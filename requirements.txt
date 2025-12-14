@@ -1,0 +1,22 @@
+# minimal
+python-dotenv
+flask
+flask_cors
+sqlalchemy
+numpy
+
+# model+torch are optional; include if you want local training/inference
+torch>=1.12; platform_system!="Darwin" or platform_machine=="arm64"  # install manually if needed
+
+# tokenizers for building tokenizer
+tokenizers
+transformers
+
+# Optional GUI (examples)
+PyQt5
+pyttsx3
+speechrecognition
+sounddevice
+vosk
+pyaudio
+
