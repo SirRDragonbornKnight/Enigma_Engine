@@ -232,15 +232,14 @@ User: Tell me about yourself.
         }
         self._save_registry()
         
-        # Create and return model
-        model = TinyEnigma(**model_config)
-        
         print(f"✓ Created model '{name}' ({size})")
         print(f"  Parameters: {metadata['estimated_parameters']:,}")
         print(f"  Location: {model_dir}")
         print(f"  Training data: {training_data_file}")
         
-        return model
+        # Return None instead of instantiating model - saves memory
+        # Model will be created lazily when load_model() is called
+        return None
     
     def load_model(
         self, 
