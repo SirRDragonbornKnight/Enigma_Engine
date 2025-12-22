@@ -14,7 +14,7 @@ class AvatarController:
 
     def speak(self, text: str):
         # integrate with TTS
-        from ..voice.tts_simple import speak
+        from ..voice import speak
         speak(text)
         return True
 

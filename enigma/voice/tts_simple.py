@@ -2,18 +2,26 @@
 Pluggable TTS adapter. Prefer offline `pyttsx3` when available; fallback to platform speakers.
 API:
   - speak(text)
+  - HAVE_PYTTSX3, HAVE_ESPEAK: Check available backends
 """
 import platform
+import shutil
+
+# Check available backends
+HAVE_PYTTSX3 = False
 try:
     import pyttsx3
-    HAVE_PYTT = True
+    HAVE_PYTTSX3 = True
 except Exception:
-    HAVE_PYTT = False
+    pass
+
+HAVE_ESPEAK = shutil.which("espeak") is not None
+
 
 def speak(text: str):
     if not text:
         return
-    if HAVE_PYTT:
+    if HAVE_PYTTSX3:
         try:
             engine = pyttsx3.init()
             engine.say(text)

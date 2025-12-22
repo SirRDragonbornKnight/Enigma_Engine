@@ -67,7 +67,7 @@ class RunCommandTool(Tool):
 
 
 class ScreenshotTool(Tool):
-    """Take a screenshot of the screen."""
+    """Take a screenshot using vision module's ScreenCapture."""
     
     name = "screenshot"
     description = "Take a screenshot and save it to a file."
@@ -76,83 +76,46 @@ class ScreenshotTool(Tool):
         "region": "Optional region as 'x,y,width,height' (default: full screen)",
     }
     
+    def __init__(self):
+        super().__init__()
+        self._capture = None
+    
+    def _get_capture(self):
+        """Lazy load ScreenCapture to avoid circular imports."""
+        if self._capture is None:
+            from .vision import ScreenCapture
+            self._capture = ScreenCapture()
+        return self._capture
+    
     def execute(self, output_path: str = "screenshot.png", region: str = None, **kwargs) -> Dict[str, Any]:
         try:
             output_path = Path(output_path).expanduser().resolve()
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Try different methods
+            # Parse region if provided
+            region_tuple = None
+            if region:
+                parts = [int(x) for x in region.split(",")]
+                if len(parts) == 4:
+                    region_tuple = tuple(parts)
             
-            # Method 1: PIL/Pillow
-            try:
-                from PIL import ImageGrab
-                
-                if region:
-                    # Parse region
-                    parts = [int(x) for x in region.split(",")]
-                    if len(parts) == 4:
-                        x, y, w, h = parts
-                        img = ImageGrab.grab(bbox=(x, y, x+w, y+h))
-                    else:
-                        img = ImageGrab.grab()
-                else:
-                    img = ImageGrab.grab()
-                
+            # Use vision.ScreenCapture (consolidated backend)
+            capture = self._get_capture()
+            img = capture.capture(region=region_tuple)
+            
+            if img:
                 img.save(str(output_path))
-                
                 return {
                     "success": True,
                     "path": str(output_path),
                     "size": f"{img.width}x{img.height}",
+                    "backend": capture._backend,
                 }
-            except ImportError:
-                pass
-            except Exception:
-                pass
-            
-            # Method 2: scrot (Linux)
-            if shutil.which("scrot"):
-                result = subprocess.run(
-                    ["scrot", str(output_path)],
-                    capture_output=True
-                )
-                if result.returncode == 0:
-                    return {
-                        "success": True,
-                        "path": str(output_path),
-                        "method": "scrot"
-                    }
-            
-            # Method 3: gnome-screenshot (Linux)
-            if shutil.which("gnome-screenshot"):
-                result = subprocess.run(
-                    ["gnome-screenshot", "-f", str(output_path)],
-                    capture_output=True
-                )
-                if result.returncode == 0:
-                    return {
-                        "success": True,
-                        "path": str(output_path),
-                        "method": "gnome-screenshot"
-                    }
-            
-            # Method 4: screencapture (macOS)
-            if platform.system() == "Darwin" and shutil.which("screencapture"):
-                result = subprocess.run(
-                    ["screencapture", str(output_path)],
-                    capture_output=True
-                )
-                if result.returncode == 0:
-                    return {
-                        "success": True,
-                        "path": str(output_path),
-                        "method": "screencapture"
-                    }
-            
-            return {
-                "success": False,
-                "error": "No screenshot method available. Install Pillow, scrot, or gnome-screenshot."
-            }
+            else:
+                return {
+                    "success": False,
+                    "error": "No screenshot method available. Install Pillow, mss, or scrot."
+                }
             
         except Exception as e:
             return {"success": False, "error": str(e)}

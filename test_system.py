@@ -315,15 +315,20 @@ def test_voice():
     header("10. Voice System")
     
     try:
-        from enigma.voice.voice_system import VoiceSystem
+        from enigma.voice import speak, listen
+        from enigma.voice.tts_simple import speak as tts_speak, HAVE_PYTTSX3, HAVE_ESPEAK
         
-        voice = VoiceSystem()
-        ok(f"Voice system initialized")
-        ok(f"Backend: {voice.backend}")
+        ok("Voice module loaded")
         
-        if voice.backend:
-            ok("TTS engine available")
-            # Don't actually speak during test
+        # Check TTS backends
+        backends = []
+        if HAVE_PYTTSX3:
+            backends.append("pyttsx3")
+        if HAVE_ESPEAK:
+            backends.append("espeak")
+        
+        if backends:
+            ok(f"TTS backends: {', '.join(backends)}")
         else:
             warn("No TTS engine (install pyttsx3 or espeak)")
         

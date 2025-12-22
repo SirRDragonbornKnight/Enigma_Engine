@@ -12,8 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from ..core.inference import EnigmaEngine
 from ..memory.manager import ConversationManager
-from ..voice.tts_adapter import speak
-from ..voice.stt_adapter import transcribe_from_mic
+from ..voice import speak, listen as transcribe_from_mic
 from ..avatar.avatar_api import AvatarController
 from ..config import CONFIG
 import time

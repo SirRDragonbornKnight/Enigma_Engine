@@ -10,9 +10,6 @@ Usage:
 Components:
     - tts_simple.py: Text-to-speech (pyttsx3/espeak)
     - stt_simple.py: Speech-to-text (SpeechRecognition)
-    - tts_adapter.py: Compatibility adapter
-    - stt_adapter.py: Compatibility adapter
-    - voice_system.py: Advanced voice with Piper support
 """
 
 from .tts_simple import speak

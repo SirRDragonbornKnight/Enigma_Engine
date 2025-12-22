@@ -1,6 +1,19 @@
 """
-Very small Flask API exposing a single /generate endpoint.
-Use for local integrations and testing.
+Simple REST API Server
+
+Minimal Flask API for programmatic access to Enigma.
+Use this for scripts, automation, and lightweight integrations.
+
+For full web interface with WebSocket support, use web_server.py instead.
+
+Endpoints:
+  GET  /health    - Health check
+  POST /generate  - Generate response (prompt, max_gen, temperature)
+
+Usage:
+  python -m enigma.comms.api_server
+  # or
+  python run.py --serve
 """
 from flask import Flask, request, jsonify
 from flask_cors import CORS
