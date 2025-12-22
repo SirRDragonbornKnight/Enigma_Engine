@@ -7,6 +7,10 @@ Features:
   - Backup before risky operations
   - Grow/shrink models with confirmation
   - Chat, Training, Voice integration
+  - Dark/Light mode toggle
+  - Avatar control panel
+  - Screen vision preview
+  - Training data editor
 """
 import sys
 import json
@@ -17,11 +21,232 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
     QTextEdit, QLineEdit, QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox,
     QDialog, QComboBox, QProgressBar, QGroupBox, QRadioButton, QButtonGroup,
-    QSpinBox, QCheckBox, QDialogButtonBox, QWizard, QWizardPage, QFormLayout
+    QSpinBox, QCheckBox, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
+    QSlider, QSplitter, QPlainTextEdit, QToolTip, QFrame, QScrollArea
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QImage
 import time
+
+
+# === DARK/LIGHT THEME STYLESHEETS ===
+DARK_STYLE = """
+QMainWindow, QWidget {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+}
+QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
+    background-color: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QPushButton {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #b4befe;
+}
+QPushButton:pressed {
+    background-color: #74c7ec;
+}
+QPushButton:disabled {
+    background-color: #45475a;
+    color: #6c7086;
+}
+QGroupBox {
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    color: #89b4fa;
+    subcontrol-origin: margin;
+    left: 10px;
+}
+QTabWidget::pane {
+    border: 1px solid #45475a;
+    border-radius: 4px;
+}
+QTabBar::tab {
+    background-color: #313244;
+    color: #cdd6f4;
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+QProgressBar {
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #a6e3a1;
+}
+QMenuBar {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+}
+QMenuBar::item:selected {
+    background-color: #313244;
+}
+QMenu {
+    background-color: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+}
+QMenu::item:selected {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+QSpinBox, QComboBox {
+    background-color: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QSlider::groove:horizontal {
+    background: #45475a;
+    height: 6px;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #89b4fa;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QScrollBar:vertical {
+    background: #313244;
+    width: 12px;
+}
+QScrollBar::handle:vertical {
+    background: #45475a;
+    border-radius: 6px;
+}
+QLabel#header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #89b4fa;
+}
+"""
+
+LIGHT_STYLE = """
+QMainWindow, QWidget {
+    background-color: #eff1f5;
+    color: #4c4f69;
+}
+QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
+    background-color: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+    padding: 4px;
+}
+QPushButton {
+    background-color: #1e66f5;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #7287fd;
+}
+QPushButton:pressed {
+    background-color: #04a5e5;
+}
+QPushButton:disabled {
+    background-color: #ccd0da;
+    color: #9ca0b0;
+}
+QGroupBox {
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    color: #1e66f5;
+    subcontrol-origin: margin;
+    left: 10px;
+}
+QTabWidget::pane {
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+}
+QTabBar::tab {
+    background-color: #e6e9ef;
+    color: #4c4f69;
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background-color: #1e66f5;
+    color: #ffffff;
+}
+QProgressBar {
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #40a02b;
+}
+QMenuBar {
+    background-color: #eff1f5;
+    color: #4c4f69;
+}
+QMenuBar::item:selected {
+    background-color: #e6e9ef;
+}
+QMenu {
+    background-color: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+}
+QMenu::item:selected {
+    background-color: #1e66f5;
+    color: #ffffff;
+}
+QSpinBox, QComboBox {
+    background-color: #ffffff;
+    color: #4c4f69;
+    border: 1px solid #ccd0da;
+    border-radius: 4px;
+    padding: 4px;
+}
+QSlider::groove:horizontal {
+    background: #ccd0da;
+    height: 6px;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #1e66f5;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QLabel#header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #1e66f5;
+}
+"""
 
 # Import enigma modules
 try:
@@ -585,14 +810,38 @@ class EnhancedMainWindow(QMainWindow):
         model_menu.addAction("Grow Model...", self._on_grow_current)
         model_menu.addAction("Shrink Model...", self._on_shrink_current)
         
+        # View menu with dark mode toggle
+        view_menu = menubar.addMenu("View")
+        self.dark_mode_action = view_menu.addAction("🌙 Dark Mode")
+        self.dark_mode_action.setCheckable(True)
+        self.dark_mode_action.setChecked(True)  # Default to dark mode
+        self.dark_mode_action.triggered.connect(self._toggle_dark_mode)
+        
         # Status bar
         self.statusBar().showMessage(f"Model: {self.current_model_name or 'None'}")
         
+        # Apply dark mode by default
+        self.setStyleSheet(DARK_STYLE)
+        
         # Main tabs
         tabs = QTabWidget()
-        tabs.addTab(self._chat_tab(), "Chat")
-        tabs.addTab(self._training_tab(), "Training")
-        tabs.addTab(self._models_tab(), "Models")
+        tabs.addTab(self._chat_tab(), "💬 Chat")
+        tabs.addTab(self._training_tab(), "🎓 Training")
+        tabs.addTab(self._data_editor_tab(), "📝 Data Editor")
+        tabs.addTab(self._avatar_tab(), "🤖 Avatar")
+        tabs.addTab(self._vision_tab(), "👁️ Vision")
+        tabs.addTab(self._models_tab(), "📦 Models")
+        
+        self.setCentralWidget(tabs)
+    
+    def _toggle_dark_mode(self, checked):
+        """Toggle between dark and light themes."""
+        if checked:
+            self.setStyleSheet(DARK_STYLE)
+            self.dark_mode_action.setText("🌙 Dark Mode")
+        else:
+            self.setStyleSheet(LIGHT_STYLE)
+            self.dark_mode_action.setText("☀️ Light Mode")
         
         self.setCentralWidget(tabs)
     
@@ -640,31 +889,76 @@ class EnhancedMainWindow(QMainWindow):
         data_layout = QVBoxLayout()
         
         self.data_path_label = QLabel("No data file selected")
-        btn_select_data = QPushButton("Select Training Data...")
+        btn_select_data = QPushButton("📂 Select Training Data...")
         btn_select_data.clicked.connect(self._on_select_data)
         
         data_layout.addWidget(self.data_path_label)
         data_layout.addWidget(btn_select_data)
+        
+        # Quick tip
+        tip_label = QLabel("<i>💡 Tip: Use the Data Editor tab to create/edit training files</i>")
+        tip_label.setWordWrap(True)
+        data_layout.addWidget(tip_label)
+        
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
         
-        # Training params
+        # Training params with tooltips
         params_group = QGroupBox("Training Parameters")
         params_layout = QFormLayout()
         
+        # Epochs
         self.epochs_spin = QSpinBox()
         self.epochs_spin.setRange(1, 10000)
         self.epochs_spin.setValue(10)
+        self.epochs_spin.setToolTip(
+            "<b>Epochs</b><br>"
+            "Number of times to go through ALL training data.<br><br>"
+            "• <b>More epochs</b> = Better learning, but takes longer<br>"
+            "• <b>Too many</b> = Overfitting (memorizes instead of learning)<br><br>"
+            "Start with 5-10, increase if responses are poor."
+        )
+        epochs_label = QLabel("Epochs:")
+        epochs_label.setToolTip(self.epochs_spin.toolTip())
         
+        # Batch size
         self.batch_spin = QSpinBox()
         self.batch_spin.setRange(1, 64)
         self.batch_spin.setValue(4)
+        self.batch_spin.setToolTip(
+            "<b>Batch Size</b><br>"
+            "How many examples to process at once.<br><br>"
+            "• <b>Larger batch</b> = Faster training, needs more VRAM<br>"
+            "• <b>Smaller batch</b> = Slower, but uses less memory<br><br>"
+            "Raspberry Pi: Use 1-2<br>"
+            "GPU (8GB): Use 4-8<br>"
+            "GPU (24GB): Use 16-32"
+        )
+        batch_label = QLabel("Batch Size:")
+        batch_label.setToolTip(self.batch_spin.toolTip())
         
+        # Learning rate
         self.lr_input = QLineEdit("0.0001")
+        self.lr_input.setToolTip(
+            "<b>Learning Rate</b><br>"
+            "How fast the AI adjusts its knowledge.<br><br>"
+            "• <b>Too high</b> = Unstable, AI 'forgets' things<br>"
+            "• <b>Too low</b> = Very slow learning<br><br>"
+            "Default 0.0001 is usually good.<br>"
+            "If training loss stays high, try 0.0003<br>"
+            "If training is unstable, try 0.00003"
+        )
+        lr_label = QLabel("Learning Rate:")
+        lr_label.setToolTip(self.lr_input.toolTip())
         
-        params_layout.addRow("Epochs:", self.epochs_spin)
-        params_layout.addRow("Batch Size:", self.batch_spin)
-        params_layout.addRow("Learning Rate:", self.lr_input)
+        params_layout.addRow(epochs_label, self.epochs_spin)
+        params_layout.addRow(batch_label, self.batch_spin)
+        params_layout.addRow(lr_label, self.lr_input)
+        
+        # Help text
+        help_label = QLabel("💡 <i>Hover over each parameter name for explanation</i>")
+        params_layout.addRow(help_label)
+        
         params_group.setLayout(params_layout)
         layout.addWidget(params_group)
         
@@ -707,6 +1001,358 @@ class EnhancedMainWindow(QMainWindow):
         
         w.setLayout(layout)
         return w
+    
+    def _data_editor_tab(self):
+        """Data editor for training files."""
+        w = QWidget()
+        layout = QVBoxLayout()
+        
+        # Header
+        header = QLabel("Training Data Editor")
+        header.setObjectName("header")
+        layout.addWidget(header)
+        
+        # File selection
+        file_layout = QHBoxLayout()
+        self.data_file_combo = QComboBox()
+        self.data_file_combo.setMinimumWidth(200)
+        self._refresh_data_files()
+        self.data_file_combo.currentTextChanged.connect(self._load_data_file)
+        
+        btn_refresh = QPushButton("🔄")
+        btn_refresh.setMaximumWidth(40)
+        btn_refresh.clicked.connect(self._refresh_data_files)
+        
+        btn_new_file = QPushButton("➕ New File")
+        btn_new_file.clicked.connect(self._create_data_file)
+        
+        file_layout.addWidget(QLabel("File:"))
+        file_layout.addWidget(self.data_file_combo)
+        file_layout.addWidget(btn_refresh)
+        file_layout.addWidget(btn_new_file)
+        file_layout.addStretch()
+        layout.addLayout(file_layout)
+        
+        # Editor
+        self.data_editor = QPlainTextEdit()
+        self.data_editor.setPlaceholderText(
+            "Enter training data here...\n\n"
+            "FORMAT OPTIONS:\n"
+            "1. Plain text (AI learns patterns)\n"
+            "2. Q&A format:\n"
+            "   Q: What is your name?\n"
+            "   A: My name is [your AI's name]\n\n"
+            "3. Conversation format:\n"
+            "   User: Hello\n"
+            "   Assistant: Hello! How can I help?\n\n"
+            "The more examples, the better the AI learns!"
+        )
+        layout.addWidget(self.data_editor)
+        
+        # Save button
+        btn_layout = QHBoxLayout()
+        self.btn_save_data = QPushButton("💾 Save File")
+        self.btn_save_data.clicked.connect(self._save_data_file)
+        
+        btn_use_for_training = QPushButton("📚 Use for Training")
+        btn_use_for_training.clicked.connect(self._use_data_for_training)
+        
+        btn_layout.addWidget(self.btn_save_data)
+        btn_layout.addWidget(btn_use_for_training)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+        # Tips
+        tips = QLabel(
+            "<b>💡 Tips:</b><br>"
+            "• More diverse examples = smarter AI<br>"
+            "• Include many variations of common questions<br>"
+            "• Add personality through response style<br>"
+            "• Save before training!"
+        )
+        tips.setWordWrap(True)
+        layout.addWidget(tips)
+        
+        w.setLayout(layout)
+        return w
+    
+    def _avatar_tab(self):
+        """Avatar control panel."""
+        w = QWidget()
+        layout = QVBoxLayout()
+        
+        # Header
+        header = QLabel("Avatar Control")
+        header.setObjectName("header")
+        layout.addWidget(header)
+        
+        # Status
+        status_group = QGroupBox("Status")
+        status_layout = QFormLayout()
+        
+        self.avatar_status_label = QLabel("Not initialized")
+        self.avatar_state_label = QLabel("Unknown")
+        
+        status_layout.addRow("Status:", self.avatar_status_label)
+        status_layout.addRow("State:", self.avatar_state_label)
+        status_group.setLayout(status_layout)
+        layout.addWidget(status_group)
+        
+        # Controls
+        ctrl_group = QGroupBox("Controls")
+        ctrl_layout = QVBoxLayout()
+        
+        # Enable/disable
+        btn_row1 = QHBoxLayout()
+        self.btn_avatar_enable = QPushButton("✅ Enable Avatar")
+        self.btn_avatar_enable.clicked.connect(self._enable_avatar)
+        self.btn_avatar_disable = QPushButton("❌ Disable Avatar")
+        self.btn_avatar_disable.clicked.connect(self._disable_avatar)
+        btn_row1.addWidget(self.btn_avatar_enable)
+        btn_row1.addWidget(self.btn_avatar_disable)
+        ctrl_layout.addLayout(btn_row1)
+        
+        # Expressions
+        expr_layout = QHBoxLayout()
+        expr_layout.addWidget(QLabel("Expression:"))
+        self.avatar_expr_combo = QComboBox()
+        self.avatar_expr_combo.addItems(["neutral", "happy", "sad", "thinking", "surprised"])
+        self.avatar_expr_combo.currentTextChanged.connect(self._set_avatar_expression)
+        expr_layout.addWidget(self.avatar_expr_combo)
+        ctrl_layout.addLayout(expr_layout)
+        
+        # Speak test
+        speak_layout = QHBoxLayout()
+        self.avatar_speak_input = QLineEdit()
+        self.avatar_speak_input.setPlaceholderText("Enter text for avatar to speak...")
+        btn_speak = QPushButton("🔊 Speak")
+        btn_speak.clicked.connect(self._avatar_speak)
+        speak_layout.addWidget(self.avatar_speak_input)
+        speak_layout.addWidget(btn_speak)
+        ctrl_layout.addLayout(speak_layout)
+        
+        ctrl_group.setLayout(ctrl_layout)
+        layout.addWidget(ctrl_group)
+        
+        # Info
+        info = QLabel(
+            "<b>ℹ️ About Avatar:</b><br>"
+            "The avatar is a visual representation of your AI.<br>"
+            "It can display expressions and speak using TTS.<br><br>"
+            "To use a custom avatar model:<br>"
+            "1. Place model files in avatar/ folder<br>"
+            "2. Update avatar_api.py with your renderer"
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        layout.addStretch()
+        
+        # Initialize avatar status
+        self._refresh_avatar_status()
+        
+        w.setLayout(layout)
+        return w
+    
+    def _vision_tab(self):
+        """Screen vision preview."""
+        w = QWidget()
+        layout = QVBoxLayout()
+        
+        # Header
+        header = QLabel("Screen Vision")
+        header.setObjectName("header")
+        layout.addWidget(header)
+        
+        # Preview area
+        preview_group = QGroupBox("Screen Preview")
+        preview_layout = QVBoxLayout()
+        
+        self.vision_preview = QLabel("Click 'Capture' to see what the AI sees")
+        self.vision_preview.setMinimumHeight(300)
+        self.vision_preview.setAlignment(Qt.AlignCenter)
+        self.vision_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 4px;")
+        preview_layout.addWidget(self.vision_preview)
+        
+        # Capture button
+        btn_capture = QPushButton("📷 Capture Screen")
+        btn_capture.clicked.connect(self._capture_screen)
+        preview_layout.addWidget(btn_capture)
+        
+        preview_group.setLayout(preview_layout)
+        layout.addWidget(preview_group)
+        
+        # OCR/Analysis
+        analysis_group = QGroupBox("Analysis")
+        analysis_layout = QVBoxLayout()
+        
+        self.vision_text = QPlainTextEdit()
+        self.vision_text.setReadOnly(True)
+        self.vision_text.setPlaceholderText("OCR text and analysis will appear here...")
+        self.vision_text.setMaximumHeight(150)
+        analysis_layout.addWidget(self.vision_text)
+        
+        btn_analyze = QPushButton("🔍 Analyze Screen")
+        btn_analyze.clicked.connect(self._analyze_screen)
+        analysis_layout.addWidget(btn_analyze)
+        
+        analysis_group.setLayout(analysis_layout)
+        layout.addWidget(analysis_group)
+        
+        # Info
+        info = QLabel(
+            "<b>ℹ️ About Vision:</b><br>"
+            "Your AI can 'see' the screen through screenshots.<br>"
+            "OCR extracts text from images for understanding.<br><br>"
+            "Use cases:<br>"
+            "• Read documents on screen<br>"
+            "• Navigate applications<br>"
+            "• Find buttons/text"
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        w.setLayout(layout)
+        return w
+    
+    # === Data Editor Actions ===
+    
+    def _refresh_data_files(self):
+        """Refresh list of data files."""
+        self.data_file_combo.clear()
+        data_dir = Path(CONFIG.get("data_dir", "data"))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        
+        for f in data_dir.glob("*.txt"):
+            self.data_file_combo.addItem(f.name)
+    
+    def _load_data_file(self, filename):
+        """Load a data file into editor."""
+        if not filename:
+            return
+        data_dir = Path(CONFIG.get("data_dir", "data"))
+        filepath = data_dir / filename
+        try:
+            self.data_editor.setPlainText(filepath.read_text())
+        except Exception as e:
+            self.data_editor.setPlainText(f"Error loading file: {e}")
+    
+    def _save_data_file(self):
+        """Save current editor content."""
+        filename = self.data_file_combo.currentText()
+        if not filename:
+            QMessageBox.warning(self, "No File", "Select or create a file first")
+            return
+        
+        data_dir = Path(CONFIG.get("data_dir", "data"))
+        filepath = data_dir / filename
+        try:
+            filepath.write_text(self.data_editor.toPlainText())
+            QMessageBox.information(self, "Saved", f"Saved to {filename}")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+    
+    def _create_data_file(self):
+        """Create a new data file."""
+        from PyQt5.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "New File", "Filename (without .txt):")
+        if ok and name:
+            name = name.strip().replace(" ", "_")
+            if not name.endswith(".txt"):
+                name += ".txt"
+            data_dir = Path(CONFIG.get("data_dir", "data"))
+            filepath = data_dir / name
+            filepath.write_text("# Training data for your AI\n\n")
+            self._refresh_data_files()
+            self.data_file_combo.setCurrentText(name)
+    
+    def _use_data_for_training(self):
+        """Set current file as training data."""
+        filename = self.data_file_combo.currentText()
+        if not filename:
+            return
+        data_dir = Path(CONFIG.get("data_dir", "data"))
+        self.training_data_path = str(data_dir / filename)
+        self.data_path_label.setText(f"Selected: {filename}")
+        QMessageBox.information(self, "Ready", f"'{filename}' selected for training.\nGo to Training tab to start.")
+    
+    # === Avatar Actions ===
+    
+    def _refresh_avatar_status(self):
+        """Update avatar status display."""
+        try:
+            from ..avatar.avatar_api import AvatarController
+            self.avatar = AvatarController()
+            self.avatar_status_label.setText("✅ Initialized")
+            self.avatar_state_label.setText(self.avatar.state.get("status", "unknown"))
+        except Exception as e:
+            self.avatar_status_label.setText(f"❌ Error: {e}")
+            self.avatar = None
+    
+    def _enable_avatar(self):
+        if self.avatar:
+            self.avatar.enable()
+            self._refresh_avatar_status()
+    
+    def _disable_avatar(self):
+        if self.avatar:
+            self.avatar.disable()
+            self._refresh_avatar_status()
+    
+    def _set_avatar_expression(self, expression):
+        if self.avatar:
+            self.avatar.set_expression(expression)
+    
+    def _avatar_speak(self):
+        text = self.avatar_speak_input.text().strip()
+        if text and self.avatar:
+            self.avatar.speak(text)
+            self.avatar_speak_input.clear()
+    
+    # === Vision Actions ===
+    
+    def _capture_screen(self):
+        """Capture and display screen."""
+        try:
+            from ..tools.vision import ScreenCapture
+            capture = ScreenCapture()
+            img = capture.capture()
+            
+            if img:
+                # Convert PIL to QPixmap
+                img = img.resize((640, 360))  # Resize for display
+                data = img.tobytes("raw", "RGB")
+                qimg = QImage(data, img.width, img.height, QImage.Format_RGB888)
+                pixmap = QPixmap.fromImage(qimg)
+                self.vision_preview.setPixmap(pixmap)
+            else:
+                self.vision_preview.setText("Failed to capture screen")
+        except Exception as e:
+            self.vision_preview.setText(f"Error: {e}")
+    
+    def _analyze_screen(self):
+        """Analyze screen with OCR."""
+        try:
+            from ..tools.vision import get_screen_vision
+            vision = get_screen_vision()
+            result = vision.see(describe=True, detect_text=True)
+            
+            output = []
+            if result.get("success"):
+                output.append(f"Resolution: {result['size']['width']}x{result['size']['height']}")
+                if result.get("description"):
+                    output.append(f"\nDescription: {result['description']}")
+                if result.get("text_content"):
+                    output.append(f"\n--- Detected Text ---\n{result['text_content'][:500]}")
+            else:
+                output.append(f"Error: {result.get('error', 'Unknown')}")
+            
+            self.vision_text.setPlainText("\n".join(output))
+            
+            # Also capture for preview
+            self._capture_screen()
+        except Exception as e:
+            self.vision_text.setPlainText(f"Error: {e}")
     
     def _refresh_models_list(self):
         self.models_list.clear()
@@ -758,6 +1404,8 @@ class EnhancedMainWindow(QMainWindow):
             if selected:
                 self.current_model_name = selected
                 self._load_current_model()
+                self._refresh_models_list()  # Update arrow indicator
+                self.model_label.setText(f"<b>Active Model:</b> {self.current_model_name}")
                 self.model_label.setText(f"<b>Active Model:</b> {self.current_model_name}")
                 self.statusBar().showMessage(f"Model: {self.current_model_name}")
                 self._refresh_models_list()
