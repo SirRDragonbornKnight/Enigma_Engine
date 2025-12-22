@@ -1030,10 +1030,14 @@ class EnhancedMainWindow(QMainWindow):
         btn_new_file = QPushButton("➕ New File")
         btn_new_file.clicked.connect(self._create_data_file)
         
+        btn_import_file = QPushButton("📥 Import File")
+        btn_import_file.clicked.connect(self._import_data_file)
+        
         file_layout.addWidget(QLabel("File:"))
         file_layout.addWidget(self.data_file_combo)
         file_layout.addWidget(btn_refresh)
         file_layout.addWidget(btn_new_file)
+        file_layout.addWidget(btn_import_file)
         file_layout.addStretch()
         layout.addLayout(file_layout)
         
@@ -1089,6 +1093,24 @@ class EnhancedMainWindow(QMainWindow):
         header = QLabel("Avatar Control")
         header.setObjectName("header")
         layout.addWidget(header)
+        
+        # Avatar image preview
+        avatar_preview_group = QGroupBox("Avatar Preview")
+        avatar_preview_layout = QVBoxLayout()
+        
+        self.avatar_image_label = QLabel("No avatar image loaded")
+        self.avatar_image_label.setMinimumSize(200, 200)
+        self.avatar_image_label.setMaximumSize(300, 300)
+        self.avatar_image_label.setAlignment(Qt.AlignCenter)
+        self.avatar_image_label.setStyleSheet("border: 2px dashed #45475a; border-radius: 8px;")
+        avatar_preview_layout.addWidget(self.avatar_image_label, alignment=Qt.AlignCenter)
+        
+        btn_load_avatar = QPushButton("📷 Load Avatar Image")
+        btn_load_avatar.clicked.connect(self._load_avatar_image)
+        avatar_preview_layout.addWidget(btn_load_avatar)
+        
+        avatar_preview_group.setLayout(avatar_preview_layout)
+        layout.addWidget(avatar_preview_group)
         
         # Status
         status_group = QGroupBox("Status")
@@ -1280,28 +1302,74 @@ class EnhancedMainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", str(e))
     
     def _create_data_file(self):
-        """Create a new data file."""
+        """Create a new data file in the current AI's folder."""
         from PyQt5.QtWidgets import QInputDialog
         name, ok = QInputDialog.getText(self, "New File", "Filename (without .txt):")
         if ok and name:
-            name = name.strip().replace(" ", "_")
-            if not name.endswith(".txt"):
-                name += ".txt"
-            data_dir = Path(CONFIG.get("data_dir", "data"))
-            filepath = data_dir / name
-            filepath.write_text("# Training data for your AI\n\n")
-            self._refresh_data_files()
-            self.data_file_combo.setCurrentText(name)
+            try:
+                name = name.strip().replace(" ", "_")
+                if not name.endswith(".txt"):
+                    name += ".txt"
+                
+                # Save to AI's data folder if available, else global
+                if self.current_model_name:
+                    model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+                    data_dir = Path(model_info.get("path", "")) / "data"
+                else:
+                    data_dir = Path(CONFIG.get("data_dir", "data"))
+                
+                data_dir.mkdir(parents=True, exist_ok=True)
+                filepath = data_dir / name
+                
+                ai_name = self.current_model_name or "Assistant"
+                filepath.write_text(f"# Training data for {ai_name}\n# Add your Q&A pairs or conversations below\n\n")
+                
+                self._refresh_data_files()
+                # Select the new file
+                for i in range(self.data_file_combo.count()):
+                    if self.data_file_combo.itemData(i) == str(filepath):
+                        self.data_file_combo.setCurrentIndex(i)
+                        break
+                QMessageBox.information(self, "Created", f"Created {name} in {data_dir}")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to create file: {e}")
     
     def _use_data_for_training(self):
         """Set current file as training data."""
-        filename = self.data_file_combo.currentText()
-        if not filename:
+        if not hasattr(self, '_current_data_file') or not self._current_data_file:
+            QMessageBox.warning(self, "No File", "Select a data file first")
             return
-        data_dir = Path(CONFIG.get("data_dir", "data"))
-        self.training_data_path = str(data_dir / filename)
+        
+        self.training_data_path = self._current_data_file
+        filename = Path(self._current_data_file).name
         self.data_path_label.setText(f"Selected: {filename}")
         QMessageBox.information(self, "Ready", f"'{filename}' selected for training.\nGo to Training tab to start.")
+    
+    def _import_data_file(self):
+        """Import an external file into the AI's data folder."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Import Training Data", "", "Text Files (*.txt);;All Files (*)"
+        )
+        if filepath:
+            try:
+                # Determine destination
+                if self.current_model_name:
+                    model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+                    dest_dir = Path(model_info.get("path", "")) / "data"
+                else:
+                    dest_dir = Path(CONFIG.get("data_dir", "data"))
+                
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                src = Path(filepath)
+                dest = dest_dir / src.name
+                
+                # Copy content
+                dest.write_text(src.read_text())
+                
+                self._refresh_data_files()
+                QMessageBox.information(self, "Imported", f"Imported {src.name} to {dest_dir}")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to import: {e}")
     
     # === Avatar Actions ===
     
@@ -1315,6 +1383,67 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             self.avatar_status_label.setText(f"❌ Error: {e}")
             self.avatar = None
+        
+        # Try to load avatar image if one exists
+        self._load_default_avatar()
+    
+    def _load_default_avatar(self):
+        """Try to load avatar image from model folder or avatar folder."""
+        avatar_paths = []
+        
+        # Check model-specific avatar
+        if self.current_model_name:
+            model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+            model_path = Path(model_info.get("path", ""))
+            avatar_paths.extend([
+                model_path / "avatar.png",
+                model_path / "avatar.jpg",
+                model_path / "avatar.jpeg",
+            ])
+        
+        # Check global avatar folder
+        avatar_dir = Path("avatar")
+        avatar_paths.extend([
+            avatar_dir / "default.png",
+            avatar_dir / "avatar.png",
+        ])
+        
+        for path in avatar_paths:
+            if path.exists():
+                self._display_avatar_image(str(path))
+                return
+    
+    def _load_avatar_image(self):
+        """Load a custom avatar image."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Select Avatar Image", "", "Images (*.png *.jpg *.jpeg *.gif);;All Files (*)"
+        )
+        if filepath:
+            # Copy to model folder if we have a current model
+            if self.current_model_name:
+                try:
+                    model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+                    model_path = Path(model_info.get("path", ""))
+                    dest = model_path / f"avatar{Path(filepath).suffix}"
+                    
+                    import shutil
+                    shutil.copy(filepath, dest)
+                    filepath = str(dest)
+                    QMessageBox.information(self, "Saved", f"Avatar saved to {dest}")
+                except Exception as e:
+                    QMessageBox.warning(self, "Warning", f"Couldn't save to model folder: {e}")
+            
+            self._display_avatar_image(filepath)
+    
+    def _display_avatar_image(self, filepath):
+        """Display an avatar image."""
+        pixmap = QPixmap(filepath)
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.avatar_image_label.setPixmap(scaled)
+            self.avatar_image_label.setStyleSheet("border: 2px solid #89b4fa; border-radius: 8px;")
+        else:
+            self.avatar_image_label.setText("Failed to load image")
     
     def _enable_avatar(self):
         if self.avatar:
@@ -1346,6 +1475,20 @@ class EnhancedMainWindow(QMainWindow):
             img = capture.capture()
             
             if img:
+                # Check if image is all black (common on Wayland)
+                import numpy as np
+                img_array = np.array(img)
+                if img_array.max() < 10:  # Nearly all black
+                    self.vision_preview.setText(
+                        "⚠️ Screenshot appears black\\n\\n"
+                        "This often happens on Wayland (Raspberry Pi default).\\n\\n"
+                        "Try:\\n"
+                        "1. Install: pip install pyscreenshot mss\\n"
+                        "2. Or switch to X11 session\\n"
+                        "3. Or use scrot: sudo apt install scrot"
+                    )
+                    return
+                
                 # Convert PIL to QPixmap safely
                 img = img.resize((640, 360))  # Resize for display
                 img = img.convert("RGB")  # Ensure RGB mode
@@ -1359,10 +1502,11 @@ class EnhancedMainWindow(QMainWindow):
                 pixmap = QPixmap()
                 pixmap.loadFromData(buffer.read())
                 self.vision_preview.setPixmap(pixmap)
+                self.vision_preview.setToolTip(f"Captured at {datetime.now().strftime('%H:%M:%S')}")
             else:
-                self.vision_preview.setText("Failed to capture screen")
+                self.vision_preview.setText("Failed to capture screen\\n\\nTry: pip install mss pyscreenshot")
         except Exception as e:
-            self.vision_preview.setText(f"Error: {e}")
+            self.vision_preview.setText(f"Error: {e}\\n\\nTry: pip install pillow mss")
     
     def _analyze_screen(self):
         """Analyze screen with OCR."""
