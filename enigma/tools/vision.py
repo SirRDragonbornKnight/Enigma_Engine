@@ -460,43 +460,37 @@ def get_screen_vision() -> ScreenVision:
 
 
 # Tool integration
-class ScreenVisionTool:
+from .tool_registry import Tool
+
+
+class ScreenVisionTool(Tool):
     """Tool wrapper for AI to use screen vision."""
     
     name = "see_screen"
     description = "Look at the screen and describe what's visible"
     parameters = {
-        "detect_text": {
-            "type": "boolean",
-            "description": "Whether to extract text via OCR",
-            "default": True
-        }
+        "detect_text": "Whether to extract text via OCR (default: True)"
     }
     
-    @staticmethod
-    def execute(detect_text: bool = True) -> Dict[str, Any]:
+    def execute(self, detect_text: bool = True, **kwargs) -> Dict[str, Any]:
         vision = get_screen_vision()
         return vision.see(describe=True, detect_text=detect_text)
 
 
-class FindOnScreenTool:
+class FindOnScreenTool(Tool):
     """Tool to find specific text on screen."""
     
     name = "find_on_screen"
     description = "Find text or element on the screen"
     parameters = {
-        "text": {
-            "type": "string",
-            "description": "Text to search for on screen",
-            "required": True
-        }
+        "text": "Text to search for on screen (required)"
     }
     
-    @staticmethod
-    def execute(text: str) -> Dict[str, Any]:
+    def execute(self, text: str = "", **kwargs) -> Dict[str, Any]:
         vision = get_screen_vision()
         matches = vision.find_text_on_screen(text)
         return {
+            "success": True,
             "query": text,
             "found": len(matches) > 0,
             "matches": matches
