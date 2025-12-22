@@ -314,7 +314,7 @@ class SetupWizard(QWizard):
         layout = QFormLayout()
         
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("e.g., enigma, artemis, apollo...")
+        self.name_input.setPlaceholderText("e.g., artemis, apollo, atlas...")
         self.name_input.textChanged.connect(self._validate_name)
         
         self.name_status = QLabel("")
