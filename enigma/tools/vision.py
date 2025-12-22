@@ -226,16 +226,28 @@ class ScreenVision:
     def __init__(self):
         self.capture = ScreenCapture()
         self.history: List[Dict] = []
-        self._ocr_available = self._check_ocr()
+        self._ocr = self._init_ocr()
+        self._ocr_available = self._ocr is not None
     
-    def _check_ocr(self) -> bool:
-        """Check if OCR is available."""
+    def _init_ocr(self):
+        """Initialize OCR system (prefers built-in, falls back to tesseract)."""
+        try:
+            from .simple_ocr import AdvancedOCR
+            return AdvancedOCR()
+        except:
+            pass
+        
+        # Fallback to tesseract check
         try:
             import pytesseract
             pytesseract.get_tesseract_version()
-            return True
+            return "tesseract"
         except:
-            return False
+            return None
+    
+    def _check_ocr(self) -> bool:
+        """Check if OCR is available (legacy method)."""
+        return self._ocr_available
     
     def see(self, describe: bool = True, detect_text: bool = True) -> Dict[str, Any]:
         """
@@ -270,8 +282,11 @@ class ScreenVision:
         # OCR for text
         if detect_text and self._ocr_available:
             try:
-                import pytesseract
-                text = pytesseract.image_to_string(img)
+                if self._ocr == "tesseract":
+                    import pytesseract
+                    text = pytesseract.image_to_string(img)
+                else:
+                    text = self._ocr.extract_text(img)
                 result["text_content"] = text.strip()
             except Exception as e:
                 result["ocr_error"] = str(e)
