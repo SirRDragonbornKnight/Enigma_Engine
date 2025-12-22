@@ -112,14 +112,96 @@ class ModelRegistry:
         
         model_config["vocab_size"] = vocab_size
         
-        # Create model directory
+        # Create model directory with full structure
         model_dir = self.models_dir / name
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "checkpoints").mkdir(exist_ok=True)
+        (model_dir / "data").mkdir(exist_ok=True)  # AI's own training data
         
         # Save config
         with open(model_dir / "config.json", "w") as f:
             json.dump(model_config, f, indent=2)
+        
+        # Create AI-specific training data file
+        training_data_file = model_dir / "data" / "training.txt"
+        training_data_file.write_text(f"""# Training Data for {name}
+# ===========================
+# Add your training data below. The more examples, the better!
+#
+# FORMAT OPTIONS:
+#
+# 1. Plain text (AI learns patterns and style):
+#    Just write paragraphs of text the AI should learn from.
+#
+# 2. Q&A format:
+#    Q: What is your name?
+#    A: My name is {name}.
+#
+# 3. Conversation format:
+#    User: Hello!
+#    {name}: Hello! How can I help you today?
+#
+# TIPS:
+# - Include many variations of common questions
+# - Add personality through response style
+# - More diverse examples = smarter AI
+# ===========================
+
+# Example conversations (customize these!):
+
+Q: What is your name?
+A: My name is {name}.
+
+Q: Who made you?
+A: I was created by my developer to be a helpful AI assistant.
+
+Q: How are you?
+A: I'm doing well, thank you for asking! How can I help you today?
+
+User: Hello!
+{name}: Hello! It's nice to meet you. How can I assist you?
+
+User: Tell me about yourself.
+{name}: I'm {name}, an AI assistant. I'm here to help with questions, have conversations, and assist with various tasks.
+
+# Add more training data below...
+
+""")
+        
+        # Create AI-specific instructions file
+        instructions_file = model_dir / "data" / "instructions.txt"
+        instructions_file.write_text(f"""# Instructions for {name}
+# ===========================
+# These instructions help define your AI's behavior and personality.
+# Edit this file to customize how {name} responds.
+# ===========================
+
+# PERSONALITY:
+# Describe the personality traits you want {name} to have.
+# Example: friendly, helpful, curious, professional
+
+{name} is a helpful and friendly AI assistant.
+{name} gives clear and concise answers.
+{name} is honest about its limitations.
+
+# KNOWLEDGE:
+# List topics or domains {name} should be knowledgeable about.
+
+# RULES:
+# Define any rules {name} should follow.
+
+1. Be helpful and respectful
+2. Give accurate information
+3. Admit when unsure
+4. Keep responses clear and relevant
+
+# STYLE:
+# Describe how {name} should communicate.
+
+{name} uses a conversational tone.
+{name} avoids overly technical jargon unless asked.
+{name} asks clarifying questions when needed.
+""")
         
         # Create metadata
         metadata = {
@@ -132,6 +214,10 @@ class ModelRegistry:
             "total_steps": 0,
             "training_history": [],
             "estimated_parameters": estimate_parameters(**model_config),
+            "data_files": {
+                "training": str(training_data_file),
+                "instructions": str(instructions_file),
+            },
         }
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
@@ -142,6 +228,7 @@ class ModelRegistry:
             "size": size,
             "created": metadata["created"],
             "has_weights": False,
+            "data_dir": str(model_dir / "data"),
         }
         self._save_registry()
         
@@ -151,6 +238,7 @@ class ModelRegistry:
         print(f"✓ Created model '{name}' ({size})")
         print(f"  Parameters: {metadata['estimated_parameters']:,}")
         print(f"  Location: {model_dir}")
+        print(f"  Training data: {training_data_file}")
         
         return model
     

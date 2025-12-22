@@ -1012,12 +1012,16 @@ class EnhancedMainWindow(QMainWindow):
         header.setObjectName("header")
         layout.addWidget(header)
         
+        # Info about current AI
+        self.data_editor_ai_label = QLabel(f"<b>Current AI:</b> {self.current_model_name or 'None'}")
+        layout.addWidget(self.data_editor_ai_label)
+        
         # File selection
         file_layout = QHBoxLayout()
         self.data_file_combo = QComboBox()
-        self.data_file_combo.setMinimumWidth(200)
+        self.data_file_combo.setMinimumWidth(300)
         self._refresh_data_files()
-        self.data_file_combo.currentTextChanged.connect(self._load_data_file)
+        self.data_file_combo.currentIndexChanged.connect(self._load_data_file)
         
         btn_refresh = QPushButton("🔄")
         btn_refresh.setMaximumWidth(40)
@@ -1218,37 +1222,60 @@ class EnhancedMainWindow(QMainWindow):
     # === Data Editor Actions ===
     
     def _refresh_data_files(self):
-        """Refresh list of data files."""
+        """Refresh list of data files - shows AI's own data first."""
         self.data_file_combo.clear()
+        
+        # First, add current AI's data files if one is loaded
+        if self.current_model_name:
+            model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+            model_data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
+            if isinstance(model_data_dir, str):
+                model_data_dir = Path(model_data_dir)
+            
+            if model_data_dir.exists():
+                for f in model_data_dir.glob("*.txt"):
+                    self.data_file_combo.addItem(f"📌 {self.current_model_name}: {f.name}", str(f))
+        
+        # Add separator if we have AI files
+        if self.data_file_combo.count() > 0:
+            self.data_file_combo.insertSeparator(self.data_file_combo.count())
+        
+        # Then add global data files
         data_dir = Path(CONFIG.get("data_dir", "data"))
         data_dir.mkdir(parents=True, exist_ok=True)
         
         for f in data_dir.glob("*.txt"):
-            self.data_file_combo.addItem(f.name)
+            self.data_file_combo.addItem(f"📁 Global: {f.name}", str(f))
     
-    def _load_data_file(self, filename):
+    def _load_data_file(self, index):
         """Load a data file into editor."""
-        if not filename:
+        if index < 0:
             return
-        data_dir = Path(CONFIG.get("data_dir", "data"))
-        filepath = data_dir / filename
+        filepath = self.data_file_combo.itemData(index)
+        if not filepath:
+            # Fallback for old format
+            filename = self.data_file_combo.currentText()
+            if not filename or filename.startswith("---"):
+                return
+            data_dir = Path(CONFIG.get("data_dir", "data"))
+            filepath = str(data_dir / filename)
+        
         try:
-            self.data_editor.setPlainText(filepath.read_text())
+            self.data_editor.setPlainText(Path(filepath).read_text())
+            self._current_data_file = filepath
         except Exception as e:
             self.data_editor.setPlainText(f"Error loading file: {e}")
     
     def _save_data_file(self):
         """Save current editor content."""
-        filename = self.data_file_combo.currentText()
-        if not filename:
+        if not hasattr(self, '_current_data_file') or not self._current_data_file:
             QMessageBox.warning(self, "No File", "Select or create a file first")
             return
         
-        data_dir = Path(CONFIG.get("data_dir", "data"))
-        filepath = data_dir / filename
+        filepath = Path(self._current_data_file)
         try:
             filepath.write_text(self.data_editor.toPlainText())
-            QMessageBox.information(self, "Saved", f"Saved to {filename}")
+            QMessageBox.information(self, "Saved", f"Saved to {filepath.name}")
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
     
@@ -1319,11 +1346,18 @@ class EnhancedMainWindow(QMainWindow):
             img = capture.capture()
             
             if img:
-                # Convert PIL to QPixmap
+                # Convert PIL to QPixmap safely
                 img = img.resize((640, 360))  # Resize for display
-                data = img.tobytes("raw", "RGB")
-                qimg = QImage(data, img.width, img.height, QImage.Format_RGB888)
-                pixmap = QPixmap.fromImage(qimg)
+                img = img.convert("RGB")  # Ensure RGB mode
+                
+                # Use BytesIO for safer conversion
+                import io
+                buffer = io.BytesIO()
+                img.save(buffer, format="PNG")
+                buffer.seek(0)
+                
+                pixmap = QPixmap()
+                pixmap.loadFromData(buffer.read())
                 self.vision_preview.setPixmap(pixmap)
             else:
                 self.vision_preview.setText("Failed to capture screen")
