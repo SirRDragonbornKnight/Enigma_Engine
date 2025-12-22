@@ -87,8 +87,12 @@ class MobileAPI:
         """Lazy load voice system."""
         if self._voice is None:
             try:
-                from ..voice.voice_system import VoiceSystem
-                self._voice = VoiceSystem()
+                from ..voice import speak
+                # Create simple wrapper object
+                class SimpleVoice:
+                    def speak(self, text):
+                        speak(text)
+                self._voice = SimpleVoice()
             except:
                 self._voice = None
         return self._voice

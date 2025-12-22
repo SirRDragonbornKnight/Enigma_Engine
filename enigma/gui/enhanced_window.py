@@ -735,7 +735,7 @@ class EnhancedMainWindow(QMainWindow):
     def _on_speak_last(self):
         if hasattr(self, 'last_response'):
             try:
-                from ..voice.voice_system import speak
+                from ..voice import speak
                 speak(self.last_response)
             except Exception as e:
                 QMessageBox.warning(self, "TTS Error", str(e))

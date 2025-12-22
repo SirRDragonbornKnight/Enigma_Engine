@@ -459,20 +459,22 @@ def get_robot() -> RobotController:
 
 # === Tool Classes for AI ===
 
-class RobotMoveTool:
+from .tool_registry import Tool
+
+
+class RobotMoveTool(Tool):
     """Tool for AI to move robot joints."""
     
     name = "robot_move"
     description = "Move a robot joint to a specific angle"
     parameters = {
-        "joint": {"type": "string", "description": "Joint name (e.g., 'shoulder', 'elbow')", "required": True},
-        "angle": {"type": "number", "description": "Target angle in degrees", "required": True},
-        "robot": {"type": "string", "description": "Robot name (optional, uses default)"},
-        "speed": {"type": "number", "description": "Speed 0-1 (default 1.0)"},
+        "joint": "Joint name (e.g., 'shoulder', 'elbow') - required",
+        "angle": "Target angle in degrees - required",
+        "robot": "Robot name (optional, uses default)",
+        "speed": "Speed 0-1 (default 1.0)",
     }
     
-    @staticmethod
-    def execute(joint: str, angle: float, robot: str = None, speed: float = 1.0) -> Dict[str, Any]:
+    def execute(self, joint: str = "", angle: float = 0, robot: str = None, speed: float = 1.0, **kwargs) -> Dict[str, Any]:
         controller = get_robot()
         success = controller.move_joint(joint, angle, robot, speed)
         return {
@@ -483,54 +485,52 @@ class RobotMoveTool:
         }
 
 
-class RobotGripperTool:
+class RobotGripperTool(Tool):
     """Tool for AI to control robot gripper."""
     
     name = "robot_gripper"
     description = "Control robot gripper (open/close)"
     parameters = {
-        "action": {"type": "string", "description": "'open', 'close', or percentage 0-100", "required": True},
-        "robot": {"type": "string", "description": "Robot name (optional)"},
+        "action": "'open', 'close', or percentage 0-100 - required",
+        "robot": "Robot name (optional)",
     }
     
-    @staticmethod
-    def execute(action: str, robot: str = None) -> Dict[str, Any]:
+    def execute(self, action: str = "open", robot: str = None, **kwargs) -> Dict[str, Any]:
         controller = get_robot()
         success = controller.gripper(action, robot)
         return {"success": success, "action": action}
 
 
-class RobotStatusTool:
+class RobotStatusTool(Tool):
     """Tool to get robot status."""
     
     name = "robot_status"
     description = "Get status and sensor data from robot"
     parameters = {
-        "robot": {"type": "string", "description": "Robot name (optional)"},
+        "robot": "Robot name (optional)",
     }
     
-    @staticmethod
-    def execute(robot: str = None) -> Dict[str, Any]:
+    def execute(self, robot: str = None, **kwargs) -> Dict[str, Any]:
         controller = get_robot()
         robots = controller.list_robots()
         sensors = controller.get_sensors(robot)
         return {
+            "success": True,
             "robots": robots,
             "sensors": sensors,
         }
 
 
-class RobotHomeTool:
+class RobotHomeTool(Tool):
     """Tool to home robot."""
     
     name = "robot_home"
     description = "Move robot to home position"
     parameters = {
-        "robot": {"type": "string", "description": "Robot name (optional)"},
+        "robot": "Robot name (optional)",
     }
     
-    @staticmethod
-    def execute(robot: str = None) -> Dict[str, Any]:
+    def execute(self, robot: str = None, **kwargs) -> Dict[str, Any]:
         controller = get_robot()
         success = controller.home(robot)
         return {"success": success, "action": "home"}
