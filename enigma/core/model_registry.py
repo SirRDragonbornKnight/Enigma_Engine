@@ -277,8 +277,14 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Create model
-        model = TinyEnigma(**config)
+        # Extract only model-relevant parameters (filter out metadata)
+        model_params = {
+            k: v for k, v in config.items() 
+            if k in ['vocab_size', 'dim', 'depth', 'heads', 'max_len']
+        }
+        
+        # Create model with filtered params
+        model = TinyEnigma(**model_params)
         
         # Load weights
         if checkpoint:
