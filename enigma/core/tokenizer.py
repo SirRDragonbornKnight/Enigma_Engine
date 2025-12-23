@@ -124,17 +124,24 @@ class SimpleTokenizer:
                     continue
                 tokens.append(token)
         
-        # Join tokens, handling spaces
+        # Join tokens, handling spaces properly
         result = ""
+        prev_was_space = True  # Start true to avoid leading space
         for token in tokens:
-            if len(token) == 1 and token != " ":
+            if token == " ":
+                if not prev_was_space:
+                    result += " "
+                prev_was_space = True
+            elif len(token) == 1:
+                # Single character - just append
                 result += token
-            elif token == " ":
-                continue  # Skip explicit spaces
+                prev_was_space = False
             else:
-                if result and not result.endswith(" "):
+                # Multi-char token (word) - add space before if needed
+                if result and not prev_was_space:
                     result += " "
                 result += token
+                prev_was_space = False
         
         return result.strip()
     

@@ -171,7 +171,7 @@ def test_model_registry():
         if test_name not in models:
             registry.create_model(test_name, size="tiny", description="Test")
             ok("Can create models")
-            registry.delete_model(test_name)
+            registry.delete_model(test_name, confirm=True)
             ok("Can delete models")
         else:
             ok("Model creation works (test model exists)")
