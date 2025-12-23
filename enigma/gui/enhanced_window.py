@@ -22,7 +22,8 @@ from PyQt5.QtWidgets import (
     QTextEdit, QLineEdit, QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox,
     QDialog, QComboBox, QProgressBar, QGroupBox, QRadioButton, QButtonGroup,
     QSpinBox, QCheckBox, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
-    QSlider, QSplitter, QPlainTextEdit, QToolTip, QFrame, QScrollArea
+    QSlider, QSplitter, QPlainTextEdit, QToolTip, QFrame, QScrollArea, QInputDialog,
+    QListWidgetItem
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QImage
@@ -675,6 +676,13 @@ class ModelManagerDialog(QDialog):
             QMessageBox.warning(self, "No Selection", "Select a model first")
             return
         
+        # Check if model still exists
+        if self.selected_model not in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists. Please select another.")
+            delattr(self, 'selected_model')
+            self._refresh_list()
+            return
+        
         # Show size selection dialog
         sizes = ["small", "medium", "large", "xl"]
         current_size = self.registry.registry["models"][self.selected_model].get("size", "tiny")
@@ -704,26 +712,32 @@ class ModelManagerDialog(QDialog):
                 # Auto-backup first
                 self._on_backup()
                 
-                # Grow
+                # Grow - replace the model in place
                 try:
                     from ..core.model_scaling import grow_registered_model
-                    new_name = f"{self.selected_model}_{size}"
                     grow_registered_model(
                         self.registry,
                         self.selected_model,
-                        new_name,
+                        self.selected_model,  # Keep same name
                         size
                     )
                     self._refresh_list()
                     QMessageBox.information(self, "Success", 
-                        f"Created grown model '{new_name}'\n"
-                        f"Original '{self.selected_model}' unchanged.")
+                        f"Model '{self.selected_model}' grown to {size}!\n"
+                        f"A backup was created.")
                 except Exception as e:
                     QMessageBox.warning(self, "Error", str(e))
     
     def _on_shrink(self):
         if not hasattr(self, 'selected_model'):
             QMessageBox.warning(self, "No Selection", "Select a model first")
+            return
+        
+        # Check if model still exists
+        if self.selected_model not in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists. Please select another.")
+            delattr(self, 'selected_model')
+            self._refresh_list()
             return
         
         sizes = ["tiny", "small", "medium", "large"]
@@ -744,27 +758,31 @@ class ModelManagerDialog(QDialog):
             reply = QMessageBox.warning(
                 self, "Confirm Shrink",
                 f"Shrink '{self.selected_model}' from {current_size} to {size}?\n\n"
-                "⚠ This will create a COPY - original is preserved.\n"
+                "A backup will be created first.\n"
                 "⚠ Some knowledge may be lost in shrinking.",
                 QMessageBox.Yes | QMessageBox.No
             )
             
             if reply == QMessageBox.Yes:
                 try:
+                    # Auto-backup first
+                    self._on_backup()
+                    
                     # Load model
                     model, config = self.registry.load_model(self.selected_model)
                     
                     # Shrink
                     shrunk = shrink_model(model, size, config["vocab_size"])
                     
-                    # Save as new model
-                    new_name = f"{self.selected_model}_{size}"
-                    self.registry.create_model(new_name, size=size, vocab_size=config["vocab_size"])
-                    self.registry.save_model(new_name, shrunk)
+                    # Update the existing model
+                    self.registry.save_model(self.selected_model, shrunk)
+                    self.registry.registry["models"][self.selected_model]["size"] = size
+                    self.registry._save_registry()
                     
                     self._refresh_list()
                     QMessageBox.information(self, "Success",
-                        f"Created shrunk model '{new_name}'")
+                        f"Model '{self.selected_model}' shrunk to {size}!\n"
+                        f"A backup was created.")
                 except Exception as e:
                     QMessageBox.warning(self, "Error", str(e))
     
@@ -773,11 +791,18 @@ class ModelManagerDialog(QDialog):
             QMessageBox.warning(self, "No Selection", "Select a model first")
             return
         
+        # Check if model still exists
+        if self.selected_model not in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists.")
+            delattr(self, 'selected_model')
+            self._refresh_list()
+            return
+        
         reply = QMessageBox.warning(
             self, "Confirm Delete",
             f"DELETE model '{self.selected_model}'?\n\n"
-            "⚠ This CANNOT be undone!\n"
-            "⚠ All weights and checkpoints will be lost!",
+            "💡 Tip: If you made a backup, it will still exist.\n"
+            "⚠ The model folder and weights will be removed!",
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -835,6 +860,10 @@ class EnhancedMainWindow(QMainWindow):
         self.registry = ModelRegistry()
         self.current_model_name = None
         self.engine = None
+        
+        # Initialize toggle states
+        self.auto_speak = False
+        self.microphone_enabled = False
         
         # Check if first run (no models)
         if not self.registry.registry.get("models"):
@@ -898,6 +927,15 @@ class EnhancedMainWindow(QMainWindow):
                 self.engine.tokenizer = load_tokenizer()
                 
                 self.setWindowTitle(f"Enigma Engine - {self.current_model_name}")
+                
+                # Update training tab label
+                if hasattr(self, 'training_model_label'):
+                    self.training_model_label.setText(f"Model: {self.current_model_name}")
+                
+                # Refresh notes files for new model
+                if hasattr(self, 'notes_file_combo'):
+                    self._refresh_notes_files()
+                    
             except Exception as e:
                 QMessageBox.warning(self, "Load Error", f"Could not load model: {e}")
                 self.engine = None
@@ -915,12 +953,32 @@ class EnhancedMainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction("Exit", self.close)
         
-        # View menu with dark mode toggle
-        view_menu = menubar.addMenu("View")
-        self.dark_mode_action = view_menu.addAction("🌙 Dark Mode")
+        # Options menu with toggles
+        options_menu = menubar.addMenu("Options")
+        
+        self.dark_mode_action = options_menu.addAction("Dark Mode (ON)")
         self.dark_mode_action.setCheckable(True)
-        self.dark_mode_action.setChecked(True)  # Default to dark mode
+        self.dark_mode_action.setChecked(True)
         self.dark_mode_action.triggered.connect(self._toggle_dark_mode)
+        
+        options_menu.addSeparator()
+        
+        self.avatar_action = options_menu.addAction("Avatar (OFF)")
+        self.avatar_action.setCheckable(True)
+        self.avatar_action.setChecked(False)
+        self.avatar_action.triggered.connect(self._toggle_avatar)
+        
+        options_menu.addSeparator()
+        
+        self.auto_speak_action = options_menu.addAction("AI Auto-Speak (OFF)")
+        self.auto_speak_action.setCheckable(True)
+        self.auto_speak_action.setChecked(False)
+        self.auto_speak_action.triggered.connect(self._toggle_auto_speak)
+        
+        self.microphone_action = options_menu.addAction("Microphone (OFF)")
+        self.microphone_action.setCheckable(True)
+        self.microphone_action.setChecked(False)
+        self.microphone_action.triggered.connect(self._toggle_microphone)
         
         # Status bar with clickable model selector
         self.model_status_btn = QPushButton(f"Model: {self.current_model_name or 'None'}  ▼")
@@ -944,13 +1002,21 @@ class EnhancedMainWindow(QMainWindow):
         # Apply dark mode by default
         self.setStyleSheet(DARK_STYLE)
         
+        # Import tabs from separate modules
+        from .tabs import (
+            create_chat_tab, create_training_tab, create_avatar_tab,
+            create_vision_tab, create_sessions_tab, create_instructions_tab
+        )
+        
         # Main tabs
         tabs = QTabWidget()
-        tabs.addTab(self._chat_tab(), "💬 Chat")
-        tabs.addTab(self._training_tab(), "🎓 Training")
-        tabs.addTab(self._avatar_tab(), "🤖 Avatar")
-        tabs.addTab(self._vision_tab(), "👁️ Vision")
-        tabs.addTab(self._instructions_tab(), "📖 Instructions")
+        self.tabs = tabs  # Store reference for AI control
+        tabs.addTab(create_chat_tab(self), "💬 Chat")
+        tabs.addTab(create_training_tab(self), "🎓 Train")
+        tabs.addTab(create_avatar_tab(self), "🤖 Avatar")
+        tabs.addTab(create_vision_tab(self), "👁️ Vision")
+        tabs.addTab(create_sessions_tab(self), "📜 History")
+        tabs.addTab(create_instructions_tab(self), "📁 Files")
         
         self.setCentralWidget(tabs)
     
@@ -958,333 +1024,42 @@ class EnhancedMainWindow(QMainWindow):
         """Toggle between dark and light themes."""
         if checked:
             self.setStyleSheet(DARK_STYLE)
-            self.dark_mode_action.setText("🌙 Dark Mode")
+            self.dark_mode_action.setText("Dark Mode (ON)")
         else:
             self.setStyleSheet(LIGHT_STYLE)
-            self.dark_mode_action.setText("☀️ Light Mode")
+            self.dark_mode_action.setText("Dark Mode (OFF)")
     
-    def _chat_tab(self):
-        """Chat interface tab."""
-        w = QWidget()
-        layout = QVBoxLayout()
-        
-        # Chat display
-        self.chat_display = QTextEdit()
-        self.chat_display.setReadOnly(True)
-        layout.addWidget(self.chat_display)
-        
-        # Input
-        input_layout = QHBoxLayout()
-        self.chat_input = QLineEdit()
-        self.chat_input.setPlaceholderText("Type a message...")
-        self.chat_input.returnPressed.connect(self._on_send)
-        
-        self.send_btn = QPushButton("Send")
-        self.send_btn.clicked.connect(self._on_send)
-        
-        self.speak_btn = QPushButton("🔊 Speak")
-        self.speak_btn.clicked.connect(self._on_speak_last)
-        
-        input_layout.addWidget(self.chat_input)
-        input_layout.addWidget(self.send_btn)
-        input_layout.addWidget(self.speak_btn)
-        
-        layout.addLayout(input_layout)
-        w.setLayout(layout)
-        return w
+    def _toggle_auto_speak(self, checked):
+        """Toggle auto-speak mode."""
+        self.auto_speak = checked
+        if hasattr(self, 'auto_speak_action'):
+            if checked:
+                self.auto_speak_action.setText("AI Auto-Speak (ON)")
+            else:
+                self.auto_speak_action.setText("AI Auto-Speak (OFF)")
     
-    def _training_tab(self):
-        """Training controls tab with integrated data editor."""
-        w = QWidget()
-        layout = QVBoxLayout()
-        
-        # Use a splitter to show data editor and training controls side by side
-        splitter = QSplitter(Qt.Horizontal)
-        
-        # Left side: Data Editor
-        data_widget = QWidget()
-        data_layout = QVBoxLayout()
-        
-        header = QLabel("Training Data")
-        header.setObjectName("header")
-        data_layout.addWidget(header)
-        
-        # File selection in a compact row
-        file_layout = QHBoxLayout()
-        self.data_file_combo = QComboBox()
-        self.data_file_combo.setMinimumWidth(200)
-        self._refresh_data_files()
-        self.data_file_combo.setCurrentIndex(-1)
-        self.data_file_combo.currentIndexChanged.connect(self._load_data_file)
-        
-        btn_new_file = QPushButton("New")
-        btn_new_file.setMaximumWidth(50)
-        btn_new_file.clicked.connect(self._create_data_file)
-        
-        file_layout.addWidget(self.data_file_combo)
-        file_layout.addWidget(btn_new_file)
-        data_layout.addLayout(file_layout)
-        
-        # Editor
-        self.data_editor = QPlainTextEdit()
-        self.data_editor.setPlaceholderText(
-            "Select a file above or create a new one.\n\n"
-            "FORMAT:\n"
-            "Q: What is your name?\n"
-            "A: My name is [AI name]\n\n"
-            "User: Hello!\n"
-            "Assistant: Hi there!"
-        )
-        data_layout.addWidget(self.data_editor)
-        
-        # Save button
-        btn_save = QPushButton("💾 Save")
-        btn_save.clicked.connect(self._save_data_file)
-        data_layout.addWidget(btn_save)
-        
-        data_widget.setLayout(data_layout)
-        splitter.addWidget(data_widget)
-        
-        # Right side: Training Controls
-        train_widget = QWidget()
-        train_layout = QVBoxLayout()
-        
-        train_header = QLabel("Training Controls")
-        train_header.setObjectName("header")
-        train_layout.addWidget(train_header)
-        
-        # Current data file indicator
-        self.data_path_label = QLabel("No data file selected")
-        train_layout.addWidget(self.data_path_label)
-        
-        btn_use_data = QPushButton("📚 Use Selected File for Training")
-        btn_use_data.clicked.connect(self._use_data_for_training)
-        train_layout.addWidget(btn_use_data)
-        
-        # Training parameters - simple layout without nested group
-        train_layout.addWidget(QLabel("<b>Parameters:</b>"))
-        
-        params_layout = QFormLayout()
-        
-        self.epochs_spin = QSpinBox()
-        self.epochs_spin.setRange(1, 10000)
-        self.epochs_spin.setValue(10)
-        
-        self.batch_spin = QSpinBox()
-        self.batch_spin.setRange(1, 64)
-        self.batch_spin.setValue(4)
-        
-        self.lr_input = QLineEdit("0.0001")
-        
-        params_layout.addRow("Epochs:", self.epochs_spin)
-        params_layout.addRow("Batch Size:", self.batch_spin)
-        params_layout.addRow("Learning Rate:", self.lr_input)
-        train_layout.addLayout(params_layout)
-        
-        # Parameter help (expandable)
-        help_btn = QPushButton("ℹ️ Parameter Help")
-        help_btn.setCheckable(True)
-        help_btn.clicked.connect(self._toggle_param_help)
-        train_layout.addWidget(help_btn)
-        
-        self.param_help_label = QLabel(
-            "<b>Epochs:</b> Times to go through all data. More = better learning but slower.<br>"
-            "<b>Batch Size:</b> Examples per step. Pi: 1-2, GPU: 4-16.<br>"
-            "<b>Learning Rate:</b> How fast AI learns. Default 0.0001 is usually good."
-        )
-        self.param_help_label.setWordWrap(True)
-        self.param_help_label.setVisible(False)
-        train_layout.addWidget(self.param_help_label)
-        
-        # Progress
-        self.train_progress = QProgressBar()
-        self.train_status = QLabel("Ready")
-        train_layout.addWidget(self.train_progress)
-        train_layout.addWidget(self.train_status)
-        
-        # Train button
-        self.btn_train = QPushButton("▶️ Start Training")
-        self.btn_train.clicked.connect(self._on_start_training)
-        train_layout.addWidget(self.btn_train)
-        
-        train_layout.addStretch()
-        train_widget.setLayout(train_layout)
-        splitter.addWidget(train_widget)
-        
-        # Set initial splitter sizes
-        splitter.setSizes([500, 300])
-        
-        layout.addWidget(splitter)
-        w.setLayout(layout)
-        return w
+    def _toggle_microphone(self, checked):
+        """Toggle microphone listening."""
+        self.microphone_enabled = checked
+        if hasattr(self, 'microphone_action'):
+            if checked:
+                self.microphone_action.setText("Microphone (ON)")
+            else:
+                self.microphone_action.setText("Microphone (OFF)")
     
-    def _toggle_param_help(self, checked):
-        """Toggle parameter help visibility."""
-        self.param_help_label.setVisible(checked)
-    
-    def _avatar_tab(self):
-        """Avatar control panel - AI controlled."""
-        w = QWidget()
-        layout = QVBoxLayout()
-        
-        # Header
-        header = QLabel("Avatar")
-        header.setObjectName("header")
-        layout.addWidget(header)
-        
-        # Avatar preview
-        avatar_group = QGroupBox("Avatar Preview")
-        avatar_layout = QVBoxLayout()
-        
-        self.avatar_image_label = QLabel("No avatar loaded")
-        self.avatar_image_label.setMinimumSize(250, 250)
-        self.avatar_image_label.setMaximumSize(350, 350)
-        self.avatar_image_label.setAlignment(Qt.AlignCenter)
-        self.avatar_image_label.setStyleSheet("border: 2px dashed #45475a; border-radius: 8px;")
-        avatar_layout.addWidget(self.avatar_image_label, alignment=Qt.AlignCenter)
-        
-        # Upload buttons
-        btn_row = QHBoxLayout()
-        btn_load_image = QPushButton("📷 Load Image")
-        btn_load_image.clicked.connect(self._load_avatar_image)
-        btn_load_model = QPushButton("📦 Load Avatar Model")
-        btn_load_model.clicked.connect(self._load_avatar_model)
-        btn_row.addWidget(btn_load_image)
-        btn_row.addWidget(btn_load_model)
-        avatar_layout.addLayout(btn_row)
-        
-        avatar_group.setLayout(avatar_layout)
-        layout.addWidget(avatar_group)
-        
-        # Status (AI controlled)
-        status_group = QGroupBox("Status (AI Controlled)")
-        status_layout = QFormLayout()
-        
-        self.avatar_status_label = QLabel("Not initialized")
-        self.avatar_state_label = QLabel("Idle")
-        self.avatar_expression_label = QLabel("neutral")
-        
-        status_layout.addRow("Status:", self.avatar_status_label)
-        status_layout.addRow("State:", self.avatar_state_label)
-        status_layout.addRow("Expression:", self.avatar_expression_label)
-        status_group.setLayout(status_layout)
-        layout.addWidget(status_group)
-        
-        # Enable/disable only
-        ctrl_group = QGroupBox("Controls")
-        ctrl_layout = QHBoxLayout()
-        
-        self.btn_avatar_enable = QPushButton("✅ Enable")
-        self.btn_avatar_enable.clicked.connect(self._enable_avatar)
-        self.btn_avatar_disable = QPushButton("❌ Disable")
-        self.btn_avatar_disable.clicked.connect(self._disable_avatar)
-        
-        ctrl_layout.addWidget(self.btn_avatar_enable)
-        ctrl_layout.addWidget(self.btn_avatar_disable)
-        ctrl_group.setLayout(ctrl_layout)
-        layout.addWidget(ctrl_group)
-        
-        # Info
-        info = QLabel(
-            "<b>ℹ️ About Avatar:</b><br>"
-            "The avatar is controlled by the AI automatically.<br>"
-            "It will change expressions and speak based on responses.<br><br>"
-            "<b>Supported formats:</b><br>"
-            "• Image: PNG, JPG, GIF<br>"
-            "• Model: Live2D, VRM (place in models/[ai_name]/avatar/)"
-        )
-        info.setWordWrap(True)
-        info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(info)
-        
-        layout.addStretch()
-        
-        # Initialize
-        self._refresh_avatar_status()
-        
-        w.setLayout(layout)
-        return w
-    
-    def _vision_tab(self):
-        """Screen vision - AI can watch the screen."""
-        w = QWidget()
-        layout = QVBoxLayout()
-        
-        # Header
-        header = QLabel("Screen Vision")
-        header.setObjectName("header")
-        layout.addWidget(header)
-        
-        # Preview area
-        preview_group = QGroupBox("Screen Preview")
-        preview_layout = QVBoxLayout()
-        
-        self.vision_preview = QLabel("Click 'Start Watching' to enable AI vision")
-        self.vision_preview.setMinimumHeight(300)
-        self.vision_preview.setAlignment(Qt.AlignCenter)
-        self.vision_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 4px;")
-        self.vision_preview.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        preview_layout.addWidget(self.vision_preview)
-        
-        # Control buttons
-        btn_layout = QHBoxLayout()
-        
-        self.btn_start_watching = QPushButton("👁️ Start Watching")
-        self.btn_start_watching.setCheckable(True)
-        self.btn_start_watching.clicked.connect(self._toggle_screen_watching)
-        
-        self.btn_single_capture = QPushButton("📷 Single Capture")
-        self.btn_single_capture.clicked.connect(self._do_single_capture)
-        
-        btn_layout.addWidget(self.btn_start_watching)
-        btn_layout.addWidget(self.btn_single_capture)
-        preview_layout.addLayout(btn_layout)
-        
-        # Watch interval
-        interval_layout = QHBoxLayout()
-        interval_layout.addWidget(QLabel("Update interval:"))
-        self.vision_interval_spin = QSpinBox()
-        self.vision_interval_spin.setRange(1, 60)
-        self.vision_interval_spin.setValue(5)
-        self.vision_interval_spin.setSuffix(" sec")
-        interval_layout.addWidget(self.vision_interval_spin)
-        interval_layout.addStretch()
-        preview_layout.addLayout(interval_layout)
-        
-        preview_group.setLayout(preview_layout)
-        layout.addWidget(preview_group)
-        
-        # Analysis output
-        analysis_group = QGroupBox("AI Analysis")
-        analysis_layout = QVBoxLayout()
-        
-        self.vision_text = QPlainTextEdit()
-        self.vision_text.setReadOnly(True)
-        self.vision_text.setPlaceholderText("AI's description of what it sees will appear here...")
-        self.vision_text.setMaximumHeight(150)
-        analysis_layout.addWidget(self.vision_text)
-        
-        analysis_group.setLayout(analysis_layout)
-        layout.addWidget(analysis_group)
-        
-        # Info
-        info = QLabel(
-            "<b>ℹ️ About Vision:</b><br>"
-            "When watching is enabled, the AI can see your screen.<br>"
-            "It will describe what it sees and can help with tasks.<br><br>"
-            "<b>Note:</b> On Wayland (Pi default), you may need:<br>"
-            "<code>sudo apt install scrot</code>"
-        )
-        info.setWordWrap(True)
-        info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(info)
-        
-        # Timer for continuous watching
-        self.vision_timer = QTimer()
-        self.vision_timer.timeout.connect(self._do_continuous_capture)
-        
-        w.setLayout(layout)
-        return w
+    def _toggle_avatar(self, checked):
+        """Toggle avatar enabled/disabled."""
+        try:
+            if checked:
+                self._enable_avatar()
+                self.avatar_action.setText("Avatar (ON)")
+            else:
+                self._disable_avatar()
+                self.avatar_action.setText("Avatar (OFF)")
+        except Exception as e:
+            # Don't crash if avatar fails
+            self.avatar_action.setChecked(False)
+            self.avatar_action.setText("Avatar (OFF)")
     
     def _toggle_screen_watching(self, checked):
         """Toggle continuous screen watching."""
@@ -1292,67 +1067,111 @@ class EnhancedMainWindow(QMainWindow):
             self.btn_start_watching.setText("⏹️ Stop Watching")
             interval_ms = self.vision_interval_spin.value() * 1000
             self.vision_timer.start(interval_ms)
-            self._do_continuous_capture()  # Capture immediately
+            self._do_continuous_capture()
         else:
             self.btn_start_watching.setText("👁️ Start Watching")
             self.vision_timer.stop()
     
     def _do_single_capture(self):
         """Do a single screen capture."""
-        self._capture_and_analyze()
+        self._capture_screen()
     
     def _do_continuous_capture(self):
         """Capture for continuous watching."""
-        self._capture_and_analyze()
+        self._capture_screen()
     
-    def _capture_and_analyze(self):
-        """Capture screen and analyze it."""
+    def _capture_screen(self):
+        """Capture screen and display it. Uses scrot on Linux (Wayland/Pi friendly)."""
         try:
-            # Try multiple capture methods
             img = None
+            error_msg = None
             
-            # Method 1: Try mss (fast, works on most systems)
-            try:
-                import mss
-                with mss.mss() as sct:
-                    monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
-                    screenshot = sct.grab(monitor)
-                    from PIL import Image
-                    img = Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
-            except Exception:
-                pass
+            # On Linux, use scrot (works on Wayland, X11, and Pi)
+            import platform
+            import shutil
             
-            # Method 2: Try scrot (works on Wayland/Pi)
-            if img is None:
+            if platform.system() == "Linux" and shutil.which("scrot"):
                 try:
                     import subprocess
                     import tempfile
+                    import os
+                    from PIL import Image
+                    
                     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
                         tmp_path = f.name
-                    subprocess.run(['scrot', tmp_path], check=True, capture_output=True)
-                    from PIL import Image
-                    img = Image.open(tmp_path)
-                    import os
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
+                    
+                    # Run scrot with overwrite flag
+                    result = subprocess.run(
+                        ['scrot', '-o', tmp_path], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=10
+                    )
+                    
+                    if result.returncode == 0 and os.path.exists(tmp_path):
+                        img = Image.open(tmp_path)
+                        img = img.copy()  # Load into memory
+                        os.unlink(tmp_path)  # Clean up temp file
+                    else:
+                        error_msg = f"scrot failed: {result.stderr}"
+                except Exception as e:
+                    error_msg = f"scrot error: {e}"
             
-            # Method 3: Try PIL ImageGrab
+            # macOS - use screencapture
+            elif platform.system() == "Darwin" and shutil.which("screencapture"):
+                try:
+                    import subprocess
+                    import tempfile
+                    import os
+                    from PIL import Image
+                    
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+                        tmp_path = f.name
+                    
+                    subprocess.run(['screencapture', '-x', tmp_path], timeout=10)
+                    
+                    if os.path.exists(tmp_path):
+                        img = Image.open(tmp_path)
+                        img = img.copy()
+                        os.unlink(tmp_path)
+                except Exception as e:
+                    error_msg = f"screencapture error: {e}"
+            
+            # Fallback: Try PIL ImageGrab (Windows, some X11)
             if img is None:
                 try:
                     from PIL import ImageGrab
                     img = ImageGrab.grab()
-                except Exception:
-                    pass
+                except Exception as e:
+                    if error_msg:
+                        error_msg += f", ImageGrab: {e}"
+                    else:
+                        error_msg = f"ImageGrab error: {e}"
+            
+            # Last resort: mss (may fail on Wayland)
+            if img is None:
+                try:
+                    import mss
+                    from PIL import Image
+                    with mss.mss() as sct:
+                        monitor = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+                        screenshot = sct.grab(monitor)
+                        img = Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
+                except Exception as e:
+                    if error_msg:
+                        error_msg += f", mss: {e}"
+                    else:
+                        error_msg = f"mss error: {e}"
             
             if img is None:
-                self.vision_preview.setText(
-                    "❌ Screenshot failed\n\n"
-                    "Install one of:\n"
-                    "• pip install mss\n"
-                    "• sudo apt install scrot"
-                )
+                install_hint = ""
+                if platform.system() == "Linux":
+                    install_hint = "\n\nInstall scrot: sudo apt install scrot"
+                self.vision_preview.setText(f"Screenshot failed\n\n{error_msg}{install_hint}")
                 return
+            
+            # Save full image for AI analysis
+            self._last_screenshot = img
             
             # Resize for display
             display_img = img.copy()
@@ -1368,302 +1187,298 @@ class EnhancedMainWindow(QMainWindow):
             pixmap.loadFromData(buffer.read())
             self.vision_preview.setPixmap(pixmap)
             
-            # Simple analysis - describe what's visible
+            # Basic info
             width, height = img.size
-            analysis = f"Screen: {width}x{height}\n"
-            analysis += f"Captured: {datetime.now().strftime('%H:%M:%S')}\n"
-            
-            # Try OCR if available
-            try:
-                from ..tools.simple_ocr import extract_text
-                text = extract_text(img)
-                if text and text.strip():
-                    analysis += f"\n--- Detected Text ---\n{text[:500]}"
-            except Exception:
-                analysis += "\n(Install pytesseract for text detection)"
-            
-            self.vision_text.setPlainText(analysis)
+            from datetime import datetime
+            info = f"Screen: {width}x{height} | Captured: {datetime.now().strftime('%H:%M:%S')}"
+            self.vision_text.setPlainText(info)
             
         except Exception as e:
             self.vision_preview.setText(f"Error: {e}")
-            self.vision_text.setPlainText(f"Capture failed: {e}")
     
-    def _instructions_tab(self):
-        """Instructions tab - editable instructions for the AI."""
-        w = QWidget()
-        layout = QVBoxLayout()
-        
-        # Header
-        header = QLabel("AI Instructions")
-        header.setObjectName("header")
-        layout.addWidget(header)
-        
-        info = QLabel(
-            "Define how your AI should behave. These instructions are loaded at startup."
-        )
-        info.setWordWrap(True)
-        info.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(info)
-        
-        # Instructions editor
-        self.instructions_editor = QPlainTextEdit()
-        self.instructions_editor.setPlaceholderText(
-            "Enter instructions for your AI here...\n\n"
-            "Example:\n"
-            "You are a helpful assistant named [name].\n"
-            "You are friendly and concise.\n"
-            "You help with programming, writing, and general questions.\n"
-            "You always respond in a polite manner."
-        )
-        
-        # Load existing instructions
-        self._load_instructions()
-        layout.addWidget(self.instructions_editor)
-        
-        # Buttons
-        btn_layout = QHBoxLayout()
-        
-        btn_save = QPushButton("💾 Save Instructions")
-        btn_save.clicked.connect(self._save_instructions)
-        
-        btn_reset = QPushButton("🔄 Reset to Default")
-        btn_reset.clicked.connect(self._reset_instructions)
-        
-        btn_layout.addWidget(btn_save)
-        btn_layout.addWidget(btn_reset)
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
-        
-        # Tips
-        tips = QLabel(
-            "<b>💡 Tips:</b><br>"
-            "• Be specific about personality and tone<br>"
-            "• Include what the AI should and shouldn't do<br>"
-            "• These instructions are saved with your model"
-        )
-        tips.setWordWrap(True)
-        tips.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(tips)
-        
-        w.setLayout(layout)
-        return w
+    def ai_start_watching(self):
+        """AI can start continuous screen watching."""
+        if not self.btn_start_watching.isChecked():
+            self.btn_start_watching.setChecked(True)
+            self._toggle_screen_watching()
+        return "Started screen watching"
     
-    def _load_instructions(self):
-        """Load instructions from model folder."""
-        if self.current_model_name:
-            model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-            instructions_path = Path(model_info.get("path", "")) / "instructions.txt"
-            if instructions_path.exists():
-                self.instructions_editor.setPlainText(instructions_path.read_text())
-                return
-        
-        # Default instructions
-        default = f"""You are {self.current_model_name or 'an AI assistant'}.
-You are helpful, friendly, and concise.
-You assist with questions and tasks to the best of your ability.
-You are honest about what you don't know."""
-        self.instructions_editor.setPlainText(default)
+    def ai_stop_watching(self):
+        """AI can stop continuous screen watching."""
+        if self.btn_start_watching.isChecked():
+            self.btn_start_watching.setChecked(False)
+            self._toggle_screen_watching()
+        return "Stopped screen watching"
     
-    def _save_instructions(self):
-        """Save instructions to model folder and optionally to GitHub."""
-        if not self.current_model_name:
-            QMessageBox.warning(self, "No Model", "Load a model first")
-            return
-        
-        model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-        instructions_path = Path(model_info.get("path", "")) / "instructions.txt"
-        
+    def ai_capture_screen(self):
+        """AI can capture a single screenshot."""
+        self._capture_screen()
+        return "Screen captured"
+    
+    def ai_get_screen_text(self):
+        """AI can get OCR text from last screenshot."""
+        if not hasattr(self, '_last_screenshot') or self._last_screenshot is None:
+            return "No screenshot available. Use ai_capture_screen() first."
         try:
-            instructions_path.write_text(self.instructions_editor.toPlainText())
-            QMessageBox.information(self, "Saved", f"Instructions saved to {instructions_path}")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+            from .tools.simple_ocr import extract_text
+            text = extract_text(self._last_screenshot)
+            return text if text else "No text detected in screenshot"
+        except:
+            return "OCR not available"
     
-    def _reset_instructions(self):
-        """Reset instructions to default."""
+    # === Session Actions ===
+    
+    def _refresh_sessions(self):
+        """Refresh the list of saved sessions."""
+        self.sessions_list.clear()
+        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        conv_dir.mkdir(parents=True, exist_ok=True)
+        for f in sorted(conv_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+            self.sessions_list.addItem(f.stem)
+    
+    def _load_session(self, item):
+        """Load a session's content into the viewer."""
+        if not item:
+            return
+        session_name = item.text()
+        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        session_file = conv_dir / f"{session_name}.json"
+        
+        if session_file.exists():
+            try:
+                data = json.loads(session_file.read_text())
+                html = f"<h3>{session_name}</h3>"
+                for msg in data.get("messages", []):
+                    role = msg.get("role", "user")
+                    text = msg.get("text", "")
+                    if role == "user":
+                        html += f"<p><b>You:</b> {text}</p>"
+                    else:
+                        html += f"<p><b>AI:</b> {text}</p>"
+                self.session_viewer.setHtml(html)
+                self._current_session = session_name
+            except Exception as e:
+                self.session_viewer.setPlainText(f"Error loading session: {e}")
+    
+    def _new_session(self):
+        """Create a new chat session."""
+        name, ok = QInputDialog.getText(self, "New Session", "Session name:")
+        if ok and name:
+            if hasattr(self, 'chat_messages') and self.chat_messages:
+                self._save_current_chat(name)
+            else:
+                conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+                conv_dir.mkdir(parents=True, exist_ok=True)
+                session_file = conv_dir / f"{name}.json"
+                session_file.write_text(json.dumps({
+                    "name": name,
+                    "saved_at": time.time(),
+                    "messages": []
+                }))
+            self._refresh_sessions()
+            self.chat_messages = []
+    
+    def _rename_session(self):
+        """Rename the selected session."""
+        item = self.sessions_list.currentItem()
+        if not item:
+            QMessageBox.warning(self, "No Selection", "Select a session to rename")
+            return
+        old_name = item.text()
+        new_name, ok = QInputDialog.getText(self, "Rename Session", "New name:", text=old_name)
+        if ok and new_name and new_name != old_name:
+            conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+            old_file = conv_dir / f"{old_name}.json"
+            new_file = conv_dir / f"{new_name}.json"
+            if old_file.exists():
+                old_file.rename(new_file)
+                self._refresh_sessions()
+    
+    def _delete_session(self):
+        """Delete the selected session."""
+        item = self.sessions_list.currentItem()
+        if not item:
+            QMessageBox.warning(self, "No Selection", "Select a session to delete")
+            return
+        session_name = item.text()
         reply = QMessageBox.question(
-            self, "Reset Instructions",
-            "Reset to default instructions? This will overwrite current text.",
+            self, "Delete Session",
+            f"Delete session '{session_name}'?",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            default = f"""You are {self.current_model_name or 'an AI assistant'}.
-You are helpful, friendly, and concise.
-You assist with questions and tasks to the best of your ability.
-You are honest about what you don't know."""
-            self.instructions_editor.setPlainText(default)
+            conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+            session_file = conv_dir / f"{session_name}.json"
+            if session_file.exists():
+                session_file.unlink()
+            self._refresh_sessions()
+            self.session_viewer.clear()
     
-    # === Data Editor Actions ===
+    def _load_session_into_chat(self):
+        """Load the selected session into the chat tab."""
+        if not hasattr(self, '_current_session'):
+            QMessageBox.warning(self, "No Session", "Select a session first")
+            return
+        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        session_file = conv_dir / f"{self._current_session}.json"
+        if session_file.exists():
+            try:
+                data = json.loads(session_file.read_text())
+                self.chat_display.clear()
+                self.chat_messages = data.get("messages", [])
+                for msg in self.chat_messages:
+                    role = msg.get("role", "user")
+                    text = msg.get("text", "")
+                    if role == "user":
+                        self.chat_display.append(f"<b>You:</b> {text}")
+                    else:
+                        self.chat_display.append(f"<b>{self.current_model_name}:</b> {text}")
+                self.tabs.setCurrentIndex(0)
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to load session: {e}")
+    
+    def _save_current_chat(self, name=None):
+        """Save current chat to a session file."""
+        if not hasattr(self, 'chat_messages'):
+            self.chat_messages = []
+        if not name:
+            name = f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        conv_dir.mkdir(parents=True, exist_ok=True)
+        session_file = conv_dir / f"{name}.json"
+        session_file.write_text(json.dumps({
+            "name": name,
+            "saved_at": time.time(),
+            "messages": self.chat_messages
+        }))
+    
+    # === Data Editor Actions (for Training tab) ===
+    
     
     def _refresh_data_files(self):
-        """Refresh list of data files - shows AI's own data first."""
+        """Refresh list of training data files."""
+        if not hasattr(self, 'data_file_combo'):
+            return
         self.data_file_combo.clear()
         
-        # First, add current AI's data files if one is loaded
+        # Get AI's data directory
         if self.current_model_name:
             model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-            model_data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-            if isinstance(model_data_dir, str):
-                model_data_dir = Path(model_data_dir)
-            
-            if model_data_dir.exists():
-                for f in model_data_dir.glob("*.txt"):
-                    self.data_file_combo.addItem(f"📌 {self.current_model_name}: {f.name}", str(f))
+            data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
+            if isinstance(data_dir, str):
+                data_dir = Path(data_dir)
+        else:
+            data_dir = Path(CONFIG.get("data_dir", "data"))
         
-        # Add separator if we have AI files
-        if self.data_file_combo.count() > 0:
-            self.data_file_combo.insertSeparator(self.data_file_combo.count())
-        
-        # Then add global data files
-        data_dir = Path(CONFIG.get("data_dir", "data"))
         data_dir.mkdir(parents=True, exist_ok=True)
         
-        for f in data_dir.glob("*.txt"):
-            self.data_file_combo.addItem(f"📁 Global: {f.name}", str(f))
+        # Ensure training.txt exists
+        training_file = data_dir / "training.txt"
+        if not training_file.exists():
+            training_file.write_text("# Training Data\n# Add Q&A pairs below\n\nQ: Hello\nA: Hi there!\n")
+        
+        # Add files (training data files, not instructions)
+        for f in sorted(data_dir.glob("*.txt")):
+            if f.name not in ["instructions.txt", "notes.txt"]:
+                self.data_file_combo.addItem(f.name, str(f))
+        
+        # Select first file if available
+        if self.data_file_combo.count() > 0:
+            self.data_file_combo.setCurrentIndex(0)
     
     def _load_data_file(self, index):
-        """Load a data file into editor."""
-        if index < 0:
+        """Load a data file into the training editor."""
+        if index < 0 or not hasattr(self, 'data_file_combo'):
             return
-        filepath = self.data_file_combo.itemData(index)
-        if not filepath:
-            # Fallback for old format
-            filename = self.data_file_combo.currentText()
-            if not filename or filename.startswith("---"):
-                return
-            data_dir = Path(CONFIG.get("data_dir", "data"))
-            filepath = str(data_dir / filename)
         
-        try:
+        filepath = self.data_file_combo.itemData(index)
+        if filepath and Path(filepath).exists():
             self.data_editor.setPlainText(Path(filepath).read_text())
             self._current_data_file = filepath
-        except Exception as e:
-            self.data_editor.setPlainText(f"Error loading file: {e}")
+            self.training_data_path = filepath  # Auto-set for training
     
     def _save_data_file(self):
-        """Save current editor content."""
+        """Save the training data file."""
         if not hasattr(self, '_current_data_file') or not self._current_data_file:
-            QMessageBox.warning(self, "No File", "Select or create a file first")
+            QMessageBox.warning(self, "No File", "Select a file first")
             return
         
-        filepath = Path(self._current_data_file)
         try:
-            filepath.write_text(self.data_editor.toPlainText())
-            QMessageBox.information(self, "Saved", f"Saved to {filepath.name}")
+            Path(self._current_data_file).write_text(self.data_editor.toPlainText())
+            QMessageBox.information(self, "Saved", "File saved!")
         except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+            QMessageBox.warning(self, "Error", f"Failed to save: {e}")
     
     def _create_data_file(self):
-        """Create a new data file in the current AI's folder."""
-        from PyQt5.QtWidgets import QInputDialog
-        name, ok = QInputDialog.getText(self, "New File", "Filename (without .txt):")
+        """Create a new training data file."""
+        name, ok = QInputDialog.getText(self, "New Training File", "File name (without .txt):")
         if ok and name:
-            try:
-                name = name.strip().replace(" ", "_")
-                if not name.endswith(".txt"):
-                    name += ".txt"
-                
-                # Save to AI's data folder if available, else global
-                if self.current_model_name:
-                    model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-                    data_dir = Path(model_info.get("path", "")) / "data"
-                else:
-                    data_dir = Path(CONFIG.get("data_dir", "data"))
-                
-                data_dir.mkdir(parents=True, exist_ok=True)
-                filepath = data_dir / name
-                
-                ai_name = self.current_model_name or "Assistant"
-                filepath.write_text(f"# Training data for {ai_name}\n# Add your Q&A pairs or conversations below\n\n")
-                
-                self._refresh_data_files()
-                # Select the new file
-                for i in range(self.data_file_combo.count()):
-                    if self.data_file_combo.itemData(i) == str(filepath):
-                        self.data_file_combo.setCurrentIndex(i)
-                        break
-                QMessageBox.information(self, "Created", f"Created {name} in {data_dir}")
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Failed to create file: {e}")
-    
-    def _use_data_for_training(self):
-        """Set current file as training data."""
-        if not hasattr(self, '_current_data_file') or not self._current_data_file:
-            QMessageBox.warning(self, "No File", "Select a data file first")
-            return
-        
-        self.training_data_path = self._current_data_file
-        filename = Path(self._current_data_file).name
-        self.data_path_label.setText(f"Selected: {filename}")
-        QMessageBox.information(self, "Ready", f"'{filename}' selected for training.\nGo to Training tab to start.")
-    
-    def _import_data_file(self):
-        """Import an external file into the AI's data folder."""
-        filepath, _ = QFileDialog.getOpenFileName(
-            self, "Import Training Data", "", "Text Files (*.txt);;All Files (*)"
-        )
-        if filepath:
-            try:
-                # Determine destination
-                if self.current_model_name:
-                    model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-                    dest_dir = Path(model_info.get("path", "")) / "data"
-                else:
-                    dest_dir = Path(CONFIG.get("data_dir", "data"))
-                
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                src = Path(filepath)
-                dest = dest_dir / src.name
-                
-                # Copy content
-                dest.write_text(src.read_text())
-                
-                self._refresh_data_files()
-                QMessageBox.information(self, "Imported", f"Imported {src.name} to {dest_dir}")
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Failed to import: {e}")
+            if not name.endswith(".txt"):
+                name += ".txt"
+            
+            # Get data directory
+            if self.current_model_name:
+                model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+                data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
+                if isinstance(data_dir, str):
+                    data_dir = Path(data_dir)
+            else:
+                data_dir = Path(CONFIG.get("data_dir", "data"))
+            
+            data_dir.mkdir(parents=True, exist_ok=True)
+            new_file = data_dir / name
+            
+            if new_file.exists():
+                QMessageBox.warning(self, "Exists", f"{name} already exists")
+                return
+            
+            new_file.write_text("# Training Data\n# Add Q&A pairs below\n\n")
+            self._refresh_data_files()
+            
+            # Select the new file
+            idx = self.data_file_combo.findText(name)
+            if idx >= 0:
+                self.data_file_combo.setCurrentIndex(idx)
     
     # === Avatar Actions ===
     
     def _refresh_avatar_status(self):
-        """Update avatar status display."""
-        try:
-            from ..avatar.avatar_api import AvatarController
-            self.avatar = AvatarController()
-            self.avatar_status_label.setText("✅ Initialized")
-            self.avatar_state_label.setText(self.avatar.state.get("status", "unknown"))
-        except Exception as e:
-            self.avatar_status_label.setText(f"❌ Error: {e}")
-            self.avatar = None
+        """Update avatar status - now handled by avatar_tab."""
+        # Initialize avatar expressions dict if needed
+        if not hasattr(self, 'avatar_expressions'):
+            self.avatar_expressions = {}
+            self.current_expression = "neutral"
         
-        # Try to load avatar image if one exists
+        # Try to load default avatar
         self._load_default_avatar()
     
     def _load_default_avatar(self):
-        """Try to load avatar image from model folder or avatar folder."""
-        avatar_paths = []
+        """Try to load avatar image from model's avatar folder."""
+        if not self.current_model_name:
+            return
+            
+        model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
+        model_path = Path(model_info.get("path", ""))
+        avatar_dir = model_path / "avatar"
         
-        # Check model-specific avatar
-        if self.current_model_name:
-            model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-            model_path = Path(model_info.get("path", ""))
-            avatar_paths.extend([
-                model_path / "avatar.png",
-                model_path / "avatar.jpg",
-                model_path / "avatar.jpeg",
-            ])
+        if not avatar_dir.exists():
+            avatar_dir.mkdir(exist_ok=True)
+            return
         
-        # Check global avatar folder
-        avatar_dir = Path("avatar")
-        avatar_paths.extend([
-            avatar_dir / "default.png",
-            avatar_dir / "avatar.png",
-        ])
+        # Load all expression images
+        for img_file in avatar_dir.glob("*.png"):
+            expr_name = img_file.stem.lower()
+            self.avatar_expressions[expr_name] = str(img_file)
+        for img_file in avatar_dir.glob("*.jpg"):
+            expr_name = img_file.stem.lower()
+            self.avatar_expressions[expr_name] = str(img_file)
         
-        for path in avatar_paths:
-            if path.exists():
-                self._display_avatar_image(str(path))
-                return
+        # Display neutral or first available
+        if "neutral" in self.avatar_expressions:
+            self._display_avatar_image(self.avatar_expressions["neutral"])
+        elif self.avatar_expressions:
+            first = list(self.avatar_expressions.values())[0]
+            self._display_avatar_image(first)
     
     def _load_avatar_image(self):
         """Load a custom avatar image."""
@@ -1671,29 +1486,7 @@ You are honest about what you don't know."""
             self, "Select Avatar Image", "", "Images (*.png *.jpg *.jpeg *.gif);;All Files (*)"
         )
         if filepath:
-            # Copy to model folder if we have a current model
-            if self.current_model_name:
-                try:
-                    model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
-                    model_path = Path(model_info.get("path", ""))
-                    dest = model_path / f"avatar{Path(filepath).suffix}"
-                    
-                    import shutil
-                    shutil.copy(filepath, dest)
-                    filepath = str(dest)
-                    QMessageBox.information(self, "Saved", f"Avatar saved to {dest}")
-                except Exception as e:
-                    QMessageBox.warning(self, "Warning", f"Couldn't save to model folder: {e}")
-            
-            self._display_avatar_image(filepath)
-    
-    def _load_avatar_model(self):
-        """Load an avatar model (Live2D, VRM, etc.)."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Avatar Model Folder",
-            "", QFileDialog.ShowDirsOnly
-        )
-        if folder:
+            # Copy to model's avatar folder
             if self.current_model_name:
                 try:
                     model_info = self.registry.registry.get("models", {}).get(self.current_model_name, {})
@@ -1701,49 +1494,44 @@ You are honest about what you don't know."""
                     avatar_dir = model_path / "avatar"
                     avatar_dir.mkdir(exist_ok=True)
                     
-                    # Copy all files from selected folder
-                    src_folder = Path(folder)
-                    for item in src_folder.iterdir():
-                        dest = avatar_dir / item.name
-                        if item.is_file():
-                            shutil.copy(item, dest)
-                        elif item.is_dir():
-                            if dest.exists():
-                                shutil.rmtree(dest)
-                            shutil.copytree(item, dest)
-                    
-                    QMessageBox.information(self, "Imported", f"Avatar model imported to {avatar_dir}")
-                    
-                    # Try to find and display preview image
-                    for ext in ['.png', '.jpg', '.jpeg']:
-                        preview = avatar_dir / f"preview{ext}"
-                        if preview.exists():
-                            self._display_avatar_image(str(preview))
-                            break
+                    import shutil
+                    dest = avatar_dir / f"neutral{Path(filepath).suffix}"
+                    shutil.copy(filepath, dest)
+                    filepath = str(dest)
                 except Exception as e:
-                    QMessageBox.warning(self, "Error", f"Failed to import: {e}")
-            else:
-                QMessageBox.warning(self, "No Model", "Load an AI model first")
+                    pass  # Use original filepath
+            
+            # Display the image
+            self._display_avatar_image(filepath)
+            
+            # Update expression dict
+            if hasattr(self, 'avatar_expressions'):
+                self.avatar_expressions["neutral"] = filepath
     
     def _display_avatar_image(self, filepath):
         """Display an avatar image."""
         pixmap = QPixmap(filepath)
         if not pixmap.isNull():
-            scaled = pixmap.scaled(250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled = pixmap.scaled(380, 380, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.avatar_image_label.setPixmap(scaled)
-            self.avatar_image_label.setStyleSheet("border: 2px solid #89b4fa; border-radius: 8px;")
+            self.avatar_image_label.setStyleSheet("border: 2px solid #89b4fa; border-radius: 12px; background: #1e1e2e;")
+            if hasattr(self, 'avatar_status_label'):
+                self.avatar_status_label.setText(f"Avatar loaded: {Path(filepath).name}")
         else:
             self.avatar_image_label.setText("Failed to load image")
+            if hasattr(self, 'avatar_status_label'):
+                self.avatar_status_label.setText("Failed to load avatar")
     
     def _enable_avatar(self):
-        if self.avatar:
-            self.avatar.enable()
-            self._refresh_avatar_status()
+        """Enable avatar display."""
+        self._refresh_avatar_status()
     
     def _disable_avatar(self):
-        if self.avatar:
-            self.avatar.disable()
-            self._refresh_avatar_status()
+        """Disable avatar display."""
+        self.avatar_image_label.clear()
+        self.avatar_image_label.setText("Avatar disabled\n\nEnable in Options → Avatar")
+        if hasattr(self, 'avatar_status_label'):
+            self.avatar_status_label.setText("Avatar disabled")
     
     # === Vision Actions ===
     
@@ -1829,15 +1617,45 @@ You are honest about what you don't know."""
         if not text or not self.engine:
             return
         
+        # Initialize chat messages list if needed
+        if not hasattr(self, 'chat_messages'):
+            self.chat_messages = []
+        
         self.chat_display.append(f"<b>You:</b> {text}")
         self.chat_input.clear()
+        
+        # Track user message
+        self.chat_messages.append({
+            "role": "user",
+            "text": text,
+            "ts": time.time()
+        })
         
         try:
             response = self.engine.generate(text, max_gen=50)
             self.chat_display.append(f"<b>{self.current_model_name}:</b> {response}")
             self.last_response = response
+            
+            # Track AI response
+            self.chat_messages.append({
+                "role": "assistant",
+                "text": response,
+                "ts": time.time()
+            })
+            
+            # Auto-speak if enabled
+            if getattr(self, 'auto_speak', False):
+                self._speak_text(response)
         except Exception as e:
             self.chat_display.append(f"<i>Error: {e}</i>")
+    
+    def _speak_text(self, text):
+        """Speak text using TTS."""
+        try:
+            from ..voice import speak
+            speak(text)
+        except Exception as e:
+            pass  # Silent fail for auto-speak
     
     def _on_speak_last(self):
         if hasattr(self, 'last_response'):
@@ -1893,12 +1711,22 @@ You are honest about what you don't know."""
             QMessageBox.warning(self, "No Model", "No model loaded")
             return
         
-        if not hasattr(self, 'training_data_path'):
-            QMessageBox.warning(self, "No Data", "Select training data first")
+        # Save training file first if editor exists
+        if hasattr(self, 'training_editor') and hasattr(self, '_current_training_file'):
+            try:
+                content = self.training_editor.toPlainText()
+                Path(self._current_training_file).write_text(content)
+            except:
+                pass
+        
+        if not hasattr(self, 'training_data_path') or not self.training_data_path:
+            QMessageBox.warning(self, "No Data", "Select a training file first.")
             return
         
-        # This should run in a thread - simplified version here
-        self.train_status.setText("Training... (UI may freeze)")
+        # Update button and progress
+        self.btn_train.setEnabled(False)
+        self.btn_train.setText("Training...")
+        self.train_progress.setValue(0)
         QApplication.processEvents()
         
         try:
@@ -1915,16 +1743,108 @@ You are honest about what you don't know."""
                 learning_rate=float(self.lr_input.text()),
             )
             
-            trainer.train(epochs=self.epochs_spin.value())
+            epochs = self.epochs_spin.value()
+            for epoch in range(epochs):
+                trainer.train(epochs=1)
+                progress = int((epoch + 1) / epochs * 100)
+                self.train_progress.setValue(progress)
+                QApplication.processEvents()
             
             # Reload model
             self._load_current_model()
             
-            self.train_status.setText("Training complete!")
+            self.train_progress.setValue(100)
+            self.btn_train.setText("Train")
+            self.btn_train.setEnabled(True)
             QMessageBox.information(self, "Done", "Training finished!")
         except Exception as e:
-            self.train_status.setText(f"Error: {e}")
+            self.btn_train.setText("Train")
+            self.btn_train.setEnabled(True)
             QMessageBox.warning(self, "Training Error", str(e))
+    
+    # === AI Control Methods ===
+    # These methods allow the AI to control the GUI programmatically
+    
+    def ai_create_model(self, name: str, size: str = "tiny"):
+        """AI can create a new model."""
+        try:
+            self.registry.create_model(name, size=size, vocab_size=32000)
+            self._refresh_models_list()
+            return f"Created model '{name}' with size '{size}'"
+        except Exception as e:
+            return f"Error creating model: {e}"
+    
+    def ai_switch_model(self, name: str):
+        """AI can switch to a different model."""
+        if name in self.registry.registry.get("models", {}):
+            self.current_model_name = name
+            self._load_current_model()
+            self.model_status_btn.setText(f"Model: {name}  ▼")
+            return f"Switched to model '{name}'"
+        return f"Model '{name}' not found"
+    
+    def ai_send_message(self, text: str):
+        """AI can send a chat message (for testing/demos)."""
+        self.chat_input.setText(text)
+        self._on_send()
+        return "Message sent"
+    
+    def ai_switch_tab(self, tab_name: str):
+        """AI can switch tabs."""
+        tab_map = {
+            "chat": 0, "train": 1, "training": 1, "avatar": 2, 
+            "vision": 3, "history": 4, "sessions": 4, "files": 5, "help": 5, "notes": 5
+        }
+        idx = tab_map.get(tab_name.lower())
+        if idx is not None:
+            self.tabs.setCurrentIndex(idx)
+            return f"Switched to {tab_name} tab"
+        return f"Unknown tab: {tab_name}"
+    
+    def ai_save_session(self, name: str = None):
+        """AI can save the current chat session."""
+        self._save_current_chat(name)
+        return f"Session saved as '{name or 'auto-named'}'"
+    
+    def ai_send_to_game(self, command: str):
+        """AI can send commands to connected game."""
+        if hasattr(self, 'game_connection') and self.game_connection:
+            try:
+                # TODO: Send via WebSocket/HTTP based on connection type
+                if hasattr(self, 'game_log'):
+                    self.game_log.append(f"AI → {command}")
+                return f"Sent to game: {command}"
+            except Exception as e:
+                return f"Failed to send: {e}"
+        return "Not connected to any game"
+    
+    def ai_send_to_robot(self, command: str):
+        """AI can send commands to connected robot."""
+        if hasattr(self, 'robot_connection') and self.robot_connection:
+            try:
+                self.robot_connection.write(f"{command}\n".encode())
+                if hasattr(self, 'robot_log'):
+                    self.robot_log.append(f"AI → {command}")
+                return f"Sent to robot: {command}"
+            except Exception as e:
+                return f"Failed to send: {e}"
+        return "Not connected to any robot"
+    
+    def ai_get_available_actions(self):
+        """Return list of actions the AI can perform."""
+        return [
+            "ai_create_model(name, size='tiny'|'small'|'medium'|'large')",
+            "ai_switch_model(name)",
+            "ai_send_message(text)",
+            "ai_switch_tab('chat'|'train'|'avatar'|'vision'|'history'|'files')",
+            "ai_save_session(name)",
+            "ai_capture_screen()",
+            "ai_start_watching()",
+            "ai_stop_watching()",
+            "ai_get_screen_text()",
+            "ai_send_to_game(command)",
+            "ai_send_to_robot(command)",
+        ]
 
 
 def run_app():

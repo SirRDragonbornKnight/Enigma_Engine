@@ -124,8 +124,8 @@ class ModelRegistry:
         
         # Create AI-specific training data file
         training_data_file = model_dir / "data" / "training.txt"
-        training_data_file.write_text(f"""# Training Data for {name}
-# ===========================
+        training_data_file.write_text(f"""# Training Data
+# =============
 # Add your training data below. The more examples, the better!
 #
 # FORMAT OPTIONS:
@@ -135,34 +135,34 @@ class ModelRegistry:
 #
 # 2. Q&A format:
 #    Q: What is your name?
-#    A: My name is {name}.
+#    A: I'm {name}.
 #
 # 3. Conversation format:
 #    User: Hello!
-#    {name}: Hello! How can I help you today?
+#    AI: Hello! How can I help you today?
 #
 # TIPS:
 # - Include many variations of common questions
 # - Add personality through response style
 # - More diverse examples = smarter AI
-# ===========================
+# =============
 
 # Example conversations (customize these!):
 
 Q: What is your name?
-A: My name is {name}.
+A: I'm {name}.
 
 Q: Who made you?
-A: I was created by my developer to be a helpful AI assistant.
+A: I was created using the Enigma Engine.
 
 Q: How are you?
 A: I'm doing well, thank you for asking! How can I help you today?
 
 User: Hello!
-{name}: Hello! It's nice to meet you. How can I assist you?
+AI: Hello! It's nice to meet you. How can I assist you?
 
 User: Tell me about yourself.
-{name}: I'm {name}, an AI assistant. I'm here to help with questions, have conversations, and assist with various tasks.
+AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversations, and assist with various tasks.
 
 # Add more training data below...
 
@@ -170,33 +170,38 @@ User: Tell me about yourself.
         
         # Create AI-specific instructions file
         instructions_file = model_dir / "data" / "instructions.txt"
-        instructions_file.write_text(f"""# Instructions for {name}
-# ===========================
-# These instructions help define your AI's behavior and personality.
-# Edit this file to customize how {name} responds.
-# ===========================
+        instructions_file.write_text(f"""# AI Instructions
+# ================
+# This file defines your AI's behavior and personality.
+# Edit this file to customize how your AI responds.
 
-# PERSONALITY:
-# Describe the personality traits you want {name} to have.
-# Example: friendly, helpful, curious, professional
+# STEP 1: PERSONALITY
+# -------------------
+# Describe the traits you want your AI to have.
+# Examples: friendly, helpful, curious, professional, playful
 
 {name} is a helpful and friendly AI assistant.
 {name} gives clear and concise answers.
 {name} is honest about its limitations.
 
-# KNOWLEDGE:
-# List topics or domains {name} should be knowledgeable about.
+# STEP 2: KNOWLEDGE AREAS
+# -----------------------
+# List topics or domains your AI should focus on.
+# Leave blank for general knowledge.
 
-# RULES:
-# Define any rules {name} should follow.
+
+# STEP 3: BEHAVIOR RULES
+# ----------------------
+# Define rules your AI should follow.
 
 1. Be helpful and respectful
 2. Give accurate information
 3. Admit when unsure
 4. Keep responses clear and relevant
 
-# STYLE:
-# Describe how {name} should communicate.
+# STEP 4: COMMUNICATION STYLE
+# ---------------------------
+# Describe how your AI should communicate.
 
 {name} uses a conversational tone.
 {name} avoids overly technical jargon unless asked.

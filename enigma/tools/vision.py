@@ -24,6 +24,7 @@ from ..config import CONFIG
 class ScreenCapture:
     """
     Cross-platform screen capture.
+    Prioritizes scrot on Linux (works on Wayland/Pi).
     """
     
     def __init__(self):
@@ -32,49 +33,48 @@ class ScreenCapture:
         self._backend = self._detect_backend()
     
     def _detect_backend(self) -> str:
-        """Detect best available screenshot backend."""
-        # Try PIL/Pillow with various grabbers
-        try:
-            from PIL import ImageGrab
-            # Test if it works (fails on some Linux)
-            ImageGrab.grab()
-            return "pillow"
-        except:
-            pass
-        
-        # Try mss (cross-platform, fast)
-        try:
-            import mss
-            return "mss"
-        except ImportError:
-            pass
-        
-        # Try PyAutoGUI
-        try:
-            import pyautogui
-            return "pyautogui"
-        except ImportError:
-            pass
-        
-        # Try pyscreenshot (Linux)
-        try:
-            import pyscreenshot
-            return "pyscreenshot"
-        except ImportError:
-            pass
-        
-        # Fallback: command line tools
+        """Detect best available screenshot backend. Prioritize CLI tools on Linux."""
         import platform
+        import shutil
+        
+        # On Linux, prefer scrot first (works on Wayland, X11, Pi)
         if platform.system() == "Linux":
-            import shutil
             if shutil.which("scrot"):
                 return "scrot"
             elif shutil.which("gnome-screenshot"):
                 return "gnome-screenshot"
             elif shutil.which("import"):  # ImageMagick
                 return "imagemagick"
-        elif platform.system() == "Darwin":
-            return "screencapture"  # macOS built-in
+        
+        # macOS built-in
+        if platform.system() == "Darwin":
+            return "screencapture"
+        
+        # Fallback to Python libraries (may fail on Wayland)
+        try:
+            from PIL import ImageGrab
+            ImageGrab.grab()
+            return "pillow"
+        except:
+            pass
+        
+        try:
+            import mss
+            return "mss"
+        except ImportError:
+            pass
+        
+        try:
+            import pyautogui
+            return "pyautogui"
+        except ImportError:
+            pass
+        
+        try:
+            import pyscreenshot
+            return "pyscreenshot"
+        except ImportError:
+            pass
         
         return "none"
     
