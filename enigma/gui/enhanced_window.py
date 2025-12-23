@@ -926,6 +926,13 @@ class EnhancedMainWindow(QMainWindow):
                 from ..core.tokenizer import load_tokenizer
                 self.engine.tokenizer = load_tokenizer()
                 
+                # Initialize the AI's brain for learning
+                from ..core.ai_brain import get_brain
+                self.brain = get_brain(
+                    self.current_model_name, 
+                    auto_learn=getattr(self, 'learn_while_chatting', True)
+                )
+                
                 self.setWindowTitle(f"Enigma Engine - {self.current_model_name}")
                 
                 # Update training tab label
@@ -939,6 +946,7 @@ class EnhancedMainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.warning(self, "Load Error", f"Could not load model: {e}")
                 self.engine = None
+                self.brain = None
     
     def _build_ui(self):
         """Build the main UI."""
@@ -979,6 +987,15 @@ class EnhancedMainWindow(QMainWindow):
         self.microphone_action.setCheckable(True)
         self.microphone_action.setChecked(False)
         self.microphone_action.triggered.connect(self._toggle_microphone)
+        
+        options_menu.addSeparator()
+        
+        # Learn while chatting toggle
+        self.learn_action = options_menu.addAction("Learn While Chatting (ON)")
+        self.learn_action.setCheckable(True)
+        self.learn_action.setChecked(True)  # On by default
+        self.learn_action.triggered.connect(self._toggle_learning)
+        self.learn_while_chatting = True
         
         # Status bar with clickable model selector
         self.model_status_btn = QPushButton(f"Model: {self.current_model_name or 'None'}  ▼")
@@ -1046,6 +1063,19 @@ class EnhancedMainWindow(QMainWindow):
                 self.microphone_action.setText("Microphone (ON)")
             else:
                 self.microphone_action.setText("Microphone (OFF)")
+    
+    def _toggle_learning(self, checked):
+        """Toggle learn-while-chatting mode."""
+        self.learn_while_chatting = checked
+        if hasattr(self, 'learn_action'):
+            if checked:
+                self.learn_action.setText("Learn While Chatting (ON)")
+            else:
+                self.learn_action.setText("Learn While Chatting (OFF)")
+        
+        # Update brain if loaded
+        if hasattr(self, 'brain') and self.brain:
+            self.brain.auto_learn = checked
     
     def _toggle_avatar(self, checked):
         """Toggle avatar enabled/disabled."""
@@ -1642,6 +1672,17 @@ class EnhancedMainWindow(QMainWindow):
                 "text": response,
                 "ts": time.time()
             })
+            
+            # Learn from this interaction if enabled
+            if getattr(self, 'learn_while_chatting', True) and hasattr(self, 'brain') and self.brain:
+                self.brain.record_interaction(text, response)
+                
+                # Check if we should auto-train
+                if self.brain.should_auto_train():
+                    self.statusBar().showMessage(
+                        f"📚 Learned {self.brain.interactions_since_train} new things! "
+                        "Training will improve responses.", 5000
+                    )
             
             # Auto-speak if enabled
             if getattr(self, 'auto_speak', False):
