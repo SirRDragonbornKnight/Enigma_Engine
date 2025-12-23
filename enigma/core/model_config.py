@@ -111,20 +111,20 @@ def estimate_parameters(vocab_size: int, dim: int, depth: int, **kwargs) -> int:
 
 def print_model_info():
     """Print all available model presets."""
-    print("\n" + "="*70)
-    print("ENIGMA MODEL SIZE PRESETS")
-    print("="*70)
+    print("\n[SYSTEM] " + "="*60)
+    print("[SYSTEM] ENIGMA MODEL SIZE PRESETS")
+    print("[SYSTEM] " + "="*60)
     
     for name, config in MODEL_PRESETS.items():
         params = estimate_parameters(vocab_size=32000, **{k:v for k,v in config.items() 
                                                           if k in ['dim','depth','heads']})
-        print(f"\n{name.upper()}")
-        print(f"  {config['description']}")
-        print(f"  Dimensions: {config['dim']}, Layers: {config['depth']}, Heads: {config['heads']}")
-        print(f"  Est. Parameters: {params:,}")
-        print(f"  Min RAM: {config['min_ram_gb']}GB, Min VRAM: {config['min_vram_gb']}GB")
+        print(f"\n[SYSTEM] {name.upper()}")
+        print(f"[SYSTEM]   {config['description']}")
+        print(f"[SYSTEM]   Dimensions: {config['dim']}, Layers: {config['depth']}, Heads: {config['heads']}")
+        print(f"[SYSTEM]   Est. Parameters: {params:,}")
+        print(f"[SYSTEM]   Min RAM: {config['min_ram_gb']}GB, Min VRAM: {config['min_vram_gb']}GB")
     
-    print("\n" + "="*70)
+    print("\n[SYSTEM] " + "="*60)
 
 
 if __name__ == "__main__":

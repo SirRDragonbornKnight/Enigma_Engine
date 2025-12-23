@@ -237,10 +237,10 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         }
         self._save_registry()
         
-        print(f"✓ Created model '{name}' ({size})")
-        print(f"  Parameters: {metadata['estimated_parameters']:,}")
-        print(f"  Location: {model_dir}")
-        print(f"  Training data: {training_data_file}")
+        print(f"[SYSTEM] ✓ Created model '{name}' ({size})")
+        print(f"[SYSTEM]   Parameters: {metadata['estimated_parameters']:,}")
+        print(f"[SYSTEM]   Location: {model_dir}")
+        print(f"[SYSTEM]   Training data: {training_data_file}")
         
         # Return None instead of instantiating model - saves memory
         # Model will be created lazily when load_model() is called
@@ -295,9 +295,9 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         if weights_path.exists():
             state_dict = torch.load(weights_path, map_location=device)
             model.load_state_dict(state_dict)
-            print(f"✓ Loaded weights from {weights_path}")
+            # Silent load - no print to avoid confusion with AI output
         else:
-            print(f"⚠ No weights found - model is untrained")
+            print(f"[SYSTEM] ⚠ No weights found - model is untrained")
         
         model.to(device)
         
@@ -332,13 +332,13 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         if save_checkpoint and epoch is not None:
             checkpoint_path = model_dir / "checkpoints" / f"epoch_{epoch}.pth"
             torch.save(model.state_dict(), checkpoint_path)
-            print(f"✓ Saved checkpoint: {checkpoint_path}")
+            # Silent - checkpoint saved
         
         # Update registry
         self.registry["models"][name]["has_weights"] = True
         self._save_registry()
         
-        print(f"✓ Saved model '{name}'")
+        # Silent save - no print to avoid confusion with AI output
     
     def update_metadata(self, name: str, **kwargs):
         """Update model metadata after training."""
@@ -355,22 +355,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             json.dump(metadata, f, indent=2)
     
     def list_models(self) -> Dict[str, Any]:
-        """List all registered models."""
-        print("\n" + "="*60)
-        print("REGISTERED MODELS")
-        print("="*60)
-        
-        if not self.registry["models"]:
-            print("No models yet. Create one with registry.create_model('name')")
-        else:
-            for name, info in self.registry["models"].items():
-                status = "✓ trained" if info["has_weights"] else "○ untrained"
-                print(f"\n{name}")
-                print(f"  Size: {info['size']}")
-                print(f"  Status: {status}")
-                print(f"  Created: {info['created'][:10]}")
-        
-        print("\n" + "="*60)
+        """List all registered models. Returns dict, prints summary."""
+        # Return data - GUI will display it
         return self.registry["models"]
     
     def delete_model(self, name: str, confirm: bool = False):
@@ -380,9 +366,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             raise ValueError(f"Model '{name}' not found")
         
         if not confirm:
-            print(f"⚠ This will permanently delete model '{name}' and all its weights!")
-            print(f"  Call delete_model('{name}', confirm=True) to proceed.")
-            return
+            raise ValueError(f"Confirm deletion by passing confirm=True")
         
         import shutil
         model_dir = Path(self.registry["models"][name]["path"])
@@ -390,8 +374,6 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         
         del self.registry["models"][name]
         self._save_registry()
-        
-        print(f"✓ Deleted model '{name}'")
     
     def get_model_info(self, name: str) -> Dict:
         """Get detailed info about a model."""

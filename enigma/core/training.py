@@ -40,10 +40,10 @@ def train_model(force=False, num_epochs=10, lr=1e-4):
     labels = input_ids.clone()
 
     if MODEL_PATH.exists() and not force:
-        print("Model already exists. Skipping training (use force=True).")
+        print("[SYSTEM] Model already exists. Skipping training (use force=True).")
         return
 
-    print("Starting toy training for", num_epochs, "epochs")
+    print(f"[SYSTEM] Starting training for {num_epochs} epochs")
     for e in range(num_epochs):
         model.train()
         out = model(input_ids)
@@ -51,8 +51,8 @@ def train_model(force=False, num_epochs=10, lr=1e-4):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print(f"Epoch {e+1}/{num_epochs} loss={loss.item():.4f}")
+        print(f"[SYSTEM] Epoch {e+1}/{num_epochs} loss={loss.item():.4f}")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), MODEL_PATH)
-    print("Saved model to", MODEL_PATH)
+    print(f"[SYSTEM] Saved model to {MODEL_PATH}")

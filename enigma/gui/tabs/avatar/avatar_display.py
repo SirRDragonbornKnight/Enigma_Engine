@@ -99,7 +99,7 @@ def load_avatar_config(config_path: Path) -> dict:
         with open(config_path, 'r') as f:
             return json.load(f)
     except Exception as e:
-        print(f"Error loading avatar config: {e}")
+        pass  # Silently fail, return empty dict
         return {}
 
 

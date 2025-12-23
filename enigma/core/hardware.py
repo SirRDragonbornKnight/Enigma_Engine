@@ -395,9 +395,9 @@ def get_recommended_model_size() -> str:
 
 if __name__ == "__main__":
     hw = HardwareProfile()
-    print("="*50)
-    print("HARDWARE PROFILE")
-    print("="*50)
-    print(hw.summary())
+    print("[SYSTEM] " + "="*50)
+    print("[SYSTEM] HARDWARE PROFILE")
+    print("[SYSTEM] " + "="*50)
+    print("[SYSTEM]", hw.summary())
     print()
-    print("Best PyTorch device:", hw.get_device())
+    print("[SYSTEM] Best PyTorch device:", hw.get_device())

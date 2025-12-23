@@ -80,7 +80,7 @@ class TextDataset(Dataset):
             padded[:len(all_ids)] = all_ids
             self.chunks.append(padded)
         
-        print(f"Created dataset with {len(self.chunks)} chunks of {max_len} tokens")
+        pass  # Dataset info available via len()
     
     def __len__(self):
         return len(self.chunks)
@@ -142,7 +142,6 @@ class EnigmaTrainer:
         # Multi-GPU setup
         self.use_multi_gpu = use_multi_gpu and torch.cuda.device_count() > 1
         if self.use_multi_gpu:
-            print(f"Using {torch.cuda.device_count()} GPUs!")
             self.model = nn.DataParallel(model)
         else:
             self.model = model
@@ -194,16 +193,16 @@ class EnigmaTrainer:
             log_every: Print loss every N steps
             callbacks: Optional list of callback functions
         """
-        print(f"\n{'='*60}")
-        print(f"TRAINING: {self.model_name}")
-        print(f"{'='*60}")
-        print(f"Device: {self.device}")
-        print(f"Multi-GPU: {self.use_multi_gpu}")
-        print(f"Epochs: {epochs}")
-        print(f"Batch size: {self.batch_size}")
-        print(f"Learning rate: {self.learning_rate}")
-        print(f"Dataset size: {len(self.dataset)} chunks")
-        print(f"{'='*60}\n")
+        print(f"\n[SYSTEM] {'='*50}")
+        print(f"[SYSTEM] TRAINING: {self.model_name}")
+        print(f"[SYSTEM] {'='*50}")
+        print(f"[SYSTEM] Device: {self.device}")
+        print(f"[SYSTEM] Multi-GPU: {self.use_multi_gpu}")
+        print(f"[SYSTEM] Epochs: {epochs}")
+        print(f"[SYSTEM] Batch size: {self.batch_size}")
+        print(f"[SYSTEM] Learning rate: {self.learning_rate}")
+        print(f"[SYSTEM] Dataset size: {len(self.dataset)} chunks")
+        print(f"[SYSTEM] {'='*50}\n")
         
         start_time = datetime.now()
         
@@ -241,7 +240,7 @@ class EnigmaTrainer:
                 self.global_step += 1
                 
                 if self.global_step % log_every == 0:
-                    print(f"  Step {self.global_step} | Loss: {loss.item():.4f}")
+                    print(f"[SYSTEM]   Step {self.global_step} | Loss: {loss.item():.4f}")
             
             avg_loss = epoch_loss / max(num_batches, 1)
             
@@ -252,7 +251,7 @@ class EnigmaTrainer:
                 "timestamp": datetime.now().isoformat(),
             })
             
-            print(f"Epoch {self.current_epoch}/{self.current_epoch + epochs - epoch - 1} | Avg Loss: {avg_loss:.4f}")
+            print(f"[SYSTEM] Epoch {self.current_epoch}/{self.current_epoch + epochs - epoch - 1} | Avg Loss: {avg_loss:.4f}")
             
             # Save checkpoint
             if self.current_epoch % save_every == 0:
@@ -268,11 +267,11 @@ class EnigmaTrainer:
         self._save_final()
         
         elapsed = datetime.now() - start_time
-        print(f"\n{'='*60}")
-        print(f"TRAINING COMPLETE")
-        print(f"Total time: {elapsed}")
-        print(f"Final loss: {self.training_history[-1]['loss']:.4f}")
-        print(f"{'='*60}\n")
+        print(f"\n[SYSTEM] {'='*50}")
+        print(f"[SYSTEM] TRAINING COMPLETE")
+        print(f"[SYSTEM] Total time: {elapsed}")
+        print(f"[SYSTEM] Final loss: {self.training_history[-1]['loss']:.4f}")
+        print(f"[SYSTEM] {'='*50}\n")
     
     def _save_checkpoint(self):
         """Save a training checkpoint."""
@@ -315,7 +314,7 @@ class EnigmaTrainer:
         if checkpoint_name.startswith("epoch_"):
             self.current_epoch = int(checkpoint_name.split("_")[1])
         
-        print(f"Resumed from checkpoint: {checkpoint_name}")
+        print(f"[SYSTEM] Resumed from checkpoint: {checkpoint_name}")
 
 
 def train_model_by_name(
@@ -363,5 +362,5 @@ def train_model_by_name(
 
 if __name__ == "__main__":
     # Example usage
-    print("EnigmaTrainer - Advanced Training System")
-    print("Use train_model_by_name() or create an EnigmaTrainer instance")
+    print("[SYSTEM] EnigmaTrainer - Advanced Training System")
+    print("[SYSTEM] Use train_model_by_name() or create an EnigmaTrainer instance")
