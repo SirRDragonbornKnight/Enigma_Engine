@@ -94,11 +94,11 @@ def create_instructions_tab(parent):
         lambda idx: _load_instructions_file(parent, idx)
     )
     
-    btn_new = QPushButton("[+] New")
+    btn_new = QPushButton("New")
     btn_new.setToolTip("Create new notes file")
     btn_new.clicked.connect(lambda: _create_instructions_file(parent))
     
-    btn_save = QPushButton("[S] Save")
+    btn_save = QPushButton("Save")
     btn_save.setToolTip("Save current file")
     btn_save.clicked.connect(lambda: _save_instructions_file(parent))
     

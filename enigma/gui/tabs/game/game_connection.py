@@ -41,8 +41,7 @@ def create_game_subtab(parent):
     )
     config_layout.addWidget(parent.game_config_combo, stretch=1)
     
-    btn_refresh = QPushButton("[R]")
-    btn_refresh.setFixedWidth(40)
+    btn_refresh = QPushButton("Refresh")
     btn_refresh.setToolTip("Refresh config list")
     btn_refresh.clicked.connect(lambda: _refresh_game_configs(parent))
     config_layout.addWidget(btn_refresh)

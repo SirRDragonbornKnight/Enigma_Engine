@@ -1213,10 +1213,31 @@ class EnhancedMainWindow(QMainWindow):
         # Options menu with toggles
         options_menu = menubar.addMenu("Options")
         
-        self.dark_mode_action = options_menu.addAction("Dark Mode (ON)")
-        self.dark_mode_action.setCheckable(True)
-        self.dark_mode_action.setChecked(True)
-        self.dark_mode_action.triggered.connect(self._toggle_dark_mode)
+        # Theme submenu with all 4 themes
+        theme_menu = options_menu.addMenu("Theme")
+        self.theme_group = QActionGroup(self)
+        self.theme_group.setExclusive(True)
+        
+        theme_dark = theme_menu.addAction("Dark (Catppuccin)")
+        theme_dark.setCheckable(True)
+        theme_dark.setChecked(True)
+        theme_dark.triggered.connect(lambda: self._set_theme("dark"))
+        self.theme_group.addAction(theme_dark)
+        
+        theme_light = theme_menu.addAction("Light")
+        theme_light.setCheckable(True)
+        theme_light.triggered.connect(lambda: self._set_theme("light"))
+        self.theme_group.addAction(theme_light)
+        
+        theme_shadow = theme_menu.addAction("Shadow (Deep Purple)")
+        theme_shadow.setCheckable(True)
+        theme_shadow.triggered.connect(lambda: self._set_theme("shadow"))
+        self.theme_group.addAction(theme_shadow)
+        
+        theme_midnight = theme_menu.addAction("Midnight (Deep Blue)")
+        theme_midnight.setCheckable(True)
+        theme_midnight.triggered.connect(lambda: self._set_theme("midnight"))
+        self.theme_group.addAction(theme_midnight)
         
         options_menu.addSeparator()
         
@@ -1288,14 +1309,18 @@ class EnhancedMainWindow(QMainWindow):
         
         self.setCentralWidget(tabs)
     
+    def _set_theme(self, theme_name):
+        """Set the application theme."""
+        if theme_name in THEMES:
+            self.setStyleSheet(THEMES[theme_name])
+            self.current_theme = theme_name
+    
     def _toggle_dark_mode(self, checked):
-        """Toggle between dark and light themes."""
+        """Toggle between dark and light themes (legacy method)."""
         if checked:
-            self.setStyleSheet(DARK_STYLE)
-            self.dark_mode_action.setText("Dark Mode (ON)")
+            self._set_theme("dark")
         else:
-            self.setStyleSheet(LIGHT_STYLE)
-            self.dark_mode_action.setText("Dark Mode (OFF)")
+            self._set_theme("light")
     
     def _toggle_auto_speak(self, checked):
         """Toggle auto-speak mode."""

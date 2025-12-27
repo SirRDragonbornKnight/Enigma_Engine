@@ -1,13 +1,21 @@
 """Vision tab for Enigma Engine GUI - screen capture and camera support."""
 
+import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QPlainTextEdit, QCheckBox, QFileDialog, QGroupBox
+    QSpinBox, QPlainTextEdit, QCheckBox, QFileDialog, QGroupBox,
+    QListWidget, QListWidgetItem
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QImage
+
+from ...config import CONFIG
+
+# Images directory
+IMAGES_DIR = Path(CONFIG["data_dir"]) / "images"
 
 
 def create_vision_tab(parent):
@@ -46,6 +54,11 @@ def create_vision_tab(parent):
     parent.btn_load_image.setToolTip("Load image from file")
     parent.btn_load_image.clicked.connect(parent._load_vision_image)
     source_layout.addWidget(parent.btn_load_image)
+    
+    parent.btn_clear_image = QPushButton("Clear")
+    parent.btn_clear_image.setToolTip("Clear current image")
+    parent.btn_clear_image.clicked.connect(lambda: _clear_vision_image(parent))
+    source_layout.addWidget(parent.btn_clear_image)
     
     source_layout.addStretch()
     source_group.setLayout(source_layout)
@@ -92,6 +105,33 @@ def create_vision_tab(parent):
     )
     layout.addWidget(parent.vision_text)
     
+    # Saved Images group
+    images_group = QGroupBox("Saved Images")
+    images_layout = QVBoxLayout()
+    
+    parent.vision_image_list = QListWidget()
+    parent.vision_image_list.setMaximumHeight(100)
+    parent.vision_image_list.itemDoubleClicked.connect(lambda item: _load_saved_image(parent, item))
+    images_layout.addWidget(parent.vision_image_list)
+    
+    img_btn_layout = QHBoxLayout()
+    btn_refresh_images = QPushButton("Refresh")
+    btn_refresh_images.clicked.connect(lambda: _refresh_saved_images(parent))
+    img_btn_layout.addWidget(btn_refresh_images)
+    
+    btn_open_folder = QPushButton("Open Folder")
+    btn_open_folder.clicked.connect(lambda: _open_images_folder(parent))
+    img_btn_layout.addWidget(btn_open_folder)
+    
+    btn_save_current = QPushButton("Save Current")
+    btn_save_current.clicked.connect(lambda: _save_current_image(parent))
+    img_btn_layout.addWidget(btn_save_current)
+    
+    img_btn_layout.addStretch()
+    images_layout.addLayout(img_btn_layout)
+    images_group.setLayout(images_layout)
+    layout.addWidget(images_group)
+    
     # Timer for continuous watching
     parent.vision_timer = QTimer()
     parent.vision_timer.timeout.connect(parent._do_continuous_capture)
@@ -99,6 +139,87 @@ def create_vision_tab(parent):
     # Store current image path
     parent.current_vision_image = None
     
+    # Initialize images directory and list
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    _refresh_saved_images(parent)
+    
     layout.addStretch()
     w.setLayout(layout)
     return w
+
+
+def _clear_vision_image(parent):
+    """Clear the current image from the preview."""
+    parent.vision_preview.clear()
+    parent.vision_preview.setText("Vision not started")
+    parent.current_vision_image = None
+    parent.vision_text.clear()
+
+
+def _refresh_saved_images(parent):
+    """Refresh the list of saved images."""
+    parent.vision_image_list.clear()
+    
+    if IMAGES_DIR.exists():
+        for img_file in sorted(IMAGES_DIR.glob("*"), reverse=True):
+            if img_file.suffix.lower() in [".png", ".jpg", ".jpeg", ".bmp", ".gif"]:
+                item = QListWidgetItem(img_file.name)
+                item.setData(Qt.UserRole, str(img_file))
+                parent.vision_image_list.addItem(item)
+
+
+def _load_saved_image(parent, item):
+    """Load a saved image into the preview."""
+    img_path = item.data(Qt.UserRole)
+    if img_path and Path(img_path).exists():
+        pixmap = QPixmap(img_path)
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(
+                parent.vision_preview.width() - 10,
+                parent.vision_preview.height() - 10,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            parent.vision_preview.setPixmap(scaled)
+            parent.current_vision_image = img_path
+
+
+def _open_images_folder(parent):
+    """Open the images folder in the system file explorer."""
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Cross-platform folder opening
+    import sys
+    if sys.platform == "win32":
+        os.startfile(str(IMAGES_DIR))
+    elif sys.platform == "darwin":
+        subprocess.run(["open", str(IMAGES_DIR)])
+    else:
+        subprocess.run(["xdg-open", str(IMAGES_DIR)])
+
+
+def _save_current_image(parent):
+    """Save the current vision image to the images folder."""
+    if not parent.current_vision_image:
+        return
+    
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest_path = IMAGES_DIR / f"capture_{timestamp}.png"
+    
+    try:
+        # If current image is a path, copy it
+        if Path(parent.current_vision_image).exists():
+            import shutil
+            shutil.copy2(parent.current_vision_image, dest_path)
+        else:
+            # Save from pixmap
+            pixmap = parent.vision_preview.pixmap()
+            if pixmap:
+                pixmap.save(str(dest_path))
+        
+        _refresh_saved_images(parent)
+    except Exception as e:
+        pass  # Silent fail
