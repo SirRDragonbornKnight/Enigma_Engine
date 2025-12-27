@@ -1,22 +1,51 @@
-# minimal
+# Enigma Engine Requirements
+# Last Updated: December 2024
+
+# === CORE (Required) ===
 python-dotenv
 flask
 flask_cors
 sqlalchemy
 numpy
 
-# model+torch are optional; include if you want local training/inference
-torch>=1.12; platform_system!="Darwin" or platform_machine=="arm64"  # install manually if needed
+# === MODEL & TRAINING ===
+# PyTorch - install manually for your platform:
+# CPU: pip install torch torchvision torchaudio
+# CUDA: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# Raspberry Pi: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+torch>=1.12; platform_system!="Darwin" or platform_machine=="arm64"
 
-# tokenizers for building tokenizer
+# Tokenizers (for BPE, optional - we have character-level built-in)
 tokenizers
 transformers
 
-# Optional GUI (examples)
+# === GUI (PyQt5) ===
 PyQt5
+
+# === VOICE ===
 pyttsx3
 speechrecognition
 sounddevice
 vosk
 pyaudio
+
+# === VISION ===
+pillow
+mss
+pyscreenshot
+
+# === CAMERA (Optional) ===
+# For webcam support:
+# opencv-python
+# For Raspberry Pi camera:
+# picamera2
+
+# === DOCUMENTS (Optional) ===
+# pypdf2
+# python-docx
+# ebooklib
+
+# === WEB (Optional) ===
+# requests
+# beautifulsoup4
 

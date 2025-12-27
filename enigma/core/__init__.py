@@ -1,20 +1,33 @@
-# Enigma Core Package
-"""
-Core components of the Enigma AI Engine:
-  - model.py: TinyEnigma transformer (scalable architecture)
-  - ai_brain.py: Learning and memory system
-  - inference.py: Text generation
-  - training.py: Model training
-  - tokenizer.py: Text tokenization
-"""
+# core package - Enigma Model and Training
 
-from .model import TinyEnigma, EnigmaModel
-from .ai_brain import AIBrain, get_brain, set_auto_learn
+from .model import Enigma, TinyEnigma
+from .inference import EnigmaEngine
+from .training import train_model
+from .tokenizer import CharacterTokenizer
+from .model_config import get_model_config, MODEL_PRESETS
+from .model_registry import ModelRegistry
+from .hardware import get_hardware, HardwareProfile
 
 __all__ = [
-    'TinyEnigma',
-    'EnigmaModel', 
-    'AIBrain',
-    'get_brain',
-    'set_auto_learn'
+    # Model
+    "Enigma",
+    "TinyEnigma",  # Backwards compatibility alias
+    "EnigmaEngine",
+    
+    # Training
+    "train_model",
+    
+    # Tokenizer
+    "CharacterTokenizer",
+    
+    # Config
+    "get_model_config",
+    "MODEL_PRESETS",
+    
+    # Registry
+    "ModelRegistry",
+    
+    # Hardware
+    "get_hardware",
+    "HardwareProfile",
 ]

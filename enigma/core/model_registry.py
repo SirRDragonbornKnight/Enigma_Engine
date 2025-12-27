@@ -32,7 +32,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Tuple, Any
 
-from .model import TinyEnigma
+from .model import Enigma, TinyEnigma  # TinyEnigma is backwards compat alias
 from .model_config import MODEL_PRESETS, get_model_config, estimate_parameters
 from ..config import CONFIG
 
@@ -85,7 +85,7 @@ class ModelRegistry:
         vocab_size: int = 32000,
         description: str = "",
         custom_config: Optional[Dict] = None
-    ) -> TinyEnigma:
+    ) -> Enigma:
         """
         Create a new named model.
         
@@ -97,7 +97,7 @@ class ModelRegistry:
             custom_config: Override preset with custom dim/depth/heads
             
         Returns:
-            Initialized (untrained) model
+            Initialized (untrained) Enigma model
         """
         # Validate name
         name = name.lower().strip().replace(" ", "_")
@@ -124,8 +124,8 @@ class ModelRegistry:
         
         # Create AI-specific training data file
         training_data_file = model_dir / "data" / "training.txt"
-        training_data_file.write_text(f"""# Training Data
-# =============
+        training_data_file.write_text(f"""# Training Data for {name}
+# ===========================
 # Add your training data below. The more examples, the better!
 #
 # FORMAT OPTIONS:
@@ -135,34 +135,34 @@ class ModelRegistry:
 #
 # 2. Q&A format:
 #    Q: What is your name?
-#    A: I'm {name}.
+#    A: My name is {name}.
 #
 # 3. Conversation format:
 #    User: Hello!
-#    AI: Hello! How can I help you today?
+#    {name}: Hello! How can I help you today?
 #
 # TIPS:
 # - Include many variations of common questions
 # - Add personality through response style
 # - More diverse examples = smarter AI
-# =============
+# ===========================
 
 # Example conversations (customize these!):
 
 Q: What is your name?
-A: I'm {name}.
+A: My name is {name}.
 
 Q: Who made you?
-A: I was created using the Enigma Engine.
+A: I was created by my developer to be a helpful AI assistant.
 
 Q: How are you?
 A: I'm doing well, thank you for asking! How can I help you today?
 
 User: Hello!
-AI: Hello! It's nice to meet you. How can I assist you?
+{name}: Hello! It's nice to meet you. How can I assist you?
 
 User: Tell me about yourself.
-AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversations, and assist with various tasks.
+{name}: I'm {name}, an AI assistant. I'm here to help with questions, have conversations, and assist with various tasks.
 
 # Add more training data below...
 
@@ -170,38 +170,33 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         
         # Create AI-specific instructions file
         instructions_file = model_dir / "data" / "instructions.txt"
-        instructions_file.write_text(f"""# AI Instructions
-# ================
-# This file defines your AI's behavior and personality.
-# Edit this file to customize how your AI responds.
+        instructions_file.write_text(f"""# Instructions for {name}
+# ===========================
+# These instructions help define your AI's behavior and personality.
+# Edit this file to customize how {name} responds.
+# ===========================
 
-# STEP 1: PERSONALITY
-# -------------------
-# Describe the traits you want your AI to have.
-# Examples: friendly, helpful, curious, professional, playful
+# PERSONALITY:
+# Describe the personality traits you want {name} to have.
+# Example: friendly, helpful, curious, professional
 
 {name} is a helpful and friendly AI assistant.
 {name} gives clear and concise answers.
 {name} is honest about its limitations.
 
-# STEP 2: KNOWLEDGE AREAS
-# -----------------------
-# List topics or domains your AI should focus on.
-# Leave blank for general knowledge.
+# KNOWLEDGE:
+# List topics or domains {name} should be knowledgeable about.
 
-
-# STEP 3: BEHAVIOR RULES
-# ----------------------
-# Define rules your AI should follow.
+# RULES:
+# Define any rules {name} should follow.
 
 1. Be helpful and respectful
 2. Give accurate information
 3. Admit when unsure
 4. Keep responses clear and relevant
 
-# STEP 4: COMMUNICATION STYLE
-# ---------------------------
-# Describe how your AI should communicate.
+# STYLE:
+# Describe how {name} should communicate.
 
 {name} uses a conversational tone.
 {name} avoids overly technical jargon unless asked.
@@ -237,28 +232,29 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         }
         self._save_registry()
         
-        print(f"[SYSTEM] ✓ Created model '{name}' ({size})")
-        print(f"[SYSTEM]   Parameters: {metadata['estimated_parameters']:,}")
-        print(f"[SYSTEM]   Location: {model_dir}")
-        print(f"[SYSTEM]   Training data: {training_data_file}")
+        # Create and return model
+        model = Enigma(**model_config)
         
-        # Return None instead of instantiating model - saves memory
-        # Model will be created lazily when load_model() is called
-        return None
+        print(f"✓ Created model '{name}' ({size})")
+        print(f"  Parameters: {metadata['estimated_parameters']:,}")
+        print(f"  Location: {model_dir}")
+        print(f"  Training data: {training_data_file}")
+        
+        return model
     
     def load_model(
         self, 
         name: str, 
         device: Optional[str] = None,
         checkpoint: Optional[str] = None
-    ) -> Tuple[TinyEnigma, Dict]:
+    ) -> Tuple[Enigma, Dict]:
         """
         Load a model by name.
         
         Args:
             name: Model name
             device: Device to load to ("cuda", "cpu", or None for auto)
-            checkpoint: Specific checkpoint to load (e.g., "epoch_100") or None for latest
+            checkpoint: Specific checkpoint to load (e.g., "epoch_100", "best") or None for latest
             
         Returns:
             (model, config_dict)
@@ -277,14 +273,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Extract only model-relevant parameters (filter out metadata)
-        model_params = {
-            k: v for k, v in config.items() 
-            if k in ['vocab_size', 'dim', 'depth', 'heads', 'max_len']
-        }
-        
-        # Create model with filtered params
-        model = TinyEnigma(**model_params)
+        # Create model
+        model = Enigma(**config)
         
         # Load weights
         if checkpoint:
@@ -295,9 +285,9 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         if weights_path.exists():
             state_dict = torch.load(weights_path, map_location=device)
             model.load_state_dict(state_dict)
-            # Silent load - no print to avoid confusion with AI output
+            print(f"✓ Loaded weights from {weights_path}")
         else:
-            print(f"[SYSTEM] ⚠ No weights found - model is untrained")
+            print(f"⚠ No weights found - model is untrained")
         
         model.to(device)
         
@@ -306,9 +296,10 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
     def save_model(
         self,
         name: str,
-        model: TinyEnigma,
+        model: Enigma,
         epoch: Optional[int] = None,
-        save_checkpoint: bool = True
+        save_checkpoint: bool = True,
+        checkpoint_name: Optional[str] = None,
     ):
         """
         Save model weights.
@@ -318,6 +309,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             model: The model to save
             epoch: Current epoch (for checkpoint naming)
             save_checkpoint: Also save as a checkpoint
+            checkpoint_name: Custom checkpoint name (e.g., "best")
         """
         name = name.lower().strip()
         if name not in self.registry["models"]:
@@ -329,16 +321,23 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         torch.save(model.state_dict(), model_dir / "weights.pth")
         
         # Save checkpoint
-        if save_checkpoint and epoch is not None:
-            checkpoint_path = model_dir / "checkpoints" / f"epoch_{epoch}.pth"
-            torch.save(model.state_dict(), checkpoint_path)
-            # Silent - checkpoint saved
+        if save_checkpoint:
+            if checkpoint_name:
+                checkpoint_path = model_dir / "checkpoints" / f"{checkpoint_name}.pth"
+            elif epoch is not None:
+                checkpoint_path = model_dir / "checkpoints" / f"epoch_{epoch}.pth"
+            else:
+                checkpoint_path = None
+            
+            if checkpoint_path:
+                torch.save(model.state_dict(), checkpoint_path)
+                print(f"✓ Saved checkpoint: {checkpoint_path}")
         
         # Update registry
         self.registry["models"][name]["has_weights"] = True
         self._save_registry()
         
-        # Silent save - no print to avoid confusion with AI output
+        print(f"✓ Saved model '{name}'")
     
     def update_metadata(self, name: str, **kwargs):
         """Update model metadata after training."""
@@ -355,8 +354,22 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             json.dump(metadata, f, indent=2)
     
     def list_models(self) -> Dict[str, Any]:
-        """List all registered models. Returns dict, prints summary."""
-        # Return data - GUI will display it
+        """List all registered models."""
+        print("\n" + "="*60)
+        print("REGISTERED MODELS")
+        print("="*60)
+        
+        if not self.registry["models"]:
+            print("No models yet. Create one with registry.create_model('name')")
+        else:
+            for name, info in self.registry["models"].items():
+                status = "✓ trained" if info["has_weights"] else "○ untrained"
+                print(f"\n{name}")
+                print(f"  Size: {info['size']}")
+                print(f"  Status: {status}")
+                print(f"  Created: {info['created'][:10]}")
+        
+        print("\n" + "="*60)
         return self.registry["models"]
     
     def delete_model(self, name: str, confirm: bool = False):
@@ -366,7 +379,9 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             raise ValueError(f"Model '{name}' not found")
         
         if not confirm:
-            raise ValueError(f"Confirm deletion by passing confirm=True")
+            print(f"⚠ This will permanently delete model '{name}' and all its weights!")
+            print(f"  Call delete_model('{name}', confirm=True) to proceed.")
+            return
         
         import shutil
         model_dir = Path(self.registry["models"][name]["path"])
@@ -374,6 +389,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         
         del self.registry["models"][name]
         self._save_registry()
+        
+        print(f"✓ Deleted model '{name}'")
     
     def get_model_info(self, name: str) -> Dict:
         """Get detailed info about a model."""
