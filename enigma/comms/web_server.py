@@ -199,7 +199,7 @@ WEB_INTERFACE_HTML = '''
 <body>
     <div class="container">
         <header>
-            <h1>🔮 Enigma AI</h1>
+            <h1>[*] Enigma AI</h1>
             <div class="status">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Connecting...</span>
@@ -436,7 +436,7 @@ class WebServer:
                 <html>
                 <head><title>Connect to Enigma AI</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 40px; background: #1a1a2e; color: white;">
-                    <h1>📱 Connect Your Phone</h1>
+                    <h1>[!] Connect Your Phone</h1>
                     <p>Scan this QR code with your phone camera:</p>
                     <img src="data:image/png;base64,{b64}" style="margin: 20px; border: 5px solid white;">
                     <p style="font-size: 1.2rem;">Or visit: <a href="{url}" style="color: #00d4ff;">{url}</a></p>
@@ -449,7 +449,7 @@ class WebServer:
                 <html>
                 <head><title>Connect to Enigma AI</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 40px; background: #1a1a2e; color: white;">
-                    <h1>📱 Connect Your Phone</h1>
+                    <h1>[!] Connect Your Phone</h1>
                     <p>Install qrcode for QR support: pip install qrcode[pil]</p>
                     <p style="font-size: 1.5rem;">Visit: <a href="{url}" style="color: #00d4ff;">{url}</a></p>
                 </body>
@@ -514,7 +514,7 @@ class WebServer:
         """Start the server."""
         ip = self._get_local_ip()
         print(f"\n{'='*50}")
-        print(f"🔮 Enigma AI Web Server")
+        print(f"[*] Enigma AI Web Server")
         print(f"{'='*50}")
         print(f"Local:    http://localhost:{self.port}")
         print(f"Network:  http://{ip}:{self.port}")

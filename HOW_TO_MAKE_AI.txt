@@ -142,12 +142,12 @@ Option C: Structured data (JSON)
 
 GOOD DATA CHARACTERISTICS
 -------------------------
-    ✓ Diverse topics
-    ✓ Proper grammar and spelling
-    ✓ Consistent tone and style
-    ✓ Question-answer pairs work well
-    ✓ 10,000+ lines recommended for decent results
-    ✓ 100,000+ lines for good results
+    [x] Diverse topics
+    [x] Proper grammar and spelling
+    [x] Consistent tone and style
+    [x] Question-answer pairs work well
+    [x] 10,000+ lines recommended for decent results
+    [x] 100,000+ lines for good results
 
 WHERE TO GET DATA
 -----------------

@@ -14,7 +14,7 @@ The engine can:
   - Train and run AI models from scratch (no pretrained required)
   - Manage multiple named AI "personalities"
   - Scale models up/down based on available hardware
-  - Communicate across devices (Pi ↔ PC ↔ Phone)
+  - Communicate across devices (Pi <-> PC <-> Phone)
   - See the screen and interact with it
   - Control a 3D avatar character
   - Search the web, read documents, manage files
@@ -23,13 +23,13 @@ The engine can:
 
 SUPPORTED PLATFORMS
 -------------------
-✓ Windows PC (with or without GPU)
-✓ Mac (Intel or Apple Silicon M1/M2/M3)
-✓ Linux (desktop or server)
-✓ Raspberry Pi (all models)
-✓ Android (via Termux or Pydroid3)
-✓ iOS (via Pythonista or a-shell)
-✓ Any device with Python 3.8+
+[x] Windows PC (with or without GPU)
+[x] Mac (Intel or Apple Silicon M1/M2/M3)
+[x] Linux (desktop or server)
+[x] Raspberry Pi (all models)
+[x] Android (via Termux or Pydroid3)
+[x] iOS (via Pythonista or a-shell)
+[x] Any device with Python 3.8+
 
 The system auto-detects your hardware and recommends optimal settings.
 
@@ -41,24 +41,25 @@ The system auto-detects your hardware and recommends optimal settings.
 enigma_engine/
 │
 ├── run.py                 Main entry point
-├── app.py                 Flask app entry
-├── config.json            Configuration
 ├── requirements.txt       Dependencies
+├── setup.py              Package installation
 │
 ├── enigma/                *** MAIN PACKAGE ***
 │   ├── __init__.py        Package init
 │   ├── config.py          Centralized config
 │   │
 │   ├── core/              *** BRAIN - Model & AI ***
-│   │   ├── model.py       TinyEnigma transformer
+│   │   ├── model.py       Enigma transformer (scalable)
 │   │   ├── training.py    Basic training loop
 │   │   ├── trainer.py     Advanced trainer (multi-GPU, checkpoints)
 │   │   ├── inference.py   EnigmaEngine response generation
-│   │   ├── tokenizer.py   Text ↔ numbers conversion
+|   |   |-- tokenizer.py   Text <-> numbers conversion
+│   │   ├── char_tokenizer.py  Full character-level tokenizer
 │   │   ├── layers.py      Neural network blocks
-│   │   ├── model_config.py Model size presets (tiny→xxl)
+|   |   |-- model_config.py Model size presets (tiny->xxl)
 │   │   ├── model_registry.py Named model management
 │   │   ├── model_scaling.py Grow/shrink models
+│   │   ├── ai_brain.py    Continuous learning system
 │   │   └── hardware.py    Hardware detection & adaptation
 │   │
 │   ├── memory/            *** MEMORY - Storage ***
@@ -68,6 +69,7 @@ enigma_engine/
 │   │
 │   ├── comms/             *** COMMUNICATIONS - Networking ***
 │   │   ├── api_server.py  Flask API server
+│   │   ├── web_server.py  WebSocket server
 │   │   ├── remote_client.py API client
 │   │   ├── network.py     Multi-device communication
 │   │   ├── discovery.py   Auto-find other nodes
@@ -75,17 +77,22 @@ enigma_engine/
 │   │   └── mobile_api.py  Phone-optimized API
 │   │
 │   ├── gui/               *** INTERFACE - Desktop App ***
-│   │   ├── main_window.py Basic PyQt5 window
-│   │   └── enhanced_window.py Full-featured GUI
+│   │   ├── enhanced_window.py Full-featured GUI
+│   │   └── tabs/          Tab implementations
+│   │       ├── chat_tab.py
+│   │       ├── training_tab.py
+│   │       ├── avatar_tab.py
+│   │       ├── vision_tab.py
+│   │       ├── sessions_tab.py
+│   │       └── instructions_tab.py
 │   │
 │   ├── voice/             *** VOICE - Speech ***
 │   │   ├── tts_simple.py  Text-to-Speech
-│   │   ├── stt_simple.py  Speech-to-Text
-│   │   └── voice_system.py Enhanced voice system
+│   │   └── stt_simple.py  Speech-to-Text
 │   │
 │   ├── avatar/            *** AVATAR - Visual Character ***
 │   │   ├── avatar_api.py  Original stub
-│   │   └── controller.py  Full avatar system (3D, movement, interactions)
+│   │   └── controller.py  Full avatar system
 │   │
 │   ├── tools/             *** TOOLS - AI Capabilities ***
 │   │   ├── tool_registry.py Tool framework
@@ -94,8 +101,10 @@ enigma_engine/
 │   │   ├── document_tools.py Read PDF, EPUB, DOCX
 │   │   ├── system_tools.py Commands, screenshots, info
 │   │   ├── vision.py      Screen capture & understanding
-│   │   ├── os_tools.py    OS utilities
-│   │   └── screenshot.py  Screenshot helper
+│   │   └── robot_tools.py Robot control
+│   │
+│   ├── data/              *** DATA - AI Resources ***
+│   │   └── dictionary.txt English dictionary for tokenizer
 │   │
 │   └── utils/             *** HELPERS ***
 │       └── io_utils.py    File I/O
@@ -103,7 +112,42 @@ enigma_engine/
 ├── data/                  Training data & conversations
 ├── models/                Saved model files
 ├── docs/                  Documentation
+│   ├── WHAT_NOT_TO_DO.txt Common mistakes to avoid
+│   ├── architecture.md
+│   ├── avatar_roadmap.md
+│   └── multi_device_guide.md
+│
 └── examples/              Example scripts
+
+
+================================================================================
+                    GUI FEATURES
+================================================================================
+
+The GUI (python run.py --gui) includes:
+
+TABS:
+  - Chat: Talk to your AI, send images
+  - Training: Edit training data, start training sessions
+  - Avatar: Control the AI's visual representation
+  - Vision: Screen capture, camera input, OCR
+  - Sessions: View and manage conversation history (per-AI)
+  - Instructions: Configure AI behavior and personality
+
+THEMES:
+  - Dark (Catppuccin Mocha) - Default
+  - Light (Catppuccin Latte)
+  - Shadow (Deep purple/black)
+  - Midnight (Deep blue/cyan)
+
+FEATURES:
+  - Multi-model support (load multiple AIs)
+  - Duplicate model prevention
+  - Model growing/shrinking
+  - Automatic backups
+  - Voice input/output toggles
+  - Learn while chatting toggle
+  - Selectable (copyable) text
 
 
 ================================================================================
@@ -123,18 +167,52 @@ Create multiple AIs with different personalities:
 Each model is fully independent - train them on different data for different skills.
 
 
-2. MULTI-DEVICE COMMUNICATION
+2. MULTI-AI SUPPORT
+-------------------
+Run multiple AI models simultaneously:
+
+    from enigma.core.model import get_running_models, is_model_loaded
+    
+    # Check what's running
+    running = get_running_models()
+    
+    # Check if specific model is loaded
+    if not is_model_loaded("luna"):
+        # Load luna
+        pass
+
+Models can communicate with each other through the communication system.
+
+
+3. CHARACTER-LEVEL TOKENIZER
+----------------------------
+Full Unicode support with dictionary enhancement:
+
+    from enigma.core.char_tokenizer import CharacterTokenizer
+    
+    tok = CharacterTokenizer(use_dictionary=True)
+    ids = tok.encode("Hello, world!")
+    text = tok.decode(ids)
+
+Features:
+  - Every character is a token (no UNK for special chars)
+  - Common words tokenized as single units for efficiency
+  - Dictionary includes 5000+ English words + tech terms
+  - Dynamically expands vocabulary as needed
+
+
+4. MULTI-DEVICE COMMUNICATION
 -----------------------------
 Run Enigma across devices:
 
     # On PC (server)
     python examples/multi_device_example.py --server --name pc_brain
     
-    # On Pi or Phone (client)
-    python examples/multi_device_example.py --client --connect 192.168.1.100:5000
+    # On Pi or Phone (client)  
+    python examples/multi_device_example.py --client --connect <server_ip>:5000
     
     # AI-to-AI conversation
-    python examples/multi_device_example.py --conversation --connect 192.168.1.100:5000
+    python examples/multi_device_example.py --conversation
 
 Features:
   - Auto-discovery finds nodes on network
@@ -142,21 +220,7 @@ Features:
   - Export/import models via USB (offline sync)
 
 
-3. PHONE SUPPORT
-----------------
-Special mobile API optimized for phones:
-
-    from enigma.comms.mobile_api import create_mobile_api
-    api = create_mobile_api(port=5000)
-    api.run()
-
-Then connect from your phone app. Client code templates included for:
-  - Flutter (Dart)
-  - React Native (JavaScript)
-  - Any HTTP client
-
-
-4. SCREEN VISION
+5. SCREEN VISION
 ----------------
 AI can see and analyze the screen:
 
@@ -165,93 +229,22 @@ AI can see and analyze the screen:
     vision = get_screen_vision()
     result = vision.see()
     print(result["text_content"])  # OCR'd text
-    print(result["description"])   # Scene description
     
     # Find text on screen
     matches = vision.find_text_on_screen("Save")
 
-Requires: PIL/Pillow, optionally pytesseract for OCR
 
-
-5. AVATAR SYSTEM
+6. AVATAR SYSTEM
 ----------------
-3D character that can move around and interact with screen elements.
+3D character framework:
 
-    from enigma.avatar.controller import get_avatar, enable_avatar
+    from enigma.avatar.controller import get_avatar
     
     avatar = get_avatar()
     avatar.enable()              # Turn ON (default is OFF)
     avatar.move_to(500, 300)    # Move to position
     avatar.speak("Hello!")      # Animate speaking
-    avatar.interact_with_window("File Manager")  # Visual effect
     avatar.disable()            # Turn OFF
-
-IMPORTANT: Avatar starts OFF by default. Call avatar.enable() to turn on.
-
-Features:
-  - On/Off toggle (default: OFF)
-  - Move anywhere on screen
-  - Expressions (happy, sad, thinking, etc.)
-  - "Interact" with windows/files (visual effects)
-  - Customizable 3D model (when renderer implemented)
-
-
-6. TOOL SYSTEM
---------------
-AI can use tools:
-
-    from enigma.tools import execute_tool
-    
-    # Web search
-    execute_tool("web_search", query="Python tutorials")
-    
-    # Read files
-    execute_tool("read_file", path="/home/user/notes.txt")
-    
-    # See screen
-    execute_tool("see_screen")
-    
-    # System info
-    execute_tool("get_system_info")
-
-Available tools:
-  - web_search: Search the internet
-  - fetch_webpage: Get page content
-  - read_file, write_file, list_directory, move_file, delete_file
-  - read_document: PDF, EPUB, DOCX, TXT
-  - run_command: Execute shell commands
-  - take_screenshot: Capture screen
-  - see_screen: Vision + OCR
-  - find_on_screen: Find text/elements
-
-
-7. MODEL SCALING
-----------------
-Grow or shrink models based on hardware:
-
-    from enigma.core.model_scaling import grow_registered_model
-    
-    # Trained on Pi, want to run on PC?
-    grow_registered_model("my_model", "small", "large")
-    
-    # PC model too big for phone?
-    shrink_registered_model("my_model", "large", "small")
-
-
-8. HARDWARE AUTO-DETECTION
---------------------------
-System automatically detects:
-
-    from enigma.core.hardware import get_hardware
-    
-    hw = get_hardware()
-    print(hw.summary())
-    # Output:
-    # Device: Raspberry Pi
-    # CPU: ARM Cortex-A76 (4 cores)
-    # RAM: 8 GB
-    # GPU: None (CPU only)
-    # Recommended Model: small
 
 
 ================================================================================
@@ -273,8 +266,11 @@ System automatically detects:
 ================================================================================
 
 # Setup (first time)
-cd /home/pi/Documents/project/enigma_engine
-source venv/bin/activate
+cd enigma_engine
+python -m venv venv
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # Linux/Mac
+pip install -r requirements.txt
 
 # Basic operations
 python run.py --train              # Train model
@@ -282,23 +278,13 @@ python run.py --run                # CLI chat
 python run.py --gui                # Desktop GUI
 python run.py --serve              # API server
 
-# Multi-device
-python examples/multi_device_example.py --discover  # Find nodes
-python examples/multi_device_example.py --server    # Start server
-python examples/multi_device_example.py --client    # Connect
-
 # Hardware info
 python -c "from enigma.core.hardware import get_hardware; print(get_hardware().summary())"
-
-# Test tools
-python -c "from enigma.tools import execute_tool; print(execute_tool('get_system_info'))"
 
 
 ================================================================================
                     PRE-TESTING CHECKLIST
 ================================================================================
-
-Before testing the full system, verify each component:
 
 □ 1. ENVIRONMENT
    python --version  # Should be 3.8+
@@ -316,82 +302,24 @@ Before testing the full system, verify each component:
    print(r.list_models())
    "
 
-□ 4. TRAINING (quick test)
+□ 4. TRAINING
    python run.py --train
 
 □ 5. INFERENCE
    python run.py --run
-   # Type "hello" and press Enter
 
-□ 6. GUI (if display available)
+□ 6. GUI
    python run.py --gui
 
-□ 7. API SERVER
-   python run.py --serve &
-   curl http://127.0.0.1:5000/health
-
-□ 8. TOOLS
-   python -c "from enigma.tools import execute_tool; print(execute_tool('get_system_info'))"
-
-□ 9. VOICE (optional)
-   python -c "from enigma.voice.voice_system import VoiceSystem; VoiceSystem().speak('Hello')"
-
-□ 10. SCREEN VISION (if display available)
-   python -c "from enigma.tools.vision import get_screen_vision; print(get_screen_vision().see())"
-
-□ 11. AVATAR (optional)
-   python -c "
-   from enigma.avatar.controller import get_avatar
-   a = get_avatar()
-   print('Avatar enabled:', a.enable())
-   a.disable()
-   "
-
-□ 12. MULTI-DEVICE (if 2+ devices available)
-   # On device 1: python examples/multi_device_example.py --server
-   # On device 2: python examples/multi_device_example.py --discover
-
 
 ================================================================================
-                         WHAT'S STILL TODO
+                         KEY DOCUMENTATION
 ================================================================================
 
-CORE FUNCTIONALITY (Ready to use):
-✓ Model training & inference
-✓ Named model registry
-✓ Model scaling
-✓ Hardware detection
-✓ Multi-device communication
-✓ Mobile API
-✓ Screen vision
-✓ Avatar controller (framework)
-✓ Tool system
-✓ Voice (TTS)
-
-NEEDS IMPLEMENTATION:
-○ Avatar 3D renderer (need PyQt5/OpenGL/PyGame implementation)
-○ Speech-to-text (need microphone + model)
-○ Tool router (AI choosing which tool to use)
-○ Training data pipeline (large corpus handling)
-○ Model quantization (for smaller memory footprint)
-
-OPTIONAL ENHANCEMENTS:
-○ Better tokenizer (BPE/SentencePiece)
-○ Attention visualization
-○ Web UI alternative to PyQt5
-○ Plugin system for custom tools
-
-
-================================================================================
-                              CONTACT
-================================================================================
-
-This project is your foundation - customize it however you want!
-
-Key files to modify:
-  - enigma/core/model.py - Change model architecture
-  - enigma/avatar/controller.py - Add real 3D rendering
-  - enigma/tools/ - Add new tool capabilities
-  - data/data.txt - Add training data
+- PROJECT_OVERVIEW.txt - This file, system overview
+- HOW_TO_MAKE_AI.txt - Step-by-step AI creation guide
+- docs/WHAT_NOT_TO_DO.txt - Common mistakes to avoid
+- docs/architecture.md - Technical architecture
+- docs/multi_device_guide.md - Network setup guide
 
 ================================================================================

@@ -238,7 +238,7 @@ class GPIORobotInterface(RobotInterface):
         if not self._gpio_available or joint not in self._servos:
             return False
         
-        # Convert angle to PWM duty cycle (typical servo: 2.5-12.5% for 0-180°)
+        # Convert angle to PWM duty cycle (typical servo: 2.5-12.5% for 0-180 deg)
         duty = 2.5 + (angle / 180.0) * 10.0
         
         import RPi.GPIO as GPIO
@@ -342,7 +342,7 @@ class SimulatedRobotInterface(RobotInterface):
         
         old_pos = self._positions[joint]
         self._positions[joint] = angle
-        print(f"[SIM] {joint}: {old_pos}° → {angle}° (speed={speed})")
+        print(f"[SIM] {joint}: {old_pos} deg -> {angle} deg (speed={speed})")
         return True
     
     def get_joint_position(self, joint: str) -> Optional[float]:
@@ -351,7 +351,7 @@ class SimulatedRobotInterface(RobotInterface):
     def gripper(self, action: str) -> bool:
         old_state = self._gripper_state
         self._gripper_state = action
-        print(f"[SIM] Gripper: {old_state} → {action}")
+        print(f"[SIM] Gripper: {old_state} -> {action}")
         return True
     
     def home(self) -> bool:

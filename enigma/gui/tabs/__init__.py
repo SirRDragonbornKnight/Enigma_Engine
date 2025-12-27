@@ -9,6 +9,7 @@ from .avatar_tab import create_avatar_tab
 from .vision_tab import create_vision_tab
 from .sessions_tab import create_sessions_tab
 from .instructions_tab import create_instructions_tab
+from .terminal_tab import create_terminal_tab, log_to_terminal
 
 __all__ = [
     'create_chat_tab',
@@ -17,4 +18,6 @@ __all__ = [
     'create_vision_tab',
     'create_sessions_tab',
     'create_instructions_tab',
+    'create_terminal_tab',
+    'log_to_terminal',
 ]

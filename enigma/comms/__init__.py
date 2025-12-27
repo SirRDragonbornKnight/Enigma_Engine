@@ -3,6 +3,7 @@
 from .network import EnigmaNode, Message, ModelExporter, create_server_node, create_client_node
 from .discovery import DeviceDiscovery, discover_enigma_nodes
 from .memory_sync import MemorySync, OfflineSync, add_sync_routes
+from .multi_ai import AIConversation, AIParticipant, quick_ai_chat
 
 __all__ = [
     # Network nodes
@@ -20,4 +21,9 @@ __all__ = [
     "MemorySync",
     "OfflineSync",
     "add_sync_routes",
+    
+    # Multi-AI
+    "AIConversation",
+    "AIParticipant",
+    "quick_ai_chat",
 ]

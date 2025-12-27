@@ -35,15 +35,15 @@ def create_avatar_tab(parent):
     
     # Avatar sub-tab - the AI's visual representation
     avatar_widget = create_avatar_subtab(parent)
-    sub_tabs.addTab(avatar_widget, "🖼️ Avatar")
+    sub_tabs.addTab(avatar_widget, "[~] Avatar")
     
     # Game connection sub-tab - games the AI can control
     game_widget = create_game_subtab(parent)
-    sub_tabs.addTab(game_widget, "🎮 Game")
+    sub_tabs.addTab(game_widget, "[G] Game")
     
     # Robot control sub-tab - robots the AI can control
     robot_widget = create_robot_subtab(parent)
-    sub_tabs.addTab(robot_widget, "🤖 Robot")
+    sub_tabs.addTab(robot_widget, "[*] Robot")
     
     layout.addWidget(sub_tabs)
     w.setLayout(layout)

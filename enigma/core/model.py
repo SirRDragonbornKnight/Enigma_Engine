@@ -1,13 +1,15 @@
 """
 Enigma Model - Scalable Transformer Architecture
 
-This is NOT just a toy model - it's a real transformer that can scale:
-  - tiny:  64 dim, 2 layers  → Fast, basic responses
-  - small: 128 dim, 4 layers → Good for Pi 4/5
-  - medium: 256 dim, 6 layers → Better quality
-  - large: 512 dim, 8 layers → Needs GPU
+A real transformer that can scale from tiny to extra-large:
+  - tiny:   64 dim, 2 layers  -> Fast, basic responses (Pi Zero)
+  - small:  128 dim, 4 layers -> Good for Pi 4/5
+  - medium: 256 dim, 6 layers -> Better quality (Pi 5 8GB)
+  - large:  512 dim, 8 layers -> High quality (GPU required)
+  - xl:     768 dim, 12 layers -> Very high quality (8GB+ GPU)
+  - xxl:    1024 dim, 16 layers -> Near-GPT quality (16GB+ GPU)
 
-The architecture is the same as GPT-style models, just smaller.
+The architecture is the same as GPT-style models, just configurable size.
 With enough training data, this WILL learn and improve.
 
 To make it smarter:
@@ -21,10 +23,34 @@ from ..config import CONFIG
 
 MAX_LEN = CONFIG.get("max_len", 512)
 
+# Global registry of running model instances (for multi-model support)
+_RUNNING_MODELS: dict = {}
 
-class TinyEnigma(nn.Module):
+
+def get_running_models() -> dict:
+    """Get all currently loaded model instances."""
+    return _RUNNING_MODELS.copy()
+
+
+def is_model_loaded(name: str) -> bool:
+    """Check if a model is already loaded."""
+    return name in _RUNNING_MODELS
+
+
+def register_model(name: str, model: 'Enigma'):
+    """Register a model as running."""
+    _RUNNING_MODELS[name] = model
+
+
+def unregister_model(name: str):
+    """Unregister a model."""
+    if name in _RUNNING_MODELS:
+        del _RUNNING_MODELS[name]
+
+
+class Enigma(nn.Module):
     """
-    A real transformer model that scales from tiny to large.
+    A real transformer model that scales from tiny to extra-large.
     
     This is architecturally identical to GPT - just configurable size.
     It learns patterns from training data and generates based on those patterns.
@@ -126,5 +152,6 @@ class TinyEnigma(nn.Module):
         )
 
 
-# Alias for compatibility
-EnigmaModel = TinyEnigma
+# Aliases for compatibility
+TinyEnigma = Enigma
+EnigmaModel = Enigma

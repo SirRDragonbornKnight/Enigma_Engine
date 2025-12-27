@@ -41,7 +41,7 @@ def create_robot_subtab(parent):
     )
     config_layout.addWidget(parent.robot_config_combo, stretch=1)
     
-    btn_refresh = QPushButton("🔄")
+    btn_refresh = QPushButton("[R]")
     btn_refresh.setFixedWidth(40)
     btn_refresh.setToolTip("Refresh config list")
     btn_refresh.clicked.connect(lambda: _refresh_robot_configs(parent))
@@ -136,7 +136,7 @@ def create_robot_subtab(parent):
     layout.addWidget(parent.robot_log)
     
     # Info
-    info = QLabel("💡 The AI you train will learn to send commands to this robot.\n"
+    info = QLabel("[i] The AI you train will learn to send commands to this robot.\n"
                   "    Create config files for each robot you want the AI to control.")
     info.setStyleSheet("color: #6c7086; font-size: 10px;")
     layout.addWidget(info)
@@ -200,7 +200,7 @@ def _on_robot_config_changed(parent, index):
         parent.robot_log.append(f"Loaded config: {Path(config_path).stem}")
         
     except Exception as e:
-        parent.robot_log.append(f"❌ Failed to load config: {e}")
+        parent.robot_log.append(f"[X] Failed to load config: {e}")
 
 
 def _on_robot_type_changed(parent, robot_type):
@@ -276,9 +276,9 @@ def _save_current_robot_config(parent):
     try:
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
-        parent.robot_log.append(f"✅ Config saved: {Path(config_path).stem}")
+        parent.robot_log.append(f"[OK] Config saved: {Path(config_path).stem}")
     except Exception as e:
-        parent.robot_log.append(f"❌ Failed to save: {e}")
+        parent.robot_log.append(f"[X] Failed to save: {e}")
 
 
 def _connect_robot(parent):
@@ -291,7 +291,7 @@ def _connect_robot(parent):
         if robot_type == "serial":
             port = parent.robot_port_input.text()
             baud = int(parent.robot_baud_combo.currentText())
-            parent.robot_log.append(f"📟 Serial: {port} @ {baud} baud...")
+            parent.robot_log.append(f"[>] Serial: {port} @ {baud} baud...")
             # TODO: Actual serial connection
             # import serial
             # parent.robot_connection = serial.Serial(port, baud, timeout=1)
@@ -299,22 +299,22 @@ def _connect_robot(parent):
         elif robot_type == "http":
             host = parent.robot_host_input.text()
             port = parent.robot_net_port_input.text()
-            parent.robot_log.append(f"🌐 HTTP: http://{host}:{port}")
+            parent.robot_log.append(f"[>] HTTP: http://{host}:{port}")
             
         elif robot_type == "ros":
             host = parent.robot_host_input.text()
             port = parent.robot_net_port_input.text()
-            parent.robot_log.append(f"🤖 ROS Master: {host}:{port}")
+            parent.robot_log.append(f"[*] ROS Master: {host}:{port}")
             # TODO: ROS connection
             
         elif robot_type == "gpio":
-            parent.robot_log.append("🔌 GPIO initialized")
+            parent.robot_log.append("[>] GPIO initialized")
             # TODO: GPIO setup
             
         elif robot_type == "mqtt":
             host = parent.robot_host_input.text()
             port = parent.robot_net_port_input.text()
-            parent.robot_log.append(f"📡 MQTT: {host}:{port}")
+            parent.robot_log.append(f"[>] MQTT: {host}:{port}")
             # TODO: MQTT connection
         
         # Mark as connected
@@ -322,10 +322,10 @@ def _connect_robot(parent):
         parent.robot_status_label.setStyleSheet("color: #a6e3a1;")
         parent.btn_robot_connect.setEnabled(False)
         parent.btn_robot_disconnect.setEnabled(True)
-        parent.robot_log.append("✅ Connection established")
+        parent.robot_log.append("[OK] Connection established")
         
     except Exception as e:
-        parent.robot_log.append(f"❌ Connection failed: {e}")
+        parent.robot_log.append(f"[X] Connection failed: {e}")
         parent.robot_status_label.setText("Status: Connection failed")
 
 
@@ -341,7 +341,7 @@ def _disconnect_robot(parent):
     parent.robot_status_label.setStyleSheet("color: #f38ba8;")
     parent.btn_robot_connect.setEnabled(True)
     parent.btn_robot_disconnect.setEnabled(False)
-    parent.robot_log.append("🔌 Disconnected")
+    parent.robot_log.append("[x] Disconnected")
 
 
 def _send_robot_command(parent):
@@ -350,13 +350,13 @@ def _send_robot_command(parent):
     if not cmd:
         return
     
-    parent.robot_log.append(f"→ {cmd}")
+    parent.robot_log.append(f">> {cmd}")
     parent.robot_cmd_input.clear()
     
     if parent.robot_connection:
         try:
             parent.robot_connection.write(f"{cmd}\n".encode())
         except Exception as e:
-            parent.robot_log.append(f"❌ Send failed: {e}")
+            parent.robot_log.append(f"[X] Send failed: {e}")
     else:
-        parent.robot_log.append("⚠️ Not connected - command logged only")
+        parent.robot_log.append("[!] Not connected - command logged only")

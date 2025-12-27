@@ -13,7 +13,7 @@ from ...config import CONFIG
 DEFAULT_INSTRUCTIONS = """# Enigma Engine - Quick Start Guide
 
 ## Getting Started
-1. Create a Model: File → New Model
+1. Create a Model: File -> New Model
 2. Add Training Data: Go to Train tab, select a file
 3. Train: Set parameters and click Train
 4. Chat: Talk to your AI in the Chat tab!
@@ -42,15 +42,15 @@ More data = smarter AI. Add lots of examples!
 
 ## Avatar
 Load an image or model in the Avatar tab.
-Enable display via Options → Avatar
+Enable display via Options -> Avatar
 
 ## Vision
 Take screenshots for the AI to analyze.
 On Raspberry Pi, install: sudo apt install scrot
 
 ## Voice Features
-- Options → AI Auto-Speak: AI speaks responses
-- Options → Microphone: Voice input
+- Options -> AI Auto-Speak: AI speaks responses
+- Options -> Microphone: Voice input
 
 ## Tips
 - Back up your model before making big changes
@@ -80,11 +80,11 @@ def create_instructions_tab(parent):
         lambda idx: _load_instructions_file(parent, idx)
     )
     
-    btn_new = QPushButton("📄 New")
+    btn_new = QPushButton("[+] New")
     btn_new.setToolTip("Create new notes file")
     btn_new.clicked.connect(lambda: _create_instructions_file(parent))
     
-    btn_save = QPushButton("💾 Save")
+    btn_save = QPushButton("[S] Save")
     btn_save.setToolTip("Save current file")
     btn_save.clicked.connect(lambda: _save_instructions_file(parent))
     

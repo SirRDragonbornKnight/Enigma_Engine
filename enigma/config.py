@@ -23,11 +23,11 @@ CONFIG = {
     "db_path": str(DB_PATH),
     
     # === CHANGE THESE TO SWITCH AI ===
-    "default_model": "sacrifice",       # Which AI to load by default
+    "default_model": "enigma",          # Which AI to load by default (change to your AI name)
     "auto_learn": True,                 # Learn from conversations automatically
     "auto_train_threshold": 10,         # Train after N conversations (0 = never)
     
-    # Model architecture (for TinyEnigma and scalable models)
+    # Model architecture (for Enigma and scalable models)
     "max_len": 512,                     # Maximum sequence length
     "embed_dim": 128,                   # Embedding dimension (bigger = smarter but slower)
     "num_layers": 4,                    # Transformer layers (more = smarter but slower)
@@ -43,6 +43,10 @@ CONFIG = {
     "enable_voice": True,
     "enable_vision": True,
     "enable_avatar": True,
+    
+    # Multi-model support
+    "allow_multiple_models": True,      # Allow running multiple AIs at once
+    "max_concurrent_models": 4,         # Maximum number of models to run
 }
 
 # =============================================================================

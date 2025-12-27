@@ -23,7 +23,6 @@ def train_model(force=False, num_epochs=10, lr=1e-4):
     if hasattr(tokenizer, "encode") or hasattr(tokenizer, "__call__"):
         enc = tokenizer(raw, return_tensors="pt", padding=True, truncation=True, max_length=CONFIG.get("max_len",512))
         if isinstance(enc["input_ids"], list):
-            import torch
             input_ids = torch.tensor(enc["input_ids"], dtype=torch.long).unsqueeze(0)
         else:
             input_ids = enc["input_ids"].long()

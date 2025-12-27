@@ -7,10 +7,14 @@ Features:
   - Backup before risky operations
   - Grow/shrink models with confirmation
   - Chat, Training, Voice integration
-  - Dark/Light mode toggle
+  - Dark/Light/Shadow/Midnight mode toggle
   - Avatar control panel
-  - Screen vision preview
+  - Screen vision preview with camera support
   - Training data editor
+  - Per-AI conversation history
+  - Multi-AI support (run multiple models)
+  - Image upload in chat/vision tabs
+  - Selectable (read-only) text throughout
 """
 import sys
 import json
@@ -23,14 +27,15 @@ from PyQt5.QtWidgets import (
     QDialog, QComboBox, QProgressBar, QGroupBox, QRadioButton, QButtonGroup,
     QSpinBox, QCheckBox, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
     QSlider, QSplitter, QPlainTextEdit, QToolTip, QFrame, QScrollArea, QInputDialog,
-    QListWidgetItem
+    QListWidgetItem, QActionGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QImage
+from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QImage, QTextCursor
 import time
 
 
-# === DARK/LIGHT THEME STYLESHEETS ===
+# === THEME STYLESHEETS ===
+# Theme: Dark (Catppuccin Mocha)
 DARK_STYLE = """
 QMainWindow, QWidget {
     background-color: #1e1e2e;
@@ -257,6 +262,250 @@ QLabel {
 }
 """
 
+# Theme: Shadow (Very dark with purple accents)
+SHADOW_STYLE = """
+QMainWindow, QWidget {
+    background-color: #0d0d0d;
+    color: #b8b8b8;
+}
+QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
+    background-color: #1a1a1a;
+    color: #d0d0d0;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QPushButton {
+    background-color: #6b21a8;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #7c3aed;
+}
+QPushButton:pressed {
+    background-color: #581c87;
+}
+QPushButton:disabled {
+    background-color: #2a2a2a;
+    color: #4a4a4a;
+}
+QGroupBox {
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    color: #9333ea;
+    subcontrol-origin: margin;
+    left: 10px;
+}
+QTabWidget::pane {
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+}
+QTabBar::tab {
+    background-color: #1a1a1a;
+    color: #b8b8b8;
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background-color: #6b21a8;
+    color: #ffffff;
+}
+QProgressBar {
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #9333ea;
+}
+QMenuBar {
+    background-color: #0d0d0d;
+    color: #b8b8b8;
+}
+QMenuBar::item:selected {
+    background-color: #1a1a1a;
+}
+QMenu {
+    background-color: #1a1a1a;
+    color: #b8b8b8;
+    border: 1px solid #2a2a2a;
+}
+QMenu::item:selected {
+    background-color: #6b21a8;
+    color: #ffffff;
+}
+QSpinBox, QComboBox {
+    background-color: #1a1a1a;
+    color: #d0d0d0;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QSlider::groove:horizontal {
+    background: #2a2a2a;
+    height: 6px;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #9333ea;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QScrollBar:vertical {
+    background: #1a1a1a;
+    width: 12px;
+}
+QScrollBar::handle:vertical {
+    background: #2a2a2a;
+    border-radius: 6px;
+}
+QLabel#header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #9333ea;
+}
+QLabel {
+    selection-background-color: #6b21a8;
+    selection-color: #ffffff;
+}
+"""
+
+# Theme: Midnight (Deep blue/black with cyan accents)
+MIDNIGHT_STYLE = """
+QMainWindow, QWidget {
+    background-color: #030712;
+    color: #e2e8f0;
+}
+QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+    padding: 4px;
+}
+QPushButton {
+    background-color: #0891b2;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #22d3ee;
+}
+QPushButton:pressed {
+    background-color: #0e7490;
+}
+QPushButton:disabled {
+    background-color: #1e293b;
+    color: #475569;
+}
+QGroupBox {
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    color: #22d3ee;
+    subcontrol-origin: margin;
+    left: 10px;
+}
+QTabWidget::pane {
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+}
+QTabBar::tab {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background-color: #0891b2;
+    color: #ffffff;
+}
+QProgressBar {
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #22d3ee;
+}
+QMenuBar {
+    background-color: #030712;
+    color: #e2e8f0;
+}
+QMenuBar::item:selected {
+    background-color: #0f172a;
+}
+QMenu {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+}
+QMenu::item:selected {
+    background-color: #0891b2;
+    color: #ffffff;
+}
+QSpinBox, QComboBox {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+    padding: 4px;
+}
+QSlider::groove:horizontal {
+    background: #1e293b;
+    height: 6px;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #22d3ee;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QScrollBar:vertical {
+    background: #0f172a;
+    width: 12px;
+}
+QScrollBar::handle:vertical {
+    background: #1e293b;
+    border-radius: 6px;
+}
+QLabel#header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #22d3ee;
+}
+QLabel {
+    selection-background-color: #0891b2;
+    selection-color: #ffffff;
+}
+"""
+
+# Theme dictionary for easy access
+THEMES = {
+    "dark": DARK_STYLE,
+    "light": LIGHT_STYLE,
+    "shadow": SHADOW_STYLE,
+    "midnight": MIDNIGHT_STYLE,
+}
+
 # Import enigma modules
 try:
     from ..core.model_registry import ModelRegistry
@@ -423,13 +672,13 @@ class SetupWizard(QWizard):
         if not name:
             self.name_status.setText("")
         elif name in self.registry.registry.get("models", {}):
-            self.name_status.setText("⚠ Name already exists!")
+            self.name_status.setText("[!] Name already exists!")
             self.name_status.setStyleSheet("color: orange")
         elif not name.replace("_", "").isalnum():
-            self.name_status.setText("✗ Use only letters, numbers, underscores")
+            self.name_status.setText("[X] Use only letters, numbers, underscores")
             self.name_status.setStyleSheet("color: red")
         else:
-            self.name_status.setText("✓ Name available")
+            self.name_status.setText("[OK] Name available")
             self.name_status.setStyleSheet("color: green")
     
     def _create_size_page(self):
@@ -460,9 +709,9 @@ class SetupWizard(QWizard):
             
             label = f"{name}\n    {hw} | Needs: {mem}"
             if is_recommended:
-                label += " ⭐ RECOMMENDED"
+                label += " [!] RECOMMENDED"
             if not can_use:
-                label += " ⚠️ TOO LARGE"
+                label += " [!] TOO LARGE"
             
             radio = QRadioButton(label)
             radio.size_id = size_id
@@ -487,7 +736,7 @@ class SetupWizard(QWizard):
         <p><b>Your Hardware:</b> {hw.get('device_type', 'Unknown')}</p>
         <ul>
             <li>RAM: {hw.get('ram_gb', '?')} GB (available: {hw.get('available_gb', '?')} GB)</li>
-            <li>GPU VRAM: {hw.get('vram_gb', 0)} GB {'✓' if hw.get('has_gpu') else '(no GPU)'}</li>
+            <li>GPU VRAM: {hw.get('vram_gb', 0)} GB {'[OK]' if hw.get('has_gpu') else '(no GPU)'}</li>
             <li>Effective memory for models: ~{hw.get('effective_mem', 1):.1f} GB</li>
         </ul>
         <p><b>Recommendation:</b> <span style="color: green;">{recommended.upper()}</span></p>
@@ -585,10 +834,10 @@ class ModelManagerDialog(QDialog):
         self.btn_backup = QPushButton("Backup")
         self.btn_backup.clicked.connect(self._on_backup)
         
-        self.btn_grow = QPushButton("Grow →")
+        self.btn_grow = QPushButton("Grow >>")
         self.btn_grow.clicked.connect(self._on_grow)
         
-        self.btn_shrink = QPushButton("← Shrink")
+        self.btn_shrink = QPushButton("<< Shrink")
         self.btn_shrink.clicked.connect(self._on_shrink)
         
         self.btn_delete = QPushButton("Delete")
@@ -613,12 +862,12 @@ class ModelManagerDialog(QDialog):
     def _refresh_list(self):
         self.model_list.clear()
         for name, info in self.registry.registry.get("models", {}).items():
-            status = "✓" if info.get("has_weights") else "○"
+            status = "[+]" if info.get("has_weights") else "[ ]"
             self.model_list.addItem(f"{status} {name} ({info.get('size', '?')})")
     
     def _on_select_model(self, item):
         text = item.text()
-        # Extract name from "✓ name (size)"
+        # Extract name from "[+] name (size)"
         name = text.split()[1]
         
         try:
@@ -752,14 +1001,14 @@ class ModelManagerDialog(QDialog):
         
         size, ok = self._show_size_dialog("Shrink Model", available,
             f"Current size: {current_size}\nSelect target size:\n\n"
-            "⚠ Shrinking loses some capacity!")
+            "WARNING: Shrinking loses some capacity!")
         
         if ok and size:
             reply = QMessageBox.warning(
                 self, "Confirm Shrink",
                 f"Shrink '{self.selected_model}' from {current_size} to {size}?\n\n"
                 "A backup will be created first.\n"
-                "⚠ Some knowledge may be lost in shrinking.",
+                "WARNING: Some knowledge may be lost in shrinking.",
                 QMessageBox.Yes | QMessageBox.No
             )
             
@@ -801,8 +1050,8 @@ class ModelManagerDialog(QDialog):
         reply = QMessageBox.warning(
             self, "Confirm Delete",
             f"DELETE model '{self.selected_model}'?\n\n"
-            "💡 Tip: If you made a backup, it will still exist.\n"
-            "⚠ The model folder and weights will be removed!",
+            "TIP: If you made a backup, it will still exist.\n"
+            "WARNING: The model folder and weights will be removed!",
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -998,7 +1247,7 @@ class EnhancedMainWindow(QMainWindow):
         self.learn_while_chatting = True
         
         # Status bar with clickable model selector
-        self.model_status_btn = QPushButton(f"Model: {self.current_model_name or 'None'}  ▼")
+        self.model_status_btn = QPushButton(f"Model: {self.current_model_name or 'None'}  v")
         self.model_status_btn.setFlat(True)
         self.model_status_btn.setCursor(Qt.PointingHandCursor)
         self.model_status_btn.clicked.connect(self._on_open_model)
@@ -1022,18 +1271,20 @@ class EnhancedMainWindow(QMainWindow):
         # Import tabs from separate modules
         from .tabs import (
             create_chat_tab, create_training_tab, create_avatar_tab,
-            create_vision_tab, create_sessions_tab, create_instructions_tab
+            create_vision_tab, create_sessions_tab, create_instructions_tab,
+            create_terminal_tab
         )
         
         # Main tabs
         tabs = QTabWidget()
         self.tabs = tabs  # Store reference for AI control
-        tabs.addTab(create_chat_tab(self), "💬 Chat")
-        tabs.addTab(create_training_tab(self), "🎓 Train")
-        tabs.addTab(create_avatar_tab(self), "🤖 Avatar")
-        tabs.addTab(create_vision_tab(self), "👁️ Vision")
-        tabs.addTab(create_sessions_tab(self), "📜 History")
-        tabs.addTab(create_instructions_tab(self), "📁 Files")
+        tabs.addTab(create_chat_tab(self), "[>] Chat")
+        tabs.addTab(create_training_tab(self), "[+] Train")
+        tabs.addTab(create_avatar_tab(self), "[*] Avatar")
+        tabs.addTab(create_vision_tab(self), "[o] Vision")
+        tabs.addTab(create_terminal_tab(self), "[#] Terminal")
+        tabs.addTab(create_sessions_tab(self), "[=] History")
+        tabs.addTab(create_instructions_tab(self), "[~] Files")
         
         self.setCentralWidget(tabs)
     
@@ -1094,12 +1345,12 @@ class EnhancedMainWindow(QMainWindow):
     def _toggle_screen_watching(self, checked):
         """Toggle continuous screen watching."""
         if checked:
-            self.btn_start_watching.setText("⏹️ Stop Watching")
+            self.btn_start_watching.setText("[x] Stop Watching")
             interval_ms = self.vision_interval_spin.value() * 1000
             self.vision_timer.start(interval_ms)
             self._do_continuous_capture()
         else:
-            self.btn_start_watching.setText("👁️ Start Watching")
+            self.btn_start_watching.setText("[o] Start Watching")
             self.vision_timer.stop()
     
     def _do_single_capture(self):
@@ -1109,6 +1360,133 @@ class EnhancedMainWindow(QMainWindow):
     def _do_continuous_capture(self):
         """Capture for continuous watching."""
         self._capture_screen()
+    
+    def _capture_camera(self):
+        """Capture image from webcam/camera."""
+        try:
+            import cv2
+            
+            # Try to open camera
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                self.vision_preview.setText("Camera not available\\n\\nMake sure a camera is connected.")
+                return
+            
+            # Capture frame
+            ret, frame = cap.read()
+            cap.release()
+            
+            if not ret:
+                self.vision_preview.setText("Failed to capture from camera")
+                return
+            
+            # Convert BGR to RGB
+            from PIL import Image
+            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            
+            # Store for analysis
+            self._last_screenshot = img
+            self.current_vision_image = "camera"
+            
+            # Resize for display
+            display_img = img.copy()
+            display_img.thumbnail((640, 400))
+            
+            # Convert to QPixmap
+            import io
+            buffer = io.BytesIO()
+            display_img.save(buffer, format="PNG")
+            buffer.seek(0)
+            
+            pixmap = QPixmap()
+            pixmap.loadFromData(buffer.read())
+            self.vision_preview.setPixmap(pixmap)
+            
+            # Info
+            width, height = img.size
+            from datetime import datetime
+            info = f"Camera: {width}x{height} | Captured: {datetime.now().strftime('%H:%M:%S')}"
+            self.vision_text.setPlainText(info)
+            
+        except ImportError:
+            self.vision_preview.setText("Camera capture requires OpenCV\\n\\nInstall: pip install opencv-python")
+        except Exception as e:
+            self.vision_preview.setText(f"Camera error: {e}")
+    
+    def _load_vision_image(self):
+        """Load an image file for analysis."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Load Image", "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            from PIL import Image
+            img = Image.open(file_path)
+            
+            # Store for analysis
+            self._last_screenshot = img
+            self.current_vision_image = file_path
+            
+            # Resize for display
+            display_img = img.copy()
+            display_img.thumbnail((640, 400))
+            
+            # Convert to QPixmap
+            import io
+            buffer = io.BytesIO()
+            display_img.save(buffer, format="PNG")
+            buffer.seek(0)
+            
+            pixmap = QPixmap()
+            pixmap.loadFromData(buffer.read())
+            self.vision_preview.setPixmap(pixmap)
+            
+            # Info
+            width, height = img.size
+            from pathlib import Path
+            info = f"Image: {Path(file_path).name} | {width}x{height}"
+            self.vision_text.setPlainText(info)
+            
+        except Exception as e:
+            self.vision_preview.setText(f"Error loading image: {e}")
+    
+    def _analyze_vision_image(self):
+        """Have AI analyze the current image."""
+        if not hasattr(self, '_last_screenshot') or self._last_screenshot is None:
+            self.vision_text.setPlainText("No image to analyze. Capture or load an image first.")
+            return
+        
+        # Get OCR text
+        ocr_text = ""
+        try:
+            from ..tools.simple_ocr import extract_text
+            ocr_text = extract_text(self._last_screenshot)
+        except:
+            pass
+        
+        # Build analysis
+        analysis = []
+        analysis.append(f"Image size: {self._last_screenshot.size[0]}x{self._last_screenshot.size[1]}")
+        
+        if ocr_text:
+            analysis.append(f"\\nDetected text:\\n{ocr_text}")
+        else:
+            analysis.append("\\nNo text detected in image.")
+        
+        # If AI is available, get description
+        if self.engine:
+            try:
+                prompt = "Describe what you might see in a screenshot or image."
+                # Note: Real vision would need multi-modal model
+                analysis.append(f"\\n(AI vision analysis requires multi-modal model)")
+            except:
+                pass
+        
+        self.vision_text.setPlainText("\\n".join(analysis))
     
     def _capture_screen(self):
         """Capture screen and display it. Uses scrot on Linux (Wayland/Pi friendly)."""
@@ -1226,6 +1604,35 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             self.vision_preview.setText(f"Error: {e}")
     
+    # ========== TERMINAL METHODS ==========
+    
+    def _clear_terminal(self):
+        """Clear the terminal output."""
+        if hasattr(self, 'terminal_output'):
+            self.terminal_output.clear()
+            self._terminal_lines = []
+    
+    def _update_terminal_filter(self):
+        """Update the terminal log level filter."""
+        if hasattr(self, 'terminal_log_level'):
+            self._terminal_log_level = self.terminal_log_level.currentText()
+    
+    def log_terminal(self, message, level="info"):
+        """Log a message to the AI terminal display."""
+        from .tabs.terminal_tab import log_to_terminal
+        log_to_terminal(self, message, level)
+    
+    def update_terminal_stats(self, tokens_per_sec=None, memory_mb=None, model_name=None):
+        """Update the terminal statistics display."""
+        if tokens_per_sec is not None and hasattr(self, 'terminal_tps_label'):
+            self.terminal_tps_label.setText(f"Tokens/sec: {tokens_per_sec:.1f}")
+        if memory_mb is not None and hasattr(self, 'terminal_memory_label'):
+            self.terminal_memory_label.setText(f"Memory: {memory_mb:.1f} MB")
+        if model_name is not None and hasattr(self, 'terminal_model_label'):
+            self.terminal_model_label.setText(f"Model: {model_name}")
+    
+    # ========== AI WATCHING METHODS ==========
+    
     def ai_start_watching(self):
         """AI can start continuous screen watching."""
         if not self.btn_start_watching.isChecked():
@@ -1258,13 +1665,73 @@ class EnhancedMainWindow(QMainWindow):
     
     # === Session Actions ===
     
+    def _populate_history_ai_selector(self):
+        """Populate the AI selector dropdown in history tab."""
+        if not hasattr(self, 'history_ai_selector'):
+            return
+        self.history_ai_selector.clear()
+        self.history_ai_selector.addItem("All AIs")
+        for name in self.registry.registry.get("models", {}).keys():
+            self.history_ai_selector.addItem(name)
+        # Select current model if available
+        if self.current_model_name:
+            idx = self.history_ai_selector.findText(self.current_model_name)
+            if idx >= 0:
+                self.history_ai_selector.setCurrentIndex(idx)
+    
+    def _on_history_ai_changed(self, ai_name):
+        """Handle AI selection change in history tab."""
+        self._refresh_sessions()
+    
+    def _get_sessions_dir(self):
+        """Get the sessions directory based on selected AI."""
+        if hasattr(self, 'history_ai_selector'):
+            ai_name = self.history_ai_selector.currentText()
+            if ai_name and ai_name != "All AIs":
+                # Per-AI sessions
+                return Path(CONFIG.get("models_dir", "models")) / ai_name / "brain" / "conversations"
+        # Default global sessions
+        return Path(CONFIG.get("data_dir", "data")) / "conversations"
+    
     def _refresh_sessions(self):
         """Refresh the list of saved sessions."""
+        if not hasattr(self, 'sessions_list'):
+            return
         self.sessions_list.clear()
-        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
-        conv_dir.mkdir(parents=True, exist_ok=True)
-        for f in sorted(conv_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
-            self.sessions_list.addItem(f.stem)
+        
+        selected_ai = ""
+        if hasattr(self, 'history_ai_selector'):
+            selected_ai = self.history_ai_selector.currentText()
+        
+        if selected_ai == "All AIs" or not selected_ai:
+            # Show sessions from all AIs
+            all_sessions = []
+            
+            # Global sessions
+            global_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+            if global_dir.exists():
+                for f in global_dir.glob("*.json"):
+                    all_sessions.append((f.stat().st_mtime, f.stem, "global"))
+            
+            # Per-AI sessions
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            for model_dir in models_dir.iterdir():
+                if model_dir.is_dir():
+                    conv_dir = model_dir / "brain" / "conversations"
+                    if conv_dir.exists():
+                        for f in conv_dir.glob("*.json"):
+                            all_sessions.append((f.stat().st_mtime, f.stem, model_dir.name))
+            
+            # Sort by time and display
+            for mtime, name, ai in sorted(all_sessions, reverse=True):
+                display = f"[{ai}] {name}" if ai != "global" else name
+                self.sessions_list.addItem(display)
+        else:
+            # Show sessions for selected AI only
+            conv_dir = self._get_sessions_dir()
+            conv_dir.mkdir(parents=True, exist_ok=True)
+            for f in sorted(conv_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+                self.sessions_list.addItem(f.stem)
     
     def _load_session(self, item):
         """Load a session's content into the viewer."""
@@ -1559,7 +2026,7 @@ class EnhancedMainWindow(QMainWindow):
     def _disable_avatar(self):
         """Disable avatar display."""
         self.avatar_image_label.clear()
-        self.avatar_image_label.setText("Avatar disabled\n\nEnable in Options → Avatar")
+        self.avatar_image_label.setText("Avatar disabled\n\nEnable in Options -> Avatar")
         if hasattr(self, 'avatar_status_label'):
             self.avatar_status_label.setText("Avatar disabled")
     
@@ -1578,7 +2045,7 @@ class EnhancedMainWindow(QMainWindow):
                 img_array = np.array(img)
                 if img_array.max() < 10:  # Nearly all black
                     self.vision_preview.setText(
-                        "⚠️ Screenshot appears black\\n\\n"
+                        "WARNING: Screenshot appears black\\n\\n"
                         "This often happens on Wayland (Raspberry Pi default).\\n\\n"
                         "Try:\\n"
                         "1. Install: pip install pyscreenshot mss\\n"
@@ -1636,8 +2103,8 @@ class EnhancedMainWindow(QMainWindow):
             return
         self.models_list.clear()
         for name, info in self.registry.registry.get("models", {}).items():
-            status = "✓" if info.get("has_weights") else "○"
-            current = " ← ACTIVE" if name == self.current_model_name else ""
+            status = "[+]" if info.get("has_weights") else "[ ]"
+            current = " << ACTIVE" if name == self.current_model_name else ""
             self.models_list.addItem(f"{status} {name} ({info.get('size', '?')}){current}")
     
     # === Actions ===
@@ -1680,7 +2147,7 @@ class EnhancedMainWindow(QMainWindow):
                 # Check if we should auto-train
                 if self.brain.should_auto_train():
                     self.statusBar().showMessage(
-                        f"📚 Learned {self.brain.interactions_since_train} new things! "
+                        f"[+] Learned {self.brain.interactions_since_train} new things! "
                         "Training will improve responses.", 5000
                     )
             
@@ -1724,7 +2191,7 @@ class EnhancedMainWindow(QMainWindow):
             if selected:
                 self.current_model_name = selected
                 self._load_current_model()
-                self.model_status_btn.setText(f"Model: {self.current_model_name}  ▼")
+                self.model_status_btn.setText(f"Model: {self.current_model_name}  v")
                 self.setWindowTitle(f"Enigma Engine - {self.current_model_name}")
     
     def _on_backup_current(self):
@@ -1820,7 +2287,7 @@ class EnhancedMainWindow(QMainWindow):
         if name in self.registry.registry.get("models", {}):
             self.current_model_name = name
             self._load_current_model()
-            self.model_status_btn.setText(f"Model: {name}  ▼")
+            self.model_status_btn.setText(f"Model: {name}  v")
             return f"Switched to model '{name}'"
         return f"Model '{name}' not found"
     
@@ -1853,7 +2320,7 @@ class EnhancedMainWindow(QMainWindow):
             try:
                 # TODO: Send via WebSocket/HTTP based on connection type
                 if hasattr(self, 'game_log'):
-                    self.game_log.append(f"AI → {command}")
+                    self.game_log.append(f"AI >> {command}")
                 return f"Sent to game: {command}"
             except Exception as e:
                 return f"Failed to send: {e}"
@@ -1865,7 +2332,7 @@ class EnhancedMainWindow(QMainWindow):
             try:
                 self.robot_connection.write(f"{command}\n".encode())
                 if hasattr(self, 'robot_log'):
-                    self.robot_log.append(f"AI → {command}")
+                    self.robot_log.append(f"AI >> {command}")
                 return f"Sent to robot: {command}"
             except Exception as e:
                 return f"Failed to send: {e}"

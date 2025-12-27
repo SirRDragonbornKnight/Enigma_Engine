@@ -237,7 +237,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         }
         self._save_registry()
         
-        print(f"[SYSTEM] ✓ Created model '{name}' ({size})")
+        print(f"[SYSTEM] [OK] Created model '{name}' ({size})")
         print(f"[SYSTEM]   Parameters: {metadata['estimated_parameters']:,}")
         print(f"[SYSTEM]   Location: {model_dir}")
         print(f"[SYSTEM]   Training data: {training_data_file}")
@@ -297,7 +297,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             model.load_state_dict(state_dict)
             # Silent load - no print to avoid confusion with AI output
         else:
-            print(f"[SYSTEM] ⚠ No weights found - model is untrained")
+            print(f"[SYSTEM] [!] No weights found - model is untrained")
         
         model.to(device)
         

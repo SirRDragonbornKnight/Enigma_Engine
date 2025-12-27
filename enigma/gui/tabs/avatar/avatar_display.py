@@ -53,7 +53,7 @@ def create_avatar_subtab(parent):
     )
     config_layout.addWidget(parent.avatar_config_combo, stretch=1)
     
-    btn_refresh = QPushButton("🔄")
+    btn_refresh = QPushButton("[R]")
     btn_refresh.setFixedWidth(40)
     btn_refresh.setToolTip("Refresh config list")
     btn_refresh.clicked.connect(lambda: _refresh_avatar_configs(parent))
@@ -75,7 +75,7 @@ def create_avatar_subtab(parent):
     layout.addWidget(parent.avatar_status_label)
     
     # Info label
-    info = QLabel("💡 The AI you train controls this avatar. When the AI responds,\n"
+    info = QLabel("[i] The AI you train controls this avatar. When the AI responds,\n"
                   "    it can change expressions based on its learned behavior.")
     info.setStyleSheet("color: #6c7086; font-size: 10px;")
     layout.addWidget(info)

@@ -2,7 +2,7 @@
 Model Scaling Utilities
 
 Allows you to:
-  1. Grow a model (small → medium → large) while preserving learning
+  1. Grow a model (small -> medium -> large) while preserving learning
   2. Distill a large model into a smaller one
   3. Export/import core knowledge between model sizes
 
@@ -51,8 +51,8 @@ def grow_model(
     target_config = get_model_config(target_size)
     target_config["vocab_size"] = vocab_size
     
-    print(f"Growing model: dim {source_config['dim']} → {target_config['dim']}, "
-          f"depth {source_config['depth']} → {target_config['depth']}")
+    print(f"Growing model: dim {source_config['dim']} -> {target_config['dim']}, "
+          f"depth {source_config['depth']} -> {target_config['depth']}")
     
     # Create new model
     new_model = TinyEnigma(**target_config)
@@ -94,7 +94,7 @@ def grow_model(
                 _copy_partial_linear(src_layer.linear1.weight, tgt_layer.linear1.weight)
                 _copy_partial_linear(src_layer.linear2.weight, tgt_layer.linear2.weight)
     
-    print(f"✓ Model grown successfully. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
+    print(f"[OK] Model grown successfully. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
     return new_model
 
 
@@ -148,7 +148,7 @@ def shrink_model(
                 _copy_partial_linear(src_layer.linear1.weight, tgt_layer.linear1.weight)
                 _copy_partial_linear(src_layer.linear2.weight, tgt_layer.linear2.weight)
     
-    print(f"✓ Model shrunk. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
+    print(f"[OK] Model shrunk. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
     return new_model
 
 
@@ -198,10 +198,10 @@ def grow_registered_model(
     registry.update_metadata(
         target_name,
         grown_from=source_name,
-        growth_note=f"Grew from {source_name} ({registry.registry['models'][source_name]['size']} → {target_size})"
+        growth_note=f"Grew from {source_name} ({registry.registry['models'][source_name]['size']} -> {target_size})"
     )
     
-    print(f"✓ Created '{target_name}' by growing '{source_name}'")
+    print(f"[OK] Created '{target_name}' by growing '{source_name}'")
     return new_model
 
 

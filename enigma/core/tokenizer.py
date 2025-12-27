@@ -178,28 +178,61 @@ def build_tokenizer_from_files(data_files: List[str], vocab_size: int = 5000):
         return str(VOCAB_DIR)
 
 
-def load_tokenizer():
-    """Load the best available tokenizer."""
-    # First try our simple tokenizer (fast, no dependencies)
-    simple_vocab = VOCAB_DIR / "simple_vocab.json"
-    if simple_vocab.exists():
-        return SimpleTokenizer(simple_vocab)
+def load_tokenizer(tokenizer_type: str = "auto"):
+    """
+    Load the best available tokenizer.
+    
+    Args:
+        tokenizer_type: "auto", "character", "simple", or "hf"
+                       - "auto": Best available (character > simple > hf)
+                       - "character": Full character-level with dictionary
+                       - "simple": Basic character + common words
+                       - "hf": HuggingFace tokenizer (if available)
+    """
+    # Try character tokenizer first (best option)
+    if tokenizer_type in ("auto", "character"):
+        try:
+            from .char_tokenizer import CharacterTokenizer
+            char_vocab = VOCAB_DIR / "char_vocab.json"
+            if char_vocab.exists():
+                return CharacterTokenizer(vocab_file=char_vocab, use_dictionary=True)
+            else:
+                # Create new character tokenizer
+                tok = CharacterTokenizer(use_dictionary=True)
+                VOCAB_DIR.mkdir(parents=True, exist_ok=True)
+                tok.save_vocab(char_vocab)
+                return tok
+        except Exception as e:
+            logger.warning(f"Could not load character tokenizer: {e}")
+            if tokenizer_type == "character":
+                raise
+    
+    # Try simple tokenizer
+    if tokenizer_type in ("auto", "simple"):
+        simple_vocab = VOCAB_DIR / "simple_vocab.json"
+        if simple_vocab.exists():
+            return SimpleTokenizer(simple_vocab)
     
     # Check for HuggingFace trained vocab
-    hf_vocab = VOCAB_DIR / "vocab.json"
-    if hf_vocab.exists():
-        try:
-            from transformers import PreTrainedTokenizerFast
-            tok = PreTrainedTokenizerFast(
-                vocab_file=str(hf_vocab),
-                merges_file=str(VOCAB_DIR / "merges.txt"),
-                pad_token="<pad>",
-                eos_token="</s>"
-            )
-            tok.pad_token = tok.eos_token
-            return tok
-        except ImportError:
-            pass
+    if tokenizer_type in ("auto", "hf"):
+        hf_vocab = VOCAB_DIR / "vocab.json"
+        if hf_vocab.exists():
+            try:
+                from transformers import PreTrainedTokenizerFast
+                tok = PreTrainedTokenizerFast(
+                    vocab_file=str(hf_vocab),
+                    merges_file=str(VOCAB_DIR / "merges.txt"),
+                    pad_token="<pad>",
+                    eos_token="</s>"
+                )
+                tok.pad_token = tok.eos_token
+                return tok
+            except ImportError:
+                pass
     
-    # Default: create and return simple tokenizer
-    return SimpleTokenizer()
+    # Default: create and return character tokenizer (best for learning)
+    try:
+        from .char_tokenizer import CharacterTokenizer
+        return CharacterTokenizer(use_dictionary=True)
+    except:
+        return SimpleTokenizer()
