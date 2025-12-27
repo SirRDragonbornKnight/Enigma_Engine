@@ -1,0 +1,17 @@
+{
+  "name": "Example Robot",
+  "description": "Template for robot connections - copy and modify",
+  "protocol": "serial",
+  "port": "COM3",
+  "baud": 115200,
+  "enabled": false,
+  "commands": {
+    "forward": "F",
+    "backward": "B",
+    "left": "L",
+    "right": "R",
+    "stop": "S",
+    "gripper_open": "GO",
+    "gripper_close": "GC"
+  }
+}

@@ -63,6 +63,9 @@ test-test-test/
 data/*
 !data/.gitkeep
 !data/data.txt
+!data/starter_training.txt
+!data/training_data.txt
+!data/protocols/
 
 # Keep models structure
 models/*

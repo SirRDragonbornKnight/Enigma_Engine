@@ -2136,8 +2136,25 @@ class EnhancedMainWindow(QMainWindow):
     
     def _on_send(self):
         text = self.chat_input.text().strip()
-        if not text or not self.engine:
+        if not text:
             return
+        
+        if not self.engine:
+            self.chat_display.append("<b style='color:#f38ba8;'>System:</b> No model loaded. "
+                                      "Create or load a model first (File menu).")
+            self.chat_input.clear()
+            return
+        
+        # Check if model is trained
+        if hasattr(self.engine, 'model'):
+            try:
+                # Quick check - see if model has any trained weights
+                param_sum = sum(p.sum().item() for p in self.engine.model.parameters())
+                if abs(param_sum) < 0.001:  # Very small = likely untrained
+                    self.chat_display.append("<b style='color:#f9e2af;'>Note:</b> "
+                                              "Model appears untrained. Go to Train tab first!")
+            except:
+                pass
         
         # Initialize chat messages list if needed
         if not hasattr(self, 'chat_messages'):

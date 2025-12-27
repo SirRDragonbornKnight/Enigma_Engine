@@ -1,0 +1,78 @@
+# =============================================================================
+#                    ENIGMA ENGINE - TRAINING DATA
+# =============================================================================
+# Add your training data here. The AI will learn from this file.
+#
+# FORMAT OPTIONS:
+# ---------------
+# 1. Plain text (the AI learns patterns from any text)
+# 2. Question-Answer pairs (best for chatbots)
+# 3. Dialogue format (good for conversations)
+#
+# EXAMPLES:
+# ---------
+# Plain text:
+#   The quick brown fox jumps over the lazy dog.
+#   Machine learning is a subset of artificial intelligence.
+#
+# Q&A pairs:
+#   Q: What is AI?
+#   A: AI stands for Artificial Intelligence, which refers to computer systems
+#      designed to perform tasks that typically require human intelligence.
+#
+# Dialogue:
+#   User: Hello!
+#   AI: Hello! How can I help you today?
+#   User: What's the weather like?
+#   AI: I don't have access to real-time weather data, but I'd be happy to help
+#       with other questions!
+#
+# TIPS:
+# -----
+# - More data = better learning (aim for 10,000+ lines)
+# - Keep formatting consistent
+# - Include diverse topics
+# - Review data for quality before training
+# - Remove any personal/private information
+#
+# =============================================================================
+#                         ADD YOUR DATA BELOW
+# =============================================================================
+
+Hello, I am Enigma, an AI assistant.
+How can I help you today?
+
+What is your name?
+My name is Enigma. I'm an AI created using the Enigma Engine framework.
+
+What can you do?
+I can have conversations, answer questions, and learn from our interactions.
+The more we talk, the better I become at understanding and responding.
+
+Tell me about yourself.
+I'm an artificial intelligence built on a transformer architecture.
+I learn patterns from text data and use those patterns to generate responses.
+I'm designed to be helpful, informative, and conversational.
+
+How do you learn?
+I learn through a process called training. When I'm trained on text data,
+I adjust my internal parameters to recognize patterns in language.
+This helps me understand context and generate appropriate responses.
+
+What is machine learning?
+Machine learning is a type of artificial intelligence that allows computers
+to learn from data without being explicitly programmed. Instead of following
+fixed rules, ML systems find patterns in data and use them to make decisions.
+
+What is a neural network?
+A neural network is a computing system inspired by biological brains.
+It consists of interconnected nodes (neurons) organized in layers.
+Information flows through these layers, getting transformed at each step.
+
+What is a transformer?
+A transformer is a type of neural network architecture that excels at
+processing sequential data like text. It uses a mechanism called attention
+to understand relationships between different parts of the input.
+
+# Add more training data below this line...
+

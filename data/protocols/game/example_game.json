@@ -1,0 +1,14 @@
+{
+  "name": "Example Game",
+  "description": "Template for game connections - copy and modify",
+  "protocol": "websocket",
+  "host": "localhost",
+  "port": 8765,
+  "endpoint": "/",
+  "enabled": false,
+  "commands": {
+    "move": "MOVE {direction}",
+    "action": "ACTION {type}",
+    "say": "SAY {message}"
+  }
+}

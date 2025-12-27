@@ -1,0 +1,17 @@
+{
+  "name": "Example API",
+  "description": "Template for API connections - copy and modify",
+  "protocol": "http",
+  "host": "localhost",
+  "port": 8080,
+  "endpoint": "/api",
+  "enabled": false,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "endpoints": {
+    "status": "GET /status",
+    "send": "POST /send",
+    "query": "GET /query?q={query}"
+  }
+}
