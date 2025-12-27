@@ -65,6 +65,10 @@ data/*
 !data/data.txt
 !data/starter_training.txt
 !data/training_data.txt
+!data/training_tiny.txt
+!data/training_small.txt
+!data/training_medium.txt
+!data/training_large.txt
 !data/protocols/
 
 # Keep models structure

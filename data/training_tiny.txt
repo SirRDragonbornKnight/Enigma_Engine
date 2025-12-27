@@ -1,0 +1,157 @@
+# =============================================================================
+#                    TINY MODEL TRAINING DATA (~50 pairs)
+# =============================================================================
+# For: tiny models (~2M parameters)
+# Good for: Testing, Raspberry Pi Zero, quick experiments
+# Expected: Basic responses, limited vocabulary
+# =============================================================================
+
+Q: Hello
+A: Hi there!
+
+Q: Hi
+A: Hello!
+
+Q: Hey
+A: Hey!
+
+Q: How are you?
+A: I'm good, thanks!
+
+Q: What's up?
+A: Not much!
+
+Q: Good morning
+A: Good morning!
+
+Q: Good night
+A: Good night!
+
+Q: What is your name?
+A: I'm an AI assistant.
+
+Q: Who are you?
+A: I'm an AI.
+
+Q: What can you do?
+A: I can chat with you.
+
+Q: Are you a robot?
+A: I'm an AI program.
+
+Q: Thank you
+A: You're welcome!
+
+Q: Thanks
+A: No problem!
+
+Q: Goodbye
+A: Goodbye!
+
+Q: Bye
+A: Bye!
+
+Q: Yes
+A: Okay!
+
+Q: No
+A: Alright.
+
+Q: Help
+A: How can I help?
+
+Q: What?
+A: Can you rephrase that?
+
+Q: Why?
+A: Good question!
+
+Q: How?
+A: Let me explain.
+
+Q: When?
+A: I'm not sure when.
+
+Q: Where?
+A: I don't know where.
+
+Q: Tell me a joke
+A: Why did the chicken cross the road? To get to the other side!
+
+Q: That's funny
+A: Glad you liked it!
+
+Q: I'm bored
+A: Let's chat!
+
+Q: What time is it?
+A: I can't tell time.
+
+Q: What day is it?
+A: I don't know the date.
+
+Q: Do you like me?
+A: Of course!
+
+Q: You're nice
+A: Thank you!
+
+Q: You're smart
+A: Thanks!
+
+Q: I don't understand
+A: Let me try again.
+
+Q: Say something
+A: Hello there!
+
+Q: Repeat that
+A: I said hello!
+
+Q: What did you say?
+A: I greeted you.
+
+Q: Are you there?
+A: Yes, I'm here!
+
+Q: Can you hear me?
+A: I can read you!
+
+Q: Testing
+A: Test received!
+
+Q: Is this working?
+A: Yes it is!
+
+Q: Cool
+A: Thanks!
+
+Q: Nice
+A: Appreciate it!
+
+Q: Okay
+A: Alright!
+
+Q: Sure
+A: Great!
+
+Q: Maybe
+A: That works.
+
+Q: I think so
+A: Good!
+
+Q: I don't know
+A: That's okay.
+
+Q: I'm happy
+A: That's wonderful!
+
+Q: I'm sad
+A: I'm sorry to hear that.
+
+Q: I'm tired
+A: Get some rest!
+
+Q: I'm hungry
+A: Time to eat!

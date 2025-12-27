@@ -94,8 +94,8 @@ def create_instructions_tab(parent):
         lambda idx: _load_instructions_file(parent, idx)
     )
     
-    btn_new = QPushButton("New")
-    btn_new.setToolTip("Create new notes file")
+    btn_new = QPushButton("Open")
+    btn_new.setToolTip("Open a file from the data folder")
     btn_new.clicked.connect(lambda: _create_instructions_file(parent))
     
     btn_save = QPushButton("Save")
@@ -184,32 +184,36 @@ def _save_instructions_file(parent):
 
 
 def _create_instructions_file(parent):
-    """Create a new notes file."""
-    name, ok = QInputDialog.getText(parent, "New File", "File name (without .txt):")
-    if ok and name:
-        if not name.endswith(".txt"):
-            name += ".txt"
-        
-        # Get data directory
-        if parent.current_model_name:
-            model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
-            data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-            if isinstance(data_dir, str):
-                data_dir = Path(data_dir)
-        else:
-            data_dir = Path(CONFIG.get("data_dir", "data"))
-        
-        data_dir.mkdir(parents=True, exist_ok=True)
-        new_file = data_dir / name
-        
-        if new_file.exists():
-            QMessageBox.warning(parent, "Exists", f"{name} already exists")
-            return
-        
-        new_file.write_text("")
+    """Open file dialog to add a file to the data directory."""
+    # Get data directory
+    if parent.current_model_name:
+        model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
+        data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
+        if isinstance(data_dir, str):
+            data_dir = Path(data_dir)
+    else:
+        data_dir = Path(CONFIG.get("data_dir", "data"))
+    
+    data_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Open file browser to select an existing file
+    filepath, _ = QFileDialog.getOpenFileName(
+        parent, 
+        "Open File",
+        str(data_dir),
+        "Text Files (*.txt);;All Files (*)"
+    )
+    
+    if filepath:
+        # Refresh and select the file
         _refresh_instructions_files(parent)
         
-        # Select the new file
-        idx = parent.instructions_file_combo.findText(name)
+        # Find and select the file in the combo
+        filename = Path(filepath).name
+        idx = parent.instructions_file_combo.findText(filename)
         if idx >= 0:
             parent.instructions_file_combo.setCurrentIndex(idx)
+        else:
+            # File might be outside data dir, add it
+            parent.instructions_file_combo.addItem(filename, filepath)
+            parent.instructions_file_combo.setCurrentIndex(parent.instructions_file_combo.count() - 1)
