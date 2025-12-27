@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTextEdit, QLineEdit
 )
+from PyQt5.QtCore import Qt
 
 
 def create_chat_tab(parent):
@@ -11,9 +12,12 @@ def create_chat_tab(parent):
     w = QWidget()
     layout = QVBoxLayout()
     
-    # Chat display
+    # Chat display - selectable text
     parent.chat_display = QTextEdit()
     parent.chat_display.setReadOnly(True)
+    parent.chat_display.setTextInteractionFlags(
+        Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+    )
     layout.addWidget(parent.chat_display)
     
     # Input row

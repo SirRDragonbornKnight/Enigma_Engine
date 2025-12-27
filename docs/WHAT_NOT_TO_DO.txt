@@ -1,0 +1,181 @@
+================================================================================
+                    ENIGMA ENGINE - WHAT NOT TO DO
+================================================================================
+
+This guide lists common mistakes and things to avoid when using Enigma Engine.
+
+================================================================================
+                           1. MODEL MANAGEMENT
+================================================================================
+
+DON'T: Delete model folders directly from file explorer
+  WHY: The registry.json won't be updated, causing errors
+  DO: Use the GUI's Model Manager or registry.delete_model()
+
+DON'T: Train the same model simultaneously from multiple processes
+  WHY: Weights will be corrupted, training will fail
+  DO: Wait for one training session to complete before starting another
+
+DON'T: Manually edit weights.pth files
+  WHY: Binary files will be corrupted beyond repair
+  DO: Use grow/shrink functions or retrain from scratch
+
+DON'T: Use special characters in model names (except underscore)
+  WHY: May cause file path issues on some systems
+  DO: Use lowercase letters, numbers, and underscores only
+  EXAMPLE: "my_ai_v2" is good, "My AI (v2)!" is bad
+
+DON'T: Train with extremely high learning rates (>0.01)
+  WHY: Model weights will "explode" and become NaN
+  DO: Start with 0.0001 and increase gradually if needed
+
+
+================================================================================
+                           2. TRAINING DATA
+================================================================================
+
+DON'T: Train on empty or near-empty data files
+  WHY: Model won't learn anything useful
+  DO: Ensure at least 50-100 lines of quality training data
+
+DON'T: Use training data with inconsistent formatting
+  WHY: Model will learn the inconsistencies
+  DO: Keep format consistent (Q/A pairs, dialogues, or plain text)
+
+DON'T: Include harmful, illegal, or private content in training data
+  WHY: Model will learn and reproduce this content
+  DO: Review training data before use
+
+DON'T: Mix languages randomly in training data
+  WHY: Model gets confused, outputs gibberish
+  DO: Either train on one language or use clear language markers
+
+DON'T: Train for too many epochs (>1000) on small datasets
+  WHY: Model will overfit and just memorize data
+  DO: Use early stopping or validation loss monitoring
+
+
+================================================================================
+                           3. HARDWARE & RESOURCES
+================================================================================
+
+DON'T: Run large models (>256 dim) on Raspberry Pi without checking RAM
+  WHY: System will freeze or crash from out-of-memory
+  DO: Use tiny/small presets for Pi, or check available RAM first
+
+DON'T: Train without GPU while using large batch sizes
+  WHY: Training will be extremely slow (hours instead of minutes)
+  DO: Use batch_size=1 or 2 on CPU, larger on GPU
+
+DON'T: Interrupt training in the middle of saving weights
+  WHY: Weights file will be corrupted
+  DO: Wait for "Saving checkpoint..." messages to complete
+
+DON'T: Run multiple GPU-intensive processes simultaneously
+  WHY: Out-of-memory errors, crashes
+  DO: Train one model at a time on GPU
+
+
+================================================================================
+                           4. GUI & INTERFACE
+================================================================================
+
+DON'T: Click "Train" repeatedly while training is in progress
+  WHY: Multiple training threads cause chaos
+  DO: Wait for current training to finish
+
+DON'T: Close the GUI while training is running
+  WHY: Training will stop abruptly, may corrupt checkpoints
+  DO: Use "Stop Training" button first, then close
+
+DON'T: Load excessively large files (>100MB) into the training data editor
+  WHY: GUI will freeze and become unresponsive
+  DO: Split large files or edit them outside the GUI
+
+DON'T: Spam the send button in chat
+  WHY: Queue builds up, responses become delayed/mixed
+  DO: Wait for each response before sending the next message
+
+
+================================================================================
+                           5. API & NETWORKING
+================================================================================
+
+DON'T: Expose the API server to the public internet without authentication
+  WHY: Anyone can use your AI, waste your resources
+  DO: Use localhost only, or add authentication
+
+DON'T: Send requests with extremely long prompts (>10000 characters)
+  WHY: May cause memory issues, timeout
+  DO: Keep prompts under 2000 characters for best results
+
+DON'T: Run the API server and GUI at the same time on the same model
+  WHY: Both try to access the same model file
+  DO: Use one interface at a time, or use different models
+
+DON'T: Hardcode IP addresses in client code
+  WHY: Won't work when IPs change
+  DO: Use discovery service or configurable addresses
+
+
+================================================================================
+                           6. VOICE & AVATAR
+================================================================================
+
+DON'T: Enable voice features without required packages installed
+  WHY: Errors and crashes
+  DO: Install pyttsx3, speechrecognition, vosk first
+
+DON'T: Use speech recognition in noisy environments
+  WHY: Poor accuracy, gibberish input
+  DO: Use a good microphone, reduce background noise
+
+DON'T: Expect the avatar stub to do anything
+  WHY: It's a placeholder for future integration
+  DO: Implement your own avatar backend (Unreal, Unity, etc.)
+
+
+================================================================================
+                           7. FILE OPERATIONS
+================================================================================
+
+DON'T: Store conversations in the same folder as model weights
+  WHY: Cleanup scripts might delete important files
+  DO: Use the designated data/conversations/ folder
+
+DON'T: Run the AI from within the enigma/ package folder
+  WHY: Relative imports break
+  DO: Run from project root: python run.py
+
+DON'T: Edit __init__.py files unless you know what you're doing
+  WHY: Import structure breaks
+  DO: Leave package structure alone
+
+
+================================================================================
+                           8. VERSION CONTROL
+================================================================================
+
+DON'T: Commit large model files (>100MB) to Git
+  WHY: Repository becomes huge, cloning takes forever
+  DO: Add models/ to .gitignore, use Git LFS for large files
+
+DON'T: Push API keys or passwords to public repositories
+  WHY: Security risk - anyone can use your credentials
+  DO: Use environment variables or config files in .gitignore
+
+
+================================================================================
+                           SUMMARY: GOLDEN RULES
+================================================================================
+
+1. ALWAYS backup before major changes (growing/shrinking/deleting models)
+2. NEVER edit binary files (weights.pth) manually
+3. ONE training session at a time
+4. MATCH model size to your hardware
+5. REVIEW training data before use
+6. WAIT for operations to complete before starting new ones
+7. KEEP models and data organized in their proper folders
+8. TEST changes on a backup before applying to your main model
+
+================================================================================

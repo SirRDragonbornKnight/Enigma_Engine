@@ -210,8 +210,36 @@ def test_inference():
     
     try:
         from enigma.core.inference import EnigmaEngine
+        from enigma.core.model_registry import ModelRegistry
+        from enigma.config import CONFIG
         
-        engine = EnigmaEngine()
+        # Check what models exist
+        registry = ModelRegistry()
+        models_dict = registry.list_models()
+        model_names = list(models_dict.keys()) if models_dict else []
+        
+        if not model_names:
+            info("No models created yet - skipping inference test")
+            info("Create a model first: File -> New Model in GUI")
+            return True  # Not a failure, just not ready
+        
+        # Get first available model
+        model_name = model_names[0]
+        info(f"Testing with model: {model_name}")
+        
+        # Check if model has weights
+        model_info = registry.get_model_info(model_name)
+        if not model_info.get("has_weights", False):
+            info("Model not trained yet - can't generate meaningful text")
+            info("Train your model first in the Train tab")
+            # Still try to load it to verify structure works
+            model, _ = registry.load_model(model_name)
+            ok("Model structure loads correctly (untrained)")
+            return True  # Not a failure, just not trained
+        
+        # Load model and create engine
+        model, _ = registry.load_model(model_name)
+        engine = EnigmaEngine(model=model)
         ok("Engine initialized")
         
         # Generate something
@@ -220,7 +248,9 @@ def test_inference():
         
         return True
     except Exception as e:
+        import traceback
         fail(f"Inference error: {e}")
+        traceback.print_exc()
         return False
 
 

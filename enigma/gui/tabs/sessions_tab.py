@@ -1,11 +1,12 @@
-"""History tab for Enigma Engine GUI - view saved chat sessions."""
+"""History tab for Enigma Engine GUI - view saved chat sessions per AI."""
 
 import json
 from pathlib import Path
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QListWidget, QTextEdit, QMessageBox, QInputDialog, QSplitter
+    QListWidget, QTextEdit, QMessageBox, QInputDialog, QSplitter,
+    QComboBox
 )
 from PyQt5.QtCore import Qt
 
@@ -13,7 +14,7 @@ from ...config import CONFIG
 
 
 def create_sessions_tab(parent):
-    """Create the history tab - side by side chat viewer."""
+    """Create the history tab - with AI selector and side by side chat viewer."""
     w = QWidget()
     layout = QVBoxLayout()
     
@@ -21,6 +22,16 @@ def create_sessions_tab(parent):
     header = QLabel("Chat History")
     header.setObjectName("header")
     layout.addWidget(header)
+    
+    # AI selector row
+    ai_layout = QHBoxLayout()
+    ai_layout.addWidget(QLabel("Select AI:"))
+    parent.history_ai_selector = QComboBox()
+    parent.history_ai_selector.setMinimumWidth(150)
+    parent.history_ai_selector.currentTextChanged.connect(parent._on_history_ai_changed)
+    ai_layout.addWidget(parent.history_ai_selector)
+    ai_layout.addStretch()
+    layout.addLayout(ai_layout)
     
     # Session controls row
     btn_layout = QHBoxLayout()
@@ -37,9 +48,14 @@ def create_sessions_tab(parent):
     btn_delete_session.setToolTip("Delete selected session")
     btn_delete_session.clicked.connect(parent._delete_session)
     
+    btn_refresh = QPushButton("Refresh")
+    btn_refresh.setToolTip("Refresh session list")
+    btn_refresh.clicked.connect(parent._refresh_sessions)
+    
     btn_layout.addWidget(btn_new_session)
     btn_layout.addWidget(btn_rename_session)
     btn_layout.addWidget(btn_delete_session)
+    btn_layout.addWidget(btn_refresh)
     btn_layout.addStretch()
     layout.addLayout(btn_layout)
     
@@ -54,7 +70,13 @@ def create_sessions_tab(parent):
     left_layout.addWidget(left_label)
     parent.session_viewer = QTextEdit()
     parent.session_viewer.setReadOnly(True)
+    parent.session_viewer.setTextInteractionFlags(
+        Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+    )
     parent.session_viewer.setPlaceholderText("Select a saved chat to view...")
+    parent.session_viewer.setTextInteractionFlags(
+        Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+    )
     left_layout.addWidget(parent.session_viewer)
     left_widget.setLayout(left_layout)
     splitter.addWidget(left_widget)
@@ -75,7 +97,8 @@ def create_sessions_tab(parent):
     splitter.setSizes([400, 200])
     layout.addWidget(splitter, stretch=1)
     
-    # Refresh sessions list
+    # Populate AI selector and refresh sessions list
+    parent._populate_history_ai_selector()
     parent._refresh_sessions()
     
     w.setLayout(layout)
