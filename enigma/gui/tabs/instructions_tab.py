@@ -40,6 +40,20 @@ More data = smarter AI. Add lots of examples!
 - Medium: ~50M params - Needs 8GB+ RAM
 - Large: ~150M params - Needs GPU 8GB+
 
+## Connecting to Games/Robots/APIs
+Protocol configs are in: data/protocols/
+  - game/   : Game connections (Unity, Godot, etc)
+  - robot/  : Robot connections (Arduino, ROS, GPIO)
+  - api/    : API connections (REST, MQTT, etc)
+
+To add a new connection:
+1. Copy an example JSON from the folder
+2. Edit the settings (host, port, protocol)
+3. Set "enabled": true
+4. Restart or click Refresh in the tab
+
+See data/protocols/README.txt for full details.
+
 ## Avatar
 Load an image or model in the Avatar tab.
 Enable display via Options -> Avatar

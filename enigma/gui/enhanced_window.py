@@ -1278,13 +1278,13 @@ class EnhancedMainWindow(QMainWindow):
         # Main tabs
         tabs = QTabWidget()
         self.tabs = tabs  # Store reference for AI control
-        tabs.addTab(create_chat_tab(self), "[>] Chat")
-        tabs.addTab(create_training_tab(self), "[+] Train")
-        tabs.addTab(create_avatar_tab(self), "[*] Avatar")
-        tabs.addTab(create_vision_tab(self), "[o] Vision")
-        tabs.addTab(create_terminal_tab(self), "[#] Terminal")
-        tabs.addTab(create_sessions_tab(self), "[=] History")
-        tabs.addTab(create_instructions_tab(self), "[~] Files")
+        tabs.addTab(create_chat_tab(self), "Chat")
+        tabs.addTab(create_training_tab(self), "Train")
+        tabs.addTab(create_avatar_tab(self), "Avatar")
+        tabs.addTab(create_vision_tab(self), "Vision")
+        tabs.addTab(create_terminal_tab(self), "Terminal")
+        tabs.addTab(create_sessions_tab(self), "History")
+        tabs.addTab(create_instructions_tab(self), "Files")
         
         self.setCentralWidget(tabs)
     

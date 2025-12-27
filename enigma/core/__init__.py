@@ -3,7 +3,7 @@
 from .model import Enigma, TinyEnigma
 from .inference import EnigmaEngine
 from .training import train_model
-from .tokenizer import CharacterTokenizer
+from .char_tokenizer import CharacterTokenizer
 from .model_config import get_model_config, MODEL_PRESETS
 from .model_registry import ModelRegistry
 from .hardware import get_hardware, HardwareProfile
