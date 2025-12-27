@@ -1,3 +1,8 @@
+"""
+Enigma Engine Configuration
+
+Central configuration for all Enigma components.
+"""
 from pathlib import Path
 import os
 
@@ -5,15 +10,13 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 MODELS_DIR = ROOT / "models"
 DB_PATH = ROOT / "memory" / "memory.db"
+VOCAB_DIR = ROOT / "enigma" / "vocab_model"
 
+# Create directories
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+VOCAB_DIR.mkdir(parents=True, exist_ok=True)
 os.makedirs(Path(DB_PATH).parent, exist_ok=True)
-
-# =============================================================================
-# MAIN CONFIGURATION
-# =============================================================================
-# Change these variables to customize your AI setup
 
 CONFIG = {
     # Paths
@@ -21,90 +24,35 @@ CONFIG = {
     "data_dir": str(DATA_DIR),
     "models_dir": str(MODELS_DIR),
     "db_path": str(DB_PATH),
+    "vocab_dir": str(VOCAB_DIR),
     
-    # === CHANGE THESE TO SWITCH AI ===
-    "default_model": "sacrifice",       # Which AI to load by default
-    "auto_learn": True,                 # Learn from conversations automatically
-    "auto_train_threshold": 10,         # Train after N conversations (0 = never)
-    
-    # Model architecture (for TinyEnigma and scalable models)
-    "max_len": 512,                     # Maximum sequence length
-    "embed_dim": 128,                   # Embedding dimension (bigger = smarter but slower)
-    "num_layers": 4,                    # Transformer layers (more = smarter but slower)
-    "num_heads": 4,                     # Attention heads
-    "vocab_size": 32000,                # Vocabulary size
+    # Model architecture defaults (used when not loading from registry)
+    "embed_dim": 256,         # Hidden dimension
+    "depth": 6,               # Number of transformer layers
+    "heads": 8,               # Number of attention heads
+    "max_len": 2048,          # Maximum sequence length
+    "ff_mult": 4.0,           # FFN hidden dimension multiplier
+    "dropout": 0.0,           # Dropout rate (0 for inference)
     
     # Training defaults
-    "default_epochs": 10,
-    "default_batch_size": 2,            # Keep small for Pi
-    "default_learning_rate": 0.0001,
+    "learning_rate": 1e-4,
+    "batch_size": 4,
+    "gradient_accumulation": 1,
+    "warmup_steps": 100,
+    "weight_decay": 0.01,
+    "max_grad_norm": 1.0,
     
-    # Features
-    "enable_voice": True,
-    "enable_vision": True,
-    "enable_avatar": True,
+    # Inference defaults
+    "temperature": 0.8,
+    "top_k": 50,
+    "top_p": 0.9,
+    "repetition_penalty": 1.1,
+    "max_gen_tokens": 100,
+    
+    # Tokenizer
+    "vocab_size": 32000,      # Default vocabulary size
+    
+    # Server
+    "api_host": "127.0.0.1",
+    "api_port": 5000,
 }
-
-# =============================================================================
-# MODEL PRESETS - Easy scaling
-# =============================================================================
-# Use these to quickly change model size
-
-MODEL_PRESETS = {
-    "tiny": {
-        "embed_dim": 64,
-        "num_layers": 2,
-        "num_heads": 2,
-        "description": "Very small, fast on Pi Zero/3"
-    },
-    "small": {
-        "embed_dim": 128,
-        "num_layers": 4,
-        "num_heads": 4,
-        "description": "Default for Pi 4/5"
-    },
-    "medium": {
-        "embed_dim": 256,
-        "num_layers": 6,
-        "num_heads": 8,
-        "description": "For Pi 5 with 8GB RAM"
-    },
-    "large": {
-        "embed_dim": 512,
-        "num_layers": 8,
-        "num_heads": 8,
-        "description": "Needs GPU or high-end machine"
-    }
-}
-
-
-def apply_preset(preset_name: str):
-    """Apply a model preset to CONFIG."""
-    if preset_name in MODEL_PRESETS:
-        preset = MODEL_PRESETS[preset_name]
-        CONFIG["embed_dim"] = preset["embed_dim"]
-        CONFIG["num_layers"] = preset["num_layers"]
-        CONFIG["num_heads"] = preset["num_heads"]
-        return True
-    return False
-
-
-def get_model_config(model_name: str) -> dict:
-    """Get configuration for a specific model."""
-    model_dir = MODELS_DIR / model_name
-    config_file = model_dir / "config.json"
-    
-    if config_file.exists():
-        import json
-        return json.loads(config_file.read_text())
-    
-    # Return defaults
-    return {
-        "name": model_name,
-        "embed_dim": CONFIG["embed_dim"],
-        "num_layers": CONFIG["num_layers"],
-        "num_heads": CONFIG["num_heads"],
-        "vocab_size": CONFIG["vocab_size"],
-        "auto_learn": CONFIG["auto_learn"]
-    }
-

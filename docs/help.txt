@@ -1,0 +1,276 @@
+================================================================================
+                         ENIGMA ENGINE - HELP GUIDE
+================================================================================
+                           Last Updated: December 2024
+
+================================================================================
+                              TABLE OF CONTENTS
+================================================================================
+
+1. GETTING STARTED
+2. GUI TABS EXPLAINED
+3. TRAINING YOUR AI
+4. KEYBOARD SHORTCUTS
+5. TROUBLESHOOTING
+6. WHAT NOT TO DO
+
+================================================================================
+                           1. GETTING STARTED
+================================================================================
+
+FIRST RUN:
+----------
+When you first start Enigma, a Setup Wizard will guide you through:
+  1. Naming your AI
+  2. Choosing a model size (based on your hardware)
+  3. Creating the initial model
+
+STARTING THE GUI:
+-----------------
+    python run.py --gui
+
+OTHER WAYS TO RUN:
+------------------
+    python run.py --run     # Command line chat
+    python run.py --train   # Train from command line
+    python run.py --serve   # Start API server
+
+================================================================================
+                          2. GUI TABS EXPLAINED
+================================================================================
+
+💬 CHAT TAB
+-----------
+Talk to your AI here.
+  - Type messages in the input box
+  - Press Enter or click Send
+  - Click 🔊 Speak to hear the response
+  - Click 🎤 Record to speak to the AI (STT)
+  - Upload images for vision analysis
+
+📁 HISTORY TAB
+--------------
+View and manage saved conversations.
+  - Select AI name from dropdown to filter conversations
+  - Double-click a conversation to load it
+  - Save current chat with "Save As"
+  - Delete old conversations
+  - Text is selectable for copy/paste
+
+🎓 TRAINING TAB
+---------------
+Train your AI on new data.
+  - Select or create training data files
+  - Adjust training parameters:
+    * Epochs: How many times to go through data (5-20 typical)
+    * Batch Size: Samples per update (1-8 for most GPUs)
+    * Learning Rate: How fast to learn (0.0001 default)
+  - Click Start Training to begin
+  - Watch progress bar and loss values
+
+📝 DATA EDITOR TAB
+------------------
+Create and edit training data files.
+  - Select existing files from dropdown
+  - Create new files with ➕ New File
+  - Import external files with 📥 Import
+  - Edit text directly in the editor
+  - Click Use for Training to send to Training tab
+  
+Each AI has its own data folder:
+  - AI-specific files shown with 📌
+  - Global files (data/) shown with 📁
+
+🤖 AVATAR TAB
+-------------
+Control your AI's visual representation.
+  - Load custom avatar image
+  - Enable/Disable avatar
+  - Set expressions (happy, sad, thinking, etc.)
+  - Test avatar speech
+
+👁️ VISION TAB  
+-------------
+Let AI see the screen or camera.
+  - 📷 Capture Screen: Take screenshot
+  - 📸 Capture Camera: Take photo from webcam
+  - 🔍 Analyze: Run OCR and scene description
+  - Upload images for AI to analyze
+
+📦 MODELS TAB
+-------------
+Manage your AI models.
+  - View all registered models
+  - Create new models
+  - Backup existing models
+  - Grow models (increase size)
+  - Shrink models (decrease size)
+  - Delete models (careful!)
+
+🖥️ TERMINAL TAB
+---------------
+See what the AI is doing internally.
+  - View real-time logs
+  - See API requests/responses
+  - Debug issues
+  - Monitor training progress
+
+================================================================================
+                         3. TRAINING YOUR AI
+================================================================================
+
+STEP 1: Prepare Training Data
+-----------------------------
+  - Go to Data Editor tab
+  - Create or edit a training file
+  - Use one of these formats:
+  
+    Q&A Format:
+    Q: What is your name?
+    A: I am Enigma.
+    
+    Conversation Format:
+    User: Hello
+    Assistant: Hello! How can I help?
+    
+    Plain Text:
+    Any text you want the AI to learn from.
+
+STEP 2: Configure Training
+--------------------------
+  - Go to Training tab
+  - Click "Use for Training" in Data Editor (or select file)
+  - Set epochs (more = longer training, better learning)
+  - Set batch size (lower if you get memory errors)
+  - Set learning rate (leave default unless you know what you're doing)
+
+STEP 3: Start Training
+----------------------
+  - Click Start Training
+  - Watch the progress bar
+  - Good training shows decreasing loss:
+      Epoch 1: loss = 4.2
+      Epoch 5: loss = 2.1
+      Epoch 10: loss = 0.8
+
+STEP 4: Test Your AI
+--------------------
+  - Go back to Chat tab
+  - Ask questions from your training data
+  - If responses are poor, train more or add more data
+
+================================================================================
+                         4. KEYBOARD SHORTCUTS
+================================================================================
+
+CHAT TAB:
+  Enter         - Send message
+  Ctrl+Shift+V  - Paste and send
+  
+DATA EDITOR:
+  Ctrl+S        - Save file
+  Ctrl+N        - New file
+  
+GENERAL:
+  Ctrl+Q        - Quit application
+  F1            - Open this help file
+
+================================================================================
+                         5. TROUBLESHOOTING
+================================================================================
+
+"No module named 'torch'"
+-------------------------
+Install PyTorch:
+    pip install torch torchvision torchaudio
+
+"CUDA out of memory"
+--------------------
+  - Use smaller batch size (1 or 2)
+  - Use smaller model size (tiny or small)
+  - Close other programs using GPU
+
+"Model produces garbage"
+------------------------
+  - Need more training data (aim for 10,000+ lines)
+  - Train for more epochs
+  - Check data format is correct
+
+"GUI not starting"
+------------------
+Install PyQt5:
+    pip install PyQt5
+
+"Voice not working"
+-------------------
+Install voice dependencies:
+    pip install pyttsx3 SpeechRecognition pyaudio
+
+"Screen capture is black"
+-------------------------
+On Raspberry Pi (Wayland):
+    pip install mss pyscreenshot
+Or switch to X11 session
+
+"Camera not working"
+--------------------
+Install OpenCV:
+    pip install opencv-python
+Check camera permissions
+
+================================================================================
+                         6. WHAT NOT TO DO
+================================================================================
+
+❌ DON'T train with very small datasets
+   - Need at least 1000 lines for basic results
+   - Need 10,000+ for good results
+
+❌ DON'T use extremely high learning rates
+   - Default 0.0001 is safe
+   - Higher than 0.01 can break training
+
+❌ DON'T delete model folders manually
+   - Use Model Manager instead
+   - Registry needs to be updated
+
+❌ DON'T train during inference
+   - Close chat before training
+   - Or use separate model instances
+
+❌ DON'T run multiple instances on same model
+   - Can corrupt model files
+   - Use different model names
+
+❌ DON'T forget to save training data
+   - Editor doesn't auto-save
+   - Click 💾 Save before training
+
+❌ DON'T expect perfect results immediately
+   - AI learning takes time
+   - Iterate: train, test, improve data, repeat
+
+❌ DON'T use copyrighted text for training
+   - Stick to your own content
+   - Or use public domain data
+
+❌ DON'T share trained models publicly without checking
+   - May contain patterns from training data
+   - Be mindful of what you trained on
+
+================================================================================
+                         NEED MORE HELP?
+================================================================================
+
+Check these files:
+  - PROJECT_OVERVIEW.txt - Full system documentation
+  - HOW_TO_MAKE_AI.txt - Detailed training guide
+  - docs/CODE_TOUR.md - Code walkthrough
+  - docs/architecture.md - Technical details
+
+Example scripts:
+  - examples/run_example.py - Basic usage
+  - examples/train_example.py - Training example
+  - examples/multi_device_example.py - Network setup
+
+================================================================================
