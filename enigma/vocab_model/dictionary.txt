@@ -1,0 +1,66 @@
+# Enigma Engine Dictionary
+# Add words here (one per line) to expand the AI's vocabulary
+# These words get their own token IDs for more efficient processing
+
+# === COMMON CONVERSATIONAL WORDS ===
+hello
+goodbye
+thanks
+please
+sorry
+welcome
+great
+awesome
+wonderful
+terrible
+amazing
+
+# === TECHNICAL TERMS ===
+algorithm
+database
+framework
+repository
+variable
+function
+parameter
+interface
+module
+library
+dependency
+configuration
+initialization
+optimization
+implementation
+
+# === AI/ML TERMS ===
+transformer
+attention
+embedding
+gradient
+backpropagation
+epoch
+batch
+tensor
+vector
+matrix
+neuron
+layer
+activation
+softmax
+sigmoid
+relu
+dropout
+regularization
+overfitting
+underfitting
+hyperparameter
+
+# === YOUR CUSTOM WORDS ===
+# Add domain-specific words below
+# Example: If your AI is for cooking, add cooking terms
+# Example: If your AI is for gaming, add gaming terms
+
+enigma
+assistant
+robot
+avatar
