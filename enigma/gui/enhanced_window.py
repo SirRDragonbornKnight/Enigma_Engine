@@ -248,6 +248,247 @@ QLabel#header {
 }
 """
 
+MIDNIGHT_STYLE = """
+QMainWindow, QWidget {
+    background-color: #0a0a0f;
+    color: #8888aa;
+}
+QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
+    background-color: #12121a;
+    color: #9999bb;
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QPushButton {
+    background-color: #2a2a4a;
+    color: #aaaacc;
+    border: 1px solid #3a3a5a;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #3a3a5a;
+    border-color: #4a4a6a;
+}
+QPushButton:pressed {
+    background-color: #1a1a3a;
+}
+QPushButton:disabled {
+    background-color: #15151f;
+    color: #444455;
+}
+QGroupBox {
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    color: #6666aa;
+    subcontrol-origin: margin;
+    left: 10px;
+}
+QTabWidget::pane {
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+}
+QTabBar::tab {
+    background-color: #12121a;
+    color: #7777aa;
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+QTabBar::tab:selected {
+    background-color: #2a2a4a;
+    color: #aaaacc;
+}
+QProgressBar {
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #4a4a8a;
+}
+QMenuBar {
+    background-color: #0a0a0f;
+    color: #8888aa;
+}
+QMenuBar::item:selected {
+    background-color: #12121a;
+}
+QMenu {
+    background-color: #12121a;
+    color: #9999bb;
+    border: 1px solid #1a1a2a;
+}
+QMenu::item:selected {
+    background-color: #2a2a4a;
+    color: #aaaacc;
+}
+QSpinBox, QComboBox {
+    background-color: #12121a;
+    color: #9999bb;
+    border: 1px solid #1a1a2a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QSlider::groove:horizontal {
+    background: #1a1a2a;
+    height: 6px;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4a4a8a;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QScrollBar:vertical {
+    background: #12121a;
+    width: 12px;
+}
+QScrollBar::handle:vertical {
+    background: #2a2a4a;
+    border-radius: 6px;
+}
+QLabel#header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #6666aa;
+}
+"""
+
+SHADOW_STYLE = """
+QMainWindow, QWidget {
+    background-color: #2d2d2d;
+    color: #d4d4d4;
+}
+QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    padding: 4px;
+    /* Shadow effect */
+    margin: 2px;
+}
+QPushButton {
+    background-color: #4a4a4a;
+    color: #e4e4e4;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+    /* Shadow */
+    border-bottom: 3px solid #333333;
+}
+QPushButton:hover {
+    background-color: #5a5a5a;
+}
+QPushButton:pressed {
+    background-color: #404040;
+    border-bottom: 1px solid #333333;
+    margin-top: 2px;
+}
+QPushButton:disabled {
+    background-color: #353535;
+    color: #666666;
+    border-bottom: 3px solid #2a2a2a;
+}
+QGroupBox {
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    margin-top: 12px;
+    padding-top: 8px;
+    /* Shadow */
+    background-color: #333333;
+}
+QGroupBox::title {
+    color: #7799cc;
+    subcontrol-origin: margin;
+    left: 10px;
+}
+QTabWidget::pane {
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    /* Shadow */
+    background-color: #333333;
+}
+QTabBar::tab {
+    background-color: #3c3c3c;
+    color: #b4b4b4;
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom: 2px solid #2a2a2a;
+}
+QTabBar::tab:selected {
+    background-color: #4a5a6a;
+    color: #ffffff;
+    border-bottom: 2px solid #5a7a9a;
+}
+QProgressBar {
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #333333;
+}
+QProgressBar::chunk {
+    background-color: #5a8a5a;
+}
+QMenuBar {
+    background-color: #2d2d2d;
+    color: #d4d4d4;
+}
+QMenuBar::item:selected {
+    background-color: #3c3c3c;
+}
+QMenu {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border: 1px solid #4a4a4a;
+}
+QMenu::item:selected {
+    background-color: #4a5a6a;
+    color: #ffffff;
+}
+QSpinBox, QComboBox {
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QSlider::groove:horizontal {
+    background: #4a4a4a;
+    height: 6px;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #6a8aaa;
+    width: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+}
+QScrollBar:vertical {
+    background: #333333;
+    width: 12px;
+}
+QScrollBar::handle:vertical {
+    background: #4a4a4a;
+    border-radius: 6px;
+}
+QLabel#header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #7799cc;
+}
+"""
+
 # Import enigma modules
 try:
     from ..core.model_registry import ModelRegistry
@@ -344,13 +585,13 @@ class SetupWizard(QWizard):
         if not name:
             self.name_status.setText("")
         elif name in self.registry.registry.get("models", {}):
-            self.name_status.setText("⚠ Name already exists!")
+            self.name_status.setText("Name already exists!")
             self.name_status.setStyleSheet("color: orange")
         elif not name.replace("_", "").isalnum():
-            self.name_status.setText("✗ Use only letters, numbers, underscores")
+            self.name_status.setText("Use only letters, numbers, underscores")
             self.name_status.setStyleSheet("color: red")
         else:
-            self.name_status.setText("✓ Name available")
+            self.name_status.setText("Name available")
             self.name_status.setStyleSheet("color: green")
     
     def _create_size_page(self):
@@ -502,12 +743,12 @@ class ModelManagerDialog(QDialog):
     def _refresh_list(self):
         self.model_list.clear()
         for name, info in self.registry.registry.get("models", {}).items():
-            status = "✓" if info.get("has_weights") else "○"
+            status = "[T]" if info.get("has_weights") else "[U]"
             self.model_list.addItem(f"{status} {name} ({info.get('size', '?')})")
     
     def _on_select_model(self, item):
         text = item.text()
-        # Extract name from "✓ name (size)"
+        # Extract name from "[T] name (size)"
         name = text.split()[1]
         
         try:
@@ -628,14 +869,14 @@ class ModelManagerDialog(QDialog):
         
         size, ok = self._show_size_dialog("Shrink Model", available,
             f"Current size: {current_size}\nSelect target size:\n\n"
-            "⚠ Shrinking loses some capacity!")
+            "Warning: Shrinking loses some capacity!")
         
         if ok and size:
             reply = QMessageBox.warning(
                 self, "Confirm Shrink",
                 f"Shrink '{self.selected_model}' from {current_size} to {size}?\n\n"
-                "⚠ This will create a COPY - original is preserved.\n"
-                "⚠ Some knowledge may be lost in shrinking.",
+                "This will create a COPY - original is preserved.\n"
+                "Some knowledge may be lost in shrinking.",
                 QMessageBox.Yes | QMessageBox.No
             )
             
@@ -666,8 +907,8 @@ class ModelManagerDialog(QDialog):
         reply = QMessageBox.warning(
             self, "Confirm Delete",
             f"DELETE model '{self.selected_model}'?\n\n"
-            "⚠ This CANNOT be undone!\n"
-            "⚠ All weights and checkpoints will be lost!",
+            "This CANNOT be undone!\n"
+            "All weights and checkpoints will be lost!",
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -810,12 +1051,31 @@ class EnhancedMainWindow(QMainWindow):
         model_menu.addAction("Grow Model...", self._on_grow_current)
         model_menu.addAction("Shrink Model...", self._on_shrink_current)
         
-        # View menu with dark mode toggle
+        # View menu with theme options
         view_menu = menubar.addMenu("View")
-        self.dark_mode_action = view_menu.addAction("🌙 Dark Mode")
-        self.dark_mode_action.setCheckable(True)
-        self.dark_mode_action.setChecked(True)  # Default to dark mode
-        self.dark_mode_action.triggered.connect(self._toggle_dark_mode)
+        
+        # Theme submenu
+        theme_menu = view_menu.addMenu("Theme")
+        self.theme_group = QButtonGroup(self)
+        
+        self.theme_dark = theme_menu.addAction("Dark")
+        self.theme_dark.setCheckable(True)
+        self.theme_dark.setChecked(True)
+        self.theme_dark.triggered.connect(lambda: self._set_theme("dark"))
+        
+        self.theme_light = theme_menu.addAction("Light")
+        self.theme_light.setCheckable(True)
+        self.theme_light.triggered.connect(lambda: self._set_theme("light"))
+        
+        self.theme_midnight = theme_menu.addAction("Midnight")
+        self.theme_midnight.setCheckable(True)
+        self.theme_midnight.triggered.connect(lambda: self._set_theme("midnight"))
+        
+        self.theme_shadow = theme_menu.addAction("Shadow")
+        self.theme_shadow.setCheckable(True)
+        self.theme_shadow.triggered.connect(lambda: self._set_theme("shadow"))
+        
+        self.current_theme = "dark"
         
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -830,25 +1090,37 @@ class EnhancedMainWindow(QMainWindow):
         
         # Main tabs
         tabs = QTabWidget()
-        tabs.addTab(self._chat_tab(), "💬 Chat")
-        tabs.addTab(self._history_tab(), "📁 History")
-        tabs.addTab(self._training_tab(), "🎓 Training")
-        tabs.addTab(self._data_editor_tab(), "📝 Data Editor")
-        tabs.addTab(self._avatar_tab(), "🤖 Avatar")
-        tabs.addTab(self._vision_tab(), "👁️ Vision")
-        tabs.addTab(self._terminal_tab(), "🖥️ Terminal")
-        tabs.addTab(self._models_tab(), "📦 Models")
+        tabs.addTab(self._chat_tab(), "Chat")
+        tabs.addTab(self._history_tab(), "History")
+        tabs.addTab(self._training_tab(), "Training")
+        tabs.addTab(self._data_editor_tab(), "Data Editor")
+        tabs.addTab(self._avatar_tab(), "Avatar")
+        tabs.addTab(self._vision_tab(), "Vision")
+        tabs.addTab(self._terminal_tab(), "Terminal")
+        tabs.addTab(self._models_tab(), "Models")
         
         self.setCentralWidget(tabs)
     
-    def _toggle_dark_mode(self, checked):
-        """Toggle between dark and light themes."""
-        if checked:
-            self.setStyleSheet(DARK_STYLE)
-            self.dark_mode_action.setText("🌙 Dark Mode")
-        else:
-            self.setStyleSheet(LIGHT_STYLE)
-            self.dark_mode_action.setText("☀️ Light Mode")
+    def _set_theme(self, theme_name):
+        """Set the application theme."""
+        themes = {
+            "dark": DARK_STYLE,
+            "light": LIGHT_STYLE,
+            "midnight": MIDNIGHT_STYLE,
+            "shadow": SHADOW_STYLE,
+        }
+        
+        if theme_name in themes:
+            self.setStyleSheet(themes[theme_name])
+            self.current_theme = theme_name
+            
+            # Update checkmarks
+            self.theme_dark.setChecked(theme_name == "dark")
+            self.theme_light.setChecked(theme_name == "light")
+            self.theme_midnight.setChecked(theme_name == "midnight")
+            self.theme_shadow.setChecked(theme_name == "shadow")
+            
+            self._log_terminal(f"Theme changed to: {theme_name}")
     
     def _open_help(self):
         """Open the help file."""
@@ -906,9 +1178,9 @@ class EnhancedMainWindow(QMainWindow):
         self.chat_image_preview.setMaximumSize(60, 60)
         self.chat_image_path = None
         
-        btn_attach_image = QPushButton("📷 Attach Image")
+        btn_attach_image = QPushButton("Attach Image")
         btn_attach_image.clicked.connect(self._attach_image_chat)
-        btn_clear_image = QPushButton("❌ Clear")
+        btn_clear_image = QPushButton("Clear")
         btn_clear_image.clicked.connect(self._clear_attached_image)
         
         image_layout.addWidget(self.chat_image_preview)
@@ -927,7 +1199,7 @@ class EnhancedMainWindow(QMainWindow):
         self.send_btn = QPushButton("Send")
         self.send_btn.clicked.connect(self._on_send)
         
-        self.speak_btn = QPushButton("🔊 Speak")
+        self.speak_btn = QPushButton("Speak")
         self.speak_btn.clicked.connect(self._on_speak_last)
         
         input_layout.addWidget(self.chat_input)
@@ -948,14 +1220,14 @@ class EnhancedMainWindow(QMainWindow):
         data_layout = QVBoxLayout()
         
         self.data_path_label = QLabel("No data file selected")
-        btn_select_data = QPushButton("📂 Select Training Data...")
+        btn_select_data = QPushButton("Select Training Data...")
         btn_select_data.clicked.connect(self._on_select_data)
         
         data_layout.addWidget(self.data_path_label)
         data_layout.addWidget(btn_select_data)
         
         # Quick tip
-        tip_label = QLabel("<i>💡 Tip: Use the Data Editor tab to create/edit training files</i>")
+        tip_label = QLabel("<i>Tip: Use the Data Editor tab to create/edit training files</i>")
         tip_label.setWordWrap(True)
         data_layout.addWidget(tip_label)
         
@@ -1015,7 +1287,7 @@ class EnhancedMainWindow(QMainWindow):
         params_layout.addRow(lr_label, self.lr_input)
         
         # Help text
-        help_label = QLabel("💡 <i>Hover over each parameter name for explanation</i>")
+        help_label = QLabel("<i>Hover over each parameter name for explanation</i>")
         params_layout.addRow(help_label)
         
         params_group.setLayout(params_layout)
@@ -1098,11 +1370,11 @@ class EnhancedMainWindow(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
-        btn_load = QPushButton("📂 Load")
+        btn_load = QPushButton("Load")
         btn_load.clicked.connect(self._load_history_item)
-        btn_delete = QPushButton("🗑️ Delete")
+        btn_delete = QPushButton("Delete")
         btn_delete.clicked.connect(self._delete_history_item)
-        btn_refresh = QPushButton("🔄 Refresh")
+        btn_refresh = QPushButton("Refresh")
         btn_refresh.clicked.connect(self._refresh_history_list)
         btn_layout.addWidget(btn_load)
         btn_layout.addWidget(btn_delete)
@@ -1157,9 +1429,9 @@ class EnhancedMainWindow(QMainWindow):
         
         # Buttons
         btn_layout = QHBoxLayout()
-        btn_clear = QPushButton("🗑️ Clear")
+        btn_clear = QPushButton("Clear")
         btn_clear.clicked.connect(lambda: self.terminal_output.clear())
-        btn_save = QPushButton("💾 Save Log")
+        btn_save = QPushButton("Save Log")
         btn_save.clicked.connect(self._save_terminal_log)
         btn_layout.addWidget(btn_clear)
         btn_layout.addWidget(btn_save)
@@ -1194,14 +1466,14 @@ class EnhancedMainWindow(QMainWindow):
         self._refresh_data_files()
         self.data_file_combo.currentIndexChanged.connect(self._load_data_file)
         
-        btn_refresh = QPushButton("🔄")
-        btn_refresh.setMaximumWidth(40)
+        btn_refresh = QPushButton("Refresh")
+        btn_refresh.setMaximumWidth(60)
         btn_refresh.clicked.connect(self._refresh_data_files)
         
-        btn_new_file = QPushButton("➕ New File")
+        btn_new_file = QPushButton("New File")
         btn_new_file.clicked.connect(self._create_data_file)
         
-        btn_import_file = QPushButton("📥 Import File")
+        btn_import_file = QPushButton("Import File")
         btn_import_file.clicked.connect(self._import_data_file)
         
         file_layout.addWidget(QLabel("File:"))
@@ -1230,10 +1502,10 @@ class EnhancedMainWindow(QMainWindow):
         
         # Save button
         btn_layout = QHBoxLayout()
-        self.btn_save_data = QPushButton("💾 Save File")
+        self.btn_save_data = QPushButton("Save File")
         self.btn_save_data.clicked.connect(self._save_data_file)
         
-        btn_use_for_training = QPushButton("📚 Use for Training")
+        btn_use_for_training = QPushButton("Use for Training")
         btn_use_for_training.clicked.connect(self._use_data_for_training)
         
         btn_layout.addWidget(self.btn_save_data)
@@ -1243,8 +1515,8 @@ class EnhancedMainWindow(QMainWindow):
         
         # Tips
         tips = QLabel(
-            "<b>💡 Tips:</b><br>"
-            "• More diverse examples = smarter AI<br>"
+            "<b>Tips:</b><br>"
+            "More diverse examples = smarter AI<br>"
             "• Include many variations of common questions<br>"
             "• Add personality through response style<br>"
             "• Save before training!"
@@ -1283,9 +1555,9 @@ class EnhancedMainWindow(QMainWindow):
         
         # Enable/disable
         btn_row1 = QHBoxLayout()
-        self.btn_avatar_enable = QPushButton("✅ Enable Avatar")
+        self.btn_avatar_enable = QPushButton("Enable Avatar")
         self.btn_avatar_enable.clicked.connect(self._enable_avatar)
-        self.btn_avatar_disable = QPushButton("❌ Disable Avatar")
+        self.btn_avatar_disable = QPushButton("Disable Avatar")
         self.btn_avatar_disable.clicked.connect(self._disable_avatar)
         btn_row1.addWidget(self.btn_avatar_enable)
         btn_row1.addWidget(self.btn_avatar_disable)
@@ -1304,7 +1576,7 @@ class EnhancedMainWindow(QMainWindow):
         speak_layout = QHBoxLayout()
         self.avatar_speak_input = QLineEdit()
         self.avatar_speak_input.setPlaceholderText("Enter text for avatar to speak...")
-        btn_speak = QPushButton("🔊 Speak")
+        btn_speak = QPushButton("Speak")
         btn_speak.clicked.connect(self._avatar_speak)
         speak_layout.addWidget(self.avatar_speak_input)
         speak_layout.addWidget(btn_speak)
@@ -1315,13 +1587,13 @@ class EnhancedMainWindow(QMainWindow):
         
         # Info
         info = QLabel(
-            "<b>ℹ️ About Avatar:</b><br>"
+            "<b>About Avatar:</b><br>"
             "The avatar is a visual representation of your AI.<br>"
             "It can display expressions and speak using TTS.<br><br>"
             "To use a custom avatar model:<br>"
             "1. Place model files in avatar/ folder<br>"
             "2. Update avatar_api.py with your renderer<br><br>"
-            "<i>💡 Upload images for vision analysis in the Chat tab or Vision tab</i>"
+            "<i>Upload images for vision analysis in the Chat tab or Vision tab</i>"
         )
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -1356,11 +1628,11 @@ class EnhancedMainWindow(QMainWindow):
         
         # Capture buttons
         capture_btn_layout = QHBoxLayout()
-        btn_capture = QPushButton("📷 Capture Screen")
+        btn_capture = QPushButton("Capture Screen")
         btn_capture.clicked.connect(self._capture_screen)
-        btn_camera = QPushButton("📸 Capture Camera")
+        btn_camera = QPushButton("Capture Camera")
         btn_camera.clicked.connect(self._capture_camera)
-        btn_upload = QPushButton("📂 Upload Image")
+        btn_upload = QPushButton("Upload Image")
         btn_upload.clicked.connect(self._upload_vision_image)
         capture_btn_layout.addWidget(btn_capture)
         capture_btn_layout.addWidget(btn_camera)
@@ -1383,7 +1655,7 @@ class EnhancedMainWindow(QMainWindow):
         self.vision_text.setMaximumHeight(150)
         analysis_layout.addWidget(self.vision_text)
         
-        btn_analyze = QPushButton("🔍 Analyze Current Image")
+        btn_analyze = QPushButton("Analyze Current Image")
         btn_analyze.clicked.connect(self._analyze_screen)
         analysis_layout.addWidget(btn_analyze)
         
@@ -1392,13 +1664,13 @@ class EnhancedMainWindow(QMainWindow):
         
         # Info
         info = QLabel(
-            "<b>ℹ️ About Vision:</b><br>"
+            "<b>About Vision:</b><br>"
             "Your AI can 'see' through screenshots, camera, or uploaded images.<br>"
             "OCR extracts text from images for understanding.<br><br>"
             "<b>Capture Options:</b><br>"
-            "• <b>Screen</b> - Take a screenshot<br>"
-            "• <b>Camera</b> - Use webcam (requires OpenCV)<br>"
-            "• <b>Upload</b> - Load image file<br><br>"
+            "Screen - Take a screenshot<br>"
+            "Camera - Use webcam (requires OpenCV)<br>"
+            "Upload - Load image file<br><br>"
             "<i>For Raspberry Pi: pip install opencv-python picamera2</i>"
         )
         info.setWordWrap(True)
@@ -1422,7 +1694,7 @@ class EnhancedMainWindow(QMainWindow):
             
             if model_data_dir.exists():
                 for f in model_data_dir.glob("*.txt"):
-                    self.data_file_combo.addItem(f"📌 {self.current_model_name}: {f.name}", str(f))
+                    self.data_file_combo.addItem(f"{self.current_model_name}: {f.name}", str(f))
         
         # Add separator if we have AI files
         if self.data_file_combo.count() > 0:
@@ -1433,7 +1705,7 @@ class EnhancedMainWindow(QMainWindow):
         data_dir.mkdir(parents=True, exist_ok=True)
         
         for f in data_dir.glob("*.txt"):
-            self.data_file_combo.addItem(f"📁 Global: {f.name}", str(f))
+            self.data_file_combo.addItem(f"Global: {f.name}", str(f))
     
     def _load_data_file(self, index):
         """Load a data file into editor."""
@@ -1544,10 +1816,10 @@ class EnhancedMainWindow(QMainWindow):
         try:
             from ..avatar.avatar_api import AvatarController
             self.avatar = AvatarController()
-            self.avatar_status_label.setText("✅ Initialized")
+            self.avatar_status_label.setText("Initialized")
             self.avatar_state_label.setText(self.avatar.state.get("status", "unknown"))
         except Exception as e:
-            self.avatar_status_label.setText(f"❌ Error: {e}")
+            self.avatar_status_label.setText(f"Error: {e}")
             self.avatar = None
         
         # Try to load avatar image if one exists
@@ -1646,11 +1918,11 @@ class EnhancedMainWindow(QMainWindow):
                 img_array = np.array(img)
                 if img_array.max() < 10:  # Nearly all black
                     self.vision_preview.setText(
-                        "⚠️ Screenshot appears black\\n\\n"
-                        "This often happens on Wayland (Raspberry Pi default).\\n\\n"
-                        "Try:\\n"
-                        "1. Install: pip install pyscreenshot mss\\n"
-                        "2. Or switch to X11 session\\n"
+                        "Screenshot appears black\n\n"
+                        "This often happens on Wayland (Raspberry Pi default).\n\n"
+                        "Try:\n"
+                        "1. Install: pip install pyscreenshot mss\n"
+                        "2. Or switch to X11 session\n"
                         "3. Or use scrot: sudo apt install scrot"
                     )
                     return
@@ -1701,8 +1973,8 @@ class EnhancedMainWindow(QMainWindow):
     def _refresh_models_list(self):
         self.models_list.clear()
         for name, info in self.registry.registry.get("models", {}).items():
-            status = "✓" if info.get("has_weights") else "○"
-            current = " ← ACTIVE" if name == self.current_model_name else ""
+            status = "[T]" if info.get("has_weights") else "[U]"
+            current = " <- ACTIVE" if name == self.current_model_name else ""
             self.models_list.addItem(f"{status} {name} ({info.get('size', '?')}){current}")
     
     # === Actions ===
