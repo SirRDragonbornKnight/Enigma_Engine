@@ -32,7 +32,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Tuple, Any
 
-from .model import TinyEnigma
+from .model import Enigma, TinyEnigma  # TinyEnigma is backwards compat alias
 from .model_config import MODEL_PRESETS, get_model_config, estimate_parameters
 from ..config import CONFIG
 
@@ -85,7 +85,7 @@ class ModelRegistry:
         vocab_size: int = 32000,
         description: str = "",
         custom_config: Optional[Dict] = None
-    ) -> TinyEnigma:
+    ) -> Enigma:
         """
         Create a new named model.
         
@@ -97,7 +97,7 @@ class ModelRegistry:
             custom_config: Override preset with custom dim/depth/heads
             
         Returns:
-            Initialized (untrained) model
+            Initialized (untrained) Enigma model
         """
         # Validate name
         name = name.lower().strip().replace(" ", "_")
@@ -233,7 +233,7 @@ User: Tell me about yourself.
         self._save_registry()
         
         # Create and return model
-        model = TinyEnigma(**model_config)
+        model = Enigma(**model_config)
         
         print(f"✓ Created model '{name}' ({size})")
         print(f"  Parameters: {metadata['estimated_parameters']:,}")
@@ -247,14 +247,14 @@ User: Tell me about yourself.
         name: str, 
         device: Optional[str] = None,
         checkpoint: Optional[str] = None
-    ) -> Tuple[TinyEnigma, Dict]:
+    ) -> Tuple[Enigma, Dict]:
         """
         Load a model by name.
         
         Args:
             name: Model name
             device: Device to load to ("cuda", "cpu", or None for auto)
-            checkpoint: Specific checkpoint to load (e.g., "epoch_100") or None for latest
+            checkpoint: Specific checkpoint to load (e.g., "epoch_100", "best") or None for latest
             
         Returns:
             (model, config_dict)
@@ -274,7 +274,7 @@ User: Tell me about yourself.
             device = "cuda" if torch.cuda.is_available() else "cpu"
         
         # Create model
-        model = TinyEnigma(**config)
+        model = Enigma(**config)
         
         # Load weights
         if checkpoint:
@@ -296,9 +296,10 @@ User: Tell me about yourself.
     def save_model(
         self,
         name: str,
-        model: TinyEnigma,
+        model: Enigma,
         epoch: Optional[int] = None,
-        save_checkpoint: bool = True
+        save_checkpoint: bool = True,
+        checkpoint_name: Optional[str] = None,
     ):
         """
         Save model weights.
@@ -308,6 +309,7 @@ User: Tell me about yourself.
             model: The model to save
             epoch: Current epoch (for checkpoint naming)
             save_checkpoint: Also save as a checkpoint
+            checkpoint_name: Custom checkpoint name (e.g., "best")
         """
         name = name.lower().strip()
         if name not in self.registry["models"]:
@@ -319,10 +321,17 @@ User: Tell me about yourself.
         torch.save(model.state_dict(), model_dir / "weights.pth")
         
         # Save checkpoint
-        if save_checkpoint and epoch is not None:
-            checkpoint_path = model_dir / "checkpoints" / f"epoch_{epoch}.pth"
-            torch.save(model.state_dict(), checkpoint_path)
-            print(f"✓ Saved checkpoint: {checkpoint_path}")
+        if save_checkpoint:
+            if checkpoint_name:
+                checkpoint_path = model_dir / "checkpoints" / f"{checkpoint_name}.pth"
+            elif epoch is not None:
+                checkpoint_path = model_dir / "checkpoints" / f"epoch_{epoch}.pth"
+            else:
+                checkpoint_path = None
+            
+            if checkpoint_path:
+                torch.save(model.state_dict(), checkpoint_path)
+                print(f"✓ Saved checkpoint: {checkpoint_path}")
         
         # Update registry
         self.registry["models"][name]["has_weights"] = True

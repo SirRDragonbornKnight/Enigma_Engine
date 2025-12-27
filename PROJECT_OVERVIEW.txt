@@ -1,7 +1,7 @@
 ================================================================================
                          ENIGMA ENGINE - PROJECT OVERVIEW
 ================================================================================
-                           Last Updated: December 2024
+                           Last Updated: December 2025
 
 WHAT IS THIS?
 -------------
@@ -40,26 +40,33 @@ The system auto-detects your hardware and recommends optimal settings.
 
 enigma_engine/
 │
-├── run.py                 Main entry point
-├── app.py                 Flask app entry
-├── config.json            Configuration
+├── run.py                 Main entry point (--train, --run, --gui, --serve)
+├── setup.py               Package installation
 ├── requirements.txt       Dependencies
+├── pytest.ini             Test configuration
+├── test_system.py         Quick system tests
 │
 ├── enigma/                *** MAIN PACKAGE ***
 │   ├── __init__.py        Package init
-│   ├── config.py          Centralized config
+│   ├── config.py          Centralized config (paths, settings)
 │   │
 │   ├── core/              *** BRAIN - Model & AI ***
-│   │   ├── model.py       TinyEnigma transformer
-│   │   ├── training.py    Basic training loop
+│   │   ├── model.py       Enigma transformer (RoPE, RMSNorm, SwiGLU)
+│   │   ├── training.py    Training loop (AMP, gradient accumulation)
 │   │   ├── trainer.py     Advanced trainer (multi-GPU, checkpoints)
-│   │   ├── inference.py   EnigmaEngine response generation
-│   │   ├── tokenizer.py   Text ↔ numbers conversion
-│   │   ├── layers.py      Neural network blocks
-│   │   ├── model_config.py Model size presets (tiny→xxl)
+│   │   ├── inference.py   EnigmaEngine (generation, streaming, chat)
+│   │   ├── tokenizer.py   Character-level tokenizer + dictionary
+│   │   ├── layers.py      Legacy neural network components
+│   │   ├── model_config.py Model size presets (tiny→xxxl)
 │   │   ├── model_registry.py Named model management
-│   │   ├── model_scaling.py Grow/shrink models
-│   │   └── hardware.py    Hardware detection & adaptation
+│   │   ├── model_scaling.py Grow/shrink/distill models
+│   │   ├── hardware.py    Hardware detection & adaptation
+│   │   └── nn/            *** MODULAR NN COMPONENTS ***
+│   │       ├── attention.py   MHA, GQA, Sliding Window
+│   │       ├── activations.py SwiGLU, GeGLU, ReGLU
+│   │       ├── normalization.py RMSNorm, AdaptiveRMSNorm
+│   │       ├── embeddings.py  RoPE, Sinusoidal, Learned
+│   │       └── experts.py     MoE, LoRA, Multi-Query Attention
 │   │
 │   ├── memory/            *** MEMORY - Storage ***
 │   │   ├── manager.py     JSON conversation files
@@ -72,20 +79,20 @@ enigma_engine/
 │   │   ├── network.py     Multi-device communication
 │   │   ├── discovery.py   Auto-find other nodes
 │   │   ├── memory_sync.py Sync memories across devices
-│   │   └── mobile_api.py  Phone-optimized API
+│   │   ├── mobile_api.py  Phone-optimized API
+│   │   └── web_server.py  WebSocket server with web UI
 │   │
 │   ├── gui/               *** INTERFACE - Desktop App ***
 │   │   ├── main_window.py Basic PyQt5 window
-│   │   └── enhanced_window.py Full-featured GUI
+│   │   └── enhanced_window.py Full-featured GUI (all tabs)
 │   │
 │   ├── voice/             *** VOICE - Speech ***
-│   │   ├── tts_simple.py  Text-to-Speech
-│   │   ├── stt_simple.py  Speech-to-Text
-│   │   └── voice_system.py Enhanced voice system
+│   │   ├── tts_simple.py  Text-to-Speech (pyttsx3)
+│   │   └── stt_simple.py  Speech-to-Text (SpeechRecognition)
 │   │
 │   ├── avatar/            *** AVATAR - Visual Character ***
-│   │   ├── avatar_api.py  Original stub
-│   │   └── controller.py  Full avatar system (3D, movement, interactions)
+│   │   ├── avatar_api.py  Simple avatar stub
+│   │   └── controller.py  Full avatar system (3D, movement)
 │   │
 │   ├── tools/             *** TOOLS - AI Capabilities ***
 │   │   ├── tool_registry.py Tool framework
@@ -93,17 +100,40 @@ enigma_engine/
 │   │   ├── file_tools.py  File operations
 │   │   ├── document_tools.py Read PDF, EPUB, DOCX
 │   │   ├── system_tools.py Commands, screenshots, info
-│   │   ├── vision.py      Screen capture & understanding
-│   │   ├── os_tools.py    OS utilities
-│   │   └── screenshot.py  Screenshot helper
+│   │   ├── vision.py      Screen capture & OCR
+│   │   ├── simple_ocr.py  Basic OCR without Tesseract
+│   │   └── robot_tools.py Robot/hardware control
+│   │
+│   ├── config/            *** CONFIGURATION ***
+│   │   └── defaults.py    Default settings
 │   │
 │   └── utils/             *** HELPERS ***
-│       └── io_utils.py    File I/O
+│       └── __init__.py    Utility functions
+│
+├── scripts/               *** CLI TOOLS ***
+│   ├── train.py           Training CLI
+│   ├── generate.py        Text generation CLI
+│   ├── serve.py           API server launcher
+│   ├── convert.py         Model conversion
+│   └── benchmark.py       Performance testing
+│
+├── tests/                 *** TEST SUITE (pytest) ***
+│   ├── test_model.py      Model architecture tests
+│   ├── test_inference.py  Generation tests
+│   ├── test_tools.py      Tool tests
+│   ├── test_memory.py     Memory/storage tests
+│   ├── test_comms.py      Communication tests
+│   └── test_integration.py End-to-end tests
+│
+├── examples/              *** EXAMPLE SCRIPTS ***
+│   ├── basic_usage.py     Simple usage examples
+│   ├── chat_example.py    Chat interface example
+│   ├── streaming_example.py Token streaming
+│   └── api_client_example.py Remote API usage
 │
 ├── data/                  Training data & conversations
 ├── models/                Saved model files
-├── docs/                  Documentation
-└── examples/              Example scripts
+└── docs/                  Documentation
 
 
 ================================================================================
@@ -260,12 +290,13 @@ System automatically detects:
 
   Size    | Params  | RAM    | VRAM  | Best For
   --------|---------|--------|-------|------------------
-  tiny    | ~9M     | 2GB    | 1GB   | Testing, Pi Zero
-  small   | ~21M    | 4GB    | 2GB   | Pi 4/5, phones
-  medium  | ~58M    | 8GB    | 4GB   | Laptops
-  large   | ~134M   | 16GB   | 8GB   | Gaming PCs
-  xl      | ~368M   | 32GB   | 12GB  | Workstations
-  xxl     | ~790M   | 64GB   | 24GB  | Multi-GPU setups
+  tiny    | ~2M     | 1GB    | 0GB   | Testing, Pi Zero, Mobile
+  small   | ~15M    | 4GB    | 2GB   | Pi 4/5, Laptops
+  medium  | ~50M    | 8GB    | 4GB   | Mid-range GPUs
+  large   | ~125M   | 16GB   | 8GB   | Gaming PCs (GPT-2 small)
+  xl      | ~350M   | 32GB   | 12GB  | Workstations (GPT-2 medium)
+  xxl     | ~770M   | 64GB   | 24GB  | Multi-GPU (GPT-2 large)
+  xxxl    | ~1.5B   | 128GB  | 48GB  | Server-scale (GPT-2 XL)
 
 
 ================================================================================
@@ -334,7 +365,7 @@ Before testing the full system, verify each component:
    python -c "from enigma.tools import execute_tool; print(execute_tool('get_system_info'))"
 
 □ 9. VOICE (optional)
-   python -c "from enigma.voice.voice_system import VoiceSystem; VoiceSystem().speak('Hello')"
+   python -c "from enigma.voice.tts_simple import TextToSpeech; TextToSpeech().speak('Hello')"
 
 □ 10. SCREEN VISION (if display available)
    python -c "from enigma.tools.vision import get_screen_vision; print(get_screen_vision().see())"

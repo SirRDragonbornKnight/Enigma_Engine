@@ -817,6 +817,11 @@ class EnhancedMainWindow(QMainWindow):
         self.dark_mode_action.setChecked(True)  # Default to dark mode
         self.dark_mode_action.triggered.connect(self._toggle_dark_mode)
         
+        # Help menu
+        help_menu = menubar.addMenu("Help")
+        help_menu.addAction("Open Help File", self._open_help)
+        help_menu.addAction("About", self._show_about)
+        
         # Status bar
         self.statusBar().showMessage(f"Model: {self.current_model_name or 'None'}")
         
@@ -826,10 +831,12 @@ class EnhancedMainWindow(QMainWindow):
         # Main tabs
         tabs = QTabWidget()
         tabs.addTab(self._chat_tab(), "💬 Chat")
+        tabs.addTab(self._history_tab(), "📁 History")
         tabs.addTab(self._training_tab(), "🎓 Training")
         tabs.addTab(self._data_editor_tab(), "📝 Data Editor")
         tabs.addTab(self._avatar_tab(), "🤖 Avatar")
         tabs.addTab(self._vision_tab(), "👁️ Vision")
+        tabs.addTab(self._terminal_tab(), "🖥️ Terminal")
         tabs.addTab(self._models_tab(), "📦 Models")
         
         self.setCentralWidget(tabs)
@@ -842,11 +849,40 @@ class EnhancedMainWindow(QMainWindow):
         else:
             self.setStyleSheet(LIGHT_STYLE)
             self.dark_mode_action.setText("☀️ Light Mode")
-        
-        self.setCentralWidget(tabs)
+    
+    def _open_help(self):
+        """Open the help file."""
+        help_path = Path(__file__).parent.parent.parent / "docs" / "help.txt"
+        if help_path.exists():
+            import subprocess
+            import platform
+            if platform.system() == "Windows":
+                subprocess.Popen(["notepad", str(help_path)])
+            elif platform.system() == "Darwin":
+                subprocess.Popen(["open", str(help_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(help_path)])
+        else:
+            QMessageBox.warning(self, "Not Found", f"Help file not found at {help_path}")
+    
+    def _show_about(self):
+        """Show about dialog."""
+        QMessageBox.about(self, "About Enigma Engine",
+            "<h2>Enigma Engine</h2>"
+            "<p>A modular AI framework for building custom AI assistants.</p>"
+            "<p>Version: 1.0.0</p>"
+            "<p>Features:</p>"
+            "<ul>"
+            "<li>Create and manage multiple AI personalities</li>"
+            "<li>Train on custom data</li>"
+            "<li>Multi-device communication</li>"
+            "<li>Vision capabilities</li>"
+            "<li>Voice support (TTS/STT)</li>"
+            "</ul>"
+        )
     
     def _chat_tab(self):
-        """Chat interface tab."""
+        """Chat interface tab with image upload."""
         w = QWidget()
         layout = QVBoxLayout()
         
@@ -854,10 +890,33 @@ class EnhancedMainWindow(QMainWindow):
         self.model_label = QLabel(f"<b>Active Model:</b> {self.current_model_name or 'None'}")
         layout.addWidget(self.model_label)
         
-        # Chat display
+        # Chat display - selectable but not editable
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
+        self.chat_display.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
         layout.addWidget(self.chat_display)
+        
+        # Image upload area
+        image_layout = QHBoxLayout()
+        self.chat_image_label = QLabel("No image attached")
+        self.chat_image_label.setMaximumHeight(60)
+        self.chat_image_preview = QLabel()
+        self.chat_image_preview.setMaximumSize(60, 60)
+        self.chat_image_path = None
+        
+        btn_attach_image = QPushButton("📷 Attach Image")
+        btn_attach_image.clicked.connect(self._attach_image_chat)
+        btn_clear_image = QPushButton("❌ Clear")
+        btn_clear_image.clicked.connect(self._clear_attached_image)
+        
+        image_layout.addWidget(self.chat_image_preview)
+        image_layout.addWidget(self.chat_image_label)
+        image_layout.addWidget(btn_attach_image)
+        image_layout.addWidget(btn_clear_image)
+        image_layout.addStretch()
+        layout.addLayout(image_layout)
         
         # Input
         input_layout = QHBoxLayout()
@@ -1002,6 +1061,118 @@ class EnhancedMainWindow(QMainWindow):
         w.setLayout(layout)
         return w
     
+    def _history_tab(self):
+        """History tab - view saved conversations per AI."""
+        w = QWidget()
+        layout = QVBoxLayout()
+        
+        # Header
+        header = QLabel("Conversation History")
+        header.setObjectName("header")
+        layout.addWidget(header)
+        
+        # AI selector
+        ai_layout = QHBoxLayout()
+        ai_layout.addWidget(QLabel("Filter by AI:"))
+        self.history_ai_combo = QComboBox()
+        self.history_ai_combo.addItem("All AIs", "all")
+        for name in self.registry.registry.get("models", {}).keys():
+            self.history_ai_combo.addItem(name, name)
+        self.history_ai_combo.currentIndexChanged.connect(self._refresh_history_list)
+        ai_layout.addWidget(self.history_ai_combo)
+        ai_layout.addStretch()
+        layout.addLayout(ai_layout)
+        
+        # Main area - split list and preview
+        splitter = QSplitter(Qt.Horizontal)
+        
+        # Left: conversation list
+        left_widget = QWidget()
+        left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.history_list = QListWidget()
+        self.history_list.itemClicked.connect(self._preview_history_item)
+        self.history_list.itemDoubleClicked.connect(self._load_history_item)
+        left_layout.addWidget(self.history_list)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_load = QPushButton("📂 Load")
+        btn_load.clicked.connect(self._load_history_item)
+        btn_delete = QPushButton("🗑️ Delete")
+        btn_delete.clicked.connect(self._delete_history_item)
+        btn_refresh = QPushButton("🔄 Refresh")
+        btn_refresh.clicked.connect(self._refresh_history_list)
+        btn_layout.addWidget(btn_load)
+        btn_layout.addWidget(btn_delete)
+        btn_layout.addWidget(btn_refresh)
+        left_layout.addLayout(btn_layout)
+        
+        left_widget.setLayout(left_layout)
+        splitter.addWidget(left_widget)
+        
+        # Right: preview (read-only, selectable)
+        self.history_preview = QTextEdit()
+        self.history_preview.setReadOnly(True)
+        self.history_preview.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        self.history_preview.setPlaceholderText("Select a conversation to preview...")
+        splitter.addWidget(self.history_preview)
+        
+        splitter.setSizes([300, 500])
+        layout.addWidget(splitter)
+        
+        # Initial refresh
+        self._refresh_history_list()
+        
+        w.setLayout(layout)
+        return w
+    
+    def _terminal_tab(self):
+        """Terminal tab - view AI activity logs."""
+        w = QWidget()
+        layout = QVBoxLayout()
+        
+        # Header
+        header = QLabel("AI Terminal Output")
+        header.setObjectName("header")
+        layout.addWidget(header)
+        
+        # Info
+        info = QLabel("Real-time logs and AI activity. Text is selectable for copying.")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        
+        # Terminal output - selectable
+        self.terminal_output = QPlainTextEdit()
+        self.terminal_output.setReadOnly(True)
+        self.terminal_output.setFont(QFont("Consolas", 10))
+        self.terminal_output.setStyleSheet(
+            "background-color: #1a1a2e; color: #00ff00; font-family: 'Consolas', 'Courier New', monospace;"
+        )
+        self.terminal_output.setPlaceholderText("AI activity will appear here...")
+        layout.addWidget(self.terminal_output)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_clear = QPushButton("🗑️ Clear")
+        btn_clear.clicked.connect(lambda: self.terminal_output.clear())
+        btn_save = QPushButton("💾 Save Log")
+        btn_save.clicked.connect(self._save_terminal_log)
+        btn_layout.addWidget(btn_clear)
+        btn_layout.addWidget(btn_save)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        
+        # Initial log entry
+        self._log_terminal("Enigma Engine started")
+        self._log_terminal(f"Active model: {self.current_model_name or 'None'}")
+        
+        w.setLayout(layout)
+        return w
+
     def _data_editor_tab(self):
         """Data editor for training files."""
         w = QWidget()
@@ -1085,7 +1256,7 @@ class EnhancedMainWindow(QMainWindow):
         return w
     
     def _avatar_tab(self):
-        """Avatar control panel."""
+        """Avatar control panel - no static image upload here."""
         w = QWidget()
         layout = QVBoxLayout()
         
@@ -1093,24 +1264,6 @@ class EnhancedMainWindow(QMainWindow):
         header = QLabel("Avatar Control")
         header.setObjectName("header")
         layout.addWidget(header)
-        
-        # Avatar image preview
-        avatar_preview_group = QGroupBox("Avatar Preview")
-        avatar_preview_layout = QVBoxLayout()
-        
-        self.avatar_image_label = QLabel("No avatar image loaded")
-        self.avatar_image_label.setMinimumSize(200, 200)
-        self.avatar_image_label.setMaximumSize(300, 300)
-        self.avatar_image_label.setAlignment(Qt.AlignCenter)
-        self.avatar_image_label.setStyleSheet("border: 2px dashed #45475a; border-radius: 8px;")
-        avatar_preview_layout.addWidget(self.avatar_image_label, alignment=Qt.AlignCenter)
-        
-        btn_load_avatar = QPushButton("📷 Load Avatar Image")
-        btn_load_avatar.clicked.connect(self._load_avatar_image)
-        avatar_preview_layout.addWidget(btn_load_avatar)
-        
-        avatar_preview_group.setLayout(avatar_preview_layout)
-        layout.addWidget(avatar_preview_group)
         
         # Status
         status_group = QGroupBox("Status")
@@ -1167,7 +1320,8 @@ class EnhancedMainWindow(QMainWindow):
             "It can display expressions and speak using TTS.<br><br>"
             "To use a custom avatar model:<br>"
             "1. Place model files in avatar/ folder<br>"
-            "2. Update avatar_api.py with your renderer"
+            "2. Update avatar_api.py with your renderer<br><br>"
+            "<i>💡 Upload images for vision analysis in the Chat tab or Vision tab</i>"
         )
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -1181,29 +1335,37 @@ class EnhancedMainWindow(QMainWindow):
         return w
     
     def _vision_tab(self):
-        """Screen vision preview."""
+        """Screen vision with camera and image upload."""
         w = QWidget()
         layout = QVBoxLayout()
         
         # Header
-        header = QLabel("Screen Vision")
+        header = QLabel("Vision System")
         header.setObjectName("header")
         layout.addWidget(header)
         
         # Preview area
-        preview_group = QGroupBox("Screen Preview")
+        preview_group = QGroupBox("Preview")
         preview_layout = QVBoxLayout()
         
-        self.vision_preview = QLabel("Click 'Capture' to see what the AI sees")
+        self.vision_preview = QLabel("Click a capture button to see what the AI sees")
         self.vision_preview.setMinimumHeight(300)
         self.vision_preview.setAlignment(Qt.AlignCenter)
         self.vision_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 4px;")
         preview_layout.addWidget(self.vision_preview)
         
-        # Capture button
+        # Capture buttons
+        capture_btn_layout = QHBoxLayout()
         btn_capture = QPushButton("📷 Capture Screen")
         btn_capture.clicked.connect(self._capture_screen)
-        preview_layout.addWidget(btn_capture)
+        btn_camera = QPushButton("📸 Capture Camera")
+        btn_camera.clicked.connect(self._capture_camera)
+        btn_upload = QPushButton("📂 Upload Image")
+        btn_upload.clicked.connect(self._upload_vision_image)
+        capture_btn_layout.addWidget(btn_capture)
+        capture_btn_layout.addWidget(btn_camera)
+        capture_btn_layout.addWidget(btn_upload)
+        preview_layout.addLayout(capture_btn_layout)
         
         preview_group.setLayout(preview_layout)
         layout.addWidget(preview_group)
@@ -1214,11 +1376,14 @@ class EnhancedMainWindow(QMainWindow):
         
         self.vision_text = QPlainTextEdit()
         self.vision_text.setReadOnly(True)
+        self.vision_text.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
         self.vision_text.setPlaceholderText("OCR text and analysis will appear here...")
         self.vision_text.setMaximumHeight(150)
         analysis_layout.addWidget(self.vision_text)
         
-        btn_analyze = QPushButton("🔍 Analyze Screen")
+        btn_analyze = QPushButton("🔍 Analyze Current Image")
         btn_analyze.clicked.connect(self._analyze_screen)
         analysis_layout.addWidget(btn_analyze)
         
@@ -1228,12 +1393,13 @@ class EnhancedMainWindow(QMainWindow):
         # Info
         info = QLabel(
             "<b>ℹ️ About Vision:</b><br>"
-            "Your AI can 'see' the screen through screenshots.<br>"
+            "Your AI can 'see' through screenshots, camera, or uploaded images.<br>"
             "OCR extracts text from images for understanding.<br><br>"
-            "Use cases:<br>"
-            "• Read documents on screen<br>"
-            "• Navigate applications<br>"
-            "• Find buttons/text"
+            "<b>Capture Options:</b><br>"
+            "• <b>Screen</b> - Take a screenshot<br>"
+            "• <b>Camera</b> - Use webcam (requires OpenCV)<br>"
+            "• <b>Upload</b> - Load image file<br><br>"
+            "<i>For Raspberry Pi: pip install opencv-python picamera2</i>"
         )
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -1584,7 +1750,6 @@ class EnhancedMainWindow(QMainWindow):
                 self._load_current_model()
                 self._refresh_models_list()  # Update arrow indicator
                 self.model_label.setText(f"<b>Active Model:</b> {self.current_model_name}")
-                self.model_label.setText(f"<b>Active Model:</b> {self.current_model_name}")
                 self.statusBar().showMessage(f"Model: {self.current_model_name}")
                 self._refresh_models_list()
     
@@ -1629,7 +1794,11 @@ class EnhancedMainWindow(QMainWindow):
             QMessageBox.warning(self, "No Data", "Select training data first")
             return
         
-        # This should run in a thread - simplified version here
+        # Log to terminal
+        self._log_terminal(f"Starting training on {self.current_model_name}")
+        self._log_terminal(f"Data: {self.training_data_path}")
+        self._log_terminal(f"Epochs: {self.epochs_spin.value()}, Batch: {self.batch_spin.value()}")
+        
         self.train_status.setText("Training... (UI may freeze)")
         QApplication.processEvents()
         
@@ -1649,14 +1818,224 @@ class EnhancedMainWindow(QMainWindow):
             
             trainer.train(epochs=self.epochs_spin.value())
             
-            # Reload model
             self._load_current_model()
             
             self.train_status.setText("Training complete!")
+            self._log_terminal("Training completed successfully!")
             QMessageBox.information(self, "Done", "Training finished!")
         except Exception as e:
             self.train_status.setText(f"Error: {e}")
+            self._log_terminal(f"Training error: {e}")
             QMessageBox.warning(self, "Training Error", str(e))
+    
+    # === NEW ACTION METHODS ===
+    
+    def _attach_image_chat(self):
+        """Attach an image for chat/vision analysis."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Select Image", "", "Images (*.png *.jpg *.jpeg *.gif *.bmp);;All Files (*)"
+        )
+        if filepath:
+            self.chat_image_path = filepath
+            self.chat_image_label.setText(Path(filepath).name)
+            pixmap = QPixmap(filepath)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.chat_image_preview.setPixmap(scaled)
+            self._log_terminal(f"Image attached: {filepath}")
+    
+    def _clear_attached_image(self):
+        """Clear attached image."""
+        self.chat_image_path = None
+        self.chat_image_label.setText("No image attached")
+        self.chat_image_preview.clear()
+    
+    def _refresh_history_list(self):
+        """Refresh conversation history list."""
+        self.history_list.clear()
+        
+        selected_ai = self.history_ai_combo.currentData()
+        
+        # Load from memory manager
+        try:
+            from ..memory.manager import ConversationManager
+            manager = ConversationManager()
+            conversations = manager.list_conversations()
+            
+            for conv_name in conversations:
+                # Filter by AI if specified
+                if selected_ai != "all":
+                    # Try to match AI name in conversation name or content
+                    if selected_ai.lower() not in conv_name.lower():
+                        continue
+                
+                self.history_list.addItem(conv_name)
+        except Exception as e:
+            self._log_terminal(f"Error loading history: {e}")
+    
+    def _preview_history_item(self):
+        """Preview selected conversation."""
+        item = self.history_list.currentItem()
+        if not item:
+            return
+        
+        try:
+            from ..memory.manager import ConversationManager
+            manager = ConversationManager()
+            conv = manager.load_conversation(item.text())
+            
+            preview_text = []
+            for msg in conv.get("messages", []):
+                role = msg.get("role", "unknown")
+                text = msg.get("text", "")
+                preview_text.append(f"[{role}] {text}")
+            
+            self.history_preview.setText("\n\n".join(preview_text))
+        except Exception as e:
+            self.history_preview.setText(f"Error loading conversation: {e}")
+    
+    def _load_history_item(self):
+        """Load selected conversation into chat."""
+        item = self.history_list.currentItem()
+        if not item:
+            return
+        
+        try:
+            from ..memory.manager import ConversationManager
+            manager = ConversationManager()
+            conv = manager.load_conversation(item.text())
+            
+            self.chat_display.clear()
+            for msg in conv.get("messages", []):
+                role = msg.get("role", "unknown")
+                text = msg.get("text", "")
+                self.chat_display.append(f"<b>{role}:</b> {text}")
+            
+            self._log_terminal(f"Loaded conversation: {item.text()}")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+    
+    def _delete_history_item(self):
+        """Delete selected conversation."""
+        item = self.history_list.currentItem()
+        if not item:
+            return
+        
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Delete conversation '{item.text()}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                from ..memory.manager import ConversationManager
+                manager = ConversationManager()
+                conv_path = manager.conv_dir / f"{item.text()}.json"
+                if conv_path.exists():
+                    conv_path.unlink()
+                self._refresh_history_list()
+                self._log_terminal(f"Deleted conversation: {item.text()}")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+    
+    def _log_terminal(self, message: str):
+        """Add a message to the terminal output."""
+        if hasattr(self, 'terminal_output'):
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.terminal_output.appendPlainText(f"[{timestamp}] {message}")
+    
+    def _save_terminal_log(self):
+        """Save terminal log to file."""
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Save Log", f"enigma_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt", "Text Files (*.txt)"
+        )
+        if filepath:
+            try:
+                Path(filepath).write_text(self.terminal_output.toPlainText())
+                QMessageBox.information(self, "Saved", f"Log saved to {filepath}")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+    
+    def _capture_camera(self):
+        """Capture image from camera."""
+        try:
+            import cv2
+            
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                # Try Raspberry Pi camera
+                try:
+                    from picamera2 import Picamera2
+                    picam = Picamera2()
+                    picam.configure(picam.create_preview_configuration())
+                    picam.start()
+                    import time
+                    time.sleep(0.5)
+                    frame = picam.capture_array()
+                    picam.stop()
+                    
+                    # Convert to QPixmap
+                    from PIL import Image
+                    img = Image.fromarray(frame)
+                    img = img.resize((640, 480))
+                    
+                    import io
+                    buffer = io.BytesIO()
+                    img.save(buffer, format="PNG")
+                    buffer.seek(0)
+                    
+                    pixmap = QPixmap()
+                    pixmap.loadFromData(buffer.read())
+                    self.vision_preview.setPixmap(pixmap)
+                    self._log_terminal("Camera capture successful (Pi camera)")
+                    return
+                except Exception as e2:
+                    raise Exception(f"No camera available. OpenCV: {e2}")
+            
+            ret, frame = cap.read()
+            cap.release()
+            
+            if ret:
+                # Convert BGR to RGB
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, ch = frame.shape
+                bytes_per_line = ch * w
+                
+                qimg = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                pixmap = QPixmap.fromImage(qimg)
+                scaled = pixmap.scaled(640, 480, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.vision_preview.setPixmap(scaled)
+                self._log_terminal("Camera capture successful")
+            else:
+                raise Exception("Failed to capture from camera")
+                
+        except ImportError:
+            self.vision_preview.setText(
+                "Camera capture requires OpenCV:\n\n"
+                "pip install opencv-python\n\n"
+                "For Raspberry Pi:\n"
+                "pip install picamera2"
+            )
+            self._log_terminal("Camera capture failed: OpenCV not installed")
+        except Exception as e:
+            self.vision_preview.setText(f"Camera error: {e}")
+            self._log_terminal(f"Camera error: {e}")
+    
+    def _upload_vision_image(self):
+        """Upload an image for vision analysis."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Select Image", "", "Images (*.png *.jpg *.jpeg *.gif *.bmp);;All Files (*)"
+        )
+        if filepath:
+            pixmap = QPixmap(filepath)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(640, 480, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.vision_preview.setPixmap(scaled)
+                self._current_vision_image = filepath
+                self._log_terminal(f"Image loaded for vision: {filepath}")
+            else:
+                QMessageBox.warning(self, "Error", "Failed to load image")
 
 
 def run_app():
