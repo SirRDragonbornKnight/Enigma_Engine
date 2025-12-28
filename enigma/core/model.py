@@ -130,6 +130,11 @@ class Enigma(nn.Module):
         
         return logits
     
+    @property
+    def num_parameters(self) -> int:
+        """Return total number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
     def get_config(self) -> dict:
         """Return model configuration for saving/loading."""
         return {

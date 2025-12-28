@@ -75,14 +75,14 @@ Examples:
             try:
                 prompt = input("You: ")
                 if prompt.strip().lower() in ("quit", "exit", "q"):
-                    print("Goodbye!")
+                    print("[SYSTEM] Goodbye!")
                     break
                 if not prompt.strip():
                     continue
                 resp = engine.generate(prompt)
                 print(f"AI: {resp}\n")
             except KeyboardInterrupt:
-                print("\nGoodbye!")
+                print("\n[SYSTEM] Goodbye!")
                 break
 
     if args.gui:

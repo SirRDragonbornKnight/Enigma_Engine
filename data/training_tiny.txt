@@ -1,5 +1,7 @@
 # =============================================================================
-#                    TINY MODEL TRAINING DATA (~50 pairs)
+#                    TINY MODEL TRAINING DATA
+# =============================================================================
+# QUESTIONS IN THIS FILE: 50
 # =============================================================================
 # For: tiny models (~2M parameters)
 # Good for: Testing, Raspberry Pi Zero, quick experiments
