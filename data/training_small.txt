@@ -4,6 +4,11 @@
 # For: small models (~10M parameters)
 # Good for: Raspberry Pi 4, basic chatbots
 # Expected: Simple conversations, basic understanding
+#
+# RECOMMENDED SETTINGS:
+#   Epochs: 30-75
+#   Batch:  2-4
+#   LR:     0.0005
 # =============================================================================
 
 # --- GREETINGS ---

@@ -84,10 +84,21 @@ def create_training_tab(parent):
     parent.train_progress.setValue(0)
     layout.addWidget(parent.train_progress)
     
-    # Train button
+    # Train and Stop buttons row
+    btn_layout = QHBoxLayout()
+    
     parent.btn_train = QPushButton("Train")
     parent.btn_train.clicked.connect(parent._on_start_training)
-    layout.addWidget(parent.btn_train)
+    btn_layout.addWidget(parent.btn_train)
+    
+    parent.btn_stop_train = QPushButton("Stop")
+    parent.btn_stop_train.setToolTip("Stop training after current epoch")
+    parent.btn_stop_train.clicked.connect(parent._on_stop_training)
+    parent.btn_stop_train.setEnabled(False)
+    parent.btn_stop_train.setStyleSheet("background-color: #dc2626;")
+    btn_layout.addWidget(parent.btn_stop_train)
+    
+    layout.addLayout(btn_layout)
     
     # Hidden data path label (for compatibility)
     parent.data_path_label = QLabel("")
@@ -106,24 +117,45 @@ def _refresh_training_files(parent):
     parent.training_file_combo.blockSignals(True)
     parent.training_file_combo.clear()
     
+    # Always use global data directory for training files
+    global_data_dir = Path(CONFIG.get("data_dir", "data"))
+    global_data_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Also check model-specific data dir if a model is loaded
+    model_data_dir = None
     if parent.current_model_name:
         model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
-        data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-        if isinstance(data_dir, str):
-            data_dir = Path(data_dir)
-    else:
-        data_dir = Path(CONFIG.get("data_dir", "data"))
+        model_data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
+        if isinstance(model_data_dir, str):
+            model_data_dir = Path(model_data_dir)
+        if model_data_dir.exists():
+            model_data_dir.mkdir(parents=True, exist_ok=True)
     
-    data_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Ensure training.txt exists
-    training_file = data_dir / "training.txt"
+    # Ensure training.txt exists in global data dir
+    training_file = global_data_dir / "training.txt"
     if not training_file.exists():
         training_file.write_text("# Training Data\n\nQ: Hello\nA: Hi there!\n")
     
-    # Add all txt files
-    for f in sorted(data_dir.glob("*.txt")):
-        parent.training_file_combo.addItem(f.name, str(f))
+    # Collect all txt files from both directories
+    seen_files = set()
+    all_files = []
+    
+    # Add files from global data directory first
+    for f in sorted(global_data_dir.glob("*.txt")):
+        if f.name not in seen_files:
+            seen_files.add(f.name)
+            all_files.append((f.name, str(f)))
+    
+    # Add model-specific files (if different directory)
+    if model_data_dir and model_data_dir != global_data_dir and model_data_dir.exists():
+        for f in sorted(model_data_dir.glob("*.txt")):
+            if f.name not in seen_files:
+                seen_files.add(f.name)
+                all_files.append((f"[Model] {f.name}", str(f)))
+    
+    # Add all files to combo
+    for name, path in all_files:
+        parent.training_file_combo.addItem(name, path)
     
     # Select training.txt by default
     idx = parent.training_file_combo.findText("training.txt")

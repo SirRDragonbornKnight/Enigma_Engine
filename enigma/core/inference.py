@@ -113,7 +113,7 @@ class EnigmaEngine:
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
         stop_strings: Optional[List[str]] = None,
-        use_cache: bool = True,
+        use_cache: bool = False,  # Disabled - standard model doesn't support KV cache
     ) -> str:
         """
         Generate text from a prompt.
@@ -126,7 +126,7 @@ class EnigmaEngine:
             top_p: Top-p (nucleus) sampling threshold
             repetition_penalty: Penalty for repeating tokens
             stop_strings: List of strings to stop generation at
-            use_cache: Use KV-cache for faster generation
+            use_cache: Use KV-cache for faster generation (requires compatible model)
             
         Returns:
             Generated text including the original prompt
@@ -299,20 +299,11 @@ class EnigmaEngine:
         
         input_ids = input_ids.to(self.device).long()
         generated = input_ids
-        kv_cache = None
         
         with torch.no_grad():
             for _ in range(max_gen):
-                if kv_cache is not None:
-                    curr_input = generated[:, -1:]
-                else:
-                    curr_input = generated
-                
-                output = self.model(curr_input, kv_cache=kv_cache, use_cache=True)
-                if isinstance(output, tuple):
-                    logits, kv_cache = output
-                else:
-                    logits = output
+                # Always use full sequence (no KV cache in standard model)
+                logits = self.model(generated)
                 
                 next_token = self._sample_token(
                     logits[:, -1, :],

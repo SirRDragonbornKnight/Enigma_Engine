@@ -74,9 +74,6 @@ def create_sessions_tab(parent):
         Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
     )
     parent.session_viewer.setPlaceholderText("Select a saved chat to view...")
-    parent.session_viewer.setTextInteractionFlags(
-        Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
-    )
     left_layout.addWidget(parent.session_viewer)
     left_widget.setLayout(left_layout)
     splitter.addWidget(left_widget)

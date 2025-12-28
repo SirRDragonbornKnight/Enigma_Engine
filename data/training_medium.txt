@@ -4,6 +4,11 @@
 # For: medium models (~50M parameters)
 # Good for: Desktop computers, quality chatbots
 # Expected: Good conversations, broader knowledge
+#
+# RECOMMENDED SETTINGS:
+#   Epochs: 50-100
+#   Batch:  4-8
+#   LR:     0.0003
 # =============================================================================
 
 # --- GREETINGS (expanded) ---

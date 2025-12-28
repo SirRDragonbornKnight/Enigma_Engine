@@ -308,7 +308,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         name: str,
         model: TinyEnigma,
         epoch: Optional[int] = None,
-        save_checkpoint: bool = True
+        save_checkpoint: bool = True,
+        checkpoint_name: Optional[str] = None
     ):
         """
         Save model weights.
@@ -318,6 +319,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             model: The model to save
             epoch: Current epoch (for checkpoint naming)
             save_checkpoint: Also save as a checkpoint
+            checkpoint_name: Custom checkpoint name (e.g., "best")
         """
         name = name.lower().strip()
         if name not in self.registry["models"]:
@@ -329,10 +331,21 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         torch.save(model.state_dict(), model_dir / "weights.pth")
         
         # Save checkpoint
-        if save_checkpoint and epoch is not None:
-            checkpoint_path = model_dir / "checkpoints" / f"epoch_{epoch}.pth"
+        if save_checkpoint:
+            checkpoints_dir = model_dir / "checkpoints"
+            checkpoints_dir.mkdir(parents=True, exist_ok=True)
+            
+            if checkpoint_name:
+                # Custom name like "best"
+                checkpoint_path = checkpoints_dir / f"{checkpoint_name}.pth"
+            elif epoch is not None:
+                # Epoch-based name
+                checkpoint_path = checkpoints_dir / f"epoch_{epoch}.pth"
+            else:
+                # Default
+                checkpoint_path = checkpoints_dir / "latest.pth"
+            
             torch.save(model.state_dict(), checkpoint_path)
-            # Silent - checkpoint saved
         
         # Update registry
         self.registry["models"][name]["has_weights"] = True

@@ -1114,6 +1114,10 @@ class EnhancedMainWindow(QMainWindow):
         self.auto_speak = False
         self.microphone_enabled = False
         
+        # Training lock to prevent concurrent training
+        self._is_training = False
+        self._stop_training = False
+        
         # Check if first run (no models)
         if not self.registry.registry.get("models"):
             self._run_setup_wizard()
@@ -1694,6 +1698,8 @@ class EnhancedMainWindow(QMainWindow):
         """Populate the AI selector dropdown in history tab."""
         if not hasattr(self, 'history_ai_selector'):
             return
+        # Block signals to prevent double refresh
+        self.history_ai_selector.blockSignals(True)
         self.history_ai_selector.clear()
         self.history_ai_selector.addItem("All AIs")
         for name in self.registry.registry.get("models", {}).keys():
@@ -1703,6 +1709,7 @@ class EnhancedMainWindow(QMainWindow):
             idx = self.history_ai_selector.findText(self.current_model_name)
             if idx >= 0:
                 self.history_ai_selector.setCurrentIndex(idx)
+        self.history_ai_selector.blockSignals(False)
     
     def _on_history_ai_changed(self, ai_name):
         """Handle AI selection change in history tab."""
@@ -1762,21 +1769,38 @@ class EnhancedMainWindow(QMainWindow):
         """Load a session's content into the viewer."""
         if not item:
             return
-        session_name = item.text()
-        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        session_text = item.text()
+        
+        # Parse AI name from [ai_name] prefix if present
+        if session_text.startswith("["):
+            # Format: [ai_name] session_name
+            bracket_end = session_text.find("]")
+            ai_name = session_text[1:bracket_end]
+            session_name = session_text[bracket_end + 2:]  # Skip "] "
+            
+            if ai_name == "global":
+                conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+            else:
+                conv_dir = Path(CONFIG.get("models_dir", "models")) / ai_name / "brain" / "conversations"
+        else:
+            # No prefix - use selected AI's folder or global
+            session_name = session_text
+            conv_dir = self._get_sessions_dir()
+        
         session_file = conv_dir / f"{session_name}.json"
         
         if session_file.exists():
             try:
                 data = json.loads(session_file.read_text())
-                html = f"<h3>{session_name}</h3>"
+                ai_label = data.get("ai_name", "Unknown AI")
+                html = f"<h3>{session_name}</h3><p><i>AI: {ai_label}</i></p><hr>"
                 for msg in data.get("messages", []):
                     role = msg.get("role", "user")
                     text = msg.get("text", "")
                     if role == "user":
                         html += f"<p><b>You:</b> {text}</p>"
                     else:
-                        html += f"<p><b>AI:</b> {text}</p>"
+                        html += f"<p><b>{ai_label}:</b> {text}</p>"
                 self.session_viewer.setHtml(html)
                 self._current_session = session_name
             except Exception as e:
@@ -1789,16 +1813,38 @@ class EnhancedMainWindow(QMainWindow):
             if hasattr(self, 'chat_messages') and self.chat_messages:
                 self._save_current_chat(name)
             else:
-                conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+                # Save to current model's folder
+                if self.current_model_name:
+                    conv_dir = Path(CONFIG.get("models_dir", "models")) / self.current_model_name / "brain" / "conversations"
+                else:
+                    conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
                 conv_dir.mkdir(parents=True, exist_ok=True)
                 session_file = conv_dir / f"{name}.json"
                 session_file.write_text(json.dumps({
                     "name": name,
+                    "ai_name": self.current_model_name or "unknown",
                     "saved_at": time.time(),
                     "messages": []
                 }))
             self._refresh_sessions()
             self.chat_messages = []
+    
+    def _get_session_path(self, session_text):
+        """Get the full path to a session file from its display text."""
+        if session_text.startswith("["):
+            bracket_end = session_text.find("]")
+            ai_name = session_text[1:bracket_end]
+            session_name = session_text[bracket_end + 2:]
+            
+            if ai_name == "global":
+                conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+            else:
+                conv_dir = Path(CONFIG.get("models_dir", "models")) / ai_name / "brain" / "conversations"
+        else:
+            session_name = session_text
+            conv_dir = self._get_sessions_dir()
+        
+        return conv_dir / f"{session_name}.json", session_name
     
     def _rename_session(self):
         """Rename the selected session."""
@@ -1806,14 +1852,13 @@ class EnhancedMainWindow(QMainWindow):
         if not item:
             QMessageBox.warning(self, "No Selection", "Select a session to rename")
             return
-        old_name = item.text()
+        
+        old_path, old_name = self._get_session_path(item.text())
         new_name, ok = QInputDialog.getText(self, "Rename Session", "New name:", text=old_name)
         if ok and new_name and new_name != old_name:
-            conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
-            old_file = conv_dir / f"{old_name}.json"
-            new_file = conv_dir / f"{new_name}.json"
-            if old_file.exists():
-                old_file.rename(new_file)
+            new_path = old_path.parent / f"{new_name}.json"
+            if old_path.exists():
+                old_path.rename(new_path)
                 self._refresh_sessions()
     
     def _delete_session(self):
@@ -1822,54 +1867,62 @@ class EnhancedMainWindow(QMainWindow):
         if not item:
             QMessageBox.warning(self, "No Selection", "Select a session to delete")
             return
-        session_name = item.text()
+        
+        session_path, session_name = self._get_session_path(item.text())
         reply = QMessageBox.question(
             self, "Delete Session",
             f"Delete session '{session_name}'?",
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
-            session_file = conv_dir / f"{session_name}.json"
-            if session_file.exists():
-                session_file.unlink()
+            if session_path.exists():
+                session_path.unlink()
             self._refresh_sessions()
             self.session_viewer.clear()
     
     def _load_session_into_chat(self):
         """Load the selected session into the chat tab."""
-        if not hasattr(self, '_current_session'):
+        item = self.sessions_list.currentItem()
+        if not item:
             QMessageBox.warning(self, "No Session", "Select a session first")
             return
-        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
-        session_file = conv_dir / f"{self._current_session}.json"
-        if session_file.exists():
+        
+        session_path, session_name = self._get_session_path(item.text())
+        if session_path.exists():
             try:
-                data = json.loads(session_file.read_text())
+                data = json.loads(session_path.read_text())
                 self.chat_display.clear()
                 self.chat_messages = data.get("messages", [])
+                ai_name = data.get("ai_name", self.current_model_name or "AI")
                 for msg in self.chat_messages:
                     role = msg.get("role", "user")
                     text = msg.get("text", "")
                     if role == "user":
                         self.chat_display.append(f"<b>You:</b> {text}")
                     else:
-                        self.chat_display.append(f"<b>{self.current_model_name}:</b> {text}")
+                        self.chat_display.append(f"<b>{ai_name}:</b> {text}")
                 self.tabs.setCurrentIndex(0)
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to load session: {e}")
     
     def _save_current_chat(self, name=None):
-        """Save current chat to a session file."""
+        """Save current chat to a session file in the current AI's folder."""
         if not hasattr(self, 'chat_messages'):
             self.chat_messages = []
         if not name:
             name = f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        
+        # Save to current model's conversations folder
+        if self.current_model_name:
+            conv_dir = Path(CONFIG.get("models_dir", "models")) / self.current_model_name / "brain" / "conversations"
+        else:
+            conv_dir = Path(CONFIG.get("data_dir", "data")) / "conversations"
+        
         conv_dir.mkdir(parents=True, exist_ok=True)
         session_file = conv_dir / f"{name}.json"
         session_file.write_text(json.dumps({
             "name": name,
+            "ai_name": self.current_model_name or "unknown",
             "saved_at": time.time(),
             "messages": self.chat_messages
         }))
@@ -2057,47 +2110,6 @@ class EnhancedMainWindow(QMainWindow):
     
     # === Vision Actions ===
     
-    def _capture_screen(self):
-        """Capture and display screen."""
-        try:
-            from ..tools.vision import ScreenCapture
-            capture = ScreenCapture()
-            img = capture.capture()
-            
-            if img:
-                # Check if image is all black (common on Wayland)
-                import numpy as np
-                img_array = np.array(img)
-                if img_array.max() < 10:  # Nearly all black
-                    self.vision_preview.setText(
-                        "WARNING: Screenshot appears black\\n\\n"
-                        "This often happens on Wayland (Raspberry Pi default).\\n\\n"
-                        "Try:\\n"
-                        "1. Install: pip install pyscreenshot mss\\n"
-                        "2. Or switch to X11 session\\n"
-                        "3. Or use scrot: sudo apt install scrot"
-                    )
-                    return
-                
-                # Convert PIL to QPixmap safely
-                img = img.resize((640, 360))  # Resize for display
-                img = img.convert("RGB")  # Ensure RGB mode
-                
-                # Use BytesIO for safer conversion
-                import io
-                buffer = io.BytesIO()
-                img.save(buffer, format="PNG")
-                buffer.seek(0)
-                
-                pixmap = QPixmap()
-                pixmap.loadFromData(buffer.read())
-                self.vision_preview.setPixmap(pixmap)
-                self.vision_preview.setToolTip(f"Captured at {datetime.now().strftime('%H:%M:%S')}")
-            else:
-                self.vision_preview.setText("Failed to capture screen\\n\\nTry: pip install mss pyscreenshot")
-        except Exception as e:
-            self.vision_preview.setText(f"Error: {e}\\n\\nTry: pip install pillow mss")
-    
     def _analyze_screen(self):
         """Analyze screen with OCR."""
         try:
@@ -2273,9 +2285,17 @@ class EnhancedMainWindow(QMainWindow):
             QMessageBox.warning(self, "No Data", "Select a training file first.")
             return
         
-        # Update button and progress
+        # Prevent concurrent training
+        if self._is_training:
+            QMessageBox.warning(self, "Training", "Training already in progress.")
+            return
+        self._is_training = True
+        self._stop_training = False
+        
+        # Update buttons and progress
         self.btn_train.setEnabled(False)
         self.btn_train.setText("Training...")
+        self.btn_stop_train.setEnabled(True)
         self.train_progress.setValue(0)
         QApplication.processEvents()
         
@@ -2294,7 +2314,13 @@ class EnhancedMainWindow(QMainWindow):
             )
             
             epochs = self.epochs_spin.value()
+            stopped_early = False
             for epoch in range(epochs):
+                # Check if user requested stop
+                if self._stop_training:
+                    stopped_early = True
+                    break
+                
                 trainer.train(epochs=1)
                 progress = int((epoch + 1) / epochs * 100)
                 self.train_progress.setValue(progress)
@@ -2306,11 +2332,30 @@ class EnhancedMainWindow(QMainWindow):
             self.train_progress.setValue(100)
             self.btn_train.setText("Train")
             self.btn_train.setEnabled(True)
-            QMessageBox.information(self, "Done", "Training finished!")
+            self.btn_stop_train.setEnabled(False)
+            self._is_training = False
+            self._stop_training = False
+            
+            if stopped_early:
+                self.btn_stop_train.setText("Stop")
+                QMessageBox.information(self, "Stopped", f"Training stopped after epoch {epoch + 1}. Progress saved!")
+            else:
+                QMessageBox.information(self, "Done", "Training finished!")
         except Exception as e:
             self.btn_train.setText("Train")
             self.btn_train.setEnabled(True)
+            self.btn_stop_train.setEnabled(False)
+            self.btn_stop_train.setText("Stop")
+            self._is_training = False
+            self._stop_training = False
             QMessageBox.warning(self, "Training Error", str(e))
+    
+    def _on_stop_training(self):
+        """Stop training after current epoch."""
+        self._stop_training = True
+        self.btn_stop_train.setEnabled(False)
+        self.btn_stop_train.setText("Stopping...")
+        self.btn_train.setText("Stopping...")
     
     # === AI Control Methods ===
     # These methods allow the AI to control the GUI programmatically
