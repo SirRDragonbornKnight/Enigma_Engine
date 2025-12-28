@@ -4,6 +4,11 @@
 # For: large models (~150M parameters)
 # Good for: GPUs with 8GB+ VRAM, high quality responses
 # Expected: Natural conversations, good knowledge, nuanced responses
+#
+# RECOMMENDED SETTINGS:
+#   Epochs: 75-150
+#   Batch:  8-16
+#   LR:     0.0001
 # =============================================================================
 
 # --- GREETINGS (comprehensive) ---

@@ -3,7 +3,7 @@
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QPlainTextEdit, QMessageBox, QInputDialog
+    QComboBox, QPlainTextEdit, QMessageBox, QInputDialog, QFileDialog
 )
 from PyQt5.QtCore import Qt
 
@@ -123,37 +123,53 @@ def _refresh_instructions_files(parent):
     """Refresh list of instruction/notes files."""
     parent.instructions_file_combo.clear()
     
-    # Get data directory
+    # Always use global data directory
+    global_data_dir = Path(CONFIG.get("data_dir", "data"))
+    global_data_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Also check model-specific data dir if a model is loaded
+    model_data_dir = None
     if parent.current_model_name:
         model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
-        data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-        if isinstance(data_dir, str):
-            data_dir = Path(data_dir)
-    else:
-        data_dir = Path(CONFIG.get("data_dir", "data"))
-    
-    data_dir.mkdir(parents=True, exist_ok=True)
+        model_data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
+        if isinstance(model_data_dir, str):
+            model_data_dir = Path(model_data_dir)
+        if model_data_dir and model_data_dir.exists():
+            model_data_dir.mkdir(parents=True, exist_ok=True)
     
     # Ensure instructions.txt exists with default content
-    instructions_file = data_dir / "instructions.txt"
+    instructions_file = global_data_dir / "instructions.txt"
     if not instructions_file.exists():
         instructions_file.write_text(DEFAULT_INSTRUCTIONS)
     
     # Ensure training.txt exists
-    training_file = data_dir / "training.txt"
+    training_file = global_data_dir / "training.txt"
     if not training_file.exists():
-        training_file.write_text("# Training Data\\n# Add Q&A pairs below\\n\\nQ: Hello\\nA: Hi there!\\n")
+        training_file.write_text("# Training Data\n# Add Q&A pairs below\n\nQ: Hello\nA: Hi there!\n")
+    
+    # Collect all txt files from both directories
+    seen_files = set()
     
     # Add instructions.txt first
     parent.instructions_file_combo.addItem("instructions.txt", str(instructions_file))
+    seen_files.add("instructions.txt")
     
     # Add training.txt second
     parent.instructions_file_combo.addItem("training.txt", str(training_file))
+    seen_files.add("training.txt")
     
-    # Add other files
-    for f in sorted(data_dir.glob("*.txt")):
-        if f.name not in ["instructions.txt", "training.txt"]:
+    # Add other files from global data directory
+    for f in sorted(global_data_dir.glob("*.txt")):
+        if f.name not in seen_files:
+            seen_files.add(f.name)
             parent.instructions_file_combo.addItem(f.name, str(f))
+    
+    # Add model-specific files (if different directory)
+    if model_data_dir and model_data_dir != global_data_dir and model_data_dir.exists():
+        for f in sorted(model_data_dir.glob("*.txt")):
+            if f.name not in seen_files:
+                seen_files.add(f.name)
+                parent.instructions_file_combo.addItem(f"[Model] {f.name}", str(f))
     
     # Select instructions.txt by default
     parent.instructions_file_combo.setCurrentIndex(0)

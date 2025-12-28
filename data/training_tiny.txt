@@ -4,6 +4,11 @@
 # For: tiny models (~2M parameters)
 # Good for: Testing, Raspberry Pi Zero, quick experiments
 # Expected: Basic responses, limited vocabulary
+#
+# RECOMMENDED SETTINGS:
+#   Epochs: 20-50
+#   Batch:  1-2
+#   LR:     0.001
 # =============================================================================
 
 Q: Hello
