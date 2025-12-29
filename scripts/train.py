@@ -97,22 +97,23 @@ def main():
         print(f"Creating new model '{args.model}'...")
         registry.create_model(args.model, size=args.size)
     
+    # Load the model
+    print(f"Loading model '{args.model}'...")
+    model, config = registry.load_model(args.model)
+    
     # Initialize trainer
     trainer = EnigmaTrainer(
+        model=model,
         model_name=args.model,
-        device=args.device,
+        registry=registry,
+        data_path=args.data,
+        use_amp=not args.no_amp,
     )
     
     # Train
     trainer.train(
-        data_path=args.data,
         epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.lr,
-        warmup_steps=args.warmup,
-        gradient_accumulation_steps=args.grad_accum,
-        use_amp=not args.no_amp,
-        val_split=args.val_split,
+        save_every=5,
     )
     
     print("Training complete!")
