@@ -178,7 +178,7 @@ def _load_training_file(parent, index):
     filepath = parent.training_file_combo.itemData(index)
     if filepath and Path(filepath).exists():
         try:
-            content = Path(filepath).read_text()
+            content = Path(filepath).read_text(encoding='utf-8', errors='replace')
             parent.training_editor.setPlainText(content)
             parent.training_data_path = filepath
             parent.data_path_label.setText(filepath)
@@ -195,7 +195,7 @@ def _save_training_file(parent):
     
     try:
         content = parent.training_editor.toPlainText()
-        Path(parent._current_training_file).write_text(content)
+        Path(parent._current_training_file).write_text(content, encoding='utf-8')
         QMessageBox.information(parent, "Saved", "Training file saved!")
     except Exception as e:
         QMessageBox.warning(parent, "Error", f"Failed to save: {e}")

@@ -834,6 +834,9 @@ class ModelManagerDialog(QDialog):
         self.btn_backup = QPushButton("Backup")
         self.btn_backup.clicked.connect(self._on_backup)
         
+        self.btn_open_folder = QPushButton("📁 Open Folder")
+        self.btn_open_folder.clicked.connect(self._on_open_folder)
+        
         self.btn_grow = QPushButton("Grow >>")
         self.btn_grow.clicked.connect(self._on_grow)
         
@@ -846,11 +849,29 @@ class ModelManagerDialog(QDialog):
         
         btn_layout.addWidget(self.btn_new)
         btn_layout.addWidget(self.btn_backup)
+        btn_layout.addWidget(self.btn_open_folder)
         btn_layout.addWidget(self.btn_grow)
         btn_layout.addWidget(self.btn_shrink)
         btn_layout.addWidget(self.btn_delete)
         
         layout.addLayout(btn_layout)
+        
+        # Second row of buttons for Clone and Rename
+        btn_layout2 = QHBoxLayout()
+        
+        self.btn_clone = QPushButton("🔀 Clone Model")
+        self.btn_clone.setToolTip("Create a copy of this model as a base for a new character")
+        self.btn_clone.clicked.connect(self._on_clone)
+        
+        self.btn_rename = QPushButton("✏️ Rename")
+        self.btn_rename.setToolTip("Rename this model")
+        self.btn_rename.clicked.connect(self._on_rename)
+        
+        btn_layout2.addWidget(self.btn_clone)
+        btn_layout2.addWidget(self.btn_rename)
+        btn_layout2.addStretch()
+        
+        layout.addLayout(btn_layout2)
         
         # Load button
         self.btn_load = QPushButton("Load Selected Model")
@@ -860,34 +881,60 @@ class ModelManagerDialog(QDialog):
         self.setLayout(layout)
     
     def _refresh_list(self):
+        # Reload registry from disk to get fresh data
+        self.registry._load_registry()
+        
         self.model_list.clear()
+        if hasattr(self, 'selected_model'):
+            delattr(self, 'selected_model')
+        self.info_label.setText("Select a model to see details")
+        
         for name, info in self.registry.registry.get("models", {}).items():
-            status = "[+]" if info.get("has_weights") else "[ ]"
-            self.model_list.addItem(f"{status} {name} ({info.get('size', '?')})")
+            # Also verify the model folder actually exists
+            model_path = Path(self.registry.models_dir) / name
+            if model_path.exists():
+                status = "[+]" if info.get("has_weights") else "[ ]"
+                self.model_list.addItem(f"{status} {name} ({info.get('size', '?')})")
     
     def _on_select_model(self, item):
         text = item.text()
-        # Extract name from "[+] name (size)"
-        name = text.split()[1]
+        # Extract name from "[+] name (size)" or "[ ] name (size)"
+        # The status prefix is either "[+]" or "[ ]" followed by space
+        # Remove status prefix and extract name before the size in parentheses
+        if text.startswith("[+] "):
+            rest = text[4:]  # Remove "[+] "
+        elif text.startswith("[ ] "):
+            rest = text[4:]  # Remove "[ ] "
+        else:
+            rest = text
+        
+        # Now rest is "name (size)" - extract name before last parentheses
+        name = rest.rsplit(" (", 1)[0]
+        
+        # Set selected model FIRST so buttons work even if info loading fails
+        self.selected_model = name
         
         try:
             info = self.registry.get_model_info(name)
             meta = info.get("metadata", {})
             config = info.get("config", {})
             
+            # Safely get created date
+            created = meta.get('created', '?')
+            if created and created != '?':
+                created = str(created)[:10]
+            
             self.info_label.setText(f"""
             <b>{name}</b><br>
             Size: {info['registry'].get('size', '?')}<br>
-            Created: {meta.get('created', '?')[:10]}<br>
+            Created: {created}<br>
             Last trained: {meta.get('last_trained', 'Never')}<br>
             Epochs: {meta.get('total_epochs', 0)}<br>
             Parameters: {meta.get('estimated_parameters', '?'):,}<br>
             Checkpoints: {len(info.get('checkpoints', []))}
             """)
-            
-            self.selected_model = name
         except Exception as e:
-            self.info_label.setText(f"Error loading info: {e}")
+            self.info_label.setText(f"<b>{name}</b><br>Error loading details: {e}")
     
     def _on_new_model(self):
         wizard = SetupWizard(self.registry, self)
@@ -1066,10 +1113,160 @@ class ModelManagerDialog(QDialog):
             if reply2 == QMessageBox.Yes:
                 try:
                     self.registry.delete_model(self.selected_model, confirm=True)
+                    delattr(self, 'selected_model')  # Clear selection after delete
                     self._refresh_list()
+                    self.info_label.setText("Select a model to see details")
                     QMessageBox.information(self, "Deleted", "Model deleted.")
                 except Exception as e:
                     QMessageBox.warning(self, "Error", str(e))
+    
+    def _on_open_folder(self):
+        """Open the model's folder in file explorer."""
+        if not hasattr(self, 'selected_model'):
+            QMessageBox.warning(self, "No Selection", "Select a model first")
+            return
+        
+        # Get model folder path
+        from ..config import CONFIG
+        model_folder = Path(CONFIG['models_dir']) / self.selected_model
+        
+        if not model_folder.exists():
+            QMessageBox.warning(self, "Not Found", f"Model folder not found:\n{model_folder}")
+            return
+        
+        # Open in file explorer
+        import os
+        import platform
+        import subprocess
+        
+        try:
+            if platform.system() == "Windows":
+                os.startfile(str(model_folder))
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", str(model_folder)])
+            else:  # Linux
+                subprocess.run(["xdg-open", str(model_folder)])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not open folder: {e}")
+    
+    def _on_clone(self):
+        """Clone the selected model to create a new model (e.g., for a new character)."""
+        if not hasattr(self, 'selected_model'):
+            QMessageBox.warning(self, "No Selection", "Select a model first")
+            return
+        
+        # Check if model still exists
+        if self.selected_model not in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists.")
+            delattr(self, 'selected_model')
+            self._refresh_list()
+            return
+        
+        # Get new name
+        from PyQt5.QtWidgets import QInputDialog
+        new_name, ok = QInputDialog.getText(
+            self, "Clone Model",
+            f"Enter name for the cloned model:\n(Clone of '{self.selected_model}')",
+            text=f"{self.selected_model}_clone"
+        )
+        
+        if not ok or not new_name.strip():
+            return
+        
+        new_name = new_name.strip()
+        
+        # Validate name
+        if new_name in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Name Exists", f"A model named '{new_name}' already exists.")
+            return
+        
+        # Clone the model folder
+        from ..config import CONFIG
+        src_folder = Path(CONFIG['models_dir']) / self.selected_model
+        dst_folder = Path(CONFIG['models_dir']) / new_name
+        
+        try:
+            shutil.copytree(src_folder, dst_folder)
+            
+            # Register the new model
+            old_info = self.registry.registry["models"][self.selected_model].copy()
+            self.registry.registry["models"][new_name] = old_info
+            self.registry._save_registry()
+            
+            # Update metadata in the cloned model
+            metadata_path = dst_folder / "metadata.json"
+            if metadata_path.exists():
+                import json
+                with open(metadata_path, 'r') as f:
+                    meta = json.load(f)
+                meta["cloned_from"] = self.selected_model
+                meta["created"] = datetime.now().isoformat()
+                with open(metadata_path, 'w') as f:
+                    json.dump(meta, f, indent=2)
+            
+            self._refresh_list()
+            QMessageBox.information(
+                self, "Clone Complete",
+                f"Model '{self.selected_model}' cloned to '{new_name}'!\n\n"
+                f"You can now train '{new_name}' with character-specific data\n"
+                f"without affecting the original model."
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Clone Failed", str(e))
+    
+    def _on_rename(self):
+        """Rename the selected model."""
+        if not hasattr(self, 'selected_model'):
+            QMessageBox.warning(self, "No Selection", "Select a model first")
+            return
+        
+        # Check if model still exists
+        if self.selected_model not in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists.")
+            delattr(self, 'selected_model')
+            self._refresh_list()
+            return
+        
+        # Get new name
+        from PyQt5.QtWidgets import QInputDialog
+        new_name, ok = QInputDialog.getText(
+            self, "Rename Model",
+            f"Enter new name for '{self.selected_model}':",
+            text=self.selected_model
+        )
+        
+        if not ok or not new_name.strip():
+            return
+        
+        new_name = new_name.strip()
+        
+        # Check if same name
+        if new_name == self.selected_model:
+            return
+        
+        # Validate name
+        if new_name in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Name Exists", f"A model named '{new_name}' already exists.")
+            return
+        
+        # Rename the model folder
+        from ..config import CONFIG
+        old_folder = Path(CONFIG['models_dir']) / self.selected_model
+        new_folder = Path(CONFIG['models_dir']) / new_name
+        
+        try:
+            old_folder.rename(new_folder)
+            
+            # Update registry
+            old_info = self.registry.registry["models"].pop(self.selected_model)
+            self.registry.registry["models"][new_name] = old_info
+            self.registry._save_registry()
+            
+            self.selected_model = new_name
+            self._refresh_list()
+            QMessageBox.information(self, "Renamed", f"Model renamed to '{new_name}'")
+        except Exception as e:
+            QMessageBox.warning(self, "Rename Failed", str(e))
     
     def _show_size_dialog(self, title, sizes, message):
         dialog = QDialog(self)
@@ -1113,6 +1310,9 @@ class EnhancedMainWindow(QMainWindow):
         # Initialize toggle states
         self.auto_speak = False
         self.microphone_enabled = False
+        
+        # Initialize chat state
+        self.chat_messages = []
         
         # Training lock to prevent concurrent training
         self._is_training = False
@@ -1299,6 +1499,7 @@ class EnhancedMainWindow(QMainWindow):
             create_vision_tab, create_sessions_tab, create_instructions_tab,
             create_terminal_tab
         )
+        from .tabs.settings_tab import create_settings_tab
         
         # Main tabs
         tabs = QTabWidget()
@@ -1310,6 +1511,7 @@ class EnhancedMainWindow(QMainWindow):
         tabs.addTab(create_terminal_tab(self), "Terminal")
         tabs.addTab(create_sessions_tab(self), "History")
         tabs.addTab(create_instructions_tab(self), "Files")
+        tabs.addTab(create_settings_tab(self), "Settings")
         
         self.setCentralWidget(tabs)
     
@@ -1502,20 +1704,20 @@ class EnhancedMainWindow(QMainWindow):
         analysis.append(f"Image size: {self._last_screenshot.size[0]}x{self._last_screenshot.size[1]}")
         
         if ocr_text:
-            analysis.append(f"\\nDetected text:\\n{ocr_text}")
+            analysis.append(f"\nDetected text:\n{ocr_text}")
         else:
-            analysis.append("\\nNo text detected in image.")
+            analysis.append("\nNo text detected in image.")
         
         # If AI is available, get description
         if self.engine:
             try:
                 prompt = "Describe what you might see in a screenshot or image."
                 # Note: Real vision would need multi-modal model
-                analysis.append(f"\\n(AI vision analysis requires multi-modal model)")
+                analysis.append(f"\n(AI vision analysis requires multi-modal model)")
             except:
                 pass
         
-        self.vision_text.setPlainText("\\n".join(analysis))
+        self.vision_text.setPlainText("\n".join(analysis))
     
     def _capture_screen(self):
         """Capture screen and display it. Uses scrot on Linux (Wayland/Pi friendly)."""
@@ -1968,7 +2170,7 @@ class EnhancedMainWindow(QMainWindow):
         
         filepath = self.data_file_combo.itemData(index)
         if filepath and Path(filepath).exists():
-            self.data_editor.setPlainText(Path(filepath).read_text())
+            self.data_editor.setPlainText(Path(filepath).read_text(encoding='utf-8', errors='replace'))
             self._current_data_file = filepath
             self.training_data_path = filepath  # Auto-set for training
     
@@ -1979,7 +2181,7 @@ class EnhancedMainWindow(QMainWindow):
             return
         
         try:
-            Path(self._current_data_file).write_text(self.data_editor.toPlainText())
+            Path(self._current_data_file).write_text(self.data_editor.toPlainText(), encoding='utf-8')
             QMessageBox.information(self, "Saved", "File saved!")
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to save: {e}")
@@ -2184,6 +2386,19 @@ class EnhancedMainWindow(QMainWindow):
         
         try:
             response = self.engine.generate(text, max_gen=50)
+            
+            # Strip the prompt from the response (model returns prompt + generated)
+            if response.startswith(text):
+                response = response[len(text):].strip()
+            
+            # Also handle common Q:/A: patterns
+            if response.startswith(":"):
+                response = response[1:].strip()
+            
+            # If response is empty after stripping, the model might not have learned well
+            if not response:
+                response = "(No response generated - model may need more training)"
+            
             self.chat_display.append(f"<b>{self.current_model_name}:</b> {response}")
             self.last_response = response
             
@@ -2273,13 +2488,8 @@ class EnhancedMainWindow(QMainWindow):
             QMessageBox.warning(self, "No Model", "No model loaded")
             return
         
-        # Save training file first if editor exists
-        if hasattr(self, 'training_editor') and hasattr(self, '_current_training_file'):
-            try:
-                content = self.training_editor.toPlainText()
-                Path(self._current_training_file).write_text(content)
-            except:
-                pass
+        # DON'T auto-save editor - it might overwrite good data with truncated content
+        # User should explicitly click Save if they want to save editor changes
         
         if not hasattr(self, 'training_data_path') or not self.training_data_path:
             QMessageBox.warning(self, "No Data", "Select a training file first.")

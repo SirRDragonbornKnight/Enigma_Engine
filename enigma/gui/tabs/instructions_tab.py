@@ -182,7 +182,7 @@ def _load_instructions_file(parent, index):
     
     filepath = parent.instructions_file_combo.itemData(index)
     if filepath and Path(filepath).exists():
-        parent.instructions_editor.setPlainText(Path(filepath).read_text())
+        parent.instructions_editor.setPlainText(Path(filepath).read_text(encoding='utf-8', errors='replace'))
         parent._current_instructions_file = filepath
 
 
@@ -193,7 +193,7 @@ def _save_instructions_file(parent):
         return
     
     try:
-        Path(parent._current_instructions_file).write_text(parent.instructions_editor.toPlainText())
+        Path(parent._current_instructions_file).write_text(parent.instructions_editor.toPlainText(), encoding='utf-8')
         QMessageBox.information(parent, "Saved", "File saved successfully!")
     except Exception as e:
         QMessageBox.warning(parent, "Error", f"Failed to save: {e}")

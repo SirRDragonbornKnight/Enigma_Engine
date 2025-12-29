@@ -188,10 +188,28 @@ class EnigmaTrainer:
             self.device = torch.device(device)
         elif torch.cuda.is_available():
             self.device = torch.device("cuda")
+            # Apply GPU memory limit from resource settings
+            gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
+            try:
+                torch.cuda.set_per_process_memory_fraction(gpu_fraction)
+            except:
+                pass  # Older PyTorch versions may not support this
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             self.device = torch.device("mps")
         else:
             self.device = torch.device("cpu")
+        
+        # Apply CPU thread limit from resource settings
+        cpu_threads = CONFIG.get("cpu_threads", 0)
+        if cpu_threads > 0:
+            torch.set_num_threads(cpu_threads)
+        
+        # Print device info
+        print(f"[Training] Device: {self.device}")
+        if self.device.type == "cuda":
+            print(f"[Training] GPU: {torch.cuda.get_device_name(0)}")
+            print(f"[Training] GPU Memory: {torch.cuda.get_device_properties(0).total_memory // 1024**2} MB")
+        print(f"[Training] CPU Threads: {torch.get_num_threads()}")
         
         # Mixed precision setup
         self.use_amp = use_amp and self.device.type == "cuda"

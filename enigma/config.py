@@ -47,6 +47,14 @@ CONFIG = {
     # Multi-model support
     "allow_multiple_models": True,      # Allow running multiple AIs at once
     "max_concurrent_models": 4,         # Maximum number of models to run
+    
+    # === RESOURCE LIMITING ===
+    # Use these to limit CPU/RAM so you can run other apps (like games!)
+    "resource_mode": "balanced",        # "minimal", "balanced", "performance", "max"
+    "cpu_threads": 0,                   # 0 = auto, or set specific number (1-16)
+    "memory_limit_mb": 0,               # 0 = no limit, or set max MB for AI
+    "gpu_memory_fraction": 0.5,         # 0.0-1.0, how much GPU memory to use
+    "low_priority": False,              # Run AI at lower process priority
 }
 
 # =============================================================================
