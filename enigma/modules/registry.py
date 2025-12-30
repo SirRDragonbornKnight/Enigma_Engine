@@ -405,7 +405,31 @@ class GUIModule(Module):
 # AI Generation Modules (Addons integrated into module system)
 # =============================================================================
 
-class ImageGenLocalModule(Module):
+class GenerationModule(Module):
+    """Base class for generation modules that wrap addons."""
+    
+    def __init__(self, manager, config=None):
+        super().__init__(manager, config)
+        self._addon = None
+    
+    def unload(self) -> bool:
+        if self._addon:
+            self._addon.unload()
+            self._addon = None
+        return True
+    
+    def generate(self, prompt: str, **kwargs):
+        """Generate content using the wrapped addon."""
+        if not self._addon or not self._addon.is_loaded:
+            raise RuntimeError(f"Module not loaded")
+        return self._addon.generate(prompt, **kwargs)
+    
+    def get_interface(self):
+        """Return the addon for direct access."""
+        return self._addon
+
+
+class ImageGenLocalModule(GenerationModule):
     """Local image generation with Stable Diffusion."""
     
     INFO = ModuleInfo(
@@ -417,6 +441,7 @@ class ImageGenLocalModule(Module):
         requires=[],
         provides=["image_generation"],
         min_vram_mb=6000,
+        requires_gpu=True,
         config_schema={
             "model": {"type": "choice", "options": ["sd-2.1", "sdxl", "sdxl-turbo"], "default": "sd-2.1"},
             "steps": {"type": "int", "min": 1, "max": 100, "default": 30},
@@ -431,14 +456,9 @@ class ImageGenLocalModule(Module):
         except Exception as e:
             logger.warning(f"Could not load local image gen: {e}")
             return False
-    
-    def unload(self) -> bool:
-        if hasattr(self, '_addon') and self._addon:
-            self._addon.unload()
-        return True
 
 
-class ImageGenAPIModule(Module):
+class ImageGenAPIModule(GenerationModule):
     """Cloud image generation via APIs."""
     
     INFO = ModuleInfo(
@@ -471,7 +491,7 @@ class ImageGenAPIModule(Module):
             return False
 
 
-class CodeGenLocalModule(Module):
+class CodeGenLocalModule(GenerationModule):
     """Local code generation using Enigma model."""
     
     INFO = ModuleInfo(
@@ -498,7 +518,7 @@ class CodeGenLocalModule(Module):
             return False
 
 
-class CodeGenAPIModule(Module):
+class CodeGenAPIModule(GenerationModule):
     """Cloud code generation via OpenAI."""
     
     INFO = ModuleInfo(
@@ -525,7 +545,7 @@ class CodeGenAPIModule(Module):
             return False
 
 
-class VideoGenLocalModule(Module):
+class VideoGenLocalModule(GenerationModule):
     """Local video generation with AnimateDiff."""
     
     INFO = ModuleInfo(
@@ -537,6 +557,7 @@ class VideoGenLocalModule(Module):
         requires=[],
         provides=["video_generation"],
         min_vram_mb=12000,
+        requires_gpu=True,
         config_schema={
             "fps": {"type": "int", "min": 4, "max": 30, "default": 8},
             "duration": {"type": "float", "min": 1, "max": 10, "default": 4},
@@ -553,7 +574,7 @@ class VideoGenLocalModule(Module):
             return False
 
 
-class VideoGenAPIModule(Module):
+class VideoGenAPIModule(GenerationModule):
     """Cloud video generation via Replicate."""
     
     INFO = ModuleInfo(
@@ -580,7 +601,7 @@ class VideoGenAPIModule(Module):
             return False
 
 
-class AudioGenLocalModule(Module):
+class AudioGenLocalModule(GenerationModule):
     """Local audio/TTS generation."""
     
     INFO = ModuleInfo(
@@ -607,7 +628,7 @@ class AudioGenLocalModule(Module):
             return False
 
 
-class AudioGenAPIModule(Module):
+class AudioGenAPIModule(GenerationModule):
     """Cloud audio generation via ElevenLabs/Replicate."""
     
     INFO = ModuleInfo(
@@ -640,7 +661,7 @@ class AudioGenAPIModule(Module):
             return False
 
 
-class EmbeddingLocalModule(Module):
+class EmbeddingLocalModule(GenerationModule):
     """Local embedding generation with sentence-transformers."""
     
     INFO = ModuleInfo(
@@ -666,7 +687,7 @@ class EmbeddingLocalModule(Module):
             return False
 
 
-class EmbeddingAPIModule(Module):
+class EmbeddingAPIModule(GenerationModule):
     """Cloud embeddings via OpenAI."""
     
     INFO = ModuleInfo(
