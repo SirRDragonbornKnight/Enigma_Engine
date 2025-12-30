@@ -34,6 +34,7 @@ class ModuleCategory(Enum):
     INTERFACE = "interface"
     PERCEPTION = "perception"
     OUTPUT = "output"
+    GENERATION = "generation"  # AI generation: images, code, video, audio
     TOOLS = "tools"
     NETWORK = "network"
     EXTENSION = "extension"

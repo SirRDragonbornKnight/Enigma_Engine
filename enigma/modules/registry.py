@@ -402,23 +402,340 @@ class GUIModule(Module):
 
 
 # =============================================================================
+# AI Generation Modules (Addons integrated into module system)
+# =============================================================================
+
+class ImageGenLocalModule(Module):
+    """Local image generation with Stable Diffusion."""
+    
+    INFO = ModuleInfo(
+        id="image_gen_local",
+        name="Image Generation (Local)",
+        description="Generate images locally with Stable Diffusion. Requires GPU with 8GB+ VRAM.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["image_generation"],
+        min_vram_mb=6000,
+        config_schema={
+            "model": {"type": "choice", "options": ["sd-2.1", "sdxl", "sdxl-turbo"], "default": "sd-2.1"},
+            "steps": {"type": "int", "min": 1, "max": 100, "default": 30},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import StableDiffusionLocal
+            self._addon = StableDiffusionLocal()
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load local image gen: {e}")
+            return False
+    
+    def unload(self) -> bool:
+        if hasattr(self, '_addon') and self._addon:
+            self._addon.unload()
+        return True
+
+
+class ImageGenAPIModule(Module):
+    """Cloud image generation via APIs."""
+    
+    INFO = ModuleInfo(
+        id="image_gen_api",
+        name="Image Generation (Cloud)",
+        description="Generate images via OpenAI DALL-E or Replicate (SDXL, Flux). Requires API key.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["image_generation"],
+        config_schema={
+            "provider": {"type": "choice", "options": ["openai", "replicate"], "default": "openai"},
+            "model": {"type": "string", "default": "dall-e-3"},
+            "api_key": {"type": "secret", "default": ""},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            provider = self.config.get('provider', 'openai')
+            if provider == 'openai':
+                from enigma.addons.builtin import OpenAIImage
+                self._addon = OpenAIImage(api_key=self.config.get('api_key'))
+            else:
+                from enigma.addons.builtin import ReplicateImage
+                self._addon = ReplicateImage(api_key=self.config.get('api_key'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load cloud image gen: {e}")
+            return False
+
+
+class CodeGenLocalModule(Module):
+    """Local code generation using Enigma model."""
+    
+    INFO = ModuleInfo(
+        id="code_gen_local",
+        name="Code Generation (Local)",
+        description="Generate code using your trained Enigma model. Free and private.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=["model", "tokenizer", "inference"],
+        provides=["code_generation"],
+        config_schema={
+            "model_name": {"type": "string", "default": "sacrifice"},
+            "temperature": {"type": "float", "min": 0.1, "max": 1.5, "default": 0.3},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import EnigmaCode
+            self._addon = EnigmaCode(model_name=self.config.get('model_name', 'sacrifice'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load local code gen: {e}")
+            return False
+
+
+class CodeGenAPIModule(Module):
+    """Cloud code generation via OpenAI."""
+    
+    INFO = ModuleInfo(
+        id="code_gen_api",
+        name="Code Generation (Cloud)",
+        description="Generate code via OpenAI GPT-4. High quality, requires API key.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["code_generation"],
+        config_schema={
+            "model": {"type": "choice", "options": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"], "default": "gpt-4"},
+            "api_key": {"type": "secret", "default": ""},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import OpenAICode
+            self._addon = OpenAICode(api_key=self.config.get('api_key'), model=self.config.get('model', 'gpt-4'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load cloud code gen: {e}")
+            return False
+
+
+class VideoGenLocalModule(Module):
+    """Local video generation with AnimateDiff."""
+    
+    INFO = ModuleInfo(
+        id="video_gen_local",
+        name="Video Generation (Local)",
+        description="Generate videos locally with AnimateDiff. Requires powerful GPU.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["video_generation"],
+        min_vram_mb=12000,
+        config_schema={
+            "fps": {"type": "int", "min": 4, "max": 30, "default": 8},
+            "duration": {"type": "float", "min": 1, "max": 10, "default": 4},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import LocalVideo
+            self._addon = LocalVideo()
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load local video gen: {e}")
+            return False
+
+
+class VideoGenAPIModule(Module):
+    """Cloud video generation via Replicate."""
+    
+    INFO = ModuleInfo(
+        id="video_gen_api",
+        name="Video Generation (Cloud)",
+        description="Generate videos via Replicate (Zeroscope, etc). Requires API key.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["video_generation"],
+        config_schema={
+            "model": {"type": "string", "default": "zeroscope"},
+            "api_key": {"type": "secret", "default": ""},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import ReplicateVideo
+            self._addon = ReplicateVideo(api_key=self.config.get('api_key'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load cloud video gen: {e}")
+            return False
+
+
+class AudioGenLocalModule(Module):
+    """Local audio/TTS generation."""
+    
+    INFO = ModuleInfo(
+        id="audio_gen_local",
+        name="Audio/TTS (Local)",
+        description="Local text-to-speech and audio generation. Free, works offline.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["audio_generation", "text_to_speech"],
+        config_schema={
+            "engine": {"type": "choice", "options": ["pyttsx3", "edge-tts"], "default": "pyttsx3"},
+            "voice": {"type": "string", "default": "default"},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import LocalTTS
+            self._addon = LocalTTS()
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load local audio gen: {e}")
+            return False
+
+
+class AudioGenAPIModule(Module):
+    """Cloud audio generation via ElevenLabs/Replicate."""
+    
+    INFO = ModuleInfo(
+        id="audio_gen_api",
+        name="Audio/TTS (Cloud)",
+        description="Premium TTS via ElevenLabs or music via MusicGen. Requires API key.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["audio_generation", "text_to_speech", "music_generation"],
+        config_schema={
+            "provider": {"type": "choice", "options": ["elevenlabs", "replicate"], "default": "elevenlabs"},
+            "api_key": {"type": "secret", "default": ""},
+            "voice": {"type": "string", "default": "Rachel"},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            provider = self.config.get('provider', 'elevenlabs')
+            if provider == 'elevenlabs':
+                from enigma.addons.builtin import ElevenLabsTTS
+                self._addon = ElevenLabsTTS(api_key=self.config.get('api_key'))
+            else:
+                from enigma.addons.builtin import ReplicateAudio
+                self._addon = ReplicateAudio(api_key=self.config.get('api_key'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load cloud audio gen: {e}")
+            return False
+
+
+class EmbeddingLocalModule(Module):
+    """Local embedding generation with sentence-transformers."""
+    
+    INFO = ModuleInfo(
+        id="embedding_local",
+        name="Embeddings (Local)",
+        description="Generate vector embeddings locally for semantic search. Free and private.",
+        category=ModuleCategory.MEMORY,
+        version="1.0.0",
+        requires=[],
+        provides=["embeddings", "semantic_search"],
+        config_schema={
+            "model": {"type": "choice", "options": ["all-MiniLM-L6-v2", "all-mpnet-base-v2"], "default": "all-MiniLM-L6-v2"},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import LocalEmbedding
+            self._addon = LocalEmbedding(model_name=self.config.get('model', 'all-MiniLM-L6-v2'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load local embeddings: {e}")
+            return False
+
+
+class EmbeddingAPIModule(Module):
+    """Cloud embeddings via OpenAI."""
+    
+    INFO = ModuleInfo(
+        id="embedding_api",
+        name="Embeddings (Cloud)",
+        description="High-quality embeddings via OpenAI API. Requires API key.",
+        category=ModuleCategory.MEMORY,
+        version="1.0.0",
+        requires=[],
+        provides=["embeddings", "semantic_search"],
+        config_schema={
+            "model": {"type": "choice", "options": ["text-embedding-3-small", "text-embedding-3-large"], "default": "text-embedding-3-small"},
+            "api_key": {"type": "secret", "default": ""},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import OpenAIEmbedding
+            self._addon = OpenAIEmbedding(api_key=self.config.get('api_key'), model=self.config.get('model'))
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load cloud embeddings: {e}")
+            return False
+
+
+# =============================================================================
 # Module Registry
 # =============================================================================
 
 MODULE_REGISTRY: Dict[str, Type[Module]] = {
+    # Core
     'model': ModelModule,
     'tokenizer': TokenizerModule,
     'training': TrainingModule,
     'inference': InferenceModule,
+    
+    # Memory
     'memory': MemoryModule,
+    'embedding_local': EmbeddingLocalModule,
+    'embedding_api': EmbeddingAPIModule,
+    
+    # Perception
     'voice_input': VoiceInputModule,
-    'voice_output': VoiceOutputModule,
     'vision': VisionModule,
+    
+    # Output
+    'voice_output': VoiceOutputModule,
     'avatar': AvatarModule,
+    
+    # Generation (AI Capabilities)
+    'image_gen_local': ImageGenLocalModule,
+    'image_gen_api': ImageGenAPIModule,
+    'code_gen_local': CodeGenLocalModule,
+    'code_gen_api': CodeGenAPIModule,
+    'video_gen_local': VideoGenLocalModule,
+    'video_gen_api': VideoGenAPIModule,
+    'audio_gen_local': AudioGenLocalModule,
+    'audio_gen_api': AudioGenAPIModule,
+    
+    # Tools
     'web_tools': WebToolsModule,
     'file_tools': FileToolsModule,
+    
+    # Network
     'api_server': APIServerModule,
     'network': NetworkModule,
+    
+    # Interface
     'gui': GUIModule,
 }
 
