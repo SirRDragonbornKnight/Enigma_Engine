@@ -257,10 +257,19 @@ class ModuleManager:
         if info.min_ram_mb > self.hardware_profile['ram_mb']:
             return False, f"Module requires {info.min_ram_mb}MB RAM, only {self.hardware_profile['ram_mb']}MB available"
         
-        # Check conflicts
+        # Check explicit conflicts
         for conflict_id in info.conflicts:
             if conflict_id in self.modules and self.modules[conflict_id].state == ModuleState.LOADED:
                 return False, f"Module conflicts with loaded module '{conflict_id}'"
+        
+        # Check capability conflicts (two modules providing same thing)
+        # e.g., image_gen_local and image_gen_api both provide 'image_generation'
+        for provided in info.provides:
+            for loaded_id, loaded_module in self.modules.items():
+                if loaded_module.state == ModuleState.LOADED:
+                    loaded_info = loaded_module.get_info()
+                    if provided in loaded_info.provides and loaded_id != module_id:
+                        return False, f"Capability '{provided}' already provided by '{loaded_id}'. Unload it first."
         
         # Check dependencies
         for dep_id in info.requires:

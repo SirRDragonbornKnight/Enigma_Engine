@@ -2,35 +2,89 @@
 Enigma Addons System
 ====================
 
-Addons extend Enigma's capabilities beyond text generation.
-Each addon provides a specific AI capability:
+AI generation capabilities integrated with the Enigma module system.
+Enable addons through the Module Manager - each addon is a toggleable module.
 
-- Image Generation (DALL-E, Stable Diffusion, local models)
-- Code Generation (specialized code models)
-- Video Generation (Runway, Pika, local)
-- Audio Generation (music, sound effects)
-- Speech Synthesis (advanced TTS)
-- Translation (multi-language)
-- And any custom capability you want!
+ARCHITECTURE:
+┌─────────────────────────────────────────────────────────────────┐
+│                      MODULE MANAGER                              │
+│  (enigma/modules/manager.py - central control for everything)    │
+├─────────────────────────────────────────────────────────────────┤
+│                      MODULE REGISTRY                             │
+│  (enigma/modules/registry.py - all modules including generation) │
+├─────────────────┬───────────────────────────────────────────────┤
+│  Core Modules   │  Generation Modules (wrap addons below)       │
+│  - model        │  - image_gen_local  → StableDiffusionLocal    │
+│  - tokenizer    │  - image_gen_api    → OpenAIImage/Replicate   │
+│  - training     │  - code_gen_local   → EnigmaCode              │
+│  - inference    │  - code_gen_api     → OpenAICode              │
+│                 │  - video_gen_local  → LocalVideo              │
+│                 │  - video_gen_api    → ReplicateVideo          │
+│                 │  - audio_gen_local  → LocalTTS                │
+│                 │  - audio_gen_api    → ElevenLabsTTS           │
+│                 │  - embedding_local  → LocalEmbedding          │
+│                 │  - embedding_api    → OpenAIEmbedding         │
+├─────────────────┴───────────────────────────────────────────────┤
+│                    ADDON IMPLEMENTATIONS                         │
+│  (enigma/addons/builtin.py - actual AI generation code)          │
+└─────────────────────────────────────────────────────────────────┘
 
-Addons can connect to:
-- Local models (run on your hardware)
-- Remote APIs (OpenAI, Anthropic, Stability, etc.)
-- Custom servers (your own deployments)
-- Other Enigma instances (distributed)
+USAGE:
+    # Through Module Manager (RECOMMENDED - no conflicts):
+    from enigma.modules import ModuleManager
+    
+    manager = ModuleManager()
+    manager.load('image_gen_local')  # Load Stable Diffusion
+    
+    module = manager.get('image_gen_local')
+    result = module.generate("a sunset", width=512, height=512)
+
+ADDON TYPES:
+    - IMAGE: Generate images (Stable Diffusion, DALL-E)
+    - CODE: Generate code (Enigma model, GPT-4)
+    - VIDEO: Generate videos (AnimateDiff, Replicate)
+    - AUDIO: TTS and music (pyttsx3, ElevenLabs, MusicGen)
+    - EMBEDDING: Vector embeddings (sentence-transformers, OpenAI)
+
+LOCAL vs API:
+    - Local: Free, private, needs GPU/hardware
+    - API: Cloud-based, needs API key, pay per use
 """
 
-from .base import Addon, AddonType, AddonProvider, AddonConfig
+from .base import (
+    Addon, AddonType, AddonProvider, AddonConfig, AddonResult,
+    ImageAddon, CodeAddon, VideoAddon, AudioAddon, EmbeddingAddon
+)
 from .manager import AddonManager
-from .registry import ADDON_REGISTRY, register_addon, get_addon
+
+
+def get_builtin_addons():
+    """Get dictionary of all built-in addon classes."""
+    from .builtin import BUILTIN_ADDONS
+    return BUILTIN_ADDONS
+
+
+def get_addon_class(name: str):
+    """Get a specific addon class by name."""
+    from .builtin import BUILTIN_ADDONS
+    return BUILTIN_ADDONS.get(name)
+
+
+def create_addon(name: str, **kwargs):
+    """Create an addon instance by name."""
+    cls = get_addon_class(name)
+    if cls:
+        return cls(**kwargs)
+    raise ValueError(f"Unknown addon: {name}")
+
 
 __all__ = [
-    'Addon',
-    'AddonType',
-    'AddonProvider', 
-    'AddonConfig',
+    # Core
+    'Addon', 'AddonType', 'AddonProvider', 'AddonConfig', 'AddonResult',
+    # Specialized bases
+    'ImageAddon', 'CodeAddon', 'VideoAddon', 'AudioAddon', 'EmbeddingAddon',
+    # Manager
     'AddonManager',
-    'ADDON_REGISTRY',
-    'register_addon',
-    'get_addon',
+    # Helpers
+    'get_builtin_addons', 'get_addon_class', 'create_addon',
 ]
