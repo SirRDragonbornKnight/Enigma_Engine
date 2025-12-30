@@ -183,13 +183,31 @@ def load_tokenizer(tokenizer_type: str = "auto"):
     Load the best available tokenizer.
     
     Args:
-        tokenizer_type: "auto", "character", "simple", or "hf"
-                       - "auto": Best available (character > simple > hf)
+        tokenizer_type: "auto", "bpe", "character", "simple", or "hf"
+                       - "auto": Best available (bpe > character > simple)
+                       - "bpe": Byte Pair Encoding (learns from data)
                        - "character": Full character-level with dictionary
                        - "simple": Basic character + common words
                        - "hf": HuggingFace tokenizer (if available)
     """
-    # Try character tokenizer first (best option)
+    # Try BPE tokenizer first (best option - learns from data)
+    if tokenizer_type in ("auto", "bpe"):
+        try:
+            from .bpe_tokenizer import BPETokenizer
+            bpe_vocab = VOCAB_DIR / "bpe_vocab.json"
+            if bpe_vocab.exists():
+                tok = BPETokenizer(vocab_file=bpe_vocab)
+                return tok
+            elif tokenizer_type == "bpe":
+                # Return untrained BPE tokenizer (user should train it)
+                logger.warning("BPE tokenizer not trained yet. Use train_bpe_tokenizer() first.")
+                return BPETokenizer()
+        except Exception as e:
+            logger.warning(f"Could not load BPE tokenizer: {e}")
+            if tokenizer_type == "bpe":
+                raise
+    
+    # Try character tokenizer (good fallback)
     if tokenizer_type in ("auto", "character"):
         try:
             from .char_tokenizer import CharacterTokenizer

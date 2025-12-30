@@ -2385,13 +2385,26 @@ class EnhancedMainWindow(QMainWindow):
         })
         
         try:
-            response = self.engine.generate(text, max_gen=50)
+            # Format prompt to match training data format (Q: ... A: ...)
+            formatted_prompt = f"Q: {text}\nA:"
+            response = self.engine.generate(formatted_prompt, max_gen=100)
             
             # Strip the prompt from the response (model returns prompt + generated)
-            if response.startswith(text):
+            if response.startswith(formatted_prompt):
+                response = response[len(formatted_prompt):].strip()
+            elif response.startswith(text):
                 response = response[len(text):].strip()
             
-            # Also handle common Q:/A: patterns
+            # Clean up any Q:/A: artifacts in the response
+            # Stop at the next Q: if present (model generating next Q&A pair)
+            if "\nQ:" in response:
+                response = response.split("\nQ:")[0].strip()
+            if "Q:" in response:
+                response = response.split("Q:")[0].strip()
+            
+            # Remove leading A: or : if still present
+            if response.startswith("A:"):
+                response = response[2:].strip()
             if response.startswith(":"):
                 response = response[1:].strip()
             

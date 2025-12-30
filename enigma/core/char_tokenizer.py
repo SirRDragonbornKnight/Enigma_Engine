@@ -32,7 +32,7 @@ class CharacterTokenizer:
     """
     
     def __init__(self, vocab_file: Optional[Path] = None, use_dictionary: bool = True):
-        # Special tokens
+        # Special tokens - includes Q&A format tokens for training
         self.special_tokens = {
             "<pad>": 0,
             "<s>": 1,      # Start of sequence
@@ -43,6 +43,10 @@ class CharacterTokenizer:
             "<mask>": 6,   # Mask for MLM
             "<nl>": 7,     # Newline
             "<tab>": 8,    # Tab
+            "<Q>": 9,      # Question marker
+            "<A>": 10,     # Answer marker
+            "<USER>": 11,  # User turn
+            "<BOT>": 12,   # Bot turn
         }
         
         self.pad_token = "<pad>"
@@ -237,8 +241,11 @@ class CharacterTokenizer:
         if add_special_tokens:
             ids.append(self.special_tokens["<s>"])
         
-        # Handle special characters
+        # Handle special characters and Q&A markers
         text = text.replace('\n', ' <nl> ').replace('\t', ' <tab> ')
+        text = text.replace('Q:', ' <Q> ').replace('A:', ' <A> ')
+        text = text.replace('User:', ' <USER> ').replace('Bot:', ' <BOT> ')
+        text = text.replace('Human:', ' <USER> ').replace('Assistant:', ' <BOT> ')
         
         # Tokenize
         i = 0
@@ -304,6 +311,14 @@ class CharacterTokenizer:
                     tokens.append("\n")
                 elif token == "<tab>":
                     tokens.append("\t")
+                elif token == "<Q>":
+                    tokens.append("Q:")
+                elif token == "<A>":
+                    tokens.append("A:")
+                elif token == "<USER>":
+                    tokens.append("User:")
+                elif token == "<BOT>":
+                    tokens.append("Bot:")
                 else:
                     tokens.append(token)
         
