@@ -1,32 +1,52 @@
 """
-Inference Engine for Enigma Language Model
+Enigma Inference Engine
+=======================
+
+High-performance inference engine for Enigma language models.
 
 Features:
-  - Efficient text generation with KV-cache
+  - Efficient text generation with KV-cache support
   - Multiple sampling strategies (greedy, top-k, top-p, beam search)
+  - Streaming generation for real-time output
   - Batch generation support
-  - Streaming generation
-  - Model quantization support (when available)
-  - Automatic device selection
+  - Chat-style conversation interface
+  - Automatic device selection and optimization
 
-USAGE:
+Usage:
     from enigma.core.inference import EnigmaEngine
     
     engine = EnigmaEngine()
     response = engine.generate("Hello, my name is")
     print(response)
+    
+    # Streaming
+    for token in engine.stream_generate("Tell me a story"):
+        print(token, end="", flush=True)
+    
+    # Chat
+    response = engine.chat("What is AI?")
 """
 import torch
-from typing import Optional, List, Union, Generator
+import torch.nn.functional as F
+from typing import Optional, List, Union, Generator, Dict, Any, Tuple
 from pathlib import Path
+import logging
 
-from .model import Enigma, TinyEnigma  # TinyEnigma is alias for backwards compat
-from .tokenizer import load_tokenizer
+from .model import Enigma, create_model, MODEL_PRESETS
+from .tokenizer import get_tokenizer
 from ..config import CONFIG
 
-MODEL_PATH = Path(CONFIG["models_dir"]) / "enigma.pth"
-LEGACY_PATH = Path(CONFIG["models_dir"]) / "tiny_enigma.pth"  # Backwards compatibility
+logger = logging.getLogger(__name__)
 
+# Default model paths
+MODELS_DIR = Path(CONFIG.get("models_dir", "models"))
+DEFAULT_MODEL = MODELS_DIR / "enigma.pth"
+LEGACY_MODEL = MODELS_DIR / "tiny_enigma.pth"
+
+
+# =============================================================================
+# Inference Engine
+# =============================================================================
 
 class EnigmaEngine:
     """
@@ -34,77 +54,39 @@ class EnigmaEngine:
     
     Features:
     - Automatic model loading and device selection
-    - KV-cache for efficient generation
-    - Multiple sampling strategies
+    - KV-cache for efficient autoregressive generation
+    - Multiple sampling strategies (greedy, top-k, top-p)
     - Streaming generation support
+    - Chat-style conversation interface
     """
     
     def __init__(
         self,
-        model_path: Optional[str] = None,
+        model_path: Optional[Union[str, Path]] = None,
+        tokenizer_path: Optional[Union[str, Path]] = None,
         device: Optional[str] = None,
         use_half: bool = False,
+        model_size: str = "auto"
     ):
         """
         Initialize the inference engine.
         
         Args:
             model_path: Path to model weights (auto-detected if None)
-            device: Device to use (auto-detected if None)
+            tokenizer_path: Path to tokenizer (auto-detected if None)
+            device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
+            model_size: Model size hint if not loading from file
         """
         # Device selection
-        if device is None:
-            if torch.cuda.is_available():
-                self.device = torch.device("cuda")
-                # Apply GPU memory limit from resource settings
-                gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
-                try:
-                    torch.cuda.set_per_process_memory_fraction(gpu_fraction)
-                except:
-                    pass  # Older PyTorch versions may not support this
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                self.device = torch.device("mps")
-            else:
-                self.device = torch.device("cpu")
-        else:
-            self.device = torch.device(device)
-        
-        # Apply CPU thread limit from resource settings
-        cpu_threads = CONFIG.get("cpu_threads", 0)
-        if cpu_threads > 0:
-            torch.set_num_threads(cpu_threads)
-        
+        self.device = self._select_device(device)
         self.use_half = use_half and self.device.type == "cuda"
         
         # Load tokenizer
-        self.tokenizer = load_tokenizer()
-        vocab_size = getattr(self.tokenizer, "vocab_size", 32000)
+        self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)
         
-        # Initialize model with better defaults
-        self.model = Enigma(
-            vocab_size=vocab_size,
-            dim=CONFIG.get("embed_dim", 256),
-            depth=CONFIG.get("depth", 6),
-            heads=CONFIG.get("heads", 8),
-            max_len=CONFIG.get("max_len", 2048),
-        )
-        
-        # Load weights if available
-        model_file = Path(model_path) if model_path else None
-        if model_file is None:
-            if MODEL_PATH.exists():
-                model_file = MODEL_PATH
-            elif LEGACY_PATH.exists():
-                model_file = LEGACY_PATH
-        
-        if model_file and model_file.exists():
-            try:
-                state_dict = torch.load(model_file, map_location=self.device, weights_only=True)
-                self.model.load_state_dict(state_dict, strict=False)
-                print(f"Loaded model from {model_file}")
-            except Exception as e:
-                print(f"Warning: Could not load weights from {model_file}: {e}")
+        # Load or create model
+        self.model = self._load_model(model_path, model_size)
         
         # Move to device and set precision
         self.model.to(self.device)
@@ -112,23 +94,173 @@ class EnigmaEngine:
             self.model.half()
         self.model.eval()
         
-        # Print device info
+        # Log initialization
+        self._log_init_info()
+    
+    def _select_device(self, device: Optional[str]) -> torch.device:
+        """Select the best available device."""
+        if device is not None:
+            return torch.device(device)
+        
+        if torch.cuda.is_available():
+            # Apply GPU memory limit from config
+            gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
+            try:
+                torch.cuda.set_per_process_memory_fraction(gpu_fraction)
+            except:
+                pass
+            return torch.device("cuda")
+        
+        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return torch.device("mps")
+        
+        # Apply CPU thread limit from config
+        cpu_threads = CONFIG.get("cpu_threads", 0)
+        if cpu_threads > 0:
+            torch.set_num_threads(cpu_threads)
+        
+        return torch.device("cpu")
+    
+    def _load_tokenizer(
+        self, 
+        tokenizer_path: Optional[Union[str, Path]],
+        model_path: Optional[Union[str, Path]]
+    ) -> Any:
+        """Load the tokenizer."""
+        # Try to load tokenizer saved with model
+        if model_path:
+            model_path = Path(model_path)
+            tok_path = model_path.parent / f"{model_path.stem}_tokenizer.json"
+            if tok_path.exists():
+                try:
+                    from .advanced_tokenizer import AdvancedBPETokenizer
+                    return AdvancedBPETokenizer(vocab_file=tok_path)
+                except Exception as e:
+                    logger.warning(f"Could not load tokenizer from {tok_path}: {e}")
+        
+        # Try explicit tokenizer path
+        if tokenizer_path:
+            try:
+                from .advanced_tokenizer import AdvancedBPETokenizer
+                return AdvancedBPETokenizer(vocab_file=Path(tokenizer_path))
+            except Exception as e:
+                logger.warning(f"Could not load tokenizer from {tokenizer_path}: {e}")
+        
+        # Fall back to default
+        return get_tokenizer()
+    
+    def _load_model(
+        self, 
+        model_path: Optional[Union[str, Path]],
+        model_size: str
+    ) -> Enigma:
+        """Load or create the model."""
+        # Find model file
+        model_file = None
+        if model_path:
+            model_file = Path(model_path)
+        elif DEFAULT_MODEL.exists():
+            model_file = DEFAULT_MODEL
+        elif LEGACY_MODEL.exists():
+            model_file = LEGACY_MODEL
+        else:
+            # Look for any .pth file in models dir
+            for f in MODELS_DIR.glob("*.pth"):
+                model_file = f
+                break
+        
+        vocab_size = getattr(self.tokenizer, "vocab_size", 8000)
+        
+        if model_file and model_file.exists():
+            # Load state dict to infer model architecture
+            state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
+            
+            # Infer model size from state dict
+            detected_size = self._infer_model_size(state_dict)
+            
+            # Get vocab size from embedding
+            for key in state_dict.keys():
+                if 'embed' in key.lower() or 'token' in key.lower():
+                    vocab_size = state_dict[key].shape[0]
+                    break
+            
+            # Create model with correct architecture
+            model = create_model(
+                detected_size,
+                vocab_size=vocab_size
+            )
+            
+            # Load weights
+            try:
+                model.load_state_dict(state_dict, strict=False)
+                logger.info(f"Loaded model from {model_file}")
+            except Exception as e:
+                logger.warning(f"Could not load weights: {e}")
+        else:
+            # Create new model
+            if model_size == "auto":
+                model_size = "small"
+            
+            model = create_model(model_size, vocab_size=vocab_size)
+            logger.info(f"Created new {model_size} model (no weights loaded)")
+        
+        return model
+    
+    def _infer_model_size(self, state_dict: Dict) -> str:
+        """Infer model size from state dict."""
+        # Look for hidden dimension
+        hidden_dim = None
+        for key, tensor in state_dict.items():
+            if 'embed' in key.lower() and tensor.dim() == 2:
+                hidden_dim = tensor.shape[1]
+                break
+            if 'ln' in key.lower() or 'norm' in key.lower():
+                hidden_dim = tensor.shape[0]
+                break
+        
+        if hidden_dim is None:
+            return "small"
+        
+        # Match to preset - MODEL_PRESETS values are dicts with 'hidden_dim' key
+        for name, preset in MODEL_PRESETS.items():
+            preset_dim = preset.get('hidden_dim') if isinstance(preset, dict) else getattr(preset, 'hidden_dim', None)
+            if preset_dim == hidden_dim:
+                return name
+        
+        # Find closest match
+        def get_dim(preset):
+            return preset.get('hidden_dim') if isinstance(preset, dict) else getattr(preset, 'hidden_dim', 512)
+        
+        diffs = [(name, abs(get_dim(preset) - hidden_dim)) 
+                 for name, preset in MODEL_PRESETS.items()]
+        return min(diffs, key=lambda x: x[1])[0]
+    
+    def _log_init_info(self):
+        """Log initialization information."""
+        num_params = sum(p.numel() for p in self.model.parameters())
+        
         print(f"EnigmaEngine initialized on {self.device}")
         if self.device.type == "cuda":
-            print(f"GPU: {torch.cuda.get_device_name(0)}")
-        print(f"CPU Threads: {torch.get_num_threads()}")
-        print(f"Model parameters: {self.model.num_parameters:,}")
+            print(f"  GPU: {torch.cuda.get_device_name(0)}")
+        print(f"  Model parameters: {num_params:,}")
+        print(f"  Vocab size: {self.tokenizer.vocab_size:,}")
+        print(f"  Max sequence length: {self.model.config.max_seq_len}")
+        print(f"  FP16: {self.use_half}")
+    
+    # =========================================================================
+    # Generation Methods
+    # =========================================================================
     
     def generate(
         self,
         prompt: str,
-        max_gen: int = 50,
+        max_gen: int = 100,
         temperature: float = 0.8,
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
         stop_strings: Optional[List[str]] = None,
-        use_cache: bool = False,  # Disabled - standard model doesn't support KV cache
+        use_cache: bool = True
     ) -> str:
         """
         Generate text from a prompt.
@@ -141,46 +273,36 @@ class EnigmaEngine:
             top_p: Top-p (nucleus) sampling threshold
             repetition_penalty: Penalty for repeating tokens
             stop_strings: List of strings to stop generation at
-            use_cache: Use KV-cache for faster generation (requires compatible model)
+            use_cache: Use KV-cache for faster generation
             
         Returns:
-            Generated text including the original prompt
+            Generated text (including the prompt)
         """
         # Encode input
-        enc = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=self.model.max_len)
-        input_ids = enc["input_ids"]
-        
-        if isinstance(input_ids, list):
-            input_ids = torch.tensor(input_ids, dtype=torch.long)
-        
-        # Ensure 2D: (batch, seq_len)
-        if input_ids.dim() == 1:
-            input_ids = input_ids.unsqueeze(0)
-        
-        input_ids = input_ids.to(self.device).long()
+        input_ids = self._encode_prompt(prompt)
         
         # Generate
         with torch.no_grad():
-            if use_cache:
-                output_ids = self._generate_with_cache(
-                    input_ids, max_gen, temperature, top_k, top_p, repetition_penalty
+            if use_cache and hasattr(self.model, 'generate'):
+                # Use model's built-in generate
+                output_ids = self.model.generate(
+                    input_ids,
+                    max_new_tokens=max_gen,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty
                 )
             else:
-                output_ids = self._generate_simple(
+                # Manual generation
+                output_ids = self._generate_manual(
                     input_ids, max_gen, temperature, top_k, top_p, repetition_penalty
                 )
         
         # Decode
-        try:
-            text = self.tokenizer.decode(output_ids[0].cpu().numpy(), skip_special_tokens=True)
-        except Exception:
-            # Fallback for simple tokenizers
-            text = "".join(
-                self.tokenizer.id_to_char.get(int(idx), "?")
-                for idx in output_ids[0].cpu().numpy()
-            )
+        text = self._decode_output(output_ids)
         
-        # Check for stop strings
+        # Apply stop strings
         if stop_strings:
             for stop_str in stop_strings:
                 if stop_str in text:
@@ -189,66 +311,74 @@ class EnigmaEngine:
         
         return text
     
-    def _generate_with_cache(
-        self,
-        input_ids: torch.Tensor,
-        max_gen: int,
-        temperature: float,
-        top_k: int,
-        top_p: float,
-        repetition_penalty: float,
-    ) -> torch.Tensor:
-        """Generate with KV-cache for efficiency."""
-        generated = input_ids
-        kv_cache = None
+    def _encode_prompt(self, prompt: str) -> torch.Tensor:
+        """Encode a prompt to tensor."""
+        if hasattr(self.tokenizer, 'encode'):
+            ids = self.tokenizer.encode(prompt, add_special_tokens=True)
+        else:
+            enc = self.tokenizer(prompt, return_tensors="pt")
+            ids = enc["input_ids"]
+            if hasattr(ids, 'tolist'):
+                ids = ids.tolist()
+            if isinstance(ids[0], list):
+                ids = ids[0]
         
-        for _ in range(max_gen):
-            if kv_cache is not None:
-                curr_input = generated[:, -1:]
-            else:
-                curr_input = generated
-            
-            output = self.model(curr_input, kv_cache=kv_cache, use_cache=True)
-            if isinstance(output, tuple):
-                logits, kv_cache = output
-            else:
-                logits = output
-                kv_cache = None
-            
-            next_token = self._sample_token(
-                logits[:, -1, :], generated, temperature, top_k, top_p, repetition_penalty
-            )
-            generated = torch.cat([generated, next_token], dim=1)
-        
-        return generated
+        # Convert to tensor
+        input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
+        return input_ids
     
-    def _generate_simple(
+    def _decode_output(self, output_ids: torch.Tensor) -> str:
+        """Decode output tensor to text."""
+        ids = output_ids[0].cpu().tolist()
+        
+        if hasattr(self.tokenizer, 'decode'):
+            return self.tokenizer.decode(ids, skip_special_tokens=True)
+        
+        # Fallback
+        return "".join(
+            self.tokenizer.id_to_token.get(idx, "?")
+            for idx in ids
+        )
+    
+    def _generate_manual(
         self,
         input_ids: torch.Tensor,
         max_gen: int,
         temperature: float,
         top_k: int,
         top_p: float,
-        repetition_penalty: float,
+        repetition_penalty: float
     ) -> torch.Tensor:
-        """Generate without cache (simpler, slightly slower)."""
+        """Manual autoregressive generation."""
         generated = input_ids
         
         for _ in range(max_gen):
+            # Truncate if needed
             curr_input = generated
-            if curr_input.shape[1] > self.model.max_len:
-                curr_input = curr_input[:, -self.model.max_len:]
+            max_len = self.model.config.max_seq_len
+            if curr_input.shape[1] > max_len:
+                curr_input = curr_input[:, -max_len:]
             
-            output = self.model(curr_input)
-            if isinstance(output, tuple):
-                logits = output[0]
-            else:
-                logits = output
+            # Forward pass
+            logits = self.model(curr_input)
             
+            # Sample next token
             next_token = self._sample_token(
-                logits[:, -1, :], generated, temperature, top_k, top_p, repetition_penalty
+                logits[:, -1, :],
+                generated,
+                temperature,
+                top_k,
+                top_p,
+                repetition_penalty
             )
+            
+            # Append
             generated = torch.cat([generated, next_token], dim=1)
+            
+            # Check for EOS
+            eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
+            if next_token[0, 0].item() == eos_id:
+                break
         
         return generated
     
@@ -259,93 +389,123 @@ class EnigmaEngine:
         temperature: float,
         top_k: int,
         top_p: float,
-        repetition_penalty: float,
+        repetition_penalty: float
     ) -> torch.Tensor:
         """Sample next token with various strategies."""
         # Apply repetition penalty
         if repetition_penalty != 1.0:
             for token_id in set(generated[0].tolist()):
-                logits[0, token_id] /= repetition_penalty
+                if 0 <= token_id < logits.shape[-1]:
+                    logits[0, token_id] /= repetition_penalty
         
         # Temperature scaling
         logits = logits / max(temperature, 1e-8)
         
         # Top-k filtering
         if top_k > 0:
-            indices_to_remove = logits < torch.topk(logits, min(top_k, logits.size(-1)))[0][..., -1, None]
-            logits = logits.masked_fill(indices_to_remove, float('-inf'))
+            top_k = min(top_k, logits.size(-1))
+            values, _ = torch.topk(logits, top_k)
+            min_value = values[:, -1, None]
+            logits = torch.where(logits < min_value, float('-inf'), logits)
         
         # Top-p (nucleus) filtering
         if top_p < 1.0:
             sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-            cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+            
+            # Remove tokens with cumulative probability above threshold
             sorted_indices_to_remove = cumulative_probs > top_p
-            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-            sorted_indices_to_remove[..., 0] = 0
-            indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+            sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
+            sorted_indices_to_remove[:, 0] = False
+            
+            indices_to_remove = torch.zeros_like(logits, dtype=torch.bool)
+            indices_to_remove.scatter_(1, sorted_indices, sorted_indices_to_remove)
             logits = logits.masked_fill(indices_to_remove, float('-inf'))
         
         # Sample
-        probs = torch.softmax(logits, dim=-1)
+        probs = F.softmax(logits, dim=-1)
         return torch.multinomial(probs, num_samples=1)
+    
+    # =========================================================================
+    # Streaming Generation
+    # =========================================================================
     
     def stream_generate(
         self,
         prompt: str,
-        max_gen: int = 50,
+        max_gen: int = 100,
         temperature: float = 0.8,
-        **kwargs,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.1
     ) -> Generator[str, None, None]:
         """
         Stream generated tokens one at a time.
         
+        Args:
+            prompt: Input text to continue
+            max_gen: Maximum tokens to generate
+            temperature: Sampling temperature
+            top_k: Top-k sampling
+            top_p: Top-p sampling
+            repetition_penalty: Repetition penalty
+            
         Yields:
             Each newly generated token as it's produced
         """
-        enc = self.tokenizer(prompt, return_tensors="pt")
-        input_ids = enc["input_ids"]
-        
-        if isinstance(input_ids, list):
-            input_ids = torch.tensor(input_ids, dtype=torch.long)
-        
-        # Ensure 2D: (batch, seq_len)
-        if input_ids.dim() == 1:
-            input_ids = input_ids.unsqueeze(0)
-        
-        input_ids = input_ids.to(self.device).long()
+        input_ids = self._encode_prompt(prompt)
         generated = input_ids
         
         with torch.no_grad():
             for _ in range(max_gen):
-                # Always use full sequence (no KV cache in standard model)
-                logits = self.model(generated)
+                # Truncate if needed
+                curr_input = generated
+                max_len = self.model.config.max_seq_len
+                if curr_input.shape[1] > max_len:
+                    curr_input = curr_input[:, -max_len:]
                 
+                # Forward pass
+                logits = self.model(curr_input)
+                
+                # Sample
                 next_token = self._sample_token(
                     logits[:, -1, :],
                     generated,
                     temperature,
-                    kwargs.get("top_k", 50),
-                    kwargs.get("top_p", 0.9),
-                    kwargs.get("repetition_penalty", 1.1),
+                    top_k,
+                    top_p,
+                    repetition_penalty
                 )
+                
                 generated = torch.cat([generated, next_token], dim=1)
                 
-                # Decode and yield the new token
-                try:
-                    token_str = self.tokenizer.decode([int(next_token[0, 0])], skip_special_tokens=True)
-                except Exception:
-                    token_str = self.tokenizer.id_to_char.get(int(next_token[0, 0]), "")
+                # Decode and yield
+                token_id = next_token[0, 0].item()
+                
+                if hasattr(self.tokenizer, 'decode'):
+                    token_str = self.tokenizer.decode([token_id], skip_special_tokens=True)
+                else:
+                    token_str = self.tokenizer.id_to_token.get(token_id, "")
                 
                 yield token_str
+                
+                # Check for EOS
+                eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
+                if token_id == eos_id:
+                    break
+    
+    # =========================================================================
+    # Batch Generation
+    # =========================================================================
     
     def batch_generate(
         self,
         prompts: List[str],
-        max_gen: int = 50,
-        **kwargs,
+        max_gen: int = 100,
+        **kwargs
     ) -> List[str]:
         """
-        Generate text for multiple prompts efficiently.
+        Generate text for multiple prompts.
         
         Args:
             prompts: List of input prompts
@@ -355,14 +515,21 @@ class EnigmaEngine:
         Returns:
             List of generated texts
         """
+        # For now, process sequentially
+        # TODO: Implement true batched generation
         return [self.generate(p, max_gen=max_gen, **kwargs) for p in prompts]
+    
+    # =========================================================================
+    # Chat Interface
+    # =========================================================================
     
     def chat(
         self,
         message: str,
-        history: Optional[List[dict]] = None,
+        history: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
-        **kwargs,
+        max_gen: int = 200,
+        **kwargs
     ) -> str:
         """
         Chat-style generation with conversation history.
@@ -371,7 +538,8 @@ class EnigmaEngine:
             message: User's message
             history: List of {"role": "user/assistant", "content": "..."} dicts
             system_prompt: Optional system prompt
-            **kwargs: Generation parameters
+            max_gen: Maximum tokens to generate
+            **kwargs: Additional generation parameters
             
         Returns:
             Assistant's response
@@ -393,11 +561,123 @@ class EnigmaEngine:
         
         full_prompt = "\n".join(prompt_parts)
         
-        # Generate response
-        response = self.generate(full_prompt, stop_strings=["\nUser:", "\n\n"], **kwargs)
+        # Generate
+        response = self.generate(
+            full_prompt,
+            max_gen=max_gen,
+            stop_strings=["\nUser:", "\n\n", "User:"],
+            **kwargs
+        )
         
         # Extract assistant's response
         if "Assistant:" in response:
             response = response.split("Assistant:")[-1].strip()
         
         return response
+    
+    def stream_chat(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+        max_gen: int = 200,
+        **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Stream chat-style generation.
+        
+        Args:
+            message: User's message
+            history: Conversation history
+            system_prompt: Optional system prompt
+            max_gen: Maximum tokens
+            **kwargs: Additional parameters
+            
+        Yields:
+            Generated tokens one at a time
+        """
+        # Build prompt
+        prompt_parts = []
+        
+        if system_prompt:
+            prompt_parts.append(f"System: {system_prompt}\n")
+        
+        if history:
+            for msg in history:
+                role = msg.get("role", "user").capitalize()
+                content = msg.get("content", "")
+                prompt_parts.append(f"{role}: {content}")
+        
+        prompt_parts.append(f"User: {message}")
+        prompt_parts.append("Assistant:")
+        
+        full_prompt = "\n".join(prompt_parts)
+        
+        # Stream generation
+        buffer = ""
+        for token in self.stream_generate(full_prompt, max_gen=max_gen, **kwargs):
+            buffer += token
+            
+            # Check for stop conditions
+            if "\nUser:" in buffer or buffer.endswith("\n\n"):
+                # Remove stop string from output
+                for stop in ["\nUser:", "\n\n"]:
+                    if stop in buffer:
+                        buffer = buffer[:buffer.find(stop)]
+                break
+            
+            yield token
+
+
+# =============================================================================
+# Convenience Functions
+# =============================================================================
+
+def generate(
+    prompt: str,
+    model_path: Optional[str] = None,
+    max_gen: int = 100,
+    **kwargs
+) -> str:
+    """
+    Quick generation function.
+    
+    Args:
+        prompt: Input text
+        model_path: Optional model path
+        max_gen: Maximum tokens
+        **kwargs: Additional parameters
+        
+    Returns:
+        Generated text
+    """
+    engine = EnigmaEngine(model_path=model_path)
+    return engine.generate(prompt, max_gen=max_gen, **kwargs)
+
+
+def load_engine(
+    model_path: Optional[str] = None,
+    device: Optional[str] = None
+) -> EnigmaEngine:
+    """
+    Load an inference engine.
+    
+    Args:
+        model_path: Path to model
+        device: Device to use
+        
+    Returns:
+        EnigmaEngine instance
+    """
+    return EnigmaEngine(model_path=model_path, device=device)
+
+
+# =============================================================================
+# Module Exports
+# =============================================================================
+
+__all__ = [
+    "EnigmaEngine",
+    "generate",
+    "load_engine",
+]

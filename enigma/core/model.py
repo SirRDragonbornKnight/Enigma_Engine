@@ -1,162 +1,551 @@
 """
-Enigma Model - Scalable Transformer Architecture
+Enigma Model - Unified Transformer Architecture
+================================================
 
-A real transformer that can scale from tiny to extra-large:
-  - tiny:   64 dim, 2 layers  -> Fast, basic responses (Pi Zero)
-  - small:  128 dim, 4 layers -> Good for Pi 4/5
-  - medium: 256 dim, 6 layers -> Better quality (Pi 5 8GB)
-  - large:  512 dim, 8 layers -> High quality (GPU required)
-  - xl:     768 dim, 12 layers -> Very high quality (8GB+ GPU)
-  - xxl:    1024 dim, 16 layers -> Near-GPT quality (16GB+ GPU)
+A production-grade transformer that scales from tiny to extra-large:
+  - tiny:   256 dim,  6 layers -> ~5M params   (Pi 4/5)
+  - small:  512 dim,  8 layers -> ~27M params  (RTX 2080)
+  - medium: 768 dim, 12 layers -> ~85M params  (RTX 3080)
+  - large: 1024 dim, 16 layers -> ~200M params (RTX 4090)
+  - xl:    1536 dim, 24 layers -> ~600M params (Multi-GPU)
+  - xxl:   2048 dim, 32 layers -> ~1.5B params (Cloud)
 
-The architecture is the same as GPT-style models, just configurable size.
-With enough training data, this WILL learn and improve.
+Architecture based on LLaMA/Mistral with:
+  - Rotary Position Embeddings (RoPE)
+  - RMSNorm (faster than LayerNorm)
+  - SwiGLU activation
+  - Grouped Query Attention (GQA)
+  - KV Cache for fast generation
 
-To make it smarter:
-  1. Add more training data (conversations, Q&A, text)
-  2. Train for more epochs
-  3. Increase model size (if you have the hardware)
+This WILL learn with enough data and training.
 """
+import math
+import json
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from typing import Optional, Tuple, Dict, Any, List, Union
+from dataclasses import dataclass
+from pathlib import Path
+
 from ..config import CONFIG
 
-MAX_LEN = CONFIG.get("max_len", 512)
+MAX_LEN = CONFIG.get("max_len", 1024)
 
-# Global registry of running model instances (for multi-model support)
-_RUNNING_MODELS: dict = {}
+# Global registry of loaded models
+_LOADED_MODELS: Dict[str, 'Enigma'] = {}
 
 
-def get_running_models() -> dict:
-    """Get all currently loaded model instances."""
-    return _RUNNING_MODELS.copy()
+def get_running_models() -> Dict[str, 'Enigma']:
+    """Get all loaded model instances."""
+    return _LOADED_MODELS.copy()
 
 
 def is_model_loaded(name: str) -> bool:
-    """Check if a model is already loaded."""
-    return name in _RUNNING_MODELS
+    """Check if a model is loaded."""
+    return name in _LOADED_MODELS
 
 
 def register_model(name: str, model: 'Enigma'):
-    """Register a model as running."""
-    _RUNNING_MODELS[name] = model
+    """Register a model instance."""
+    _LOADED_MODELS[name] = model
 
 
 def unregister_model(name: str):
     """Unregister a model."""
-    if name in _RUNNING_MODELS:
-        del _RUNNING_MODELS[name]
+    _LOADED_MODELS.pop(name, None)
 
 
-class Enigma(nn.Module):
-    """
-    A real transformer model that scales from tiny to extra-large.
-    
-    This is architecturally identical to GPT - just configurable size.
-    It learns patterns from training data and generates based on those patterns.
-    
-    The model IS expandable:
-      - Change dim to increase capacity (smarter but slower)
-      - Change depth to add reasoning layers
-      - Change heads for better attention patterns
-    """
-    
-    def __init__(self, vocab_size, dim=None, depth=None, heads=None, max_len=MAX_LEN):
-        super().__init__()
-        
-        # Use CONFIG values if not specified (allows easy scaling)
-        self.dim = dim or CONFIG.get("embed_dim", 128)
-        self.depth = depth or CONFIG.get("num_layers", 4)
-        self.heads = heads or CONFIG.get("num_heads", 4)
-        self.vocab_size = vocab_size
-        self.max_len = max_len
-        
-        # Token embeddings - converts words to vectors
-        self.token_embed = nn.Embedding(vocab_size, self.dim)
-        
-        # Position embeddings - tells model where each word is
-        self.pos = nn.Parameter(torch.randn(1, max_len, self.dim))
-        
-        # Transformer layers - the "thinking" part
-        self.layers = nn.ModuleList([
-            nn.TransformerEncoderLayer(
-                d_model=self.dim, 
-                nhead=self.heads,
-                dim_feedforward=self.dim * 4,  # Standard 4x expansion
-                dropout=0.1,
-                activation='gelu'
-            )
-            for _ in range(self.depth)
-        ])
-        
-        # Normalization for stable training
-        self.norm = nn.LayerNorm(self.dim)
-        
-        # Output head - converts vectors back to word probabilities
-        self.head = nn.Linear(self.dim, vocab_size)
-        
-        # Initialize weights properly
-        self._init_weights()
-    
-    def _init_weights(self):
-        """Initialize weights for better training."""
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                if module.bias is not None:
-                    torch.nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.Embedding):
-                torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+# =============================================================================
+# Configuration
+# =============================================================================
 
-    def forward(self, input_ids):
-        """
-        Forward pass - process input and generate output.
-        
-        input_ids: (batch, seq_len) LongTensor of token IDs
-        returns: logits (batch, seq_len, vocab_size) - probability of each word
-        """
-        seq_len = input_ids.size(1)
-        
-        # Convert tokens to embeddings and add position info
-        x = self.token_embed(input_ids.long()) + self.pos[:, :seq_len]
-        
-        # Pass through transformer layers (the "thinking")
-        for layer in self.layers:
-            x = layer(x)
-        
-        # Normalize and project to vocabulary
-        x = self.norm(x)
-        logits = self.head(x)
-        
-        return logits
+@dataclass
+class EnigmaConfig:
+    """Model configuration with sensible defaults."""
+    vocab_size: int = 8000
+    dim: int = 512
+    n_layers: int = 8
+    n_heads: int = 8
+    n_kv_heads: Optional[int] = None
+    hidden_dim: Optional[int] = None
+    max_seq_len: int = 1024
+    dropout: float = 0.1
+    use_rope: bool = True
+    use_rms_norm: bool = True
+    use_swiglu: bool = True
+    use_bias: bool = False
+    rope_theta: float = 10000.0
     
-    @property
-    def num_parameters(self) -> int:
-        """Return total number of trainable parameters."""
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    # Legacy aliases
+    depth: Optional[int] = None
+    heads: Optional[int] = None
+    max_len: Optional[int] = None
+    embed_dim: Optional[int] = None
     
-    def get_config(self) -> dict:
-        """Return model configuration for saving/loading."""
+    def __post_init__(self):
+        # Map legacy names
+        if self.depth: self.n_layers = self.depth
+        if self.heads: self.n_heads = self.heads
+        if self.max_len: self.max_seq_len = self.max_len
+        if self.embed_dim: self.dim = self.embed_dim
+        
+        # Defaults
+        if self.n_kv_heads is None:
+            self.n_kv_heads = self.n_heads
+        
+        if self.hidden_dim is None:
+            if self.use_swiglu:
+                self.hidden_dim = int(2 * (4 * self.dim) / 3)
+                self.hidden_dim = 64 * ((self.hidden_dim + 63) // 64)
+            else:
+                self.hidden_dim = 4 * self.dim
+    
+    def to_dict(self) -> Dict[str, Any]:
         return {
-            "vocab_size": self.vocab_size,
-            "dim": self.dim,
-            "depth": self.depth,
-            "heads": self.heads,
-            "max_len": self.max_len
+            'vocab_size': self.vocab_size,
+            'dim': self.dim,
+            'n_layers': self.n_layers,
+            'n_heads': self.n_heads,
+            'n_kv_heads': self.n_kv_heads,
+            'hidden_dim': self.hidden_dim,
+            'max_seq_len': self.max_seq_len,
+            'dropout': self.dropout,
+            'use_rope': self.use_rope,
+            'use_rms_norm': self.use_rms_norm,
+            'use_swiglu': self.use_swiglu,
+            'use_bias': self.use_bias,
+            'rope_theta': self.rope_theta,
         }
     
     @classmethod
-    def from_config(cls, config: dict):
-        """Create model from configuration."""
-        return cls(
-            vocab_size=config["vocab_size"],
-            dim=config.get("dim", 128),
-            depth=config.get("depth", 4),
-            heads=config.get("heads", 4),
-            max_len=config.get("max_len", 512)
-        )
+    def from_dict(cls, d: Dict[str, Any]) -> 'EnigmaConfig':
+        known = {
+            'vocab_size', 'dim', 'n_layers', 'n_heads', 'n_kv_heads',
+            'hidden_dim', 'max_seq_len', 'dropout', 'use_rope', 'use_rms_norm',
+            'use_swiglu', 'use_bias', 'rope_theta', 'depth', 'heads', 
+            'max_len', 'embed_dim'
+        }
+        return cls(**{k: v for k, v in d.items() if k in known})
 
 
-# Aliases for compatibility
+# =============================================================================
+# Model Presets
+# =============================================================================
+
+MODEL_PRESETS = {
+    'tiny': EnigmaConfig(dim=256, n_layers=6, n_heads=8, n_kv_heads=4, max_seq_len=512),
+    'small': EnigmaConfig(dim=512, n_layers=8, n_heads=8, n_kv_heads=4, max_seq_len=1024),
+    'medium': EnigmaConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=1024),
+    'large': EnigmaConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=2048),
+    'xl': EnigmaConfig(dim=1536, n_layers=24, n_heads=16, n_kv_heads=4, max_seq_len=2048, dropout=0.05),
+    'xxl': EnigmaConfig(dim=2048, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=4096, dropout=0.05),
+}
+
+
+def get_preset(name: str, vocab_size: int = 8000) -> EnigmaConfig:
+    """Get a preset configuration."""
+    if name not in MODEL_PRESETS:
+        raise ValueError(f"Unknown preset: {name}. Available: {list(MODEL_PRESETS.keys())}")
+    
+    # Create a copy with vocab_size
+    preset = MODEL_PRESETS[name]
+    return EnigmaConfig(
+        vocab_size=vocab_size,
+        dim=preset.dim,
+        n_layers=preset.n_layers,
+        n_heads=preset.n_heads,
+        n_kv_heads=preset.n_kv_heads,
+        max_seq_len=preset.max_seq_len,
+        dropout=preset.dropout,
+    )
+
+
+# =============================================================================
+# Model Components
+# =============================================================================
+
+class RMSNorm(nn.Module):
+    """Root Mean Square Layer Normalization - faster than LayerNorm."""
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        rms = torch.sqrt(torch.mean(x ** 2, dim=-1, keepdim=True) + self.eps)
+        return x / rms * self.weight
+
+
+def precompute_rope_frequencies(dim: int, max_seq_len: int, theta: float = 10000.0) -> torch.Tensor:
+    """Precompute RoPE frequencies."""
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
+    positions = torch.arange(max_seq_len)
+    angles = torch.outer(positions, freqs)
+    return torch.polar(torch.ones_like(angles), angles)
+
+
+def apply_rotary_embedding(x: torch.Tensor, freqs_cis: torch.Tensor, start_pos: int = 0) -> torch.Tensor:
+    """Apply rotary embeddings to Q and K."""
+    seq_len = x.shape[1]
+    freqs = freqs_cis[start_pos:start_pos + seq_len]
+    x_complex = torch.view_as_complex(x.float().reshape(*x.shape[:-1], -1, 2))
+    freqs = freqs.unsqueeze(0).unsqueeze(2)
+    x_rotated = x_complex * freqs
+    return torch.view_as_real(x_rotated).flatten(-2).type_as(x)
+
+
+class Attention(nn.Module):
+    """Multi-Head Attention with Grouped Query Attention (GQA)."""
+    def __init__(self, config: EnigmaConfig):
+        super().__init__()
+        self.n_heads = config.n_heads
+        self.n_kv_heads = config.n_kv_heads
+        self.head_dim = config.dim // config.n_heads
+        self.n_rep = self.n_heads // self.n_kv_heads
+        
+        self.wq = nn.Linear(config.dim, config.n_heads * self.head_dim, bias=config.use_bias)
+        self.wk = nn.Linear(config.dim, self.n_kv_heads * self.head_dim, bias=config.use_bias)
+        self.wv = nn.Linear(config.dim, self.n_kv_heads * self.head_dim, bias=config.use_bias)
+        self.wo = nn.Linear(config.n_heads * self.head_dim, config.dim, bias=config.use_bias)
+        
+        self.dropout = nn.Dropout(config.dropout)
+        self.use_rope = config.use_rope
+        
+        self.cache_k: Optional[torch.Tensor] = None
+        self.cache_v: Optional[torch.Tensor] = None
+    
+    def forward(
+        self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None, use_cache: bool = False, start_pos: int = 0
+    ) -> torch.Tensor:
+        B, T, _ = x.shape
+        
+        q = self.wq(x).view(B, T, self.n_heads, self.head_dim)
+        k = self.wk(x).view(B, T, self.n_kv_heads, self.head_dim)
+        v = self.wv(x).view(B, T, self.n_kv_heads, self.head_dim)
+        
+        if self.use_rope and freqs_cis is not None:
+            q = apply_rotary_embedding(q, freqs_cis, start_pos)
+            k = apply_rotary_embedding(k, freqs_cis, start_pos)
+        
+        if use_cache:
+            if self.cache_k is None:
+                self.cache_k, self.cache_v = k, v
+            else:
+                self.cache_k = torch.cat([self.cache_k, k], dim=1)
+                self.cache_v = torch.cat([self.cache_v, v], dim=1)
+            k, v = self.cache_k, self.cache_v
+        
+        if self.n_rep > 1:
+            k = k.repeat_interleave(self.n_rep, dim=2)
+            v = v.repeat_interleave(self.n_rep, dim=2)
+        
+        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+        
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        if mask is not None:
+            scores = scores + mask
+        
+        attn = self.dropout(F.softmax(scores, dim=-1))
+        output = torch.matmul(attn, v)
+        
+        return self.wo(output.transpose(1, 2).contiguous().view(B, T, -1))
+    
+    def clear_cache(self):
+        self.cache_k = self.cache_v = None
+
+
+class FeedForward(nn.Module):
+    """SwiGLU Feed-Forward Network."""
+    def __init__(self, config: EnigmaConfig):
+        super().__init__()
+        self.use_swiglu = config.use_swiglu
+        
+        if self.use_swiglu:
+            self.w1 = nn.Linear(config.dim, config.hidden_dim, bias=config.use_bias)
+            self.w2 = nn.Linear(config.hidden_dim, config.dim, bias=config.use_bias)
+            self.w3 = nn.Linear(config.dim, config.hidden_dim, bias=config.use_bias)
+        else:
+            self.up = nn.Linear(config.dim, config.hidden_dim, bias=config.use_bias)
+            self.down = nn.Linear(config.hidden_dim, config.dim, bias=config.use_bias)
+        
+        self.dropout = nn.Dropout(config.dropout)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self.use_swiglu:
+            return self.w2(self.dropout(F.silu(self.w1(x)) * self.w3(x)))
+        return self.down(self.dropout(F.gelu(self.up(x))))
+
+
+class TransformerBlock(nn.Module):
+    """Transformer block with pre-norm architecture."""
+    def __init__(self, config: EnigmaConfig, layer_id: int):
+        super().__init__()
+        self.layer_id = layer_id
+        
+        Norm = RMSNorm if config.use_rms_norm else nn.LayerNorm
+        self.attention_norm = Norm(config.dim)
+        self.ffn_norm = Norm(config.dim)
+        self.attention = Attention(config)
+        self.feed_forward = FeedForward(config)
+    
+    def forward(
+        self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None, use_cache: bool = False, start_pos: int = 0
+    ) -> torch.Tensor:
+        h = x + self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)
+        return h + self.feed_forward(self.ffn_norm(h))
+    
+    def clear_cache(self):
+        self.attention.clear_cache()
+
+
+# =============================================================================
+# Main Model
+# =============================================================================
+
+class Enigma(nn.Module):
+    """
+    Enigma - Modern Transformer Language Model
+    
+    Based on LLaMA/Mistral architecture with:
+      - RoPE positional embeddings
+      - RMSNorm
+      - SwiGLU activation
+      - GQA attention
+      - KV cache
+    """
+    
+    def __init__(
+        self, vocab_size: int = 8000, dim: Optional[int] = None,
+        depth: Optional[int] = None, heads: Optional[int] = None,
+        max_len: Optional[int] = None, config: Optional[EnigmaConfig] = None, **kwargs
+    ):
+        super().__init__()
+        
+        # Build config
+        if config is not None:
+            self.config = config
+        else:
+            self.config = EnigmaConfig(
+                vocab_size=vocab_size,
+                dim=dim or CONFIG.get("embed_dim", 512),
+                n_layers=depth or CONFIG.get("num_layers", 8),
+                n_heads=heads or CONFIG.get("num_heads", 8),
+                max_seq_len=max_len or CONFIG.get("max_len", 1024),
+                **{k: v for k, v in kwargs.items() if hasattr(EnigmaConfig, k)}
+            )
+        
+        if vocab_size != 8000:
+            self.config.vocab_size = vocab_size
+        
+        # Legacy attributes for compatibility
+        self.vocab_size = self.config.vocab_size
+        self.dim = self.config.dim
+        self.depth = self.config.n_layers
+        self.heads = self.config.n_heads
+        self.max_len = self.config.max_seq_len
+        
+        # Token embeddings
+        self.tok_embeddings = nn.Embedding(self.config.vocab_size, self.config.dim)
+        
+        # Legacy alias
+        self.token_embed = self.tok_embeddings
+        
+        # Position embeddings (fallback)
+        if not self.config.use_rope:
+            self.pos = nn.Parameter(torch.randn(1, self.config.max_seq_len, self.config.dim) * 0.02)
+        
+        # Transformer layers
+        self.layers = nn.ModuleList([
+            TransformerBlock(self.config, i) for i in range(self.config.n_layers)
+        ])
+        
+        # Output
+        Norm = RMSNorm if self.config.use_rms_norm else nn.LayerNorm
+        self.norm = Norm(self.config.dim)
+        self.output = nn.Linear(self.config.dim, self.config.vocab_size, bias=False)
+        self.head = self.output  # Legacy alias
+        
+        # Weight tying
+        self.output.weight = self.tok_embeddings.weight
+        
+        # RoPE frequencies
+        if self.config.use_rope:
+            self.register_buffer(
+                'freqs_cis',
+                precompute_rope_frequencies(
+                    self.config.dim // self.config.n_heads,
+                    self.config.max_seq_len * 2,
+                    self.config.rope_theta
+                )
+            )
+        else:
+            self.freqs_cis = None
+        
+        # Initialize
+        self.apply(self._init_weights)
+        self._init_output_weights()
+    
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def _init_output_weights(self):
+        for name, p in self.named_parameters():
+            if name.endswith('wo.weight') or name.endswith('w2.weight'):
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * self.config.n_layers))
+    
+    def forward(
+        self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None,
+        use_cache: bool = False, start_pos: int = 0, return_loss: bool = False
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
+        """
+        Forward pass.
+        
+        Args:
+            input_ids: Input token IDs (B, T)
+            targets: Optional target IDs for loss computation
+            use_cache: Whether to use KV cache
+            start_pos: Starting position for RoPE
+            return_loss: If True, always return (logits, loss) tuple
+            
+        Returns:
+            logits if no targets and return_loss=False, else (logits, loss)
+        """
+        B, T = input_ids.shape
+        
+        h = self.tok_embeddings(input_ids)
+        
+        if not self.config.use_rope:
+            h = h + self.pos[:, start_pos:start_pos + T]
+        
+        mask = None
+        if T > 1:
+            mask = torch.full((T, T), float('-inf'), device=input_ids.device)
+            mask = torch.triu(mask, diagonal=1).unsqueeze(0).unsqueeze(0)
+        
+        for layer in self.layers:
+            h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
+        
+        logits = self.output(self.norm(h))
+        
+        # Compute loss if targets provided
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=0)
+        
+        # Return format depends on whether loss was computed
+        if targets is not None or return_loss:
+            return logits, loss
+        
+        return logits
+    
+    def clear_cache(self):
+        for layer in self.layers:
+            layer.clear_cache()
+    
+    @torch.no_grad()
+    def generate(
+        self, input_ids: torch.Tensor, max_new_tokens: int = 100,
+        temperature: float = 0.8, top_k: int = 50, top_p: float = 0.9,
+        repetition_penalty: float = 1.1, stop_tokens: Optional[List[int]] = None
+    ) -> torch.Tensor:
+        """Generate tokens autoregressively."""
+        self.clear_cache()
+        stop_tokens = stop_tokens or [2]
+        
+        generated = input_ids
+        logits = self.forward(input_ids, use_cache=True)
+        
+        for _ in range(max_new_tokens):
+            next_logits = logits[:, -1, :] / temperature
+            
+            # Repetition penalty
+            if repetition_penalty != 1.0:
+                for i in range(input_ids.shape[0]):
+                    for tok in set(generated[i].tolist()):
+                        if 0 <= tok < next_logits.shape[1]:
+                            next_logits[i, tok] /= repetition_penalty
+            
+            # Top-k
+            if top_k > 0:
+                v, _ = torch.topk(next_logits, min(top_k, next_logits.size(-1)))
+                next_logits[next_logits < v[:, [-1]]] = float('-inf')
+            
+            # Top-p
+            if top_p < 1.0:
+                sorted_logits, sorted_idx = torch.sort(next_logits, descending=True)
+                cumsum = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                mask = cumsum > top_p
+                mask[:, 1:] = mask[:, :-1].clone()
+                mask[:, 0] = False
+                indices_to_remove = mask.scatter(1, sorted_idx, mask)
+                next_logits[indices_to_remove] = float('-inf')
+            
+            # Sample
+            probs = F.softmax(next_logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            generated = torch.cat([generated, next_token], dim=1)
+            
+            if next_token.item() in stop_tokens:
+                break
+            
+            logits = self.forward(next_token, use_cache=True, start_pos=generated.shape[1] - 1)
+        
+        return generated
+    
+    @property
+    def num_parameters(self) -> int:
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def get_config(self) -> Dict[str, Any]:
+        return self.config.to_dict()
+    
+    @classmethod
+    def from_config(cls, config: Dict[str, Any]) -> 'Enigma':
+        return cls(config=EnigmaConfig.from_dict(config))
+    
+    @classmethod
+    def from_pretrained(cls, path: Path) -> 'Enigma':
+        path = Path(path)
+        config_file = path / 'config.json' if path.is_dir() else path.with_suffix('.json')
+        
+        if config_file.exists():
+            with open(config_file) as f:
+                model = cls.from_config(json.load(f))
+        else:
+            model = cls()
+        
+        weights_file = path / 'weights.pth' if path.is_dir() else path
+        if weights_file.exists():
+            state_dict = torch.load(weights_file, map_location='cpu', weights_only=True)
+            model.load_state_dict(state_dict, strict=False)
+        
+        return model
+
+
+# =============================================================================
+# Factory Functions & Aliases
+# =============================================================================
+
+def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Enigma:
+    """Create model from preset."""
+    config = get_preset(size, vocab_size)
+    for k, v in kwargs.items():
+        if hasattr(config, k):
+            setattr(config, k, v)
+    
+    model = Enigma(config=config)
+    print(f"Created Enigma ({size}): {model.num_parameters:,} params, {config.dim}d, {config.n_layers}L")
+    return model
+
+
+# Backwards compatibility
 TinyEnigma = Enigma
 EnigmaModel = Enigma
