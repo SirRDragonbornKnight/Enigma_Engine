@@ -19,7 +19,6 @@ import torch
 
 from enigma.core.model import Enigma, create_model, MODEL_PRESETS
 from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
-from enigma.core.inference import EnigmaEngine
 
 # Constants
 DEFAULT_MAX_TOKENS = 100
