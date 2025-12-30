@@ -93,11 +93,15 @@ def gather_training_data() -> str:
     return combined
 
 
-def train_bpe_tokenizer(vocab_size: int = DEFAULT_VOCAB_SIZE) -> AdvancedBPETokenizer:
+def train_bpe_tokenizer(
+    vocab_size: int = DEFAULT_VOCAB_SIZE,
+    training_text: str = None
+) -> AdvancedBPETokenizer:
     """Train the advanced BPE tokenizer.
     
     Args:
         vocab_size: Target vocabulary size
+        training_text: Pre-loaded training text (optional, will load if not provided)
     
     Returns:
         AdvancedBPETokenizer: Trained tokenizer
@@ -114,15 +118,18 @@ def train_bpe_tokenizer(vocab_size: int = DEFAULT_VOCAB_SIZE) -> AdvancedBPEToke
         print(f"  ✓ Loaded tokenizer: {tokenizer.vocab_size:,} tokens")
         return tokenizer
     
-    # Gather training data
-    print("  Gathering training data...")
-    combined_text = gather_training_data()
+    # Gather training data if not provided
+    if training_text is None:
+        print("  Gathering training data...")
+        training_text = gather_training_data()
+    else:
+        print("  Using pre-loaded training data")
     
     # Create and train tokenizer
     print(f"\n  Training tokenizer (vocab_size={vocab_size})...")
     tokenizer = AdvancedBPETokenizer()
     tokenizer.train(
-        texts=[combined_text],
+        texts=[training_text],
         vocab_size=vocab_size,
         min_frequency=MIN_FREQUENCY,
         verbose=True,
@@ -178,6 +185,7 @@ def create_sacrifice_model(
 def train_sacrifice_model(
     model: Enigma,
     tokenizer: AdvancedBPETokenizer,
+    training_text: str = None,
     epochs: int = DEFAULT_EPOCHS,
     batch_size: int = DEFAULT_BATCH_SIZE,
     learning_rate: float = DEFAULT_LEARNING_RATE,
@@ -187,6 +195,7 @@ def train_sacrifice_model(
     Args:
         model: Enigma model to train
         tokenizer: Tokenizer for text encoding
+        training_text: Pre-loaded training text (optional, will load if not provided)
         epochs: Number of training epochs
         batch_size: Training batch size
         learning_rate: Learning rate
@@ -196,9 +205,12 @@ def train_sacrifice_model(
     """
     print_header("Training Model")
     
-    # Gather training data
-    print("  Loading training data...")
-    combined = gather_training_data()
+    # Gather training data if not provided
+    if training_text is None:
+        print("  Loading training data...")
+        training_text = gather_training_data()
+    else:
+        print("  Using pre-loaded training data")
     
     # Training configuration
     config = TrainingConfig(
@@ -223,7 +235,7 @@ def train_sacrifice_model(
     
     # Train
     print("\n  Starting training...")
-    results = trainer.train(texts=[combined], epochs=epochs)
+    results = trainer.train(texts=[training_text], epochs=epochs)
     
     return results
 
@@ -336,16 +348,29 @@ def main():
     
     start_time = time.time()
     
+    # Load training data once (if we're going to use it)
+    training_data = None
+    if not args.skip_tokenizer or not args.skip_training:
+        print_header("Loading Training Data")
+        training_data = gather_training_data()
+    
     # Step 1: Train tokenizer
     if args.skip_tokenizer:
         tokenizer_path = VOCAB_DIR / 'bpe_vocab.json'
         if tokenizer_path.exists():
             print_header("Loading Existing Tokenizer")
             tokenizer = AdvancedBPETokenizer(vocab_file=tokenizer_path)
+            print(f"  ✓ Loaded tokenizer: {tokenizer.vocab_size:,} tokens")
         else:
-            tokenizer = train_bpe_tokenizer(vocab_size=args.vocab_size)
+            tokenizer = train_bpe_tokenizer(
+                vocab_size=args.vocab_size,
+                training_text=training_data
+            )
     else:
-        tokenizer = train_bpe_tokenizer(vocab_size=args.vocab_size)
+        tokenizer = train_bpe_tokenizer(
+            vocab_size=args.vocab_size,
+            training_text=training_data
+        )
     
     # Step 2: Create model
     model = create_sacrifice_model(tokenizer, size=args.size)
@@ -355,6 +380,7 @@ def main():
         results = train_sacrifice_model(
             model, 
             tokenizer,
+            training_text=training_data,
             epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.lr,
