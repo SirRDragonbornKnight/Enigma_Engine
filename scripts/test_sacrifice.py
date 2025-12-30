@@ -154,10 +154,11 @@ def generate_response(
                 logits = model(generated)
                 next_logits = logits[:, -1, :] / temperature
                 
-                # Top-k sampling
-                values, indices = torch.topk(next_logits, DEFAULT_TOP_K)
-                next_logits = torch.full_like(next_logits, float('-inf'))
-                next_logits.scatter_(1, indices, values)
+                # Top-k sampling with in-place masking for efficiency
+                k = min(DEFAULT_TOP_K, next_logits.size(-1))
+                values, _ = torch.topk(next_logits, k)
+                next_logits = next_logits.clone()
+                next_logits[next_logits < values[0, -1]] = float('-inf')
                 
                 # Sample
                 probs = torch.softmax(next_logits, dim=-1)

@@ -34,13 +34,11 @@ def sample_with_temperature(logits, temperature=DEFAULT_TEMPERATURE, top_k=DEFAU
     
     # Apply top-k filtering to focus on most likely tokens
     if top_k > 0:
-        values, indices = torch.topk(logits, min(top_k, logits.size(-1)))
-        # Mask out tokens below top-k threshold
-        logits = torch.where(
-            logits < values[-1],
-            torch.full_like(logits, float('-inf')),
-            logits
-        )
+        k = min(top_k, logits.size(-1))
+        values, _ = torch.topk(logits, k)
+        # In-place masking for better performance
+        logits = logits.clone()  # Clone to avoid modifying original
+        logits[logits < values[-1]] = float('-inf')
     
     # Sample from probability distribution
     probs = F.softmax(logits, dim=-1)
