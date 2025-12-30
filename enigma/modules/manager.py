@@ -184,27 +184,35 @@ class ModuleManager:
     
     def _detect_hardware(self):
         """Detect available hardware capabilities."""
-        import torch
-        
+        # Default values
         self.hardware_profile = {
             'cpu_cores': 1,
             'ram_mb': 4096,
-            'gpu_available': torch.cuda.is_available(),
+            'gpu_available': False,
             'gpu_name': None,
             'vram_mb': 0,
-            'mps_available': hasattr(torch.backends, 'mps') and torch.backends.mps.is_available(),
+            'mps_available': False,
         }
         
+        # Try to detect GPU with torch
+        try:
+            import torch
+            self.hardware_profile['gpu_available'] = torch.cuda.is_available()
+            self.hardware_profile['mps_available'] = hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+            
+            if torch.cuda.is_available():
+                self.hardware_profile['gpu_name'] = torch.cuda.get_device_name(0)
+                self.hardware_profile['vram_mb'] = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
+        except ImportError:
+            logger.warning("PyTorch not available - GPU detection disabled")
+        
+        # Try to detect CPU/RAM with psutil
         try:
             import psutil
             self.hardware_profile['cpu_cores'] = psutil.cpu_count()
             self.hardware_profile['ram_mb'] = psutil.virtual_memory().total // (1024 * 1024)
         except ImportError:
-            pass
-        
-        if torch.cuda.is_available():
-            self.hardware_profile['gpu_name'] = torch.cuda.get_device_name(0)
-            self.hardware_profile['vram_mb'] = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
+            logger.warning("psutil not available - using default CPU/RAM values")
     
     def register(self, module_class: type) -> bool:
         """
