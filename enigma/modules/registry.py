@@ -1,0 +1,447 @@
+"""
+Enigma Module Registry
+======================
+
+Central registry of all available modules.
+Auto-discovers and registers built-in modules.
+"""
+
+import logging
+from typing import Dict, List, Optional, Type
+from pathlib import Path
+
+from .manager import Module, ModuleInfo, ModuleCategory, ModuleState, ModuleManager
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Built-in Module Definitions
+# =============================================================================
+
+class ModelModule(Module):
+    """Core transformer model module."""
+    
+    INFO = ModuleInfo(
+        id="model",
+        name="Enigma Model",
+        description="Core transformer language model with RoPE, RMSNorm, SwiGLU, GQA",
+        category=ModuleCategory.CORE,
+        version="2.0.0",
+        requires=[],
+        provides=["language_model", "text_generation", "embeddings"],
+        config_schema={
+            "size": {"type": "choice", "options": ["nano", "micro", "tiny", "small", "medium", "large", "xl", "xxl", "titan"], "default": "small"},
+            "vocab_size": {"type": "int", "min": 1000, "max": 500000, "default": 8000},
+            "device": {"type": "choice", "options": ["auto", "cuda", "cpu", "mps"], "default": "auto"},
+            "dtype": {"type": "choice", "options": ["float32", "float16", "bfloat16"], "default": "float32"},
+        },
+        min_ram_mb=512,
+    )
+    
+    def load(self) -> bool:
+        from enigma.core.model import create_model
+        
+        size = self.config.get('size', 'small')
+        vocab_size = self.config.get('vocab_size', 8000)
+        
+        self._instance = create_model(size, vocab_size=vocab_size)
+        return self._instance is not None
+    
+    def unload(self) -> bool:
+        if self._instance is not None:
+            del self._instance
+            self._instance = None
+        return True
+
+
+class TokenizerModule(Module):
+    """Tokenizer module - converts text to/from tokens."""
+    
+    INFO = ModuleInfo(
+        id="tokenizer",
+        name="Tokenizer",
+        description="Text tokenization with BPE, character, or custom vocabularies",
+        category=ModuleCategory.CORE,
+        version="2.0.0",
+        requires=[],
+        provides=["tokenization", "vocabulary"],
+        config_schema={
+            "type": {"type": "choice", "options": ["auto", "bpe", "character", "simple"], "default": "auto"},
+            "vocab_size": {"type": "int", "min": 100, "max": 500000, "default": 8000},
+        },
+    )
+    
+    def load(self) -> bool:
+        from enigma.core.tokenizer import get_tokenizer
+        
+        tok_type = self.config.get('type', 'auto')
+        self._instance = get_tokenizer(tok_type)
+        return self._instance is not None
+
+
+class TrainingModule(Module):
+    """Training module - trains models on data."""
+    
+    INFO = ModuleInfo(
+        id="training",
+        name="Training System",
+        description="Production-grade training with AMP, gradient accumulation, distributed support",
+        category=ModuleCategory.CORE,
+        version="2.0.0",
+        requires=["model", "tokenizer"],
+        provides=["model_training", "fine_tuning"],
+        supports_distributed=True,
+        config_schema={
+            "learning_rate": {"type": "float", "min": 1e-6, "max": 1e-1, "default": 3e-4},
+            "batch_size": {"type": "int", "min": 1, "max": 256, "default": 8},
+            "epochs": {"type": "int", "min": 1, "max": 10000, "default": 30},
+            "use_amp": {"type": "bool", "default": True},
+            "gradient_accumulation": {"type": "int", "min": 1, "max": 64, "default": 4},
+        },
+    )
+    
+    def load(self) -> bool:
+        from enigma.core.training import Trainer, TrainingConfig
+        self._trainer_class = Trainer
+        self._config_class = TrainingConfig
+        return True
+    
+    def get_interface(self):
+        return {
+            'Trainer': self._trainer_class,
+            'TrainingConfig': self._config_class,
+        }
+
+
+class InferenceModule(Module):
+    """Inference module - generates text from models."""
+    
+    INFO = ModuleInfo(
+        id="inference",
+        name="Inference Engine",
+        description="High-performance text generation with streaming, batching, chat",
+        category=ModuleCategory.CORE,
+        version="2.0.0",
+        requires=["model", "tokenizer"],
+        provides=["text_generation", "streaming", "chat"],
+        config_schema={
+            "max_length": {"type": "int", "min": 1, "max": 32768, "default": 2048},
+            "temperature": {"type": "float", "min": 0.0, "max": 2.0, "default": 0.8},
+            "top_k": {"type": "int", "min": 0, "max": 1000, "default": 50},
+            "top_p": {"type": "float", "min": 0.0, "max": 1.0, "default": 0.9},
+        },
+    )
+    
+    def load(self) -> bool:
+        from enigma.core.inference import EnigmaEngine
+        self._engine_class = EnigmaEngine
+        return True
+
+
+class MemoryModule(Module):
+    """Memory module - conversation and knowledge storage."""
+    
+    INFO = ModuleInfo(
+        id="memory",
+        name="Memory System",
+        description="Conversation history, vector search, long-term memory",
+        category=ModuleCategory.MEMORY,
+        version="1.0.0",
+        requires=[],
+        optional=["model"],  # For embeddings
+        provides=["conversation_storage", "vector_search", "knowledge_base"],
+        config_schema={
+            "backend": {"type": "choice", "options": ["json", "sqlite", "vector"], "default": "json"},
+            "max_conversations": {"type": "int", "min": 1, "max": 100000, "default": 1000},
+        },
+    )
+    
+    def load(self) -> bool:
+        from enigma.memory.manager import ConversationManager
+        self._instance = ConversationManager()
+        return True
+
+
+class VoiceInputModule(Module):
+    """Voice input module - speech to text."""
+    
+    INFO = ModuleInfo(
+        id="voice_input",
+        name="Voice Input (STT)",
+        description="Speech-to-text for voice commands and dictation",
+        category=ModuleCategory.PERCEPTION,
+        version="1.0.0",
+        requires=[],
+        provides=["speech_recognition", "voice_commands"],
+        config_schema={
+            "engine": {"type": "choice", "options": ["system", "whisper", "vosk"], "default": "system"},
+            "language": {"type": "string", "default": "en-US"},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.voice.stt_simple import SimpleSpeechToText
+            self._instance = SimpleSpeechToText()
+            return True
+        except Exception as e:
+            logger.warning(f"Could not load voice input: {e}")
+            return False
+
+
+class VoiceOutputModule(Module):
+    """Voice output module - text to speech."""
+    
+    INFO = ModuleInfo(
+        id="voice_output",
+        name="Voice Output (TTS)",
+        description="Text-to-speech for spoken responses",
+        category=ModuleCategory.OUTPUT,
+        version="1.0.0",
+        requires=[],
+        provides=["text_to_speech", "spoken_response"],
+        config_schema={
+            "engine": {"type": "choice", "options": ["system", "pyttsx3", "elevenlabs"], "default": "system"},
+            "voice": {"type": "string", "default": "default"},
+            "rate": {"type": "float", "min": 0.5, "max": 2.0, "default": 1.0},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.voice.tts_simple import SimpleTextToSpeech
+            self._instance = SimpleTextToSpeech()
+            return True
+        except Exception as e:
+            logger.warning(f"Could not load voice output: {e}")
+            return False
+
+
+class VisionModule(Module):
+    """Vision module - image processing and analysis."""
+    
+    INFO = ModuleInfo(
+        id="vision",
+        name="Vision System",
+        description="Image capture, OCR, object detection, visual understanding",
+        category=ModuleCategory.PERCEPTION,
+        version="1.0.0",
+        requires=[],
+        optional=["model"],
+        provides=["image_capture", "ocr", "object_detection"],
+        config_schema={
+            "camera_id": {"type": "int", "min": 0, "max": 10, "default": 0},
+            "resolution": {"type": "choice", "options": ["480p", "720p", "1080p"], "default": "720p"},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.tools.vision import VisionSystem
+            self._instance = VisionSystem()
+            return True
+        except Exception as e:
+            logger.warning(f"Could not load vision: {e}")
+            return False
+
+
+class AvatarModule(Module):
+    """Avatar module - visual AI representation."""
+    
+    INFO = ModuleInfo(
+        id="avatar",
+        name="Avatar System",
+        description="Visual representation, expressions, animations",
+        category=ModuleCategory.OUTPUT,
+        version="1.0.0",
+        requires=[],
+        optional=["voice_output"],
+        provides=["visual_avatar", "expressions", "lip_sync"],
+        config_schema={
+            "style": {"type": "choice", "options": ["2d", "3d", "animated"], "default": "2d"},
+            "character": {"type": "string", "default": "default"},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.avatar.controller import AvatarController
+            self._instance = AvatarController()
+            return True
+        except Exception as e:
+            logger.warning(f"Could not load avatar: {e}")
+            return False
+
+
+class WebToolsModule(Module):
+    """Web tools module - internet access."""
+    
+    INFO = ModuleInfo(
+        id="web_tools",
+        name="Web Tools",
+        description="Web search, page fetching, API access",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=[],
+        provides=["web_search", "url_fetch", "api_access"],
+        config_schema={
+            "allow_external": {"type": "bool", "default": True},
+            "timeout": {"type": "int", "min": 1, "max": 300, "default": 30},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.tools.web_tools import WebTools
+            self._instance = WebTools()
+            return True
+        except:
+            return True  # Optional, don't fail
+
+
+class FileToolsModule(Module):
+    """File tools module - file system access."""
+    
+    INFO = ModuleInfo(
+        id="file_tools",
+        name="File Tools",
+        description="Read, write, search files and directories",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=[],
+        provides=["file_read", "file_write", "file_search"],
+        config_schema={
+            "allowed_paths": {"type": "list", "default": []},
+            "max_file_size_mb": {"type": "int", "min": 1, "max": 1000, "default": 100},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.tools.file_tools import FileTools
+            self._instance = FileTools()
+            return True
+        except:
+            return True
+
+
+class APIServerModule(Module):
+    """API server module - REST API interface."""
+    
+    INFO = ModuleInfo(
+        id="api_server",
+        name="API Server",
+        description="REST API for remote access and integrations",
+        category=ModuleCategory.INTERFACE,
+        version="1.0.0",
+        requires=["inference"],
+        provides=["rest_api", "remote_access"],
+        config_schema={
+            "host": {"type": "string", "default": "127.0.0.1"},
+            "port": {"type": "int", "min": 1, "max": 65535, "default": 5000},
+            "auth_enabled": {"type": "bool", "default": False},
+        },
+    )
+    
+    def load(self) -> bool:
+        from enigma.comms.api_server import create_app
+        self._app_factory = create_app
+        return True
+
+
+class NetworkModule(Module):
+    """Network module - multi-device communication."""
+    
+    INFO = ModuleInfo(
+        id="network",
+        name="Network System",
+        description="Multi-device communication, distributed inference, model sharing",
+        category=ModuleCategory.NETWORK,
+        version="1.0.0",
+        requires=[],
+        optional=["model", "inference"],
+        provides=["multi_device", "distributed_inference", "model_sync"],
+        supports_distributed=True,
+        config_schema={
+            "role": {"type": "choice", "options": ["standalone", "server", "client", "peer"], "default": "standalone"},
+            "discovery": {"type": "bool", "default": True},
+        },
+    )
+    
+    def load(self) -> bool:
+        try:
+            from enigma.comms.network import NetworkManager
+            self._instance = NetworkManager()
+            return True
+        except:
+            return True
+
+
+class GUIModule(Module):
+    """GUI module - graphical interface."""
+    
+    INFO = ModuleInfo(
+        id="gui",
+        name="Graphical Interface",
+        description="PyQt5-based GUI with chat, training, modules management",
+        category=ModuleCategory.INTERFACE,
+        version="2.0.0",
+        requires=[],
+        optional=["model", "tokenizer", "inference", "training", "memory", "voice_input", "voice_output", "vision", "avatar"],
+        provides=["graphical_interface", "chat_ui", "training_ui", "module_management"],
+        config_schema={
+            "theme": {"type": "choice", "options": ["dark", "light", "system"], "default": "dark"},
+            "window_size": {"type": "choice", "options": ["small", "medium", "large", "fullscreen"], "default": "medium"},
+        },
+    )
+    
+    def load(self) -> bool:
+        # GUI is loaded on demand
+        return True
+
+
+# =============================================================================
+# Module Registry
+# =============================================================================
+
+MODULE_REGISTRY: Dict[str, Type[Module]] = {
+    'model': ModelModule,
+    'tokenizer': TokenizerModule,
+    'training': TrainingModule,
+    'inference': InferenceModule,
+    'memory': MemoryModule,
+    'voice_input': VoiceInputModule,
+    'voice_output': VoiceOutputModule,
+    'vision': VisionModule,
+    'avatar': AvatarModule,
+    'web_tools': WebToolsModule,
+    'file_tools': FileToolsModule,
+    'api_server': APIServerModule,
+    'network': NetworkModule,
+    'gui': GUIModule,
+}
+
+
+def register_all(manager: ModuleManager):
+    """Register all built-in modules with a manager."""
+    for module_class in MODULE_REGISTRY.values():
+        manager.register(module_class)
+
+
+def get_module(module_id: str) -> Optional[Type[Module]]:
+    """Get a module class by ID."""
+    return MODULE_REGISTRY.get(module_id)
+
+
+def list_modules() -> List[ModuleInfo]:
+    """List all available modules."""
+    return [cls.get_info() for cls in MODULE_REGISTRY.values()]
+
+
+def list_by_category(category: ModuleCategory) -> List[ModuleInfo]:
+    """List modules by category."""
+    return [
+        cls.get_info() for cls in MODULE_REGISTRY.values()
+        if cls.get_info().category == category
+    ]

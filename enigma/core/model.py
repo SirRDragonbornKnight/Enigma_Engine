@@ -130,16 +130,57 @@ class EnigmaConfig:
 
 
 # =============================================================================
-# Model Presets
+# Model Presets - From Raspberry Pi to Server Farm
 # =============================================================================
 
 MODEL_PRESETS = {
+    # Embedded / IoT (~1-2M params)
+    'nano': EnigmaConfig(dim=128, n_layers=4, n_heads=4, n_kv_heads=2, max_seq_len=256),
+    'micro': EnigmaConfig(dim=192, n_layers=4, n_heads=4, n_kv_heads=2, max_seq_len=384),
+    
+    # Edge / Raspberry Pi (~5-15M params)
     'tiny': EnigmaConfig(dim=256, n_layers=6, n_heads=8, n_kv_heads=4, max_seq_len=512),
+    'mini': EnigmaConfig(dim=384, n_layers=6, n_heads=6, n_kv_heads=3, max_seq_len=512),
+    
+    # Consumer GPU (~27-85M params)
     'small': EnigmaConfig(dim=512, n_layers=8, n_heads=8, n_kv_heads=4, max_seq_len=1024),
-    'medium': EnigmaConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=1024),
-    'large': EnigmaConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=2048),
-    'xl': EnigmaConfig(dim=1536, n_layers=24, n_heads=16, n_kv_heads=4, max_seq_len=2048, dropout=0.05),
-    'xxl': EnigmaConfig(dim=2048, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=4096, dropout=0.05),
+    'medium': EnigmaConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=2048),
+    'base': EnigmaConfig(dim=896, n_layers=14, n_heads=14, n_kv_heads=4, max_seq_len=2048),
+    
+    # Prosumer GPU (~200M-600M params)
+    'large': EnigmaConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=4096),
+    'xl': EnigmaConfig(dim=1536, n_layers=24, n_heads=24, n_kv_heads=6, max_seq_len=4096, dropout=0.05),
+    
+    # Multi-GPU / Server (~1B-3B params)
+    'xxl': EnigmaConfig(dim=2048, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+    'huge': EnigmaConfig(dim=2560, n_layers=40, n_heads=40, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+    
+    # Datacenter / Cloud (~7B-13B params)
+    'giant': EnigmaConfig(dim=4096, n_layers=32, n_heads=32, n_kv_heads=8, max_seq_len=8192, dropout=0.05),
+    'colossal': EnigmaConfig(dim=4096, n_layers=48, n_heads=32, n_kv_heads=8, max_seq_len=16384, dropout=0.05),
+    
+    # Maximum Scale (~30B+ params)
+    'titan': EnigmaConfig(dim=6144, n_layers=48, n_heads=48, n_kv_heads=12, max_seq_len=16384, dropout=0.05),
+    'omega': EnigmaConfig(dim=8192, n_layers=64, n_heads=64, n_kv_heads=16, max_seq_len=32768, dropout=0.05),
+}
+
+# Human-readable descriptions
+MODEL_DESCRIPTIONS = {
+    'nano': "Minimal (~1M) - Microcontrollers, basic responses",
+    'micro': "Tiny (~2M) - IoT devices, simple tasks",
+    'tiny': "Small (~5M) - Raspberry Pi, edge devices",
+    'mini': "Compact (~10M) - Mobile, low-power devices",
+    'small': "Standard (~27M) - Entry GPU, good learning",
+    'medium': "Capable (~85M) - Mid-range GPU, solid results",
+    'base': "Balanced (~125M) - Good GPU, versatile",
+    'large': "Powerful (~200M) - RTX 3080+, high quality",
+    'xl': "Advanced (~600M) - RTX 4090, excellent results",
+    'xxl': "Massive (~1.5B) - Multi-GPU, near-production",
+    'huge': "Enterprise (~3B) - Server GPU, production ready",
+    'giant': "Datacenter (~7B) - Multi-node, commercial grade",
+    'colossal': "Cloud (~13B) - Distributed, competitive",
+    'titan': "Maximum (~30B) - Full datacenter, state-of-art",
+    'omega': "Ultimate (~70B+) - Cluster, research frontier",
 }
 
 
@@ -159,6 +200,37 @@ def get_preset(name: str, vocab_size: int = 8000) -> EnigmaConfig:
         max_seq_len=preset.max_seq_len,
         dropout=preset.dropout,
     )
+
+
+def estimate_parameters(config: EnigmaConfig) -> int:
+    """Estimate number of parameters for a config."""
+    # Embedding: vocab_size * dim
+    embed = config.vocab_size * config.dim
+    
+    # Per layer: attention + FFN
+    # Attention: 4 * dim * dim (Q, K, V, O)
+    # FFN: 3 * dim * hidden_dim (SwiGLU has 3 matrices)
+    per_layer = (4 * config.dim * config.dim + 
+                 3 * config.dim * (config.hidden_dim or 4 * config.dim))
+    
+    # Total
+    return embed + (per_layer * config.n_layers) + config.dim
+
+
+def list_presets() -> dict:
+    """List all presets with descriptions and estimated parameters."""
+    result = {}
+    for name, config in MODEL_PRESETS.items():
+        config.vocab_size = 32000  # Standard for estimation
+        result[name] = {
+            'description': MODEL_DESCRIPTIONS.get(name, ""),
+            'estimated_params': estimate_parameters(config),
+            'dim': config.dim,
+            'layers': config.n_layers,
+            'heads': config.n_heads,
+            'max_seq_len': config.max_seq_len,
+        }
+    return result
 
 
 # =============================================================================

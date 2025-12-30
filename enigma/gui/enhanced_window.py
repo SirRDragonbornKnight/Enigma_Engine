@@ -1500,12 +1500,16 @@ class EnhancedMainWindow(QMainWindow):
             create_terminal_tab
         )
         from .tabs.settings_tab import create_settings_tab
+        from .tabs.modules_tab import ModulesTab
+        from .tabs.scaling_tab import ScalingTab
         
         # Main tabs
         tabs = QTabWidget()
         self.tabs = tabs  # Store reference for AI control
         tabs.addTab(create_chat_tab(self), "Chat")
         tabs.addTab(create_training_tab(self), "Train")
+        tabs.addTab(ScalingTab(self), "Scale")    # Model scaling visualization
+        tabs.addTab(ModulesTab(self), "Modules")  # Module manager
         tabs.addTab(create_avatar_tab(self), "Avatar")
         tabs.addTab(create_vision_tab(self), "Vision")
         tabs.addTab(create_terminal_tab(self), "Terminal")
