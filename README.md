@@ -155,13 +155,23 @@ This is normal for a new AI! Go to the Train tab and train it.
 - PyQt5 (for GUI)
 - 2GB+ RAM (more for larger models)
 
+## Documentation
+
+- **[Getting Started](GETTING_STARTED.md)** - Quick start guide
+- **[Module System Guide](docs/MODULE_GUIDE.md)** - Complete guide to the module system
+- **[Project Overview](PROJECT_OVERVIEW.txt)** - Architecture and features
+- **[How To Make AI](HOW_TO_MAKE_AI.txt)** - AI creation tutorial
+- **[What NOT To Do](docs/WHAT_NOT_TO_DO.txt)** - Common mistakes to avoid
+
 ## Contributing
 
 Contributions welcome! Please read the documentation in `docs/` first.
 
+See [CREDITS.md](CREDITS.md) for attribution of libraries and research we build upon.
+
 ## License
 
-MIT License - use freely for any purpose.
+MIT License - use freely for any purpose. See [LICENSE](LICENSE) for details.
 
 ---
 
