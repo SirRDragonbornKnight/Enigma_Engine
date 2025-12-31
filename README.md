@@ -148,6 +148,51 @@ This is normal for a new AI! Go to the Train tab and train it.
 - Train for more epochs
 - Check your data quality
 
+## Privacy & Local-First Design 🔒
+
+Enigma Engine is an **"open black box"** - completely transparent about what runs locally vs what requires cloud services.
+
+### 100% Local by Default
+
+**Enigma Engine runs in local-only mode by default.** This means:
+- ✅ No API keys required
+- ✅ No data leaves your machine
+- ✅ Works completely offline
+- ✅ Zero cloud dependencies
+
+### Local vs Cloud Modules
+
+Enigma uses a modular system where you choose what to enable:
+
+**Local Modules** (No internet required):
+- Core AI model, training, and inference
+- Local image generation (Stable Diffusion)
+- Local code generation (your Enigma model)
+- Local text-to-speech (pyttsx3)
+- Local embeddings (sentence-transformers)
+- Memory, vision, avatar, GUI, and more
+
+**Cloud Modules** (Requires API keys + internet):
+- OpenAI DALL-E, GPT-4
+- Replicate (SDXL, video, music generation)
+- ElevenLabs (premium TTS)
+- OpenAI Embeddings
+
+Cloud modules require **explicit opt-in** and will show a warning when loaded:
+```
+⚠️  Warning: This module connects to external cloud services
+```
+
+### Learn More
+
+See [docs/LOCAL_VS_CLOUD.md](docs/LOCAL_VS_CLOUD.md) for complete details on:
+- Which modules are local vs cloud
+- How to enable/disable cloud services
+- Privacy implications
+- Best practices for maximum privacy
+
+**Remember:** By default, everything stays on your machine. You choose when to use cloud services.
+
 ## Requirements
 
 - Python 3.8+

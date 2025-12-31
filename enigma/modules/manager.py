@@ -10,7 +10,7 @@ import json
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Set
+from typing import Dict, List, Optional, Any, Callable, Set, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -79,6 +79,9 @@ class ModuleInfo:
     min_vram_mb: int = 0
     requires_gpu: bool = False
     supports_distributed: bool = False
+    
+    # Privacy and cloud requirements
+    is_cloud_service: bool = False  # True if module connects to external cloud APIs
     
     # Capabilities provided
     provides: List[str] = field(default_factory=list)
@@ -188,11 +191,12 @@ class ModuleManager:
     - Hardware compatibility checking
     """
     
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Optional[Path] = None, local_only: bool = True):
         self.modules: Dict[str, Module] = {}
         self.module_classes: Dict[str, type] = {}
         self.config_path = config_path or Path("enigma_modules.json")
         self.hardware_profile: Dict[str, Any] = {}
+        self.local_only = local_only  # Default to local-only for privacy
         
         # Event callbacks
         self._on_load: List[Callable] = []
@@ -265,7 +269,7 @@ class ModuleManager:
             return True
         return False
     
-    def can_load(self, module_id: str) -> tuple[bool, str]:
+    def can_load(self, module_id: str) -> Tuple[bool, str]:
         """
         Check if a module can be loaded.
         
@@ -276,6 +280,10 @@ class ModuleManager:
             return False, f"Module '{module_id}' not registered"
         
         info = self.module_classes[module_id].get_info()
+        
+        # Check local-only mode
+        if self.local_only and info.is_cloud_service:
+            return False, "Module requires external cloud services. Disable local_only mode to use cloud modules."
         
         # Check hardware requirements
         if info.requires_gpu and not self.hardware_profile['gpu_available']:
@@ -325,6 +333,11 @@ class ModuleManager:
             return False
         
         module_class = self.module_classes[module_id]
+        module_info = module_class.get_info()
+        
+        # Warn about cloud services
+        if module_info.is_cloud_service:
+            logger.warning(f"⚠️  Warning: Module '{module_id}' connects to external cloud services and requires API keys + internet.")
         
         try:
             # Create instance
