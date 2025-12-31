@@ -710,10 +710,10 @@ class AdvancedBPETokenizer:
         text = re.sub(r' ([.,!?;:])', r'\1', text)
         
         # Remove spaces after opening brackets/quotes
-        text = re.sub(r'([\[\(\{\"\'']) ', r'\1', text)
+        text = re.sub(r'([\[\(\{"\']) ', r'\1', text)
         
         # Remove spaces before closing brackets/quotes
-        text = re.sub(r' ([\]\)\}\"\''])', r'\1', text)
+        text = re.sub(r' ([\]\)\}"\'])', r'\1', text)
         
         # Fix multiple spaces
         text = re.sub(r' +', ' ', text)
