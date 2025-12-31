@@ -17,11 +17,10 @@ These modules run entirely on your machine with **zero external API calls**:
 - **code_gen_local** - Uses your trained Enigma model for code
 - **video_gen_local** - AnimateDiff for video (requires powerful GPU)
 - **audio_gen_local** - pyttsx3 or edge-tts for text-to-speech
-- **embedding_local** - sentence-transformers for embeddings
 
 ### Memory & Storage
 - **memory** - Conversation storage (JSON/SQLite)
-- **embedding_local** - Local semantic search
+- **embedding_local** - sentence-transformers for semantic search
 
 ### Perception & Output
 - **voice_input** - Speech-to-text (local engines)

@@ -10,7 +10,7 @@ import json
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Set
+from typing import Dict, List, Optional, Any, Callable, Set, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -239,7 +239,7 @@ class ModuleManager:
             return True
         return False
     
-    def can_load(self, module_id: str) -> tuple[bool, str]:
+    def can_load(self, module_id: str) -> Tuple[bool, str]:
         """
         Check if a module can be loaded.
         
