@@ -1,5 +1,10 @@
 # Enigma Engine
 
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: autopep8](https://img.shields.io/badge/code%20style-autopep8-000000.svg)](https://github.com/hhatto/autopep8)
+[![PyTorch](https://img.shields.io/badge/PyTorch-1.12%2B-ee4c2c.svg)](https://pytorch.org/)
+
 **Create your own AI from scratch.** No cloud required. Runs on anything from a Raspberry Pi to a gaming PC.
 
 ## What is this?
