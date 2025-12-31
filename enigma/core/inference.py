@@ -629,6 +629,178 @@ class EnigmaEngine:
             yield token
 
 
+    # =========================================================================
+    # Tool-Aware Generation
+    # =========================================================================
+    
+    def generate_with_tools(
+        self,
+        prompt: str,
+        module_manager=None,
+        max_gen: int = 200,
+        max_tool_iterations: int = 5,
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.1,
+        include_system_prompt: bool = True,
+        **kwargs
+    ) -> str:
+        """
+        Generate text with tool execution support.
+        
+        The AI can invoke tools during generation, and the results are fed back
+        for continued generation. This enables the AI to:
+          - Generate images when asked
+          - Control avatar expressions
+          - Search the web for information
+          - Read/write files
+          - And more
+        
+        Args:
+            prompt: Input text or user query
+            module_manager: ModuleManager instance for tool access
+            max_gen: Maximum tokens per generation step
+            max_tool_iterations: Maximum number of tool calls in sequence
+            temperature: Sampling temperature
+            top_k: Top-k sampling
+            top_p: Top-p sampling
+            repetition_penalty: Repetition penalty
+            include_system_prompt: Prepend tool usage instructions
+            **kwargs: Additional generation parameters
+            
+        Returns:
+            Complete generated text with tool results
+        """
+        from .tool_interface import ToolInterface
+        from .tool_prompts import get_tool_enabled_system_prompt
+        
+        # Create tool interface
+        tool_interface = ToolInterface(module_manager)
+        
+        # Prepend system prompt if requested
+        if include_system_prompt:
+            system_prompt = get_tool_enabled_system_prompt()
+            full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
+        else:
+            full_prompt = prompt
+        
+        # Generate with tool support
+        current_prompt = full_prompt
+        full_output = ""
+        iterations = 0
+        
+        while iterations < max_tool_iterations:
+            # Generate next chunk
+            output = self.generate(
+                current_prompt,
+                max_gen=max_gen,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                use_cache=True
+            )
+            
+            # Extract new content (remove the prompt if it's in the output)
+            if current_prompt in output:
+                new_content = output[len(current_prompt):]
+            else:
+                new_content = output
+            
+            # Check for tool calls in the new content
+            tool_call = tool_interface.parse_tool_call(new_content)
+            
+            if tool_call:
+                # Execute the tool
+                result = tool_interface.execute_tool(tool_call)
+                result_str = tool_interface.format_tool_result(result)
+                
+                # Append tool call and result to output
+                full_output += new_content[:tool_call.end_pos - tool_call.start_pos]
+                full_output += "\n" + result_str + "\n"
+                
+                # Update prompt for next iteration
+                current_prompt = full_prompt + full_output
+                iterations += 1
+                
+                # Continue generation after tool result
+                continue
+            else:
+                # No tool call found, we're done
+                full_output += new_content
+                break
+        
+        return full_output
+    
+    def stream_generate_with_tools(
+        self,
+        prompt: str,
+        module_manager=None,
+        max_gen: int = 200,
+        max_tool_iterations: int = 5,
+        include_system_prompt: bool = True,
+        **kwargs
+    ):
+        """
+        Stream generation with tool execution support.
+        
+        Yields tokens as they're generated, pausing for tool execution
+        when tool calls are detected.
+        
+        Args:
+            prompt: Input text
+            module_manager: ModuleManager for tool access
+            max_gen: Maximum tokens per step
+            max_tool_iterations: Maximum tool calls
+            include_system_prompt: Include tool instructions
+            **kwargs: Additional parameters
+            
+        Yields:
+            Generated tokens, including tool results
+        """
+        from .tool_interface import ToolInterface
+        from .tool_prompts import get_tool_enabled_system_prompt
+        
+        tool_interface = ToolInterface(module_manager)
+        
+        if include_system_prompt:
+            system_prompt = get_tool_enabled_system_prompt()
+            full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
+        else:
+            full_prompt = prompt
+        
+        current_prompt = full_prompt
+        buffer = ""
+        iterations = 0
+        
+        while iterations < max_tool_iterations:
+            # Stream generate
+            for token in self.stream_generate(current_prompt, max_gen=max_gen, **kwargs):
+                buffer += token
+                yield token
+                
+                # Check if we have a complete tool call
+                if '<|tool_end|>' in buffer:
+                    tool_call = tool_interface.parse_tool_call(buffer)
+                    if tool_call:
+                        # Execute tool
+                        result = tool_interface.execute_tool(tool_call)
+                        result_str = tool_interface.format_tool_result(result)
+                        
+                        # Yield result
+                        yield "\n" + result_str + "\n"
+                        
+                        # Update prompt
+                        current_prompt = full_prompt + buffer + "\n" + result_str + "\n"
+                        buffer = ""
+                        iterations += 1
+                        break
+            else:
+                # Generation completed without tool call
+                break
+
+
 # =============================================================================
 # Convenience Functions
 # =============================================================================

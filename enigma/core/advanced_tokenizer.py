@@ -78,9 +78,14 @@ class AdvancedBPETokenizer:
     
     # GPT-style regex pattern for pre-tokenization
     # Splits text into words, contractions, numbers, and punctuation
-    # Note: Using simpler pattern compatible with Python's re module
+    # Enhanced pattern for better code, numbers, and special character handling
     PAT = re.compile(
-        r"""'s|'t|'re|'ve|'m|'ll|'d| ?[a-zA-Z]+| ?[0-9]+| ?[^\s\w]+|\s+(?!\S)|\s+""",
+        r"""'(?:[sdmt]|ll|ve|re)|"""  # Contractions
+        r"""\s?\d+(?:\.\d+)?|"""  # Numbers (including decimals)
+        r"""\s?[a-zA-Z]+|"""  # Words
+        r"""\s?[^\s\w]+|"""  # Punctuation
+        r"""\s+(?!\S)|"""  # Trailing whitespace
+        r"""\s+""",  # Other whitespace
         re.IGNORECASE
     )
     
@@ -95,20 +100,62 @@ class AdvancedBPETokenizer:
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
         
-        # Special tokens with reserved IDs (0-19 reserved)
+        # Special tokens with reserved IDs (0-39 reserved for comprehensive tool use)
         self.special_tokens = {
+            # Core tokens
             "<|pad|>": 0,
             "<|start|>": 1,
             "<|end|>": 2,
             "<|unk|>": 3,
             "<|sep|>": 4,
             "<|mask|>": 5,
+            
+            # Legacy conversation tokens
             "<|Q|>": 6,
             "<|A|>": 7,
+            
+            # Modern conversation tokens
             "<|user|>": 8,
             "<|bot|>": 9,
-            "<|system|>": 10,
-            "<|newline|>": 11,
+            "<|assistant|>": 10,
+            "<|system|>": 11,
+            
+            # Tool invocation tokens
+            "<|tool_call|>": 12,
+            "<|tool_result|>": 13,
+            "<|tool_end|>": 14,
+            "<|tool_result_end|>": 15,
+            
+            # Modality tokens
+            "<|image|>": 16,
+            "<|audio|>": 17,
+            "<|video|>": 18,
+            "<|vision|>": 19,
+            
+            # Action/capability tokens
+            "<|generate_image|>": 20,
+            "<|avatar_action|>": 21,
+            "<|speak|>": 22,
+            "<|listen|>": 23,
+            "<|search_web|>": 24,
+            "<|read_file|>": 25,
+            "<|write_file|>": 26,
+            "<|capture_screen|>": 27,
+            "<|run_code|>": 28,
+            
+            # Formatting tokens
+            "<|newline|>": 29,
+            "<|tab|>": 30,
+            "<|code|>": 31,
+            "<|code_end|>": 32,
+            
+            # Meta tokens
+            "<|thinking|>": 33,
+            "<|thinking_end|>": 34,
+            "<|error|>": 35,
+            "<|warning|>": 36,
+            "<|success|>": 37,
+            "<|info|>": 38,
         }
         self.special_token_ids = {v: k for k, v in self.special_tokens.items()}
         
@@ -445,9 +492,11 @@ class AdvancedBPETokenizer:
             if idx in self.decoder:
                 token = self.decoder[idx]
                 
-                # Handle special tokens
+                 # Handle special tokens
                 if token in self.special_tokens:
-                    if skip_special_tokens:
+                    if not skip_special_tokens:
+                        tokens.append(token)
+                    else:
                         # Convert some special tokens to readable form
                         if token == '<|Q|>':
                             tokens.append('Q: ')
@@ -455,13 +504,15 @@ class AdvancedBPETokenizer:
                             tokens.append('A: ')
                         elif token == '<|user|>':
                             tokens.append('User: ')
-                        elif token == '<|bot|>':
+                        elif token == '<|bot|>' or token == '<|assistant|>':
                             tokens.append('Bot: ')
                         elif token == '<|system|>':
                             tokens.append('System: ')
                         elif token == '<|newline|>':
                             tokens.append('\n')
-                        # Skip other special tokens
+                        elif token == '<|tab|>':
+                            tokens.append('\t')
+                        # Skip other special tokens when skip_special_tokens=True
                     continue
                 
                 tokens.append(token)
@@ -478,28 +529,100 @@ class AdvancedBPETokenizer:
         
         return text
     
-    def save(self, path: Path):
-        """Save tokenizer to file."""
+    def encode_stream(self, text_stream, add_special_tokens: bool = True, chunk_size: int = 1000):
+        """
+        Stream encode text in chunks.
+        
+        Args:
+            text_stream: Iterable of text chunks
+            add_special_tokens: Whether to add start/end tokens
+            chunk_size: Process text in chunks of this size
+            
+        Yields:
+            Lists of token IDs
+        """
+        buffer = ""
+        first_chunk = True
+        
+        for text_chunk in text_stream:
+            buffer += text_chunk
+            
+            # Process complete chunks
+            while len(buffer) >= chunk_size:
+                chunk = buffer[:chunk_size]
+                buffer = buffer[chunk_size:]
+                
+                ids = self.encode(chunk, add_special_tokens=first_chunk and add_special_tokens)
+                first_chunk = False
+                yield ids
+        
+        # Process remaining buffer
+        if buffer:
+            ids = self.encode(buffer, add_special_tokens=first_chunk and add_special_tokens)
+            yield ids
+    
+    def decode_stream(self, id_stream, skip_special_tokens: bool = True):
+        """
+        Stream decode token IDs in chunks.
+        
+        Args:
+            id_stream: Iterable of token ID lists
+            skip_special_tokens: Whether to skip special tokens
+            
+        Yields:
+            Decoded text chunks
+        """
+        for ids in id_stream:
+            text = self.decode(ids, skip_special_tokens=skip_special_tokens)
+            if text:
+                yield text
+    
+    def save(self, path: Path, save_merges_separately: bool = False):
+        """
+        Save tokenizer to file.
+        
+        Args:
+            path: Path to save tokenizer
+            save_merges_separately: If True, save merges to a separate .merges file
+        """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         
         data = {
-            'version': '2.0',
+            'version': '2.1',
             'vocab_size': self.vocab_size,
             'encoder': self.encoder,
-            'bpe_ranks': {f"{k[0]}|||{k[1]}": v for k, v in self.bpe_ranks.items()},
             'special_tokens': self.special_tokens,
         }
         
+        if not save_merges_separately:
+            # Save merges in main file
+            data['bpe_ranks'] = {f"{k[0]}|||{k[1]}": v for k, v in self.bpe_ranks.items()}
+        
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        # Save merges separately if requested
+        if save_merges_separately and self.bpe_ranks:
+            merges_path = path.parent / f"{path.stem}.merges"
+            with open(merges_path, 'w', encoding='utf-8') as f:
+                f.write("#version: 2.1\n")
+                # Write merges in order of rank
+                sorted_merges = sorted(self.bpe_ranks.items(), key=lambda x: x[1])
+                for (first, second), rank in sorted_merges:
+                    f.write(f"{first} {second}\n")
+            print(f"Saved merges to {merges_path}")
         
         print(f"Saved tokenizer to {path}")
         print(f"  Vocab size: {self.vocab_size:,}")
         print(f"  Merges: {len(self.bpe_ranks):,}")
     
     def load(self, path: Path):
-        """Load tokenizer from file."""
+        """
+        Load tokenizer from file.
+        
+        Automatically loads merges from separate .merges file if it exists.
+        """
         path = Path(path)
         
         with open(path, 'r', encoding='utf-8') as f:
@@ -510,12 +633,28 @@ class AdvancedBPETokenizer:
                         for k, v in self.encoder.items()}
         self.decoder = {v: k for k, v in self.encoder.items()}
         
-        # Parse bpe_ranks
+        # Parse bpe_ranks from main file if present
         self.bpe_ranks = {}
-        for k, v in data.get('bpe_ranks', {}).items():
-            parts = k.split('|||')
-            if len(parts) == 2:
-                self.bpe_ranks[(parts[0], parts[1])] = v
+        if 'bpe_ranks' in data:
+            for k, v in data.get('bpe_ranks', {}).items():
+                parts = k.split('|||')
+                if len(parts) == 2:
+                    self.bpe_ranks[(parts[0], parts[1])] = v
+        
+        # Try to load from separate merges file
+        merges_path = path.parent / f"{path.stem}.merges"
+        if merges_path.exists():
+            with open(merges_path, 'r', encoding='utf-8') as f:
+                rank = 0
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#') or not line:
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        self.bpe_ranks[(parts[0], parts[1])] = rank
+                        rank += 1
+            print(f"Loaded merges from {merges_path}")
         
         if 'special_tokens' in data:
             self.special_tokens = data['special_tokens']
