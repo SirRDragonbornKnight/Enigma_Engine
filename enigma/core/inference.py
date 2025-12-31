@@ -270,17 +270,44 @@ class EnigmaEngine:
 
         Args:
             prompt: Input text to continue
-            max_gen: Maximum tokens to generate
-            temperature: Sampling temperature (higher = more random)
-            top_k: Top-k sampling (0 to disable)
-            top_p: Top-p (nucleus) sampling threshold
-            repetition_penalty: Penalty for repeating tokens
+            max_gen: Maximum tokens to generate (must be > 0)
+            temperature: Sampling temperature (higher = more random, > 0)
+            top_k: Top-k sampling (>= 0 to disable)
+            top_p: Top-p (nucleus) sampling threshold (0-1)
+            repetition_penalty: Penalty for repeating tokens (>= 1.0)
             stop_strings: List of strings to stop generation at
             use_cache: Use KV-cache for faster generation
 
         Returns:
             Generated text (including the prompt)
+
+        Raises:
+            ValueError: If parameters are out of valid range
+            TypeError: If prompt is not a string
         """
+        # Validate inputs
+        if not isinstance(prompt, str):
+            raise TypeError(f"prompt must be a string, got {type(prompt).__name__}")
+
+        if not prompt.strip():
+            logger.warning("Empty prompt provided")
+            return ""
+
+        if max_gen <= 0:
+            raise ValueError(f"max_gen must be positive, got {max_gen}")
+
+        if temperature <= 0:
+            raise ValueError(f"temperature must be positive, got {temperature}")
+
+        if top_k < 0:
+            raise ValueError(f"top_k must be non-negative, got {top_k}")
+
+        if not 0 <= top_p <= 1:
+            raise ValueError(f"top_p must be between 0 and 1, got {top_p}")
+
+        if repetition_penalty < 1.0:
+            raise ValueError(f"repetition_penalty must be >= 1.0, got {repetition_penalty}")
+
         # Encode input
         input_ids = self._encode_prompt(prompt)
 
