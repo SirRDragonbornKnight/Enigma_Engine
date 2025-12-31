@@ -1,0 +1,39 @@
+# Enigma Engine Pre-commit Configuration
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Python code formatting
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: mixed-line-ending
+
+  # Python linting
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: ['--config=.flake8']
+
+  # Python formatting (optional - uncomment to enable)
+  # - repo: https://github.com/psf/black
+  #   rev: 23.12.1
+  #   hooks:
+  #     - id: black
+  #       language_version: python3.9
+
+  # Import sorting (optional - uncomment to enable)
+  # - repo: https://github.com/PyCQA/isort
+  #   rev: 5.13.2
+  #   hooks:
+  #     - id: isort
+  #       args: ['--profile', 'black']
