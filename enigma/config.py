@@ -1,6 +1,5 @@
 """
 Enigma Engine Configuration
-============================
 
 Central configuration for all Enigma components.
 Provides sensible defaults, validation, and preset management.
@@ -8,6 +7,7 @@ Provides sensible defaults, validation, and preset management.
 from pathlib import Path
 from typing import Dict, Any, List
 import os
+from typing import Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)

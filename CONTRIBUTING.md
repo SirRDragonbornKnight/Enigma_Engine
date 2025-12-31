@@ -214,7 +214,114 @@ class MyImageGen(ImageAddon):
 - **PascalCase** for classes
 - **UPPER_CASE** for constants
 
-### Code Quality
+### Code Quality Requirements
+
+All new code must follow these standards:
+
+#### 1. Type Hints
+
+Add type hints to all function signatures:
+
+```python
+# Good ✓
+def process_data(input: str, max_length: int = 100) -> Dict[str, Any]:
+    return {"result": input[:max_length]}
+
+# Bad ✗
+def process_data(input, max_length=100):
+    return {"result": input[:max_length]}
+```
+
+#### 2. Error Handling
+
+Use specific exception types, never bare `except:`:
+
+```python
+# Good ✓
+try:
+    result = risky_operation()
+except (ValueError, KeyError) as e:
+    logger.error(f"Operation failed: {e}")
+    return None
+
+# Bad ✗
+try:
+    result = risky_operation()
+except:
+    pass
+```
+
+#### 3. Input Validation
+
+Validate all user inputs at function boundaries:
+
+```python
+# Good ✓
+def save_file(path: str, content: str) -> bool:
+    if not path:
+        raise ValueError("Path cannot be empty")
+    if not content:
+        raise ValueError("Content cannot be empty")
+    # ... rest of function
+
+# Bad ✗
+def save_file(path, content):
+    # No validation, might crash with None values
+    with open(path, 'w') as f:
+        f.write(content)
+```
+
+#### 4. Resource Limits
+
+Add limits to prevent resource exhaustion:
+
+```python
+# Good ✓
+def read_file(path: str, max_size: int = 100 * 1024 * 1024) -> str:
+    file_size = Path(path).stat().st_size
+    if file_size > max_size:
+        raise ValueError(f"File too large: {file_size} bytes")
+    with open(path, 'r') as f:
+        return f.read()
+
+# Bad ✗
+def read_file(path):
+    # Could read a 10GB file into memory!
+    with open(path, 'r') as f:
+        return f.read()
+```
+
+#### 5. Documentation
+
+Document all public APIs:
+
+```python
+# Good ✓
+def calculate_loss(predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    """
+    Calculate cross-entropy loss between predictions and targets.
+    
+    Args:
+        predictions: Model predictions of shape (batch, vocab_size)
+        targets: Ground truth labels of shape (batch,)
+        
+    Returns:
+        Scalar loss tensor
+        
+    Example:
+        >>> preds = torch.randn(32, 1000)
+        >>> targets = torch.randint(0, 1000, (32,))
+        >>> loss = calculate_loss(preds, targets)
+    """
+    return F.cross_entropy(predictions, targets)
+
+# Bad ✗
+def calculate_loss(predictions, targets):
+    # No documentation
+    return F.cross_entropy(predictions, targets)
+```
+
+### Code Formatting
 
 ```bash
 # Format code
@@ -225,6 +332,61 @@ flake8 enigma/
 
 # Type checking
 mypy enigma/
+```
+
+### Common Patterns
+
+#### Safe File Operations
+
+```python
+from pathlib import Path
+
+def safe_read(path: str) -> Optional[str]:
+    """Read file with proper error handling."""
+    try:
+        p = Path(path).expanduser().resolve()
+        if not p.exists():
+            logger.error(f"File not found: {p}")
+            return None
+        return p.read_text(encoding='utf-8')
+    except (IOError, UnicodeDecodeError) as e:
+        logger.error(f"Failed to read {path}: {e}")
+        return None
+```
+
+#### Safe Network Operations
+
+```python
+def fetch_url(url: str, timeout: int = 10) -> Optional[bytes]:
+    """Fetch URL with timeout and error handling."""
+    if not url.startswith(('http://', 'https://')):
+        raise ValueError("Invalid URL scheme")
+    
+    try:
+        response = urllib.request.urlopen(url, timeout=timeout)
+        return response.read()
+    except urllib.error.URLError as e:
+        logger.error(f"Failed to fetch {url}: {e}")
+        return None
+```
+
+#### Module Loading Pattern
+
+```python
+def load(self) -> bool:
+    """Load module with proper error handling."""
+    try:
+        # Import and initialize
+        from my_package import MyClass
+        self._instance = MyClass()
+        self.is_loaded = True
+        return True
+    except ImportError:
+        logger.warning("Package not installed: pip install my_package")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to load module: {e}")
+        return False
 ```
 
 ### Documentation
