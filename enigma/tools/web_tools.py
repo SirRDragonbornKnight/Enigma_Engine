@@ -30,10 +30,26 @@ class WebSearchTool(Tool):
         """
         Search using DuckDuckGo Lite (simpler, more reliable).
         No API key required.
+        
+        Args:
+            query: Search query string
+            num_results: Number of results to return (default: 5)
+            
+        Returns:
+            Dictionary with success status and search results
         """
         try:
+            if not query or not query.strip():
+                return {"success": False, "error": "Query cannot be empty"}
+            
+            if num_results <= 0:
+                return {"success": False, "error": "num_results must be positive"}
+            
+            if num_results > 20:
+                num_results = 20  # Reasonable limit
+            
             # Use DuckDuckGo Lite - simpler HTML
-            encoded_query = urllib.parse.quote(query)
+            encoded_query = urllib.parse.quote(query.strip())
             url = f"https://lite.duckduckgo.com/lite/?q={encoded_query}"
             
             headers = {
@@ -88,6 +104,8 @@ class WebSearchTool(Tool):
                 "results": results
             }
             
+        except urllib.error.URLError as e:
+            return {"success": False, "error": f"Network error: {e}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -105,8 +123,30 @@ class FetchWebpageTool(Tool):
     }
     
     def execute(self, url: str, max_length: int = 5000, **kwargs) -> Dict[str, Any]:
-        """Fetch webpage and extract text."""
+        """
+        Fetch webpage and extract text.
+        
+        Args:
+            url: URL to fetch
+            max_length: Maximum characters to return
+            
+        Returns:
+            Dictionary with success status and webpage content
+        """
         try:
+            if not url or not url.strip():
+                return {"success": False, "error": "URL cannot be empty"}
+            
+            # Validate URL format
+            if not url.startswith(('http://', 'https://')):
+                return {"success": False, "error": "URL must start with http:// or https://"}
+            
+            if max_length <= 0:
+                return {"success": False, "error": "max_length must be positive"}
+            
+            # Limit max_length to prevent memory issues
+            max_length = min(max_length, 100000)  # 100KB limit
+            
             headers = {
                 "User-Agent": "Mozilla/5.0 (compatible; EnigmaBot/1.0)"
             }
@@ -114,6 +154,11 @@ class FetchWebpageTool(Tool):
             req = urllib.request.Request(url, headers=headers)
             
             with urllib.request.urlopen(req, timeout=15) as response:
+                # Check content type
+                content_type = response.headers.get('Content-Type', '')
+                if 'text/html' not in content_type and 'text/plain' not in content_type:
+                    return {"success": False, "error": f"Unsupported content type: {content_type}"}
+                
                 html = response.read().decode('utf-8', errors='ignore')
             
             # Extract text content (remove HTML tags)
@@ -143,6 +188,10 @@ class FetchWebpageTool(Tool):
                 "content": text
             }
             
+        except urllib.error.HTTPError as e:
+            return {"success": False, "error": f"HTTP error {e.code}: {e.reason}"}
+        except urllib.error.URLError as e:
+            return {"success": False, "error": f"Network error: {e}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
