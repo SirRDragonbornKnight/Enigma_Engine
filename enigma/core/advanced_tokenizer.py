@@ -188,14 +188,15 @@ class AdvancedBPETokenizer:
         
         self.vocab_size = len(self.encoder)
         
-        # Compile pattern
+        # Compile pattern - try advanced regex, fall back to standard
         try:
             import regex
             self.pat = regex.compile(
                 r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
             )
         except ImportError:
-            self.pat = self.PAT_FALLBACK
+            # Use the standard re pattern defined as class variable
+            self.pat = self.PAT
     
     def _init_base_vocab(self):
         """Initialize vocabulary with special tokens and byte-level tokens."""
