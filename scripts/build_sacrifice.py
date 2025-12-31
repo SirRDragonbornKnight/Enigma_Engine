@@ -21,16 +21,35 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
 
-from enigma.core.model import Enigma, create_model, MODEL_PRESETS, EnigmaConfig
-from enigma.core.training import Trainer, TrainingConfig, train_model
-from enigma.core.tokenizer import train_tokenizer
+from enigma.core.model import Enigma, create_model
+from enigma.core.training import Trainer, TrainingConfig
 from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+
+# Constants
+DEFAULT_VOCAB_SIZE = 8000
+DEFAULT_BATCH_SIZE = 8
+DEFAULT_LEARNING_RATE = 3e-4
+DEFAULT_EPOCHS = 30
+DEFAULT_WEIGHT_DECAY = 0.1
+DEFAULT_WARMUP_STEPS = 100
+DEFAULT_GRAD_CLIP = 1.0
+DEFAULT_GRAD_ACCUMULATION = 4
+MIN_FREQUENCY = 2
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / 'data'
 MODELS_DIR = BASE_DIR / 'models'
 VOCAB_DIR = BASE_DIR / 'enigma' / 'vocab_model'
+
+# Training data files to load
+TRAINING_DATA_FILES = [
+    'default_training_data.txt',
+    'starter_training.txt',
+    'training_data.txt',
+    'data.txt',
+    'user_training.txt',
+]
 
 
 def print_header(title: str):
@@ -41,53 +60,84 @@ def print_header(title: str):
 
 
 def gather_training_data() -> str:
-    """Gather all training data from data directory."""
-    data_files = [
-        'default_training_data.txt',
-        'starter_training.txt',
-        'training_data.txt',
-        'data.txt',
-        'user_training.txt',
-    ]
+    """Gather all training data from data directory.
     
+    Returns:
+        str: Combined training text
+    """
     all_text = []
     total_chars = 0
+    files_loaded = 0
     
-    for filename in data_files:
+    for filename in TRAINING_DATA_FILES:
         filepath = DATA_DIR / filename
         if filepath.exists():
-            text = filepath.read_text(encoding='utf-8', errors='ignore')
-            all_text.append(text)
-            total_chars += len(text)
-            print(f"  Loaded {filename}: {len(text):,} chars")
+            try:
+                text = filepath.read_text(encoding='utf-8', errors='ignore')
+                if text.strip():  # Only add non-empty files
+                    all_text.append(text)
+                    total_chars += len(text)
+                    files_loaded += 1
+                    print(f"  ✓ {filename}: {len(text):,} chars")
+            except Exception as e:
+                print(f"  ✗ {filename}: Error reading file - {e}")
+        else:
+            print(f"  - {filename}: Not found (skipping)")
+    
+    if not all_text:
+        raise ValueError("No training data found! Please add data files to the data/ directory.")
     
     combined = '\n'.join(all_text)
-    print(f"\n  Total: {total_chars:,} characters")
+    print(f"\n  Total: {files_loaded} files, {total_chars:,} characters")
     
     return combined
 
 
-def train_bpe_tokenizer(vocab_size: int = 8000) -> AdvancedBPETokenizer:
-    """Train the advanced BPE tokenizer."""
+def train_bpe_tokenizer(
+    vocab_size: int = DEFAULT_VOCAB_SIZE,
+    training_text: str = None
+) -> AdvancedBPETokenizer:
+    """Train the advanced BPE tokenizer.
+    
+    Args:
+        vocab_size: Target vocabulary size
+        training_text: Pre-loaded training text (optional, will load if not provided)
+    
+    Returns:
+        AdvancedBPETokenizer: Trained tokenizer
+    """
     print_header("Training BPE Tokenizer")
     
-    # Gather data
-    combined_text = gather_training_data()
+    # Check if tokenizer already exists
+    VOCAB_DIR.mkdir(parents=True, exist_ok=True)
+    tokenizer_path = VOCAB_DIR / 'bpe_vocab.json'
+    
+    if tokenizer_path.exists():
+        print(f"  Found existing tokenizer at {tokenizer_path}")
+        tokenizer = AdvancedBPETokenizer(vocab_file=tokenizer_path)
+        print(f"  ✓ Loaded tokenizer: {tokenizer.vocab_size:,} tokens")
+        return tokenizer
+    
+    # Gather training data if not provided
+    if training_text is None:
+        print("  Gathering training data...")
+        training_text = gather_training_data()
+    else:
+        print("  Using pre-loaded training data")
     
     # Create and train tokenizer
+    print(f"\n  Training tokenizer (vocab_size={vocab_size})...")
     tokenizer = AdvancedBPETokenizer()
     tokenizer.train(
-        texts=[combined_text],
+        texts=[training_text],
         vocab_size=vocab_size,
-        min_frequency=2,
+        min_frequency=MIN_FREQUENCY,
         verbose=True,
     )
     
     # Save tokenizer
-    VOCAB_DIR.mkdir(parents=True, exist_ok=True)
-    tokenizer_path = VOCAB_DIR / 'bpe_vocab.json'
     tokenizer.save(tokenizer_path)
-    print(f"\n  Saved tokenizer to {tokenizer_path}")
+    print(f"\n  ✓ Saved tokenizer to {tokenizer_path}")
     
     # Test tokenizer
     print("\n  Testing tokenizer:")
@@ -99,7 +149,8 @@ def train_bpe_tokenizer(vocab_size: int = 8000) -> AdvancedBPETokenizer:
     for s in test_strings:
         tokens = tokenizer.encode(s)
         decoded = tokenizer.decode(tokens)
-        print(f"    '{s}' -> {len(tokens)} tokens -> '{decoded}'")
+        match = "✓" if decoded == s else "✗"
+        print(f"    {match} '{s}' -> {len(tokens)} tokens")
     
     return tokenizer
 
@@ -134,25 +185,42 @@ def create_sacrifice_model(
 def train_sacrifice_model(
     model: Enigma,
     tokenizer: AdvancedBPETokenizer,
-    epochs: int = 30,
-    batch_size: int = 8,
-    learning_rate: float = 3e-4,
+    training_text: str = None,
+    epochs: int = DEFAULT_EPOCHS,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    learning_rate: float = DEFAULT_LEARNING_RATE,
 ) -> dict:
-    """Train the model using the production trainer."""
+    """Train the model using the production trainer.
+    
+    Args:
+        model: Enigma model to train
+        tokenizer: Tokenizer for text encoding
+        training_text: Pre-loaded training text (optional, will load if not provided)
+        epochs: Number of training epochs
+        batch_size: Training batch size
+        learning_rate: Learning rate
+    
+    Returns:
+        dict: Training results
+    """
     print_header("Training Model")
     
-    # Gather training data
-    combined = gather_training_data()
+    # Gather training data if not provided
+    if training_text is None:
+        print("  Loading training data...")
+        training_text = gather_training_data()
+    else:
+        print("  Using pre-loaded training data")
     
     # Training configuration
     config = TrainingConfig(
         epochs=epochs,
         batch_size=batch_size,
         learning_rate=learning_rate,
-        weight_decay=0.1,
-        warmup_steps=100,
-        grad_clip=1.0,
-        grad_accumulation_steps=4,
+        weight_decay=DEFAULT_WEIGHT_DECAY,
+        warmup_steps=DEFAULT_WARMUP_STEPS,
+        grad_clip=DEFAULT_GRAD_CLIP,
+        grad_accumulation_steps=DEFAULT_GRAD_ACCUMULATION,
         use_amp=torch.cuda.is_available(),
         max_seq_len=model.config.max_seq_len,
         save_every=5,
@@ -162,10 +230,12 @@ def train_sacrifice_model(
     
     # Create trainer
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"\n  Device: {device}")
     trainer = Trainer(model, tokenizer, config, device=device)
     
     # Train
-    results = trainer.train(texts=[combined], epochs=epochs)
+    print("\n  Starting training...")
+    results = trainer.train(texts=[training_text], epochs=epochs)
     
     return results
 
@@ -278,16 +348,29 @@ def main():
     
     start_time = time.time()
     
+    # Load training data once (if we're going to use it)
+    training_data = None
+    if not args.skip_tokenizer or not args.skip_training:
+        print_header("Loading Training Data")
+        training_data = gather_training_data()
+    
     # Step 1: Train tokenizer
     if args.skip_tokenizer:
         tokenizer_path = VOCAB_DIR / 'bpe_vocab.json'
         if tokenizer_path.exists():
             print_header("Loading Existing Tokenizer")
             tokenizer = AdvancedBPETokenizer(vocab_file=tokenizer_path)
+            print(f"  ✓ Loaded tokenizer: {tokenizer.vocab_size:,} tokens")
         else:
-            tokenizer = train_bpe_tokenizer(vocab_size=args.vocab_size)
+            tokenizer = train_bpe_tokenizer(
+                vocab_size=args.vocab_size,
+                training_text=training_data
+            )
     else:
-        tokenizer = train_bpe_tokenizer(vocab_size=args.vocab_size)
+        tokenizer = train_bpe_tokenizer(
+            vocab_size=args.vocab_size,
+            training_text=training_data
+        )
     
     # Step 2: Create model
     model = create_sacrifice_model(tokenizer, size=args.size)
@@ -297,6 +380,7 @@ def main():
         results = train_sacrifice_model(
             model, 
             tokenizer,
+            training_text=training_data,
             epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.lr,

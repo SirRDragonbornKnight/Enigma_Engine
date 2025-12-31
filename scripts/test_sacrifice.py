@@ -11,6 +11,7 @@ Usage:
 import sys
 import argparse
 from pathlib import Path
+from typing import Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -18,19 +19,37 @@ import torch
 
 from enigma.core.model import Enigma, create_model, MODEL_PRESETS
 from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
-from enigma.core.inference import EnigmaEngine
+
+# Constants
+DEFAULT_MAX_TOKENS = 100
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_TOP_K = 50
+DEFAULT_TOP_P = 0.9
 
 # Paths
 MODELS_DIR = Path(__file__).parent.parent / 'models'
 VOCAB_DIR = Path(__file__).parent.parent / 'enigma' / 'vocab_model'
 
 
-def load_sacrifice_model(model_dir: Path = None):
-    """Load the sacrifice model and tokenizer."""
+def load_sacrifice_model(model_dir: Path = None) -> Tuple[Enigma, AdvancedBPETokenizer, str]:
+    """Load the sacrifice model and tokenizer.
+    
+    Args:
+        model_dir: Path to model directory (default: models/sacrifice)
+    
+    Returns:
+        tuple: (model, tokenizer, device)
+    
+    Raises:
+        FileNotFoundError: If model files are not found
+    """
     if model_dir is None:
         model_dir = MODELS_DIR / 'sacrifice'
     
     model_dir = Path(model_dir)
+    
+    if not model_dir.exists():
+        raise FileNotFoundError(f"Model directory not found: {model_dir}")
     
     print("Loading model...")
     
@@ -38,6 +57,9 @@ def load_sacrifice_model(model_dir: Path = None):
     tokenizer_path = model_dir / 'tokenizer.json'
     if not tokenizer_path.exists():
         tokenizer_path = VOCAB_DIR / 'bpe_vocab.json'
+    
+    if not tokenizer_path.exists():
+        raise FileNotFoundError(f"Tokenizer not found at: {tokenizer_path}")
     
     tokenizer = AdvancedBPETokenizer(vocab_file=tokenizer_path)
     print(f"  Tokenizer: {tokenizer.vocab_size:,} tokens")
@@ -56,6 +78,9 @@ def load_sacrifice_model(model_dir: Path = None):
         if 'embed' in key.lower() and tensor.dim() == 2:
             hidden_dim = tensor.shape[1]
             break
+    
+    if hidden_dim is None:
+        raise ValueError("Could not infer model dimensions from state dict")
     
     # Find matching preset
     model_size = "small"
@@ -87,11 +112,24 @@ def generate_response(
     tokenizer: AdvancedBPETokenizer,
     prompt: str,
     device: str,
-    max_tokens: int = 100,
-    temperature: float = 0.7,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    temperature: float = DEFAULT_TEMPERATURE,
     stream: bool = True,
 ) -> str:
-    """Generate a response from the model."""
+    """Generate a response from the model.
+    
+    Args:
+        model: The Enigma model
+        tokenizer: Tokenizer for encoding/decoding
+        prompt: User input prompt
+        device: Device to run on ('cuda' or 'cpu')
+        max_tokens: Maximum tokens to generate
+        temperature: Sampling temperature
+        stream: Whether to stream output
+    
+    Returns:
+        str: Generated response
+    """
     # Format as Q&A
     formatted = f"Q: {prompt}\nA:"
     
@@ -104,22 +142,23 @@ def generate_response(
     
     with torch.no_grad():
         if stream:
-            # Streaming generation
+            # Streaming generation - print as we generate
             print("AI: ", end="", flush=True)
             
             generated = input_ids
             response_started = False
+            response_text = ""
             
             for _ in range(max_tokens):
                 # Get logits for next token
                 logits = model(generated)
                 next_logits = logits[:, -1, :] / temperature
                 
-                # Top-k sampling
-                top_k = 50
-                values, indices = torch.topk(next_logits, top_k)
-                next_logits = torch.full_like(next_logits, float('-inf'))
-                next_logits.scatter_(1, indices, values)
+                # Top-k sampling with in-place masking for efficiency
+                k = min(DEFAULT_TOP_K, next_logits.size(-1))
+                values, _ = torch.topk(next_logits, k)
+                next_logits = next_logits.clone()
+                next_logits[next_logits < values[0, -1]] = float('-inf')
                 
                 # Sample
                 probs = torch.softmax(next_logits, dim=-1)
@@ -128,36 +167,42 @@ def generate_response(
                 # Append
                 generated = torch.cat([generated, next_token], dim=1)
                 
-                # Decode token
-                token_text = tokenizer.decode([next_token[0, 0].item()])
-                
-                # Skip until we're past "A:"
+                # Decode and print token
                 full_text = tokenizer.decode(generated[0].tolist())
+                
+                # Check if we've reached the answer section
                 if "A:" in full_text and not response_started:
                     response_started = True
-                    # Print what comes after A:
-                    response_part = full_text.split("A:", 1)[-1]
-                    print(response_part, end="", flush=True)
+                    response_text = full_text.split("A:", 1)[-1]
+                    print(response_text, end="", flush=True)
                 elif response_started:
-                    print(token_text, end="", flush=True)
+                    new_response = full_text.split("A:", 1)[-1]
+                    # Only print the new part
+                    new_part = new_response[len(response_text):]
+                    print(new_part, end="", flush=True)
+                    response_text = new_response
                 
-                # Check for end
+                # Check for end conditions
                 if next_token[0, 0].item() == tokenizer.eos_token_id:
                     break
-                if "\nQ:" in full_text.split("A:", 1)[-1] if "A:" in full_text else False:
+                if "\nQ:" in response_text:
                     break
             
             print()  # Newline at end
             
-            return tokenizer.decode(generated[0].tolist())
+            # Clean up response
+            if "\nQ:" in response_text:
+                response_text = response_text.split("\nQ:")[0]
+            
+            return response_text.strip()
         else:
             # Non-streaming generation
             output_ids = model.generate(
                 input_ids,
                 max_new_tokens=max_tokens,
                 temperature=temperature,
-                top_k=50,
-                top_p=0.9,
+                top_k=DEFAULT_TOP_K,
+                top_p=DEFAULT_TOP_P,
             )
             
             full_response = tokenizer.decode(output_ids[0].tolist())
@@ -174,20 +219,29 @@ def generate_response(
 
 
 def main():
+    """Main entry point for interactive testing."""
     parser = argparse.ArgumentParser(description="Test Sacrifice Model")
     parser.add_argument("--model", type=str, default=None,
                        help="Path to model directory")
-    parser.add_argument("--max-tokens", type=int, default=100,
+    parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS,
                        help="Maximum tokens to generate")
-    parser.add_argument("--temperature", type=float, default=0.7,
+    parser.add_argument("--temperature", type=float, default=DEFAULT_TEMPERATURE,
                        help="Sampling temperature")
     parser.add_argument("--no-stream", action="store_true",
                        help="Disable streaming output")
     args = parser.parse_args()
     
     # Load model
-    model_dir = Path(args.model) if args.model else None
-    model, tokenizer, device = load_sacrifice_model(model_dir)
+    try:
+        model_dir = Path(args.model) if args.model else None
+        model, tokenizer, device = load_sacrifice_model(model_dir)
+    except FileNotFoundError as e:
+        print(f"\nError: {e}")
+        print("\nPlease train a model first using: python scripts/build_sacrifice.py")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nError loading model: {e}")
+        sys.exit(1)
     
     print()
     print("=" * 50)
@@ -208,7 +262,7 @@ def main():
                 print("\nCommands:")
                 print("  quit, exit, q - Exit the program")
                 print("  help - Show this message")
-                print("  temp <value> - Set temperature (current: {:.1f})".format(args.temperature))
+                print(f"  temp <value> - Set temperature (current: {args.temperature:.1f})")
                 print()
                 continue
             
@@ -216,8 +270,8 @@ def main():
                 try:
                     args.temperature = float(user_input.split()[1])
                     print(f"Temperature set to {args.temperature}")
-                except:
-                    print("Invalid temperature value")
+                except (IndexError, ValueError):
+                    print("Invalid temperature value. Usage: temp 0.7")
                 continue
             
             if not user_input:
@@ -237,6 +291,8 @@ def main():
             break
         except Exception as e:
             print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
