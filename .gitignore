@@ -19,6 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
@@ -35,10 +36,27 @@ env/
 .project
 .pydevproject
 .settings/
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+
+# Linting/Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
 
 # Project specific
 *.pth
@@ -55,6 +73,8 @@ logs/
 tmp/
 temp/
 *.tmp
+*.bak
+*.swp
 
 # Test outputs
 test-test-test/
@@ -90,3 +110,6 @@ memory/*.db
 *.cache
 .pytest_cache/
 
+# Memory database (optional - comment out to keep)
+memory/*.db
+memory/*.db-*

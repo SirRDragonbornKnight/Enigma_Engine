@@ -1,0 +1,32 @@
+# Enigma Engine Development Requirements
+# Install with: pip install -r requirements-dev.txt
+
+# Include base requirements
+-r requirements.txt
+
+# === TESTING ===
+pytest>=7.0.0
+pytest-cov>=3.0.0
+pytest-xdist>=3.0.0  # Parallel test execution
+pytest-timeout>=2.1.0  # Timeout for long tests
+
+# === CODE QUALITY ===
+flake8>=5.0.0
+flake8-docstrings>=1.7.0
+flake8-bugbear>=23.0.0  # Additional bug checks
+mypy>=0.990
+autopep8>=2.0.0
+
+# === DOCUMENTATION ===
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.2.0
+
+# === DEBUGGING & PROFILING ===
+ipdb>=0.13.0  # Enhanced debugger
+memory-profiler>=0.60.0  # Memory profiling
+line-profiler>=4.0.0  # Line-by-line profiling
+
+# === UTILITIES ===
+pre-commit>=3.0.0  # Git hooks for quality checks
+black>=23.0.0  # Code formatter (optional)
+isort>=5.12.0  # Import sorting

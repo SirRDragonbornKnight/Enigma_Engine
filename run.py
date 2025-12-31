@@ -50,17 +50,22 @@ Examples:
 
     # If no arguments, show help and suggest GUI
     if not any([args.train, args.build, args.serve, args.run, args.gui]):
-        print("\nWelcome to Enigma Engine!")
-        print("=" * 50)
-        print("\nTo get started, run one of:")
-        print("  python run.py --gui                    # GUI (recommended)")
-        print("  python run.py --train                  # Train model")
-        print("  python run.py --train --model medium   # Train medium model")
-        print("  python run.py --build                  # Build from scratch")
-        print("  python run.py --run                    # CLI chat")
-        print("  python run.py --serve                  # API server")
-        print("\nFor more options: python run.py --help")
-        print()
+        print("\n" + "=" * 60)
+        print("  ⚡ ENIGMA ENGINE - Build Your Own AI")
+        print("=" * 60)
+        print("\n🚀 Quick Start Options:\n")
+        print("  python run.py --gui")
+        print("    └─ Launch GUI (recommended for beginners)")
+        print("\n  python run.py --train")
+        print("    └─ Train a model with default settings")
+        print("\n  python run.py --train --model medium")
+        print("    └─ Train a medium-sized model")
+        print("\n  python run.py --run")
+        print("    └─ Start CLI chat interface")
+        print("\n  python run.py --serve")
+        print("    └─ Start API server on localhost:5000")
+        print("\n📚 For detailed options: python run.py --help")
+        print("=" * 60 + "\n")
         return
 
     if args.build:
@@ -131,16 +136,35 @@ Examples:
         print("=" * 50)
         print("Type your message and press Enter.")
         print("Type 'quit' or 'exit' to stop.\n")
-        
+
         try:
             engine = EnigmaEngine()
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            print("Have you trained the model yet?")
-            print("Try: python run.py --train")
-            print("Or:  python run.py --gui")
+        except FileNotFoundError as e:
+            print(f"\n❌ Error: Model not found")
+            print(f"   {e}")
+            print("\n💡 To fix this:")
+            print("   1. Train a model first:")
+            print("      python run.py --train")
+            print("   2. Or use the GUI to train:")
+            print("      python run.py --gui")
             return
-            
+        except ImportError as e:
+            print(f"\n❌ Error: Missing dependency")
+            print(f"   {e}")
+            print("\n💡 To fix this:")
+            print("   Install required packages:")
+            print("      pip install -r requirements.txt")
+            return
+        except Exception as e:
+            print(f"\n❌ Error loading model: {e}")
+            print("\n💡 Troubleshooting:")
+            print("   • Check if the model file exists in the models/ directory")
+            print("   • Try retraining: python run.py --train --force")
+            print("   • Check logs for more details")
+            return
+
+        print("✓ Model loaded successfully!\n")
+
         while True:
             try:
                 prompt = input("You: ")
@@ -149,13 +173,17 @@ Examples:
                     break
                 if not prompt.strip():
                     continue
-                    
+
                 # Generate with streaming
                 print("AI: ", end="", flush=True)
-                for token in engine.stream_generate(prompt, max_gen=200):
-                    print(token, end="", flush=True)
+                try:
+                    for token in engine.stream_generate(prompt, max_gen=200):
+                        print(token, end="", flush=True)
+                except Exception as e:
+                    print(f"\n\n⚠️  Generation error: {e}")
+                    print("Try a different prompt or check the model.")
                 print("\n")
-                
+
             except KeyboardInterrupt:
                 print("\n\n[SYSTEM] Goodbye!")
                 break
@@ -164,8 +192,13 @@ Examples:
         try:
             from enigma.gui.enhanced_window import run_app
         except ImportError as e:
-            print(f"GUI requires PyQt5. Install with: pip install PyQt5")
-            print(f"Error: {e}")
+            print(f"\n❌ GUI requires PyQt5")
+            print(f"   Error: {e}")
+            print("\n💡 To fix this:")
+            print("   Install PyQt5:")
+            print("      pip install PyQt5")
+            print("\n   On Raspberry Pi, use the system package:")
+            print("      sudo apt install python3-pyqt5")
             sys.exit(1)
         run_app()
 
