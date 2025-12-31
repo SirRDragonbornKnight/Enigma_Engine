@@ -59,6 +59,16 @@ temp/
 # Test outputs
 test-test-test/
 
+# Secrets and configuration
+.env
+*.key
+*.pem
+secrets/
+credentials/
+*_secrets.json
+*_credentials.json
+enigma_config.json
+
 # Keep data structure but not contents
 data/*
 !data/.gitkeep
@@ -74,3 +84,9 @@ data/*
 # Keep models structure
 models/*
 !models/.gitkeep
+
+# Memory and cache
+memory/*.db
+*.cache
+.pytest_cache/
+
