@@ -10,7 +10,7 @@ import urllib.request
 import urllib.parse
 import json
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from .tool_registry import Tool
 
 

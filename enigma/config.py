@@ -5,7 +5,7 @@ This module provides configuration management for the Enigma Engine.
 """
 from pathlib import Path
 import os
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"

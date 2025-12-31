@@ -9,10 +9,9 @@ Tools:
   - delete_file: Delete a file
 """
 
-import os
 import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from .tool_registry import Tool
 
 
