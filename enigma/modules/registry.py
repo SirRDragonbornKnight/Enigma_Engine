@@ -469,6 +469,7 @@ class ImageGenAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["image_generation"],
+        is_cloud_service=True,
         config_schema={
             "provider": {"type": "choice", "options": ["openai", "replicate"], "default": "openai"},
             "model": {"type": "string", "default": "dall-e-3"},
@@ -529,6 +530,7 @@ class CodeGenAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["code_generation"],
+        is_cloud_service=True,
         config_schema={
             "model": {"type": "choice", "options": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"], "default": "gpt-4"},
             "api_key": {"type": "secret", "default": ""},
@@ -585,6 +587,7 @@ class VideoGenAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["video_generation"],
+        is_cloud_service=True,
         config_schema={
             "model": {"type": "string", "default": "zeroscope"},
             "api_key": {"type": "secret", "default": ""},
@@ -639,6 +642,7 @@ class AudioGenAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["audio_generation", "text_to_speech", "music_generation"],
+        is_cloud_service=True,
         config_schema={
             "provider": {"type": "choice", "options": ["elevenlabs", "replicate"], "default": "elevenlabs"},
             "api_key": {"type": "secret", "default": ""},
@@ -698,6 +702,7 @@ class EmbeddingAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["embeddings", "semantic_search"],
+        is_cloud_service=True,
         config_schema={
             "model": {"type": "choice", "options": ["text-embedding-3-small", "text-embedding-3-large"], "default": "text-embedding-3-small"},
             "api_key": {"type": "secret", "default": ""},
@@ -782,4 +787,20 @@ def list_by_category(category: ModuleCategory) -> List[ModuleInfo]:
     return [
         cls.get_info() for cls in MODULE_REGISTRY.values()
         if cls.get_info().category == category
+    ]
+
+
+def list_local_modules() -> List[ModuleInfo]:
+    """List modules that run 100% locally (no cloud/internet required)."""
+    return [
+        cls.get_info() for cls in MODULE_REGISTRY.values()
+        if not cls.get_info().is_cloud_service
+    ]
+
+
+def list_cloud_modules() -> List[ModuleInfo]:
+    """List modules that require cloud services and API keys."""
+    return [
+        cls.get_info() for cls in MODULE_REGISTRY.values()
+        if cls.get_info().is_cloud_service
     ]
