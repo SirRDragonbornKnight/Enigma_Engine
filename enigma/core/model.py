@@ -628,14 +628,15 @@ def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Enigm
     Args:
         size: Model size preset (tiny, small, medium, large, xl, etc.)
         vocab_size: Size of vocabulary (must be > 0)
-        **kwargs: Additional config overrides
+        **kwargs: Additional config overrides (unknown keys are logged and ignored)
 
     Returns:
         Configured Enigma model instance
 
     Raises:
         ValueError: If size is invalid or vocab_size is invalid
-        TypeError: If kwargs contain invalid configuration keys
+        TypeError: If size is not a string or vocab_size is not an integer
+        RuntimeError: If model initialization fails
 
     Example:
         >>> model = create_model('small', vocab_size=8000)

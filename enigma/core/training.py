@@ -661,9 +661,10 @@ def train_model(
             - epochs_completed: Number of epochs completed
 
     Raises:
-        ValueError: If parameters are invalid
+        ValueError: If parameters are invalid (epochs, paths)
+        TypeError: If parameter types are incorrect
         FileNotFoundError: If data file doesn't exist
-        RuntimeError: If training fails
+        RuntimeError: If training, tokenization, or model creation fails
     """
     # Validate inputs
     if epochs <= 0:
