@@ -110,6 +110,12 @@ class StableDiffusionLocal(ImageAddon):
 class OpenAIImage(ImageAddon):
     """
     OpenAI DALL-E image generation.
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and OpenAI API key.
+    
+    This addon connects to OpenAI's external cloud API to generate images.
+    All prompts are sent to OpenAI's servers.
+    
     Requires: openai
     """
     
@@ -181,6 +187,12 @@ class OpenAIImage(ImageAddon):
 class ReplicateImage(ImageAddon):
     """
     Replicate.com image generation (SDXL, Flux, etc).
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and Replicate API token.
+    
+    This addon connects to Replicate's external cloud API to generate images.
+    All prompts are sent to Replicate's servers.
+    
     Requires: replicate
     """
     
@@ -313,6 +325,12 @@ class EnigmaCode(CodeAddon):
 class OpenAICode(CodeAddon):
     """
     OpenAI GPT for code generation.
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and OpenAI API key.
+    
+    This addon connects to OpenAI's external cloud API (GPT-4) for code generation.
+    All prompts and code are sent to OpenAI's servers.
+    
     Good for complex code tasks.
     """
     
@@ -428,6 +446,11 @@ class OpenAICode(CodeAddon):
 class ReplicateVideo(VideoAddon):
     """
     Replicate.com video generation (Runway, AnimateDiff, etc).
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and Replicate API token.
+    
+    This addon connects to Replicate's external cloud API to generate videos.
+    All prompts are sent to Replicate's servers.
     """
     
     def __init__(self, api_key: Optional[str] = None,
@@ -589,6 +612,12 @@ class LocalVideo(VideoAddon):
 class ElevenLabsTTS(AudioAddon):
     """
     ElevenLabs text-to-speech.
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and ElevenLabs API key.
+    
+    This addon connects to ElevenLabs' external cloud API for voice synthesis.
+    All text is sent to ElevenLabs' servers.
+    
     High quality voice synthesis.
     """
     
@@ -715,6 +744,12 @@ class LocalTTS(AudioAddon):
 class ReplicateAudio(AudioAddon):
     """
     Replicate.com audio/music generation.
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and Replicate API token.
+    
+    This addon connects to Replicate's external cloud API for audio/music generation.
+    All prompts are sent to Replicate's servers.
+    
     Supports MusicGen, AudioCraft, etc.
     """
     
@@ -841,6 +876,12 @@ class LocalEmbedding(EmbeddingAddon):
 class OpenAIEmbedding(EmbeddingAddon):
     """
     OpenAI embeddings.
+    
+    ⚠️  CLOUD SERVICE: Requires internet connection and OpenAI API key.
+    
+    This addon connects to OpenAI's external cloud API for embeddings.
+    All text is sent to OpenAI's servers.
+    
     High quality for production use.
     """
     
