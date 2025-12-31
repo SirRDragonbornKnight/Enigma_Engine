@@ -78,9 +78,14 @@ class AdvancedBPETokenizer:
 
     # GPT-style regex pattern for pre-tokenization
     # Splits text into words, contractions, numbers, and punctuation
-    # Note: Using simpler pattern compatible with Python's re module
+    # Enhanced pattern for better code, numbers, and special character handling
     PAT = re.compile(
-        r"""'s|'t|'re|'ve|'m|'ll|'d| ?[a-zA-Z]+| ?[0-9]+| ?[^\s\w]+|\s+(?!\S)|\s+""",
+        r"""'(?:[sdmt]|ll|ve|re)|"""  # Contractions
+        r"""\s?\d+(?:\.\d+)?|"""  # Numbers (including decimals)
+        r"""\s?[a-zA-Z]+|"""  # Words
+        r"""\s?[^\s\w]+|"""  # Punctuation
+        r"""\s+(?!\S)|"""  # Trailing whitespace
+        r"""\s+""",  # Other whitespace
         re.IGNORECASE
     )
 
@@ -97,18 +102,60 @@ class AdvancedBPETokenizer:
 
         # Special tokens with reserved IDs (0-19 reserved)
         self.special_tokens = {
+            # Core tokens
             "<|pad|>": 0,
             "<|start|>": 1,
             "<|end|>": 2,
             "<|unk|>": 3,
             "<|sep|>": 4,
             "<|mask|>": 5,
+            
+            # Legacy conversation tokens
             "<|Q|>": 6,
             "<|A|>": 7,
+            
+            # Modern conversation tokens
             "<|user|>": 8,
             "<|bot|>": 9,
-            "<|system|>": 10,
-            "<|newline|>": 11,
+            "<|assistant|>": 10,
+            "<|system|>": 11,
+            
+            # Tool invocation tokens
+            "<|tool_call|>": 12,
+            "<|tool_result|>": 13,
+            "<|tool_end|>": 14,
+            "<|tool_result_end|>": 15,
+            
+            # Modality tokens
+            "<|image|>": 16,
+            "<|audio|>": 17,
+            "<|video|>": 18,
+            "<|vision|>": 19,
+            
+            # Action/capability tokens
+            "<|generate_image|>": 20,
+            "<|avatar_action|>": 21,
+            "<|speak|>": 22,
+            "<|listen|>": 23,
+            "<|search_web|>": 24,
+            "<|read_file|>": 25,
+            "<|write_file|>": 26,
+            "<|capture_screen|>": 27,
+            "<|run_code|>": 28,
+            
+            # Formatting tokens
+            "<|newline|>": 29,
+            "<|tab|>": 30,
+            "<|code|>": 31,
+            "<|code_end|>": 32,
+            
+            # Meta tokens
+            "<|thinking|>": 33,
+            "<|thinking_end|>": 34,
+            "<|error|>": 35,
+            "<|warning|>": 36,
+            "<|success|>": 37,
+            "<|info|>": 38,
         }
         self.special_token_ids = {v: k for k, v in self.special_tokens.items()}
 
@@ -140,6 +187,8 @@ class AdvancedBPETokenizer:
             self._init_base_vocab()
 
         self.vocab_size = len(self.encoder)
+        
+        # Compile pattern - try advanced regex, fall back to standard
 
         # Compile pattern
         try:
@@ -148,6 +197,9 @@ class AdvancedBPETokenizer:
                 r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
             )
         except ImportError:
+            # Use the standard re pattern defined as class variable
+            self.pat = self.PAT
+    
             self.pat = self.PAT_FALLBACK
 
     def _init_base_vocab(self):
@@ -447,7 +499,9 @@ class AdvancedBPETokenizer:
 
                 # Handle special tokens
                 if token in self.special_tokens:
-                    if skip_special_tokens:
+                    if not skip_special_tokens:
+                        tokens.append(token)
+                    else:
                         # Convert some special tokens to readable form
                         if token == '<|Q|>':
                             tokens.append('Q: ')
@@ -455,13 +509,15 @@ class AdvancedBPETokenizer:
                             tokens.append('A: ')
                         elif token == '<|user|>':
                             tokens.append('User: ')
-                        elif token == '<|bot|>':
+                        elif token == '<|bot|>' or token == '<|assistant|>':
                             tokens.append('Bot: ')
                         elif token == '<|system|>':
                             tokens.append('System: ')
                         elif token == '<|newline|>':
                             tokens.append('\n')
-                        # Skip other special tokens
+                        elif token == '<|tab|>':
+                            tokens.append('\t')
+                        # Skip other special tokens when skip_special_tokens=True
                     continue
 
                 tokens.append(token)
@@ -484,10 +540,9 @@ class AdvancedBPETokenizer:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {
-            'version': '2.0',
+            'version': '2.1',
             'vocab_size': self.vocab_size,
             'encoder': self.encoder,
-            'bpe_ranks': {f"{k[0]}|||{k[1]}": v for k, v in self.bpe_ranks.items()},
             'special_tokens': self.special_tokens,
         }
 
@@ -499,7 +554,11 @@ class AdvancedBPETokenizer:
         print(f"  Merges: {len(self.bpe_ranks):,}")
 
     def load(self, path: Path):
-        """Load tokenizer from file."""
+        """
+        Load tokenizer from file.
+        
+        Automatically loads merges from separate .merges file if it exists.
+        """
         path = Path(path)
 
         with open(path, 'r', encoding='utf-8') as f:

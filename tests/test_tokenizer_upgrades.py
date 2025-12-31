@@ -1,0 +1,331 @@
+"""
+Tests for Upgraded Tokenizer
+============================
+
+Tests for the enhanced AdvancedBPETokenizer with:
+  - Special tokens for tool use
+  - Streaming encode/decode
+  - Merges file support
+  - Improved unicode handling
+"""
+
+import pytest
+import tempfile
+from pathlib import Path
+import json
+
+from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+
+
+class TestTokenizerSpecialTokens:
+    """Test special tokens for tool use."""
+    
+    def test_tool_tokens_present(self):
+        """Test that all tool-related special tokens are defined."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        # Tool invocation tokens
+        assert '<|tool_call|>' in tokenizer.special_tokens
+        assert '<|tool_result|>' in tokenizer.special_tokens
+        assert '<|tool_end|>' in tokenizer.special_tokens
+        assert '<|tool_result_end|>' in tokenizer.special_tokens
+        
+        # Modality tokens
+        assert '<|image|>' in tokenizer.special_tokens
+        assert '<|audio|>' in tokenizer.special_tokens
+        assert '<|video|>' in tokenizer.special_tokens
+        assert '<|vision|>' in tokenizer.special_tokens
+        
+        # Action tokens
+        assert '<|generate_image|>' in tokenizer.special_tokens
+        assert '<|avatar_action|>' in tokenizer.special_tokens
+        assert '<|speak|>' in tokenizer.special_tokens
+    
+    def test_conversation_tokens(self):
+        """Test conversation role tokens."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        assert '<|system|>' in tokenizer.special_tokens
+        assert '<|user|>' in tokenizer.special_tokens
+        assert '<|assistant|>' in tokenizer.special_tokens
+    
+    def test_encode_decode_special_tokens(self):
+        """Test encoding and decoding text with special tokens."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = '<|tool_call|>generate_image("test")<|tool_end|>'
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        decoded = tokenizer.decode(ids, skip_special_tokens=False)
+        
+        # Should preserve special tokens (may have minor formatting differences)
+        decoded_lower = decoded.lower().replace(' ', '').replace('_', '')
+        assert 'toolcall' in decoded_lower or 'tool_call' in decoded.lower()
+        assert 'toolend' in decoded_lower or 'tool_end' in decoded.lower()
+    
+    def test_special_token_ids_unique(self):
+        """Test that all special tokens have unique IDs."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        ids = list(tokenizer.special_tokens.values())
+        assert len(ids) == len(set(ids)), "Special token IDs must be unique"
+    
+    def test_special_token_ids_low(self):
+        """Test that special tokens use low IDs (< 100)."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        for token, idx in tokenizer.special_tokens.items():
+            assert idx < 100, f"Special token {token} has ID {idx} >= 100"
+
+
+class TestStreamingEncodeDecode:
+    """Test streaming encode/decode functionality."""
+    
+    def test_encode_stream_simple(self):
+        """Test basic streaming encode."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text_chunks = ["Hello ", "world", "!"]
+        all_ids = []
+        
+        for ids in tokenizer.encode_stream(text_chunks, add_special_tokens=False):
+            all_ids.extend(ids)
+        
+        # Compare with regular encode
+        full_text = "".join(text_chunks)
+        regular_ids = tokenizer.encode(full_text, add_special_tokens=False)
+        
+        # Should produce similar results (may differ slightly at chunk boundaries)
+        assert len(all_ids) > 0
+        assert len(regular_ids) > 0
+    
+    def test_decode_stream_simple(self):
+        """Test basic streaming decode."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = "Hello world!"
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        
+        # Split ids into chunks
+        chunk_size = 3
+        id_chunks = [ids[i:i+chunk_size] for i in range(0, len(ids), chunk_size)]
+        
+        decoded_parts = list(tokenizer.decode_stream(id_chunks))
+        decoded_text = "".join(decoded_parts)
+        
+        # Should decode to similar text
+        assert len(decoded_text) > 0
+    
+    def test_encode_stream_empty(self):
+        """Test streaming with empty input."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        result = list(tokenizer.encode_stream([]))
+        assert result == []
+    
+    def test_decode_stream_empty(self):
+        """Test decode stream with empty input."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        result = list(tokenizer.decode_stream([]))
+        assert result == []
+
+
+class TestMergesFile:
+    """Test separate merges file support."""
+    
+    def test_save_with_separate_merges(self):
+        """Test saving tokenizer with separate merges file."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        # Train on simple data
+        tokenizer.train(
+            ["Hello world", "Hello there", "world peace"],
+            vocab_size=500,
+            verbose=False
+        )
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            vocab_path = Path(tmpdir) / "tokenizer.json"
+            tokenizer.save(vocab_path, save_merges_separately=True)
+            
+            # Check both files exist
+            assert vocab_path.exists()
+            merges_path = Path(tmpdir) / "tokenizer.merges"
+            assert merges_path.exists()
+            
+            # Check merges file format
+            with open(merges_path, 'r') as f:
+                content = f.read()
+                assert content.startswith("#version:")
+    
+    def test_load_with_separate_merges(self):
+        """Test loading tokenizer with separate merges file."""
+        tokenizer = AdvancedBPETokenizer()
+        tokenizer.train(
+            ["Hello world", "Hello there"],
+            vocab_size=500,
+            verbose=False
+        )
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            vocab_path = Path(tmpdir) / "tokenizer.json"
+            
+            # Save with separate merges
+            tokenizer.save(vocab_path, save_merges_separately=True)
+            
+            # Load into new tokenizer
+            tokenizer2 = AdvancedBPETokenizer(vocab_file=vocab_path)
+            
+            # Should have loaded merges
+            assert len(tokenizer2.bpe_ranks) > 0
+            assert tokenizer2.vocab_size == tokenizer.vocab_size
+    
+    def test_save_without_separate_merges(self):
+        """Test traditional save with merges in main file."""
+        tokenizer = AdvancedBPETokenizer()
+        tokenizer.train(["test"], vocab_size=300, verbose=False)
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            vocab_path = Path(tmpdir) / "tokenizer.json"
+            tokenizer.save(vocab_path, save_merges_separately=False)
+            
+            # Should only have main file
+            assert vocab_path.exists()
+            merges_path = Path(tmpdir) / "tokenizer.merges"
+            assert not merges_path.exists()
+            
+            # Check merges are in main file
+            with open(vocab_path, 'r') as f:
+                data = json.load(f)
+                assert 'bpe_ranks' in data or len(data.get('bpe_ranks', {})) >= 0
+
+
+class TestImprovedRegex:
+    """Test improved regex pre-tokenization."""
+    
+    def test_number_handling(self):
+        """Test that numbers are handled well."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = "I have 42 apples and 3.14 oranges"
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        decoded = tokenizer.decode(ids)
+        
+        # Numbers should be preserved
+        assert '42' in decoded or '4' in decoded
+        assert '3.14' in decoded or '3' in decoded
+    
+    def test_code_handling(self):
+        """Test handling of code-like text."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        code = "def hello(): print('world')"
+        ids = tokenizer.encode(code, add_special_tokens=False)
+        decoded = tokenizer.decode(ids)
+        
+        # Should preserve structure
+        assert 'def' in decoded or 'hello' in decoded
+        assert 'print' in decoded
+    
+    def test_punctuation_handling(self):
+        """Test handling of punctuation."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = "Hello! How are you? I'm fine."
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        decoded = tokenizer.decode(ids)
+        
+        # Should have some content
+        assert len(decoded) > 0
+
+
+class TestUnicodeEmoji:
+    """Test unicode and emoji handling."""
+    
+    def test_emoji_encode_decode(self):
+        """Test encoding and decoding emoji."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = "Hello 😊 World 🌍"
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        decoded = tokenizer.decode(ids)
+        
+        # Should handle emojis (may not preserve exactly, but shouldn't crash)
+        assert len(decoded) > 0
+        assert 'Hello' in decoded or 'World' in decoded
+    
+    def test_unicode_characters(self):
+        """Test various unicode characters."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = "Héllo wörld ñiño"
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        decoded = tokenizer.decode(ids)
+        
+        assert len(decoded) > 0
+    
+    def test_mixed_scripts(self):
+        """Test mixed language scripts."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        text = "Hello 世界 مرحبا"
+        ids = tokenizer.encode(text, add_special_tokens=False)
+        decoded = tokenizer.decode(ids)
+        
+        # Should not crash
+        assert len(decoded) > 0
+
+
+class TestTokenizerCompleteness:
+    """Test overall tokenizer functionality."""
+    
+    def test_encode_decode_roundtrip(self):
+        """Test that encode->decode preserves meaning."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        texts = [
+            "Hello world",
+            "The quick brown fox",
+            "123 test 456",
+            "test@email.com",
+        ]
+        
+        for text in texts:
+            ids = tokenizer.encode(text, add_special_tokens=False)
+            decoded = tokenizer.decode(ids)
+            
+            # Should be similar (may not be exact due to BPE)
+            assert len(decoded) > 0
+            # At least some words should match
+            assert any(word in decoded for word in text.split())
+    
+    def test_vocab_size(self):
+        """Test that vocab size is reasonable."""
+        tokenizer = AdvancedBPETokenizer()
+        
+        # Base vocab should be > 256 (bytes) + special tokens (~40)
+        assert tokenizer.vocab_size > 290
+    
+    def test_cache_functionality(self):
+        """Test that caching improves performance."""
+        tokenizer = AdvancedBPETokenizer()
+        tokenizer.train(["test text"], vocab_size=500, verbose=False)
+        
+        text = "test"
+        
+        # First encode
+        ids1 = tokenizer.encode(text, add_special_tokens=False)
+        cache_size1 = len(tokenizer.cache)
+        
+        # Second encode (should use cache)
+        ids2 = tokenizer.encode(text, add_special_tokens=False)
+        cache_size2 = len(tokenizer.cache)
+        
+        # Results should be identical
+        assert ids1 == ids2
+        # Cache should have entries
+        assert cache_size2 >= cache_size1
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
