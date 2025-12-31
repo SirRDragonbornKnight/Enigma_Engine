@@ -1,12 +1,13 @@
 # Enigma Engine Requirements
 # Last Updated: December 2024
+# Minimum Python version: 3.9+
 
 # === CORE (Required) ===
-python-dotenv
-flask
-flask_cors
-sqlalchemy
-numpy
+python-dotenv>=0.19.0
+flask>=2.0.0
+flask-cors>=3.0.10
+sqlalchemy>=1.4.0
+numpy>=1.21.0
 
 # === MODEL & TRAINING ===
 # PyTorch - install manually for your platform:
@@ -16,36 +17,58 @@ numpy
 torch>=1.12; platform_system!="Darwin" or platform_machine=="arm64"
 
 # Tokenizers (for BPE, optional - we have character-level built-in)
-tokenizers
-transformers
+tokenizers>=0.13.0
+transformers>=4.20.0
 
 # === GUI (PyQt5) ===
-PyQt5
+# Note: On Raspberry Pi, use system package instead:
+#   sudo apt install python3-pyqt5
+PyQt5>=5.15.0
 
 # === VOICE ===
-pyttsx3
-speechrecognition
-sounddevice
-vosk
-pyaudio
+pyttsx3>=2.90
+SpeechRecognition>=3.8.0
+sounddevice>=0.4.0
+vosk>=0.3.0
+# PyAudio - may need system dependencies:
+#   Ubuntu/Debian: sudo apt install portaudio19-dev python3-pyaudio
+#   macOS: brew install portaudio
+#   Windows: pip will handle it
+pyaudio>=0.2.11
 
 # === VISION ===
-pillow
-mss
-pyscreenshot
+pillow>=9.0.0
+mss>=6.1.0
+pyscreenshot>=3.0
+
+# === DEVELOPMENT & TESTING (Optional) ===
+# Uncomment for development work:
+# pytest>=7.0.0
+# pytest-cov>=3.0.0
+# flake8>=5.0.0
+# mypy>=0.990
+# autopep8>=2.0.0
 
 # === CAMERA (Optional) ===
 # For webcam support:
-# opencv-python
+# opencv-python>=4.5.0
 # For Raspberry Pi camera:
-# picamera2
+# picamera2>=0.3.0
 
 # === DOCUMENTS (Optional) ===
-# pypdf2
-# python-docx
-# ebooklib
+# Uncomment to enable document parsing:
+# pypdf2>=2.0.0
+# python-docx>=0.8.11
+# ebooklib>=0.18
 
 # === WEB (Optional) ===
-# requests
-# beautifulsoup4
+# Uncomment to enable web scraping:
+# requests>=2.28.0
+# beautifulsoup4>=4.11.0
+
+# === AI SERVICES (Optional, Cloud-based) ===
+# Uncomment if using cloud AI services:
+# openai>=1.0.0  # For DALL-E, GPT-4, embeddings
+# replicate>=0.15.0  # For SDXL, video, music generation
+# elevenlabs>=0.2.0  # For premium TTS
 
