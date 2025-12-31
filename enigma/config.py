@@ -124,6 +124,9 @@ def get_model_config(model_name: str) -> Dict[str, Any]:
         
     Returns:
         Dictionary containing model configuration
+        
+    Raises:
+        ValueError: If model_name is empty
     """
     if not model_name:
         raise ValueError("model_name cannot be empty")

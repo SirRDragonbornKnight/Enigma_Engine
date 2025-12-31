@@ -54,6 +54,7 @@ class ConversationManager:
         
         # Sanitize filename
         safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_name = safe_name.replace(' ', '_')  # Replace spaces with underscores
         if not safe_name:
             raise ValueError(f"Invalid conversation name: {name}")
         
