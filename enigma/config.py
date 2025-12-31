@@ -1,5 +1,11 @@
+"""
+Enigma Engine Configuration Module
+
+This module provides configuration management for the Enigma Engine.
+"""
 from pathlib import Path
 import os
+from typing import Optional, Dict, Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -90,8 +96,16 @@ MODEL_PRESETS = {
 }
 
 
-def apply_preset(preset_name: str):
-    """Apply a model preset to CONFIG."""
+def apply_preset(preset_name: str) -> bool:
+    """
+    Apply a model preset to CONFIG.
+    
+    Args:
+        preset_name: Name of the preset to apply (tiny, small, medium, large)
+        
+    Returns:
+        True if preset was applied successfully, False otherwise
+    """
     if preset_name in MODEL_PRESETS:
         preset = MODEL_PRESETS[preset_name]
         CONFIG["embed_dim"] = preset["embed_dim"]
@@ -101,14 +115,30 @@ def apply_preset(preset_name: str):
     return False
 
 
-def get_model_config(model_name: str) -> dict:
-    """Get configuration for a specific model."""
+def get_model_config(model_name: str) -> Dict[str, Any]:
+    """
+    Get configuration for a specific model.
+    
+    Args:
+        model_name: Name of the model to get config for
+        
+    Returns:
+        Dictionary containing model configuration
+    """
+    if not model_name:
+        raise ValueError("model_name cannot be empty")
+        
     model_dir = MODELS_DIR / model_name
     config_file = model_dir / "config.json"
     
     if config_file.exists():
         import json
-        return json.loads(config_file.read_text())
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Failed to load model config from {config_file}: {e}")
+            # Fall through to return defaults
     
     # Return defaults
     return {

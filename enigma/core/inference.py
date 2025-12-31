@@ -107,8 +107,8 @@ class EnigmaEngine:
             gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
             try:
                 torch.cuda.set_per_process_memory_fraction(gpu_fraction)
-            except:
-                pass
+            except (RuntimeError, AttributeError) as e:
+                logger.debug(f"Could not set GPU memory fraction: {e}")
             return torch.device("cuda")
         
         if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
