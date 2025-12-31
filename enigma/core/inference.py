@@ -66,7 +66,9 @@ class EnigmaEngine:
         tokenizer_path: Optional[Union[str, Path]] = None,
         device: Optional[str] = None,
         use_half: bool = False,
-        model_size: str = "auto"
+        model_size: str = "auto",
+        enable_tools: bool = False,
+        module_manager: Optional[Any] = None
     ):
         """
         Initialize the inference engine.
@@ -77,6 +79,8 @@ class EnigmaEngine:
             device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
             model_size: Model size hint if not loading from file
+            enable_tools: Enable AI tool use system
+            module_manager: ModuleManager instance for tool execution
         """
         # Device selection
         self.device = self._select_device(device)
@@ -93,6 +97,14 @@ class EnigmaEngine:
         if self.use_half:
             self.model.half()
         self.model.eval()
+        
+        # Tool use system
+        self.enable_tools = enable_tools
+        self.module_manager = module_manager
+        self._tool_executor = None
+        
+        if enable_tools:
+            self._init_tool_executor()
         
         # Log initialization
         self._log_init_info()
@@ -246,6 +258,18 @@ class EnigmaEngine:
         print(f"  Vocab size: {self.tokenizer.vocab_size:,}")
         print(f"  Max sequence length: {self.model.config.max_seq_len}")
         print(f"  FP16: {self.use_half}")
+        if self.enable_tools:
+            print(f"  Tool use: ENABLED")
+    
+    def _init_tool_executor(self):
+        """Initialize the tool execution system."""
+        try:
+            from ..tools import ToolExecutor
+            self._tool_executor = ToolExecutor(module_manager=self.module_manager)
+            logger.info("Tool executor initialized")
+        except ImportError as e:
+            logger.warning(f"Could not initialize tool executor: {e}")
+            self.enable_tools = False
     
     # =========================================================================
     # Generation Methods
@@ -260,10 +284,12 @@ class EnigmaEngine:
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
         stop_strings: Optional[List[str]] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        execute_tools: bool = None,
+        max_tool_iterations: int = 5
     ) -> str:
         """
-        Generate text from a prompt.
+        Generate text from a prompt with optional tool execution.
         
         Args:
             prompt: Input text to continue
@@ -274,10 +300,46 @@ class EnigmaEngine:
             repetition_penalty: Penalty for repeating tokens
             stop_strings: List of strings to stop generation at
             use_cache: Use KV-cache for faster generation
+            execute_tools: Execute tool calls (defaults to self.enable_tools)
+            max_tool_iterations: Maximum number of tool execution iterations
             
         Returns:
             Generated text (including the prompt)
         """
+        # Determine if tools should be executed
+        if execute_tools is None:
+            execute_tools = self.enable_tools
+        
+        # Standard generation
+        text = self._generate_text(
+            prompt, max_gen, temperature, top_k, top_p, 
+            repetition_penalty, stop_strings, use_cache
+        )
+        
+        # Tool execution loop
+        if execute_tools and self._tool_executor:
+            text = self._execute_tools_in_text(
+                text, max_iterations=max_tool_iterations,
+                max_gen=max_gen, temperature=temperature,
+                top_k=top_k, top_p=top_p, 
+                repetition_penalty=repetition_penalty,
+                stop_strings=stop_strings, use_cache=use_cache
+            )
+        
+        return text
+    
+    def _generate_text(
+        self,
+        prompt: str,
+        max_gen: int,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+        repetition_penalty: float,
+        stop_strings: Optional[List[str]],
+        use_cache: bool
+    ) -> str:
+        """Internal method for standard text generation."""
         # Encode input
         input_ids = self._encode_prompt(prompt)
         
@@ -308,6 +370,95 @@ class EnigmaEngine:
                 if stop_str in text:
                     text = text[:text.find(stop_str)]
                     break
+        
+        return text
+    
+    def _execute_tools_in_text(
+        self,
+        text: str,
+        max_iterations: int,
+        max_gen: int,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+        repetition_penalty: float,
+        stop_strings: Optional[List[str]],
+        use_cache: bool
+    ) -> str:
+        """
+        Execute tool calls found in text and continue generation.
+        
+        This implements the tool use loop:
+        1. Check for tool calls in generated text
+        2. If found, execute them
+        3. Inject results back into context
+        4. Continue generation
+        5. Repeat until no more tool calls or max iterations
+        """
+        iteration = 0
+        
+        while iteration < max_iterations:
+            # Parse tool calls
+            tool_calls = self._tool_executor.parse_tool_calls(text)
+            
+            if not tool_calls:
+                # No tool calls found - we're done
+                break
+            
+            logger.info(f"Found {len(tool_calls)} tool call(s) in iteration {iteration + 1}")
+            
+            # Execute tools and replace calls with results
+            modified_text = text
+            results = []
+            
+            # Execute in reverse order to preserve positions
+            for tool_name, params, start_pos, end_pos in reversed(tool_calls):
+                logger.info(f"Executing tool: {tool_name} with params: {params}")
+                
+                # Execute tool
+                result = self._tool_executor.execute_tool(tool_name, params)
+                results.insert(0, result)
+                
+                # Format result
+                result_str = self._tool_executor.format_tool_result(result)
+                
+                # Replace tool call with result in text
+                modified_text = (
+                    modified_text[:start_pos] + 
+                    result_str + 
+                    modified_text[end_pos:]
+                )
+            
+            # Check if we should continue generating
+            # If text ends with a tool result, continue generation
+            if modified_text.rstrip().endswith("</tool_result>"):
+                # Continue generation after tool results
+                continuation = self._generate_text(
+                    modified_text,
+                    max_gen=max_gen // 2,  # Use less tokens for continuations
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    stop_strings=stop_strings,
+                    use_cache=use_cache
+                )
+                
+                # Extract just the new generation (after the prompt)
+                if len(continuation) > len(modified_text):
+                    new_text = continuation[len(modified_text):]
+                    modified_text = continuation
+                else:
+                    # Generation didn't add anything new
+                    break
+            
+            text = modified_text
+            iteration += 1
+            
+            # Safety check
+            if iteration >= max_iterations:
+                logger.warning(f"Reached max tool iterations ({max_iterations})")
+                break
         
         return text
     

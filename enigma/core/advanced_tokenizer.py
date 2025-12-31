@@ -95,7 +95,7 @@ class AdvancedBPETokenizer:
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
         
-        # Special tokens with reserved IDs (0-19 reserved)
+        # Special tokens with reserved IDs (0-39 reserved for expansion)
         self.special_tokens = {
             "<|pad|>": 0,
             "<|start|>": 1,
@@ -109,6 +109,30 @@ class AdvancedBPETokenizer:
             "<|bot|>": 9,
             "<|system|>": 10,
             "<|newline|>": 11,
+            # Tool use tokens
+            "<|tool_call|>": 12,
+            "<|/tool_call|>": 13,
+            "<|tool_result|>": 14,
+            "<|/tool_result|>": 15,
+            # Image tokens
+            "<|image|>": 16,
+            "<|/image|>": 17,
+            # Code tokens
+            "<|code|>": 18,
+            "<|/code|>": 19,
+            # Vision tokens
+            "<|vision|>": 20,
+            "<|/vision|>": 21,
+            # Audio tokens
+            "<|audio|>": 22,
+            "<|/audio|>": 23,
+            # Avatar tokens
+            "<|avatar|>": 24,
+            "<|/avatar|>": 25,
+            # Thinking tokens
+            "<|think|>": 26,
+            "<|/think|>": 27,
+            # Reserved for future use (28-39)
         }
         self.special_token_ids = {v: k for k, v in self.special_tokens.items()}
         
@@ -133,6 +157,15 @@ class AdvancedBPETokenizer:
         # Encoding cache
         self.cache: Dict[str, str] = {}
         
+        # BPE dropout for subword regularization (0.0 = disabled, 0.1 = 10% dropout)
+        self.bpe_dropout: float = 0.0
+        
+        # Max vocabulary size (for efficient large vocab support)
+        self.max_vocab_size: int = 500000
+        
+        # Streaming buffer for efficient streaming tokenization
+        self._stream_buffer: str = ""
+        
         # Load or initialize
         if vocab_file and vocab_file.exists():
             self.load(vocab_file)
@@ -148,7 +181,7 @@ class AdvancedBPETokenizer:
                 r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
             )
         except ImportError:
-            self.pat = self.PAT_FALLBACK
+            self.pat = self.PAT
     
     def _init_base_vocab(self):
         """Initialize vocabulary with special tokens and byte-level tokens."""
@@ -333,22 +366,33 @@ class AdvancedBPETokenizer:
         
         return result
     
-    def _bpe(self, token: str) -> str:
+    def _bpe(self, token: str, dropout: float = 0.0) -> str:
         """
-        Apply BPE to a single token.
+        Apply BPE to a single token with optional dropout for subword regularization.
         
-        Uses caching for efficiency.
+        Args:
+            token: Input token to encode
+            dropout: BPE dropout probability (0.0-1.0). During training, randomly
+                    skips merge operations to expose model to different segmentations.
+        
+        Uses caching for efficiency when dropout=0.0.
         """
-        if token in self.cache:
+        # Use cache only when dropout is disabled
+        if dropout == 0.0 and token in self.cache:
             return self.cache[token]
         
-        # Convert to byte representation
-        word = tuple(self.byte_encoder[b] for b in token.encode('utf-8'))
+        # Convert to byte representation for universal character support
+        try:
+            word = tuple(self.byte_encoder[b] for b in token.encode('utf-8'))
+        except Exception as e:
+            logger.warning(f"Failed to encode token '{token}': {e}")
+            return self.byte_encoder.get(ord('?'), '?')
         
         if len(word) == 1:
             return word[0]
         
-        # Apply merges
+        # Apply merges with optional dropout
+        import random
         while True:
             # Find the merge with lowest rank (learned earliest = most common)
             pairs = get_pairs(word)
@@ -360,6 +404,11 @@ class AdvancedBPETokenizer:
             min_rank = float('inf')
             for pair in pairs:
                 rank = self.bpe_ranks.get(pair, float('inf'))
+                
+                # BPE dropout: randomly skip merges during training
+                if dropout > 0.0 and random.random() < dropout:
+                    continue
+                    
                 if rank < min_rank:
                     min_rank = rank
                     min_pair = pair
@@ -385,16 +434,21 @@ class AdvancedBPETokenizer:
                 break
         
         result = ' '.join(word)
-        self.cache[token] = result
+        
+        # Cache only when dropout is disabled
+        if dropout == 0.0:
+            self.cache[token] = result
+        
         return result
     
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True, use_dropout: bool = False) -> List[int]:
         """
         Encode text to token IDs.
         
         Args:
             text: Input text
             add_special_tokens: Whether to add start/end tokens
+            use_dropout: Enable BPE dropout for subword regularization (training only)
             
         Returns:
             List of token IDs
@@ -407,14 +461,17 @@ class AdvancedBPETokenizer:
         # Pre-tokenize
         tokens = self._pre_tokenize(text)
         
+        # Determine dropout rate
+        dropout = self.bpe_dropout if use_dropout else 0.0
+        
         for token in tokens:
             # Check for special tokens
             if token in self.special_tokens:
                 ids.append(self.special_tokens[token])
                 continue
             
-            # Apply BPE
-            bpe_tokens = self._bpe(token).split(' ')
+            # Apply BPE with optional dropout
+            bpe_tokens = self._bpe(token, dropout=dropout).split(' ')
             
             for bpe_token in bpe_tokens:
                 if bpe_token in self.encoder:
@@ -567,6 +624,150 @@ class AdvancedBPETokenizer:
     def id_to_token(self) -> Dict[int, str]:
         """Compatibility property."""
         return self.decoder
+    
+    def set_bpe_dropout(self, dropout: float):
+        """
+        Set BPE dropout rate for subword regularization.
+        
+        Args:
+            dropout: Dropout probability (0.0 = disabled, 0.1 = 10% dropout)
+        """
+        if not 0.0 <= dropout <= 1.0:
+            raise ValueError(f"Dropout must be between 0.0 and 1.0, got {dropout}")
+        self.bpe_dropout = dropout
+    
+    def encode_stream(self, text_chunk: str, finalize: bool = False) -> List[int]:
+        """
+        Encode streaming text efficiently.
+        
+        Buffers incomplete tokens and only encodes complete words/tokens.
+        Call with finalize=True on the last chunk to flush the buffer.
+        
+        Args:
+            text_chunk: New text to encode
+            finalize: Whether this is the last chunk (flush buffer)
+            
+        Returns:
+            Token IDs for complete tokens in this chunk
+        """
+        self._stream_buffer += text_chunk
+        
+        if not finalize:
+            # Only encode complete tokens (wait for whitespace/punctuation)
+            # Find last complete token boundary
+            last_space = self._stream_buffer.rfind(' ')
+            last_newline = self._stream_buffer.rfind('\n')
+            last_boundary = max(last_space, last_newline)
+            
+            if last_boundary == -1:
+                # No complete tokens yet
+                return []
+            
+            # Encode up to boundary
+            to_encode = self._stream_buffer[:last_boundary + 1]
+            self._stream_buffer = self._stream_buffer[last_boundary + 1:]
+        else:
+            # Final chunk - encode everything
+            to_encode = self._stream_buffer
+            self._stream_buffer = ""
+        
+        if not to_encode:
+            return []
+        
+        return self.encode(to_encode, add_special_tokens=False)
+    
+    def reset_stream(self):
+        """Reset streaming buffer."""
+        self._stream_buffer = ""
+    
+    def decode_improved(
+        self, 
+        ids: List[int], 
+        skip_special_tokens: bool = True,
+        clean_up_spaces: bool = True
+    ) -> str:
+        """
+        Improved decoding with better space and punctuation handling.
+        
+        Args:
+            ids: Token IDs to decode
+            skip_special_tokens: Whether to skip special tokens
+            clean_up_spaces: Apply intelligent space cleanup
+            
+        Returns:
+            Decoded text with improved formatting
+        """
+        # First do standard decode
+        text = self.decode(ids, skip_special_tokens=skip_special_tokens)
+        
+        if not clean_up_spaces:
+            return text
+        
+        # Cleanup common spacing issues
+        import re
+        
+        # Remove spaces before punctuation
+        text = re.sub(r' ([.,!?;:])', r'\1', text)
+        
+        # Remove spaces after opening brackets/quotes
+        text = re.sub(r'([\[\(\{\"\'']) ', r'\1', text)
+        
+        # Remove spaces before closing brackets/quotes
+        text = re.sub(r' ([\]\)\}\"\''])', r'\1', text)
+        
+        # Fix multiple spaces
+        text = re.sub(r' +', ' ', text)
+        
+        # Fix newline spacing
+        text = re.sub(r'\n +', '\n', text)
+        text = re.sub(r' +\n', '\n', text)
+        
+        # Clean up leading/trailing whitespace
+        text = text.strip()
+        
+        return text
+    
+    def get_compression_ratio(self, text: str) -> float:
+        """
+        Calculate compression ratio (chars per token).
+        Higher is better - means more efficient encoding.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Average characters per token
+        """
+        if not text:
+            return 0.0
+        
+        ids = self.encode(text, add_special_tokens=False)
+        if not ids:
+            return 0.0
+        
+        return len(text) / len(ids)
+    
+    def tokenize_stats(self, text: str) -> Dict[str, Any]:
+        """
+        Get detailed tokenization statistics.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dictionary with tokenization stats
+        """
+        ids = self.encode(text, add_special_tokens=False)
+        tokens = [self.decoder.get(id, '<unk>') for id in ids]
+        
+        return {
+            'text_length': len(text),
+            'token_count': len(ids),
+            'unique_tokens': len(set(ids)),
+            'compression_ratio': len(text) / len(ids) if ids else 0.0,
+            'avg_token_length': sum(len(t) for t in tokens) / len(tokens) if tokens else 0.0,
+            'tokens': tokens[:50],  # First 50 tokens
+        }
 
 
 def train_tokenizer(
