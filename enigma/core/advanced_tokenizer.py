@@ -454,13 +454,14 @@ class AdvancedBPETokenizer:
         
         return result
 
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True, dropout: float = 0.0) -> List[int]:
         """
         Encode text to token IDs.
 
         Args:
             text: Input text
             add_special_tokens: Whether to add start/end tokens
+            dropout: BPE dropout rate for training regularization (0.0 = disabled)
 
         Returns:
             List of token IDs
@@ -479,8 +480,8 @@ class AdvancedBPETokenizer:
                 ids.append(self.special_tokens[token])
                 continue
 
-            # Apply BPE
-            bpe_tokens = self._bpe(token).split(' ')
+            # Apply BPE (with optional dropout for training)
+            bpe_tokens = self._bpe(token, dropout=dropout).split(' ')
 
             for bpe_token in bpe_tokens:
                 if bpe_token in self.encoder:
