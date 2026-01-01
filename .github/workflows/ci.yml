@@ -52,11 +52,12 @@ jobs:
       
       - name: Run tests
         run: |
-          pytest tests/ -v --tb=short --continue-on-collection-errors || true
+          pytest tests/ -v --tb=short --continue-on-collection-errors
+        continue-on-error: true
       
       - name: Generate coverage report
         run: |
-          pytest tests/ --cov=enigma --cov-report=xml --cov-report=term || true
+          pytest tests/ --cov=enigma --cov-report=xml --cov-report=term
         continue-on-error: true
       
       - name: Upload coverage to Codecov
