@@ -206,6 +206,52 @@ class InferenceModule(Module):
         return True
 
 
+class GGUFLoaderModule(Module):
+    """GGUF model loader module - load llama.cpp compatible models."""
+
+    INFO = ModuleInfo(
+        id="gguf_loader",
+        name="GGUF Model Loader",
+        description="Load and run GGUF format models (llama.cpp compatible)",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        conflicts=["model", "inference"],  # Can't use both GGUF and Enigma model
+        provides=["text_generation", "completion", "gguf_support"],
+        config_schema={
+            "model_path": {"type": "string", "default": ""},
+            "n_ctx": {"type": "int", "min": 512, "max": 32768, "default": 2048},
+            "n_gpu_layers": {"type": "int", "min": 0, "max": 999, "default": 0},
+            "n_threads": {"type": "int", "min": 1, "max": 32, "default": 4},
+        },
+    )
+
+    def load(self) -> bool:
+        try:
+            from enigma.core.gguf_loader import GGUFModel
+            model_path = self.config.get('model_path', '')
+            if not model_path:
+                logger.warning("No GGUF model path specified")
+                return False
+            
+            self._instance = GGUFModel(
+                model_path=model_path,
+                n_ctx=self.config.get('n_ctx', 2048),
+                n_gpu_layers=self.config.get('n_gpu_layers', 0),
+                n_threads=self.config.get('n_threads', 4)
+            )
+            return self._instance.load()
+        except Exception as e:
+            logger.warning(f"Could not load GGUF model: {e}")
+            return False
+
+    def unload(self) -> bool:
+        if self._instance:
+            self._instance.unload()
+            self._instance = None
+        return True
+
+
 class MemoryModule(Module):
     """Memory module - conversation and knowledge storage."""
 
@@ -924,6 +970,138 @@ class EmbeddingAPIModule(GenerationModule):
             return False
 
 
+class ThreeDGenLocalModule(GenerationModule):
+    """Local 3D model generation with Shap-E or Point-E."""
+
+    INFO = ModuleInfo(
+        id="threed_gen_local",
+        name="3D Generation (Local)",
+        description="Generate 3D models from text/images locally. Requires GPU.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["3d_generation", "mesh_generation"],
+        conflicts=["threed_gen_api"],
+        min_vram_mb=4000,
+        requires_gpu=True,
+        config_schema={
+            "model": {
+                "type": "choice",
+                "options": ["shap-e", "point-e"],
+                "default": "shap-e"
+            },
+            "guidance_scale": {
+                "type": "float",
+                "min": 1.0,
+                "max": 20.0,
+                "default": 15.0
+            },
+            "num_inference_steps": {
+                "type": "int",
+                "min": 10,
+                "max": 100,
+                "default": 64
+            },
+        },
+    )
+
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import Local3DGen
+            self._addon = Local3DGen(
+                model=self.config.get('model', 'shap-e')
+            )
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load local 3D gen: {e}")
+            return False
+
+
+class ThreeDGenAPIModule(GenerationModule):
+    """Cloud 3D model generation via API services."""
+
+    INFO = ModuleInfo(
+        id="threed_gen_api",
+        name="3D Generation (Cloud)",
+        description="Generate 3D models via cloud APIs (Replicate, etc). Requires API key.",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        provides=["3d_generation", "mesh_generation"],
+        conflicts=["threed_gen_local"],
+        is_cloud_service=True,
+        config_schema={
+            "service": {
+                "type": "choice",
+                "options": ["replicate"],
+                "default": "replicate"
+            },
+            "api_key": {
+                "type": "secret",
+                "default": ""
+            },
+        },
+    )
+
+    def load(self) -> bool:
+        try:
+            from enigma.addons.builtin import Cloud3DGen
+            self._addon = Cloud3DGen(
+                api_key=self.config.get('api_key'),
+                service=self.config.get('service', 'replicate')
+            )
+            return self._addon.load()
+        except Exception as e:
+            logger.warning(f"Could not load cloud 3D gen: {e}")
+            return False
+
+
+class MotionTrackingModule(Module):
+    """Motion tracking module for user mimicry."""
+
+    INFO = ModuleInfo(
+        id="motion_tracking",
+        name="Motion Tracking",
+        description="Real-time motion tracking with MediaPipe for gesture mimicry",
+        category=ModuleCategory.PERCEPTION,
+        version="1.0.0",
+        requires=[],
+        optional=["avatar"],
+        provides=["motion_tracking", "gesture_recognition", "pose_estimation"],
+        config_schema={
+            "camera_id": {
+                "type": "int",
+                "min": 0,
+                "max": 10,
+                "default": 0
+            },
+            "tracking_mode": {
+                "type": "choice",
+                "options": ["pose", "hands", "face", "holistic"],
+                "default": "holistic"
+            },
+            "model_complexity": {
+                "type": "int",
+                "min": 0,
+                "max": 2,
+                "default": 1
+            },
+        },
+    )
+
+    def load(self) -> bool:
+        try:
+            from enigma.tools.motion_tracking import MotionTracker
+            self._instance = MotionTracker(
+                camera_id=self.config.get('camera_id', 0),
+                tracking_mode=self.config.get('tracking_mode', 'holistic')
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"Could not load motion tracking: {e}")
+            return False
+
+
 # =============================================================================
 # Module Registry
 # =============================================================================
@@ -934,6 +1112,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'tokenizer': TokenizerModule,
     'training': TrainingModule,
     'inference': InferenceModule,
+    'gguf_loader': GGUFLoaderModule,
 
     # Memory
     'memory': MemoryModule,
@@ -943,6 +1122,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     # Perception
     'voice_input': VoiceInputModule,
     'vision': VisionModule,
+    'motion_tracking': MotionTrackingModule,
 
     # Output
     'voice_output': VoiceOutputModule,
@@ -957,6 +1137,8 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'video_gen_api': VideoGenAPIModule,
     'audio_gen_local': AudioGenLocalModule,
     'audio_gen_api': AudioGenAPIModule,
+    'threed_gen_local': ThreeDGenLocalModule,
+    'threed_gen_api': ThreeDGenAPIModule,
 
     # Tools
     'web_tools': WebToolsModule,

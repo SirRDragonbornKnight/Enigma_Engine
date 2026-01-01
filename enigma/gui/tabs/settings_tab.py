@@ -67,15 +67,15 @@ def create_settings_tab(parent):
     mode_row = QHBoxLayout()
     mode_row.addWidget(QLabel("Mode:"))
     
-    parent.power_mode_combo = QComboBox()
-    parent.power_mode_combo.addItem("💪 Full - Use all resources", "full")
-    parent.power_mode_combo.addItem("⚖️ Balanced - Normal use (default)", "balanced")
-    parent.power_mode_combo.addItem("💡 Low - Conserve resources", "low")
-    parent.power_mode_combo.addItem("🎮 Gaming - Minimal CPU/GPU", "gaming")
-    parent.power_mode_combo.addItem("🌙 Background - Lowest priority", "background")
-    parent.power_mode_combo.setCurrentIndex(1)  # Default to balanced
-    parent.power_mode_combo.currentIndexChanged.connect(
-        lambda idx: _apply_power_mode(parent)
+    parent.resource_mode_combo = QComboBox()
+    parent.resource_mode_combo.addItem("🎮 Minimal - Best for gaming", "minimal")
+    parent.resource_mode_combo.addItem("🕹️ Gaming - AI in background", "gaming")
+    parent.resource_mode_combo.addItem("⚖️ Balanced - Normal use (default)", "balanced")
+    parent.resource_mode_combo.addItem("🚀 Performance - Faster AI responses", "performance")
+    parent.resource_mode_combo.addItem("💪 Maximum - Use all resources", "max")
+    parent.resource_mode_combo.setCurrentIndex(2)  # Default to balanced
+    parent.resource_mode_combo.currentIndexChanged.connect(
+        lambda idx: _apply_resource_mode(parent)
     )
     mode_row.addWidget(parent.power_mode_combo)
     mode_row.addStretch()
@@ -148,8 +148,76 @@ def create_settings_tab(parent):
     return tab
 
 
-def _apply_power_mode(parent):
-    """Apply selected power mode."""
+def _load_saved_settings(parent):
+    """Load saved settings from CONFIG into the UI."""
+    from ...config import CONFIG
+    
+    # Load resource mode
+    saved_mode = CONFIG.get("resource_mode", "balanced")
+    mode_map = {"minimal": 0, "balanced": 1, "performance": 2, "max": 3}
+    if saved_mode in mode_map:
+        parent.resource_mode_combo.setCurrentIndex(mode_map[saved_mode])
+    
+    # Load CPU threads
+    saved_threads = CONFIG.get("cpu_threads", 0)
+    parent.cpu_threads_spin.setValue(saved_threads)
+    
+    # Load GPU memory fraction
+    saved_gpu = CONFIG.get("gpu_memory_fraction", 0.5)
+    parent.gpu_slider.setValue(int(saved_gpu * 100))
+    _update_gpu_label(parent, int(saved_gpu * 100))
+    
+    # Load low priority setting
+    saved_priority = CONFIG.get("low_priority", False)
+    parent.low_priority_check.setChecked(saved_priority)
+
+
+def _apply_resource_mode(parent):
+    """Apply selected resource mode."""
+    mode = parent.resource_mode_combo.currentData()
+    
+    # Update description
+    descriptions = {
+        "minimal": "Minimal: Uses 1 CPU thread, low priority. Best while gaming!",
+        "gaming": "Gaming: AI runs in background, prioritizes gaming performance.",
+        "balanced": "Balanced: Uses moderate resources. Good for normal use.",
+        "performance": "Performance: Uses more resources for faster AI responses.",
+        "max": "Maximum: Uses all available resources. May slow other apps."
+    }
+    parent.mode_details_label.setText(descriptions.get(mode, ""))
+    
+    # Update advanced controls to match mode
+    mode_settings = {
+        "minimal": {"threads": 1, "gpu": 20, "priority": True},
+        "gaming": {"threads": 2, "gpu": 30, "priority": True},
+        "balanced": {"threads": 0, "gpu": 50, "priority": False},
+        "performance": {"threads": 0, "gpu": 70, "priority": False},
+        "max": {"threads": 0, "gpu": 90, "priority": False},
+    }
+    
+    settings = mode_settings.get(mode, mode_settings["balanced"])
+    parent.cpu_threads_spin.setValue(settings["threads"])
+    parent.gpu_slider.setValue(settings["gpu"])
+    parent.low_priority_check.setChecked(settings["priority"])
+
+
+def _update_gpu_label(parent, value):
+    """Update GPU percentage label."""
+    parent.gpu_label.setText(f"{value}%")
+
+
+def _update_cpu_threads(parent, value):
+    """Handle CPU thread change."""
+    pass  # Applied when Apply button is clicked
+
+
+def _update_priority(parent, state):
+    """Handle priority checkbox change."""
+    pass  # Applied when Apply button is clicked
+
+
+def _apply_all_settings(parent):
+    """Apply all resource settings."""
     try:
         from ...core.power_mode import get_power_manager, PowerLevel
         

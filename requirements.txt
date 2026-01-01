@@ -49,11 +49,30 @@ pyscreenshot>=3.0
 # mypy>=0.990
 # autopep8>=2.0.0
 
+# === MONITORING (Optional) ===
+# For resource monitoring:
+psutil>=5.9.0
+
 # === CAMERA (Optional) ===
 # For webcam support:
 # opencv-python>=4.5.0
 # For Raspberry Pi camera:
 # picamera2>=0.3.0
+
+# === MOTION TRACKING (Optional) ===
+# For user gesture mimicry:
+# mediapipe>=0.10.0
+# opencv-python>=4.5.0
+
+# === 3D GENERATION (Optional) ===
+# For local 3D model generation:
+# shap-e>=0.0.1  # Shap-E for 3D generation
+# point-e>=0.0.1  # Point-E alternative
+# trimesh>=3.20.0  # For 3D mesh manipulation
+
+# === GGUF MODELS (Optional) ===
+# For loading llama.cpp compatible models:
+# llama-cpp-python>=0.2.0
 
 # === DOCUMENTS (Optional) ===
 # Uncomment to enable document parsing:
