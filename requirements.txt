@@ -72,3 +72,19 @@ pyscreenshot>=3.0
 # replicate>=0.15.0  # For SDXL, video, music generation
 # elevenlabs>=0.2.0  # For premium TTS
 
+# === UPGRADED COMPONENTS (Optional) ===
+
+# Better STT (choose one)
+# openai-whisper>=20231117  # Accurate but slower
+# faster-whisper>=0.9.0     # Faster alternative
+
+# Better TTS (choose one)  
+# TTS>=0.22.0               # Coqui TTS - natural voices
+# bark>=0.1.5               # Suno Bark - very natural
+
+# Faster tokenizer
+# tiktoken>=0.5.0           # GPT-style fast tokenizer
+
+# Model quantization
+# bitsandbytes>=0.41.0      # INT8/INT4 quantization
+
