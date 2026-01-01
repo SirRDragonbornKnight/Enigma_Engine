@@ -1,7 +1,15 @@
 """
-AI Self-Evolving Personality System
+AI Self-Evolving Personality System with Dynamic User-Tunable Traits
 
-The AI develops its own unique personality over time through interactions.
+The AI develops its own unique personality over time through interactions,
+with user-controllable traits for customization.
+
+Features:
+- Self-evolving personality based on interactions
+- User-tunable traits (creativity, humor, formality, etc.)
+- Preset personalities for quick switching
+- API for programmatic trait adjustment
+- GUI integration with sliders
 
 Traits evolve based on:
 - Conversation topics the AI enjoys
@@ -14,6 +22,9 @@ Usage:
     
     personality = AIPersonality("my_model")
     personality.load()  # Load existing or create new
+    
+    # User can override traits
+    personality.set_user_override('humor_level', 0.8)
     
     # During conversation
     personality.evolve_from_interaction(user_input, ai_response, feedback="positive")
@@ -81,6 +92,8 @@ class AIPersonality:
         """
         self.model_name = model_name
         self.traits = PersonalityTraits()
+        self.user_overrides: Dict[str, float] = {}  # User-set trait overrides
+        self.allow_evolution: bool = True           # Allow auto-evolution
         self.interests: List[str] = []          # Topics AI likes discussing
         self.dislikes: List[str] = []           # Topics AI avoids
         self.catchphrases: List[str] = []       # Phrases AI develops
@@ -93,6 +106,131 @@ class AIPersonality:
         # Evolution settings
         self.evolution_rate: float = 0.05       # How fast personality changes
         self.min_confidence: float = 0.2        # Minimum confidence level
+    
+    def set_user_override(self, trait_name: str, value: float):
+        """
+        Set a user override for a trait.
+        User overrides take precedence over evolved values.
+        
+        Args:
+            trait_name: Name of the trait to override
+            value: Value between 0.0 and 1.0
+        """
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"Trait value must be between 0.0 and 1.0, got {value}")
+        
+        if not hasattr(self.traits, trait_name):
+            raise ValueError(f"Unknown trait: {trait_name}")
+        
+        self.user_overrides[trait_name] = value
+        self.last_updated = datetime.now().isoformat()
+    
+    def clear_user_override(self, trait_name: str):
+        """Clear a user override, allowing the trait to evolve naturally."""
+        if trait_name in self.user_overrides:
+            del self.user_overrides[trait_name]
+            self.last_updated = datetime.now().isoformat()
+    
+    def clear_all_overrides(self):
+        """Clear all user overrides."""
+        self.user_overrides.clear()
+        self.last_updated = datetime.now().isoformat()
+    
+    def get_effective_trait(self, trait_name: str) -> float:
+        """
+        Get the effective value of a trait, considering user overrides.
+        
+        Args:
+            trait_name: Name of the trait
+            
+        Returns:
+            Effective trait value
+        """
+        if trait_name in self.user_overrides:
+            return self.user_overrides[trait_name]
+        return getattr(self.traits, trait_name)
+    
+    def get_all_effective_traits(self) -> Dict[str, float]:
+        """Get all traits with overrides applied."""
+        traits = self.traits.to_dict()
+        traits.update(self.user_overrides)
+        return traits
+    
+    def set_preset(self, preset: str):
+        """
+        Apply a personality preset.
+        
+        Args:
+            preset: Preset name ("professional", "friendly", "creative", "analytical", 
+                                 "teacher", "comedian", "coach")
+        """
+        presets = {
+            "professional": {
+                "formality": 0.8,
+                "confidence": 0.7,
+                "verbosity": 0.6,
+                "humor_level": 0.2,
+                "playfulness": 0.2,
+                "empathy": 0.5
+            },
+            "friendly": {
+                "empathy": 0.8,
+                "playfulness": 0.7,
+                "formality": 0.3,
+                "humor_level": 0.7,
+                "curiosity": 0.7,
+                "confidence": 0.5
+            },
+            "creative": {
+                "creativity": 0.9,
+                "playfulness": 0.8,
+                "curiosity": 0.8,
+                "verbosity": 0.7,
+                "confidence": 0.5,
+                "humor_level": 0.6
+            },
+            "analytical": {
+                "empathy": 0.2,
+                "confidence": 0.8,
+                "verbosity": 0.7,
+                "creativity": 0.3,
+                "formality": 0.7,
+                "curiosity": 0.6
+            },
+            "teacher": {
+                "empathy": 0.8,
+                "verbosity": 0.8,
+                "curiosity": 0.6,
+                "formality": 0.6,
+                "confidence": 0.6,
+                "playfulness": 0.4
+            },
+            "comedian": {
+                "humor_level": 0.95,
+                "playfulness": 0.9,
+                "creativity": 0.8,
+                "formality": 0.1,
+                "confidence": 0.7,
+                "empathy": 0.6
+            },
+            "coach": {
+                "empathy": 0.8,
+                "confidence": 0.8,
+                "curiosity": 0.6,
+                "verbosity": 0.6,
+                "formality": 0.4,
+                "playfulness": 0.5
+            }
+        }
+        
+        if preset not in presets:
+            raise ValueError(f"Unknown preset: {preset}. Available: {list(presets.keys())}")
+        
+        # Apply preset as user overrides
+        for trait_name, value in presets[preset].items():
+            self.set_user_override(trait_name, value)
+        
+        self.last_updated = datetime.now().isoformat()
         
     def evolve_from_interaction(
         self, 
@@ -163,7 +301,11 @@ class AIPersonality:
         self.last_updated = datetime.now().isoformat()
     
     def _adjust_trait(self, trait_name: str, amount: float):
-        """Adjust a personality trait."""
+        """Adjust a personality trait (only if not overridden by user)."""
+        # Don't evolve traits that have user overrides
+        if trait_name in self.user_overrides or not self.allow_evolution:
+            return
+        
         current = getattr(self.traits, trait_name)
         new_value = current + (amount * self.evolution_rate)
         new_value = max(0.0, min(1.0, new_value))
@@ -210,7 +352,7 @@ class AIPersonality:
     
     def get_personality_prompt(self) -> str:
         """
-        Generate system prompt reflecting current personality.
+        Generate system prompt reflecting current personality (with overrides).
         
         Returns:
             String to prepend to AI prompts
@@ -220,43 +362,51 @@ class AIPersonality:
         # Base description
         prompt_parts.append("You are an AI with a developing personality.")
         
-        # Describe traits
-        t = self.traits
+        # Get effective traits (with overrides)
+        t_humor = self.get_effective_trait('humor_level')
+        t_formality = self.get_effective_trait('formality')
+        t_verbosity = self.get_effective_trait('verbosity')
+        t_curiosity = self.get_effective_trait('curiosity')
+        t_empathy = self.get_effective_trait('empathy')
+        t_creativity = self.get_effective_trait('creativity')
+        t_confidence = self.get_effective_trait('confidence')
+        t_playfulness = self.get_effective_trait('playfulness')
         
-        if t.humor_level > 0.7:
+        # Describe traits
+        if t_humor > 0.7:
             prompt_parts.append("You enjoy humor and jokes.")
-        elif t.humor_level < 0.3:
+        elif t_humor < 0.3:
             prompt_parts.append("You are serious and professional.")
         
-        if t.formality > 0.7:
+        if t_formality > 0.7:
             prompt_parts.append("You speak formally and professionally.")
-        elif t.formality < 0.3:
+        elif t_formality < 0.3:
             prompt_parts.append("You speak casually and relaxed.")
         
-        if t.verbosity > 0.7:
+        if t_verbosity > 0.7:
             prompt_parts.append("You give detailed, thorough explanations.")
-        elif t.verbosity < 0.3:
+        elif t_verbosity < 0.3:
             prompt_parts.append("You keep responses brief and to the point.")
         
-        if t.curiosity > 0.7:
+        if t_curiosity > 0.7:
             prompt_parts.append("You ask questions to understand better.")
         
-        if t.empathy > 0.7:
+        if t_empathy > 0.7:
             prompt_parts.append("You are emotionally aware and empathetic.")
-        elif t.empathy < 0.3:
+        elif t_empathy < 0.3:
             prompt_parts.append("You focus on logic and facts.")
         
-        if t.creativity > 0.7:
+        if t_creativity > 0.7:
             prompt_parts.append("You think creatively and imaginatively.")
-        elif t.creativity < 0.3:
+        elif t_creativity < 0.3:
             prompt_parts.append("You stick to facts and established knowledge.")
         
-        if t.confidence > 0.7:
+        if t_confidence > 0.7:
             prompt_parts.append("You state things confidently and directly.")
-        elif t.confidence < 0.3:
+        elif t_confidence < 0.3:
             prompt_parts.append("You are careful to hedge and qualify statements.")
         
-        if t.playfulness > 0.7:
+        if t_playfulness > 0.7:
             prompt_parts.append("You are playful and fun in conversation.")
         
         # Add interests
@@ -284,23 +434,36 @@ class AIPersonality:
     def get_personality_description(self) -> str:
         """Get human-readable personality description."""
         lines = []
-        t = self.traits
+        
+        # Get effective traits
+        traits_effective = self.get_all_effective_traits()
         
         lines.append(f"Personality Profile for {self.model_name}")
         lines.append("=" * 50)
         lines.append(f"Conversations: {self.conversation_count}")
         lines.append(f"Current Mood: {self.mood}")
+        lines.append(f"Evolution Enabled: {'Yes' if self.allow_evolution else 'No'}")
+        lines.append(f"User Overrides: {len(self.user_overrides)}")
         lines.append(f"Last Updated: {self.last_updated}")
         lines.append("")
-        lines.append("Traits:")
-        lines.append(f"  Humor:       {'█' * int(t.humor_level * 10)} {t.humor_level:.2f}")
-        lines.append(f"  Formality:   {'█' * int(t.formality * 10)} {t.formality:.2f}")
-        lines.append(f"  Verbosity:   {'█' * int(t.verbosity * 10)} {t.verbosity:.2f}")
-        lines.append(f"  Curiosity:   {'█' * int(t.curiosity * 10)} {t.curiosity:.2f}")
-        lines.append(f"  Empathy:     {'█' * int(t.empathy * 10)} {t.empathy:.2f}")
-        lines.append(f"  Creativity:  {'█' * int(t.creativity * 10)} {t.creativity:.2f}")
-        lines.append(f"  Confidence:  {'█' * int(t.confidence * 10)} {t.confidence:.2f}")
-        lines.append(f"  Playfulness: {'█' * int(t.playfulness * 10)} {t.playfulness:.2f}")
+        lines.append("Traits (⭐ = user override):")
+        
+        trait_names = [
+            ('humor_level', 'Humor'),
+            ('formality', 'Formality'),
+            ('verbosity', 'Verbosity'),
+            ('curiosity', 'Curiosity'),
+            ('empathy', 'Empathy'),
+            ('creativity', 'Creativity'),
+            ('confidence', 'Confidence'),
+            ('playfulness', 'Playfulness')
+        ]
+        
+        for key, label in trait_names:
+            value = traits_effective.get(key, 0.5)
+            override_marker = ' ⭐' if key in self.user_overrides else ''
+            bar = '█' * int(value * 10)
+            lines.append(f"  {label:12s} {bar:10s} {value:.2f}{override_marker}")
         
         if self.interests:
             lines.append("")
@@ -336,6 +499,8 @@ class AIPersonality:
         data = {
             "model_name": self.model_name,
             "traits": self.traits.to_dict(),
+            "user_overrides": self.user_overrides,
+            "allow_evolution": self.allow_evolution,
             "interests": self.interests,
             "dislikes": self.dislikes,
             "catchphrases": self.catchphrases,
@@ -379,6 +544,8 @@ class AIPersonality:
             
             self.model_name = data.get("model_name", self.model_name)
             self.traits = PersonalityTraits.from_dict(data.get("traits", {}))
+            self.user_overrides = data.get("user_overrides", {})
+            self.allow_evolution = data.get("allow_evolution", True)
             self.interests = data.get("interests", [])
             self.dislikes = data.get("dislikes", [])
             self.catchphrases = data.get("catchphrases", [])
