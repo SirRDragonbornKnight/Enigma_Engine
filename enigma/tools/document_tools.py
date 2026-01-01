@@ -6,9 +6,8 @@ Tools:
   - extract_text: Extract plain text from any document
 """
 
-import os
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from .tool_registry import Tool
 
 

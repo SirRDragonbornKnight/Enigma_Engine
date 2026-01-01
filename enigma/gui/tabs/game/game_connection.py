@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, 
     QGroupBox, QLineEdit, QSpinBox, QTextEdit, QFileDialog
 )
-from PyQt5.QtCore import Qt
 import json
 
 from ....config import CONFIG
@@ -261,26 +260,41 @@ def _connect_to_game(parent):
     try:
         if protocol == "websocket":
             parent.game_log.append("[>] WebSocket connection...")
-            # TODO: Actual WebSocket connection
-            # import websocket
-            # parent.game_connection = websocket.create_connection(f"ws://{host}:{port}{endpoint}")
+            # Actual WebSocket connection
+            try:
+                import websocket
+                parent.game_connection = websocket.create_connection(f"ws://{host}:{port}{endpoint}")
+                parent.game_log.append("[OK] WebSocket connection established")
+            except ImportError:
+                parent.game_log.append("[!] websocket-client not installed. Install with: pip install websocket-client")
+                parent.game_connection = None
             
         elif protocol == "http":
             parent.game_log.append("[>] HTTP API ready")
-            # HTTP doesn't maintain persistent connection
+            # HTTP doesn't maintain persistent connection, store info for requests
+            parent.game_connection = {"type": "http", "host": host, "port": port, "endpoint": endpoint}
             
         elif protocol == "osc":
             parent.game_log.append("[>] OSC client ready")
-            # TODO: OSC client
-            # from pythonosc import udp_client
-            # parent.game_connection = udp_client.SimpleUDPClient(host, port)
+            # Actual OSC client
+            try:
+                from pythonosc import udp_client
+                parent.game_connection = udp_client.SimpleUDPClient(host, port)
+                parent.game_log.append("[OK] OSC client initialized")
+            except ImportError:
+                parent.game_log.append("[!] python-osc not installed. Install with: pip install python-osc")
+                parent.game_connection = None
         
-        # Mark as connected (for UI state)
-        parent.game_status_label.setText(f"Status: Connected ({protocol}://{host}:{port})")
-        parent.game_status_label.setStyleSheet("color: #a6e3a1;")
-        parent.btn_game_connect.setEnabled(False)
-        parent.btn_game_disconnect.setEnabled(True)
-        parent.game_log.append("[OK] Connection established")
+        # Mark as connected if we have a connection
+        if parent.game_connection:
+            parent.game_status_label.setText(f"Status: Connected ({protocol}://{host}:{port})")
+            parent.game_status_label.setStyleSheet("color: #a6e3a1;")
+            parent.btn_game_connect.setEnabled(False)
+            parent.btn_game_disconnect.setEnabled(True)
+            parent.game_log.append("[OK] Connection established")
+        else:
+            parent.game_status_label.setText("Status: Connection failed (missing library)")
+            parent.game_status_label.setStyleSheet("color: #f38ba8;")
         
     except Exception as e:
         parent.game_log.append(f"[X] Connection failed: {e}")
@@ -292,7 +306,7 @@ def _disconnect_from_game(parent):
     if parent.game_connection:
         try:
             parent.game_connection.close()
-        except:
+        except Exception:
             pass
     parent.game_connection = None
     parent.game_status_label.setText("Status: Not connected")

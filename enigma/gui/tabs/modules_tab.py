@@ -5,18 +5,17 @@ Module Manager Tab - Control all Enigma capabilities
 Unified control panel for all modules and AI capabilities.
 Everything toggleable, organized by category.
 """
-import sys
-from typing import Dict, Optional, List
+from typing import Dict, List
 
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
         QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
-        QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit,
-        QProgressBar, QMessageBox, QSplitter, QTextEdit, QTabWidget
+        QLineEdit, QProgressBar, QMessageBox, QSplitter,
+        QTextEdit
     )
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-    from PyQt5.QtGui import QFont, QColor, QPalette
+    from PyQt5.QtCore import Qt, QTimer
+    from PyQt5.QtGui import QFont
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -510,7 +509,7 @@ class ModulesTab(QWidget):
                 total = torch.cuda.get_device_properties(0).total_memory
                 self.vram_bar.setValue(int(allocated / total * 100))
                 self.gpu_bar.setValue(50)  # Would need pynvml for actual GPU usage
-        except:
+        except Exception:
             pass
     
     def log(self, message: str):

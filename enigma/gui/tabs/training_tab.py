@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import (
     QSpinBox, QLineEdit, QProgressBar, QComboBox, QFileDialog,
     QPlainTextEdit, QMessageBox
 )
-from PyQt5.QtCore import Qt
 
 from ...config import CONFIG
 

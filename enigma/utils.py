@@ -4,7 +4,6 @@ Enigma Utilities
 
 Common utility functions used throughout Enigma Engine.
 """
-import sys
 import time
 from typing import Optional, Iterator, Any
 

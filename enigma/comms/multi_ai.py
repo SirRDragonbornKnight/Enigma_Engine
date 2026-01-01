@@ -20,7 +20,7 @@ Usage:
 
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Callable, Generator
+from typing import Dict, List, Callable, Generator
 from pathlib import Path
 import json
 

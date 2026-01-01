@@ -10,16 +10,12 @@ Provides:
 Run with: python -m enigma.comms.web_server
 """
 
-import json
-import threading
-import time
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Optional, List, Callable
 import socket
 
 try:
-    from flask import Flask, render_template_string, request, jsonify, send_from_directory
+    from flask import Flask, render_template_string, request, jsonify
     from flask_cors import CORS
     FLASK_AVAILABLE = True
 except ImportError:

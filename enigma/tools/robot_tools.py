@@ -91,17 +91,14 @@ class RobotInterface(ABC):
     @abstractmethod
     def connect(self) -> bool:
         """Connect to the robot. Return True if successful."""
-        pass
     
     @abstractmethod
     def disconnect(self) -> bool:
         """Disconnect from the robot."""
-        pass
     
     @abstractmethod
     def move_joint(self, joint: str, angle: float, speed: float = 1.0) -> bool:
         """Move a specific joint to an angle."""
-        pass
     
     def get_joint_position(self, joint: str) -> Optional[float]:
         """Get current position of a joint."""

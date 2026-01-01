@@ -26,9 +26,8 @@ USAGE:
     result = tools.execute("read_file", path="/home/user/document.txt")
 """
 
-from typing import Dict, Any, Callable, Optional, List
+from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
-import json
 
 
 class Tool(ABC):
@@ -46,7 +45,6 @@ class Tool(ABC):
         Returns:
             Dict with 'success', 'result', and optionally 'error'
         """
-        pass
     
     def to_dict(self) -> Dict:
         """Export tool info for AI consumption."""

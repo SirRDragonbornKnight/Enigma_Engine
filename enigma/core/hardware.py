@@ -9,7 +9,7 @@ import os
 import sys
 import platform
 import subprocess
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 from pathlib import Path
 
 

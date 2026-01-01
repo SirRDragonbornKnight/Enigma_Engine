@@ -10,13 +10,11 @@ Provides a REST API specifically designed for mobile apps:
 Works with: iOS, Android (native or React Native/Flutter)
 """
 
-import json
 import base64
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
-from functools import wraps
+from typing import Dict, Optional
 
 try:
     from flask import Flask, request, jsonify, Response
@@ -25,7 +23,6 @@ try:
 except ImportError:
     HAS_FLASK = False
 
-from ..config import CONFIG
 
 
 class MobileAPI:

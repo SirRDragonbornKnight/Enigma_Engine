@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Callable
 from dataclasses import dataclass
 
-from .model import Enigma, create_model, MODEL_PRESETS
+from .model import create_model, MODEL_PRESETS
 from .tokenizer import get_tokenizer, train_tokenizer
 from ..config import CONFIG
 

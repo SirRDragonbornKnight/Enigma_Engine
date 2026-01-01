@@ -18,9 +18,7 @@ Usage:
 """
 
 import os
-import sys
 import platform
-from typing import Optional
 from ..config import CONFIG
 
 # Check for torch

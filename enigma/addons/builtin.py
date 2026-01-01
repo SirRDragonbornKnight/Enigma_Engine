@@ -8,14 +8,12 @@ These can connect to various providers or run locally.
 
 import os
 import base64
-import json
 import time
-from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 from .base import (
-    Addon, AddonConfig, AddonResult, AddonType, AddonProvider,
-    ImageAddon, CodeAddon, VideoAddon, AudioAddon, EmbeddingAddon
+    AddonConfig, AddonResult, AddonType, AddonProvider, ImageAddon,
+    CodeAddon, VideoAddon, AudioAddon, EmbeddingAddon
 )
 
 
@@ -583,7 +581,6 @@ class LocalVideo(VideoAddon):
             frames = output.frames[0]
             
             import io
-            from PIL import Image
             
             buf = io.BytesIO()
             frames[0].save(

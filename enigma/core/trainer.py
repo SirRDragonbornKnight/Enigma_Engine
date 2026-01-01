@@ -42,8 +42,6 @@ from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Callable, Dict, Any, Union
-import json
-import os
 
 from .model import Enigma, TinyEnigma  # TinyEnigma is backwards compat alias
 from .model_registry import ModelRegistry

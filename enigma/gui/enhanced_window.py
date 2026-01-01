@@ -22,15 +22,13 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTextEdit, QLineEdit, QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox,
-    QDialog, QComboBox, QProgressBar, QGroupBox, QRadioButton, QButtonGroup,
-    QSpinBox, QCheckBox, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
-    QSlider, QSplitter, QPlainTextEdit, QToolTip, QFrame, QScrollArea, QInputDialog,
-    QListWidgetItem, QActionGroup
+    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
+    QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
+    QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
+    QInputDialog, QActionGroup
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap, QImage, QTextCursor
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap
 import time
 
 
@@ -509,10 +507,8 @@ THEMES = {
 # Import enigma modules
 try:
     from ..core.model_registry import ModelRegistry
-    from ..core.model_config import MODEL_PRESETS, get_model_config
-    from ..core.model_scaling import grow_model, shrink_model
-    from ..core.inference import EnigmaEngine
-    from ..memory.manager import ConversationManager
+    from ..core.model_config import MODEL_PRESETS
+    from ..core.model_scaling import shrink_model
     from ..config import CONFIG
 except ImportError:
     # Running standalone
@@ -1702,7 +1698,7 @@ class EnhancedMainWindow(QMainWindow):
         try:
             from ..tools.simple_ocr import extract_text
             ocr_text = extract_text(self._last_screenshot)
-        except:
+        except Exception:
             pass
         
         # Build analysis
@@ -1720,7 +1716,7 @@ class EnhancedMainWindow(QMainWindow):
                 prompt = "Describe what you might see in a screenshot or image."
                 # Note: Real vision would need multi-modal model
                 analysis.append(f"\n(AI vision analysis requires multi-modal model)")
-            except:
+            except Exception:
                 pass
         
         self.vision_text.setPlainText("\n".join(analysis))
@@ -1897,7 +1893,7 @@ class EnhancedMainWindow(QMainWindow):
             from .tools.simple_ocr import extract_text
             text = extract_text(self._last_screenshot)
             return text if text else "No text detected in screenshot"
-        except:
+        except Exception:
             return "OCR not available"
     
     # === Session Actions ===
@@ -2373,7 +2369,7 @@ class EnhancedMainWindow(QMainWindow):
                 if abs(param_sum) < 0.001:  # Very small = likely untrained
                     self.chat_display.append("<b style='color:#f9e2af;'>Note:</b> "
                                               "Model appears untrained. Go to Train tab first!")
-            except:
+            except Exception:
                 pass
         
         # Initialize chat messages list if needed

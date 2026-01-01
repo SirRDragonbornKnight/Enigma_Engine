@@ -1,14 +1,11 @@
 """
 Model Scaling Tab - Visualize and manage model sizes from nano to omega
 """
-import sys
-from typing import Dict, Optional
 
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-        QLabel, QPushButton, QFrame, QGroupBox, QSlider, QComboBox,
-        QProgressBar, QMessageBox, QSpinBox, QTextEdit, QSplitter
+        QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QTextEdit
     )
     from PyQt5.QtCore import Qt, pyqtSignal
     from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush

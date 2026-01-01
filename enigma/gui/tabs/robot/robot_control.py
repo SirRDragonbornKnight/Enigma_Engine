@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, 
     QGroupBox, QLineEdit, QTextEdit, QFileDialog
 )
-from PyQt5.QtCore import Qt
 import json
 
 from ....config import CONFIG
@@ -291,37 +290,75 @@ def _connect_robot(parent):
             port = parent.robot_port_input.text()
             baud = int(parent.robot_baud_combo.currentText())
             parent.robot_log.append(f"[>] Serial: {port} @ {baud} baud...")
-            # TODO: Actual serial connection
-            # import serial
-            # parent.robot_connection = serial.Serial(port, baud, timeout=1)
+            # Actual serial connection
+            try:
+                import serial
+                parent.robot_connection = serial.Serial(port, baud, timeout=1)
+                parent.robot_log.append("[OK] Serial connection established")
+            except ImportError:
+                parent.robot_log.append("[!] pyserial not installed. Install with: pip install pyserial")
+                parent.robot_connection = None
             
         elif robot_type == "http":
             host = parent.robot_host_input.text()
             port = parent.robot_net_port_input.text()
             parent.robot_log.append(f"[>] HTTP: http://{host}:{port}")
+            # Store connection info for HTTP requests
+            parent.robot_connection = {"type": "http", "url": f"http://{host}:{port}"}
             
         elif robot_type == "ros":
             host = parent.robot_host_input.text()
             port = parent.robot_net_port_input.text()
             parent.robot_log.append(f"[*] ROS Master: {host}:{port}")
-            # TODO: ROS connection
+            # ROS connection
+            try:
+                import rospy
+                if not rospy.core.is_initialized():
+                    rospy.init_node('enigma_robot_client', anonymous=True)
+                parent.robot_connection = {"type": "ros", "host": host, "port": port}
+                parent.robot_log.append("[OK] ROS node initialized")
+            except ImportError:
+                parent.robot_log.append("[!] rospy not installed. ROS not available.")
+                parent.robot_connection = None
             
         elif robot_type == "gpio":
             parent.robot_log.append("[>] GPIO initialized")
-            # TODO: GPIO setup
+            # GPIO setup for Raspberry Pi
+            try:
+                import RPi.GPIO as GPIO
+                GPIO.setmode(GPIO.BCM)
+                parent.robot_connection = {"type": "gpio", "GPIO": GPIO}
+                parent.robot_log.append("[OK] GPIO configured (BCM mode)")
+            except ImportError:
+                parent.robot_log.append("[!] RPi.GPIO not installed. GPIO not available.")
+                parent.robot_connection = None
             
         elif robot_type == "mqtt":
             host = parent.robot_host_input.text()
             port = parent.robot_net_port_input.text()
             parent.robot_log.append(f"[>] MQTT: {host}:{port}")
-            # TODO: MQTT connection
+            # MQTT connection
+            try:
+                import paho.mqtt.client as mqtt
+                client = mqtt.Client()
+                client.connect(host, int(port))
+                client.loop_start()
+                parent.robot_connection = {"type": "mqtt", "client": client}
+                parent.robot_log.append("[OK] MQTT connection established")
+            except ImportError:
+                parent.robot_log.append("[!] paho-mqtt not installed. Install with: pip install paho-mqtt")
+                parent.robot_connection = None
         
-        # Mark as connected
-        parent.robot_status_label.setText(f"Status: Connected ({robot_type})")
-        parent.robot_status_label.setStyleSheet("color: #a6e3a1;")
-        parent.btn_robot_connect.setEnabled(False)
-        parent.btn_robot_disconnect.setEnabled(True)
-        parent.robot_log.append("[OK] Connection established")
+        # Mark as connected if we have a connection
+        if parent.robot_connection:
+            parent.robot_status_label.setText(f"Status: Connected ({robot_type})")
+            parent.robot_status_label.setStyleSheet("color: #a6e3a1;")
+            parent.btn_robot_connect.setEnabled(False)
+            parent.btn_robot_disconnect.setEnabled(True)
+            parent.robot_log.append("[OK] Connection established")
+        else:
+            parent.robot_status_label.setText("Status: Connection failed (missing library)")
+            parent.robot_status_label.setStyleSheet("color: #f38ba8;")
         
     except Exception as e:
         parent.robot_log.append(f"[X] Connection failed: {e}")
@@ -333,7 +370,7 @@ def _disconnect_robot(parent):
     if parent.robot_connection:
         try:
             parent.robot_connection.close()
-        except:
+        except Exception:
             pass
     parent.robot_connection = None
     parent.robot_status_label.setText("Status: Not connected")

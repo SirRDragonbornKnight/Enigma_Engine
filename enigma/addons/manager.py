@@ -6,15 +6,14 @@ Central manager for all Enigma addons.
 Handles loading, routing requests, and coordination.
 """
 
-from typing import Dict, List, Optional, Any, Type
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 import json
 import importlib
 import sys
 
 from .base import (
-    Addon, AddonConfig, AddonResult, AddonType, AddonProvider,
-    ImageAddon, CodeAddon, VideoAddon, AudioAddon, EmbeddingAddon
+    Addon, AddonResult, AddonType
 )
 
 

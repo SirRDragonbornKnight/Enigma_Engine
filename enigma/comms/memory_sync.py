@@ -16,7 +16,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, List
 import urllib.request
 
 from ..config import CONFIG
