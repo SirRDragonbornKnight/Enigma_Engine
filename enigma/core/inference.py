@@ -85,6 +85,10 @@ class EnigmaEngine:
         # Device selection
         self.device = self._select_device(device)
         self.use_half = use_half and self.device.type == "cuda"
+        
+        # Store configuration
+        self.enable_tools = enable_tools
+        self.module_manager = module_manager
 
         # Load tokenizer
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)

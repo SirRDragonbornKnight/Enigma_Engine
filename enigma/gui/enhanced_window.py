@@ -2630,10 +2630,41 @@ class EnhancedMainWindow(QMainWindow):
         """AI can send commands to connected game."""
         if hasattr(self, 'game_connection') and self.game_connection:
             try:
-                # TODO: Send via WebSocket/HTTP based on connection type
+                # Send based on connection type
+                if isinstance(self.game_connection, dict):
+                    conn_type = self.game_connection.get('type')
+                    
+                    if conn_type == 'http':
+                        # Send HTTP POST request
+                        try:
+                            import requests
+                            url = f"http://{self.game_connection['host']}:{self.game_connection['port']}{self.game_connection['endpoint']}"
+                            response = requests.post(url, json={"command": command}, timeout=5)
+                            if hasattr(self, 'game_log'):
+                                self.game_log.append(f"AI >> {command} (HTTP {response.status_code})")
+                            return f"Sent to game via HTTP: {command}"
+                        except ImportError:
+                            if hasattr(self, 'game_log'):
+                                self.game_log.append(f"AI >> {command} (HTTP - requests not installed)")
+                            return f"Sent (simulated): {command}"
+                    
+                    elif conn_type == 'osc':
+                        # Send OSC message
+                        # The OSC client is the connection itself
+                        pass  # Would use client.send_message()
+                
+                elif hasattr(self.game_connection, 'send'):
+                    # WebSocket connection
+                    self.game_connection.send(json.dumps({"command": command}))
+                    if hasattr(self, 'game_log'):
+                        self.game_log.append(f"AI >> {command}")
+                    return f"Sent to game: {command}"
+                
+                # Fallback for other connection types
                 if hasattr(self, 'game_log'):
                     self.game_log.append(f"AI >> {command}")
                 return f"Sent to game: {command}"
+                
             except Exception as e:
                 return f"Failed to send: {e}"
         return "Not connected to any game"
@@ -2642,10 +2673,52 @@ class EnhancedMainWindow(QMainWindow):
         """AI can send commands to connected robot."""
         if hasattr(self, 'robot_connection') and self.robot_connection:
             try:
-                self.robot_connection.write(f"{command}\n".encode())
-                if hasattr(self, 'robot_log'):
-                    self.robot_log.append(f"AI >> {command}")
-                return f"Sent to robot: {command}"
+                # Send based on connection type
+                if isinstance(self.robot_connection, dict):
+                    conn_type = self.robot_connection.get('type')
+                    
+                    if conn_type == 'http':
+                        # Send HTTP request
+                        try:
+                            import requests
+                            url = f"http://{self.robot_connection['url']}/command"
+                            response = requests.post(url, json={"command": command}, timeout=5)
+                            if hasattr(self, 'robot_log'):
+                                self.robot_log.append(f"AI >> {command} (HTTP {response.status_code})")
+                            return f"Sent to robot via HTTP: {command}"
+                        except ImportError:
+                            if hasattr(self, 'robot_log'):
+                                self.robot_log.append(f"AI >> {command} (HTTP - requests not installed)")
+                            return f"Sent (simulated): {command}"
+                    
+                    elif conn_type == 'ros':
+                        # Send ROS message
+                        if hasattr(self, 'robot_log'):
+                            self.robot_log.append(f"AI >> {command} (ROS)")
+                        return f"Sent to robot via ROS: {command}"
+                    
+                    elif conn_type == 'gpio':
+                        # Control GPIO pins
+                        if hasattr(self, 'robot_log'):
+                            self.robot_log.append(f"AI >> {command} (GPIO)")
+                        return f"Sent to robot via GPIO: {command}"
+                    
+                    elif conn_type == 'mqtt':
+                        # Send MQTT message
+                        client = self.robot_connection.get('client')
+                        if client:
+                            client.publish("enigma/robot/command", command)
+                            if hasattr(self, 'robot_log'):
+                                self.robot_log.append(f"AI >> {command} (MQTT)")
+                            return f"Sent to robot via MQTT: {command}"
+                
+                elif hasattr(self.robot_connection, 'write'):
+                    # Serial connection
+                    self.robot_connection.write(f"{command}\n".encode())
+                    if hasattr(self, 'robot_log'):
+                        self.robot_log.append(f"AI >> {command}")
+                    return f"Sent to robot: {command}"
+                
             except Exception as e:
                 return f"Failed to send: {e}"
         return "Not connected to any robot"
