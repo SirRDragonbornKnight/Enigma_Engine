@@ -391,7 +391,8 @@ class AdvancedBPETokenizer:
 
         Uses caching for efficiency.
         """
-        if token in self.cache:
+        # Use cache only when dropout is disabled
+        if dropout == 0.0 and token in self.cache:
             return self.cache[token]
 
         # Convert to byte representation
@@ -412,6 +413,11 @@ class AdvancedBPETokenizer:
             min_rank = float('inf')
             for pair in pairs:
                 rank = self.bpe_ranks.get(pair, float('inf'))
+                
+                # BPE dropout: randomly skip merges during training
+                if dropout > 0.0 and random.random() < dropout:
+                    continue
+                    
                 if rank < min_rank:
                     min_rank = rank
                     min_pair = pair
@@ -437,7 +443,11 @@ class AdvancedBPETokenizer:
                 break
 
         result = ' '.join(word)
-        self.cache[token] = result
+        
+        # Cache only when dropout is disabled
+        if dropout == 0.0:
+            self.cache[token] = result
+        
         return result
 
     def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
@@ -626,6 +636,150 @@ class AdvancedBPETokenizer:
     def id_to_token(self) -> Dict[int, str]:
         """Compatibility property."""
         return self.decoder
+    
+    def set_bpe_dropout(self, dropout: float):
+        """
+        Set BPE dropout rate for subword regularization.
+        
+        Args:
+            dropout: Dropout probability (0.0 = disabled, 0.1 = 10% dropout)
+        """
+        if not 0.0 <= dropout <= 1.0:
+            raise ValueError(f"Dropout must be between 0.0 and 1.0, got {dropout}")
+        self.bpe_dropout = dropout
+    
+    def encode_stream(self, text_chunk: str, finalize: bool = False) -> List[int]:
+        """
+        Encode streaming text efficiently.
+        
+        Buffers incomplete tokens and only encodes complete words/tokens.
+        Call with finalize=True on the last chunk to flush the buffer.
+        
+        Args:
+            text_chunk: New text to encode
+            finalize: Whether this is the last chunk (flush buffer)
+            
+        Returns:
+            Token IDs for complete tokens in this chunk
+        """
+        self._stream_buffer += text_chunk
+        
+        if not finalize:
+            # Only encode complete tokens (wait for whitespace/punctuation)
+            # Find last complete token boundary
+            last_space = self._stream_buffer.rfind(' ')
+            last_newline = self._stream_buffer.rfind('\n')
+            last_boundary = max(last_space, last_newline)
+            
+            if last_boundary == -1:
+                # No complete tokens yet
+                return []
+            
+            # Encode up to boundary
+            to_encode = self._stream_buffer[:last_boundary + 1]
+            self._stream_buffer = self._stream_buffer[last_boundary + 1:]
+        else:
+            # Final chunk - encode everything
+            to_encode = self._stream_buffer
+            self._stream_buffer = ""
+        
+        if not to_encode:
+            return []
+        
+        return self.encode(to_encode, add_special_tokens=False)
+    
+    def reset_stream(self):
+        """Reset streaming buffer."""
+        self._stream_buffer = ""
+    
+    def decode_improved(
+        self, 
+        ids: List[int], 
+        skip_special_tokens: bool = True,
+        clean_up_spaces: bool = True
+    ) -> str:
+        """
+        Improved decoding with better space and punctuation handling.
+        
+        Args:
+            ids: Token IDs to decode
+            skip_special_tokens: Whether to skip special tokens
+            clean_up_spaces: Apply intelligent space cleanup
+            
+        Returns:
+            Decoded text with improved formatting
+        """
+        # First do standard decode
+        text = self.decode(ids, skip_special_tokens=skip_special_tokens)
+        
+        if not clean_up_spaces:
+            return text
+        
+        # Cleanup common spacing issues
+        import re
+        
+        # Remove spaces before punctuation
+        text = re.sub(r' ([.,!?;:])', r'\1', text)
+        
+        # Remove spaces after opening brackets/quotes
+        text = re.sub(r'([\[\(\{"\']) ', r'\1', text)
+        
+        # Remove spaces before closing brackets/quotes
+        text = re.sub(r' ([\]\)\}"\'])', r'\1', text)
+        
+        # Fix multiple spaces
+        text = re.sub(r' +', ' ', text)
+        
+        # Fix newline spacing
+        text = re.sub(r'\n +', '\n', text)
+        text = re.sub(r' +\n', '\n', text)
+        
+        # Clean up leading/trailing whitespace
+        text = text.strip()
+        
+        return text
+    
+    def get_compression_ratio(self, text: str) -> float:
+        """
+        Calculate compression ratio (chars per token).
+        Higher is better - means more efficient encoding.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Average characters per token
+        """
+        if not text:
+            return 0.0
+        
+        ids = self.encode(text, add_special_tokens=False)
+        if not ids:
+            return 0.0
+        
+        return len(text) / len(ids)
+    
+    def tokenize_stats(self, text: str) -> Dict[str, Any]:
+        """
+        Get detailed tokenization statistics.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dictionary with tokenization stats
+        """
+        ids = self.encode(text, add_special_tokens=False)
+        tokens = [self.decoder.get(id, '<unk>') for id in ids]
+        
+        return {
+            'text_length': len(text),
+            'token_count': len(ids),
+            'unique_tokens': len(set(ids)),
+            'compression_ratio': len(text) / len(ids) if ids else 0.0,
+            'avg_token_length': sum(len(t) for t in tokens) / len(tokens) if tokens else 0.0,
+            'tokens': tokens[:50],  # First 50 tokens
+        }
 
 
 def train_tokenizer(

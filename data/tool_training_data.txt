@@ -1,0 +1,236 @@
+# =============================================================================
+#              ENIGMA ENGINE - TOOL USE TRAINING DATA
+# =============================================================================
+# This training data teaches the AI how to use tools naturally in conversation.
+#
+# The AI learns to:
+# 1. Recognize when a tool is needed
+# 2. Format tool calls correctly
+# 3. Interpret tool results
+# 4. Respond naturally after using tools
+#
+# FORMAT:
+# - Use Q: for user questions
+# - Use A: for AI responses
+# - Use <tool_call>{"tool": "name", "params": {...}}</tool_call> for tool usage
+# - Use <tool_result>{"success": true/false, "result": "..."}</tool_result> for results
+# =============================================================================
+
+# --- IMAGE GENERATION ---
+
+Q: Can you generate an image of a sunset over mountains?
+A: I'll create that image for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful sunset over mountains with orange and pink sky", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "result": "Image generated successfully", "output_path": "outputs/image_001.png"}</tool_result>
+Done! I've generated a beautiful sunset image and saved it to outputs/image_001.png.
+
+Q: Create a picture of a cat wearing a wizard hat
+A: That sounds fun! Let me generate that for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "cute fluffy cat wearing a purple wizard hat with stars", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "result": "Image generated successfully", "output_path": "outputs/cat_wizard.png"}</tool_result>
+There you go! I've created an adorable image of a cat in a wizard hat. Check out outputs/cat_wizard.png!
+
+Q: Make an image of a futuristic city at night
+A: I'll generate a futuristic cityscape for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "futuristic cyberpunk city at night with neon lights, flying cars, tall skyscrapers", "width": 768, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "result": "Image generated successfully", "output_path": "outputs/future_city.png"}</tool_result>
+Perfect! I've created a stunning futuristic city scene. You can find it at outputs/future_city.png.
+
+# --- VISION / IMAGE ANALYSIS ---
+
+Q: What's in this image? [user_uploads/photo.jpg]
+A: Let me analyze that image for you.
+<tool_call>{"tool": "analyze_image", "params": {"image_path": "user_uploads/photo.jpg", "detail_level": "detailed"}}</tool_call>
+<tool_result>{"tool": "analyze_image", "success": true, "result": "The image shows a mountain landscape with snow-capped peaks in the background. In the foreground, there is a pristine alpine lake with crystal clear blue water. Pine trees line the shore, and the sky is bright blue with a few white clouds."}</tool_result>
+This is a beautiful photograph! The image shows a stunning mountain landscape with snow-capped peaks in the background. There's a pristine alpine lake with crystal clear blue water in the foreground, surrounded by pine trees. The sky is bright blue with a few white clouds. It looks like a perfect spot for hiking or photography!
+
+Q: Describe what you see in this picture: screenshot.png
+A: I'll take a look at that screenshot.
+<tool_call>{"tool": "analyze_image", "params": {"image_path": "screenshot.png", "detail_level": "normal"}}</tool_call>
+<tool_result>{"tool": "analyze_image", "success": true, "result": "The screenshot shows a computer desktop with a code editor open. The editor displays Python code with syntax highlighting. There are multiple tabs open at the top."}</tool_result>
+The screenshot shows a computer desktop with a code editor open. I can see Python code with syntax highlighting, and there are multiple tabs open at the top of the editor. It looks like someone is working on a programming project.
+
+# --- AVATAR CONTROL ---
+
+Q: Make the avatar smile
+A: I'll set the avatar's expression to happy.
+<tool_call>{"tool": "control_avatar", "params": {"action": "expression", "value": "happy"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar expression set to happy"}</tool_result>
+Done! The avatar is now smiling. 😊
+
+Q: Have the avatar wave hello
+A: I'll make the avatar wave.
+<tool_call>{"tool": "control_avatar", "params": {"action": "gesture", "value": "wave"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar gesture set to wave"}</tool_result>
+The avatar is waving hello now! 👋
+
+Q: Set the avatar to look surprised
+A: I'll change the avatar's expression.
+<tool_call>{"tool": "control_avatar", "params": {"action": "expression", "value": "surprised"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar expression set to surprised"}</tool_result>
+The avatar now has a surprised expression! 😲
+
+# --- TEXT-TO-SPEECH ---
+
+Q: Say "Hello there!" out loud
+A: I'll speak that for you.
+<tool_call>{"tool": "speak", "params": {"text": "Hello there!"}}</tool_call>
+<tool_result>{"tool": "speak", "success": true, "result": "Spoke: Hello there!"}</tool_result>
+Done! I've spoken "Hello there!" out loud.
+
+Q: Read this text aloud: The weather is beautiful today
+A: I'll read that for you.
+<tool_call>{"tool": "speak", "params": {"text": "The weather is beautiful today"}}</tool_call>
+<tool_result>{"tool": "speak", "success": true, "result": "Spoke: The weather is beautiful today"}</tool_result>
+I've read that text aloud for you.
+
+# --- CODE GENERATION ---
+
+Q: Write a Python function to calculate fibonacci numbers
+A: I'll generate that Python code for you.
+<tool_call>{"tool": "generate_code", "params": {"description": "function to calculate fibonacci numbers", "language": "python"}}</tool_call>
+<tool_result>{"tool": "generate_code", "success": true, "result": "def fibonacci(n):\n    if n <= 0:\n        return 0\n    elif n == 1:\n        return 1\n    else:\n        return fibonacci(n-1) + fibonacci(n-2)"}</tool_result>
+Here's a Python function to calculate Fibonacci numbers:
+
+```python
+def fibonacci(n):
+    if n <= 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fibonacci(n-1) + fibonacci(n-2)
+```
+
+This uses a recursive approach. You can call it like `fibonacci(10)` to get the 10th Fibonacci number.
+
+Q: Generate JavaScript code to validate an email
+A: I'll create that JavaScript code.
+<tool_call>{"tool": "generate_code", "params": {"description": "function to validate email address", "language": "javascript"}}</tool_call>
+<tool_result>{"tool": "generate_code", "success": true, "result": "function validateEmail(email) {\n    const regex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n    return regex.test(email);\n}"}</tool_result>
+Here's a JavaScript function to validate email addresses:
+
+```javascript
+function validateEmail(email) {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+}
+```
+
+This uses a regular expression to check if an email has a basic valid format.
+
+# --- FILE OPERATIONS ---
+
+Q: Read the file README.md
+A: I'll read that file for you.
+<tool_call>{"tool": "read_file", "params": {"path": "README.md"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "result": "# Enigma AI Engine\n\nA modular AI framework...\n\n## Features\n- Transformer model\n- Tokenizer\n- Training system"}</tool_result>
+Here's the content of README.md:
+
+# Enigma AI Engine
+
+A modular AI framework...
+
+## Features
+- Transformer model
+- Tokenizer
+- Training system
+
+Q: Save this text to notes.txt: Remember to buy milk
+A: I'll save that to notes.txt.
+<tool_call>{"tool": "write_file", "params": {"path": "notes.txt", "content": "Remember to buy milk"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true, "result": "File written successfully"}</tool_result>
+Done! I've saved "Remember to buy milk" to notes.txt.
+
+Q: List the files in the current directory
+A: I'll list the files for you.
+<tool_call>{"tool": "list_directory", "params": {"path": "."}}</tool_call>
+<tool_result>{"tool": "list_directory", "success": true, "result": "Files: README.md, main.py, config.json, data/"}</tool_result>
+Here are the files in the current directory:
+- README.md
+- main.py
+- config.json
+- data/ (directory)
+
+# --- WEB SEARCH ---
+
+Q: Search for Python tutorials
+A: I'll search the web for Python tutorials.
+<tool_call>{"tool": "web_search", "params": {"query": "Python tutorials for beginners", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "result": "Found 5 results: 1) Python.org Tutorial 2) Real Python Tutorials 3) W3Schools Python 4) Codecademy Python 5) LearnPython.org"}</tool_result>
+I found several great Python tutorials for you:
+1. Python.org Tutorial - Official Python documentation
+2. Real Python Tutorials - In-depth articles and courses
+3. W3Schools Python - Interactive examples
+4. Codecademy Python - Hands-on coding exercises
+5. LearnPython.org - Interactive lessons
+
+Q: Look up information about machine learning
+A: I'll search for machine learning information.
+<tool_call>{"tool": "web_search", "params": {"query": "what is machine learning", "num_results": 3}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "result": "Machine learning is a branch of AI that enables computers to learn from data without explicit programming. It uses algorithms to find patterns and make predictions."}</tool_result>
+Machine learning is a branch of artificial intelligence that enables computers to learn from data without being explicitly programmed. It uses algorithms to automatically find patterns in data and make predictions or decisions based on those patterns. Common applications include image recognition, natural language processing, and recommendation systems.
+
+# --- MULTI-STEP TOOL CHAINS ---
+
+Q: Generate an image of a robot, then tell me what's in it
+A: I'll first generate the robot image, then analyze it.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "friendly humanoid robot with blue eyes and metallic silver body", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "result": "Image generated successfully", "output_path": "outputs/robot.png"}</tool_result>
+Great! I've generated the robot image. Now let me analyze what's in it.
+<tool_call>{"tool": "analyze_image", "params": {"image_path": "outputs/robot.png", "detail_level": "detailed"}}</tool_call>
+<tool_result>{"tool": "analyze_image", "success": true, "result": "The image shows a friendly-looking humanoid robot with a metallic silver body. It has expressive blue eyes that give it a welcoming appearance. The robot has articulated limbs and appears to be standing in a neutral pose."}</tool_result>
+Perfect! I generated an image of a robot and analyzed it. The image shows a friendly-looking humanoid robot with a metallic silver body and expressive blue eyes that give it a welcoming appearance. The robot has articulated limbs and is standing in a neutral pose. The image is saved at outputs/robot.png.
+
+Q: Create a space scene image and make the avatar excited about it
+A: I'll generate a space scene first, then set the avatar's expression.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful space scene with planets, stars, nebulas, and galaxies", "width": 768, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "result": "Image generated successfully", "output_path": "outputs/space.png"}</tool_result>
+Wow! I've created an amazing space scene. Now let me make the avatar excited about it!
+<tool_call>{"tool": "control_avatar", "params": {"action": "expression", "value": "excited"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar expression set to excited"}</tool_result>
+Perfect! I've generated a stunning space scene with planets, stars, nebulas, and galaxies (saved to outputs/space.png), and the avatar is now showing an excited expression! 🌌✨
+
+# --- ERROR HANDLING ---
+
+Q: Generate an image with no description
+A: I'll try, but I need more details.
+<tool_call>{"tool": "generate_image", "params": {"prompt": ""}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": false, "error": "Missing required parameter: prompt"}</tool_result>
+I wasn't able to generate the image because I need a description of what you'd like me to create. Could you tell me what kind of image you have in mind?
+
+Q: Read a file that doesn't exist
+A: Let me try to read that file.
+<tool_call>{"tool": "read_file", "params": {"path": "nonexistent.txt"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": false, "error": "File not found: nonexistent.txt"}</tool_result>
+I couldn't find the file 'nonexistent.txt'. Please make sure the file exists and the path is correct.
+
+# --- NATURAL CONVERSATION WITH TOOLS ---
+
+Q: I need a logo for my coffee shop
+A: I'd be happy to help you create a logo! Let me generate one for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "minimalist coffee shop logo with coffee cup and steam, warm brown colors, professional design", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "result": "Image generated successfully", "output_path": "outputs/coffee_logo.png"}</tool_result>
+I've created a coffee shop logo for you! It features a minimalist design with a coffee cup and steam in warm brown colors. The logo has a professional look that would work well for signage, menus, and marketing materials. You can find it at outputs/coffee_logo.png. Would you like me to make any adjustments to the design?
+
+Q: Show me what files are here, then read config.json
+A: I'll first list the files, then read the config.
+<tool_call>{"tool": "list_directory", "params": {"path": "."}}</tool_call>
+<tool_result>{"tool": "list_directory", "success": true, "result": "Files: README.md, main.py, config.json, notes.txt"}</tool_result>
+I can see the files: README.md, main.py, config.json, and notes.txt. Now let me read config.json for you.
+<tool_call>{"tool": "read_file", "params": {"path": "config.json"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "result": "{\"model\": \"small\", \"device\": \"auto\", \"learning_rate\": 0.0001}"}</tool_result>
+Here's what's in config.json:
+```json
+{
+  "model": "small",
+  "device": "auto",
+  "learning_rate": 0.0001
+}
+```
+
+This configuration is set to use a small model, auto-detect the device, and use a learning rate of 0.0001.
+
+# =============================================================================
+# End of Tool Use Training Data
+# =============================================================================

@@ -66,7 +66,9 @@ class EnigmaEngine:
         tokenizer_path: Optional[Union[str, Path]] = None,
         device: Optional[str] = None,
         use_half: bool = False,
-        model_size: str = "auto"
+        model_size: str = "auto",
+        enable_tools: bool = False,
+        module_manager: Optional[Any] = None
     ):
         """
         Initialize the inference engine.
@@ -77,6 +79,8 @@ class EnigmaEngine:
             device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
             model_size: Model size hint if not loading from file
+            enable_tools: Enable AI tool use system
+            module_manager: ModuleManager instance for tool execution
         """
         # Device selection
         self.device = self._select_device(device)
@@ -263,7 +267,9 @@ class EnigmaEngine:
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
         stop_strings: Optional[List[str]] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
+        execute_tools: bool = None,
+        max_tool_iterations: int = 5
     ) -> str:
         """
         Generate text from a prompt.
@@ -285,6 +291,40 @@ class EnigmaEngine:
             ValueError: If parameters are out of valid range
             TypeError: If prompt is not a string
         """
+        # Determine if tools should be executed
+        if execute_tools is None:
+            execute_tools = self.enable_tools
+        
+        # Standard generation
+        text = self._generate_text(
+            prompt, max_gen, temperature, top_k, top_p, 
+            repetition_penalty, stop_strings, use_cache
+        )
+        
+        # Tool execution loop
+        if execute_tools and self._tool_executor:
+            text = self._execute_tools_in_text(
+                text, max_iterations=max_tool_iterations,
+                max_gen=max_gen, temperature=temperature,
+                top_k=top_k, top_p=top_p, 
+                repetition_penalty=repetition_penalty,
+                stop_strings=stop_strings, use_cache=use_cache
+            )
+        
+        return text
+    
+    def _generate_text(
+        self,
+        prompt: str,
+        max_gen: int,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+        repetition_penalty: float,
+        stop_strings: Optional[List[str]],
+        use_cache: bool
+    ) -> str:
+        """Internal method for standard text generation."""
         # Validate inputs
         if not isinstance(prompt, str):
             raise TypeError(f"prompt must be a string, got {type(prompt).__name__}")
