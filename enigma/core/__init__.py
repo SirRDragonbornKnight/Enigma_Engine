@@ -68,6 +68,13 @@ except ImportError:
     get_hardware = None
     HardwareProfile = None
 
+# Quantization (optional)
+try:
+    from .quantization import quantize_model, load_quantized
+except ImportError:
+    quantize_model = None
+    load_quantized = None
+
 
 __all__ = [
     # Model
@@ -105,4 +112,8 @@ __all__ = [
     # Hardware
     "get_hardware",
     "HardwareProfile",
+
+    # Quantization
+    "quantize_model",
+    "load_quantized",
 ]
