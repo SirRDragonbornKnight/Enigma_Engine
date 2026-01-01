@@ -72,3 +72,10 @@ pyscreenshot>=3.0
 # replicate>=0.15.0  # For SDXL, video, music generation
 # elevenlabs>=0.2.0  # For premium TTS
 
+# === WEB DASHBOARD & MOBILE ===
+flask-socketio>=5.0.0
+
+# === HUGGINGFACE INTEGRATION ===
+huggingface-hub>=0.20.0
+# transformers already included above (>=4.20.0)
+

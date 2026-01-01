@@ -1031,6 +1031,23 @@ class MockVideoAddon(VideoAddon):
 
 
 # =============================================================================
+# HuggingFace Integration
+# =============================================================================
+
+# Import HuggingFace addons if available
+try:
+    from .huggingface import (
+        HuggingFaceTextGeneration,
+        HuggingFaceImageGeneration,
+        HuggingFaceEmbeddings,
+        HuggingFaceTTS
+    )
+    HF_AVAILABLE = True
+except ImportError:
+    HF_AVAILABLE = False
+
+
+# =============================================================================
 # All Built-in Addons
 # =============================================================================
 
@@ -1062,3 +1079,12 @@ BUILTIN_ADDONS = {
     'mock_code': MockCodeAddon,
     'mock_video': MockVideoAddon,
 }
+
+# Add HuggingFace addons if available
+if HF_AVAILABLE:
+    BUILTIN_ADDONS.update({
+        'huggingface_text': HuggingFaceTextGeneration,
+        'huggingface_image': HuggingFaceImageGeneration,
+        'huggingface_embedding': HuggingFaceEmbeddings,
+        'huggingface_tts': HuggingFaceTTS,
+    })

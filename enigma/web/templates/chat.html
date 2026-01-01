@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Enigma Engine{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <h2>💬 Chat Interface</h2>
+    
+    <div class="chat-box" id="chat-box">
+        <div class="chat-message system">
+            <p>👋 Hello! I'm your Enigma AI. Ask me anything!</p>
+        </div>
+    </div>
+    
+    <div class="chat-input-container">
+        <textarea id="chat-input" placeholder="Type your message here..." rows="3"></textarea>
+        <div class="chat-controls">
+            <button id="send-btn" class="btn btn-primary">Send</button>
+            <button id="clear-btn" class="btn btn-secondary">Clear</button>
+        </div>
+    </div>
+    
+    <div class="chat-settings">
+        <label>Max Tokens: <input type="number" id="max-tokens" value="200" min="50" max="500"></label>
+        <label>Temperature: <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1"></label>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const chatBox = document.getElementById('chat-box');
+const chatInput = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+const clearBtn = document.getElementById('clear-btn');
+
+// Try to connect to WebSocket
+let socket = null;
+try {
+    socket = io();
+    
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        addSystemMessage('✓ Connected to server');
+    });
+    
+    socket.on('response', (data) => {
+        addAIMessage(data.text);
+    });
+    
+    socket.on('token', (data) => {
+        // Stream token
+        appendToLastMessage(data.token);
+    });
+    
+    socket.on('stream_end', () => {
+        // Streaming complete
+    });
+    
+    socket.on('error', (data) => {
+        addSystemMessage('Error: ' + data.message);
+    });
+} catch (error) {
+    console.log('WebSocket not available, using REST API');
+}
+
+function addMessage(content, className) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${className}`;
+    messageDiv.innerHTML = `<p>${content}</p>`;
+    chatBox.appendChild(messageDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return messageDiv;
+}
+
+function addUserMessage(text) {
+    return addMessage(text, 'user');
+}
+
+function addAIMessage(text) {
+    return addMessage(text, 'ai');
+}
+
+function addSystemMessage(text) {
+    return addMessage(text, 'system');
+}
+
+function appendToLastMessage(text) {
+    const messages = chatBox.querySelectorAll('.chat-message.ai');
+    if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        lastMessage.querySelector('p').textContent += text;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+}
+
+async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+    
+    addUserMessage(message);
+    chatInput.value = '';
+    
+    // Disable send button
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Thinking...';
+    
+    try {
+        if (socket && socket.connected) {
+            // Use WebSocket
+            socket.emit('message', { text: message });
+        } else {
+            // Use REST API
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    prompt: message,
+                    max_tokens: parseInt(document.getElementById('max-tokens').value),
+                    temperature: parseFloat(document.getElementById('temperature').value)
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                addAIMessage(data.response);
+            } else {
+                addSystemMessage('Error: ' + data.error);
+            }
+        }
+    } catch (error) {
+        addSystemMessage('Error: ' + error.message);
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+    }
+}
+
+// Event listeners
+sendBtn.addEventListener('click', sendMessage);
+
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+clearBtn.addEventListener('click', () => {
+    chatBox.innerHTML = '<div class="chat-message system"><p>Chat cleared</p></div>';
+});
+</script>
+{% endblock %}
