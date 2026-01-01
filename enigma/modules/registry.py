@@ -206,6 +206,52 @@ class InferenceModule(Module):
         return True
 
 
+class GGUFLoaderModule(Module):
+    """GGUF model loader module - load llama.cpp compatible models."""
+
+    INFO = ModuleInfo(
+        id="gguf_loader",
+        name="GGUF Model Loader",
+        description="Load and run GGUF format models (llama.cpp compatible)",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        conflicts=["model", "inference"],  # Can't use both GGUF and Enigma model
+        provides=["text_generation", "completion", "gguf_support"],
+        config_schema={
+            "model_path": {"type": "string", "default": ""},
+            "n_ctx": {"type": "int", "min": 512, "max": 32768, "default": 2048},
+            "n_gpu_layers": {"type": "int", "min": 0, "max": 999, "default": 0},
+            "n_threads": {"type": "int", "min": 1, "max": 32, "default": 4},
+        },
+    )
+
+    def load(self) -> bool:
+        try:
+            from enigma.core.gguf_loader import GGUFModel
+            model_path = self.config.get('model_path', '')
+            if not model_path:
+                logger.warning("No GGUF model path specified")
+                return False
+            
+            self._instance = GGUFModel(
+                model_path=model_path,
+                n_ctx=self.config.get('n_ctx', 2048),
+                n_gpu_layers=self.config.get('n_gpu_layers', 0),
+                n_threads=self.config.get('n_threads', 4)
+            )
+            return self._instance.load()
+        except Exception as e:
+            logger.warning(f"Could not load GGUF model: {e}")
+            return False
+
+    def unload(self) -> bool:
+        if self._instance:
+            self._instance.unload()
+            self._instance = None
+        return True
+
+
 class MemoryModule(Module):
     """Memory module - conversation and knowledge storage."""
 
@@ -1066,6 +1112,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'tokenizer': TokenizerModule,
     'training': TrainingModule,
     'inference': InferenceModule,
+    'gguf_loader': GGUFLoaderModule,
 
     # Memory
     'memory': MemoryModule,
