@@ -114,3 +114,12 @@ memory/*.db
 # Memory database (optional - comment out to keep)
 memory/*.db
 memory/*.db-*
+
+# Instance locks
+.enigma/
+
+# Voice samples
+models/*/voice/samples/
+
+# Personality data
+models/*/personality.json
