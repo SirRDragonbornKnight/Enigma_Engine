@@ -5,7 +5,6 @@ The API surface:
   - transcribe_from_mic(timeout=10) -> str
   - transcribe_from_file(path) -> str
 """
-import importlib
 import os
 
 # Try VOSK first (offline)

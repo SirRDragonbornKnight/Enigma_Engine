@@ -4,10 +4,10 @@ Enigma Engine Configuration
 Central configuration for all Enigma components.
 Provides sensible defaults, validation, and preset management.
 """
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Any, List
 import os
-from typing import Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -133,6 +133,7 @@ def apply_preset(preset_name: str) -> bool:
     return True
 
 
+@lru_cache(maxsize=32)
 def get_model_config(model_name: str) -> Dict[str, Any]:
     """
     Get configuration for a specific model.

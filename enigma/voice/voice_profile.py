@@ -28,7 +28,7 @@ import json
 import platform
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, List
 from dataclasses import dataclass, asdict
 
 # Check available TTS backends

@@ -12,13 +12,10 @@ Works on: Desktop (Windows/Mac/Linux), Mobile (limited)
 
 import base64
 import io
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
-import json
 
-from ..config import CONFIG
 
 
 class ScreenCapture:
@@ -59,19 +56,16 @@ class ScreenCapture:
             pass
         
         try:
-            import mss
             return "mss"
         except ImportError:
             pass
         
         try:
-            import pyautogui
             return "pyautogui"
         except ImportError:
             pass
         
         try:
-            import pyscreenshot
             return "pyscreenshot"
         except ImportError:
             pass

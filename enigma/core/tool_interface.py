@@ -35,7 +35,6 @@ import json
 import logging
 from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 

@@ -9,9 +9,8 @@ Extend these to create your own AI capabilities.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Dict, List, Optional, Callable
 from pathlib import Path
-import json
 import time
 
 
@@ -188,12 +187,10 @@ class Addon(ABC):
     @abstractmethod
     def load(self) -> bool:
         """Load the addon (connect to API, load model, etc.)."""
-        pass
     
     @abstractmethod
     def unload(self) -> bool:
         """Unload the addon (disconnect, free resources)."""
-        pass
     
     def check_availability(self) -> bool:
         """Check if the addon is currently available."""
@@ -213,7 +210,6 @@ class Addon(ABC):
         Returns:
             AddonResult with the generated content
         """
-        pass
     
     def generate_stream(self, prompt: str, **kwargs):
         """
@@ -327,7 +323,6 @@ class ImageAddon(Addon):
     def generate(self, prompt: str, width: int = 512, height: int = 512, 
                  num_images: int = 1, **kwargs) -> AddonResult:
         """Generate images from prompt."""
-        pass
     
     def edit(self, image: bytes, prompt: str, **kwargs) -> AddonResult:
         """Edit an existing image (if supported)."""
@@ -348,7 +343,6 @@ class CodeAddon(Addon):
     @abstractmethod
     def generate(self, prompt: str, language: str = "python", **kwargs) -> AddonResult:
         """Generate code from prompt."""
-        pass
     
     def complete(self, code: str, cursor_position: int = -1, **kwargs) -> AddonResult:
         """Complete code at cursor position."""
@@ -374,7 +368,6 @@ class VideoAddon(Addon):
     def generate(self, prompt: str, duration: float = 4.0, 
                  fps: int = 24, **kwargs) -> AddonResult:
         """Generate video from prompt."""
-        pass
     
     def extend(self, video: bytes, prompt: str, **kwargs) -> AddonResult:
         """Extend an existing video."""
@@ -395,7 +388,6 @@ class AudioAddon(Addon):
     @abstractmethod
     def generate(self, prompt: str, duration: float = 10.0, **kwargs) -> AddonResult:
         """Generate audio from prompt."""
-        pass
     
     def text_to_speech(self, text: str, voice: str = "default", **kwargs) -> AddonResult:
         """Convert text to speech."""
@@ -416,7 +408,6 @@ class EmbeddingAddon(Addon):
     @abstractmethod
     def generate(self, text: str, **kwargs) -> AddonResult:
         """Generate embedding vector for text."""
-        pass
     
     def batch_embed(self, texts: List[str], **kwargs) -> AddonResult:
         """Embed multiple texts."""

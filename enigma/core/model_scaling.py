@@ -10,14 +10,10 @@ This is EXPERIMENTAL but allows your AI to "grow up" over time.
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from pathlib import Path
-from typing import Optional, Dict, Tuple
-import json
 
 from .model import TinyEnigma
-from .model_config import MODEL_PRESETS, get_model_config
+from .model_config import get_model_config
 from .model_registry import ModelRegistry
 
 

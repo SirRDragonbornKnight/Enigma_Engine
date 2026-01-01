@@ -16,8 +16,7 @@ Limited for: Handwriting, unusual fonts, rotated text
 
 import io
 import base64
-from typing import List, Dict, Tuple, Optional, Any
-from pathlib import Path
+from typing import List, Dict
 
 
 class SimpleOCR:
@@ -47,7 +46,6 @@ class SimpleOCR:
         """
         try:
             import numpy as np
-            from PIL import Image
             
             # Convert to grayscale
             if image.mode != 'L':
@@ -176,7 +174,6 @@ class SimpleOCR:
         
         Uses character segmentation and pattern matching.
         """
-        import numpy as np
         
         x, y, w, h = region['x'], region['y'], region['width'], region['height']
         
@@ -239,7 +236,6 @@ class SimpleOCR:
         
         Uses aspect ratio and density analysis.
         """
-        import numpy as np
         
         h, w = char_img.shape
         density = char_img.sum() / (h * w) if h * w > 0 else 0
@@ -302,7 +298,6 @@ class SimpleOCR:
         """
         try:
             import numpy as np
-            from PIL import Image
             
             if image.mode != 'L':
                 gray = image.convert('L')
@@ -347,14 +342,12 @@ class AdvancedOCR:
         """Detect best available OCR backend."""
         # Try EasyOCR (PyTorch-based, no tesseract)
         try:
-            import easyocr
             return "easyocr"
         except ImportError:
             pass
         
         # Try PaddleOCR (alternative)
         try:
-            from paddleocr import PaddleOCR
             return "paddleocr"
         except ImportError:
             pass

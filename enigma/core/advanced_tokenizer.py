@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any, Set
 from collections import Counter, defaultdict
 import logging
-import unicodedata
 
 logger = logging.getLogger(__name__)
 

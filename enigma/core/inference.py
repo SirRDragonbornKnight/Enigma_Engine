@@ -85,6 +85,10 @@ class EnigmaEngine:
         # Device selection
         self.device = self._select_device(device)
         self.use_half = use_half and self.device.type == "cuda"
+        
+        # Store configuration
+        self.enable_tools = enable_tools
+        self.module_manager = module_manager
 
         # Load tokenizer
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)
@@ -575,19 +579,122 @@ class EnigmaEngine:
         **kwargs
     ) -> List[str]:
         """
-        Generate text for multiple prompts.
+        Generate text for multiple prompts in a single batched forward pass.
 
         Args:
             prompts: List of input prompts
             max_gen: Maximum tokens to generate per prompt
-            **kwargs: Additional generation parameters
+            **kwargs: Additional generation parameters (temperature, top_k, top_p, repetition_penalty)
 
         Returns:
             List of generated texts
         """
-        # For now, process sequentially
-        # TODO: Implement true batched generation
-        return [self.generate(p, max_gen=max_gen, **kwargs) for p in prompts]
+        if not prompts:
+            return []
+        
+        # If only one prompt, use regular generate
+        if len(prompts) == 1:
+            return [self.generate(prompts[0], max_gen=max_gen, **kwargs)]
+        
+        # Extract generation parameters
+        temperature = kwargs.get('temperature', 0.8)
+        top_k = kwargs.get('top_k', 50)
+        top_p = kwargs.get('top_p', 0.9)
+        repetition_penalty = kwargs.get('repetition_penalty', 1.1)
+        
+        # Encode all prompts
+        if hasattr(self.tokenizer, 'encode'):
+            encoded = [self.tokenizer.encode(p) for p in prompts]
+        else:
+            encoded = [[self.tokenizer.token_to_id.get(t, 3) for t in p] for p in prompts]
+        
+        # Pad all sequences to the same length
+        max_input_len = max(len(e) for e in encoded)
+        pad_id = getattr(self.tokenizer, 'pad_token_id', 0)
+        
+        # Create padded batch tensor
+        batch_size = len(prompts)
+        input_ids = torch.full(
+            (batch_size, max_input_len),
+            pad_id,
+            dtype=torch.long,
+            device=self.device
+        )
+        
+        # Fill in the actual tokens
+        for i, tokens in enumerate(encoded):
+            input_ids[i, :len(tokens)] = torch.tensor(tokens, dtype=torch.long)
+        
+        # Track which sequences are still generating
+        eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
+        finished = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
+        
+        # Generate tokens autoregressively
+        generated = input_ids
+        all_finished = False
+        for step in range(max_gen):
+            # Early exit if all sequences finished (check every 5 steps starting from step 5 to reduce overhead)
+            if all_finished or (step >= 5 and step % 5 == 0 and finished.all()):
+                all_finished = True
+                break
+            
+            # Truncate if needed
+            curr_input = generated
+            max_len = self.model.config.max_seq_len
+            if curr_input.shape[1] > max_len:
+                curr_input = curr_input[:, -max_len:]
+            
+            # Forward pass for entire batch
+            with torch.no_grad():
+                logits = self.model(curr_input)
+            
+            # Sample next token for each sequence
+            next_tokens = []
+            for i in range(batch_size):
+                if finished[i]:
+                    # Already finished, use pad token
+                    next_tokens.append(pad_id)
+                else:
+                    # Sample from logits
+                    token = self._sample_token(
+                        logits[i:i+1, -1:, :],
+                        generated[i:i+1],
+                        temperature,
+                        top_k,
+                        top_p,
+                        repetition_penalty
+                    )
+                    next_tokens.append(token.item())
+                    
+                    # Check for EOS
+                    if token.item() == eos_id:
+                        finished[i] = True
+            
+            # Append next tokens to generated
+            next_tokens_tensor = torch.tensor(
+                [[t] for t in next_tokens],
+                dtype=torch.long,
+                device=self.device
+            )
+            generated = torch.cat([generated, next_tokens_tensor], dim=1)
+        
+        # Decode all outputs
+        results = []
+        for i in range(batch_size):
+            ids = generated[i].cpu().tolist()
+            
+            if hasattr(self.tokenizer, 'decode'):
+                text = self.tokenizer.decode(ids, skip_special_tokens=True)
+            else:
+                # Fallback
+                text = "".join(
+                    self.tokenizer.id_to_token.get(idx, "?")
+                    for idx in ids
+                )
+            
+            results.append(text)
+        
+        return results
 
     # =========================================================================
     # Chat Interface

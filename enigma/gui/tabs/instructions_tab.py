@@ -3,9 +3,8 @@
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QPlainTextEdit, QMessageBox, QInputDialog, QFileDialog
+    QComboBox, QPlainTextEdit, QMessageBox, QFileDialog
 )
-from PyQt5.QtCore import Qt
 
 from ...config import CONFIG
 

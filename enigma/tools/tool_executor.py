@@ -14,9 +14,8 @@ import json
 import re
 import logging
 from typing import Dict, Any, Optional, List, Tuple
-from pathlib import Path
 
-from .tool_definitions import get_tool_definition, TOOLS_BY_NAME
+from .tool_definitions import get_tool_definition
 
 logger = logging.getLogger(__name__)
 

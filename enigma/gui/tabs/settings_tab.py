@@ -8,7 +8,7 @@ while gaming or doing other tasks.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
     QPushButton, QComboBox, QSpinBox, QSlider, QCheckBox,
-    QTextEdit, QFrame
+    QTextEdit
 )
 from PyQt5.QtCore import Qt
 
@@ -37,7 +37,7 @@ def create_settings_tab(parent):
         
         cpu_count = torch.get_num_threads()
         cpu_info = f"CPU Threads: {cpu_count}"
-    except:
+    except Exception:
         device_info = "⚠️ PyTorch not available"
         device_style = "color: #ef4444;"
         cpu_info = ""

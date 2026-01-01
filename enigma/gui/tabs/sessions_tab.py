@@ -1,16 +1,11 @@
 """History tab for Enigma Engine GUI - view saved chat sessions per AI."""
 
-import json
-from pathlib import Path
-from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QListWidget, QTextEdit, QMessageBox, QInputDialog, QSplitter,
-    QComboBox
+    QListWidget, QTextEdit, QSplitter, QComboBox
 )
 from PyQt5.QtCore import Qt
 
-from ...config import CONFIG
 
 
 def create_sessions_tab(parent):

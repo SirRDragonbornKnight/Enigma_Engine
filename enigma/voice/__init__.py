@@ -40,7 +40,6 @@ Components:
     - voice_profile.py: Voice customization system
 """
 
-from .tts_simple import speak as _basic_speak
 from .stt_simple import transcribe_from_mic as listen
 from .voice_profile import (
     VoiceProfile,

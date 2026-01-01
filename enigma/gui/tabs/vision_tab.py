@@ -6,11 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QPlainTextEdit, QCheckBox, QFileDialog, QGroupBox,
-    QListWidget, QListWidgetItem
+    QSpinBox, QPlainTextEdit, QGroupBox, QListWidget, QListWidgetItem
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui import QPixmap
 
 from ...config import CONFIG
 

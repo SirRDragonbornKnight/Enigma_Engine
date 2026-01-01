@@ -6,11 +6,11 @@ Central registry of all available modules.
 Auto-discovers and registers built-in modules.
 """
 
+from functools import lru_cache
 import logging
 from typing import Dict, List, Optional, Type
-from pathlib import Path
 
-from .manager import Module, ModuleInfo, ModuleCategory, ModuleState, ModuleManager
+from .manager import Module, ModuleInfo, ModuleCategory, ModuleManager
 
 logger = logging.getLogger(__name__)
 
@@ -977,11 +977,13 @@ def register_all(manager: ModuleManager):
         manager.register(module_class)
 
 
+@lru_cache(maxsize=128)
 def get_module(module_id: str) -> Optional[Type[Module]]:
     """Get a module class by ID."""
     return MODULE_REGISTRY.get(module_id)
 
 
+@lru_cache(maxsize=32)
 def list_modules() -> List[ModuleInfo]:
     """List all available modules."""
     return [cls.get_info() for cls in MODULE_REGISTRY.values()]

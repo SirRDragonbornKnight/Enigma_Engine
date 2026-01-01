@@ -33,7 +33,7 @@ from datetime import datetime
 from typing import Optional, Dict, Tuple, Any
 
 from .model import TinyEnigma
-from .model_config import MODEL_PRESETS, get_model_config, estimate_parameters
+from .model_config import get_model_config, estimate_parameters
 from ..config import CONFIG
 
 

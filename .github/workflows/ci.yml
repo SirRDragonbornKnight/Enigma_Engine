@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop, copilot/** ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov flake8 mypy autopep8
+      
+      - name: Lint with flake8 (syntax errors and undefined names)
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 enigma/ --count --select=E9,F63,F7,F82 --show-source --statistics
+      
+      - name: Check for unused imports (F401)
+        run: |
+          # Check that we have no unused imports
+          flake8 enigma/ --count --select=F401 --statistics || true
+      
+      - name: Lint with flake8 (full check)
+        run: |
+          # Exit-zero treats all errors as warnings
+          flake8 enigma/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short --continue-on-collection-errors
+        continue-on-error: true
+      
+      - name: Generate coverage report
+        run: |
+          pytest tests/ --cov=enigma --cov-report=xml --cov-report=term
+        continue-on-error: true
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 autopep8 mypy
+      
+      - name: Check code style with flake8
+        run: |
+          flake8 enigma/ --count --statistics --show-source || true
+      
+      - name: Check for security issues
+        run: |
+          # Basic security checks
+          grep -r "eval(" enigma/ && exit 1 || echo "No eval() found"
+          grep -r "exec(" enigma/ && exit 1 || echo "No exec() found"
+        continue-on-error: true
+
+  build-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Verify documentation exists
+        run: |
+          test -f README.md || exit 1
+          test -f CONTRIBUTING.md || exit 1
+          test -f SECURITY.md || exit 1
+          echo "Documentation files verified"

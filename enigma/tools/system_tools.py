@@ -10,7 +10,6 @@ Tools:
 import os
 import platform
 import subprocess
-import shutil
 from pathlib import Path
 from typing import Dict, Any
 from .tool_registry import Tool
@@ -130,8 +129,6 @@ class GetSystemInfoTool(Tool):
     
     def execute(self, **kwargs) -> Dict[str, Any]:
         try:
-            import shutil
-            
             info = {
                 "os": platform.system(),
                 "os_release": platform.release(),

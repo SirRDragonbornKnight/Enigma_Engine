@@ -6,20 +6,16 @@ Control image generation, code generation, video, audio, and more.
 Connect to local models or cloud APIs.
 """
 
-import sys
-from typing import Dict, Optional
-from pathlib import Path
 
 try:
     from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-        QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
-        QComboBox, QLineEdit, QTextEdit, QTabWidget,
-        QProgressBar, QMessageBox, QSplitter, QFileDialog,
-        QSpinBox, QDoubleSpinBox, QFormLayout
+        QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
+        QPushButton, QFrame, QComboBox, QTextEdit, QTabWidget,
+        QProgressBar, QMessageBox, QFileDialog, QSpinBox,
+        QDoubleSpinBox
     )
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-    from PyQt5.QtGui import QFont, QPixmap, QImage
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QFont
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
