@@ -103,6 +103,10 @@ psutil>=5.9.0             # For power mode CPU/memory monitoring
 # replicate>=0.15.0  # For SDXL, video, music generation
 # elevenlabs>=0.2.0  # For premium TTS
 
+# === VIDEO & GIF EDITING (Optional) ===
+# Uncomment to enable video editing and advanced GIF features:
+# moviepy>=1.0.3  # For video editing, conversion to GIF, frame extraction
+
 # === WEB DASHBOARD & MOBILE ===
 flask-socketio>=5.0.0
 

@@ -428,6 +428,253 @@ GENERATE_AUDIO = ToolDefinition(
     ],
 )
 
+# --- GIF Generation Tools ---
+
+GENERATE_GIF = ToolDefinition(
+    name="generate_gif",
+    description="Generate an animated GIF from a list of image prompts",
+    category="generation",
+    module="image_gen_local",  # or image_gen_api
+    parameters=[
+        ToolParameter(
+            name="frames",
+            type="list",
+            description="List of text prompts for each frame of the GIF",
+            required=True,
+        ),
+        ToolParameter(
+            name="fps",
+            type="int",
+            description="Frames per second for the GIF animation",
+            required=False,
+            default=5,
+        ),
+        ToolParameter(
+            name="loop",
+            type="int",
+            description="Number of times to loop (0 = infinite loop)",
+            required=False,
+            default=0,
+        ),
+        ToolParameter(
+            name="width",
+            type="int",
+            description="Width of each frame in pixels",
+            required=False,
+            default=512,
+        ),
+        ToolParameter(
+            name="height",
+            type="int",
+            description="Height of each frame in pixels",
+            required=False,
+            default=512,
+        ),
+    ],
+    examples=[
+        "Create a GIF showing sunrise, noon, and sunset",
+        "Generate an animated GIF of a cat walking",
+        "Make a GIF of a flower blooming",
+    ],
+)
+
+# --- Media Editing Tools ---
+
+EDIT_IMAGE = ToolDefinition(
+    name="edit_image",
+    description="Edit an existing image with various transformations and enhancements",
+    category="generation",
+    module=None,  # Built-in tool using Pillow
+    parameters=[
+        ToolParameter(
+            name="image_path",
+            type="string",
+            description="Path to the image file to edit",
+            required=True,
+        ),
+        ToolParameter(
+            name="edit_type",
+            type="string",
+            description="Type of edit to perform",
+            required=True,
+            enum=["resize", "rotate", "flip", "brightness", "contrast", "blur", "sharpen", "grayscale", "crop"],
+        ),
+        ToolParameter(
+            name="width",
+            type="int",
+            description="New width for resize operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="height",
+            type="int",
+            description="New height for resize operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="angle",
+            type="int",
+            description="Rotation angle in degrees",
+            required=False,
+            default=0,
+        ),
+        ToolParameter(
+            name="direction",
+            type="string",
+            description="Flip direction: 'horizontal' or 'vertical'",
+            required=False,
+            enum=["horizontal", "vertical"],
+        ),
+        ToolParameter(
+            name="factor",
+            type="float",
+            description="Adjustment factor (e.g., 1.5 for brightness, 0.5-2.0 range)",
+            required=False,
+            default=1.0,
+        ),
+        ToolParameter(
+            name="crop_box",
+            type="list",
+            description="Crop coordinates [left, top, right, bottom]",
+            required=False,
+            default=None,
+        ),
+    ],
+    examples=[
+        "Resize the image to 800x600",
+        "Rotate the image 90 degrees",
+        "Increase the brightness of the image",
+        "Apply blur to the image",
+    ],
+)
+
+EDIT_GIF = ToolDefinition(
+    name="edit_gif",
+    description="Edit an existing GIF animation (speed, reverse, crop, etc.)",
+    category="generation",
+    module=None,  # Built-in tool using Pillow
+    parameters=[
+        ToolParameter(
+            name="gif_path",
+            type="string",
+            description="Path to the GIF file to edit",
+            required=True,
+        ),
+        ToolParameter(
+            name="edit_type",
+            type="string",
+            description="Type of edit to perform",
+            required=True,
+            enum=["speed", "reverse", "crop", "resize", "extract_frames"],
+        ),
+        ToolParameter(
+            name="speed_factor",
+            type="float",
+            description="Speed multiplier (2.0 = 2x faster, 0.5 = half speed)",
+            required=False,
+            default=1.0,
+        ),
+        ToolParameter(
+            name="width",
+            type="int",
+            description="New width for resize operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="height",
+            type="int",
+            description="New height for resize operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="crop_box",
+            type="list",
+            description="Crop coordinates [left, top, right, bottom]",
+            required=False,
+            default=None,
+        ),
+    ],
+    examples=[
+        "Make the GIF play twice as fast",
+        "Reverse the GIF animation",
+        "Resize the GIF to 400x400",
+    ],
+)
+
+EDIT_VIDEO = ToolDefinition(
+    name="edit_video",
+    description="Edit an existing video file (trim, speed, extract frames, etc.)",
+    category="generation",
+    module=None,  # Built-in tool, requires moviepy
+    parameters=[
+        ToolParameter(
+            name="video_path",
+            type="string",
+            description="Path to the video file to edit",
+            required=True,
+        ),
+        ToolParameter(
+            name="edit_type",
+            type="string",
+            description="Type of edit to perform",
+            required=True,
+            enum=["trim", "speed", "extract_frames", "resize", "to_gif"],
+        ),
+        ToolParameter(
+            name="start_time",
+            type="float",
+            description="Start time in seconds for trim operation",
+            required=False,
+            default=0.0,
+        ),
+        ToolParameter(
+            name="end_time",
+            type="float",
+            description="End time in seconds for trim operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="speed_factor",
+            type="float",
+            description="Speed multiplier (2.0 = 2x faster, 0.5 = half speed)",
+            required=False,
+            default=1.0,
+        ),
+        ToolParameter(
+            name="width",
+            type="int",
+            description="New width for resize operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="height",
+            type="int",
+            description="New height for resize operation",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="fps",
+            type="int",
+            description="Frames per second for extract_frames or to_gif operations",
+            required=False,
+            default=10,
+        ),
+    ],
+    examples=[
+        "Trim the video from 10 to 30 seconds",
+        "Convert video to GIF",
+        "Extract frames from the video",
+        "Speed up the video 2x",
+    ],
+)
+
 
 # =============================================================================
 # Registry of All Tools
@@ -436,9 +683,15 @@ GENERATE_AUDIO = ToolDefinition(
 ALL_TOOLS = [
     # Generation
     GENERATE_IMAGE,
+    GENERATE_GIF,
     GENERATE_CODE,
     GENERATE_VIDEO,
     GENERATE_AUDIO,
+    
+    # Editing
+    EDIT_IMAGE,
+    EDIT_GIF,
+    EDIT_VIDEO,
     
     # Perception
     ANALYZE_IMAGE,
