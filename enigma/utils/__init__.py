@@ -8,7 +8,11 @@ import time
 from typing import Optional, Iterator, Any
 
 # Re-export from submodules for convenience
-from .system_messages import system_msg, error_msg, warning_msg, info_msg, debug_msg, ai_msg, user_msg
+from .system_messages import (
+    system_msg, error_msg, warning_msg, info_msg, debug_msg, 
+    ai_msg, user_msg, enigma_msg, thinking_msg, memory_msg,
+    MessagePrefix
+)
 from .text_formatting import TextFormatter
 from .error_handler import ErrorHandler
 
@@ -142,14 +146,18 @@ __all__ = [
     'format_number',
     'format_bytes',
     'print_section',
-    # Messages
+    # Enigma Messages
+    'MessagePrefix',
     'system_msg',
     'error_msg',
     'warning_msg',
     'info_msg',
     'debug_msg',
     'ai_msg',
+    'enigma_msg',
     'user_msg',
+    'thinking_msg',
+    'memory_msg',
     # Classes
     'TextFormatter',
     'ErrorHandler',
