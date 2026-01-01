@@ -66,6 +66,12 @@ pyscreenshot>=3.0
 # requests>=2.28.0
 # beautifulsoup4>=4.11.0
 
+# === SAFETY & FILTERING ===
+beautifulsoup4>=4.11.0    # For content extraction
+
+# === SYSTEM MONITORING ===
+psutil>=5.9.0             # For power mode CPU/memory monitoring
+
 # === AI SERVICES (Optional, Cloud-based) ===
 # Uncomment if using cloud AI services:
 # openai>=1.0.0  # For DALL-E, GPT-4, embeddings
