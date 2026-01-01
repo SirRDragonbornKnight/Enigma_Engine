@@ -14,11 +14,10 @@ Usage:
 
 import os
 from pathlib import Path
-from typing import Optional
 from datetime import datetime
 
 try:
-    from flask import Flask, render_template, jsonify, request, send_from_directory
+    from flask import Flask, render_template, jsonify, request
     from flask_cors import CORS
     FLASK_AVAILABLE = True
 except ImportError:

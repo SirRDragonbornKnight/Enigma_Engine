@@ -34,7 +34,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from dataclasses import dataclass, asdict
 
-from ..config import CONFIG
+from ..config import CONFIG  # noqa: F401 - imported for side effects
 
 
 # Lock directory in user's home

@@ -1,20 +1,58 @@
+"""
+Enigma AI Engine
+================
+
+A fully modular AI framework where EVERYTHING is a toggleable module.
+Scales from Raspberry Pi to datacenter.
+
+Quick Start:
+    >>> from enigma.core import create_model, EnigmaEngine
+    >>> model = create_model('small')
+    >>> engine = EnigmaEngine()
+    >>> response = engine.generate("Hello, how are you?")
+
+Package Structure:
+    enigma/
+    ├── core/       - Model, training, inference, tokenizers
+    ├── modules/    - Module system (load/unload capabilities)
+    ├── addons/     - AI generation (images, code, video, audio)
+    ├── memory/     - Conversation storage, vector search
+    ├── comms/      - API server, networking
+    ├── gui/        - PyQt5 interface
+    ├── voice/      - TTS/STT
+    ├── avatar/     - Avatar control
+    ├── tools/      - Vision, web, file tools
+    ├── utils/      - Common utilities
+    └── config/     - Configuration management
+
+For more details, see the README.md or visit:
+https://github.com/SirRDragonbornKnight/Enigma_AI_Engine
+"""
 from pathlib import Path
-import os
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-MODELS_DIR = ROOT / "models"
-DB_PATH = ROOT / "memory" / "memory.db"
+# Re-export configuration from central location
+from .config import CONFIG, get_config, update_config
 
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-os.makedirs(Path(DB_PATH).parent, exist_ok=True)
+# For backwards compatibility, export path constants
+ROOT = Path(CONFIG["root"])
+DATA_DIR = Path(CONFIG["data_dir"])
+MODELS_DIR = Path(CONFIG["models_dir"])
+DB_PATH = Path(CONFIG["db_path"])
 
-CONFIG = {
-    "root": str(ROOT),
-    "data_dir": str(DATA_DIR),
-    "models_dir": str(MODELS_DIR),
-    "db_path": str(DB_PATH),
-    "max_len": 512,
-    "embed_dim": 128,
-}
+# Version info
+__version__ = "2.0.0"
+__author__ = "Enigma AI Team"
+
+__all__ = [
+    # Configuration
+    'CONFIG',
+    'get_config',
+    'update_config',
+    # Path constants
+    'ROOT',
+    'DATA_DIR',
+    'MODELS_DIR',
+    'DB_PATH',
+    # Version
+    '__version__',
+]

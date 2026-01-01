@@ -14,7 +14,6 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 import json
 import psutil
-import os
 
 
 class ResourceAllocator:

@@ -17,14 +17,11 @@ Usage:
     main_app.register_blueprint(mobile_app, url_prefix='/mobile')
 """
 
-import base64
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 try:
-    from flask import Flask, Blueprint, request, jsonify, Response
+    from flask import Flask, request, jsonify
     from flask_cors import CORS
     FLASK_AVAILABLE = True
 except ImportError:

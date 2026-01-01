@@ -4,10 +4,9 @@ Enhanced with dynamic blocklist loading and periodic updates.
 """
 
 import re
-import time
 import logging
 from pathlib import Path
-from typing import Set, List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime, timedelta
 

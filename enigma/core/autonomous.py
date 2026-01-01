@@ -14,8 +14,7 @@ Can be turned off at any time.
 import time
 import random
 import threading
-from typing import Optional, List, Callable
-from pathlib import Path
+from typing import Optional, Callable
 
 
 class AutonomousMode:

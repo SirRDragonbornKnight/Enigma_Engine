@@ -18,7 +18,6 @@ Usage:
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import os
 
 logger = logging.getLogger(__name__)
 

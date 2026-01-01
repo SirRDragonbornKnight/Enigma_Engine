@@ -4,9 +4,8 @@ Training Data Validator - Validate training data before training
 Checks training data format, quality, and provides suggestions for improvement.
 """
 
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any
 from pathlib import Path
-import re
 
 
 class TrainingDataValidator:
