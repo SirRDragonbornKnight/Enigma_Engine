@@ -56,8 +56,9 @@ class DeviceDiscovery:
         for cb in self._on_discover:
             try:
                 cb(name, info)
-            except:
-                pass
+            except Exception as e:
+                # Log but don't fail on callback errors
+                print(f"Warning: Discovery callback failed: {e}")
     
     def get_local_ip(self) -> str:
         """Get this machine's local IP address."""
@@ -67,7 +68,7 @@ class DeviceDiscovery:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except (OSError, socket.error):
             return "127.0.0.1"
     
     def start_listener(self):
@@ -129,7 +130,8 @@ class DeviceDiscovery:
                             if is_new:
                                 print(f"Discovered node: {name} at {addr[0]}:{device_info['port']}")
                                 self._notify_discover(name, device_info)
-                    except:
+                    except (json.JSONDecodeError, KeyError, ValueError) as e:
+                        # Invalid discovery message format
                         pass
                         
             except socket.timeout:
@@ -157,13 +159,16 @@ class DeviceDiscovery:
         # Send broadcast
         try:
             sock.sendto(self.DISCOVERY_MESSAGE, ("<broadcast>", self.BROADCAST_PORT))
-        except:
+        except (OSError, socket.error) as e:
             # Try specific broadcast address
             local_ip = self.get_local_ip()
             if "." in local_ip:
                 parts = local_ip.split(".")
                 broadcast = f"{parts[0]}.{parts[1]}.{parts[2]}.255"
-                sock.sendto(self.DISCOVERY_MESSAGE, (broadcast, self.BROADCAST_PORT))
+                try:
+                    sock.sendto(self.DISCOVERY_MESSAGE, (broadcast, self.BROADCAST_PORT))
+                except (OSError, socket.error):
+                    pass  # Broadcast failed
         
         # Collect responses
         start_time = time.time()
@@ -183,8 +188,8 @@ class DeviceDiscovery:
                                 "port": info.get("port", 5000),
                                 "last_seen": time.time(),
                             }
-                    except:
-                        pass
+                    except (json.JSONDecodeError, KeyError, AttributeError):
+                        pass  # Invalid response format
             except socket.timeout:
                 pass
         
@@ -231,8 +236,8 @@ class DeviceDiscovery:
                             "last_seen": time.time(),
                             "model": data.get("model"),
                         }
-            except:
-                pass
+            except (urllib.error.URLError, json.JSONDecodeError, socket.timeout):
+                pass  # Host not reachable or invalid response
             return None, None
         
         # Scan in parallel using threads

@@ -55,7 +55,7 @@ class ScreenCapture:
             from PIL import ImageGrab
             ImageGrab.grab()
             return "pillow"
-        except:
+        except (ImportError, OSError, Exception):
             pass
         
         try:

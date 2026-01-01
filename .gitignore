@@ -19,6 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
@@ -35,10 +36,27 @@ env/
 .project
 .pydevproject
 .settings/
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+
+# Linting/Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
 
 # Project specific
 *.pth
@@ -55,9 +73,21 @@ logs/
 tmp/
 temp/
 *.tmp
+*.bak
+*.swp
 
 # Test outputs
 test-test-test/
+
+# Secrets and configuration
+.env
+*.key
+*.pem
+secrets/
+credentials/
+*_secrets.json
+*_credentials.json
+enigma_config.json
 
 # Keep data structure but not contents
 data/*
@@ -69,9 +99,18 @@ data/*
 !data/training_small.txt
 !data/training_medium.txt
 !data/training_large.txt
-!data/tool_training_data.txt
+!data/tool_training_examples.txt
 !data/protocols/
 
 # Keep models structure
 models/*
 !models/.gitkeep
+
+# Memory and cache
+memory/*.db
+*.cache
+.pytest_cache/
+
+# Memory database (optional - comment out to keep)
+memory/*.db
+memory/*.db-*

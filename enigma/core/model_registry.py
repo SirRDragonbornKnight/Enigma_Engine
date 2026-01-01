@@ -10,18 +10,18 @@ This allows you to:
 
 USAGE:
     from enigma.core.model_registry import ModelRegistry
-    
+
     registry = ModelRegistry()
-    
+
     # Create a new AI
     registry.create_model("artemis", size="small", vocab_size=32000)
-    
+
     # List all models
     registry.list_models()
-    
+
     # Load a specific model
     model, config = registry.load_model("artemis")
-    
+
     # Save after training
     registry.save_model("artemis", model)
 """
@@ -40,7 +40,7 @@ from ..config import CONFIG
 class ModelRegistry:
     """
     Manages multiple named AI models.
-    
+
     Directory structure:
         models/
             registry.json           # Index of all models
@@ -57,13 +57,13 @@ class ModelRegistry:
                 weights.pth
                 checkpoints/
     """
-    
+
     def __init__(self, models_dir: Optional[str] = None):
         self.models_dir = Path(models_dir or CONFIG["models_dir"])
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.registry_file = self.models_dir / "registry.json"
         self._load_registry()
-    
+
     def _load_registry(self):
         """Load or create the model registry."""
         if self.registry_file.exists():
@@ -72,12 +72,12 @@ class ModelRegistry:
         else:
             self.registry = {"models": {}, "created": datetime.now().isoformat()}
             self._save_registry()
-    
+
     def _save_registry(self):
         """Save the registry index."""
         with open(self.registry_file, "w") as f:
             json.dump(self.registry, f, indent=2)
-    
+
     def create_model(
         self,
         name: str,
@@ -88,14 +88,14 @@ class ModelRegistry:
     ) -> TinyEnigma:
         """
         Create a new named model.
-        
+
         Args:
             name: Unique name for this AI (e.g., "artemis", "apollo")
             size: Preset size ("tiny", "small", "medium", "large", "xl", "xxl")
             vocab_size: Vocabulary size for tokenizer
             description: Optional description of this model's purpose
             custom_config: Override preset with custom dim/depth/heads
-            
+
         Returns:
             Initialized (untrained) model
         """
@@ -103,25 +103,25 @@ class ModelRegistry:
         name = name.lower().strip().replace(" ", "_")
         if name in self.registry["models"]:
             raise ValueError(f"Model '{name}' already exists. Use load_model() or delete it first.")
-        
+
         # Get config
         if custom_config:
             model_config = custom_config
         else:
             model_config = get_model_config(size)
-        
+
         model_config["vocab_size"] = vocab_size
-        
+
         # Create model directory with full structure
         model_dir = self.models_dir / name
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "checkpoints").mkdir(exist_ok=True)
         (model_dir / "data").mkdir(exist_ok=True)  # AI's own training data
-        
+
         # Save config
         with open(model_dir / "config.json", "w") as f:
             json.dump(model_config, f, indent=2)
-        
+
         # Create AI-specific training data file
         training_data_file = model_dir / "data" / "training.txt"
         training_data_file.write_text(f"""# Training Data
@@ -167,7 +167,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
 # Add more training data below...
 
 """)
-        
+
         # Create AI-specific instructions file
         instructions_file = model_dir / "data" / "instructions.txt"
         instructions_file.write_text(f"""# AI Instructions
@@ -207,7 +207,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
 {name} avoids overly technical jargon unless asked.
 {name} asks clarifying questions when needed.
 """)
-        
+
         # Create metadata
         metadata = {
             "name": name,
@@ -226,7 +226,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         }
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
-        
+
         # Update registry
         self.registry["models"][name] = {
             "path": str(model_dir),
@@ -236,73 +236,76 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             "data_dir": str(model_dir / "data"),
         }
         self._save_registry()
-        
+
         print(f"[SYSTEM] [OK] Created model '{name}' ({size})")
         print(f"[SYSTEM]   Parameters: {metadata['estimated_parameters']:,}")
         print(f"[SYSTEM]   Location: {model_dir}")
         print(f"[SYSTEM]   Training data: {training_data_file}")
-        
+
         # Return None instead of instantiating model - saves memory
         # Model will be created lazily when load_model() is called
         return None
-    
+
     def load_model(
-        self, 
-        name: str, 
+        self,
+        name: str,
         device: Optional[str] = None,
         checkpoint: Optional[str] = None
     ) -> Tuple[TinyEnigma, Dict]:
         """
         Load a model by name.
-        
+
         Args:
             name: Model name
             device: Device to load to ("cuda", "cpu", or None for auto)
             checkpoint: Specific checkpoint to load (e.g., "epoch_100") or None for latest
-            
+
         Returns:
             (model, config_dict)
         """
         name = name.lower().strip()
         if name not in self.registry["models"]:
-            raise ValueError(f"Model '{name}' not found. Available: {list(self.registry['models'].keys())}")
-        
+            raise ValueError(
+                f"Model '{name}' not found. Available: {
+                    list(
+                        self.registry['models'].keys())}")
+
         model_dir = Path(self.registry["models"][name]["path"])
-        
+
         # Load config
         with open(model_dir / "config.json", "r") as f:
             config = json.load(f)
-        
+
         # Determine device
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+
         # Extract only model-relevant parameters (filter out metadata)
         model_params = {
-            k: v for k, v in config.items() 
+            k: v for k, v in config.items()
             if k in ['vocab_size', 'dim', 'depth', 'heads', 'max_len']
         }
-        
+
         # Create model with filtered params
         model = TinyEnigma(**model_params)
-        
+
         # Load weights
         if checkpoint:
             weights_path = model_dir / "checkpoints" / f"{checkpoint}.pth"
         else:
             weights_path = model_dir / "weights.pth"
-        
+
         if weights_path.exists():
             state_dict = torch.load(weights_path, map_location=device)
             model.load_state_dict(state_dict)
             # Silent load - no print to avoid confusion with AI output
         else:
             print(f"[SYSTEM] [!] No weights found - model is untrained")
-        
+
         model.to(device)
-        
+
         return model, config
-    
+
     def save_model(
         self,
         name: str,
@@ -313,7 +316,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
     ):
         """
         Save model weights.
-        
+
         Args:
             name: Model name
             model: The model to save
@@ -324,17 +327,17 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         name = name.lower().strip()
         if name not in self.registry["models"]:
             raise ValueError(f"Model '{name}' not found in registry")
-        
+
         model_dir = Path(self.registry["models"][name]["path"])
-        
+
         # Save main weights
         torch.save(model.state_dict(), model_dir / "weights.pth")
-        
+
         # Save checkpoint
         if save_checkpoint:
             checkpoints_dir = model_dir / "checkpoints"
             checkpoints_dir.mkdir(parents=True, exist_ok=True)
-            
+
             if checkpoint_name:
                 # Custom name like "best"
                 checkpoint_path = checkpoints_dir / f"{checkpoint_name}.pth"
@@ -344,63 +347,63 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             else:
                 # Default
                 checkpoint_path = checkpoints_dir / "latest.pth"
-            
+
             torch.save(model.state_dict(), checkpoint_path)
-        
+
         # Update registry
         self.registry["models"][name]["has_weights"] = True
         self._save_registry()
-        
+
         # Silent save - no print to avoid confusion with AI output
-    
+
     def update_metadata(self, name: str, **kwargs):
         """Update model metadata after training."""
         name = name.lower().strip()
         model_dir = Path(self.registry["models"][name]["path"])
-        
+
         with open(model_dir / "metadata.json", "r") as f:
             metadata = json.load(f)
-        
+
         metadata.update(kwargs)
         metadata["last_trained"] = datetime.now().isoformat()
-        
+
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
-    
+
     def list_models(self) -> Dict[str, Any]:
         """List all registered models. Returns dict, prints summary."""
         # Return data - GUI will display it
         return self.registry["models"]
-    
+
     def delete_model(self, name: str, confirm: bool = False):
         """Delete a model and all its files."""
         name = name.lower().strip()
         if name not in self.registry["models"]:
             raise ValueError(f"Model '{name}' not found")
-        
+
         if not confirm:
             raise ValueError(f"Confirm deletion by passing confirm=True")
-        
+
         import shutil
         model_dir = Path(self.registry["models"][name]["path"])
         shutil.rmtree(model_dir)
-        
+
         del self.registry["models"][name]
         self._save_registry()
-    
+
     def get_model_info(self, name: str) -> Dict:
         """Get detailed info about a model."""
         name = name.lower().strip()
         model_dir = Path(self.registry["models"][name]["path"])
-        
+
         with open(model_dir / "config.json", "r") as f:
             config = json.load(f)
         with open(model_dir / "metadata.json", "r") as f:
             metadata = json.load(f)
-        
+
         # List checkpoints
         checkpoints = list((model_dir / "checkpoints").glob("*.pth"))
-        
+
         return {
             "config": config,
             "metadata": metadata,

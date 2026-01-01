@@ -15,12 +15,12 @@ Features:
 USAGE:
     from enigma.core.trainer import EnigmaTrainer
     from enigma.core.model_registry import ModelRegistry
-    
+
     registry = ModelRegistry()
-    
+
     # Create a new model
     model = registry.create_model("artemis", size="small")
-    
+
     # Set up trainer
     trainer = EnigmaTrainer(
         model=model,
@@ -30,7 +30,7 @@ USAGE:
         use_multi_gpu=True,  # Use all available GPUs
         use_amp=True,        # Mixed precision training
     )
-    
+
     # Train
     trainer.train(epochs=100, save_every=10)
 """
@@ -54,10 +54,10 @@ from ..config import CONFIG
 class TextDataset(Dataset):
     """
     Text dataset for language model training with sliding window chunking.
-    
+
     Handles tokenization, chunking, and proper input/label pairs for causal LM training.
     """
-    
+
     def __init__(
         self,
         text: str,
@@ -77,18 +77,18 @@ class TextDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_len = max_len
         stride = stride or max_len // 2
-        
+
         # Tokenize entire text
         enc = tokenizer(text, return_tensors="pt", truncation=False, padding=False)
         if isinstance(enc["input_ids"], list):
             all_ids = torch.tensor(enc["input_ids"], dtype=torch.long).squeeze()
         else:
             all_ids = enc["input_ids"].squeeze().long()
-        
+
         # Handle 0-dim tensor
         if all_ids.dim() == 0:
             all_ids = all_ids.unsqueeze(0)
-        
+
         # Create sliding window chunks
         self.chunks = []
         for i in range(0, max(1, len(all_ids) - max_len + 1), stride):
@@ -100,19 +100,19 @@ class TextDataset(Dataset):
                     padded[:len(chunk)] = chunk
                     chunk = padded
                 self.chunks.append(chunk)
-        
+
         # Handle very short text
         if len(self.chunks) == 0 and len(all_ids) > 0:
             padded = torch.zeros(max_len, dtype=torch.long)
             padded[:min(len(all_ids), max_len)] = all_ids[:max_len]
             self.chunks.append(padded)
-        
+
         print(f"Created dataset with {len(self.chunks)} chunks of {max_len} tokens")
         print(f"Total tokens: {len(all_ids):,}")
-    
+
     def __len__(self) -> int:
         return len(self.chunks)
-    
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         chunk = self.chunks[idx]
         # For language modeling: input is all but last token, labels are all but first
@@ -126,7 +126,7 @@ class TextDataset(Dataset):
 class EnigmaTrainer:
     """
     Full-featured trainer for Enigma models.
-    
+
     Features:
     - Multi-GPU training
     - Mixed precision (AMP)
@@ -136,7 +136,7 @@ class EnigmaTrainer:
     - Early stopping
     - Comprehensive logging
     """
-    
+
     def __init__(
         self,
         model: Union[Enigma, TinyEnigma],
@@ -182,7 +182,7 @@ class EnigmaTrainer:
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.warmup_steps = warmup_steps
         self.max_grad_norm = max_grad_norm
-        
+
         # Set up device(s)
         if device:
             self.device = torch.device(device)
@@ -192,29 +192,32 @@ class EnigmaTrainer:
             gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
             try:
                 torch.cuda.set_per_process_memory_fraction(gpu_fraction)
-            except:
+            except BaseException:
                 pass  # Older PyTorch versions may not support this
         elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             self.device = torch.device("mps")
         else:
             self.device = torch.device("cpu")
-        
+
         # Apply CPU thread limit from resource settings
         cpu_threads = CONFIG.get("cpu_threads", 0)
         if cpu_threads > 0:
             torch.set_num_threads(cpu_threads)
-        
+
         # Print device info
         print(f"[Training] Device: {self.device}")
         if self.device.type == "cuda":
             print(f"[Training] GPU: {torch.cuda.get_device_name(0)}")
-            print(f"[Training] GPU Memory: {torch.cuda.get_device_properties(0).total_memory // 1024**2} MB")
+            print(
+                f"[Training] GPU Memory: {
+                    torch.cuda.get_device_properties(0).total_memory //
+                    1024**2} MB")
         print(f"[Training] CPU Threads: {torch.get_num_threads()}")
-        
+
         # Mixed precision setup
         self.use_amp = use_amp and self.device.type == "cuda"
         self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
-        
+
         # Multi-GPU setup
         self.use_multi_gpu = use_multi_gpu and torch.cuda.device_count() > 1
         if self.use_multi_gpu:
@@ -222,12 +225,12 @@ class EnigmaTrainer:
             self.model = nn.DataParallel(model)
         else:
             self.model = model
-        
+
         self.model.to(self.device)
-        
+
         # Load tokenizer
         self.tokenizer = load_tokenizer()
-        
+
         # Load data
         if data_path:
             data_file = Path(data_path)
@@ -242,17 +245,17 @@ class EnigmaTrainer:
             # Default dataset
             text = "Hello world. This is Enigma. I am learning to think and respond helpfully.\n" * 100
             print("Warning: No training data provided. Using default dataset.")
-        
+
         self.dataset = TextDataset(text, self.tokenizer, max_len=max_len)
         self.dataloader = DataLoader(
-            self.dataset, 
-            batch_size=batch_size, 
+            self.dataset,
+            batch_size=batch_size,
             shuffle=True,
             num_workers=0,  # Set >0 for faster loading on PC
             pin_memory=torch.cuda.is_available(),
             drop_last=True,  # Avoid issues with small batches
         )
-        
+
         # Training state
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
@@ -265,17 +268,18 @@ class EnigmaTrainer:
         self.global_step = 0
         self.training_history: List[Dict[str, Any]] = []
         self.best_loss = float('inf')
-    
+
     def _get_scheduler(self, num_training_steps: int):
         """Create cosine scheduler with warmup."""
         def lr_lambda(step):
             if step < self.warmup_steps:
                 return float(step) / float(max(1, self.warmup_steps))
-            progress = float(step - self.warmup_steps) / float(max(1, num_training_steps - self.warmup_steps))
+            progress = float(step - self.warmup_steps) / \
+                float(max(1, num_training_steps - self.warmup_steps))
             return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
-        
+
         return torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
-    
+
     def train(
         self,
         epochs: int = 10,
@@ -287,7 +291,7 @@ class EnigmaTrainer:
     ):
         """
         Train the model.
-        
+
         Args:
             epochs: Number of epochs to train
             save_every: Save checkpoint every N epochs
@@ -299,10 +303,10 @@ class EnigmaTrainer:
         # Get model parameter count
         model_ref = self.model.module if self.use_multi_gpu else self.model
         param_count = sum(p.numel() for p in model_ref.parameters())
-        
-        print(f"\n{'='*60}")
+
+        print(f"\n{'=' * 60}")
         print(f"TRAINING: {self.model_name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Device: {self.device}")
         print(f"Multi-GPU: {self.use_multi_gpu}")
         print(f"Mixed Precision: {self.use_amp}")
@@ -313,28 +317,28 @@ class EnigmaTrainer:
         print(f"Effective batch size: {self.batch_size * self.gradient_accumulation_steps}")
         print(f"Learning rate: {self.learning_rate}")
         print(f"Dataset size: {len(self.dataset)} chunks")
-        print(f"{'='*60}\n")
-        
+        print(f"{'=' * 60}\n")
+
         # Calculate total steps and create scheduler
         steps_per_epoch = len(self.dataloader) // self.gradient_accumulation_steps
         total_steps = steps_per_epoch * epochs
         scheduler = self._get_scheduler(total_steps)
-        
+
         start_time = datetime.now()
         no_improvement_count = 0
-        
+
         for epoch in range(epochs):
             self.current_epoch += 1
             epoch_loss = 0.0
             num_batches = 0
-            
+
             self.model.train()
             self.optimizer.zero_grad()
-            
+
             for batch_idx, batch in enumerate(self.dataloader):
                 input_ids = batch["input_ids"].to(self.device)
                 labels = batch["labels"].to(self.device)
-                
+
                 # Forward pass with AMP
                 if self.use_amp:
                     with torch.amp.autocast('cuda'):
@@ -346,7 +350,7 @@ class EnigmaTrainer:
                             labels.reshape(-1)
                         )
                         loss = loss / self.gradient_accumulation_steps
-                    
+
                     self.scaler.scale(loss).backward()
                 else:
                     outputs = self.model(input_ids)
@@ -358,7 +362,7 @@ class EnigmaTrainer:
                     )
                     loss = loss / self.gradient_accumulation_steps
                     loss.backward()
-                
+
                 # Gradient accumulation step
                 if (batch_idx + 1) % self.gradient_accumulation_steps == 0:
                     if self.use_amp:
@@ -369,20 +373,25 @@ class EnigmaTrainer:
                     else:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                         self.optimizer.step()
-                    
+
                     scheduler.step()
                     self.optimizer.zero_grad()
                     self.global_step += 1
-                    
+
                     if self.global_step % log_every == 0:
                         current_lr = scheduler.get_last_lr()[0]
-                        print(f"  Step {self.global_step} | Loss: {loss.item() * self.gradient_accumulation_steps:.4f} | LR: {current_lr:.2e}")
-                
+                        print(
+                            f"  Step {
+                                self.global_step} | Loss: {
+                                loss.item() *
+                                self.gradient_accumulation_steps:.4f} | LR: {
+                                current_lr:.2e}")
+
                 epoch_loss += loss.item() * self.gradient_accumulation_steps
                 num_batches += 1
-            
+
             avg_loss = epoch_loss / max(num_batches, 1)
-            
+
             # Log epoch
             self.training_history.append({
                 "epoch": self.current_epoch,
@@ -390,9 +399,9 @@ class EnigmaTrainer:
                 "lr": scheduler.get_last_lr()[0],
                 "timestamp": datetime.now().isoformat(),
             })
-            
+
             print(f"Epoch {self.current_epoch}/{epochs} | Avg Loss: {avg_loss:.4f}")
-            
+
             # Check for improvement
             if avg_loss < self.best_loss:
                 self.best_loss = avg_loss
@@ -400,37 +409,38 @@ class EnigmaTrainer:
                 self._save_best()
             else:
                 no_improvement_count += 1
-            
+
             # Save checkpoint
             if self.current_epoch % save_every == 0:
                 self._save_checkpoint()
-            
+
             # Early stopping
             if early_stopping_patience and no_improvement_count >= early_stopping_patience:
-                print(f"\nEarly stopping triggered after {no_improvement_count} epochs without improvement")
+                print(
+                    f"\nEarly stopping triggered after {no_improvement_count} epochs without improvement")
                 break
-            
+
             # Run callbacks
             if callbacks:
                 for cb in callbacks:
                     cb(self)
-        
+
         # Final save
         self._save_checkpoint()
         self._save_final()
-        
+
         elapsed = datetime.now() - start_time
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"TRAINING COMPLETE")
         print(f"Total time: {elapsed}")
         print(f"Final loss: {self.training_history[-1]['loss']:.4f}")
         print(f"Best loss: {self.best_loss:.4f}")
-        print(f"{'='*60}\n")
-    
+        print(f"{'=' * 60}\n")
+
     def _save_checkpoint(self):
         """Save a training checkpoint."""
         model_to_save = self.model.module if self.use_multi_gpu else self.model
-        
+
         self.registry.save_model(
             self.model_name,
             model_to_save,
@@ -438,11 +448,11 @@ class EnigmaTrainer:
             save_checkpoint=True
         )
         print(f"  Checkpoint saved at epoch {self.current_epoch}")
-    
+
     def _save_best(self):
         """Save the best model so far."""
         model_to_save = self.model.module if self.use_multi_gpu else self.model
-        
+
         self.registry.save_model(
             self.model_name,
             model_to_save,
@@ -451,11 +461,11 @@ class EnigmaTrainer:
             checkpoint_name="best"
         )
         print(f"  New best model saved (loss: {self.best_loss:.4f})")
-    
+
     def _save_final(self):
         """Save final model and update metadata."""
         model_to_save = self.model.module if self.use_multi_gpu else self.model
-        
+
         self.registry.save_model(self.model_name, model_to_save)
         self.registry.update_metadata(
             self.model_name,
@@ -465,7 +475,7 @@ class EnigmaTrainer:
             training_history=self.training_history,
             last_trained=datetime.now().isoformat(),
         )
-    
+
     def resume_from_checkpoint(self, checkpoint_name: str = "best"):
         """Resume training from a checkpoint."""
         model, config = self.registry.load_model(
@@ -473,16 +483,16 @@ class EnigmaTrainer:
             device=str(self.device),
             checkpoint=checkpoint_name
         )
-        
+
         if self.use_multi_gpu:
             self.model = nn.DataParallel(model)
         else:
             self.model = model
-        
+
         # Try to restore epoch from checkpoint name
         if checkpoint_name.startswith("epoch_"):
             self.current_epoch = int(checkpoint_name.split("_")[1])
-        
+
         print(f"Resumed from checkpoint: {checkpoint_name}")
         return self
 
@@ -498,7 +508,7 @@ def train_model_by_name(
 ) -> Union[Enigma, TinyEnigma]:
     """
     Convenience function to create and train a new model.
-    
+
     Example:
         train_model_by_name(
             "artemis",
@@ -510,13 +520,13 @@ def train_model_by_name(
         )
     """
     registry = ModelRegistry()
-    
+
     # Create model if it doesn't exist
     if name not in registry.registry["models"]:
         model = registry.create_model(name, size=size)
     else:
         model, _ = registry.load_model(name)
-    
+
     # Train
     trainer = EnigmaTrainer(
         model=model,
@@ -527,9 +537,9 @@ def train_model_by_name(
         use_amp=use_amp,
         **kwargs
     )
-    
+
     trainer.train(epochs=epochs)
-    
+
     return model
 
 
