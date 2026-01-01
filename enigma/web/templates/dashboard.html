@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Enigma Engine{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h2>📊 Dashboard</h2>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Status</h3>
+            <p id="status">Loading...</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Current Model</h3>
+            <p id="model-name">Loading...</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Running Instances</h3>
+            <p id="instance-count">Loading...</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Available Models</h3>
+            <p id="model-count">Loading...</p>
+        </div>
+    </div>
+    
+    <div class="quick-actions">
+        <h3>Quick Actions</h3>
+        <div class="action-buttons">
+            <a href="/chat" class="btn btn-primary">💬 Start Chat</a>
+            <a href="/train" class="btn btn-secondary">🎓 Train Model</a>
+            <a href="/settings" class="btn btn-secondary">⚙️ Settings</a>
+        </div>
+    </div>
+    
+    <div class="recent-activity">
+        <h3>System Information</h3>
+        <div id="system-info">
+            <p>Last updated: <span id="last-update">Never</span></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Load dashboard data
+async function loadDashboard() {
+    try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+        
+        document.getElementById('status').textContent = data.model_loaded ? '✅ Running' : '⚠️ No Model';
+        document.getElementById('model-name').textContent = data.model_name || 'None';
+        document.getElementById('instance-count').textContent = data.instances || '1';
+        document.getElementById('last-update').textContent = new Date(data.timestamp).toLocaleString();
+        
+        // Load models count
+        const modelsResp = await fetch('/api/models');
+        const modelsData = await modelsResp.json();
+        document.getElementById('model-count').textContent = modelsData.models.length;
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
+// Load on page load
+loadDashboard();
+
+// Refresh every 5 seconds
+setInterval(loadDashboard, 5000);
+</script>
+{% endblock %}
