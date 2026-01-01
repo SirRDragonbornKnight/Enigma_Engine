@@ -31,6 +31,8 @@ from pathlib import Path
 from typing import Optional, Dict, List
 from dataclasses import dataclass, asdict
 
+from ..utils.system_messages import warning_msg, error_msg
+
 # Check available TTS backends
 HAVE_PYTTSX3 = False
 try:
@@ -230,7 +232,7 @@ class VoiceEngine:
                 try:
                     self.profile = VoiceProfile.load(profile)
                 except FileNotFoundError:
-                    print(f"Profile '{profile}' not found, using default")
+                    print(warning_msg(f"Profile '{profile}' not found, using default"))
                     self.profile = PRESET_PROFILES["default"]
                     return False
         elif isinstance(profile, dict):
@@ -283,7 +285,7 @@ class VoiceEngine:
                 if target_voice:
                     self._engine.setProperty('voice', target_voice)
         except Exception as e:
-            print(f"Could not apply voice settings: {e}")
+            print(warning_msg(f"Could not apply voice settings: {e}"))
     
     def get_available_voices(self) -> List[Dict[str, str]]:
         """Get list of available system voices."""
@@ -379,7 +381,7 @@ class VoiceEngine:
                     print(f"[TTS] {text}")
                     
         except Exception as e:
-            print(f"TTS failed: {e}")
+            print(error_msg(f"TTS failed: {e}"))
     
     def save_profile(self, name: str = None) -> Path:
         """Save current profile to file."""

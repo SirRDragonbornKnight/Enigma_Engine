@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from .model import create_model, MODEL_PRESETS
 from .tokenizer import get_tokenizer, train_tokenizer
 from ..config import CONFIG
+from ..utils.system_messages import system_msg, info_msg, warning_msg
 
 logger = logging.getLogger(__name__)
 
@@ -438,22 +439,22 @@ class Trainer:
         # Print training info
         if self.config.verbose:
             print("=" * 60)
-            print("ENIGMA TRAINING")
+            print(system_msg("ENIGMA TRAINING"))
             print("=" * 60)
-            print(f"  Device: {self.device}")
-            print(f"  Model parameters: {sum(p.numel() for p in self.model.parameters()):,}")
-            print(f"  Dataset size: {len(dataset):,} sequences")
-            print(f"  Batch size: {self.config.batch_size}")
-            print(f"  Gradient accumulation: {self.config.grad_accumulation_steps}")
+            print(info_msg(f"Device: {self.device}"))
+            print(info_msg(f"Model parameters: {sum(p.numel() for p in self.model.parameters()):,}"))
+            print(info_msg(f"Dataset size: {len(dataset):,} sequences"))
+            print(info_msg(f"Batch size: {self.config.batch_size}"))
+            print(info_msg(f"Gradient accumulation: {self.config.grad_accumulation_steps}"))
             print(
-                f"  Effective batch size: {
+                info_msg(f"Effective batch size: {
                     self.config.batch_size *
-                    self.config.grad_accumulation_steps}")
-            print(f"  Steps per epoch: {steps_per_epoch}")
-            print(f"  Total steps: {total_steps}")
-            print(f"  Epochs: {epochs}")
-            print(f"  Learning rate: {self.config.learning_rate}")
-            print(f"  AMP: {self.scaler is not None}")
+                    self.config.grad_accumulation_steps}"))
+            print(info_msg(f"Steps per epoch: {steps_per_epoch}"))
+            print(info_msg(f"Total steps: {total_steps}"))
+            print(info_msg(f"Epochs: {epochs}"))
+            print(info_msg(f"Learning rate: {self.config.learning_rate}"))
+            print(info_msg(f"AMP: {self.scaler is not None}"))
             print("=" * 60)
 
         # Training loop
@@ -486,11 +487,11 @@ class Trainer:
         if self.config.verbose:
             print()
             print("=" * 60)
-            print("TRAINING COMPLETE")
+            print(system_msg("TRAINING COMPLETE"))
             print("=" * 60)
-            print(f"  Total time: {elapsed:.1f}s")
-            print(f"  Final loss: {self.loss_history[-1]:.4f}")
-            print(f"  Best loss: {self.best_loss:.4f}")
+            print(info_msg(f"Total time: {elapsed:.1f}s"))
+            print(info_msg(f"Final loss: {self.loss_history[-1]:.4f}"))
+            print(info_msg(f"Best loss: {self.best_loss:.4f}"))
             print("=" * 60)
 
         return {
@@ -596,7 +597,7 @@ class Trainer:
         epoch_time = time.time() - epoch_start
 
         if self.config.verbose:
-            print(f"Epoch {epoch + 1}/{total_epochs} | Loss: {epoch_loss:.4f} | Time: {epoch_time:.1f}s")
+            print(info_msg(f"Epoch {epoch + 1}/{total_epochs} | Loss: {epoch_loss:.4f} | Time: {epoch_time:.1f}s"))
 
         return epoch_loss
 
@@ -705,8 +706,8 @@ def train_model(
 
     # Check if model exists
     if output_path.exists() and not force:
-        print(f"Model already exists at {output_path}")
-        print("Use force=True to retrain")
+        print(warning_msg(f"Model already exists at {output_path}"))
+        print(info_msg("Use force=True to retrain"))
         return {"status": "skipped", "path": str(output_path)}
 
     # Ensure output directory exists
@@ -724,7 +725,7 @@ def train_model(
 
     # Train tokenizer if needed
     if train_tokenizer_first:
-        print("Training tokenizer...")
+        print(system_msg("Training tokenizer..."))
         try:
             tokenizer = train_tokenizer(
                 data_paths=[str(data_path)],
@@ -744,7 +745,7 @@ def train_model(
             ) from e
 
     # Create model with error handling
-    print(f"Creating {model_size} model...")
+    print(system_msg(f"Creating {model_size} model..."))
     try:
         model = create_model(model_size, vocab_size=tokenizer.vocab_size)
     except (ValueError, RuntimeError) as e:
