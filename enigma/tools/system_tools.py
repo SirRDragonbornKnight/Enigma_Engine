@@ -129,8 +129,6 @@ class GetSystemInfoTool(Tool):
     
     def execute(self, **kwargs) -> Dict[str, Any]:
         try:
-            import shutil
-            
             info = {
                 "os": platform.system(),
                 "os_release": platform.release(),
