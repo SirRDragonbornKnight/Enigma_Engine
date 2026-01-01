@@ -69,10 +69,11 @@ def create_settings_tab(parent):
     
     parent.resource_mode_combo = QComboBox()
     parent.resource_mode_combo.addItem("🎮 Minimal - Best for gaming", "minimal")
+    parent.resource_mode_combo.addItem("🕹️ Gaming - AI in background", "gaming")
     parent.resource_mode_combo.addItem("⚖️ Balanced - Normal use (default)", "balanced")
     parent.resource_mode_combo.addItem("🚀 Performance - Faster AI responses", "performance")
     parent.resource_mode_combo.addItem("💪 Maximum - Use all resources", "max")
-    parent.resource_mode_combo.setCurrentIndex(1)  # Default to balanced
+    parent.resource_mode_combo.setCurrentIndex(2)  # Default to balanced
     parent.resource_mode_combo.currentIndexChanged.connect(
         lambda idx: _apply_resource_mode(parent)
     )
@@ -203,6 +204,7 @@ def _apply_resource_mode(parent):
     # Update description
     descriptions = {
         "minimal": "Minimal: Uses 1 CPU thread, low priority. Best while gaming!",
+        "gaming": "Gaming: AI runs in background, prioritizes gaming performance.",
         "balanced": "Balanced: Uses moderate resources. Good for normal use.",
         "performance": "Performance: Uses more resources for faster AI responses.",
         "max": "Maximum: Uses all available resources. May slow other apps."
@@ -212,6 +214,7 @@ def _apply_resource_mode(parent):
     # Update advanced controls to match mode
     mode_settings = {
         "minimal": {"threads": 1, "gpu": 20, "priority": True},
+        "gaming": {"threads": 2, "gpu": 30, "priority": True},
         "balanced": {"threads": 0, "gpu": 50, "priority": False},
         "performance": {"threads": 0, "gpu": 70, "priority": False},
         "max": {"threads": 0, "gpu": 90, "priority": False},
