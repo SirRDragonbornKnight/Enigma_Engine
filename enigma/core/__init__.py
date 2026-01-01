@@ -40,10 +40,11 @@ from .tokenizer import (
     SimpleTokenizer,
 )
 
-# Try to import advanced tokenizer (may fail if dependencies missing)
+# Try to import Enigma tokenizer (may fail if dependencies missing)
 try:
-    from .advanced_tokenizer import AdvancedBPETokenizer
+    from .advanced_tokenizer import EnigmaTokenizer, AdvancedBPETokenizer  # AdvancedBPETokenizer is alias
 except ImportError:
+    EnigmaTokenizer = None
     AdvancedBPETokenizer = None
 
 # Try to import character tokenizer
@@ -102,7 +103,8 @@ __all__ = [
     "load_tokenizer",
     "train_tokenizer",
     "SimpleTokenizer",
-    "AdvancedBPETokenizer",
+    "EnigmaTokenizer",
+    "AdvancedBPETokenizer",  # Backwards compatibility alias
     "CharacterTokenizer",
 
     # Config & Registry

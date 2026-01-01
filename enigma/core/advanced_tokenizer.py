@@ -1,19 +1,25 @@
 """
-Advanced Byte Pair Encoding (BPE) Tokenizer
-============================================
+Enigma Tokenizer - Custom BPE Implementation
+=============================================
 
-A production-grade tokenizer built from scratch. No external dependencies.
+The Enigma Engine's native tokenizer, built from scratch with unique features.
 
-Features:
+Differentiators from GPT-style tokenizers:
+  - [E:token] format - Enigma's unique special token syntax
+  - Multi-modal native support (images, audio, video, avatar)
+  - Tool invocation tokens built-in
+  - Thinking/reasoning tokens for chain-of-thought
+  - BPE dropout for training regularization
+
+Core Features:
   - Byte-level BPE (handles ANY text, any language, any characters)
   - Learns optimal subword vocabulary from your data
-  - Special token handling (Q:, A:, etc.)
   - Efficient caching for fast encoding
-  - Regex-based pre-tokenization (GPT-style)
+  - Custom regex pre-tokenization optimized for code and natural language
   - Serialization and loading
-  - Compatible with trainer interface
+  - Compatible with Enigma trainer interface
 
-This is how GPT-2, GPT-3, and GPT-4 tokenize text.
+This is the Enigma Engine's custom tokenizer - not a GPT clone.
 """
 import json
 import random
@@ -64,21 +70,19 @@ def get_pairs(word: Tuple[str, ...]) -> Set[Tuple[str, str]]:
     return pairs
 
 
-class AdvancedBPETokenizer:
+class EnigmaTokenizer:
     """
-    Advanced Byte Pair Encoding Tokenizer.
+    Enigma Engine's Native Tokenizer.
 
-    This is a production-grade implementation that:
-    - Handles any input (byte-level)
-    - Uses efficient algorithms
-    - Supports special tokens
-    - Caches encoding for speed
-    - Can be trained on any text data
+    Custom BPE implementation with unique features:
+    - [E:token] format for special tokens (Enigma's signature)
+    - Multi-modal support built-in
+    - Tool invocation and reasoning tokens
+    - Optimized for both code and natural language
     """
 
-    # GPT-style regex pattern for pre-tokenization
-    # Splits text into words, contractions, numbers, and punctuation
-    # Enhanced pattern for better code, numbers, and special character handling
+    # Enigma's custom regex pattern for pre-tokenization
+    # Optimized for code, natural language, and special characters
     PAT = re.compile(
         r"""'(?:[sdmt]|ll|ve|re)|"""  # Contractions
         r"""\s?\d+(?:\.\d+)?|"""  # Numbers (including decimals)
@@ -101,69 +105,76 @@ class AdvancedBPETokenizer:
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
 
         # Special tokens with reserved IDs (0-19 reserved)
+        # Enigma's unique [E:token] format - distinguishes from GPT's <|token|>
         self.special_tokens = {
             # Core tokens
-            "<|pad|>": 0,
-            "<|start|>": 1,
-            "<|end|>": 2,
-            "<|unk|>": 3,
-            "<|sep|>": 4,
-            "<|mask|>": 5,
+            "[E:pad]": 0,
+            "[E:start]": 1,
+            "[E:end]": 2,
+            "[E:unk]": 3,
+            "[E:sep]": 4,
+            "[E:mask]": 5,
             
             # Legacy conversation tokens
-            "<|Q|>": 6,
-            "<|A|>": 7,
+            "[E:Q]": 6,
+            "[E:A]": 7,
             
             # Modern conversation tokens
-            "<|user|>": 8,
-            "<|bot|>": 9,
-            "<|assistant|>": 10,
-            "<|system|>": 11,
+            "[E:user]": 8,
+            "[E:enigma]": 9,  # The AI's name, not generic "bot"
+            "[E:assistant]": 10,
+            "[E:system]": 11,
             
             # Tool invocation tokens
-            "<|tool_call|>": 12,
-            "<|tool_result|>": 13,
-            "<|tool_end|>": 14,
-            "<|tool_result_end|>": 15,
+            "[E:tool]": 12,
+            "[E:tool_out]": 13,
+            "[E:tool_end]": 14,
+            "[E:out_end]": 15,
             
             # Modality tokens
-            "<|image|>": 16,
-            "<|audio|>": 17,
-            "<|video|>": 18,
-            "<|vision|>": 19,
+            "[E:img]": 16,
+            "[E:audio]": 17,
+            "[E:video]": 18,
+            "[E:vision]": 19,
             
             # Action/capability tokens
-            "<|generate_image|>": 20,
-            "<|avatar_action|>": 21,
-            "<|speak|>": 22,
-            "<|listen|>": 23,
-            "<|search_web|>": 24,
-            "<|read_file|>": 25,
-            "<|write_file|>": 26,
-            "<|capture_screen|>": 27,
-            "<|run_code|>": 28,
+            "[E:gen_img]": 20,
+            "[E:avatar]": 21,
+            "[E:speak]": 22,
+            "[E:listen]": 23,
+            "[E:web]": 24,
+            "[E:read]": 25,
+            "[E:write]": 26,
+            "[E:screen]": 27,
+            "[E:exec]": 28,
             
             # Formatting tokens
-            "<|newline|>": 29,
-            "<|tab|>": 30,
-            "<|code|>": 31,
-            "<|code_end|>": 32,
+            "[E:nl]": 29,
+            "[E:tab]": 30,
+            "[E:code]": 31,
+            "[E:/code]": 32,
             
-            # Meta tokens
-            "<|thinking|>": 33,
-            "<|thinking_end|>": 34,
-            "<|error|>": 35,
-            "<|warning|>": 36,
-            "<|success|>": 37,
-            "<|info|>": 38,
+            # Meta tokens - Enigma's reasoning system
+            "[E:think]": 33,
+            "[E:/think]": 34,
+            "[E:err]": 35,
+            "[E:warn]": 36,
+            "[E:ok]": 37,
+            "[E:info]": 38,
+            
+            # Enigma-specific tokens
+            "[E:memory]": 39,      # Memory recall
+            "[E:learn]": 40,       # Learning marker
+            "[E:emotion]": 41,     # Emotional context
+            "[E:context]": 42,     # Context switch
         }
         self.special_token_ids = {v: k for k, v in self.special_tokens.items()}
 
         # Standard token names for compatibility
-        self.pad_token = "<|pad|>"
-        self.eos_token = "<|end|>"
-        self.bos_token = "<|start|>"
-        self.unk_token = "<|unk|>"
+        self.pad_token = "[E:pad]"
+        self.eos_token = "[E:end]"
+        self.bos_token = "[E:start]"
+        self.unk_token = "[E:unk]"
 
         self.pad_token_id = 0
         self.eos_token_id = 2
@@ -199,8 +210,6 @@ class AdvancedBPETokenizer:
         except ImportError:
             # Use the standard re pattern defined as class variable
             self.pat = self.PAT
-    
-            self.pat = self.PAT_FALLBACK
 
     def _init_base_vocab(self):
         """Initialize vocabulary with special tokens and byte-level tokens."""
@@ -791,9 +800,9 @@ def train_tokenizer(
     data_paths: List[str],
     vocab_size: int = 8000,
     output_path: Optional[str] = None
-) -> AdvancedBPETokenizer:
+) -> 'EnigmaTokenizer':
     """
-    Train a tokenizer on data files.
+    Train an Enigma tokenizer on data files.
 
     Args:
         data_paths: List of text file paths
@@ -801,7 +810,7 @@ def train_tokenizer(
         output_path: Where to save the tokenizer
 
     Returns:
-        Trained tokenizer
+        Trained EnigmaTokenizer
     """
     # Load texts
     texts = []
@@ -815,7 +824,7 @@ def train_tokenizer(
         raise ValueError("No training data found!")
 
     # Train
-    tokenizer = AdvancedBPETokenizer()
+    tokenizer = EnigmaTokenizer()
     tokenizer.train(texts, vocab_size=vocab_size, verbose=True)
 
     # Save
@@ -823,3 +832,7 @@ def train_tokenizer(
         tokenizer.save(Path(output_path))
 
     return tokenizer
+
+
+# Backwards compatibility alias
+AdvancedBPETokenizer = EnigmaTokenizer
