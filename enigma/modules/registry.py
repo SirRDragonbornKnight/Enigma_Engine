@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ModelModule(Module):
     """Core transformer model module."""
-    
+
     INFO = ModuleInfo(
         id="model",
         name="Enigma Model",
@@ -29,25 +29,57 @@ class ModelModule(Module):
         category=ModuleCategory.CORE,
         version="2.0.0",
         requires=[],
-        provides=["language_model", "text_generation", "embeddings"],
+        provides=[
+            "language_model",
+            "text_generation",
+            "embeddings"],
         config_schema={
-            "size": {"type": "choice", "options": ["nano", "micro", "tiny", "small", "medium", "large", "xl", "xxl", "titan"], "default": "small"},
-            "vocab_size": {"type": "int", "min": 1000, "max": 500000, "default": 8000},
-            "device": {"type": "choice", "options": ["auto", "cuda", "cpu", "mps"], "default": "auto"},
-            "dtype": {"type": "choice", "options": ["float32", "float16", "bfloat16"], "default": "float32"},
+            "size": {
+                "type": "choice",
+                "options": [
+                    "nano",
+                    "micro",
+                    "tiny",
+                    "small",
+                    "medium",
+                    "large",
+                    "xl",
+                    "xxl",
+                    "titan"],
+                "default": "small"},
+            "vocab_size": {
+                "type": "int",
+                        "min": 1000,
+                        "max": 500000,
+                        "default": 8000},
+            "device": {
+                "type": "choice",
+                "options": [
+                    "auto",
+                    "cuda",
+                    "cpu",
+                    "mps"],
+                "default": "auto"},
+            "dtype": {
+                "type": "choice",
+                "options": [
+                    "float32",
+                    "float16",
+                    "bfloat16"],
+                "default": "float32"},
         },
         min_ram_mb=512,
     )
-    
+
     def load(self) -> bool:
         from enigma.core.model import create_model
-        
+
         size = self.config.get('size', 'small')
         vocab_size = self.config.get('vocab_size', 8000)
-        
+
         self._instance = create_model(size, vocab_size=vocab_size)
         return self._instance is not None
-    
+
     def unload(self) -> bool:
         if self._instance is not None:
             del self._instance
@@ -57,7 +89,7 @@ class ModelModule(Module):
 
 class TokenizerModule(Module):
     """Tokenizer module - converts text to/from tokens."""
-    
+
     INFO = ModuleInfo(
         id="tokenizer",
         name="Tokenizer",
@@ -65,16 +97,29 @@ class TokenizerModule(Module):
         category=ModuleCategory.CORE,
         version="2.0.0",
         requires=[],
-        provides=["tokenization", "vocabulary"],
+        provides=[
+            "tokenization",
+            "vocabulary"],
         config_schema={
-            "type": {"type": "choice", "options": ["auto", "bpe", "character", "simple"], "default": "auto"},
-            "vocab_size": {"type": "int", "min": 100, "max": 500000, "default": 8000},
+            "type": {
+                "type": "choice",
+                "options": [
+                    "auto",
+                    "bpe",
+                    "character",
+                    "simple"],
+                "default": "auto"},
+            "vocab_size": {
+                "type": "int",
+                        "min": 100,
+                        "max": 500000,
+                        "default": 8000},
         },
     )
-    
+
     def load(self) -> bool:
         from enigma.core.tokenizer import get_tokenizer
-        
+
         tok_type = self.config.get('type', 'auto')
         self._instance = get_tokenizer(tok_type)
         return self._instance is not None
@@ -82,31 +127,53 @@ class TokenizerModule(Module):
 
 class TrainingModule(Module):
     """Training module - trains models on data."""
-    
+
     INFO = ModuleInfo(
         id="training",
         name="Training System",
         description="Production-grade training with AMP, gradient accumulation, distributed support",
         category=ModuleCategory.CORE,
         version="2.0.0",
-        requires=["model", "tokenizer"],
-        provides=["model_training", "fine_tuning"],
+        requires=[
+            "model",
+            "tokenizer"],
+        provides=[
+            "model_training",
+            "fine_tuning"],
         supports_distributed=True,
         config_schema={
-            "learning_rate": {"type": "float", "min": 1e-6, "max": 1e-1, "default": 3e-4},
-            "batch_size": {"type": "int", "min": 1, "max": 256, "default": 8},
-            "epochs": {"type": "int", "min": 1, "max": 10000, "default": 30},
-            "use_amp": {"type": "bool", "default": True},
-            "gradient_accumulation": {"type": "int", "min": 1, "max": 64, "default": 4},
+            "learning_rate": {
+                "type": "float",
+                "min": 1e-6,
+                "max": 1e-1,
+                "default": 3e-4},
+            "batch_size": {
+                "type": "int",
+                "min": 1,
+                        "max": 256,
+                        "default": 8},
+            "epochs": {
+                "type": "int",
+                "min": 1,
+                "max": 10000,
+                "default": 30},
+            "use_amp": {
+                "type": "bool",
+                "default": True},
+            "gradient_accumulation": {
+                "type": "int",
+                "min": 1,
+                "max": 64,
+                "default": 4},
         },
     )
-    
+
     def load(self) -> bool:
         from enigma.core.training import Trainer, TrainingConfig
         self._trainer_class = Trainer
         self._config_class = TrainingConfig
         return True
-    
+
     def get_interface(self):
         return {
             'Trainer': self._trainer_class,
@@ -116,7 +183,7 @@ class TrainingModule(Module):
 
 class InferenceModule(Module):
     """Inference module - generates text from models."""
-    
+
     INFO = ModuleInfo(
         id="inference",
         name="Inference Engine",
@@ -132,7 +199,7 @@ class InferenceModule(Module):
             "top_p": {"type": "float", "min": 0.0, "max": 1.0, "default": 0.9},
         },
     )
-    
+
     def load(self) -> bool:
         from enigma.core.inference import EnigmaEngine
         self._engine_class = EnigmaEngine
@@ -141,7 +208,7 @@ class InferenceModule(Module):
 
 class MemoryModule(Module):
     """Memory module - conversation and knowledge storage."""
-    
+
     INFO = ModuleInfo(
         id="memory",
         name="Memory System",
@@ -156,7 +223,7 @@ class MemoryModule(Module):
             "max_conversations": {"type": "int", "min": 1, "max": 100000, "default": 1000},
         },
     )
-    
+
     def load(self) -> bool:
         from enigma.memory.manager import ConversationManager
         self._instance = ConversationManager()
@@ -165,7 +232,7 @@ class MemoryModule(Module):
 
 class VoiceInputModule(Module):
     """Voice input module - speech to text."""
-    
+
     INFO = ModuleInfo(
         id="voice_input",
         name="Voice Input (STT)",
@@ -173,13 +240,23 @@ class VoiceInputModule(Module):
         category=ModuleCategory.PERCEPTION,
         version="1.0.0",
         requires=[],
-        provides=["speech_recognition", "voice_commands"],
+        provides=[
+            "speech_recognition",
+            "voice_commands"],
         config_schema={
-            "engine": {"type": "choice", "options": ["system", "whisper", "vosk"], "default": "system"},
-            "language": {"type": "string", "default": "en-US"},
+            "engine": {
+                "type": "choice",
+                "options": [
+                    "system",
+                    "whisper",
+                    "vosk"],
+                "default": "system"},
+            "language": {
+                "type": "string",
+                        "default": "en-US"},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.voice.stt_simple import SimpleSpeechToText
@@ -192,7 +269,7 @@ class VoiceInputModule(Module):
 
 class VoiceOutputModule(Module):
     """Voice output module - text to speech."""
-    
+
     INFO = ModuleInfo(
         id="voice_output",
         name="Voice Output (TTS)",
@@ -200,14 +277,28 @@ class VoiceOutputModule(Module):
         category=ModuleCategory.OUTPUT,
         version="1.0.0",
         requires=[],
-        provides=["text_to_speech", "spoken_response"],
+        provides=[
+            "text_to_speech",
+            "spoken_response"],
         config_schema={
-            "engine": {"type": "choice", "options": ["system", "pyttsx3", "elevenlabs"], "default": "system"},
-            "voice": {"type": "string", "default": "default"},
-            "rate": {"type": "float", "min": 0.5, "max": 2.0, "default": 1.0},
+            "engine": {
+                "type": "choice",
+                "options": [
+                    "system",
+                    "pyttsx3",
+                    "elevenlabs"],
+                "default": "system"},
+            "voice": {
+                "type": "string",
+                        "default": "default"},
+            "rate": {
+                "type": "float",
+                "min": 0.5,
+                "max": 2.0,
+                "default": 1.0},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.voice.tts_simple import SimpleTextToSpeech
@@ -220,7 +311,7 @@ class VoiceOutputModule(Module):
 
 class VisionModule(Module):
     """Vision module - image processing and analysis."""
-    
+
     INFO = ModuleInfo(
         id="vision",
         name="Vision System",
@@ -229,13 +320,26 @@ class VisionModule(Module):
         version="1.0.0",
         requires=[],
         optional=["model"],
-        provides=["image_capture", "ocr", "object_detection"],
+        provides=[
+            "image_capture",
+            "ocr",
+            "object_detection"],
         config_schema={
-            "camera_id": {"type": "int", "min": 0, "max": 10, "default": 0},
-            "resolution": {"type": "choice", "options": ["480p", "720p", "1080p"], "default": "720p"},
+            "camera_id": {
+                "type": "int",
+                "min": 0,
+                "max": 10,
+                "default": 0},
+            "resolution": {
+                "type": "choice",
+                "options": [
+                        "480p",
+                        "720p",
+                        "1080p"],
+                "default": "720p"},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.tools.vision import VisionSystem
@@ -248,7 +352,7 @@ class VisionModule(Module):
 
 class AvatarModule(Module):
     """Avatar module - visual AI representation."""
-    
+
     INFO = ModuleInfo(
         id="avatar",
         name="Avatar System",
@@ -263,7 +367,7 @@ class AvatarModule(Module):
             "character": {"type": "string", "default": "default"},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.avatar.controller import AvatarController
@@ -276,7 +380,7 @@ class AvatarModule(Module):
 
 class WebToolsModule(Module):
     """Web tools module - internet access."""
-    
+
     INFO = ModuleInfo(
         id="web_tools",
         name="Web Tools",
@@ -290,19 +394,19 @@ class WebToolsModule(Module):
             "timeout": {"type": "int", "min": 1, "max": 300, "default": 30},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.tools.web_tools import WebTools
             self._instance = WebTools()
             return True
-        except:
+        except BaseException:
             return True  # Optional, don't fail
 
 
 class FileToolsModule(Module):
     """File tools module - file system access."""
-    
+
     INFO = ModuleInfo(
         id="file_tools",
         name="File Tools",
@@ -316,19 +420,19 @@ class FileToolsModule(Module):
             "max_file_size_mb": {"type": "int", "min": 1, "max": 1000, "default": 100},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.tools.file_tools import FileTools
             self._instance = FileTools()
             return True
-        except:
+        except BaseException:
             return True
 
 
 class APIServerModule(Module):
     """API server module - REST API interface."""
-    
+
     INFO = ModuleInfo(
         id="api_server",
         name="API Server",
@@ -343,7 +447,7 @@ class APIServerModule(Module):
             "auth_enabled": {"type": "bool", "default": False},
         },
     )
-    
+
     def load(self) -> bool:
         from enigma.comms.api_server import create_app
         self._app_factory = create_app
@@ -352,7 +456,7 @@ class APIServerModule(Module):
 
 class NetworkModule(Module):
     """Network module - multi-device communication."""
-    
+
     INFO = ModuleInfo(
         id="network",
         name="Network System",
@@ -360,27 +464,41 @@ class NetworkModule(Module):
         category=ModuleCategory.NETWORK,
         version="1.0.0",
         requires=[],
-        optional=["model", "inference"],
-        provides=["multi_device", "distributed_inference", "model_sync"],
+        optional=[
+            "model",
+            "inference"],
+        provides=[
+            "multi_device",
+            "distributed_inference",
+            "model_sync"],
         supports_distributed=True,
         config_schema={
-            "role": {"type": "choice", "options": ["standalone", "server", "client", "peer"], "default": "standalone"},
-            "discovery": {"type": "bool", "default": True},
+            "role": {
+                "type": "choice",
+                "options": [
+                        "standalone",
+                        "server",
+                        "client",
+                        "peer"],
+                "default": "standalone"},
+            "discovery": {
+                "type": "bool",
+                "default": True},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.comms.network import NetworkManager
             self._instance = NetworkManager()
             return True
-        except:
+        except BaseException:
             return True
 
 
 class GUIModule(Module):
     """GUI module - graphical interface."""
-    
+
     INFO = ModuleInfo(
         id="gui",
         name="Graphical Interface",
@@ -388,14 +506,40 @@ class GUIModule(Module):
         category=ModuleCategory.INTERFACE,
         version="2.0.0",
         requires=[],
-        optional=["model", "tokenizer", "inference", "training", "memory", "voice_input", "voice_output", "vision", "avatar"],
-        provides=["graphical_interface", "chat_ui", "training_ui", "module_management"],
+        optional=[
+            "model",
+            "tokenizer",
+            "inference",
+            "training",
+            "memory",
+            "voice_input",
+            "voice_output",
+            "vision",
+            "avatar"],
+        provides=[
+            "graphical_interface",
+            "chat_ui",
+            "training_ui",
+            "module_management"],
         config_schema={
-            "theme": {"type": "choice", "options": ["dark", "light", "system"], "default": "dark"},
-            "window_size": {"type": "choice", "options": ["small", "medium", "large", "fullscreen"], "default": "medium"},
+            "theme": {
+                "type": "choice",
+                "options": [
+                        "dark",
+                        "light",
+                        "system"],
+                "default": "dark"},
+            "window_size": {
+                "type": "choice",
+                "options": [
+                    "small",
+                    "medium",
+                    "large",
+                    "fullscreen"],
+                "default": "medium"},
         },
     )
-    
+
     def load(self) -> bool:
         # GUI is loaded on demand
         return True
@@ -407,23 +551,23 @@ class GUIModule(Module):
 
 class GenerationModule(Module):
     """Base class for generation modules that wrap addons."""
-    
+
     def __init__(self, manager, config=None):
         super().__init__(manager, config)
         self._addon = None
-    
+
     def unload(self) -> bool:
         if self._addon:
             self._addon.unload()
             self._addon = None
         return True
-    
+
     def generate(self, prompt: str, **kwargs):
         """Generate content using the wrapped addon."""
         if not self._addon or not self._addon.is_loaded:
             raise RuntimeError(f"Module not loaded")
         return self._addon.generate(prompt, **kwargs)
-    
+
     def get_interface(self):
         """Return the addon for direct access."""
         return self._addon
@@ -431,7 +575,7 @@ class GenerationModule(Module):
 
 class ImageGenLocalModule(GenerationModule):
     """Local image generation with Stable Diffusion."""
-    
+
     INFO = ModuleInfo(
         id="image_gen_local",
         name="Image Generation (Local)",
@@ -443,11 +587,21 @@ class ImageGenLocalModule(GenerationModule):
         min_vram_mb=6000,
         requires_gpu=True,
         config_schema={
-            "model": {"type": "choice", "options": ["sd-2.1", "sdxl", "sdxl-turbo"], "default": "sd-2.1"},
-            "steps": {"type": "int", "min": 1, "max": 100, "default": 30},
+            "model": {
+                "type": "choice",
+                "options": [
+                    "sd-2.1",
+                    "sdxl",
+                    "sdxl-turbo"],
+                "default": "sd-2.1"},
+            "steps": {
+                "type": "int",
+                "min": 1,
+                "max": 100,
+                "default": 30},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import StableDiffusionLocal
@@ -460,7 +614,7 @@ class ImageGenLocalModule(GenerationModule):
 
 class ImageGenAPIModule(GenerationModule):
     """Cloud image generation via APIs."""
-    
+
     INFO = ModuleInfo(
         id="image_gen_api",
         name="Image Generation (Cloud)",
@@ -471,12 +625,21 @@ class ImageGenAPIModule(GenerationModule):
         provides=["image_generation"],
         is_cloud_service=True,
         config_schema={
-            "provider": {"type": "choice", "options": ["openai", "replicate"], "default": "openai"},
-            "model": {"type": "string", "default": "dall-e-3"},
-            "api_key": {"type": "secret", "default": ""},
+            "provider": {
+                "type": "choice",
+                "options": [
+                    "openai",
+                    "replicate"],
+                "default": "openai"},
+            "model": {
+                "type": "string",
+                "default": "dall-e-3"},
+            "api_key": {
+                "type": "secret",
+                "default": ""},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             provider = self.config.get('provider', 'openai')
@@ -494,7 +657,7 @@ class ImageGenAPIModule(GenerationModule):
 
 class CodeGenLocalModule(GenerationModule):
     """Local code generation using Enigma model."""
-    
+
     INFO = ModuleInfo(
         id="code_gen_local",
         name="Code Generation (Local)",
@@ -508,7 +671,7 @@ class CodeGenLocalModule(GenerationModule):
             "temperature": {"type": "float", "min": 0.1, "max": 1.5, "default": 0.3},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import EnigmaCode
@@ -521,7 +684,7 @@ class CodeGenLocalModule(GenerationModule):
 
 class CodeGenAPIModule(GenerationModule):
     """Cloud code generation via OpenAI."""
-    
+
     INFO = ModuleInfo(
         id="code_gen_api",
         name="Code Generation (Cloud)",
@@ -532,15 +695,27 @@ class CodeGenAPIModule(GenerationModule):
         provides=["code_generation"],
         is_cloud_service=True,
         config_schema={
-            "model": {"type": "choice", "options": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"], "default": "gpt-4"},
-            "api_key": {"type": "secret", "default": ""},
+            "model": {
+                "type": "choice",
+                "options": [
+                    "gpt-4",
+                    "gpt-4-turbo",
+                    "gpt-3.5-turbo"],
+                "default": "gpt-4"},
+            "api_key": {
+                "type": "secret",
+                "default": ""},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import OpenAICode
-            self._addon = OpenAICode(api_key=self.config.get('api_key'), model=self.config.get('model', 'gpt-4'))
+            self._addon = OpenAICode(
+                api_key=self.config.get('api_key'),
+                model=self.config.get(
+                    'model',
+                    'gpt-4'))
             return self._addon.load()
         except Exception as e:
             logger.warning(f"Could not load cloud code gen: {e}")
@@ -549,7 +724,7 @@ class CodeGenAPIModule(GenerationModule):
 
 class VideoGenLocalModule(GenerationModule):
     """Local video generation with AnimateDiff."""
-    
+
     INFO = ModuleInfo(
         id="video_gen_local",
         name="Video Generation (Local)",
@@ -565,7 +740,7 @@ class VideoGenLocalModule(GenerationModule):
             "duration": {"type": "float", "min": 1, "max": 10, "default": 4},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import LocalVideo
@@ -578,7 +753,7 @@ class VideoGenLocalModule(GenerationModule):
 
 class VideoGenAPIModule(GenerationModule):
     """Cloud video generation via Replicate."""
-    
+
     INFO = ModuleInfo(
         id="video_gen_api",
         name="Video Generation (Cloud)",
@@ -593,7 +768,7 @@ class VideoGenAPIModule(GenerationModule):
             "api_key": {"type": "secret", "default": ""},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import ReplicateVideo
@@ -606,7 +781,7 @@ class VideoGenAPIModule(GenerationModule):
 
 class AudioGenLocalModule(GenerationModule):
     """Local audio/TTS generation."""
-    
+
     INFO = ModuleInfo(
         id="audio_gen_local",
         name="Audio/TTS (Local)",
@@ -620,7 +795,7 @@ class AudioGenLocalModule(GenerationModule):
             "voice": {"type": "string", "default": "default"},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import LocalTTS
@@ -633,7 +808,7 @@ class AudioGenLocalModule(GenerationModule):
 
 class AudioGenAPIModule(GenerationModule):
     """Cloud audio generation via ElevenLabs/Replicate."""
-    
+
     INFO = ModuleInfo(
         id="audio_gen_api",
         name="Audio/TTS (Cloud)",
@@ -641,15 +816,27 @@ class AudioGenAPIModule(GenerationModule):
         category=ModuleCategory.GENERATION,
         version="1.0.0",
         requires=[],
-        provides=["audio_generation", "text_to_speech", "music_generation"],
+        provides=[
+            "audio_generation",
+            "text_to_speech",
+            "music_generation"],
         is_cloud_service=True,
         config_schema={
-            "provider": {"type": "choice", "options": ["elevenlabs", "replicate"], "default": "elevenlabs"},
-            "api_key": {"type": "secret", "default": ""},
-            "voice": {"type": "string", "default": "Rachel"},
+            "provider": {
+                "type": "choice",
+                "options": [
+                    "elevenlabs",
+                    "replicate"],
+                "default": "elevenlabs"},
+            "api_key": {
+                "type": "secret",
+                        "default": ""},
+            "voice": {
+                "type": "string",
+                "default": "Rachel"},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             provider = self.config.get('provider', 'elevenlabs')
@@ -667,7 +854,7 @@ class AudioGenAPIModule(GenerationModule):
 
 class EmbeddingLocalModule(GenerationModule):
     """Local embedding generation with sentence-transformers."""
-    
+
     INFO = ModuleInfo(
         id="embedding_local",
         name="Embeddings (Local)",
@@ -675,12 +862,19 @@ class EmbeddingLocalModule(GenerationModule):
         category=ModuleCategory.MEMORY,
         version="1.0.0",
         requires=[],
-        provides=["embeddings", "semantic_search"],
+        provides=[
+            "embeddings",
+            "semantic_search"],
         config_schema={
-            "model": {"type": "choice", "options": ["all-MiniLM-L6-v2", "all-mpnet-base-v2"], "default": "all-MiniLM-L6-v2"},
+            "model": {
+                "type": "choice",
+                "options": [
+                    "all-MiniLM-L6-v2",
+                    "all-mpnet-base-v2"],
+                "default": "all-MiniLM-L6-v2"},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import LocalEmbedding
@@ -693,7 +887,7 @@ class EmbeddingLocalModule(GenerationModule):
 
 class EmbeddingAPIModule(GenerationModule):
     """Cloud embeddings via OpenAI."""
-    
+
     INFO = ModuleInfo(
         id="embedding_api",
         name="Embeddings (Cloud)",
@@ -701,18 +895,29 @@ class EmbeddingAPIModule(GenerationModule):
         category=ModuleCategory.MEMORY,
         version="1.0.0",
         requires=[],
-        provides=["embeddings", "semantic_search"],
+        provides=[
+            "embeddings",
+            "semantic_search"],
         is_cloud_service=True,
         config_schema={
-            "model": {"type": "choice", "options": ["text-embedding-3-small", "text-embedding-3-large"], "default": "text-embedding-3-small"},
-            "api_key": {"type": "secret", "default": ""},
+            "model": {
+                "type": "choice",
+                "options": [
+                    "text-embedding-3-small",
+                    "text-embedding-3-large"],
+                "default": "text-embedding-3-small"},
+            "api_key": {
+                "type": "secret",
+                        "default": ""},
         },
     )
-    
+
     def load(self) -> bool:
         try:
             from enigma.addons.builtin import OpenAIEmbedding
-            self._addon = OpenAIEmbedding(api_key=self.config.get('api_key'), model=self.config.get('model'))
+            self._addon = OpenAIEmbedding(
+                api_key=self.config.get('api_key'),
+                model=self.config.get('model'))
             return self._addon.load()
         except Exception as e:
             logger.warning(f"Could not load cloud embeddings: {e}")
@@ -729,20 +934,20 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'tokenizer': TokenizerModule,
     'training': TrainingModule,
     'inference': InferenceModule,
-    
+
     # Memory
     'memory': MemoryModule,
     'embedding_local': EmbeddingLocalModule,
     'embedding_api': EmbeddingAPIModule,
-    
+
     # Perception
     'voice_input': VoiceInputModule,
     'vision': VisionModule,
-    
+
     # Output
     'voice_output': VoiceOutputModule,
     'avatar': AvatarModule,
-    
+
     # Generation (AI Capabilities)
     'image_gen_local': ImageGenLocalModule,
     'image_gen_api': ImageGenAPIModule,
@@ -752,15 +957,15 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'video_gen_api': VideoGenAPIModule,
     'audio_gen_local': AudioGenLocalModule,
     'audio_gen_api': AudioGenAPIModule,
-    
+
     # Tools
     'web_tools': WebToolsModule,
     'file_tools': FileToolsModule,
-    
+
     # Network
     'api_server': APIServerModule,
     'network': NetworkModule,
-    
+
     # Interface
     'gui': GUIModule,
 }

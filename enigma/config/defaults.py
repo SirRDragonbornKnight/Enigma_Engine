@@ -8,6 +8,7 @@ These can be overridden by:
 import os
 import json
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 # Base directory (where enigma package is)
 BASE_DIR = Path(__file__).parent.parent.parent
@@ -64,7 +65,7 @@ CONFIG = {
 }
 
 
-def _load_user_config():
+def _load_user_config() -> None:
     """Load user configuration file if it exists."""
     config_paths = [
         Path.cwd() / "enigma_config.json",
@@ -77,14 +78,19 @@ def _load_user_config():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     user_config = json.load(f)
+                if not isinstance(user_config, dict):
+                    print(f"Warning: Config in {path} is not a dictionary, skipping")
+                    continue
                 CONFIG.update(user_config)
                 print(f"Loaded config from {path}")
                 return
+            except json.JSONDecodeError as e:
+                print(f"Warning: Invalid JSON in config file {path}: {e}")
             except Exception as e:
                 print(f"Warning: Failed to load config from {path}: {e}")
 
 
-def _load_env_config():
+def _load_env_config() -> None:
     """Load configuration from environment variables."""
     env_mappings = {
         "ENIGMA_DATA_DIR": "data_dir",
@@ -98,30 +104,70 @@ def _load_env_config():
     
     for env_var, config_key in env_mappings.items():
         if env_var in os.environ:
-            value = os.environ[env_var]
-            # Type conversion
-            if config_key in ["api_port"]:
-                value = int(value)
+            value: Any = os.environ[env_var]
+            # Type conversion with validation
+            if config_key == "api_port":
+                try:
+                    value = int(value)
+                    if not (1 <= value <= 65535):
+                        print(f"Warning: Invalid port {value}, using default")
+                        continue
+                except ValueError:
+                    print(f"Warning: Invalid port value {value}, using default")
+                    continue
             CONFIG[config_key] = value
 
 
-def get_config(key: str, default=None):
-    """Get a configuration value."""
+def get_config(key: str, default: Any = None) -> Any:
+    """
+    Get a configuration value.
+    
+    Args:
+        key: Configuration key to retrieve
+        default: Default value if key not found
+        
+    Returns:
+        Configuration value or default
+    """
     return CONFIG.get(key, default)
 
 
-def update_config(updates: dict):
-    """Update configuration with new values."""
+def update_config(updates: Dict[str, Any]) -> None:
+    """
+    Update configuration with new values.
+    
+    Args:
+        updates: Dictionary of configuration updates
+        
+    Raises:
+        TypeError: If updates is not a dictionary
+    """
+    if not isinstance(updates, dict):
+        raise TypeError(f"updates must be a dict, got {type(updates).__name__}")
     CONFIG.update(updates)
 
 
-def save_config(path: str = None):
-    """Save current configuration to file."""
-    if path is None:
-        path = BASE_DIR / "enigma_config.json"
+def save_config(path: Optional[str] = None) -> None:
+    """
+    Save current configuration to file.
     
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(CONFIG, f, indent=2)
+    Args:
+        path: Path to save config file (default: enigma_config.json in base directory)
+        
+    Raises:
+        IOError: If file cannot be written
+    """
+    if path is None:
+        path = str(BASE_DIR / "enigma_config.json")
+    
+    try:
+        config_path = Path(path)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(CONFIG, f, indent=2)
+    except Exception as e:
+        raise IOError(f"Failed to save config to {path}: {e}") from e
 
 
 # Create directories on import

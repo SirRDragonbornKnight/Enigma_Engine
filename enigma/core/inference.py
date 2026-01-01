@@ -14,21 +14,21 @@ Features:
 
 Usage:
     from enigma.core.inference import EnigmaEngine
-    
+
     engine = EnigmaEngine()
     response = engine.generate("Hello, my name is")
     print(response)
-    
+
     # Streaming
     for token in engine.stream_generate("Tell me a story"):
         print(token, end="", flush=True)
-    
+
     # Chat
     response = engine.chat("What is AI?")
 """
 import torch
 import torch.nn.functional as F
-from typing import Optional, List, Union, Generator, Dict, Any, Tuple
+from typing import Optional, List, Union, Generator, Dict, Any
 from pathlib import Path
 import logging
 
@@ -51,7 +51,7 @@ LEGACY_MODEL = MODELS_DIR / "tiny_enigma.pth"
 class EnigmaEngine:
     """
     High-performance inference engine for Enigma models.
-    
+
     Features:
     - Automatic model loading and device selection
     - KV-cache for efficient autoregressive generation
@@ -59,7 +59,7 @@ class EnigmaEngine:
     - Streaming generation support
     - Chat-style conversation interface
     """
-    
+
     def __init__(
         self,
         model_path: Optional[Union[str, Path]] = None,
@@ -72,7 +72,7 @@ class EnigmaEngine:
     ):
         """
         Initialize the inference engine.
-        
+
         Args:
             model_path: Path to model weights (auto-detected if None)
             tokenizer_path: Path to tokenizer (auto-detected if None)
@@ -85,56 +85,48 @@ class EnigmaEngine:
         # Device selection
         self.device = self._select_device(device)
         self.use_half = use_half and self.device.type == "cuda"
-        
+
         # Load tokenizer
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)
-        
+
         # Load or create model
         self.model = self._load_model(model_path, model_size)
-        
+
         # Move to device and set precision
         self.model.to(self.device)
         if self.use_half:
             self.model.half()
         self.model.eval()
-        
-        # Tool use system
-        self.enable_tools = enable_tools
-        self.module_manager = module_manager
-        self._tool_executor = None
-        
-        if enable_tools:
-            self._init_tool_executor()
-        
+
         # Log initialization
         self._log_init_info()
-    
+
     def _select_device(self, device: Optional[str]) -> torch.device:
         """Select the best available device."""
         if device is not None:
             return torch.device(device)
-        
+
         if torch.cuda.is_available():
             # Apply GPU memory limit from config
             gpu_fraction = CONFIG.get("gpu_memory_fraction", 0.9)
             try:
                 torch.cuda.set_per_process_memory_fraction(gpu_fraction)
-            except:
-                pass
+            except (RuntimeError, AttributeError) as e:
+                logger.debug(f"Could not set GPU memory fraction: {e}")
             return torch.device("cuda")
-        
+
         if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             return torch.device("mps")
-        
+
         # Apply CPU thread limit from config
         cpu_threads = CONFIG.get("cpu_threads", 0)
         if cpu_threads > 0:
             torch.set_num_threads(cpu_threads)
-        
+
         return torch.device("cpu")
-    
+
     def _load_tokenizer(
-        self, 
+        self,
         tokenizer_path: Optional[Union[str, Path]],
         model_path: Optional[Union[str, Path]]
     ) -> Any:
@@ -149,7 +141,7 @@ class EnigmaEngine:
                     return AdvancedBPETokenizer(vocab_file=tok_path)
                 except Exception as e:
                     logger.warning(f"Could not load tokenizer from {tok_path}: {e}")
-        
+
         # Try explicit tokenizer path
         if tokenizer_path:
             try:
@@ -157,12 +149,12 @@ class EnigmaEngine:
                 return AdvancedBPETokenizer(vocab_file=Path(tokenizer_path))
             except Exception as e:
                 logger.warning(f"Could not load tokenizer from {tokenizer_path}: {e}")
-        
+
         # Fall back to default
         return get_tokenizer()
-    
+
     def _load_model(
-        self, 
+        self,
         model_path: Optional[Union[str, Path]],
         model_size: str
     ) -> Enigma:
@@ -180,28 +172,28 @@ class EnigmaEngine:
             for f in MODELS_DIR.glob("*.pth"):
                 model_file = f
                 break
-        
+
         vocab_size = getattr(self.tokenizer, "vocab_size", 8000)
-        
+
         if model_file and model_file.exists():
             # Load state dict to infer model architecture
             state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
-            
+
             # Infer model size from state dict
             detected_size = self._infer_model_size(state_dict)
-            
+
             # Get vocab size from embedding
             for key in state_dict.keys():
                 if 'embed' in key.lower() or 'token' in key.lower():
                     vocab_size = state_dict[key].shape[0]
                     break
-            
+
             # Create model with correct architecture
             model = create_model(
                 detected_size,
                 vocab_size=vocab_size
             )
-            
+
             # Load weights
             try:
                 model.load_state_dict(state_dict, strict=False)
@@ -212,12 +204,12 @@ class EnigmaEngine:
             # Create new model
             if model_size == "auto":
                 model_size = "small"
-            
+
             model = create_model(model_size, vocab_size=vocab_size)
             logger.info(f"Created new {model_size} model (no weights loaded)")
-        
+
         return model
-    
+
     def _infer_model_size(self, state_dict: Dict) -> str:
         """Infer model size from state dict."""
         # Look for hidden dimension
@@ -229,28 +221,31 @@ class EnigmaEngine:
             if 'ln' in key.lower() or 'norm' in key.lower():
                 hidden_dim = tensor.shape[0]
                 break
-        
+
         if hidden_dim is None:
             return "small"
-        
+
         # Match to preset - MODEL_PRESETS values are dicts with 'hidden_dim' key
         for name, preset in MODEL_PRESETS.items():
-            preset_dim = preset.get('hidden_dim') if isinstance(preset, dict) else getattr(preset, 'hidden_dim', None)
+            preset_dim = preset.get('hidden_dim') if isinstance(
+                preset, dict) else getattr(preset, 'hidden_dim', None)
             if preset_dim == hidden_dim:
                 return name
-        
+
         # Find closest match
         def get_dim(preset):
-            return preset.get('hidden_dim') if isinstance(preset, dict) else getattr(preset, 'hidden_dim', 512)
-        
-        diffs = [(name, abs(get_dim(preset) - hidden_dim)) 
+            return preset.get('hidden_dim') if isinstance(
+                preset, dict) else getattr(
+                preset, 'hidden_dim', 512)
+
+        diffs = [(name, abs(get_dim(preset) - hidden_dim))
                  for name, preset in MODEL_PRESETS.items()]
         return min(diffs, key=lambda x: x[1])[0]
-    
+
     def _log_init_info(self):
         """Log initialization information."""
         num_params = sum(p.numel() for p in self.model.parameters())
-        
+
         print(f"EnigmaEngine initialized on {self.device}")
         if self.device.type == "cuda":
             print(f"  GPU: {torch.cuda.get_device_name(0)}")
@@ -258,23 +253,11 @@ class EnigmaEngine:
         print(f"  Vocab size: {self.tokenizer.vocab_size:,}")
         print(f"  Max sequence length: {self.model.config.max_seq_len}")
         print(f"  FP16: {self.use_half}")
-        if self.enable_tools:
-            print(f"  Tool use: ENABLED")
-    
-    def _init_tool_executor(self):
-        """Initialize the tool execution system."""
-        try:
-            from ..tools import ToolExecutor
-            self._tool_executor = ToolExecutor(module_manager=self.module_manager)
-            logger.info("Tool executor initialized")
-        except ImportError as e:
-            logger.warning(f"Could not initialize tool executor: {e}")
-            self.enable_tools = False
-    
+
     # =========================================================================
     # Generation Methods
     # =========================================================================
-    
+
     def generate(
         self,
         prompt: str,
@@ -289,22 +272,24 @@ class EnigmaEngine:
         max_tool_iterations: int = 5
     ) -> str:
         """
-        Generate text from a prompt with optional tool execution.
-        
+        Generate text from a prompt.
+
         Args:
             prompt: Input text to continue
-            max_gen: Maximum tokens to generate
-            temperature: Sampling temperature (higher = more random)
-            top_k: Top-k sampling (0 to disable)
-            top_p: Top-p (nucleus) sampling threshold
-            repetition_penalty: Penalty for repeating tokens
+            max_gen: Maximum tokens to generate (must be > 0)
+            temperature: Sampling temperature (higher = more random, > 0)
+            top_k: Top-k sampling (>= 0 to disable)
+            top_p: Top-p (nucleus) sampling threshold (0-1)
+            repetition_penalty: Penalty for repeating tokens (>= 1.0)
             stop_strings: List of strings to stop generation at
             use_cache: Use KV-cache for faster generation
-            execute_tools: Execute tool calls (defaults to self.enable_tools)
-            max_tool_iterations: Maximum number of tool execution iterations
-            
+
         Returns:
             Generated text (including the prompt)
+
+        Raises:
+            ValueError: If parameters are out of valid range
+            TypeError: If prompt is not a string
         """
         # Determine if tools should be executed
         if execute_tools is None:
@@ -340,9 +325,32 @@ class EnigmaEngine:
         use_cache: bool
     ) -> str:
         """Internal method for standard text generation."""
+        # Validate inputs
+        if not isinstance(prompt, str):
+            raise TypeError(f"prompt must be a string, got {type(prompt).__name__}")
+
+        if not prompt.strip():
+            logger.warning("Empty prompt provided")
+            return ""
+
+        if max_gen <= 0:
+            raise ValueError(f"max_gen must be positive, got {max_gen}")
+
+        if temperature <= 0:
+            raise ValueError(f"temperature must be positive, got {temperature}")
+
+        if top_k < 0:
+            raise ValueError(f"top_k must be non-negative, got {top_k}")
+
+        if not 0 <= top_p <= 1:
+            raise ValueError(f"top_p must be between 0 and 1, got {top_p}")
+
+        if repetition_penalty < 1.0:
+            raise ValueError(f"repetition_penalty must be >= 1.0, got {repetition_penalty}")
+
         # Encode input
         input_ids = self._encode_prompt(prompt)
-        
+
         # Generate
         with torch.no_grad():
             if use_cache and hasattr(self.model, 'generate'):
@@ -360,108 +368,19 @@ class EnigmaEngine:
                 output_ids = self._generate_manual(
                     input_ids, max_gen, temperature, top_k, top_p, repetition_penalty
                 )
-        
+
         # Decode
         text = self._decode_output(output_ids)
-        
+
         # Apply stop strings
         if stop_strings:
             for stop_str in stop_strings:
                 if stop_str in text:
                     text = text[:text.find(stop_str)]
                     break
-        
+
         return text
-    
-    def _execute_tools_in_text(
-        self,
-        text: str,
-        max_iterations: int,
-        max_gen: int,
-        temperature: float,
-        top_k: int,
-        top_p: float,
-        repetition_penalty: float,
-        stop_strings: Optional[List[str]],
-        use_cache: bool
-    ) -> str:
-        """
-        Execute tool calls found in text and continue generation.
-        
-        This implements the tool use loop:
-        1. Check for tool calls in generated text
-        2. If found, execute them
-        3. Inject results back into context
-        4. Continue generation
-        5. Repeat until no more tool calls or max iterations
-        """
-        iteration = 0
-        
-        while iteration < max_iterations:
-            # Parse tool calls
-            tool_calls = self._tool_executor.parse_tool_calls(text)
-            
-            if not tool_calls:
-                # No tool calls found - we're done
-                break
-            
-            logger.info(f"Found {len(tool_calls)} tool call(s) in iteration {iteration + 1}")
-            
-            # Execute tools and replace calls with results
-            modified_text = text
-            results = []
-            
-            # Execute in reverse order to preserve positions
-            for tool_name, params, start_pos, end_pos in reversed(tool_calls):
-                logger.info(f"Executing tool: {tool_name} with params: {params}")
-                
-                # Execute tool
-                result = self._tool_executor.execute_tool(tool_name, params)
-                results.insert(0, result)
-                
-                # Format result
-                result_str = self._tool_executor.format_tool_result(result)
-                
-                # Replace tool call with result in text
-                modified_text = (
-                    modified_text[:start_pos] + 
-                    result_str + 
-                    modified_text[end_pos:]
-                )
-            
-            # Check if we should continue generating
-            # If text ends with a tool result, continue generation
-            if modified_text.rstrip().endswith("</tool_result>"):
-                # Continue generation after tool results
-                continuation = self._generate_text(
-                    modified_text,
-                    max_gen=max_gen // 2,  # Use less tokens for continuations
-                    temperature=temperature,
-                    top_k=top_k,
-                    top_p=top_p,
-                    repetition_penalty=repetition_penalty,
-                    stop_strings=stop_strings,
-                    use_cache=use_cache
-                )
-                
-                # Extract just the new generation (after the prompt)
-                if len(continuation) > len(modified_text):
-                    new_text = continuation[len(modified_text):]
-                    modified_text = continuation
-                else:
-                    # Generation didn't add anything new
-                    break
-            
-            text = modified_text
-            iteration += 1
-            
-            # Safety check
-            if iteration >= max_iterations:
-                logger.warning(f"Reached max tool iterations ({max_iterations})")
-                break
-        
-        return text
-    
+
     def _encode_prompt(self, prompt: str) -> torch.Tensor:
         """Encode a prompt to tensor."""
         if hasattr(self.tokenizer, 'encode'):
@@ -473,24 +392,24 @@ class EnigmaEngine:
                 ids = ids.tolist()
             if isinstance(ids[0], list):
                 ids = ids[0]
-        
+
         # Convert to tensor
         input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
         return input_ids
-    
+
     def _decode_output(self, output_ids: torch.Tensor) -> str:
         """Decode output tensor to text."""
         ids = output_ids[0].cpu().tolist()
-        
+
         if hasattr(self.tokenizer, 'decode'):
             return self.tokenizer.decode(ids, skip_special_tokens=True)
-        
+
         # Fallback
         return "".join(
             self.tokenizer.id_to_token.get(idx, "?")
             for idx in ids
         )
-    
+
     def _generate_manual(
         self,
         input_ids: torch.Tensor,
@@ -502,17 +421,17 @@ class EnigmaEngine:
     ) -> torch.Tensor:
         """Manual autoregressive generation."""
         generated = input_ids
-        
+
         for _ in range(max_gen):
             # Truncate if needed
             curr_input = generated
             max_len = self.model.config.max_seq_len
             if curr_input.shape[1] > max_len:
                 curr_input = curr_input[:, -max_len:]
-            
+
             # Forward pass
             logits = self.model(curr_input)
-            
+
             # Sample next token
             next_token = self._sample_token(
                 logits[:, -1, :],
@@ -522,17 +441,17 @@ class EnigmaEngine:
                 top_p,
                 repetition_penalty
             )
-            
+
             # Append
             generated = torch.cat([generated, next_token], dim=1)
-            
+
             # Check for EOS
             eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
             if next_token[0, 0].item() == eos_id:
                 break
-        
+
         return generated
-    
+
     def _sample_token(
         self,
         logits: torch.Tensor,
@@ -548,39 +467,39 @@ class EnigmaEngine:
             for token_id in set(generated[0].tolist()):
                 if 0 <= token_id < logits.shape[-1]:
                     logits[0, token_id] /= repetition_penalty
-        
+
         # Temperature scaling
         logits = logits / max(temperature, 1e-8)
-        
+
         # Top-k filtering
         if top_k > 0:
             top_k = min(top_k, logits.size(-1))
             values, _ = torch.topk(logits, top_k)
             min_value = values[:, -1, None]
             logits = torch.where(logits < min_value, float('-inf'), logits)
-        
+
         # Top-p (nucleus) filtering
         if top_p < 1.0:
             sorted_logits, sorted_indices = torch.sort(logits, descending=True)
             cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-            
+
             # Remove tokens with cumulative probability above threshold
             sorted_indices_to_remove = cumulative_probs > top_p
             sorted_indices_to_remove[:, 1:] = sorted_indices_to_remove[:, :-1].clone()
             sorted_indices_to_remove[:, 0] = False
-            
+
             indices_to_remove = torch.zeros_like(logits, dtype=torch.bool)
             indices_to_remove.scatter_(1, sorted_indices, sorted_indices_to_remove)
             logits = logits.masked_fill(indices_to_remove, float('-inf'))
-        
+
         # Sample
         probs = F.softmax(logits, dim=-1)
         return torch.multinomial(probs, num_samples=1)
-    
+
     # =========================================================================
     # Streaming Generation
     # =========================================================================
-    
+
     def stream_generate(
         self,
         prompt: str,
@@ -592,7 +511,7 @@ class EnigmaEngine:
     ) -> Generator[str, None, None]:
         """
         Stream generated tokens one at a time.
-        
+
         Args:
             prompt: Input text to continue
             max_gen: Maximum tokens to generate
@@ -600,13 +519,13 @@ class EnigmaEngine:
             top_k: Top-k sampling
             top_p: Top-p sampling
             repetition_penalty: Repetition penalty
-            
+
         Yields:
             Each newly generated token as it's produced
         """
         input_ids = self._encode_prompt(prompt)
         generated = input_ids
-        
+
         with torch.no_grad():
             for _ in range(max_gen):
                 # Truncate if needed
@@ -614,10 +533,10 @@ class EnigmaEngine:
                 max_len = self.model.config.max_seq_len
                 if curr_input.shape[1] > max_len:
                     curr_input = curr_input[:, -max_len:]
-                
+
                 # Forward pass
                 logits = self.model(curr_input)
-                
+
                 # Sample
                 next_token = self._sample_token(
                     logits[:, -1, :],
@@ -627,28 +546,28 @@ class EnigmaEngine:
                     top_p,
                     repetition_penalty
                 )
-                
+
                 generated = torch.cat([generated, next_token], dim=1)
-                
+
                 # Decode and yield
                 token_id = next_token[0, 0].item()
-                
+
                 if hasattr(self.tokenizer, 'decode'):
                     token_str = self.tokenizer.decode([token_id], skip_special_tokens=True)
                 else:
                     token_str = self.tokenizer.id_to_token.get(token_id, "")
-                
+
                 yield token_str
-                
+
                 # Check for EOS
                 eos_id = getattr(self.tokenizer, 'eos_token_id', 2)
                 if token_id == eos_id:
                     break
-    
+
     # =========================================================================
     # Batch Generation
     # =========================================================================
-    
+
     def batch_generate(
         self,
         prompts: List[str],
@@ -657,23 +576,23 @@ class EnigmaEngine:
     ) -> List[str]:
         """
         Generate text for multiple prompts.
-        
+
         Args:
             prompts: List of input prompts
             max_gen: Maximum tokens to generate per prompt
             **kwargs: Additional generation parameters
-            
+
         Returns:
             List of generated texts
         """
         # For now, process sequentially
         # TODO: Implement true batched generation
         return [self.generate(p, max_gen=max_gen, **kwargs) for p in prompts]
-    
+
     # =========================================================================
     # Chat Interface
     # =========================================================================
-    
+
     def chat(
         self,
         message: str,
@@ -684,34 +603,34 @@ class EnigmaEngine:
     ) -> str:
         """
         Chat-style generation with conversation history.
-        
+
         Args:
             message: User's message
             history: List of {"role": "user/assistant", "content": "..."} dicts
             system_prompt: Optional system prompt
             max_gen: Maximum tokens to generate
             **kwargs: Additional generation parameters
-            
+
         Returns:
             Assistant's response
         """
         # Build prompt from history
         prompt_parts = []
-        
+
         if system_prompt:
             prompt_parts.append(f"System: {system_prompt}\n")
-        
+
         if history:
             for msg in history:
                 role = msg.get("role", "user").capitalize()
                 content = msg.get("content", "")
                 prompt_parts.append(f"{role}: {content}")
-        
+
         prompt_parts.append(f"User: {message}")
         prompt_parts.append("Assistant:")
-        
+
         full_prompt = "\n".join(prompt_parts)
-        
+
         # Generate
         response = self.generate(
             full_prompt,
@@ -719,13 +638,13 @@ class EnigmaEngine:
             stop_strings=["\nUser:", "\n\n", "User:"],
             **kwargs
         )
-        
+
         # Extract assistant's response
         if "Assistant:" in response:
             response = response.split("Assistant:")[-1].strip()
-        
+
         return response
-    
+
     def stream_chat(
         self,
         message: str,
@@ -736,39 +655,39 @@ class EnigmaEngine:
     ) -> Generator[str, None, None]:
         """
         Stream chat-style generation.
-        
+
         Args:
             message: User's message
             history: Conversation history
             system_prompt: Optional system prompt
             max_gen: Maximum tokens
             **kwargs: Additional parameters
-            
+
         Yields:
             Generated tokens one at a time
         """
         # Build prompt
         prompt_parts = []
-        
+
         if system_prompt:
             prompt_parts.append(f"System: {system_prompt}\n")
-        
+
         if history:
             for msg in history:
                 role = msg.get("role", "user").capitalize()
                 content = msg.get("content", "")
                 prompt_parts.append(f"{role}: {content}")
-        
+
         prompt_parts.append(f"User: {message}")
         prompt_parts.append("Assistant:")
-        
+
         full_prompt = "\n".join(prompt_parts)
-        
+
         # Stream generation
         buffer = ""
         for token in self.stream_generate(full_prompt, max_gen=max_gen, **kwargs):
             buffer += token
-            
+
             # Check for stop conditions
             if "\nUser:" in buffer or buffer.endswith("\n\n"):
                 # Remove stop string from output
@@ -776,8 +695,180 @@ class EnigmaEngine:
                     if stop in buffer:
                         buffer = buffer[:buffer.find(stop)]
                 break
-            
+
             yield token
+
+
+    # =========================================================================
+    # Tool-Aware Generation
+    # =========================================================================
+    
+    def generate_with_tools(
+        self,
+        prompt: str,
+        module_manager=None,
+        max_gen: int = 200,
+        max_tool_iterations: int = 5,
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.1,
+        include_system_prompt: bool = True,
+        **kwargs
+    ) -> str:
+        """
+        Generate text with tool execution support.
+        
+        The AI can invoke tools during generation, and the results are fed back
+        for continued generation. This enables the AI to:
+          - Generate images when asked
+          - Control avatar expressions
+          - Search the web for information
+          - Read/write files
+          - And more
+        
+        Args:
+            prompt: Input text or user query
+            module_manager: ModuleManager instance for tool access
+            max_gen: Maximum tokens per generation step
+            max_tool_iterations: Maximum number of tool calls in sequence
+            temperature: Sampling temperature
+            top_k: Top-k sampling
+            top_p: Top-p sampling
+            repetition_penalty: Repetition penalty
+            include_system_prompt: Prepend tool usage instructions
+            **kwargs: Additional generation parameters
+            
+        Returns:
+            Complete generated text with tool results
+        """
+        from .tool_interface import ToolInterface
+        from .tool_prompts import get_tool_enabled_system_prompt
+        
+        # Create tool interface
+        tool_interface = ToolInterface(module_manager)
+        
+        # Prepend system prompt if requested
+        if include_system_prompt:
+            system_prompt = get_tool_enabled_system_prompt()
+            full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
+        else:
+            full_prompt = prompt
+        
+        # Generate with tool support
+        current_prompt = full_prompt
+        full_output = ""
+        iterations = 0
+        
+        while iterations < max_tool_iterations:
+            # Generate next chunk
+            output = self.generate(
+                current_prompt,
+                max_gen=max_gen,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                use_cache=True
+            )
+            
+            # Extract new content (remove the prompt if it's in the output)
+            if current_prompt in output:
+                new_content = output[len(current_prompt):]
+            else:
+                new_content = output
+            
+            # Check for tool calls in the new content
+            tool_call = tool_interface.parse_tool_call(new_content)
+            
+            if tool_call:
+                # Execute the tool
+                result = tool_interface.execute_tool(tool_call)
+                result_str = tool_interface.format_tool_result(result)
+                
+                # Append tool call and result to output
+                full_output += new_content[:tool_call.end_pos - tool_call.start_pos]
+                full_output += "\n" + result_str + "\n"
+                
+                # Update prompt for next iteration
+                current_prompt = full_prompt + full_output
+                iterations += 1
+                
+                # Continue generation after tool result
+                continue
+            else:
+                # No tool call found, we're done
+                full_output += new_content
+                break
+        
+        return full_output
+    
+    def stream_generate_with_tools(
+        self,
+        prompt: str,
+        module_manager=None,
+        max_gen: int = 200,
+        max_tool_iterations: int = 5,
+        include_system_prompt: bool = True,
+        **kwargs
+    ):
+        """
+        Stream generation with tool execution support.
+        
+        Yields tokens as they're generated, pausing for tool execution
+        when tool calls are detected.
+        
+        Args:
+            prompt: Input text
+            module_manager: ModuleManager for tool access
+            max_gen: Maximum tokens per step
+            max_tool_iterations: Maximum tool calls
+            include_system_prompt: Include tool instructions
+            **kwargs: Additional parameters
+            
+        Yields:
+            Generated tokens, including tool results
+        """
+        from .tool_interface import ToolInterface
+        from .tool_prompts import get_tool_enabled_system_prompt
+        
+        tool_interface = ToolInterface(module_manager)
+        
+        if include_system_prompt:
+            system_prompt = get_tool_enabled_system_prompt()
+            full_prompt = f"{system_prompt}\n\nUser: {prompt}\nAssistant:"
+        else:
+            full_prompt = prompt
+        
+        current_prompt = full_prompt
+        buffer = ""
+        iterations = 0
+        
+        while iterations < max_tool_iterations:
+            # Stream generate
+            for token in self.stream_generate(current_prompt, max_gen=max_gen, **kwargs):
+                buffer += token
+                yield token
+                
+                # Check if we have a complete tool call
+                if '<|tool_end|>' in buffer:
+                    tool_call = tool_interface.parse_tool_call(buffer)
+                    if tool_call:
+                        # Execute tool
+                        result = tool_interface.execute_tool(tool_call)
+                        result_str = tool_interface.format_tool_result(result)
+                        
+                        # Yield result
+                        yield "\n" + result_str + "\n"
+                        
+                        # Update prompt
+                        current_prompt = full_prompt + buffer + "\n" + result_str + "\n"
+                        buffer = ""
+                        iterations += 1
+                        break
+            else:
+                # Generation completed without tool call
+                break
 
 
 # =============================================================================
@@ -792,13 +883,13 @@ def generate(
 ) -> str:
     """
     Quick generation function.
-    
+
     Args:
         prompt: Input text
         model_path: Optional model path
         max_gen: Maximum tokens
         **kwargs: Additional parameters
-        
+
     Returns:
         Generated text
     """
@@ -812,11 +903,11 @@ def load_engine(
 ) -> EnigmaEngine:
     """
     Load an inference engine.
-    
+
     Args:
         model_path: Path to model
         device: Device to use
-        
+
     Returns:
         EnigmaEngine instance
     """
