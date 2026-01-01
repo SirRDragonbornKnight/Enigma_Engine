@@ -1523,13 +1523,6 @@ class EnhancedMainWindow(QMainWindow):
             self.setStyleSheet(THEMES[theme_name])
             self.current_theme = theme_name
     
-    def _toggle_dark_mode(self, checked):
-        """Toggle between dark and light themes (legacy method)."""
-        if checked:
-            self._set_theme("dark")
-        else:
-            self._set_theme("light")
-    
     def _toggle_auto_speak(self, checked):
         """Toggle auto-speak mode."""
         self.auto_speak = checked

@@ -38,6 +38,8 @@ Components:
     - tts_simple.py: Basic text-to-speech
     - stt_simple.py: Speech-to-text (SpeechRecognition)
     - voice_profile.py: Voice customization system
+    - whisper_stt.py: High-quality Whisper STT (optional)
+    - natural_tts.py: Natural TTS with Coqui/Bark (optional)
 """
 
 from .stt_simple import transcribe_from_mic as listen
@@ -53,6 +55,10 @@ from .voice_profile import (
     PRESET_PROFILES,
 )
 
+# New voice options (optional dependencies)
+from .whisper_stt import WhisperSTT
+from .natural_tts import NaturalTTS
+
 __all__ = [
     'speak',
     'listen', 
@@ -64,5 +70,7 @@ __all__ = [
     'list_custom_profiles',
     'list_system_voices',
     'PRESET_PROFILES',
+    'WhisperSTT',
+    'NaturalTTS',
 ]
 
