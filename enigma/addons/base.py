@@ -24,6 +24,7 @@ class AddonType(Enum):
     VIDEO = auto()          # Video generation
     AUDIO = auto()          # Audio/music generation
     SPEECH = auto()         # Text-to-speech
+    THREED = auto()         # 3D model generation
     
     # Understanding types
     VISION = auto()         # Image understanding
@@ -417,6 +418,32 @@ class EmbeddingAddon(Addon):
             if result.success:
                 vectors.append(result.data)
             else:
+                return result
+        return AddonResult(success=True, data=vectors)
+
+
+class ThreeDAddon(Addon):
+    """Base class for 3D model generation addons."""
+    
+    def __init__(self, config: AddonConfig):
+        config.addon_type = AddonType.THREED
+        super().__init__(config)
+    
+    @abstractmethod
+    def generate(self, prompt: str, **kwargs) -> AddonResult:
+        """Generate 3D model from text prompt."""
+    
+    def text_to_3d(self, prompt: str, format: str = "glb", **kwargs) -> AddonResult:
+        """Generate 3D model from text, specify output format."""
+        return self.generate(prompt, format=format, **kwargs)
+    
+    def image_to_3d(self, image: bytes, **kwargs) -> AddonResult:
+        """Generate 3D model from image (if supported)."""
+        return AddonResult(success=False, error="Image-to-3D not supported")
+    
+    def refine(self, model: bytes, prompt: str, **kwargs) -> AddonResult:
+        """Refine existing 3D model."""
+        return AddonResult(success=False, error="Refinement not supported")
                 return AddonResult(success=False, error=result.error)
         return AddonResult(success=True, data=vectors)
     
