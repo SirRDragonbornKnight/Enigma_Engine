@@ -238,10 +238,6 @@ class ScreenVision:
         except:
             return None
     
-    def _check_ocr(self) -> bool:
-        """Check if OCR is available (legacy method)."""
-        return self._ocr_available
-    
     def see(self, describe: bool = True, detect_text: bool = True) -> Dict[str, Any]:
         """
         Look at the screen and return what's visible.
