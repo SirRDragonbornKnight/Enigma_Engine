@@ -40,13 +40,23 @@ RESOURCE_MODES = {
         "memory_limit_mb": 512,
         "gpu_memory_fraction": 0.2,
         "low_priority": True,
+        "batch_size_limit": 1,
         "description": "Minimum resources - for gaming/heavy multitasking"
+    },
+    "gaming": {
+        "cpu_threads": 2,
+        "memory_limit_mb": 1024,
+        "gpu_memory_fraction": 0.3,
+        "low_priority": True,
+        "batch_size_limit": 2,
+        "description": "Gaming mode - AI runs in background, prioritizes gaming performance"
     },
     "balanced": {
         "cpu_threads": 0,  # Auto (half of available)
         "memory_limit_mb": 0,  # No hard limit
         "gpu_memory_fraction": 0.5,
         "low_priority": False,
+        "batch_size_limit": 4,
         "description": "Balanced - good for normal use"
     },
     "performance": {
@@ -54,6 +64,7 @@ RESOURCE_MODES = {
         "memory_limit_mb": 0,
         "gpu_memory_fraction": 0.7,
         "low_priority": False,
+        "batch_size_limit": 8,
         "description": "More resources - faster responses"
     },
     "max": {
@@ -61,6 +72,7 @@ RESOURCE_MODES = {
         "memory_limit_mb": 0,
         "gpu_memory_fraction": 0.9,
         "low_priority": False,
+        "batch_size_limit": 16,
         "description": "Maximum resources - fastest, but may slow other apps"
     }
 }
@@ -93,6 +105,7 @@ def apply_resource_mode(mode: str = "balanced") -> bool:
     CONFIG["memory_limit_mb"] = preset["memory_limit_mb"]
     CONFIG["gpu_memory_fraction"] = preset["gpu_memory_fraction"]
     CONFIG["low_priority"] = preset["low_priority"]
+    CONFIG["batch_size_limit"] = preset.get("batch_size_limit", 4)
 
     # Apply the settings
     _apply_current_settings()
@@ -211,6 +224,7 @@ def get_resource_info() -> dict:
         "cpu_count": get_cpu_count(),
         "cpu_threads_setting": CONFIG.get("cpu_threads", 0),
         "memory_limit_mb": CONFIG.get("memory_limit_mb", 0),
+        "batch_size_limit": CONFIG.get("batch_size_limit", 4),
         "gpu_available": False,
         "gpu_memory_fraction": CONFIG.get("gpu_memory_fraction", 0.5),
         "low_priority": CONFIG.get("low_priority", False),
@@ -227,6 +241,16 @@ def get_resource_info() -> dict:
     return info
 
 
+def get_batch_size_limit() -> int:
+    """
+    Get the current batch size limit based on resource mode.
+    
+    Returns:
+        Maximum batch size to use for training/inference
+    """
+    return CONFIG.get("batch_size_limit", 4)
+
+
 def print_resource_info():
     """Print current resource configuration."""
     info = get_resource_info()
@@ -237,6 +261,7 @@ def print_resource_info():
     print(f"Mode:           {info['mode']}")
     print(f"CPU Cores:      {info['cpu_count']}")
     print(f"Torch Threads:  {info.get('torch_threads', 'N/A')}")
+    print(f"Batch Size Limit: {info['batch_size_limit']}")
     print(f"Low Priority:   {'Yes' if info['low_priority'] else 'No'}")
 
     if info['gpu_available']:

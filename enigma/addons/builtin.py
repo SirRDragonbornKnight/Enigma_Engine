@@ -13,7 +13,7 @@ from typing import Optional, List
 
 from .base import (
     AddonConfig, AddonResult, AddonType, AddonProvider, ImageAddon,
-    CodeAddon, VideoAddon, AudioAddon, EmbeddingAddon
+    CodeAddon, VideoAddon, AudioAddon, EmbeddingAddon, ThreeDAddon
 )
 
 
@@ -1048,6 +1048,269 @@ except ImportError:
 
 
 # =============================================================================
+# 3D Model Generation Addons
+# =============================================================================
+
+class Local3DGen(ThreeDAddon):
+    """
+    Local 3D model generation using Shap-E or Point-E.
+    Requires: shap-e (for Shap-E) or point-e (for Point-E)
+    """
+    
+    def __init__(self, model: str = "shap-e"):
+        super().__init__(AddonConfig(
+            name=f"3d_gen_local_{model}",
+            addon_type=AddonType.THREED,
+            provider=AddonProvider.LOCAL,
+            model_name=model,
+            extra={'model': model}
+        ))
+        self.model_name = model
+        self.pipe = None
+    
+    def load(self) -> bool:
+        try:
+            import torch
+            
+            if self.model_name == "shap-e":
+                # Shap-E is preferred - better quality and faster
+                from shap_e.diffusion.sample import sample_latents
+                from shap_e.diffusion.gaussian_diffusion import diffusion_from_config
+                from shap_e.models.download import load_model, load_config
+                
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                
+                # Load Shap-E models
+                self.xm = load_model('transmitter', device=device)
+                self.model = load_model('text300M', device=device)
+                self.diffusion = diffusion_from_config(load_config('diffusion'))
+                
+            elif self.model_name == "point-e":
+                # Point-E fallback
+                from point_e.diffusion.configs import DIFFUSION_CONFIGS, diffusion_from_config
+                from point_e.diffusion.sampler import PointCloudSampler
+                from point_e.models.download import load_checkpoint
+                from point_e.models.configs import MODEL_CONFIGS, model_from_config
+                
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                
+                # Load Point-E models
+                base_name = 'base40M-textvec'
+                base_model = model_from_config(MODEL_CONFIGS[base_name], device)
+                base_model.load_state_dict(load_checkpoint(base_name, device))
+                
+                self.model = base_model
+                self.sampler = PointCloudSampler(
+                    device=device,
+                    models=[base_model],
+                    diffusions=[
+                        diffusion_from_config(DIFFUSION_CONFIGS[base_name]),
+                    ],
+                )
+            else:
+                raise ValueError(f"Unknown 3D model: {self.model_name}")
+            
+            self.is_loaded = True
+            self.is_available = True
+            return True
+            
+        except ImportError as e:
+            print(f"Install {self.model_name}: pip install {self.model_name}")
+            print(f"Note: 3D generation requires GPU and significant VRAM")
+            return False
+        except Exception as e:
+            print(f"Failed to load {self.model_name}: {e}")
+            return False
+    
+    def unload(self) -> bool:
+        if self.pipe or self.model:
+            del self.pipe
+            del self.model
+            self.pipe = None
+            self.model = None
+            
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        
+        self.is_loaded = False
+        self.is_available = False
+        return True
+    
+    def generate(self, prompt: str, format: str = "glb", **kwargs) -> AddonResult:
+        """Generate 3D model from text prompt."""
+        if not self.is_loaded:
+            return AddonResult(success=False, error="Addon not loaded")
+        
+        try:
+            import torch
+            start = time.time()
+            
+            if self.model_name == "shap-e":
+                # Generate with Shap-E
+                batch_size = 1
+                guidance_scale = kwargs.get('guidance_scale', 15.0)
+                
+                latents = sample_latents(
+                    batch_size=batch_size,
+                    model=self.model,
+                    diffusion=self.diffusion,
+                    guidance_scale=guidance_scale,
+                    model_kwargs=dict(texts=[prompt] * batch_size),
+                    progress=False,
+                    clip_denoised=True,
+                    use_fp16=True,
+                    use_karras=True,
+                    karras_steps=64,
+                    sigma_min=1e-3,
+                    sigma_max=160,
+                    s_churn=0,
+                )
+                
+                # Convert to mesh
+                # Export to file (simplified - would need trimesh for actual export)
+                result_data = {
+                    'latents': latents,
+                    'format': format,
+                    'prompt': prompt
+                }
+                
+            elif self.model_name == "point-e":
+                # Generate with Point-E
+                samples = self.sampler.sample_batch_progressive(
+                    batch_size=1,
+                    model_kwargs=dict(texts=[prompt]),
+                )
+                
+                # Get the final sample
+                for sample in samples:
+                    pass  # Iterate to get last sample
+                
+                result_data = {
+                    'point_cloud': sample,
+                    'format': format,
+                    'prompt': prompt
+                }
+            
+            elapsed = time.time() - start
+            
+            return AddonResult(
+                success=True,
+                data=result_data,
+                metadata={
+                    'prompt': prompt,
+                    'model': self.model_name,
+                    'format': format,
+                    'generation_time': elapsed
+                },
+                time_taken=elapsed
+            )
+            
+        except Exception as e:
+            return AddonResult(
+                success=False,
+                error=f"3D generation failed: {str(e)}"
+            )
+
+
+class Cloud3DGen(ThreeDAddon):
+    """
+    Cloud-based 3D model generation via Replicate or other APIs.
+    Requires: replicate package and API key
+    """
+    
+    def __init__(self, api_key: Optional[str] = None, service: str = "replicate"):
+        super().__init__(AddonConfig(
+            name=f"3d_gen_cloud_{service}",
+            addon_type=AddonType.THREED,
+            provider=AddonProvider.REPLICATE if service == "replicate" else AddonProvider.CUSTOM_API,
+            api_key=api_key or os.getenv('REPLICATE_API_TOKEN'),
+            extra={'service': service}
+        ))
+        self.service = service
+        self.client = None
+    
+    def load(self) -> bool:
+        try:
+            if self.service == "replicate":
+                import replicate
+                if not self.config.api_key:
+                    print("Replicate API key required. Set REPLICATE_API_TOKEN env var.")
+                    return False
+                
+                self.client = replicate.Client(api_token=self.config.api_key)
+            else:
+                print(f"Unknown 3D generation service: {self.service}")
+                return False
+            
+            self.is_loaded = True
+            self.is_available = True
+            return True
+            
+        except ImportError:
+            print(f"Install {self.service}: pip install {self.service}")
+            return False
+        except Exception as e:
+            print(f"Failed to load {self.service}: {e}")
+            return False
+    
+    def unload(self) -> bool:
+        self.client = None
+        self.is_loaded = False
+        self.is_available = False
+        return True
+    
+    def generate(self, prompt: str, format: str = "glb", **kwargs) -> AddonResult:
+        """Generate 3D model via cloud API."""
+        if not self.is_loaded:
+            return AddonResult(success=False, error="Addon not loaded")
+        
+        try:
+            start = time.time()
+            
+            if self.service == "replicate":
+                # Use Shap-E on Replicate (example model)
+                # Note: Actual model ID would need to be updated based on available models
+                output = self.client.run(
+                    "cjwbw/shap-e:e4b7c0f7b8c5c5f0e4b7c0f7b8c5c5f0",  # Placeholder
+                    input={
+                        "prompt": prompt,
+                        "guidance_scale": kwargs.get('guidance_scale', 15.0),
+                        "num_inference_steps": kwargs.get('num_inference_steps', 64)
+                    }
+                )
+                
+                result_data = {
+                    'url': output,
+                    'format': format,
+                    'prompt': prompt
+                }
+            else:
+                return AddonResult(success=False, error=f"Service {self.service} not implemented")
+            
+            elapsed = time.time() - start
+            
+            return AddonResult(
+                success=True,
+                data=result_data,
+                metadata={
+                    'prompt': prompt,
+                    'service': self.service,
+                    'format': format,
+                    'generation_time': elapsed
+                },
+                time_taken=elapsed,
+                cost=kwargs.get('estimated_cost', 0.01)  # Estimate
+            )
+            
+        except Exception as e:
+            return AddonResult(
+                success=False,
+                error=f"Cloud 3D generation failed: {str(e)}"
+            )
+
+
+# =============================================================================
 # All Built-in Addons
 # =============================================================================
 
@@ -1069,6 +1332,10 @@ BUILTIN_ADDONS = {
     'elevenlabs_tts': ElevenLabsTTS,
     'local_tts': LocalTTS,
     'replicate_audio': ReplicateAudio,
+    
+    # 3D
+    'local_3d': Local3DGen,
+    'cloud_3d': Cloud3DGen,
     
     # Embedding
     'local_embedding': LocalEmbedding,
