@@ -378,32 +378,6 @@ def train_tokenizer(
 # Backwards Compatibility
 # =============================================================================
 
-# Build function (deprecated, use train_tokenizer)
-def build_tokenizer_from_files(data_files: List[str], vocab_size: int = 5000):
-    """
-    DEPRECATED: Use train_tokenizer() instead.
-
-    Train a tokenizer from data files.
-    """
-    import warnings
-    warnings.warn(
-        "build_tokenizer_from_files() is deprecated. Use train_tokenizer() instead.",
-        DeprecationWarning
-    )
-
-    return train_tokenizer(
-        data_paths=data_files,
-        vocab_size=vocab_size,
-        tokenizer_type="bpe"
-    )
-
-
-# For backwards compatibility with old imports
-def create_tokenizer(tokenizer_type: str = "auto") -> Any:
-    """Alias for get_tokenizer()."""
-    return get_tokenizer(tokenizer_type)
-
-
 # Expose SimpleTokenizer as default (always available)
 Tokenizer = SimpleTokenizer
 
@@ -424,8 +398,4 @@ __all__ = [
 
     # Constants
     "VOCAB_DIR",
-
-    # Deprecated
-    "build_tokenizer_from_files",
-    "create_tokenizer",
 ]
