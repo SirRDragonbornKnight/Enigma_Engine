@@ -127,3 +127,7 @@ models/*/voice/samples/
 
 # Personality data
 models/*/personality.json
+
+# Outputs directory (generated images, GIFs, etc.)
+outputs/*
+!outputs/.gitkeep
