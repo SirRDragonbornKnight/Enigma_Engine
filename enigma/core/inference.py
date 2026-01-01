@@ -579,7 +579,7 @@ class EnigmaEngine:
         **kwargs
     ) -> List[str]:
         """
-        Generate text for multiple prompts in parallel.
+        Generate text for multiple prompts in a single batched forward pass.
 
         Args:
             prompts: List of input prompts
@@ -633,8 +633,8 @@ class EnigmaEngine:
         generated = input_ids
         all_finished = False
         for step in range(max_gen):
-            # Early exit if all sequences finished (check every 5 steps to reduce overhead)
-            if all_finished or (step > 0 and step % 5 == 0 and finished.all()):
+            # Early exit if all sequences finished (check every 5 steps starting from step 5 to reduce overhead)
+            if all_finished or (step >= 5 and step % 5 == 0 and finished.all()):
                 all_finished = True
                 break
             
