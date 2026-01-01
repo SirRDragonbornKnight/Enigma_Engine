@@ -35,6 +35,7 @@ import logging
 from .model import Enigma, create_model, MODEL_PRESETS
 from .tokenizer import get_tokenizer
 from ..config import CONFIG
+from ..utils.system_messages import system_msg, info_msg
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,19 @@ class EnigmaEngine:
         """Select the best available device."""
         if device is not None:
             return torch.device(device)
+
+        # Check power mode settings
+        try:
+            from .power_mode import get_power_manager
+            power_mgr = get_power_manager()
+            if not power_mgr.should_use_gpu():
+                # Power mode disabled GPU - use CPU
+                cpu_threads = CONFIG.get("cpu_threads", 0)
+                if cpu_threads > 0:
+                    torch.set_num_threads(cpu_threads)
+                return torch.device("cpu")
+        except ImportError:
+            pass  # Power mode not available
 
         if torch.cuda.is_available():
             # Apply GPU memory limit from config
@@ -250,13 +264,13 @@ class EnigmaEngine:
         """Log initialization information."""
         num_params = sum(p.numel() for p in self.model.parameters())
 
-        print(f"EnigmaEngine initialized on {self.device}")
+        print(system_msg(f"EnigmaEngine initialized on {self.device}"))
         if self.device.type == "cuda":
-            print(f"  GPU: {torch.cuda.get_device_name(0)}")
-        print(f"  Model parameters: {num_params:,}")
-        print(f"  Vocab size: {self.tokenizer.vocab_size:,}")
-        print(f"  Max sequence length: {self.model.config.max_seq_len}")
-        print(f"  FP16: {self.use_half}")
+            print(info_msg(f"GPU: {torch.cuda.get_device_name(0)}"))
+        print(info_msg(f"Model parameters: {num_params:,}"))
+        print(info_msg(f"Vocab size: {self.tokenizer.vocab_size:,}"))
+        print(info_msg(f"Max sequence length: {self.model.config.max_seq_len}"))
+        print(info_msg(f"FP16: {self.use_half}"))
 
     # =========================================================================
     # Generation Methods

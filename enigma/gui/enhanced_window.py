@@ -31,6 +31,13 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 import time
 
+# Import text formatting
+try:
+    from ..utils.text_formatting import TextFormatter
+    HAVE_TEXT_FORMATTER = True
+except ImportError:
+    HAVE_TEXT_FORMATTER = False
+
 
 # === THEME STYLESHEETS ===
 # Theme: Dark (Catppuccin Mocha)
@@ -2414,7 +2421,13 @@ class EnhancedMainWindow(QMainWindow):
             if not response:
                 response = "(No response generated - model may need more training)"
             
-            self.chat_display.append(f"<b>{self.current_model_name}:</b> {response}")
+            # Format AI response with HTML markup if available
+            if HAVE_TEXT_FORMATTER:
+                formatted_response = TextFormatter.to_html(response)
+            else:
+                formatted_response = response
+            
+            self.chat_display.append(f"<b>{self.current_model_name}:</b> {formatted_response}")
             self.last_response = response
             
             # Track AI response

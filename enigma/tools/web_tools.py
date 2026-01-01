@@ -12,6 +12,7 @@ import json
 import re
 from typing import Dict, Any
 from .tool_registry import Tool
+from .url_safety import URLSafety, ContentFilter
 
 
 class WebSearchTool(Tool):
@@ -25,6 +26,10 @@ class WebSearchTool(Tool):
         "query": "The search query string",
         "num_results": "Number of results to return (default: 5)",
     }
+    
+    def __init__(self):
+        super().__init__()
+        self.url_safety = URLSafety()
     
     def execute(self, query: str, num_results: int = 5, **kwargs) -> Dict[str, Any]:
         """
@@ -81,11 +86,14 @@ class WebSearchTool(Tool):
                 # Clean up title
                 title = re.sub(r'<[^>]+>', '', title).strip()
                 if title and link.startswith('http'):
-                    results.append({
-                        "title": title,
-                        "url": link,
-                        "snippet": ""  # Lite version doesn't have snippets
-                    })
+                    # Check URL safety
+                    if self.url_safety.is_safe(link):
+                        results.append({
+                            "title": title,
+                            "url": link,
+                            "snippet": "",  # Lite version doesn't have snippets
+                            "trusted": self.url_safety.is_trusted(link)
+                        })
             
             # If still no results, provide helpful message
             if not results:
@@ -122,6 +130,11 @@ class FetchWebpageTool(Tool):
         "max_length": "Maximum characters to return (default: 5000)",
     }
     
+    def __init__(self):
+        super().__init__()
+        self.url_safety = URLSafety()
+        self.content_filter = ContentFilter()
+    
     def execute(self, url: str, max_length: int = 5000, **kwargs) -> Dict[str, Any]:
         """
         Fetch webpage and extract text.
@@ -140,6 +153,10 @@ class FetchWebpageTool(Tool):
             # Validate URL format
             if not url.startswith(('http://', 'https://')):
                 return {"success": False, "error": "URL must start with http:// or https://"}
+            
+            # Check URL safety
+            if not self.url_safety.is_safe(url):
+                return {"success": False, "error": "URL is blocked for safety reasons"}
             
             if max_length <= 0:
                 return {"success": False, "error": "max_length must be positive"}
@@ -161,13 +178,11 @@ class FetchWebpageTool(Tool):
                 
                 html = response.read().decode('utf-8', errors='ignore')
             
-            # Extract text content (remove HTML tags)
-            # Remove script and style elements
-            html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
-            html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            # Extract text content using content filter for better extraction
+            text = self.content_filter.extract_main_content(html)
             
-            # Remove HTML tags
-            text = re.sub(r'<[^>]+>', ' ', html)
+            # Filter out ad content
+            text = self.content_filter.filter_content(text)
             
             # Clean up whitespace
             text = re.sub(r'\s+', ' ', text).strip()
