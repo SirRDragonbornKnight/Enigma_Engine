@@ -229,7 +229,8 @@ class ToolExecutor:
             }
         
         # Check if module is loaded
-        if not self.module_manager.is_loaded(module_name):
+        loaded_modules = self.module_manager.list_loaded()
+        if module_name not in loaded_modules:
             return {
                 "success": False,
                 "error": f"Module '{module_name}' is not loaded. Load it first to use {tool_name}",
