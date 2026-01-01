@@ -100,6 +100,10 @@ data/*
 !data/training_medium.txt
 !data/training_large.txt
 !data/tool_training_examples.txt
+!data/tool_training_data.txt
+!data/personality_development.txt
+!data/self_awareness_training.txt
+!data/combined_action_training.txt
 !data/protocols/
 
 # Keep models structure
