@@ -298,6 +298,9 @@ def _connect_robot(parent):
             except ImportError:
                 parent.robot_log.append("[!] pyserial not installed. Install with: pip install pyserial")
                 parent.robot_connection = None
+            except (serial.SerialException, OSError, ValueError) as e:
+                parent.robot_log.append(f"[X] Serial connection failed: {e}")
+                parent.robot_connection = None
             
         elif robot_type == "http":
             host = parent.robot_host_input.text()

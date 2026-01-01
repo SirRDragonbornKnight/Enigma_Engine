@@ -268,6 +268,9 @@ def _connect_to_game(parent):
             except ImportError:
                 parent.game_log.append("[!] websocket-client not installed. Install with: pip install websocket-client")
                 parent.game_connection = None
+            except (websocket.WebSocketException, OSError, ConnectionError) as e:
+                parent.game_log.append(f"[X] WebSocket connection failed: {e}")
+                parent.game_connection = None
             
         elif protocol == "http":
             parent.game_log.append("[>] HTTP API ready")

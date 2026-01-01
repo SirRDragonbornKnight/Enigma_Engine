@@ -631,8 +631,11 @@ class EnigmaEngine:
         
         # Generate tokens autoregressively
         generated = input_ids
-        for _ in range(max_gen):
-            if finished.all():
+        all_finished = False
+        for step in range(max_gen):
+            # Early exit if all sequences finished (check every 5 steps to reduce overhead)
+            if all_finished or (step > 0 and step % 5 == 0 and finished.all()):
+                all_finished = True
                 break
             
             # Truncate if needed
