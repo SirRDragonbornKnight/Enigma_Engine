@@ -1080,6 +1080,9 @@ class Local3DGen(ThreeDAddon):
                 
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 
+                # Store the sample_latents function for use in generate()
+                self._sample_latents = sample_latents
+                
                 # Load Shap-E models
                 self.xm = load_model('transmitter', device=device)
                 self.model = load_model('text300M', device=device)
@@ -1151,7 +1154,7 @@ class Local3DGen(ThreeDAddon):
                 batch_size = 1
                 guidance_scale = kwargs.get('guidance_scale', 15.0)
                 
-                latents = sample_latents(
+                latents = self._sample_latents(
                     batch_size=batch_size,
                     model=self.model,
                     diffusion=self.diffusion,

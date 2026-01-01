@@ -199,7 +199,7 @@ def correct_typos(text: str, custom_dict: dict = None) -> str:
     # Rejoin text
     result = ''
     for i, word in enumerate(corrected):
-        if i > 0 and word not in '.,!?;:\'"'-–—':
+        if i > 0 and word not in '.,!?;:\'"\'--':
             result += ' '
         result += word
     

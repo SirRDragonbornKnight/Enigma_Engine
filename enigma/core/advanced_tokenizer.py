@@ -16,6 +16,7 @@ Features:
 This is how GPT-2, GPT-3, and GPT-4 tokenize text.
 """
 import json
+import random
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any, Set
@@ -384,9 +385,13 @@ class AdvancedBPETokenizer:
 
         return result
 
-    def _bpe(self, token: str) -> str:
+    def _bpe(self, token: str, dropout: float = 0.0) -> str:
         """
         Apply BPE to a single token.
+
+        Args:
+            token: The token to process
+            dropout: BPE dropout rate for training (0.0 = disabled)
 
         Uses caching for efficiency.
         """

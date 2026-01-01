@@ -444,9 +444,7 @@ class ThreeDAddon(Addon):
     def refine(self, model: bytes, prompt: str, **kwargs) -> AddonResult:
         """Refine existing 3D model."""
         return AddonResult(success=False, error="Refinement not supported")
-                return AddonResult(success=False, error=result.error)
-        return AddonResult(success=True, data=vectors)
-    
+
     def similarity(self, text1: str, text2: str, **kwargs) -> AddonResult:
         """Calculate similarity between two texts."""
         import math

@@ -352,7 +352,7 @@ def create_mobile_api(port: int = 5000, model_name: str = None) -> MobileAPI:
 
 # Simple Flutter/React Native code templates
 MOBILE_CLIENT_TEMPLATES = {
-    "flutter": '''
+    "flutter": r'''
 // Flutter client for Enigma Mobile API
 
 import 'dart:convert';
@@ -367,7 +367,7 @@ class EnigmaClient {
   
   Future<String> chat(String message) async {
     final response = await http.post(
-      Uri.parse('\$baseUrl/chat'),
+      Uri.parse('$baseUrl/chat'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'message': message,
@@ -383,7 +383,7 @@ class EnigmaClient {
   }
   
   Future<Map<String, dynamic>> status() async {
-    final response = await http.get(Uri.parse('\$baseUrl/status'));
+    final response = await http.get(Uri.parse('$baseUrl/status'));
     return jsonDecode(response.body);
   }
 }
