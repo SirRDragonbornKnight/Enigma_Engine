@@ -72,6 +72,9 @@ class ToolRegistry:
         from .system_tools import RunCommandTool, ScreenshotTool, GetSystemInfoTool
         from .vision import ScreenVisionTool, FindOnScreenTool
         from .robot_tools import RobotMoveTool, RobotGripperTool, RobotStatusTool, RobotHomeTool
+        from .interactive_tools import (CreateChecklistTool, ListChecklistsTool, AddTaskTool, 
+                                       ListTasksTool, CompleteTaskTool, SetReminderTool, 
+                                       ListRemindersTool, CheckRemindersTool)
         
         builtin = [
             # Web
@@ -98,6 +101,15 @@ class ToolRegistry:
             RobotGripperTool(),
             RobotStatusTool(),
             RobotHomeTool(),
+            # Interactive/Personal Assistant
+            CreateChecklistTool(),
+            ListChecklistsTool(),
+            AddTaskTool(),
+            ListTasksTool(),
+            CompleteTaskTool(),
+            SetReminderTool(),
+            ListRemindersTool(),
+            CheckRemindersTool(),
         ]
         
         for tool in builtin:
