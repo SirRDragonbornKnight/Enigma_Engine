@@ -4,6 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: autopep8](https://img.shields.io/badge/code%20style-autopep8-000000.svg)](https://github.com/hhatto/autopep8)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.12%2B-ee4c2c.svg)](https://pytorch.org/)
+[![Whisper STT](https://img.shields.io/badge/Whisper-STT-green.svg)](https://github.com/openai/whisper)
+[![Quantization](https://img.shields.io/badge/INT8%2FINT4-Quantization-orange.svg)](https://pytorch.org/docs/stable/quantization.html)
 
 **Create your own AI from scratch.** No cloud required. Runs on anything from a Raspberry Pi to a gaming PC.
 
@@ -102,7 +104,7 @@ Choose based on your hardware:
 enigma_engine/
 ├── run.py              # Main entry point
 ├── data/               # Training data goes here
-│   └── training_data.txt
+│   └── training.txt    # Consolidated training data
 ├── models/             # Your trained AI models
 ├── enigma/
 │   ├── core/          # AI model & training
@@ -124,6 +126,7 @@ python run.py --serve   # Start API server
 
 ## Features
 
+### Core Features
 - **Chat Interface** - Talk to your AI
 - **Training Tab** - Train and monitor progress
 - **Vision** - Screen capture and image analysis
@@ -131,6 +134,20 @@ python run.py --serve   # Start API server
 - **Voice** - Text-to-speech responses
 - **Multi-AI** - Run multiple AI models
 - **Themes** - Dark, Light, Shadow, Midnight
+
+### Upgraded Components (Optional)
+- **🎤 Whisper STT** - High-accuracy speech recognition (vs basic STT)
+- **🔊 Natural TTS** - Coqui/Bark for realistic voices (vs pyttsx3)
+- **⚡ tiktoken** - 5-10x faster tokenization (vs BPE)
+- **📦 Quantization** - INT8/INT4 for 2-4x speedup and lower memory
+
+Install upgraded components with:
+```bash
+pip install openai-whisper  # Whisper STT
+pip install TTS             # Coqui TTS
+pip install tiktoken        # Fast tokenizer
+pip install bitsandbytes    # INT4 quantization
+```
 
 ## Troubleshooting
 

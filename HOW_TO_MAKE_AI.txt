@@ -32,11 +32,11 @@ STEP 1: Set up environment
 
 STEP 2: Prepare training data
 -----------------------------
-    Create or edit: data/data.txt
+    Create or edit: data/training.txt
     
     Format: One conversation or text sample per line
     
-    Example data.txt:
+    Example training.txt:
     -----------------
     Hello, how are you?
     I'm doing great, thanks for asking!
@@ -106,7 +106,7 @@ MODEL SIZES
 
 DATA FILE LOCATION
 ------------------
-    data/data.txt
+    data/training.txt
 
 DATA FORMAT OPTIONS
 -------------------
@@ -184,7 +184,7 @@ TRAINING WITH MODEL REGISTRY
     python -c "
     from enigma.core.trainer import ModelTrainer
     trainer = ModelTrainer()
-    trainer.train_model('my_assistant', 'data/data.txt', epochs=10)
+    trainer.train_model('my_assistant', 'data/training.txt', epochs=10)
     "
 
 TRAINING PARAMETERS
@@ -254,14 +254,32 @@ METHOD 3: REST API Server
 
 METHOD 4: Voice Interface
 -------------------------
-    # In Python:
-    from enigma.voice.stt_simple import listen_for_speech
-    from enigma.voice.tts_simple import speak
+    # Basic voice (pyttsx3 + SpeechRecognition):
+    from enigma.voice import speak, listen
     from enigma.core.inference import generate
     
-    text = listen_for_speech()      # Listen
-    response = generate(text)        # Think
-    speak(response)                  # Speak
+    text = listen()           # Listen
+    response = generate(text) # Think
+    speak(response)           # Speak
+    
+    # UPGRADED: High-quality Whisper STT (more accurate):
+    from enigma.voice import WhisperSTT
+    
+    stt = WhisperSTT(model_size="base")  # tiny, base, small, medium, large
+    text = stt.listen(duration=5)
+    # Or transcribe from file:
+    text = stt.transcribe("audio.wav")
+    
+    # UPGRADED: Natural TTS with Coqui or Bark (better quality):
+    from enigma.voice import NaturalTTS
+    
+    tts = NaturalTTS(engine="coqui")  # or "bark"
+    tts.speak("Hello! I sound much more natural now.")
+    
+    # To use these upgraded options, install:
+    # pip install openai-whisper  # For Whisper STT
+    # pip install TTS            # For Coqui TTS
+    # Or see requirements.txt for alternatives
 
 METHOD 5: Mobile App (via API)
 ------------------------------
@@ -389,6 +407,27 @@ ENABLING TOOLS
     # Execute a tool
     result = tool_registry.execute('web_search', {'query': 'Python tutorials'})
 
+PERFORMANCE OPTIMIZATION
+------------------------
+    # Use fast tiktoken tokenizer (GPT-style):
+    from enigma.core.tokenizer import get_tokenizer
+    
+    tokenizer = get_tokenizer("tiktoken")  # Much faster than BPE
+    # Install with: pip install tiktoken
+    
+    # Model quantization (run larger models faster):
+    from enigma.core.quantization import quantize_model, load_quantized
+    
+    # INT8 quantization (~2x speedup, minimal quality loss):
+    quantized_model = quantize_model(model, dtype="int8")
+    
+    # INT4 quantization (~4x speedup, some quality loss):
+    quantized_model = quantize_model(model, dtype="int4")
+    # Requires: pip install bitsandbytes
+    
+    # Load and quantize in one step:
+    model = load_quantized("models/my_model.pth", dtype="int8")
+
 ================================================================================
                          8. TROUBLESHOOTING
 ================================================================================
@@ -444,10 +483,10 @@ PROBLEM: "GUI not starting"
 EXAMPLE 1: Create a simple chatbot
 ----------------------------------
     # 1. Create training data
-    echo "Hello!" > data/data.txt
-    echo "Hi there! How can I help?" >> data/data.txt
-    echo "What's your name?" >> data/data.txt
-    echo "I'm Enigma, your AI assistant." >> data/data.txt
+    echo "Hello!" > data/training.txt
+    echo "Hi there! How can I help?" >> data/training.txt
+    echo "What's your name?" >> data/training.txt
+    echo "I'm Enigma, your AI assistant." >> data/training.txt
     
     # 2. Train
     python run.py --train
@@ -459,7 +498,7 @@ EXAMPLE 2: Create a specialized assistant
 -----------------------------------------
     # 1. Prepare domain-specific data
     # Example: cooking assistant
-    # data/data.txt:
+    # data/training.txt:
     # How do I make pasta?
     # Boil water, add pasta, cook for 8-10 minutes until al dente.
     # What's a good pizza dough recipe?
@@ -477,7 +516,7 @@ EXAMPLE 2: Create a specialized assistant
     python -c "
     from enigma.core.trainer import ModelTrainer
     trainer = ModelTrainer()
-    trainer.train_model('cooking_ai', 'data/data.txt', epochs=20)
+    trainer.train_model('cooking_ai', 'data/training.txt', epochs=20)
     "
 
 EXAMPLE 3: Multi-device setup
@@ -529,7 +568,7 @@ Commands:
     python test_system.py           Run tests
 
 Files:
-    data/data.txt                   Training data
+    data/training.txt                   Training data
     models/                         Saved models
     data/conversations/             Chat history
     config.json                     Settings
