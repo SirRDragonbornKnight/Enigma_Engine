@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Enigma Engine{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <h2>⚙️ Settings</h2>
+    
+    <div class="settings-section">
+        <h3>Model Settings</h3>
+        <div class="form-group">
+            <label for="active-model">Active Model:</label>
+            <select id="active-model">
+                <option>Loading...</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="auto-learn">
+                Auto-learn from conversations
+            </label>
+        </div>
+    </div>
+    
+    <div class="settings-section">
+        <h3>Personality Settings</h3>
+        <p>Configure your AI's personality traits (0.0 = minimum, 1.0 = maximum)</p>
+        
+        <div class="form-group">
+            <label for="humor">Humor Level: <span id="humor-val">0.5</span></label>
+            <input type="range" id="humor" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        
+        <div class="form-group">
+            <label for="formality">Formality: <span id="formality-val">0.5</span></label>
+            <input type="range" id="formality" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        
+        <div class="form-group">
+            <label for="verbosity">Verbosity: <span id="verbosity-val">0.5</span></label>
+            <input type="range" id="verbosity" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        
+        <div class="form-group">
+            <label for="creativity">Creativity: <span id="creativity-val">0.5</span></label>
+            <input type="range" id="creativity" min="0" max="1" step="0.1" value="0.5">
+        </div>
+        
+        <button class="btn btn-primary">Save Personality</button>
+    </div>
+    
+    <div class="settings-section">
+        <h3>Voice Settings</h3>
+        <div class="form-group">
+            <label for="voice-profile">Voice Profile:</label>
+            <select id="voice-profile">
+                <option value="default">Default</option>
+                <option value="glados">GLaDOS</option>
+                <option value="jarvis">Jarvis</option>
+                <option value="robot">Robot</option>
+            </select>
+        </div>
+        
+        <button class="btn btn-primary">Save Voice</button>
+    </div>
+    
+    <div class="settings-section">
+        <h3>Instance Management</h3>
+        <div id="instances-list">
+            <p>Loading instances...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Load models
+async function loadModels() {
+    try {
+        const response = await fetch('/api/models');
+        const data = await response.json();
+        
+        const select = document.getElementById('active-model');
+        select.innerHTML = '';
+        
+        data.models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.name;
+            option.textContent = model.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading models:', error);
+    }
+}
+
+// Update slider values
+const sliders = ['humor', 'formality', 'verbosity', 'creativity'];
+sliders.forEach(name => {
+    const slider = document.getElementById(name);
+    const valueSpan = document.getElementById(name + '-val');
+    
+    slider.addEventListener('input', () => {
+        valueSpan.textContent = slider.value;
+    });
+});
+
+loadModels();
+</script>
+{% endblock %}

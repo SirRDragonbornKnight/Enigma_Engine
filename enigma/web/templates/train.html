@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Train - Enigma Engine{% endblock %}
+
+{% block content %}
+<div class="train-container">
+    <h2>🎓 Train Model</h2>
+    
+    <div class="train-form">
+        <div class="form-group">
+            <label for="model-name">Model Name:</label>
+            <input type="text" id="model-name" placeholder="my_model" value="enigma">
+        </div>
+        
+        <div class="form-group">
+            <label for="model-size">Model Size:</label>
+            <select id="model-size">
+                <option value="tiny">Tiny (~2M params)</option>
+                <option value="small" selected>Small (~10M params)</option>
+                <option value="medium">Medium (~50M params)</option>
+                <option value="large">Large (~150M params)</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="epochs">Epochs:</label>
+            <input type="number" id="epochs" value="30" min="1" max="200">
+        </div>
+        
+        <div class="form-group">
+            <label for="data-file">Training Data:</label>
+            <input type="file" id="data-file">
+            <small>Or use default training data</small>
+        </div>
+        
+        <button id="train-btn" class="btn btn-primary">Start Training</button>
+    </div>
+    
+    <div class="train-status" id="train-status" style="display: none;">
+        <h3>Training Progress</h3>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <p id="status-text">Initializing...</p>
+    </div>
+    
+    <div class="train-info">
+        <h3>📝 Training Tips</h3>
+        <ul>
+            <li><strong>Tiny:</strong> Fast training, good for testing (5-10 min)</li>
+            <li><strong>Small:</strong> Good balance for personal use (20-40 min)</li>
+            <li><strong>Medium:</strong> Better quality, needs more time (1-2 hours)</li>
+            <li><strong>Large:</strong> Best quality, GPU recommended (4-8 hours)</li>
+        </ul>
+        
+        <h3>📊 Training Data</h3>
+        <p>Your training data should be in Q&A format or plain text conversations.</p>
+        <p>More data = better results (aim for 1000+ lines)</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const trainBtn = document.getElementById('train-btn');
+const trainStatus = document.getElementById('train-status');
+
+trainBtn.addEventListener('click', async () => {
+    const modelName = document.getElementById('model-name').value;
+    const modelSize = document.getElementById('model-size').value;
+    const epochs = document.getElementById('epochs').value;
+    
+    if (!modelName) {
+        alert('Please enter a model name');
+        return;
+    }
+    
+    // Show status
+    trainStatus.style.display = 'block';
+    trainBtn.disabled = true;
+    
+    // Note: Actual training would be done via a background process
+    // This is a placeholder UI
+    alert('Training must be started from CLI:\n\npython run.py --train --model ' + modelSize + ' --epochs ' + epochs);
+    
+    trainBtn.disabled = false;
+});
+</script>
+{% endblock %}

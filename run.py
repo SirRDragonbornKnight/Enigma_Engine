@@ -36,6 +36,11 @@ Examples:
     parser.add_argument("--serve", action="store_true", help="Start API server")
     parser.add_argument("--run", action="store_true", help="Run CLI chat interface")
     parser.add_argument("--gui", action="store_true", help="Start the GUI (recommended)")
+    parser.add_argument("--web", action="store_true", help="Start web dashboard")
+    
+    # Multi-instance options
+    parser.add_argument("--instance", type=str, default=None, help="Instance ID (for multi-instance)")
+    parser.add_argument("--new-instance", action="store_true", help="Force new instance")
     
     # Training options
     parser.add_argument("--model", type=str, default="small",
@@ -49,7 +54,7 @@ Examples:
     args = parser.parse_args()
 
     # If no arguments, show help and suggest GUI
-    if not any([args.train, args.build, args.serve, args.run, args.gui]):
+    if not any([args.train, args.build, args.serve, args.run, args.gui, args.web]):
         print("\n" + "=" * 60)
         print("  ⚡ ENIGMA ENGINE - Build Your Own AI")
         print("=" * 60)
@@ -64,6 +69,8 @@ Examples:
         print("    └─ Start CLI chat interface")
         print("\n  python run.py --serve")
         print("    └─ Start API server on localhost:5000")
+        print("\n  python run.py --web")
+        print("    └─ Start web dashboard on localhost:8080")
         print("\n📚 For detailed options: python run.py --help")
         print("=" * 60 + "\n")
         return
@@ -201,6 +208,30 @@ Examples:
             print("      sudo apt install python3-pyqt5")
             sys.exit(1)
         run_app()
+    
+    if args.web:
+        try:
+            from enigma.web.app import run_web
+        except ImportError as e:
+            print(f"\n❌ Web dashboard requires flask-socketio")
+            print(f"   Error: {e}")
+            print("\n💡 To fix this:")
+            print("   Install required packages:")
+            print("      pip install flask-socketio")
+            sys.exit(1)
+        
+        print("\n" + "=" * 60)
+        print("ENIGMA ENGINE - WEB DASHBOARD")
+        print("=" * 60)
+        print(f"\nStarting web server...")
+        
+        # Setup instance manager if needed
+        if args.instance or args.new_instance:
+            from enigma.core.instance_manager import InstanceManager
+            instance_manager = InstanceManager(instance_id=args.instance)
+            print(f"Instance ID: {instance_manager.instance_id}")
+        
+        run_web(host='0.0.0.0', port=8080)
 
 
 if __name__ == "__main__":
