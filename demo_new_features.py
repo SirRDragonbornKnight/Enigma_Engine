@@ -7,7 +7,7 @@ Shows how the AI can use formatting to express emphasis.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from enigma.utils.text_formatting import TextFormatter
 from enigma.utils.system_messages import system_msg, info_msg, warning_msg, error_msg

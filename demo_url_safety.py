@@ -7,7 +7,7 @@ Shows how the AI can filter unsafe URLs and content.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from enigma.tools.url_safety import URLSafety, ContentFilter
 

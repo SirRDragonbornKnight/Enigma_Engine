@@ -8,7 +8,7 @@ while gaming or doing other tasks.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
     QPushButton, QComboBox, QSpinBox, QSlider, QCheckBox,
-    QTextEdit
+    QTextEdit, QMessageBox
 )
 from PyQt5.QtCore import Qt
 
@@ -173,7 +173,6 @@ def _apply_power_mode(parent):
         # Refresh status
         _refresh_power_status(parent)
         
-        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.information(parent, "Power Mode Changed", 
             f"Power mode set to: {mode.upper()}\n\n"
             f"Batch size: {power_mgr.settings.max_batch_size}\n"
@@ -181,10 +180,8 @@ def _apply_power_mode(parent):
             f"GPU: {'Enabled' if power_mgr.settings.use_gpu else 'Disabled'}"
         )
     except ImportError:
-        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.warning(parent, "Error", "Power mode manager not available")
     except Exception as e:
-        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.warning(parent, "Error", f"Failed to apply power mode: {e}")
 
 
@@ -206,7 +203,6 @@ def _toggle_autonomous(parent, state):
             autonomous.start()
             parent.autonomous_activity_spin.setEnabled(True)
             
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.information(parent, "Autonomous Mode", 
                 "Autonomous mode enabled!\n\n"
                 "AI will explore topics, learn, and evolve on its own.\n"
@@ -218,10 +214,8 @@ def _toggle_autonomous(parent, state):
             parent.autonomous_activity_spin.setEnabled(False)
             
     except ImportError:
-        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.warning(parent, "Error", "Autonomous mode not available")
     except Exception as e:
-        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.warning(parent, "Error", f"Failed to toggle autonomous mode: {e}")
 
 
