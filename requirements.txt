@@ -88,6 +88,12 @@ psutil>=5.9.0
 # === SAFETY & FILTERING ===
 beautifulsoup4>=4.11.0    # For content extraction
 
+# === VECTOR DATABASES (Optional) ===
+# Uncomment to enable advanced memory features:
+# faiss-cpu>=1.7.0  # For FAISS vector database (CPU version)
+# faiss-gpu>=1.7.0  # For FAISS vector database (GPU version)
+# pinecone-client>=2.2.0  # For Pinecone cloud vector database
+
 # === SYSTEM MONITORING ===
 psutil>=5.9.0             # For power mode CPU/memory monitoring
 
