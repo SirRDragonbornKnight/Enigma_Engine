@@ -240,8 +240,9 @@ class CategorySection(QWidget):
 class ModulesTab(QWidget):
     """Tab for managing all Enigma modules."""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, module_manager=None):
         super().__init__(parent)
+        self.module_manager = module_manager
         self.categories: Dict[str, CategorySection] = {}
         self.all_cards: Dict[str, ModuleCard] = {}
         self.setup_ui()
@@ -388,6 +389,13 @@ class ModulesTab(QWidget):
                 self.modules_layout.addWidget(section)
         
         self.modules_layout.addStretch()
+        
+        # Sync with actually loaded modules from ModuleManager
+        self._sync_loaded_modules()
+        
+        # Auto-enable essential modules if ModuleManager is available
+        self._auto_enable_essential_modules()
+        
         self._update_stats()
     
     def _get_all_modules(self) -> dict:
@@ -461,12 +469,84 @@ class ModulesTab(QWidget):
         action = "Loading" if enabled else "Unloading"
         self.log(f"{action} {module_id}...")
         
+        # Actually load/unload the module if ModuleManager is available
+        if self.module_manager:
+            try:
+                if enabled:
+                    success = self.module_manager.load(module_id)
+                    if not success:
+                        self.log(f"✗ Failed to load {module_id}")
+                        # Revert toggle
+                        if module_id in self.all_cards:
+                            self.all_cards[module_id].toggle.blockSignals(True)
+                            self.all_cards[module_id].toggle.setChecked(False)
+                            self.all_cards[module_id].toggle.blockSignals(False)
+                        return
+                else:
+                    success = self.module_manager.unload(module_id)
+                    if not success:
+                        self.log(f"✗ Failed to unload {module_id}")
+                        return
+            except Exception as e:
+                self.log(f"✗ Error: {str(e)}")
+                return
+        
         # Update card
         if module_id in self.all_cards:
             self.all_cards[module_id].set_loaded(enabled)
         
         self.log(f"✓ {module_id} {'enabled' if enabled else 'disabled'}")
         self._update_stats()
+    
+    def _sync_loaded_modules(self):
+        """Sync UI state with actually loaded modules."""
+        if not self.module_manager:
+            return
+        
+        try:
+            loaded_modules = self.module_manager.list_loaded()
+            for mod_id in loaded_modules:
+                if mod_id in self.all_cards:
+                    self.all_cards[mod_id].toggle.blockSignals(True)
+                    self.all_cards[mod_id].set_loaded(True)
+                    self.all_cards[mod_id].toggle.blockSignals(False)
+            self.log(f"Synced {len(loaded_modules)} loaded modules")
+        except Exception as e:
+            self.log(f"Could not sync modules: {e}")
+    
+    def _auto_enable_essential_modules(self):
+        """Auto-enable essential modules that should be on by default."""
+        if not self.module_manager:
+            self.log("⚠ No module manager - modules won't auto-load")
+            return
+        
+        # Essential modules that should be loaded by default
+        essential_modules = [
+            'model',      # Core model
+            'tokenizer',  # Tokenizer
+            'inference',  # Inference engine
+        ]
+        
+        # Check which ones aren't loaded yet
+        try:
+            loaded = self.module_manager.list_loaded()
+            for mod_id in essential_modules:
+                if mod_id not in loaded and mod_id in self.all_cards:
+                    # Try to load it
+                    self.log(f"Auto-loading essential module: {mod_id}")
+                    try:
+                        success = self.module_manager.load(mod_id)
+                        if success:
+                            self.all_cards[mod_id].toggle.blockSignals(True)
+                            self.all_cards[mod_id].set_loaded(True)
+                            self.all_cards[mod_id].toggle.blockSignals(False)
+                            self.log(f"✓ {mod_id} loaded automatically")
+                        else:
+                            self.log(f"⚠ Could not auto-load {mod_id}")
+                    except Exception as e:
+                        self.log(f"⚠ Error loading {mod_id}: {e}")
+        except Exception as e:
+            self.log(f"Error during auto-enable: {e}")
     
     def _on_configure(self, module_id: str):
         """Show configuration for a module."""
@@ -493,7 +573,22 @@ class ModulesTab(QWidget):
         self.loaded_label.setText(f"Loaded: {loaded} / {total}")
     
     def refresh_status(self):
-        """Refresh system status."""
+        """Refresh system status and module states."""
+        # Sync module states with ModuleManager
+        if self.module_manager:
+            try:
+                loaded = self.module_manager.list_loaded()
+                for mod_id, card in self.all_cards.items():
+                    is_loaded = mod_id in loaded
+                    if card.is_loaded != is_loaded:
+                        card.toggle.blockSignals(True)
+                        card.set_loaded(is_loaded)
+                        card.toggle.blockSignals(False)
+                self._update_stats()
+            except Exception:
+                pass
+        
+        # Update resource bars
         try:
             import psutil
             self.cpu_bar.setValue(int(psutil.cpu_percent()))
