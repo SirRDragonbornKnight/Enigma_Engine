@@ -1509,7 +1509,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs import (
             create_chat_tab, create_training_tab, create_avatar_tab,
             create_vision_tab, create_sessions_tab, create_instructions_tab,
-            create_terminal_tab
+            create_terminal_tab, create_examples_tab
         )
         from .tabs.settings_tab import create_settings_tab
         from .tabs.personality_tab import create_personality_tab
@@ -1531,6 +1531,7 @@ class EnhancedMainWindow(QMainWindow):
         tabs.addTab(create_terminal_tab(self), "Terminal")
         tabs.addTab(create_sessions_tab(self), "History")
         tabs.addTab(create_instructions_tab(self), "Files")
+        tabs.addTab(create_examples_tab(self), "Examples")
         tabs.addTab(create_settings_tab(self), "Settings")
         
         self.setCentralWidget(tabs)
