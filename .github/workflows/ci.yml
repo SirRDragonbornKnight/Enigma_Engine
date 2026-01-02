@@ -95,12 +95,14 @@ jobs:
       - name: Check for security issues
         run: |
           # Basic security checks - fail if dangerous functions are found
-          # Look for eval() function calls (not .eval() method calls)
+          # Uses extended regex with POSIX character classes (works with GNU grep in Ubuntu)
+          # Pattern: (\s|^|[^[:alnum:]_.]) matches whitespace, start of line, or non-word/non-dot chars
+          # This catches eval(...) but not .eval() method calls
           if grep -rE '(\s|^|[^[:alnum:]_.])eval\s*\(' enigma/ 2>/dev/null; then
             echo "ERROR: Found eval() function usage which is a security risk"
             exit 1
           fi
-          # Look for exec() function calls (not .exec() method calls)
+          # Same pattern for exec() - catches exec(...) but not .exec() method calls
           if grep -rE '(\s|^|[^[:alnum:]_.])exec\s*\(' enigma/ 2>/dev/null; then
             echo "ERROR: Found exec() function usage which is a security risk"
             exit 1

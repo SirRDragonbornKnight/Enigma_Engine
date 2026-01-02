@@ -27,7 +27,7 @@ updates:
       - "python"
     reviewers:
       - "SirRDragonbornKnight"
-    # Group minor and patch updates together
+    # Group minor and patch updates together to reduce PR volume
     groups:
       python-dependencies:
         patterns:
