@@ -3,8 +3,10 @@
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QPlainTextEdit, QMessageBox, QFileDialog
+    QComboBox, QPlainTextEdit, QMessageBox, QFileDialog,
+    QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox
 )
+from PyQt5.QtCore import Qt
 
 from ...config import CONFIG
 
@@ -114,14 +116,53 @@ Use the Modules tab to enable/disable capabilities.
 
 
 def create_instructions_tab(parent):
-    """Create the files tab - edit model data and notes."""
+    """Create the files tab - edit model data and notes with folder browser."""
     w = QWidget()
     layout = QVBoxLayout()
     
     # Header
-    header = QLabel("Model Files")
+    header = QLabel("📁 File Browser")
     header.setObjectName("header")
     layout.addWidget(header)
+    
+    # Create splitter for file tree and editor
+    splitter = QSplitter(Qt.Horizontal)
+    splitter.setChildrenCollapsible(False)
+    
+    # Left side: File tree browser
+    left_widget = QWidget()
+    left_widget.setMinimumWidth(200)
+    left_layout = QVBoxLayout(left_widget)
+    left_layout.setContentsMargins(0, 0, 5, 0)
+    
+    # File tree header
+    tree_header = QHBoxLayout()
+    tree_label = QLabel("📂 Folders")
+    tree_label.setStyleSheet("font-weight: bold;")
+    tree_header.addWidget(tree_label)
+    
+    refresh_btn = QPushButton("🔄")
+    refresh_btn.setToolTip("Refresh file list")
+    refresh_btn.setMaximumWidth(30)
+    refresh_btn.clicked.connect(lambda: _refresh_file_tree(parent))
+    tree_header.addWidget(refresh_btn)
+    
+    left_layout.addLayout(tree_header)
+    
+    # File tree widget
+    parent.file_tree = QTreeWidget()
+    parent.file_tree.setHeaderHidden(True)
+    parent.file_tree.setMinimumWidth(180)
+    parent.file_tree.itemClicked.connect(lambda item, col: _on_tree_item_clicked(parent, item))
+    left_layout.addWidget(parent.file_tree)
+    
+    splitter.addWidget(left_widget)
+    
+    # Right side: Editor
+    right_widget = QWidget()
+    right_widget.setMinimumWidth(400)
+    right_layout = QVBoxLayout(right_widget)
+    right_layout.setContentsMargins(5, 0, 0, 0)
     
     # File buttons row
     file_layout = QHBoxLayout()
@@ -142,23 +183,105 @@ def create_instructions_tab(parent):
     file_layout.addWidget(btn_new)
     
     file_layout.addStretch()
-    layout.addLayout(file_layout)
+    right_layout.addLayout(file_layout)
     
     # Current file name display
     parent.instructions_file_label = QLabel("No file open")
     parent.instructions_file_label.setStyleSheet("color: #a6e3a1; font-style: italic; padding: 4px;")
-    layout.addWidget(parent.instructions_file_label)
+    right_layout.addWidget(parent.instructions_file_label)
     
     # Editor
     parent.instructions_editor = QPlainTextEdit()
-    parent.instructions_editor.setPlaceholderText("Open a file to edit...")
-    layout.addWidget(parent.instructions_editor, stretch=1)
+    parent.instructions_editor.setPlaceholderText("Select a file from the tree or click 'Open File...'")
+    right_layout.addWidget(parent.instructions_editor, stretch=1)
+    
+    splitter.addWidget(right_widget)
+    splitter.setSizes([200, 600])
+    
+    layout.addWidget(splitter)
+    
+    w.setLayout(layout)
+    
+    # Initialize file tree
+    _refresh_file_tree(parent)
     
     # Load default instructions file on startup
     _load_default_instructions(parent)
     
-    w.setLayout(layout)
     return w
+
+
+def _refresh_file_tree(parent):
+    """Refresh the file tree with .txt files from data and docs folders."""
+    parent.file_tree.clear()
+    
+    # Get paths
+    data_dir = Path(CONFIG.get("data_dir", "data"))
+    
+    # Find docs folder - check multiple possible locations
+    enigma_root = Path(__file__).resolve().parent.parent.parent.parent
+    docs_dir = enigma_root / "docs"
+    
+    # Add data folder section
+    if data_dir.exists():
+        data_item = QTreeWidgetItem(parent.file_tree, ["📁 Data Files"])
+        data_item.setData(0, Qt.UserRole, str(data_dir))
+        data_item.setExpanded(True)
+        _add_txt_files_to_tree(data_item, data_dir)
+    
+    # Add docs folder section
+    if docs_dir.exists():
+        docs_item = QTreeWidgetItem(parent.file_tree, ["📚 Documentation"])
+        docs_item.setData(0, Qt.UserRole, str(docs_dir))
+        docs_item.setExpanded(True)
+        _add_txt_files_to_tree(docs_item, docs_dir, include_md=True)
+    
+    # Add root level .txt files
+    root_txt_files = list(enigma_root.glob("*.txt"))
+    if root_txt_files:
+        root_item = QTreeWidgetItem(parent.file_tree, ["📄 Root Files"])
+        root_item.setData(0, Qt.UserRole, str(enigma_root))
+        root_item.setExpanded(True)
+        for txt_file in sorted(root_txt_files):
+            file_item = QTreeWidgetItem(root_item, [f"📄 {txt_file.name}"])
+            file_item.setData(0, Qt.UserRole, str(txt_file))
+
+
+def _add_txt_files_to_tree(parent_item, folder: Path, include_md: bool = False):
+    """Add .txt files (and optionally .md files) from a folder to the tree."""
+    if not folder.exists():
+        return
+    
+    # Get all relevant files
+    files = list(folder.glob("*.txt"))
+    if include_md:
+        files.extend(folder.glob("*.md"))
+    
+    for txt_file in sorted(files, key=lambda x: x.name.lower()):
+        icon = "📄" if txt_file.suffix == ".txt" else "📝"
+        file_item = QTreeWidgetItem(parent_item, [f"{icon} {txt_file.name}"])
+        file_item.setData(0, Qt.UserRole, str(txt_file))
+
+
+def _on_tree_item_clicked(parent, item):
+    """Handle tree item click - load file if it's a file."""
+    filepath = item.data(0, Qt.UserRole)
+    if filepath:
+        path = Path(filepath)
+        if path.is_file():
+            _load_file_into_editor(parent, path)
+
+
+def _load_file_into_editor(parent, filepath: Path):
+    """Load a file into the editor."""
+    parent._current_instructions_file = str(filepath)
+    parent.instructions_file_label.setText(f"📄 {filepath.name}")
+    
+    try:
+        content = filepath.read_text(encoding='utf-8', errors='replace')
+        parent.instructions_editor.setPlainText(content)
+    except Exception as e:
+        parent.instructions_editor.setPlainText(f"Error loading file: {e}")
 
 
 def _load_default_instructions(parent):
@@ -172,14 +295,7 @@ def _load_default_instructions(parent):
         instructions_file.write_text(DEFAULT_INSTRUCTIONS)
     
     # Load it
-    parent._current_instructions_file = str(instructions_file)
-    parent.instructions_file_label.setText(f"📄 {instructions_file.name}")
-    
-    try:
-        content = instructions_file.read_text(encoding='utf-8', errors='replace')
-        parent.instructions_editor.setPlainText(content)
-    except Exception as e:
-        parent.instructions_editor.setPlainText(f"Error loading file: {e}")
+    _load_file_into_editor(parent, instructions_file)
 
 
 def _open_instructions_file(parent):
@@ -187,18 +303,12 @@ def _open_instructions_file(parent):
     start_dir = str(Path(CONFIG.get("data_dir", "data")))
     
     filepath, _ = QFileDialog.getOpenFileName(
-        parent, "Open File", start_dir, "Text Files (*.txt);;All Files (*)"
+        parent, "Open File", start_dir, "Text Files (*.txt *.md);;All Files (*)"
     )
     
     if filepath:
-        parent._current_instructions_file = filepath
-        parent.instructions_file_label.setText(f"📄 {Path(filepath).name}")
-        
-        try:
-            content = Path(filepath).read_text(encoding='utf-8', errors='replace')
-            parent.instructions_editor.setPlainText(content)
-        except Exception as e:
-            parent.instructions_editor.setPlainText(f"Error loading file: {e}")
+        _load_file_into_editor(parent, Path(filepath))
+        _refresh_file_tree(parent)
 
 
 def _save_instructions_file(parent):
@@ -249,11 +359,5 @@ def _create_new_instructions_file(parent):
         new_file.write_text("# Notes\n\n", encoding='utf-8')
     
     # Load the file
-    parent._current_instructions_file = str(new_file)
-    parent.instructions_file_label.setText(f"📄 {new_file.name}")
-    
-    try:
-        content = new_file.read_text(encoding='utf-8', errors='replace')
-        parent.instructions_editor.setPlainText(content)
-    except Exception as e:
-        parent.instructions_editor.setPlainText(f"Error loading file: {e}")
+    _load_file_into_editor(parent, new_file)
+    _refresh_file_tree(parent)

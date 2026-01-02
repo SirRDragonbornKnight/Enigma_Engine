@@ -12,7 +12,7 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
         QPushButton, QFrame, QComboBox, QTextEdit, QTabWidget,
         QProgressBar, QMessageBox, QFileDialog, QSpinBox,
-        QDoubleSpinBox
+        QDoubleSpinBox, QLineEdit, QGroupBox, QCheckBox
     )
     from PyQt5.QtCore import Qt
     from PyQt5.QtGui import QFont
@@ -40,6 +40,7 @@ PROVIDER_COLORS = {
     'STABILITY': '#7c3aed',
     'REPLICATE': '#000000',
     'ELEVENLABS': '#1a1a2e',
+    'HUGGINGFACE': '#ffcc00',
     'MOCK': '#666666',
 }
 
@@ -354,7 +355,219 @@ class AddonsTab(QWidget):
         })
         tabs.addTab(embed_tab, "🔍 Search")
         
+        # HuggingFace Settings tab
+        hf_tab = self._create_huggingface_tab()
+        tabs.addTab(hf_tab, "🤗 HuggingFace")
+        
         layout.addWidget(tabs)
+    
+    def _create_huggingface_tab(self) -> QWidget:
+        """Create the HuggingFace configuration tab."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header_layout = QHBoxLayout()
+        hf_icon = QLabel("🤗")
+        hf_icon.setFont(QFont('Arial', 24))
+        header_layout.addWidget(hf_icon)
+        
+        title = QLabel("HuggingFace Integration")
+        title.setFont(QFont('Arial', 14, QFont.Bold))
+        title.setStyleSheet("color: #ffcc00;")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+        
+        desc = QLabel("Connect to HuggingFace for models, embeddings, and inference API.")
+        desc.setStyleSheet("color: #888; margin-bottom: 10px;")
+        layout.addWidget(desc)
+        
+        # API Key Configuration
+        api_group = QGroupBox("🔑 API Configuration")
+        api_layout = QVBoxLayout(api_group)
+        
+        key_row = QHBoxLayout()
+        key_label = QLabel("HuggingFace Token:")
+        key_row.addWidget(key_label)
+        
+        self.hf_token_input = QLineEdit()
+        self.hf_token_input.setPlaceholderText("hf_xxxxxxxxxxxx")
+        self.hf_token_input.setEchoMode(QLineEdit.Password)
+        key_row.addWidget(self.hf_token_input, stretch=1)
+        
+        show_btn = QPushButton("👁")
+        show_btn.setMaximumWidth(30)
+        show_btn.setCheckable(True)
+        show_btn.toggled.connect(lambda checked: self.hf_token_input.setEchoMode(
+            QLineEdit.Normal if checked else QLineEdit.Password))
+        key_row.addWidget(show_btn)
+        
+        api_layout.addLayout(key_row)
+        
+        # Save/Test buttons
+        btn_row = QHBoxLayout()
+        save_key_btn = QPushButton("💾 Save Token")
+        save_key_btn.clicked.connect(self._save_hf_token)
+        btn_row.addWidget(save_key_btn)
+        
+        test_btn = QPushButton("🧪 Test Connection")
+        test_btn.clicked.connect(self._test_hf_connection)
+        btn_row.addWidget(test_btn)
+        
+        btn_row.addStretch()
+        api_layout.addLayout(btn_row)
+        
+        # How to get token
+        help_label = QLabel(
+            "<p>Get your token from: "
+            "<a href='https://huggingface.co/settings/tokens' style='color: #ffcc00;'>"
+            "huggingface.co/settings/tokens</a></p>"
+            "<p><i>Token is stored in: ~/.enigma/hf_token</i></p>"
+        )
+        help_label.setOpenExternalLinks(True)
+        help_label.setStyleSheet("color: #666; font-size: 10px;")
+        api_layout.addWidget(help_label)
+        
+        layout.addWidget(api_group)
+        
+        # Model Selection
+        model_group = QGroupBox("📦 Model Selection")
+        model_layout = QVBoxLayout(model_group)
+        
+        # Text generation
+        text_row = QHBoxLayout()
+        text_row.addWidget(QLabel("Text Generation:"))
+        self.hf_text_model = QComboBox()
+        self.hf_text_model.addItems([
+            "gpt2",
+            "gpt2-medium",
+            "gpt2-large",
+            "microsoft/DialoGPT-medium",
+            "bigscience/bloom-560m",
+        ])
+        self.hf_text_model.setEditable(True)
+        text_row.addWidget(self.hf_text_model, stretch=1)
+        model_layout.addLayout(text_row)
+        
+        # Image generation
+        img_row = QHBoxLayout()
+        img_row.addWidget(QLabel("Image Generation:"))
+        self.hf_image_model = QComboBox()
+        self.hf_image_model.addItems([
+            "stabilityai/stable-diffusion-2-1",
+            "runwayml/stable-diffusion-v1-5",
+            "CompVis/stable-diffusion-v1-4",
+        ])
+        self.hf_image_model.setEditable(True)
+        img_row.addWidget(self.hf_image_model, stretch=1)
+        model_layout.addLayout(img_row)
+        
+        # Embeddings
+        embed_row = QHBoxLayout()
+        embed_row.addWidget(QLabel("Embeddings:"))
+        self.hf_embed_model = QComboBox()
+        self.hf_embed_model.addItems([
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "sentence-transformers/all-mpnet-base-v2",
+        ])
+        self.hf_embed_model.setEditable(True)
+        embed_row.addWidget(self.hf_embed_model, stretch=1)
+        model_layout.addLayout(embed_row)
+        
+        # Use local checkbox
+        self.hf_use_local = QCheckBox("Download and run models locally (requires disk space)")
+        model_layout.addWidget(self.hf_use_local)
+        
+        layout.addWidget(model_group)
+        
+        # Status
+        status_group = QGroupBox("📊 Status")
+        status_layout = QVBoxLayout(status_group)
+        
+        self.hf_status_label = QLabel("Not connected")
+        self.hf_status_label.setStyleSheet("color: #f39c12;")
+        status_layout.addWidget(self.hf_status_label)
+        
+        layout.addWidget(status_group)
+        
+        layout.addStretch()
+        
+        # Load saved token
+        self._load_hf_token()
+        
+        return widget
+    
+    def _load_hf_token(self):
+        """Load saved HuggingFace token."""
+        import os
+        from pathlib import Path
+        
+        # Try environment variable first
+        token = os.environ.get('HUGGINGFACE_TOKEN', '')
+        
+        # Try saved file
+        if not token:
+            token_file = Path.home() / ".enigma" / "hf_token"
+            if token_file.exists():
+                try:
+                    token = token_file.read_text().strip()
+                except Exception:
+                    pass
+        
+        if token:
+            self.hf_token_input.setText(token)
+            self.hf_status_label.setText("✓ Token loaded")
+            self.hf_status_label.setStyleSheet("color: #2ecc71;")
+    
+    def _save_hf_token(self):
+        """Save HuggingFace token."""
+        from pathlib import Path
+        
+        token = self.hf_token_input.text().strip()
+        if not token:
+            QMessageBox.warning(self, "No Token", "Please enter a HuggingFace token")
+            return
+        
+        # Save to file
+        try:
+            enigma_dir = Path.home() / ".enigma"
+            enigma_dir.mkdir(exist_ok=True)
+            token_file = enigma_dir / "hf_token"
+            token_file.write_text(token)
+            
+            self.hf_status_label.setText("✓ Token saved")
+            self.hf_status_label.setStyleSheet("color: #2ecc71;")
+            QMessageBox.information(self, "Saved", "Token saved to ~/.enigma/hf_token")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to save token: {e}")
+    
+    def _test_hf_connection(self):
+        """Test HuggingFace API connection."""
+        token = self.hf_token_input.text().strip()
+        if not token:
+            QMessageBox.warning(self, "No Token", "Please enter a HuggingFace token first")
+            return
+        
+        try:
+            from huggingface_hub import HfApi
+            api = HfApi(token=token)
+            user = api.whoami()
+            username = user.get('name', 'Unknown')
+            
+            self.hf_status_label.setText(f"✓ Connected as: {username}")
+            self.hf_status_label.setStyleSheet("color: #2ecc71;")
+            QMessageBox.information(self, "Success", f"Connected to HuggingFace as: {username}")
+        except ImportError:
+            QMessageBox.warning(
+                self, "Missing Package",
+                "huggingface-hub is not installed.\n\n"
+                "Install with: pip install huggingface-hub"
+            )
+        except Exception as e:
+            self.hf_status_label.setText(f"✗ Connection failed")
+            self.hf_status_label.setStyleSheet("color: #e74c3c;")
+            QMessageBox.warning(self, "Connection Failed", f"Could not connect: {e}")
     
     def _create_type_tab(self, addon_type: str, addons: dict) -> QWidget:
         """Create a tab for a specific addon type."""
