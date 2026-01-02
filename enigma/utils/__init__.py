@@ -14,7 +14,13 @@ from .system_messages import (
     MessagePrefix
 )
 from .text_formatting import TextFormatter
-from .error_handler import ErrorHandler
+from .error_handler import ErrorHandler, GracefulFileHandler
+from .feedback import FeedbackCollector
+from .training_validator import TrainingDataValidator
+from .text_enhancement import (
+    levenshtein_distance, find_closest_match, suggest_command, 
+    format_did_you_mean
+)
 
 
 def progress_bar(
@@ -161,4 +167,12 @@ __all__ = [
     # Classes
     'TextFormatter',
     'ErrorHandler',
+    'GracefulFileHandler',
+    'FeedbackCollector',
+    'TrainingDataValidator',
+    # Text enhancement
+    'levenshtein_distance',
+    'find_closest_match',
+    'suggest_command',
+    'format_did_you_mean',
 ]

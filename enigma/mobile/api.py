@@ -156,7 +156,7 @@ if FLASK_AVAILABLE:
         }
         
         Response:
-            Audio file (WAV format)
+            Audio file (WAV format) or JSON status
         """
         data = request.json
         
@@ -164,23 +164,29 @@ if FLASK_AVAILABLE:
             return jsonify({'error': 'No text provided'}), 400
         
         text = data['text']
-        voice = data.get('voice', 'default')
+        voice_name = data.get('voice', 'default')
         
         try:
-            # Try to use voice system
-            from ..voice.voice_profile import VoiceEngine
+            from ..voice import speak, set_voice, VoiceProfile
             
-            engine = VoiceEngine()
-            engine.set_profile(voice)
+            # Set the voice profile
+            try:
+                set_voice(voice_name)
+            except FileNotFoundError:
+                # Voice profile not found, use default
+                pass
             
-            # Generate audio (this is a simplified version)
-            # Real implementation would save to temp file and return
+            # Speak the text (uses system TTS)
+            speak(text)
             
             return jsonify({
-                'message': 'TTS not fully implemented in mobile API',
+                'success': True,
                 'text': text,
-                'voice': voice
+                'voice': voice_name,
+                'timestamp': datetime.now().isoformat()
             })
+        except ImportError:
+            return jsonify({'error': 'Voice module not available'}), 500
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
@@ -236,11 +242,39 @@ if FLASK_AVAILABLE:
         """
         engine = get_engine()
         
+        # Check available features
+        features = {
+            'chat': True,
+            'voice_tts': False,
+            'voice_stt': False,
+            'personality': False,
+        }
+        
+        try:
+            from ..voice import speak
+            features['voice_tts'] = True
+        except ImportError:
+            pass
+        
+        try:
+            from ..voice import listen
+            features['voice_stt'] = True
+        except ImportError:
+            pass
+        
+        try:
+            from ..core.personality import load_personality
+            features['personality'] = True
+        except ImportError:
+            pass
+        
         return jsonify({
             'status': 'ok',
             'model_loaded': engine is not None,
             'model_name': CONFIG.get('default_model', 'enigma'),
-            'version': '1.0'
+            'version': '1.0',
+            'features': features,
+            'timestamp': datetime.now().isoformat()
         })
     
     

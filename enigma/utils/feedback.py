@@ -53,7 +53,7 @@ class FeedbackCollector:
             try:
                 with open(self.storage_path, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError):
                 return []
         return []
     

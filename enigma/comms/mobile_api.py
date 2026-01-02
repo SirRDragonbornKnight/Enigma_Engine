@@ -89,8 +89,21 @@ class MobileAPI:
                 class SimpleVoice:
                     def speak(self, text):
                         speak(text)
+                    
+                    def save_to_file(self, text, filepath):
+                        """Save TTS output to file."""
+                        try:
+                            from ..voice.voice_profile import get_engine
+                            engine = get_engine()
+                            engine.save_to_file(text, filepath)
+                        except Exception:
+                            # Fallback: just speak (no file save)
+                            self.speak(text)
+                            raise NotImplementedError("Voice engine doesn't support save_to_file")
+                
                 self._voice = SimpleVoice()
-            except:
+            except ImportError as e:
+                print(f"[MobileAPI] Voice not available: {e}")
                 self._voice = None
         return self._voice
     
@@ -216,8 +229,8 @@ class MobileAPI:
             # Decode audio
             try:
                 audio_data = base64.b64decode(audio_b64)
-            except:
-                return jsonify({"error": "Invalid base64 audio"}), 400
+            except Exception as e:
+                return jsonify({"error": f"Invalid base64 audio: {e}"}), 400
             
             # Save temp file and transcribe
             import tempfile
@@ -312,13 +325,13 @@ class MobileAPI:
             # Try Google (requires internet)
             try:
                 return recognizer.recognize_google(audio)
-            except:
+            except Exception:
                 pass
             
             # Try offline (if available)
             try:
                 return recognizer.recognize_sphinx(audio)
-            except:
+            except Exception:
                 pass
         except ImportError:
             pass
@@ -329,7 +342,7 @@ class MobileAPI:
             model = whisper.load_model("tiny")
             result = model.transcribe(audio_path)
             return result["text"]
-        except:
+        except Exception:
             pass
         
         return None

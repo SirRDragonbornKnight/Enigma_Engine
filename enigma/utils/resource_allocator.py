@@ -95,7 +95,7 @@ class ResourceAllocator:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
                 return data.get('mode', 'balanced')
-            except:
+            except (json.JSONDecodeError, IOError):
                 return 'balanced'
         return 'balanced'
     
@@ -106,7 +106,7 @@ class ResourceAllocator:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
                 return data.get('preference', 'balanced')
-            except:
+            except (json.JSONDecodeError, IOError):
                 return 'balanced'
         return 'balanced'
     
@@ -150,7 +150,7 @@ class ResourceAllocator:
                 psutil.Process().nice(-10)  # Higher priority
             else:
                 psutil.Process().nice(0)  # Normal
-        except:
+        except (OSError, psutil.AccessDenied):
             pass  # May fail on some systems
         
         # Set CPU affinity if threads specified
@@ -160,7 +160,7 @@ class ResourceAllocator:
                 cpu_count = psutil.cpu_count()
                 cpus = list(range(min(threads, cpu_count)))
                 psutil.Process().cpu_affinity(cpus)
-        except:
+        except (OSError, psutil.AccessDenied, AttributeError):
             pass
     
     def get_current_mode(self) -> Dict[str, Any]:
@@ -198,7 +198,7 @@ class ResourceAllocator:
                     info['gpu_memory_gb'] = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 else:
                     info['gpu_available'] = False
-            except:
+            except ImportError:
                 info['gpu_available'] = False
             
             return info

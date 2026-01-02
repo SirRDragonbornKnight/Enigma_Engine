@@ -52,12 +52,14 @@ Conflict Prevention:
     - embedding_local / embedding_api
 """
 
-from .manager import ModuleManager, Module, ModuleState, ModuleCategory, ModuleInfo
+from .manager import ModuleManager, Module, ModuleState, ModuleCategory, ModuleInfo, get_manager
 from .registry import (
     MODULE_REGISTRY,
     get_module,
     list_modules,
     list_by_category,
+    list_local_modules,
+    list_cloud_modules,
     register_all
 )
 
@@ -68,10 +70,13 @@ __all__ = [
     'ModuleState',
     'ModuleCategory',
     'ModuleInfo',
+    'get_manager',
     # Registry
     'MODULE_REGISTRY',
     'get_module',
     'list_modules',
     'list_by_category',
+    'list_local_modules',
+    'list_cloud_modules',
     'register_all',
 ]

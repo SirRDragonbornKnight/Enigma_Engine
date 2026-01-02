@@ -91,7 +91,7 @@ class DiscoveryMode:
             try:
                 with open(self.storage_path, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError):
                 return []
         return []
     
@@ -396,11 +396,11 @@ class AutoSaveManager:
                             'training' if 'state' in data else
                             'config'
                 })
-            except:
+            except (json.JSONDecodeError, IOError):
                 continue
         
         # Sort by timestamp
-        saves.sort(key=lambda x: x['timestamp'], reverse=True)
+        saves.sort(key=lambda x: x['timestamp'] or '', reverse=True)
         return saves
     
     def recover_conversation(self, conversation_id: str) -> Optional[List[Dict]]:
@@ -419,7 +419,7 @@ class AutoSaveManager:
                 with open(save_path, 'r') as f:
                     data = json.load(f)
                 return data.get('messages', [])
-            except:
+            except (json.JSONDecodeError, IOError):
                 return None
         return None
     
@@ -439,7 +439,7 @@ class AutoSaveManager:
                 timestamp = datetime.fromisoformat(data.get('timestamp', ''))
                 if timestamp < cutoff:
                     file.unlink()
-            except:
+            except (json.JSONDecodeError, IOError, ValueError):
                 continue
 
 

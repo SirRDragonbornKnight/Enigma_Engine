@@ -305,8 +305,17 @@ class VoiceInputModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.voice.stt_simple import SimpleSpeechToText
-            self._instance = SimpleSpeechToText()
+            from enigma.voice.stt_simple import transcribe_from_mic, transcribe_from_file
+            # Wrap functions in a simple class for consistency
+            class STTWrapper:
+                def __init__(self):
+                    self.transcribe_from_mic = transcribe_from_mic
+                    self.transcribe_from_file = transcribe_from_file
+                
+                def listen(self, timeout=8):
+                    return transcribe_from_mic(timeout)
+            
+            self._instance = STTWrapper()
             return True
         except Exception as e:
             logger.warning(f"Could not load voice input: {e}")
@@ -347,8 +356,19 @@ class VoiceOutputModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.voice.tts_simple import SimpleTextToSpeech
-            self._instance = SimpleTextToSpeech()
+            from enigma.voice.tts_simple import speak
+            # Wrap function in a simple class for consistency
+            class TTSWrapper:
+                def __init__(self):
+                    self._speak = speak
+                
+                def speak(self, text):
+                    return self._speak(text)
+                
+                def say(self, text):
+                    return self._speak(text)
+            
+            self._instance = TTSWrapper()
             return True
         except Exception as e:
             logger.warning(f"Could not load voice output: {e}")
@@ -388,8 +408,8 @@ class VisionModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.tools.vision import VisionSystem
-            self._instance = VisionSystem()
+            from enigma.tools.vision import ScreenVision
+            self._instance = ScreenVision()
             return True
         except Exception as e:
             logger.warning(f"Could not load vision: {e}")
@@ -446,7 +466,7 @@ class WebToolsModule(Module):
             from enigma.tools.web_tools import WebTools
             self._instance = WebTools()
             return True
-        except BaseException:
+        except Exception:
             return True  # Optional, don't fail
 
 
@@ -472,7 +492,7 @@ class FileToolsModule(Module):
             from enigma.tools.file_tools import FileTools
             self._instance = FileTools()
             return True
-        except BaseException:
+        except Exception:
             return True
 
 
@@ -535,10 +555,10 @@ class NetworkModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.comms.network import NetworkManager
-            self._instance = NetworkManager()
+            from enigma.comms.network import EnigmaNode
+            self._instance = EnigmaNode()
             return True
-        except BaseException:
+        except Exception:
             return True
 
 

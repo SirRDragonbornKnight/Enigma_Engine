@@ -169,8 +169,8 @@ class AvatarController:
         for cb in self._callbacks["state_change"]:
             try:
                 cb(old_state, state)
-            except:
-                pass
+            except Exception as e:
+                print(f"[Avatar] State callback error: {e}")
     
     def _init_renderer(self) -> None:
         """Initialize the renderer component."""
@@ -192,9 +192,20 @@ class AvatarController:
         """Execute a single animation."""
         anim_type = animation.get("type", "idle")
         duration = animation.get("duration", 1.0)
+        on_complete = animation.get("on_complete")
         
         if self._animator:
             self._animator.play(anim_type, duration)
+        
+        # Wait for animation duration
+        time.sleep(duration)
+        
+        # Call completion callback
+        if on_complete and callable(on_complete):
+            try:
+                on_complete()
+            except Exception as e:
+                print(f"[Avatar] Animation callback error: {e}")
     
     # === Movement ===
     
@@ -217,6 +228,7 @@ class AvatarController:
                 "from": (self.position.x, self.position.y),
                 "to": (x, y),
                 "duration": 0.5,
+                "on_complete": lambda: self._set_state(AvatarState.IDLE),
             })
         
         self.position.x = x
@@ -228,11 +240,8 @@ class AvatarController:
         for cb in self._callbacks["move"]:
             try:
                 cb(x, y)
-            except:
-                pass
-        
-        if animate:
-            self._set_state(AvatarState.IDLE)
+            except Exception as e:
+                print(f"[Avatar] Move callback error: {e}")
     
     def move_relative(self, dx: int, dy: int) -> None:
         """Move avatar by offset."""
@@ -241,15 +250,32 @@ class AvatarController:
     def center_on_screen(self) -> None:
         """Center avatar on screen."""
         try:
-            from ..core.hardware import get_hardware
-            hw = get_hardware()
-            display = hw.profile.get("display", {})
+            # Try to get screen dimensions
+            import subprocess
+            import platform
             
-            if display.get("width") and display.get("height"):
-                x = (display["width"] - self.position.width) // 2
-                y = (display["height"] - self.position.height) // 2
-                self.move_to(x, y)
-        except:
+            width, height = 1920, 1080  # Default fallback
+            
+            if platform.system() == "Linux":
+                result = subprocess.run(
+                    ["xrandr", "--current"],
+                    capture_output=True, text=True
+                )
+                import re
+                match = re.search(r'current (\d+) x (\d+)', result.stdout)
+                if match:
+                    width, height = int(match.group(1)), int(match.group(2))
+            elif platform.system() == "Windows":
+                import ctypes
+                user32 = ctypes.windll.user32
+                width = user32.GetSystemMetrics(0)
+                height = user32.GetSystemMetrics(1)
+            
+            x = (width - self.position.width) // 2
+            y = (height - self.position.height) // 2
+            self.move_to(x, y)
+        except Exception as e:
+            print(f"[Avatar] Could not detect screen size: {e}")
             self.move_to(400, 200)
     
     # === Speaking ===
@@ -280,8 +306,8 @@ class AvatarController:
         for cb in self._callbacks["speak"]:
             try:
                 cb(text)
-            except:
-                pass
+            except Exception as e:
+                print(f"[Avatar] Speak callback error: {e}")
     
     def think(self, duration: float = 2.0) -> None:
         """Show thinking animation."""
@@ -335,8 +361,8 @@ class AvatarController:
         for cb in self._callbacks["interact"]:
             try:
                 cb(window_title, action, window_pos)
-            except:
-                pass
+            except Exception as e:
+                print(f"[Avatar] Interact callback error: {e}")
         
         return True
     
@@ -536,6 +562,24 @@ class AvatarRenderer:
     def render_frame(self, animation_data: Dict = None) -> None:
         """Render a single frame."""
         pass  # Implement with actual rendering
+    
+    def load_model(self, model_path: str) -> bool:
+        """Load a 3D model file."""
+        # Stub - implement with actual 3D rendering library
+        print(f"[Avatar] Loading model: {model_path}")
+        return True
+    
+    def set_scale(self, scale: float) -> None:
+        """Set avatar scale."""
+        print(f"[Avatar] Scale set to: {scale}")
+    
+    def set_opacity(self, opacity: float) -> None:
+        """Set avatar opacity."""
+        print(f"[Avatar] Opacity set to: {opacity}")
+    
+    def set_color(self, color: str) -> None:
+        """Set avatar color/tint."""
+        print(f"[Avatar] Color set to: {color}")
 
 
 class AvatarAnimator:

@@ -108,7 +108,7 @@ class ShortcutManager:
                 shortcuts = self.DEFAULT_SHORTCUTS.copy()
                 shortcuts.update(custom)
                 return shortcuts
-            except:
+            except (json.JSONDecodeError, IOError):
                 return self.DEFAULT_SHORTCUTS.copy()
         return self.DEFAULT_SHORTCUTS.copy()
     

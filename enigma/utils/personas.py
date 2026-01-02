@@ -212,7 +212,7 @@ class PersonaManager:
                     name: Persona.from_dict(persona_data)
                     for name, persona_data in data.items()
                 }
-            except:
+            except (json.JSONDecodeError, IOError, KeyError):
                 return {}
         return {}
     

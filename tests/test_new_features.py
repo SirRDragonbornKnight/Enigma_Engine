@@ -208,23 +208,27 @@ class TestMobileAPI:
     def test_import(self):
         """Test that mobile API can be imported."""
         try:
-            from enigma.mobile.api import mobile_app
-            assert mobile_app is not None
+            from enigma.mobile import mobile_app, MobileAPI
+            # mobile_app may be None if Flask not available
+            assert MobileAPI is not None
         except ImportError:
             pytest.skip("Flask not installed")
     
     def test_endpoints_exist(self):
         """Test that API endpoints are defined."""
         try:
-            from enigma.mobile.api import mobile_app
+            from enigma.mobile import MobileAPI
+            
+            api = MobileAPI(port=5099)  # Use unusual port for test
             
             # Get all route rules
-            routes = [str(rule) for rule in mobile_app.url_map.iter_rules()]
+            routes = [str(rule) for rule in api.app.url_map.iter_rules()]
             
-            # Check API endpoints exist
-            assert '/api/v1/chat' in routes
-            assert '/api/v1/status' in routes
-            assert '/api/v1/models' in routes
+            # Check API endpoints exist (comms/mobile_api uses these routes)
+            assert '/chat' in routes
+            assert '/status' in routes
+            assert '/voice/input' in routes
+            assert '/voice/output' in routes
         except ImportError:
             pytest.skip("Flask not installed")
 
