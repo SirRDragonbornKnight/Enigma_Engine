@@ -650,7 +650,7 @@ class ImageGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import StableDiffusionLocal
+            from enigma.gui.tabs.image_tab import StableDiffusionLocal
             self._addon = StableDiffusionLocal()
             return self._addon.load()
         except Exception as e:
@@ -690,10 +690,10 @@ class ImageGenAPIModule(GenerationModule):
         try:
             provider = self.config.get('provider', 'openai')
             if provider == 'openai':
-                from enigma.addons.builtin import OpenAIImage
+                from enigma.gui.tabs.image_tab import OpenAIImage
                 self._addon = OpenAIImage(api_key=self.config.get('api_key'))
             else:
-                from enigma.addons.builtin import ReplicateImage
+                from enigma.gui.tabs.image_tab import ReplicateImage
                 self._addon = ReplicateImage(api_key=self.config.get('api_key'))
             return self._addon.load()
         except Exception as e:
@@ -720,7 +720,7 @@ class CodeGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import EnigmaCode
+            from enigma.gui.tabs.code_tab import EnigmaCode
             self._addon = EnigmaCode(model_name=self.config.get('model_name', 'sacrifice'))
             return self._addon.load()
         except Exception as e:
@@ -756,7 +756,7 @@ class CodeGenAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import OpenAICode
+            from enigma.gui.tabs.code_tab import OpenAICode
             self._addon = OpenAICode(
                 api_key=self.config.get('api_key'),
                 model=self.config.get(
@@ -789,7 +789,7 @@ class VideoGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import LocalVideo
+            from enigma.gui.tabs.video_tab import LocalVideo
             self._addon = LocalVideo()
             return self._addon.load()
         except Exception as e:
@@ -817,7 +817,7 @@ class VideoGenAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import ReplicateVideo
+            from enigma.gui.tabs.video_tab import ReplicateVideo
             self._addon = ReplicateVideo(api_key=self.config.get('api_key'))
             return self._addon.load()
         except Exception as e:
@@ -844,7 +844,7 @@ class AudioGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import LocalTTS
+            from enigma.gui.tabs.audio_tab import LocalTTS
             self._addon = LocalTTS()
             return self._addon.load()
         except Exception as e:
@@ -887,10 +887,10 @@ class AudioGenAPIModule(GenerationModule):
         try:
             provider = self.config.get('provider', 'elevenlabs')
             if provider == 'elevenlabs':
-                from enigma.addons.builtin import ElevenLabsTTS
+                from enigma.gui.tabs.audio_tab import ElevenLabsTTS
                 self._addon = ElevenLabsTTS(api_key=self.config.get('api_key'))
             else:
-                from enigma.addons.builtin import ReplicateAudio
+                from enigma.gui.tabs.audio_tab import ReplicateAudio
                 self._addon = ReplicateAudio(api_key=self.config.get('api_key'))
             return self._addon.load()
         except Exception as e:
@@ -923,7 +923,7 @@ class EmbeddingLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import LocalEmbedding
+            from enigma.gui.tabs.embeddings_tab import LocalEmbedding
             self._addon = LocalEmbedding(model_name=self.config.get('model', 'all-MiniLM-L6-v2'))
             return self._addon.load()
         except Exception as e:
@@ -960,7 +960,7 @@ class EmbeddingAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import OpenAIEmbedding
+            from enigma.gui.tabs.embeddings_tab import OpenAIEmbedding
             self._addon = OpenAIEmbedding(
                 api_key=self.config.get('api_key'),
                 model=self.config.get('model'))
@@ -1007,7 +1007,7 @@ class ThreeDGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import Local3DGen
+            from enigma.gui.tabs.threed_tab import Local3DGen
             self._addon = Local3DGen(
                 model=self.config.get('model', 'shap-e')
             )
@@ -1045,7 +1045,7 @@ class ThreeDGenAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.addons.builtin import Cloud3DGen
+            from enigma.gui.tabs.threed_tab import Cloud3DGen
             self._addon = Cloud3DGen(
                 api_key=self.config.get('api_key'),
                 service=self.config.get('service', 'replicate')

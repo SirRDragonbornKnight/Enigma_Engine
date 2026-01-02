@@ -1,12 +1,22 @@
 """
-Audio Generation Tab - Generate audio/speech using local or cloud models.
+Audio Generation Tab - Text-to-speech and audio generation.
+
+Providers:
+  - LOCAL: pyttsx3 offline TTS
+  - ELEVENLABS: High-quality cloud TTS (requires API key)
+  - REPLICATE: Cloud audio generation (requires API key)
 """
+
+import os
+import time
+from pathlib import Path
+from typing import Optional, Dict, Any
 
 try:
     from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
-        QPushButton, QFrame, QComboBox, QTextEdit, QProgressBar,
-        QMessageBox, QFileDialog, QDoubleSpinBox, QSlider, QGroupBox
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+        QPushButton, QComboBox, QTextEdit, QProgressBar,
+        QMessageBox, QGroupBox, QSlider, QFileDialog
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
@@ -14,134 +24,308 @@ try:
 except ImportError:
     HAS_PYQT = False
 
-from pathlib import Path
 from ...config import CONFIG
 
+# Output directory
+OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "audio"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Provider colors for UI badges
-PROVIDER_COLORS = {
-    'LOCAL': '#27ae60',
-    'ELEVENLABS': '#1a1a2e',
-    'REPLICATE': '#000000',
-    'OPENAI': '#10a37f',
+
+# =============================================================================
+# Audio/TTS Implementations
+# =============================================================================
+
+class LocalTTS:
+    """Local text-to-speech using pyttsx3."""
+    
+    def __init__(self):
+        self.engine = None
+        self.is_loaded = False
+        self.voices = []
+        self.current_voice = 0
+    
+    def load(self) -> bool:
+        try:
+            import pyttsx3
+            self.engine = pyttsx3.init()
+            self.voices = self.engine.getProperty('voices')
+            self.is_loaded = True
+            return True
+        except ImportError:
+            print("Install: pip install pyttsx3")
+            return False
+        except Exception as e:
+            print(f"Failed to load TTS: {e}")
+            return False
+    
+    def unload(self):
+        if self.engine:
+            try:
+                self.engine.stop()
+            except:
+                pass
+            self.engine = None
+        self.is_loaded = False
+    
+    def get_voices(self) -> list:
+        if not self.is_loaded:
+            return []
+        return [v.name for v in self.voices]
+    
+    def set_voice(self, index: int):
+        if self.is_loaded and 0 <= index < len(self.voices):
+            self.engine.setProperty('voice', self.voices[index].id)
+            self.current_voice = index
+    
+    def set_rate(self, rate: int):
+        if self.is_loaded:
+            self.engine.setProperty('rate', rate)
+    
+    def set_volume(self, volume: float):
+        if self.is_loaded:
+            self.engine.setProperty('volume', volume)
+    
+    def speak(self, text: str) -> Dict[str, Any]:
+        """Speak text directly (no file)."""
+        if not self.is_loaded:
+            return {"success": False, "error": "TTS not loaded"}
+        
+        try:
+            self.engine.say(text)
+            self.engine.runAndWait()
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+        """Generate audio file from text."""
+        if not self.is_loaded:
+            return {"success": False, "error": "TTS not loaded"}
+        
+        try:
+            start = time.time()
+            
+            timestamp = int(time.time())
+            filename = f"tts_{timestamp}.wav"
+            filepath = OUTPUT_DIR / filename
+            
+            self.engine.save_to_file(text, str(filepath))
+            self.engine.runAndWait()
+            
+            return {
+                "success": True,
+                "path": str(filepath),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+class ElevenLabsTTS:
+    """ElevenLabs high-quality TTS (CLOUD - requires API key)."""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
+        self.client = None
+        self.is_loaded = False
+        self.voices = []
+        self.current_voice_id = None
+    
+    def load(self) -> bool:
+        if not self.api_key:
+            print("ElevenLabs requires ELEVENLABS_API_KEY")
+            return False
+        
+        try:
+            from elevenlabs import ElevenLabs
+            self.client = ElevenLabs(api_key=self.api_key)
+            
+            # Fetch available voices
+            voices_response = self.client.voices.get_all()
+            self.voices = [(v.voice_id, v.name) for v in voices_response.voices]
+            
+            if self.voices:
+                self.current_voice_id = self.voices[0][0]
+            
+            self.is_loaded = True
+            return True
+        except ImportError:
+            print("Install: pip install elevenlabs")
+            return False
+        except Exception as e:
+            print(f"Failed to load ElevenLabs: {e}")
+            return False
+    
+    def unload(self):
+        self.client = None
+        self.is_loaded = False
+    
+    def get_voices(self) -> list:
+        return [v[1] for v in self.voices]
+    
+    def set_voice(self, index: int):
+        if 0 <= index < len(self.voices):
+            self.current_voice_id = self.voices[index][0]
+    
+    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+        if not self.is_loaded:
+            return {"success": False, "error": "ElevenLabs not loaded"}
+        
+        try:
+            start = time.time()
+            
+            audio = self.client.text_to_speech.convert(
+                voice_id=self.current_voice_id or "21m00Tcm4TlvDq8ikWAM",
+                text=text,
+                model_id="eleven_multilingual_v2"
+            )
+            
+            # Audio is a generator, collect it
+            audio_bytes = b"".join(audio)
+            
+            timestamp = int(time.time())
+            filename = f"elevenlabs_{timestamp}.mp3"
+            filepath = OUTPUT_DIR / filename
+            filepath.write_bytes(audio_bytes)
+            
+            return {
+                "success": True,
+                "path": str(filepath),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+class ReplicateAudio:
+    """Replicate audio generation (CLOUD - requires API key)."""
+    
+    def __init__(self, api_key: Optional[str] = None,
+                 model: str = "suno-ai/bark:latest"):
+        self.api_key = api_key or os.environ.get("REPLICATE_API_TOKEN")
+        self.model = model
+        self.client = None
+        self.is_loaded = False
+    
+    def load(self) -> bool:
+        try:
+            import replicate
+            os.environ["REPLICATE_API_TOKEN"] = self.api_key or ""
+            self.client = replicate
+            self.is_loaded = bool(self.api_key)
+            return self.is_loaded
+        except ImportError:
+            print("Install: pip install replicate")
+            return False
+    
+    def unload(self):
+        self.client = None
+        self.is_loaded = False
+    
+    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+        if not self.is_loaded:
+            return {"success": False, "error": "Not loaded or missing API key"}
+        
+        try:
+            import requests
+            start = time.time()
+            
+            output = self.client.run(
+                self.model,
+                input={"prompt": text}
+            )
+            
+            # Download audio
+            audio_url = output if isinstance(output, str) else output.get("audio_out")
+            if not audio_url:
+                return {"success": False, "error": "No audio URL returned"}
+            
+            resp = requests.get(audio_url)
+            
+            timestamp = int(time.time())
+            filename = f"replicate_audio_{timestamp}.wav"
+            filepath = OUTPUT_DIR / filename
+            filepath.write_bytes(resp.content)
+            
+            return {
+                "success": True,
+                "path": str(filepath),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# GUI Components
+# =============================================================================
+
+_providers = {
+    'local': None,
+    'elevenlabs': None,
+    'replicate': None,
 }
+
+
+def get_provider(name: str):
+    global _providers
+    
+    if name == 'local' and _providers['local'] is None:
+        _providers['local'] = LocalTTS()
+    elif name == 'elevenlabs' and _providers['elevenlabs'] is None:
+        _providers['elevenlabs'] = ElevenLabsTTS()
+    elif name == 'replicate' and _providers['replicate'] is None:
+        _providers['replicate'] = ReplicateAudio()
+    
+    return _providers.get(name)
 
 
 class AudioGenerationWorker(QThread):
     """Background worker for audio generation."""
-    finished = pyqtSignal(str)  # Path to generated audio
-    error = pyqtSignal(str)
+    finished = pyqtSignal(dict)
     progress = pyqtSignal(int)
     
-    def __init__(self, text, voice, provider, parent=None):
+    def __init__(self, text, provider_name, save_file=True, parent=None):
         super().__init__(parent)
         self.text = text
-        self.voice = voice
-        self.provider = provider
+        self.provider_name = provider_name
+        self.save_file = save_file
     
     def run(self):
         try:
             self.progress.emit(10)
             
-            # Try to use module manager if available
-            try:
-                from ...modules.manager import ModuleManager
-                manager = ModuleManager()
-                
-                if self.provider == 'LOCAL':
-                    if manager.is_loaded('audio_gen_local'):
-                        module = manager.get_module('audio_gen_local')
-                        self.progress.emit(50)
-                        result = module.speak(self.text, voice=self.voice)
-                        self.progress.emit(100)
-                        self.finished.emit(result.get('path', ''))
-                        return
-                else:
-                    if manager.is_loaded('audio_gen_api'):
-                        module = manager.get_module('audio_gen_api')
-                        self.progress.emit(50)
-                        result = module.speak(self.text, voice=self.voice)
-                        self.progress.emit(100)
-                        self.finished.emit(result.get('path', ''))
-                        return
-            except ImportError:
-                pass
-            
-            # Try basic pyttsx3 fallback
-            try:
-                import pyttsx3
-                engine = pyttsx3.init()
-                
-                # Save to temp file
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                    temp_path = f.name
-                
-                self.progress.emit(50)
-                engine.save_to_file(self.text, temp_path)
-                engine.runAndWait()
-                self.progress.emit(100)
-                self.finished.emit(temp_path)
+            provider = get_provider(self.provider_name)
+            if provider is None:
+                self.finished.emit({"success": False, "error": "Unknown provider"})
                 return
-            except ImportError:
-                pass
             
-            # Mock for demo
+            if not provider.is_loaded:
+                self.progress.emit(20)
+                if not provider.load():
+                    self.finished.emit({"success": False, "error": "Failed to load provider"})
+                    return
+            
+            self.progress.emit(50)
+            
+            if self.save_file:
+                result = provider.generate(self.text)
+            else:
+                # Only LocalTTS supports speak()
+                if hasattr(provider, 'speak'):
+                    result = provider.speak(self.text)
+                else:
+                    result = provider.generate(self.text)
+            
             self.progress.emit(100)
-            self.finished.emit('')
+            self.finished.emit(result)
             
         except Exception as e:
-            self.error.emit(str(e))
-
-
-class ProviderCard(QFrame):
-    """Card displaying a single audio provider."""
-    
-    def __init__(self, name: str, info: dict, parent=None):
-        super().__init__(parent)
-        self.provider_name = name
-        self.provider_info = info
-        self.setup_ui()
-    
-    def setup_ui(self):
-        self.setFrameStyle(QFrame.Box | QFrame.Raised)
-        self.setLineWidth(1)
-        self.setMaximumHeight(100)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        
-        # Header
-        header = QHBoxLayout()
-        
-        name_label = QLabel(self.provider_info.get('name', self.provider_name))
-        name_label.setFont(QFont('Arial', 10, QFont.Bold))
-        header.addWidget(name_label)
-        
-        header.addStretch()
-        
-        # Provider badge
-        provider = self.provider_info.get('provider', 'UNKNOWN')
-        color = PROVIDER_COLORS.get(provider, '#666')
-        provider_label = QLabel(provider)
-        provider_label.setStyleSheet(
-            f"background-color: {color}; color: white; "
-            f"padding: 2px 6px; border-radius: 3px; font-size: 9px;"
-        )
-        header.addWidget(provider_label)
-        
-        layout.addLayout(header)
-        
-        # Description
-        desc = self.provider_info.get('description', 'No description')
-        desc_label = QLabel(desc)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #888; font-size: 9px;")
-        layout.addWidget(desc_label)
+            self.finished.emit({"success": False, "error": str(e)})
 
 
 class AudioTab(QWidget):
-    """Tab for audio/speech generation."""
+    """Tab for audio generation / text-to-speech."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -151,280 +335,294 @@ class AudioTab(QWidget):
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         
-        # Left: Provider list
-        left = QWidget()
-        left.setMaximumWidth(280)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        
-        type_label = QLabel("Audio Providers")
-        type_label.setFont(QFont('Arial', 12, QFont.Bold))
-        type_label.setStyleSheet("color: #2ecc71;")
-        left_layout.addWidget(type_label)
-        
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        cards_widget = QWidget()
-        cards_layout = QVBoxLayout(cards_widget)
-        cards_layout.setSpacing(8)
-        
-        # Available providers
-        providers = {
-            'local_tts': {
-                'name': 'Local TTS (pyttsx3)',
-                'description': 'Offline text-to-speech. Basic quality, free.',
-                'requirements': ['pyttsx3'],
-                'provider': 'LOCAL',
-            },
-            'elevenlabs_tts': {
-                'name': 'ElevenLabs',
-                'description': 'Premium voice synthesis. Very realistic.',
-                'requirements': ['elevenlabs'],
-                'provider': 'ELEVENLABS',
-                'needs_api_key': True,
-            },
-            'openai_tts': {
-                'name': 'OpenAI TTS',
-                'description': 'OpenAI text-to-speech voices.',
-                'requirements': ['openai'],
-                'provider': 'OPENAI',
-                'needs_api_key': True,
-            },
-            'replicate_music': {
-                'name': 'MusicGen',
-                'description': 'Generate music from text prompts.',
-                'requirements': ['replicate'],
-                'provider': 'REPLICATE',
-                'needs_api_key': True,
-            },
-        }
-        
-        for name, info in providers.items():
-            card = ProviderCard(name, info)
-            cards_layout.addWidget(card)
-        
-        cards_layout.addStretch()
-        scroll.setWidget(cards_widget)
-        left_layout.addWidget(scroll)
-        
-        layout.addWidget(left)
-        
-        # Right: Generation panel
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        
-        # Mode selection
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("Mode:"))
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItems(['Text-to-Speech', 'Music Generation'])
-        self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
-        mode_row.addWidget(self.mode_combo)
-        mode_row.addStretch()
-        right_layout.addLayout(mode_row)
+        # Header
+        header = QLabel("Audio Generation / Text-to-Speech")
+        header.setFont(QFont('Arial', 14, QFont.Bold))
+        header.setStyleSheet("color: #e74c3c;")
+        layout.addWidget(header)
         
         # Provider selection
-        provider_row = QHBoxLayout()
-        provider_row.addWidget(QLabel("Provider:"))
+        provider_group = QGroupBox("Provider")
+        provider_layout = QHBoxLayout()
+        
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems(['Local (pyttsx3)', 'ElevenLabs', 'OpenAI TTS'])
-        provider_row.addWidget(self.provider_combo)
-        provider_row.addStretch()
-        right_layout.addLayout(provider_row)
+        self.provider_combo.addItems([
+            'Local (pyttsx3)',
+            'ElevenLabs (Cloud)',
+            'Replicate (Cloud)'
+        ])
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        provider_layout.addWidget(self.provider_combo)
         
-        # Text input
-        text_label = QLabel("Text to Speak:")
-        right_layout.addWidget(text_label)
+        self.load_btn = QPushButton("Load")
+        self.load_btn.clicked.connect(self._load_provider)
+        provider_layout.addWidget(self.load_btn)
         
-        self.text_input = QTextEdit()
-        self.text_input.setMaximumHeight(100)
-        self.text_input.setPlaceholderText(
-            "Enter the text you want to convert to speech..."
-        )
-        right_layout.addWidget(self.text_input)
+        provider_layout.addStretch()
+        provider_group.setLayout(provider_layout)
+        layout.addWidget(provider_group)
         
-        # Voice settings group
+        # Voice selection (for local/elevenlabs)
         voice_group = QGroupBox("Voice Settings")
-        voice_layout = QVBoxLayout(voice_group)
+        voice_layout = QVBoxLayout()
         
-        # Voice selection
         voice_row = QHBoxLayout()
         voice_row.addWidget(QLabel("Voice:"))
         self.voice_combo = QComboBox()
-        self.voice_combo.addItems(['Default', 'Male', 'Female'])
-        voice_row.addWidget(self.voice_combo)
-        voice_row.addStretch()
+        self.voice_combo.currentIndexChanged.connect(self._on_voice_changed)
+        voice_row.addWidget(self.voice_combo, 1)
         voice_layout.addLayout(voice_row)
         
-        # Speed control
-        speed_row = QHBoxLayout()
-        speed_row.addWidget(QLabel("Speed:"))
-        self.speed_slider = QSlider(Qt.Horizontal)
-        self.speed_slider.setRange(50, 200)
-        self.speed_slider.setValue(100)
-        speed_row.addWidget(self.speed_slider)
-        self.speed_label = QLabel("100%")
-        self.speed_slider.valueChanged.connect(
-            lambda v: self.speed_label.setText(f"{v}%")
-        )
-        speed_row.addWidget(self.speed_label)
-        voice_layout.addLayout(speed_row)
+        # Rate slider (local only)
+        rate_row = QHBoxLayout()
+        rate_row.addWidget(QLabel("Rate:"))
+        self.rate_slider = QSlider(Qt.Horizontal)
+        self.rate_slider.setRange(50, 300)
+        self.rate_slider.setValue(150)
+        self.rate_slider.valueChanged.connect(self._on_rate_changed)
+        rate_row.addWidget(self.rate_slider)
+        self.rate_label = QLabel("150")
+        rate_row.addWidget(self.rate_label)
+        voice_layout.addLayout(rate_row)
         
-        right_layout.addWidget(voice_group)
+        # Volume slider (local only)
+        vol_row = QHBoxLayout()
+        vol_row.addWidget(QLabel("Volume:"))
+        self.volume_slider = QSlider(Qt.Horizontal)
+        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setValue(100)
+        self.volume_slider.valueChanged.connect(self._on_volume_changed)
+        vol_row.addWidget(self.volume_slider)
+        self.volume_label = QLabel("100%")
+        vol_row.addWidget(self.volume_label)
+        voice_layout.addLayout(vol_row)
         
-        # Generate button
+        voice_group.setLayout(voice_layout)
+        layout.addWidget(voice_group)
+        
+        # Text input
+        text_group = QGroupBox("Text to Speak")
+        text_layout = QVBoxLayout()
+        
+        self.text_input = QTextEdit()
+        self.text_input.setMaximumHeight(100)
+        self.text_input.setPlaceholderText("Enter text to convert to speech...")
+        text_layout.addWidget(self.text_input)
+        
+        text_group.setLayout(text_layout)
+        layout.addWidget(text_group)
+        
+        # Buttons
         btn_layout = QHBoxLayout()
-        self.generate_btn = QPushButton("Generate Audio")
-        self.generate_btn.setStyleSheet("background-color: #2ecc71; font-weight: bold;")
-        self.generate_btn.clicked.connect(self._generate_audio)
-        btn_layout.addWidget(self.generate_btn)
         
-        self.play_btn = QPushButton("Play")
-        self.play_btn.setEnabled(False)
-        self.play_btn.clicked.connect(self._play_audio)
-        btn_layout.addWidget(self.play_btn)
+        self.speak_btn = QPushButton("🔊 Speak")
+        self.speak_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 10px;")
+        self.speak_btn.clicked.connect(self._speak_text)
+        btn_layout.addWidget(self.speak_btn)
         
-        self.save_btn = QPushButton("Save")
-        self.save_btn.setEnabled(False)
-        self.save_btn.clicked.connect(self._save_audio)
+        self.save_btn = QPushButton("💾 Save to File")
+        self.save_btn.clicked.connect(self._save_to_file)
         btn_layout.addWidget(self.save_btn)
         
-        right_layout.addLayout(btn_layout)
+        self.play_btn = QPushButton("▶ Play Last")
+        self.play_btn.setEnabled(False)
+        self.play_btn.clicked.connect(self._play_last)
+        btn_layout.addWidget(self.play_btn)
+        
+        self.open_folder_btn = QPushButton("📁 Output Folder")
+        self.open_folder_btn.clicked.connect(self._open_output_folder)
+        btn_layout.addWidget(self.open_folder_btn)
+        
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
         
         # Progress
         self.progress = QProgressBar()
         self.progress.setVisible(False)
-        right_layout.addWidget(self.progress)
+        layout.addWidget(self.progress)
         
-        # Status area
-        self.status_label = QLabel("Audio will be generated here")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setMinimumHeight(100)
-        self.status_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
-        right_layout.addWidget(self.status_label, stretch=1)
+        # Status
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
         
-        layout.addWidget(right, stretch=1)
+        # Info
+        info_label = QLabel(
+            "💡 Local TTS works offline. Cloud services require API keys.\n"
+            "ElevenLabs: Set ELEVENLABS_API_KEY | Replicate: Set REPLICATE_API_TOKEN"
+        )
+        info_label.setStyleSheet("color: #888; font-style: italic;")
+        layout.addWidget(info_label)
+        
+        layout.addStretch()
     
-    def _on_mode_changed(self, mode: str):
-        """Update UI when mode changes."""
-        if mode == 'Music Generation':
-            self.provider_combo.clear()
-            self.provider_combo.addItems(['MusicGen (Replicate)'])
-            self.text_input.setPlaceholderText(
-                "Describe the music you want to generate...\n"
-                "Example: Upbeat electronic music with synths"
-            )
+    def _get_provider_name(self) -> str:
+        text = self.provider_combo.currentText()
+        if 'Local' in text:
+            return 'local'
+        elif 'ElevenLabs' in text:
+            return 'elevenlabs'
+        elif 'Replicate' in text:
+            return 'replicate'
+        return 'local'
+    
+    def _on_provider_changed(self, index):
+        provider_name = self._get_provider_name()
+        
+        # Show/hide voice settings based on provider
+        is_local = provider_name == 'local'
+        self.rate_slider.setEnabled(is_local)
+        self.volume_slider.setEnabled(is_local)
+        
+        # Update voices if provider is loaded
+        provider = get_provider(provider_name)
+        if provider and provider.is_loaded:
+            self._populate_voices(provider)
+    
+    def _populate_voices(self, provider):
+        self.voice_combo.clear()
+        if hasattr(provider, 'get_voices'):
+            voices = provider.get_voices()
+            self.voice_combo.addItems(voices)
+    
+    def _on_voice_changed(self, index):
+        if index >= 0:
+            provider_name = self._get_provider_name()
+            provider = get_provider(provider_name)
+            if provider and provider.is_loaded:
+                provider.set_voice(index)
+    
+    def _on_rate_changed(self, value):
+        self.rate_label.setText(str(value))
+        provider = get_provider('local')
+        if provider and provider.is_loaded:
+            provider.set_rate(value)
+    
+    def _on_volume_changed(self, value):
+        self.volume_label.setText(f"{value}%")
+        provider = get_provider('local')
+        if provider and provider.is_loaded:
+            provider.set_volume(value / 100.0)
+    
+    def _load_provider(self):
+        provider_name = self._get_provider_name()
+        provider = get_provider(provider_name)
+        
+        if provider and not provider.is_loaded:
+            self.status_label.setText(f"Loading {provider_name}...")
+            self.load_btn.setEnabled(False)
+            
+            from PyQt5.QtCore import QTimer
+            def do_load():
+                success = provider.load()
+                if success:
+                    self.status_label.setText(f"{provider_name} loaded!")
+                    self._populate_voices(provider)
+                else:
+                    self.status_label.setText(f"Failed to load {provider_name}")
+                self.load_btn.setEnabled(True)
+            
+            QTimer.singleShot(100, do_load)
+    
+    def _speak_text(self):
+        text = self.text_input.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(self, "No Text", "Please enter some text to speak")
+            return
+        
+        provider_name = self._get_provider_name()
+        
+        # Only local supports direct speak
+        if provider_name != 'local':
+            self._save_to_file()
+            return
+        
+        self.speak_btn.setEnabled(False)
+        self.progress.setVisible(True)
+        self.progress.setValue(0)
+        self.status_label.setText("Speaking...")
+        
+        self.worker = AudioGenerationWorker(text, provider_name, save_file=False)
+        self.worker.progress.connect(self.progress.setValue)
+        self.worker.finished.connect(self._on_speak_complete)
+        self.worker.start()
+    
+    def _on_speak_complete(self, result: dict):
+        self.speak_btn.setEnabled(True)
+        self.progress.setVisible(False)
+        
+        if result.get("success"):
+            self.status_label.setText("Done speaking!")
         else:
-            self.provider_combo.clear()
-            self.provider_combo.addItems(['Local (pyttsx3)', 'ElevenLabs', 'OpenAI TTS'])
-            self.text_input.setPlaceholderText(
-                "Enter the text you want to convert to speech..."
-            )
+            error = result.get("error", "Unknown error")
+            self.status_label.setText(f"Error: {error}")
     
-    def _generate_audio(self):
-        """Generate audio."""
+    def _save_to_file(self):
         text = self.text_input.toPlainText().strip()
         if not text:
             QMessageBox.warning(self, "No Text", "Please enter some text")
             return
         
-        # Determine provider
-        provider_text = self.provider_combo.currentText()
-        if 'Local' in provider_text:
-            provider = 'LOCAL'
-        else:
-            provider = 'API'
+        provider_name = self._get_provider_name()
         
-        self.generate_btn.setEnabled(False)
+        self.save_btn.setEnabled(False)
         self.progress.setVisible(True)
         self.progress.setValue(0)
-        self.status_label.setText("Generating audio...")
+        self.status_label.setText("Generating audio file...")
         
-        self.worker = AudioGenerationWorker(
-            text,
-            self.voice_combo.currentText().lower(),
-            provider
-        )
+        self.worker = AudioGenerationWorker(text, provider_name, save_file=True)
         self.worker.progress.connect(self.progress.setValue)
-        self.worker.finished.connect(self._on_generation_complete)
-        self.worker.error.connect(self._on_generation_error)
+        self.worker.finished.connect(self._on_save_complete)
         self.worker.start()
     
-    def _on_generation_complete(self, path: str):
-        """Handle generation completion."""
-        self.generate_btn.setEnabled(True)
+    def _on_save_complete(self, result: dict):
+        self.save_btn.setEnabled(True)
         self.progress.setVisible(False)
         
-        if path and Path(path).exists():
+        if result.get("success"):
+            path = result.get("path", "")
+            duration = result.get("duration", 0)
+            
             self.last_audio_path = path
-            self.status_label.setText(f"Audio generated!\n{Path(path).name}")
             self.play_btn.setEnabled(True)
-            self.save_btn.setEnabled(True)
+            self.status_label.setText(f"Saved in {duration:.1f}s - {path}")
         else:
-            self.status_label.setText(
-                "Audio generation completed.\n\n"
-                "Install pyttsx3 for local TTS:\n"
-                "pip install pyttsx3"
-            )
+            error = result.get("error", "Unknown error")
+            self.status_label.setText(f"Error: {error}")
     
-    def _on_generation_error(self, error: str):
-        """Handle generation error."""
-        self.generate_btn.setEnabled(True)
-        self.progress.setVisible(False)
-        self.status_label.setText(f"Error: {error}")
-        QMessageBox.warning(self, "Generation Failed", f"Error: {error}")
+    def _play_last(self):
+        if self.last_audio_path and Path(self.last_audio_path).exists():
+            import subprocess
+            import sys
+            
+            if sys.platform == 'darwin':
+                subprocess.run(['afplay', self.last_audio_path])
+            elif sys.platform == 'win32':
+                os.startfile(self.last_audio_path)
+            else:
+                # Try common Linux players
+                for player in ['aplay', 'paplay', 'mpv', 'ffplay']:
+                    try:
+                        subprocess.run([player, self.last_audio_path])
+                        break
+                    except FileNotFoundError:
+                        continue
     
-    def _play_audio(self):
-        """Play the generated audio."""
-        if not self.last_audio_path or not Path(self.last_audio_path).exists():
-            return
-        
+    def _open_output_folder(self):
         import subprocess
         import sys
         
-        try:
-            if sys.platform == 'linux':
-                subprocess.Popen(['xdg-open', self.last_audio_path])
-            elif sys.platform == 'darwin':
-                subprocess.Popen(['open', self.last_audio_path])
-            else:
-                subprocess.Popen(['start', '', self.last_audio_path], shell=True)
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not open audio player: {e}")
-    
-    def _save_audio(self):
-        """Save the generated audio."""
-        if not self.last_audio_path:
-            return
-        
-        # Get extension from source
-        ext = Path(self.last_audio_path).suffix or '.wav'
-        
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Audio",
-            str(Path.home() / f"generated_audio{ext}"),
-            f"Audio Files (*{ext});;All Files (*)"
-        )
-        if path:
-            import shutil
-            shutil.copy(self.last_audio_path, path)
-            QMessageBox.information(self, "Saved", f"Audio saved to:\n{path}")
+        if sys.platform == 'darwin':
+            subprocess.run(['open', str(OUTPUT_DIR)])
+        elif sys.platform == 'win32':
+            subprocess.run(['explorer', str(OUTPUT_DIR)])
+        else:
+            subprocess.run(['xdg-open', str(OUTPUT_DIR)])
 
 
 def create_audio_tab(parent) -> QWidget:
     """Factory function for creating the audio tab."""
-    return AudioTab(parent)
-
-
-if not HAS_PYQT:
-    class AudioTab:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("PyQt5 is required for the Audio Tab")
-    
-    def create_audio_tab(parent):
+    if not HAS_PYQT:
         raise ImportError("PyQt5 is required for the Audio Tab")
+    return AudioTab(parent)

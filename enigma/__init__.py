@@ -15,10 +15,9 @@ Package Structure:
     enigma/
     ├── core/       - Model, training, inference, tokenizers
     ├── modules/    - Module system (load/unload capabilities)
-    ├── addons/     - AI generation (images, code, video, audio)
+    ├── gui/        - PyQt5 interface with generation tabs (image, code, video, audio, 3D)
     ├── memory/     - Conversation storage, vector search
     ├── comms/      - API server, networking
-    ├── gui/        - PyQt5 interface
     ├── voice/      - TTS/STT
     ├── avatar/     - Avatar control
     ├── tools/      - Vision, web, file tools

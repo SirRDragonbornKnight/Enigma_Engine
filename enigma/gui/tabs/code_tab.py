@@ -1,11 +1,20 @@
 """
 Code Generation Tab - Generate code using local or cloud models.
+
+Providers:
+  - LOCAL: Uses Enigma's own model
+  - OPENAI: GPT-4 (requires openai, API key)
 """
+
+import os
+import time
+from pathlib import Path
+from typing import Optional, Dict, Any
 
 try:
     from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
-        QPushButton, QFrame, QComboBox, QTextEdit, QProgressBar,
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+        QPushButton, QComboBox, QTextEdit, QProgressBar,
         QMessageBox, QFileDialog, QGroupBox, QPlainTextEdit
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -14,134 +23,197 @@ try:
 except ImportError:
     HAS_PYQT = False
 
-from pathlib import Path
 from ...config import CONFIG
 
+# Output directory
+OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "code"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Provider colors for UI badges
-PROVIDER_COLORS = {
-    'LOCAL': '#27ae60',
-    'OPENAI': '#10a37f',
-    'ANTHROPIC': '#d4a27f',
-    'HUGGINGFACE': '#ffcc00',
+
+# =============================================================================
+# Code Generation Implementations
+# =============================================================================
+
+class EnigmaCode:
+    """Use Enigma's own model for code generation."""
+    
+    def __init__(self, model_name: str = "sacrifice"):
+        self.model_name = model_name
+        self.engine = None
+        self.is_loaded = False
+    
+    def load(self) -> bool:
+        try:
+            from ...core.inference import InferenceEngine
+            self.engine = InferenceEngine(model_name=self.model_name)
+            self.is_loaded = True
+            return True
+        except Exception as e:
+            print(f"Failed to load Enigma model: {e}")
+            return False
+    
+    def unload(self):
+        self.engine = None
+        self.is_loaded = False
+    
+    def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
+        if not self.is_loaded:
+            return {"success": False, "error": "Model not loaded"}
+        
+        try:
+            start = time.time()
+            
+            # Format prompt for code generation
+            code_prompt = f"Write {language} code:\n{prompt}\n\n```{language}\n"
+            
+            result = self.engine.generate(
+                code_prompt,
+                max_tokens=kwargs.get('max_tokens', 500),
+                temperature=kwargs.get('temperature', 0.3),
+            )
+            
+            return {
+                "success": True,
+                "code": result,
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+class OpenAICode:
+    """OpenAI GPT for code generation (CLOUD - requires API key)."""
+    
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.model = model
+        self.client = None
+        self.is_loaded = False
+    
+    def load(self) -> bool:
+        try:
+            from openai import OpenAI
+            self.client = OpenAI(api_key=self.api_key)
+            self.is_loaded = bool(self.api_key)
+            return self.is_loaded
+        except ImportError:
+            print("Install: pip install openai")
+            return False
+    
+    def unload(self):
+        self.client = None
+        self.is_loaded = False
+    
+    def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
+        if not self.is_loaded or not self.client:
+            return {"success": False, "error": "Not loaded or missing API key"}
+        
+        try:
+            start = time.time()
+            
+            system_prompt = f"You are an expert {language} programmer. Write clean, efficient, well-documented code. Return only the code, no explanations."
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=kwargs.get('temperature', 0.3),
+                max_tokens=kwargs.get('max_tokens', 2000),
+            )
+            
+            code = response.choices[0].message.content
+            
+            return {
+                "success": True,
+                "code": code,
+                "duration": time.time() - start,
+                "tokens": response.usage.total_tokens
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def explain(self, code: str) -> Dict[str, Any]:
+        """Explain what code does."""
+        if not self.is_loaded or not self.client:
+            return {"success": False, "error": "Not loaded"}
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "Explain code clearly and concisely."},
+                    {"role": "user", "content": f"Explain this code:\n\n{code}"}
+                ],
+                temperature=0.3,
+            )
+            
+            return {
+                "success": True,
+                "explanation": response.choices[0].message.content
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# GUI Components
+# =============================================================================
+
+_providers = {
+    'local': None,
+    'openai': None,
 }
+
+
+def get_provider(name: str):
+    """Get or create a provider instance."""
+    global _providers
+    
+    if name == 'local' and _providers['local'] is None:
+        _providers['local'] = EnigmaCode()
+    elif name == 'openai' and _providers['openai'] is None:
+        _providers['openai'] = OpenAICode()
+    
+    return _providers.get(name)
 
 
 class CodeGenerationWorker(QThread):
     """Background worker for code generation."""
-    finished = pyqtSignal(str)  # Generated code
-    error = pyqtSignal(str)
+    finished = pyqtSignal(dict)
     progress = pyqtSignal(int)
     
-    def __init__(self, prompt, language, provider, parent=None):
+    def __init__(self, prompt, language, provider_name, parent=None):
         super().__init__(parent)
         self.prompt = prompt
         self.language = language
-        self.provider = provider
+        self.provider_name = provider_name
     
     def run(self):
         try:
             self.progress.emit(10)
             
-            # Try to use module manager if available
-            try:
-                from ...modules.manager import ModuleManager
-                manager = ModuleManager()
-                
-                if self.provider == 'LOCAL':
-                    if manager.is_loaded('code_gen_local'):
-                        module = manager.get_module('code_gen_local')
-                        self.progress.emit(50)
-                        result = module.generate(
-                            self.prompt,
-                            language=self.language
-                        )
-                        self.progress.emit(100)
-                        self.finished.emit(result.get('code', ''))
-                        return
-                    elif manager.is_loaded('inference'):
-                        # Use main Enigma model for code
-                        inference = manager.get_module('inference')
-                        self.progress.emit(50)
-                        code_prompt = f"Write {self.language} code: {self.prompt}"
-                        result = inference.generate(code_prompt)
-                        self.progress.emit(100)
-                        self.finished.emit(result)
-                        return
-                else:
-                    if manager.is_loaded('code_gen_api'):
-                        module = manager.get_module('code_gen_api')
-                        self.progress.emit(50)
-                        result = module.generate(
-                            self.prompt,
-                            language=self.language
-                        )
-                        self.progress.emit(100)
-                        self.finished.emit(result.get('code', ''))
-                        return
-            except ImportError:
-                pass
+            provider = get_provider(self.provider_name)
+            if provider is None:
+                self.finished.emit({"success": False, "error": "Unknown provider"})
+                return
             
-            # Mock generation for demo
-            self.progress.emit(50)
-            import time
-            time.sleep(0.5)
+            if not provider.is_loaded:
+                self.progress.emit(20)
+                if not provider.load():
+                    self.finished.emit({"success": False, "error": "Failed to load provider"})
+                    return
             
-            mock_code = f"# Generated {self.language} code for: {self.prompt}\n"
-            mock_code += f"# (Load code_gen_local or inference module for real generation)\n\n"
-            mock_code += f"def example():\n    pass\n"
+            self.progress.emit(40)
+            
+            result = provider.generate(self.prompt, language=self.language)
             
             self.progress.emit(100)
-            self.finished.emit(mock_code)
+            self.finished.emit(result)
             
         except Exception as e:
-            self.error.emit(str(e))
-
-
-class ProviderCard(QFrame):
-    """Card displaying a single code provider."""
-    
-    def __init__(self, name: str, info: dict, parent=None):
-        super().__init__(parent)
-        self.provider_name = name
-        self.provider_info = info
-        self.setup_ui()
-    
-    def setup_ui(self):
-        self.setFrameStyle(QFrame.Box | QFrame.Raised)
-        self.setLineWidth(1)
-        self.setMaximumHeight(100)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        
-        # Header
-        header = QHBoxLayout()
-        
-        name_label = QLabel(self.provider_info.get('name', self.provider_name))
-        name_label.setFont(QFont('Arial', 10, QFont.Bold))
-        header.addWidget(name_label)
-        
-        header.addStretch()
-        
-        # Provider badge
-        provider = self.provider_info.get('provider', 'UNKNOWN')
-        color = PROVIDER_COLORS.get(provider, '#666')
-        provider_label = QLabel(provider)
-        provider_label.setStyleSheet(
-            f"background-color: {color}; color: white; "
-            f"padding: 2px 6px; border-radius: 3px; font-size: 9px;"
-        )
-        header.addWidget(provider_label)
-        
-        layout.addLayout(header)
-        
-        # Description
-        desc = self.provider_info.get('description', 'No description')
-        desc_label = QLabel(desc)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #888; font-size: 9px;")
-        layout.addWidget(desc_label)
+            self.finished.emit({"success": False, "error": str(e)})
 
 
 class CodeTab(QWidget):
@@ -154,227 +226,172 @@ class CodeTab(QWidget):
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         
-        # Left: Provider list
-        left = QWidget()
-        left.setMaximumWidth(280)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        # Header
+        header = QLabel("Code Generation")
+        header.setFont(QFont('Arial', 14, QFont.Bold))
+        header.setStyleSheet("color: #3498db;")
+        layout.addWidget(header)
         
-        type_label = QLabel("Code Providers")
-        type_label.setFont(QFont('Arial', 12, QFont.Bold))
-        type_label.setStyleSheet("color: #3498db;")
-        left_layout.addWidget(type_label)
+        # Provider and language selection
+        settings_layout = QHBoxLayout()
         
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        cards_widget = QWidget()
-        cards_layout = QVBoxLayout(cards_widget)
-        cards_layout.setSpacing(8)
-        
-        # Available providers
-        providers = {
-            'enigma_code': {
-                'name': 'Enigma Code',
-                'description': 'Use your trained Enigma model for code generation.',
-                'requirements': [],
-                'provider': 'LOCAL',
-            },
-            'openai_code': {
-                'name': 'GPT-4 Code',
-                'description': 'OpenAI GPT-4 for complex code tasks.',
-                'requirements': ['openai'],
-                'provider': 'OPENAI',
-                'needs_api_key': True,
-            },
-            'anthropic_code': {
-                'name': 'Claude Code',
-                'description': 'Anthropic Claude for code generation.',
-                'requirements': ['anthropic'],
-                'provider': 'ANTHROPIC',
-                'needs_api_key': True,
-            },
-        }
-        
-        for name, info in providers.items():
-            card = ProviderCard(name, info)
-            cards_layout.addWidget(card)
-        
-        cards_layout.addStretch()
-        scroll.setWidget(cards_widget)
-        left_layout.addWidget(scroll)
-        
-        layout.addWidget(left)
-        
-        # Right: Generation panel
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        
-        # Provider selection
-        provider_row = QHBoxLayout()
-        provider_row.addWidget(QLabel("Provider:"))
+        settings_layout.addWidget(QLabel("Provider:"))
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems(['Enigma (Local)', 'OpenAI (GPT-4)', 'Anthropic (Claude)'])
-        provider_row.addWidget(self.provider_combo)
-        
-        provider_row.addWidget(QLabel("Language:"))
-        self.lang_combo = QComboBox()
-        self.lang_combo.addItems([
-            'python', 'javascript', 'typescript', 'rust', 'go',
-            'java', 'c++', 'c#', 'ruby', 'php', 'swift', 'kotlin'
+        self.provider_combo.addItems([
+            'Local (Enigma Model)',
+            'OpenAI (GPT-4) - Cloud'
         ])
-        provider_row.addWidget(self.lang_combo)
+        settings_layout.addWidget(self.provider_combo)
         
-        provider_row.addStretch()
-        right_layout.addLayout(provider_row)
+        settings_layout.addWidget(QLabel("Language:"))
+        self.language_combo = QComboBox()
+        self.language_combo.addItems([
+            'python', 'javascript', 'java', 'cpp', 'go', 'rust',
+            'html', 'css', 'sql', 'bash', 'typescript'
+        ])
+        settings_layout.addWidget(self.language_combo)
+        
+        settings_layout.addStretch()
+        layout.addLayout(settings_layout)
         
         # Prompt input
-        prompt_label = QLabel("Describe what code you need:")
-        right_layout.addWidget(prompt_label)
+        prompt_group = QGroupBox("What code do you need?")
+        prompt_layout = QVBoxLayout()
         
         self.prompt_input = QTextEdit()
         self.prompt_input.setMaximumHeight(100)
         self.prompt_input.setPlaceholderText(
-            "Example: Write a function that calculates fibonacci numbers recursively with memoization..."
+            "Describe what you want the code to do...\n"
+            "Example: A function that sorts a list of dictionaries by a specific key"
         )
-        right_layout.addWidget(self.prompt_input)
+        prompt_layout.addWidget(self.prompt_input)
         
-        # Generate button
+        prompt_group.setLayout(prompt_layout)
+        layout.addWidget(prompt_group)
+        
+        # Buttons
         btn_layout = QHBoxLayout()
+        
         self.generate_btn = QPushButton("Generate Code")
-        self.generate_btn.setStyleSheet("background-color: #3498db; font-weight: bold;")
+        self.generate_btn.setStyleSheet("background-color: #3498db; font-weight: bold; padding: 10px;")
         self.generate_btn.clicked.connect(self._generate_code)
         btn_layout.addWidget(self.generate_btn)
         
-        self.copy_btn = QPushButton("Copy")
-        self.copy_btn.setEnabled(False)
+        self.copy_btn = QPushButton("Copy to Clipboard")
         self.copy_btn.clicked.connect(self._copy_code)
         btn_layout.addWidget(self.copy_btn)
         
-        self.save_btn = QPushButton("Save")
-        self.save_btn.setEnabled(False)
+        self.save_btn = QPushButton("Save to File")
         self.save_btn.clicked.connect(self._save_code)
         btn_layout.addWidget(self.save_btn)
         
-        right_layout.addLayout(btn_layout)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
         
         # Progress
         self.progress = QProgressBar()
         self.progress.setVisible(False)
-        right_layout.addWidget(self.progress)
+        layout.addWidget(self.progress)
         
-        # Result area - code output
-        result_label = QLabel("Generated Code:")
-        right_layout.addWidget(result_label)
+        # Status
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+        
+        # Output
+        output_group = QGroupBox("Generated Code")
+        output_layout = QVBoxLayout()
         
         self.code_output = QPlainTextEdit()
         self.code_output.setReadOnly(True)
         self.code_output.setPlaceholderText("Generated code will appear here...")
-        # Use monospace font for code
-        font = QFont("Monospace")
-        font.setStyleHint(QFont.TypeWriter)
-        font.setPointSize(10)
-        self.code_output.setFont(font)
-        self.code_output.setStyleSheet(
-            "background-color: #1e1e1e; color: #d4d4d4; "
-            "border-radius: 4px; padding: 8px;"
-        )
-        right_layout.addWidget(self.code_output, stretch=1)
         
-        layout.addWidget(right, stretch=1)
+        # Use monospace font
+        font = QFont("Courier New", 10)
+        font.setStyleHint(QFont.Monospace)
+        self.code_output.setFont(font)
+        
+        output_layout.addWidget(self.code_output)
+        output_group.setLayout(output_layout)
+        layout.addWidget(output_group, stretch=1)
+    
+    def _get_provider_name(self) -> str:
+        text = self.provider_combo.currentText()
+        if 'Local' in text:
+            return 'local'
+        elif 'OpenAI' in text:
+            return 'openai'
+        return 'local'
     
     def _generate_code(self):
-        """Generate code."""
         prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please describe what code you need")
             return
         
-        # Determine provider
-        provider_text = self.provider_combo.currentText()
-        if 'Local' in provider_text or 'Enigma' in provider_text:
-            provider = 'LOCAL'
-        else:
-            provider = 'API'
+        provider_name = self._get_provider_name()
+        language = self.language_combo.currentText()
         
         self.generate_btn.setEnabled(False)
         self.progress.setVisible(True)
         self.progress.setValue(0)
+        self.status_label.setText("Generating...")
         
-        self.worker = CodeGenerationWorker(
-            prompt,
-            self.lang_combo.currentText(),
-            provider
-        )
+        self.worker = CodeGenerationWorker(prompt, language, provider_name)
         self.worker.progress.connect(self.progress.setValue)
         self.worker.finished.connect(self._on_generation_complete)
-        self.worker.error.connect(self._on_generation_error)
         self.worker.start()
     
-    def _on_generation_complete(self, code: str):
-        """Handle generation completion."""
+    def _on_generation_complete(self, result: dict):
         self.generate_btn.setEnabled(True)
         self.progress.setVisible(False)
         
-        self.code_output.setPlainText(code)
-        self.copy_btn.setEnabled(True)
-        self.save_btn.setEnabled(True)
-    
-    def _on_generation_error(self, error: str):
-        """Handle generation error."""
-        self.generate_btn.setEnabled(True)
-        self.progress.setVisible(False)
-        self.code_output.setPlainText(f"Error: {error}")
-        QMessageBox.warning(self, "Generation Failed", f"Error: {error}")
+        if result.get("success"):
+            code = result.get("code", "")
+            duration = result.get("duration", 0)
+            
+            self.code_output.setPlainText(code)
+            self.status_label.setText(f"Generated in {duration:.1f}s")
+        else:
+            error = result.get("error", "Unknown error")
+            self.status_label.setText(f"Error: {error}")
+            self.code_output.setPlainText(f"# Error: {error}")
     
     def _copy_code(self):
-        """Copy generated code to clipboard."""
         from PyQt5.QtWidgets import QApplication
         code = self.code_output.toPlainText()
         if code:
             QApplication.clipboard().setText(code)
-            QMessageBox.information(self, "Copied", "Code copied to clipboard!")
+            self.status_label.setText("Code copied to clipboard!")
     
     def _save_code(self):
-        """Save the generated code to a file."""
         code = self.code_output.toPlainText()
         if not code:
             return
         
-        # Get file extension based on language
-        lang = self.lang_combo.currentText()
-        extensions = {
-            'python': '.py', 'javascript': '.js', 'typescript': '.ts',
-            'rust': '.rs', 'go': '.go', 'java': '.java',
-            'c++': '.cpp', 'c#': '.cs', 'ruby': '.rb',
-            'php': '.php', 'swift': '.swift', 'kotlin': '.kt'
+        lang = self.language_combo.currentText()
+        ext_map = {
+            'python': '.py', 'javascript': '.js', 'java': '.java',
+            'cpp': '.cpp', 'go': '.go', 'rust': '.rs',
+            'html': '.html', 'css': '.css', 'sql': '.sql',
+            'bash': '.sh', 'typescript': '.ts'
         }
-        ext = extensions.get(lang, '.txt')
+        ext = ext_map.get(lang, '.txt')
         
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Code",
             str(Path.home() / f"generated_code{ext}"),
-            f"Code Files (*{ext});;All Files (*)"
+            f"{lang.title()} Files (*{ext});;All Files (*.*)"
         )
         if path:
-            with open(path, 'w') as f:
-                f.write(code)
+            Path(path).write_text(code)
             QMessageBox.information(self, "Saved", f"Code saved to:\n{path}")
 
 
 def create_code_tab(parent) -> QWidget:
     """Factory function for creating the code tab."""
-    return CodeTab(parent)
-
-
-if not HAS_PYQT:
-    class CodeTab:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("PyQt5 is required for the Code Tab")
-    
-    def create_code_tab(parent):
+    if not HAS_PYQT:
         raise ImportError("PyQt5 is required for the Code Tab")
+    return CodeTab(parent)

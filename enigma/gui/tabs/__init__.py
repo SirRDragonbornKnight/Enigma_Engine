@@ -18,6 +18,7 @@ from .code_tab import CodeTab, create_code_tab
 from .video_tab import VideoTab, create_video_tab
 from .audio_tab import AudioTab, create_audio_tab
 from .embeddings_tab import EmbeddingsTab, create_embeddings_tab
+from .threed_tab import ThreeDTab, create_threed_tab
 
 __all__ = [
     'create_chat_tab',
@@ -43,4 +44,6 @@ __all__ = [
     'create_audio_tab',
     'EmbeddingsTab',
     'create_embeddings_tab',
+    'ThreeDTab',
+    'create_threed_tab',
 ]

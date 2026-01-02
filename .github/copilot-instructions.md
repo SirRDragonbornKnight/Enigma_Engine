@@ -18,9 +18,10 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 │  - tokenizer │  - code_gen  │  - embedding │  - vision                 │
 │  - training  │  - video_gen │              │  - avatar                 │
 │  - inference │  - audio_gen │              │                           │
+│              │  - threed    │              │                           │
 ├──────────────┴──────────────┴──────────────┴───────────────────────────┤
 │    TOOLS              │    NETWORK              │    INTERFACE          │
-│  - web_tools          │  - api_server           │  - gui                │
+│  - web_tools          │  - api_server           │  - gui (with tabs)    │
 │  - file_tools         │  - network (multi-dev)  │                       │
 └───────────────────────┴─────────────────────────┴───────────────────────┘
 ```
@@ -28,7 +29,7 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 ### Core Packages
 - **enigma.core**: Enigma transformer model with RoPE, RMSNorm, SwiGLU, KV-cache
 - **enigma.modules**: Module system - manager, registry, state handling
-- **enigma.addons**: AI generation capabilities (image, code, video, audio, embeddings)
+- **enigma.gui.tabs**: Generation capabilities in standalone tabs (image, code, video, audio, 3D, embeddings)
 - **enigma.memory**: Conversation storage (JSON/SQLite), vector search
 - **enigma.comms**: API server, remote client, multi-device networking
 - **enigma.gui**: PyQt5 interface with Module Manager tab
@@ -60,12 +61,14 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 - **enigma/core/training.py**: `Trainer` class - Model training loop and optimization
 - **enigma/core/inference.py**: `InferenceEngine` class - Model inference and generation
 
-### AI Generation Addons (in enigma/addons/)
-- **image_gen_local.py**: Local image generation using Stable Diffusion
-- **image_gen_api.py**: Cloud image generation (DALL-E, Replicate)
-- **code_gen_local.py**: Local code generation using Enigma model
-- **audio_gen_local.py**: Local TTS with pyttsx3
-- **embedding_local.py**: Local embeddings with sentence-transformers
+### AI Generation Tabs (in enigma/gui/tabs/)
+Each tab contains both the implementation (provider classes) and the GUI:
+- **image_tab.py**: `StableDiffusionLocal`, `OpenAIImage`, `ReplicateImage` + `ImageTab`
+- **code_tab.py**: `EnigmaCode`, `OpenAICode` + `CodeTab`
+- **video_tab.py**: `LocalVideo`, `ReplicateVideo` + `VideoTab`
+- **audio_tab.py**: `LocalTTS`, `ElevenLabsTTS`, `ReplicateAudio` + `AudioTab`
+- **embeddings_tab.py**: `LocalEmbedding`, `OpenAIEmbedding` + `EmbeddingsTab`
+- **threed_tab.py**: `Local3DGen`, `Cloud3DGen` + `ThreeDTab`
 
 ### Memory System
 - **enigma/memory/conversation.py**: `ConversationMemory` class - Stores chat history
@@ -116,6 +119,7 @@ Each generation capability has LOCAL and API variants. **Only one can be loaded 
 | Video Gen | `video_gen_local` (AnimateDiff) | `video_gen_api` (Replicate) |
 | Audio/TTS | `audio_gen_local` (pyttsx3) | `audio_gen_api` (ElevenLabs) |
 | Embeddings | `embedding_local` (sentence-transformers) | `embedding_api` (OpenAI) |
+| 3D Gen | `threed_gen_local` (Shap-E) | `threed_gen_api` (Replicate) |
 
 ### Conflict Prevention
 The module manager automatically prevents:
@@ -134,7 +138,7 @@ The module manager automatically prevents:
 - **Imports**: Relative within enigma (`from ..config import CONFIG`)
 - **Paths**: Use `pathlib.Path`, dirs auto-created via CONFIG
 - **Modules**: Always use ModuleManager for loading capabilities
-- **Addons**: Wrap external AI via addon base classes, integrate as modules
+- **Tabs**: Generation implementations live directly in their GUI tabs
 
 ## What NOT To Do
 
@@ -153,5 +157,7 @@ The module manager automatically prevents:
 ❌ **DON'T run multiple instances on same model** - Can corrupt files
 
 ❌ **DON'T block the UI thread** - Use QThread for long operations
+
+❌ **DON'T mix model sizes carelessly** - Requires proper conversion
 
 ❌ **DON'T mix model sizes carelessly** - Requires proper conversion

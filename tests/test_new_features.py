@@ -144,40 +144,33 @@ class TestInstanceManager:
 
 
 class TestHuggingFaceAddons:
-    """Test HuggingFace integration."""
+    """Test HuggingFace integration (legacy - addons moved to tabs)."""
     
     def test_import(self):
         """Test that HuggingFace addons can be imported."""
-        try:
-            from enigma.addons.huggingface import (
-                HuggingFaceTextGeneration,
-                HuggingFaceImageGeneration,
-                HuggingFaceEmbeddings,
-                HuggingFaceTTS
-            )
-            assert HuggingFaceTextGeneration is not None
-        except ImportError:
-            pytest.skip("HuggingFace dependencies not installed")
+        # Addons have been moved to GUI tabs
+        # HuggingFace integration is now through tabs
+        pytest.skip("Addons system removed - functionality moved to GUI tabs")
     
     def test_addon_creation(self):
         """Test creating HuggingFace addons."""
-        try:
-            from enigma.addons.huggingface import HuggingFaceTextGeneration
-            
-            addon = HuggingFaceTextGeneration(model_name="gpt2", use_local=False)
-            assert addon.config.model_name == "gpt2"
-            assert addon.config.provider.name == "HUGGINGFACE"
-        except ImportError:
-            pytest.skip("HuggingFace dependencies not installed")
+        pytest.skip("Addons system removed - functionality moved to GUI tabs")
     
     def test_builtin_registration(self):
-        """Test that HuggingFace addons are registered."""
-        from enigma.addons.builtin import BUILTIN_ADDONS
-        
-        # Check if HF addons are available
-        hf_addons = [k for k in BUILTIN_ADDONS.keys() if k.startswith('huggingface')]
-        # Should have at least some HF addons if dependencies are installed
-        assert len(hf_addons) >= 0  # May be 0 if not installed
+        """Test that generation tabs are available."""
+        # Test that the new tab-based providers exist
+        try:
+            from enigma.gui.tabs.image_tab import StableDiffusionLocal, OpenAIImage
+            from enigma.gui.tabs.code_tab import EnigmaCode, OpenAICode
+            from enigma.gui.tabs.embeddings_tab import LocalEmbedding, OpenAIEmbedding
+            assert StableDiffusionLocal is not None
+            assert OpenAIImage is not None
+            assert EnigmaCode is not None
+            assert OpenAICode is not None
+            assert LocalEmbedding is not None
+            assert OpenAIEmbedding is not None
+        except ImportError:
+            pytest.skip("GUI tabs not fully available")
 
 
 class TestWebDashboard:

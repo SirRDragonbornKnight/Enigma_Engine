@@ -1,13 +1,24 @@
 """
-Embeddings Tab - Generate text embeddings for semantic search.
+Embeddings Tab - Generate and compare text embeddings.
+
+Providers:
+  - LOCAL: sentence-transformers (all-MiniLM-L6-v2 or other models)
+  - OPENAI: OpenAI embedding API (requires API key)
 """
+
+import os
+import time
+import json
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 
 try:
     from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
-        QPushButton, QFrame, QComboBox, QTextEdit, QProgressBar,
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+        QPushButton, QComboBox, QTextEdit, QProgressBar,
         QMessageBox, QGroupBox, QListWidget, QListWidgetItem,
-        QLineEdit, QPlainTextEdit, QSpinBox
+        QSplitter, QLineEdit, QTableWidget, QTableWidgetItem,
+        QHeaderView
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
@@ -15,498 +26,588 @@ try:
 except ImportError:
     HAS_PYQT = False
 
-from pathlib import Path
 from ...config import CONFIG
 
+# Output directory
+OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "embeddings"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Provider colors for UI badges
-PROVIDER_COLORS = {
-    'LOCAL': '#27ae60',
-    'OPENAI': '#10a37f',
-    'HUGGINGFACE': '#ffcc00',
+
+# =============================================================================
+# Embedding Implementations
+# =============================================================================
+
+class LocalEmbedding:
+    """Local embeddings using sentence-transformers."""
+    
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+        self.model_name = model_name
+        self.model = None
+        self.is_loaded = False
+    
+    def load(self) -> bool:
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer(self.model_name)
+            self.is_loaded = True
+            return True
+        except ImportError:
+            print("Install: pip install sentence-transformers")
+            return False
+        except Exception as e:
+            print(f"Failed to load embedding model: {e}")
+            return False
+    
+    def unload(self):
+        if self.model:
+            del self.model
+            self.model = None
+        self.is_loaded = False
+    
+    def embed(self, text: str) -> Dict[str, Any]:
+        """Generate embedding for a single text."""
+        if not self.is_loaded:
+            return {"success": False, "error": "Model not loaded"}
+        
+        try:
+            start = time.time()
+            embedding = self.model.encode(text, convert_to_numpy=True)
+            
+            return {
+                "success": True,
+                "embedding": embedding.tolist(),
+                "dimensions": len(embedding),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def embed_batch(self, texts: List[str]) -> Dict[str, Any]:
+        """Generate embeddings for multiple texts."""
+        if not self.is_loaded:
+            return {"success": False, "error": "Model not loaded"}
+        
+        try:
+            start = time.time()
+            embeddings = self.model.encode(texts, convert_to_numpy=True)
+            
+            return {
+                "success": True,
+                "embeddings": [e.tolist() for e in embeddings],
+                "dimensions": len(embeddings[0]) if len(embeddings) > 0 else 0,
+                "count": len(embeddings),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def similarity(self, text1: str, text2: str) -> Dict[str, Any]:
+        """Calculate cosine similarity between two texts."""
+        if not self.is_loaded:
+            return {"success": False, "error": "Model not loaded"}
+        
+        try:
+            start = time.time()
+            embeddings = self.model.encode([text1, text2], convert_to_numpy=True)
+            
+            # Cosine similarity
+            import numpy as np
+            cos_sim = np.dot(embeddings[0], embeddings[1]) / (
+                np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
+            )
+            
+            return {
+                "success": True,
+                "similarity": float(cos_sim),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+class OpenAIEmbedding:
+    """OpenAI embedding API (CLOUD - requires API key)."""
+    
+    def __init__(self, api_key: Optional[str] = None,
+                 model: str = "text-embedding-3-small"):
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.model = model
+        self.client = None
+        self.is_loaded = False
+    
+    def load(self) -> bool:
+        if not self.api_key:
+            print("OpenAI requires OPENAI_API_KEY")
+            return False
+        
+        try:
+            import openai
+            self.client = openai.OpenAI(api_key=self.api_key)
+            self.is_loaded = True
+            return True
+        except ImportError:
+            print("Install: pip install openai")
+            return False
+        except Exception as e:
+            print(f"Failed to load OpenAI: {e}")
+            return False
+    
+    def unload(self):
+        self.client = None
+        self.is_loaded = False
+    
+    def embed(self, text: str) -> Dict[str, Any]:
+        if not self.is_loaded:
+            return {"success": False, "error": "Not loaded or missing API key"}
+        
+        try:
+            start = time.time()
+            
+            response = self.client.embeddings.create(
+                model=self.model,
+                input=text
+            )
+            
+            embedding = response.data[0].embedding
+            
+            return {
+                "success": True,
+                "embedding": embedding,
+                "dimensions": len(embedding),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def embed_batch(self, texts: List[str]) -> Dict[str, Any]:
+        if not self.is_loaded:
+            return {"success": False, "error": "Not loaded or missing API key"}
+        
+        try:
+            start = time.time()
+            
+            response = self.client.embeddings.create(
+                model=self.model,
+                input=texts
+            )
+            
+            embeddings = [d.embedding for d in response.data]
+            
+            return {
+                "success": True,
+                "embeddings": embeddings,
+                "dimensions": len(embeddings[0]) if embeddings else 0,
+                "count": len(embeddings),
+                "duration": time.time() - start
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def similarity(self, text1: str, text2: str) -> Dict[str, Any]:
+        if not self.is_loaded:
+            return {"success": False, "error": "Not loaded or missing API key"}
+        
+        try:
+            import numpy as np
+            start = time.time()
+            
+            response = self.client.embeddings.create(
+                model=self.model,
+                input=[text1, text2]
+            )
+            
+            emb1 = response.data[0].embedding
+            emb2 = response.data[1].embedding
+            
+            # Cosine similarity
+            emb1 = np.array(emb1)
+            emb2 = np.array(emb2)
+            cos_sim = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+            
+            return {
+                "success": True,
+                "similarity": float(cos_sim),
+                "duration": time.time() - start
+            }
+        except ImportError:
+            return {"success": False, "error": "NumPy required for similarity"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# GUI Components
+# =============================================================================
+
+_providers = {
+    'local': None,
+    'openai': None,
 }
 
 
+def get_provider(name: str):
+    global _providers
+    
+    if name == 'local' and _providers['local'] is None:
+        _providers['local'] = LocalEmbedding()
+    elif name == 'openai' and _providers['openai'] is None:
+        _providers['openai'] = OpenAIEmbedding()
+    
+    return _providers.get(name)
+
+
 class EmbeddingWorker(QThread):
-    """Background worker for embedding generation."""
-    finished = pyqtSignal(list)  # Embedding vector
-    error = pyqtSignal(str)
+    """Background worker for embedding operations."""
+    finished = pyqtSignal(dict)
     progress = pyqtSignal(int)
     
-    def __init__(self, text, provider, parent=None):
-        super().__init__(parent)
-        self.text = text
-        self.provider = provider
+    def __init__(self, operation, provider_name, **kwargs):
+        super().__init__()
+        self.operation = operation  # 'embed', 'similarity', 'batch'
+        self.provider_name = provider_name
+        self.kwargs = kwargs
     
     def run(self):
         try:
             self.progress.emit(10)
             
-            # Try to use module manager if available
-            try:
-                from ...modules.manager import ModuleManager
-                manager = ModuleManager()
-                
-                if self.provider == 'LOCAL':
-                    if manager.is_loaded('embedding_local'):
-                        module = manager.get_module('embedding_local')
-                        self.progress.emit(50)
-                        result = module.embed(self.text)
-                        self.progress.emit(100)
-                        self.finished.emit(result)
-                        return
-                else:
-                    if manager.is_loaded('embedding_api'):
-                        module = manager.get_module('embedding_api')
-                        self.progress.emit(50)
-                        result = module.embed(self.text)
-                        self.progress.emit(100)
-                        self.finished.emit(result)
-                        return
-            except ImportError:
-                pass
-            
-            # Try sentence-transformers fallback
-            try:
-                from sentence_transformers import SentenceTransformer
-                self.progress.emit(30)
-                model = SentenceTransformer('all-MiniLM-L6-v2')
-                self.progress.emit(70)
-                embedding = model.encode(self.text).tolist()
-                self.progress.emit(100)
-                self.finished.emit(embedding)
+            provider = get_provider(self.provider_name)
+            if provider is None:
+                self.finished.emit({"success": False, "error": "Unknown provider"})
                 return
-            except ImportError:
-                pass
             
-            # Mock for demo
-            self.progress.emit(100)
-            self.finished.emit([0.0] * 384)  # Fake embedding
+            if not provider.is_loaded:
+                self.progress.emit(20)
+                if not provider.load():
+                    self.finished.emit({"success": False, "error": "Failed to load provider"})
+                    return
             
-        except Exception as e:
-            self.error.emit(str(e))
-
-
-class SearchWorker(QThread):
-    """Background worker for semantic search."""
-    finished = pyqtSignal(list)  # Search results
-    error = pyqtSignal(str)
-    progress = pyqtSignal(int)
-    
-    def __init__(self, query, documents, top_k, parent=None):
-        super().__init__(parent)
-        self.query = query
-        self.documents = documents
-        self.top_k = top_k
-    
-    def run(self):
-        try:
-            self.progress.emit(10)
+            self.progress.emit(50)
             
-            # Try sentence-transformers
-            try:
-                from sentence_transformers import SentenceTransformer, util
-                import torch
-                
-                self.progress.emit(30)
-                model = SentenceTransformer('all-MiniLM-L6-v2')
-                
-                # Encode query and documents
-                self.progress.emit(50)
-                query_embedding = model.encode(self.query, convert_to_tensor=True)
-                doc_embeddings = model.encode(self.documents, convert_to_tensor=True)
-                
-                # Calculate similarity
-                self.progress.emit(80)
-                cos_scores = util.cos_sim(query_embedding, doc_embeddings)[0]
-                top_results = torch.topk(cos_scores, k=min(self.top_k, len(self.documents)))
-                
-                results = []
-                for score, idx in zip(top_results[0], top_results[1]):
-                    results.append({
-                        'document': self.documents[idx],
-                        'score': float(score),
-                        'index': int(idx)
-                    })
-                
-                self.progress.emit(100)
-                self.finished.emit(results)
-                return
-            except ImportError:
-                pass
-            
-            # Mock for demo - simple keyword matching
-            results = []
-            query_lower = self.query.lower()
-            for i, doc in enumerate(self.documents):
-                if query_lower in doc.lower():
-                    results.append({
-                        'document': doc,
-                        'score': 0.8,
-                        'index': i
-                    })
+            if self.operation == 'embed':
+                result = provider.embed(self.kwargs.get('text', ''))
+            elif self.operation == 'similarity':
+                result = provider.similarity(
+                    self.kwargs.get('text1', ''),
+                    self.kwargs.get('text2', '')
+                )
+            elif self.operation == 'batch':
+                result = provider.embed_batch(self.kwargs.get('texts', []))
+            else:
+                result = {"success": False, "error": f"Unknown operation: {self.operation}"}
             
             self.progress.emit(100)
-            self.finished.emit(results[:self.top_k])
+            self.finished.emit(result)
             
         except Exception as e:
-            self.error.emit(str(e))
-
-
-class ProviderCard(QFrame):
-    """Card displaying a single embedding provider."""
-    
-    def __init__(self, name: str, info: dict, parent=None):
-        super().__init__(parent)
-        self.provider_name = name
-        self.provider_info = info
-        self.setup_ui()
-    
-    def setup_ui(self):
-        self.setFrameStyle(QFrame.Box | QFrame.Raised)
-        self.setLineWidth(1)
-        self.setMaximumHeight(90)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        
-        # Header
-        header = QHBoxLayout()
-        
-        name_label = QLabel(self.provider_info.get('name', self.provider_name))
-        name_label.setFont(QFont('Arial', 10, QFont.Bold))
-        header.addWidget(name_label)
-        
-        header.addStretch()
-        
-        # Provider badge
-        provider = self.provider_info.get('provider', 'UNKNOWN')
-        color = PROVIDER_COLORS.get(provider, '#666')
-        provider_label = QLabel(provider)
-        provider_label.setStyleSheet(
-            f"background-color: {color}; color: white; "
-            f"padding: 2px 6px; border-radius: 3px; font-size: 9px;"
-        )
-        header.addWidget(provider_label)
-        
-        layout.addLayout(header)
-        
-        # Description
-        desc = self.provider_info.get('description', 'No description')
-        desc_label = QLabel(desc)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #888; font-size: 9px;")
-        layout.addWidget(desc_label)
+            self.finished.emit({"success": False, "error": str(e)})
 
 
 class EmbeddingsTab(QWidget):
-    """Tab for embeddings and semantic search."""
+    """Tab for text embeddings."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = parent
-        self.embed_worker = None
-        self.search_worker = None
-        self.documents = []
+        self.worker = None
+        self.stored_embeddings = {}  # name -> embedding vector
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         
-        # Left: Provider list and document store
-        left = QWidget()
-        left.setMaximumWidth(300)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        
-        type_label = QLabel("Embedding Providers")
-        type_label.setFont(QFont('Arial', 12, QFont.Bold))
-        type_label.setStyleSheet("color: #f39c12;")
-        left_layout.addWidget(type_label)
-        
-        # Provider cards
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setMaximumHeight(200)
-        
-        cards_widget = QWidget()
-        cards_layout = QVBoxLayout(cards_widget)
-        cards_layout.setSpacing(6)
-        
-        providers = {
-            'sentence_transformers': {
-                'name': 'Sentence Transformers',
-                'description': 'Local embeddings. Fast and free.',
-                'requirements': ['sentence-transformers'],
-                'provider': 'LOCAL',
-            },
-            'openai_embedding': {
-                'name': 'OpenAI Embeddings',
-                'description': 'High quality embeddings via API.',
-                'requirements': ['openai'],
-                'provider': 'OPENAI',
-                'needs_api_key': True,
-            },
-        }
-        
-        for name, info in providers.items():
-            card = ProviderCard(name, info)
-            cards_layout.addWidget(card)
-        
-        cards_layout.addStretch()
-        scroll.setWidget(cards_widget)
-        left_layout.addWidget(scroll)
-        
-        # Document store
-        doc_group = QGroupBox("Document Store")
-        doc_layout = QVBoxLayout(doc_group)
-        
-        self.doc_list = QListWidget()
-        self.doc_list.setMaximumHeight(150)
-        doc_layout.addWidget(self.doc_list)
-        
-        doc_btn_row = QHBoxLayout()
-        add_doc_btn = QPushButton("Add")
-        add_doc_btn.clicked.connect(self._add_document)
-        doc_btn_row.addWidget(add_doc_btn)
-        
-        remove_doc_btn = QPushButton("Remove")
-        remove_doc_btn.clicked.connect(self._remove_document)
-        doc_btn_row.addWidget(remove_doc_btn)
-        
-        clear_docs_btn = QPushButton("Clear")
-        clear_docs_btn.clicked.connect(self._clear_documents)
-        doc_btn_row.addWidget(clear_docs_btn)
-        
-        doc_layout.addLayout(doc_btn_row)
-        
-        self.doc_count_label = QLabel("0 documents")
-        self.doc_count_label.setStyleSheet("color: #888; font-size: 10px;")
-        doc_layout.addWidget(self.doc_count_label)
-        
-        left_layout.addWidget(doc_group)
-        left_layout.addStretch()
-        
-        layout.addWidget(left)
-        
-        # Right: Search and embedding panels
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
+        # Header
+        header = QLabel("Text Embeddings")
+        header.setFont(QFont('Arial', 14, QFont.Bold))
+        header.setStyleSheet("color: #1abc9c;")
+        layout.addWidget(header)
         
         # Provider selection
-        provider_row = QHBoxLayout()
-        provider_row.addWidget(QLabel("Provider:"))
+        provider_group = QGroupBox("Provider")
+        provider_layout = QHBoxLayout()
+        
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems(['Sentence Transformers (Local)', 'OpenAI'])
-        provider_row.addWidget(self.provider_combo)
-        provider_row.addStretch()
-        right_layout.addLayout(provider_row)
+        self.provider_combo.addItems([
+            'Local (sentence-transformers)',
+            'OpenAI (Cloud)'
+        ])
+        provider_layout.addWidget(self.provider_combo)
         
-        # Search section
-        search_group = QGroupBox("Semantic Search")
-        search_layout = QVBoxLayout(search_group)
+        self.load_btn = QPushButton("Load Model")
+        self.load_btn.clicked.connect(self._load_provider)
+        provider_layout.addWidget(self.load_btn)
         
-        query_row = QHBoxLayout()
-        query_row.addWidget(QLabel("Query:"))
-        self.query_input = QLineEdit()
-        self.query_input.setPlaceholderText("Enter search query...")
-        self.query_input.returnPressed.connect(self._search)
-        query_row.addWidget(self.query_input)
-        search_layout.addLayout(query_row)
+        provider_layout.addStretch()
+        provider_group.setLayout(provider_layout)
+        layout.addWidget(provider_group)
         
-        search_opts = QHBoxLayout()
-        search_opts.addWidget(QLabel("Top K:"))
-        self.top_k_spin = QSpinBox()
-        self.top_k_spin.setRange(1, 20)
-        self.top_k_spin.setValue(5)
-        search_opts.addWidget(self.top_k_spin)
+        # Main splitter
+        splitter = QSplitter(Qt.Horizontal)
         
-        self.search_btn = QPushButton("Search")
-        self.search_btn.setStyleSheet("background-color: #f39c12; font-weight: bold;")
-        self.search_btn.clicked.connect(self._search)
-        search_opts.addWidget(self.search_btn)
-        search_opts.addStretch()
-        search_layout.addLayout(search_opts)
+        # Left panel - Input
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
         
-        right_layout.addWidget(search_group)
+        # Single embedding
+        single_group = QGroupBox("Generate Embedding")
+        single_layout = QVBoxLayout()
+        
+        self.text_input = QTextEdit()
+        self.text_input.setMaximumHeight(80)
+        self.text_input.setPlaceholderText("Enter text to embed...")
+        single_layout.addWidget(self.text_input)
+        
+        name_row = QHBoxLayout()
+        name_row.addWidget(QLabel("Save as:"))
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("optional name")
+        name_row.addWidget(self.name_input)
+        single_layout.addLayout(name_row)
+        
+        self.embed_btn = QPushButton("Generate Embedding")
+        self.embed_btn.setStyleSheet("background-color: #1abc9c; font-weight: bold;")
+        self.embed_btn.clicked.connect(self._generate_embedding)
+        single_layout.addWidget(self.embed_btn)
+        
+        single_group.setLayout(single_layout)
+        left_layout.addWidget(single_group)
+        
+        # Similarity
+        sim_group = QGroupBox("Compare Similarity")
+        sim_layout = QVBoxLayout()
+        
+        self.text1_input = QTextEdit()
+        self.text1_input.setMaximumHeight(60)
+        self.text1_input.setPlaceholderText("Text 1...")
+        sim_layout.addWidget(self.text1_input)
+        
+        self.text2_input = QTextEdit()
+        self.text2_input.setMaximumHeight(60)
+        self.text2_input.setPlaceholderText("Text 2...")
+        sim_layout.addWidget(self.text2_input)
+        
+        self.similarity_btn = QPushButton("Calculate Similarity")
+        self.similarity_btn.clicked.connect(self._calculate_similarity)
+        sim_layout.addWidget(self.similarity_btn)
+        
+        sim_group.setLayout(sim_layout)
+        left_layout.addWidget(sim_group)
+        
+        left_layout.addStretch()
+        splitter.addWidget(left_panel)
+        
+        # Right panel - Stored embeddings
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        
+        stored_group = QGroupBox("Stored Embeddings")
+        stored_layout = QVBoxLayout()
+        
+        self.stored_table = QTableWidget()
+        self.stored_table.setColumnCount(3)
+        self.stored_table.setHorizontalHeaderLabels(["Name", "Dimensions", "Preview"])
+        self.stored_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        stored_layout.addWidget(self.stored_table)
+        
+        btn_row = QHBoxLayout()
+        
+        self.export_btn = QPushButton("Export All")
+        self.export_btn.clicked.connect(self._export_embeddings)
+        btn_row.addWidget(self.export_btn)
+        
+        self.clear_btn = QPushButton("Clear All")
+        self.clear_btn.clicked.connect(self._clear_embeddings)
+        btn_row.addWidget(self.clear_btn)
+        
+        btn_row.addStretch()
+        stored_layout.addLayout(btn_row)
+        
+        stored_group.setLayout(stored_layout)
+        right_layout.addWidget(stored_group)
+        
+        splitter.addWidget(right_panel)
+        splitter.setSizes([400, 400])
+        
+        layout.addWidget(splitter)
         
         # Progress
         self.progress = QProgressBar()
         self.progress.setVisible(False)
-        right_layout.addWidget(self.progress)
+        layout.addWidget(self.progress)
         
-        # Results
-        results_label = QLabel("Search Results:")
-        right_layout.addWidget(results_label)
-        
-        self.results_list = QListWidget()
-        self.results_list.setMinimumHeight(150)
-        right_layout.addWidget(self.results_list, stretch=1)
-        
-        # Single text embedding section
-        embed_group = QGroupBox("Single Text Embedding")
-        embed_layout = QVBoxLayout(embed_group)
-        
-        self.embed_input = QTextEdit()
-        self.embed_input.setMaximumHeight(60)
-        self.embed_input.setPlaceholderText("Enter text to embed...")
-        embed_layout.addWidget(self.embed_input)
-        
-        embed_btn_row = QHBoxLayout()
-        self.embed_btn = QPushButton("Generate Embedding")
-        self.embed_btn.clicked.connect(self._generate_embedding)
-        embed_btn_row.addWidget(self.embed_btn)
-        embed_btn_row.addStretch()
-        embed_layout.addLayout(embed_btn_row)
-        
-        self.embed_result = QLabel("Embedding dimensions: -")
-        self.embed_result.setStyleSheet("color: #888; font-size: 10px;")
-        embed_layout.addWidget(self.embed_result)
-        
-        right_layout.addWidget(embed_group)
+        # Status
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
         
         # Info
         info_label = QLabel(
-            "Install sentence-transformers for local embeddings:\n"
-            "pip install sentence-transformers"
+            "💡 Embeddings convert text into numerical vectors for semantic search.\n"
+            "Local uses sentence-transformers (384 dims). OpenAI uses text-embedding-3-small (1536 dims)."
         )
-        info_label.setStyleSheet("color: #666; font-size: 9px;")
-        right_layout.addWidget(info_label)
+        info_label.setStyleSheet("color: #888; font-style: italic;")
+        layout.addWidget(info_label)
+    
+    def _get_provider_name(self) -> str:
+        text = self.provider_combo.currentText()
+        if 'Local' in text:
+            return 'local'
+        elif 'OpenAI' in text:
+            return 'openai'
+        return 'local'
+    
+    def _load_provider(self):
+        provider_name = self._get_provider_name()
+        provider = get_provider(provider_name)
         
-        layout.addWidget(right, stretch=1)
-    
-    def _add_document(self):
-        """Add a document to the store."""
-        from PyQt5.QtWidgets import QInputDialog
-        text, ok = QInputDialog.getMultiLineText(
-            self, "Add Document", "Enter document text:"
-        )
-        if ok and text.strip():
-            self.documents.append(text.strip())
-            item = QListWidgetItem(text[:50] + "..." if len(text) > 50 else text)
-            item.setToolTip(text)
-            self.doc_list.addItem(item)
-            self._update_doc_count()
-    
-    def _remove_document(self):
-        """Remove selected document."""
-        row = self.doc_list.currentRow()
-        if row >= 0:
-            self.doc_list.takeItem(row)
-            del self.documents[row]
-            self._update_doc_count()
-    
-    def _clear_documents(self):
-        """Clear all documents."""
-        self.doc_list.clear()
-        self.documents.clear()
-        self._update_doc_count()
-    
-    def _update_doc_count(self):
-        """Update document count label."""
-        count = len(self.documents)
-        self.doc_count_label.setText(f"{count} document{'s' if count != 1 else ''}")
-    
-    def _search(self):
-        """Perform semantic search."""
-        query = self.query_input.text().strip()
-        if not query:
-            QMessageBox.warning(self, "No Query", "Please enter a search query")
-            return
-        
-        if not self.documents:
-            QMessageBox.warning(self, "No Documents", "Please add documents first")
-            return
-        
-        self.search_btn.setEnabled(False)
-        self.progress.setVisible(True)
-        self.progress.setValue(0)
-        self.results_list.clear()
-        
-        self.search_worker = SearchWorker(
-            query,
-            self.documents,
-            self.top_k_spin.value()
-        )
-        self.search_worker.progress.connect(self.progress.setValue)
-        self.search_worker.finished.connect(self._on_search_complete)
-        self.search_worker.error.connect(self._on_search_error)
-        self.search_worker.start()
-    
-    def _on_search_complete(self, results: list):
-        """Handle search completion."""
-        self.search_btn.setEnabled(True)
-        self.progress.setVisible(False)
-        
-        self.results_list.clear()
-        for r in results:
-            doc = r['document']
-            score = r['score']
-            preview = doc[:60] + "..." if len(doc) > 60 else doc
-            item = QListWidgetItem(f"[{score:.3f}] {preview}")
-            item.setToolTip(doc)
-            self.results_list.addItem(item)
-        
-        if not results:
-            self.results_list.addItem("No matching documents found")
-    
-    def _on_search_error(self, error: str):
-        """Handle search error."""
-        self.search_btn.setEnabled(True)
-        self.progress.setVisible(False)
-        QMessageBox.warning(self, "Search Failed", f"Error: {error}")
+        if provider and not provider.is_loaded:
+            self.status_label.setText(f"Loading {provider_name}...")
+            self.load_btn.setEnabled(False)
+            
+            from PyQt5.QtCore import QTimer
+            def do_load():
+                success = provider.load()
+                if success:
+                    self.status_label.setText(f"{provider_name} loaded!")
+                else:
+                    self.status_label.setText(f"Failed to load {provider_name}")
+                self.load_btn.setEnabled(True)
+            
+            QTimer.singleShot(100, do_load)
     
     def _generate_embedding(self):
-        """Generate embedding for single text."""
-        text = self.embed_input.toPlainText().strip()
+        text = self.text_input.toPlainText().strip()
         if not text:
             QMessageBox.warning(self, "No Text", "Please enter text to embed")
             return
         
-        # Determine provider
-        provider_text = self.provider_combo.currentText()
-        if 'Local' in provider_text:
-            provider = 'LOCAL'
-        else:
-            provider = 'API'
+        provider_name = self._get_provider_name()
+        name = self.name_input.text().strip() or f"emb_{len(self.stored_embeddings) + 1}"
         
         self.embed_btn.setEnabled(False)
         self.progress.setVisible(True)
         self.progress.setValue(0)
+        self.status_label.setText("Generating embedding...")
         
-        self.embed_worker = EmbeddingWorker(text, provider)
-        self.embed_worker.progress.connect(self.progress.setValue)
-        self.embed_worker.finished.connect(self._on_embedding_complete)
-        self.embed_worker.error.connect(self._on_embedding_error)
-        self.embed_worker.start()
+        self.worker = EmbeddingWorker('embed', provider_name, text=text)
+        self.worker.progress.connect(self.progress.setValue)
+        self.worker.finished.connect(lambda r: self._on_embed_complete(r, name, text))
+        self.worker.start()
     
-    def _on_embedding_complete(self, embedding: list):
-        """Handle embedding completion."""
+    def _on_embed_complete(self, result: dict, name: str, text: str):
         self.embed_btn.setEnabled(True)
         self.progress.setVisible(False)
         
-        dims = len(embedding)
-        preview = str(embedding[:5])[:-1] + ", ..."
-        self.embed_result.setText(f"Embedding dimensions: {dims}\nPreview: {preview}")
+        if result.get("success"):
+            embedding = result.get("embedding", [])
+            dims = result.get("dimensions", 0)
+            duration = result.get("duration", 0)
+            
+            # Store embedding
+            self.stored_embeddings[name] = {
+                "text": text,
+                "embedding": embedding
+            }
+            self._update_table()
+            
+            self.status_label.setText(
+                f"Generated {dims}-dim embedding in {duration:.3f}s"
+            )
+        else:
+            error = result.get("error", "Unknown error")
+            self.status_label.setText(f"Error: {error}")
     
-    def _on_embedding_error(self, error: str):
-        """Handle embedding error."""
-        self.embed_btn.setEnabled(True)
+    def _calculate_similarity(self):
+        text1 = self.text1_input.toPlainText().strip()
+        text2 = self.text2_input.toPlainText().strip()
+        
+        if not text1 or not text2:
+            QMessageBox.warning(self, "Missing Text", "Please enter both texts")
+            return
+        
+        provider_name = self._get_provider_name()
+        
+        self.similarity_btn.setEnabled(False)
+        self.progress.setVisible(True)
+        self.progress.setValue(0)
+        self.status_label.setText("Calculating similarity...")
+        
+        self.worker = EmbeddingWorker('similarity', provider_name, text1=text1, text2=text2)
+        self.worker.progress.connect(self.progress.setValue)
+        self.worker.finished.connect(self._on_similarity_complete)
+        self.worker.start()
+    
+    def _on_similarity_complete(self, result: dict):
+        self.similarity_btn.setEnabled(True)
         self.progress.setVisible(False)
-        self.embed_result.setText(f"Error: {error}")
-        QMessageBox.warning(self, "Embedding Failed", f"Error: {error}")
+        
+        if result.get("success"):
+            similarity = result.get("similarity", 0)
+            duration = result.get("duration", 0)
+            
+            # Show as percentage
+            sim_percent = similarity * 100
+            
+            # Color based on similarity
+            if sim_percent >= 80:
+                color = "#27ae60"  # green
+            elif sim_percent >= 50:
+                color = "#f39c12"  # orange
+            else:
+                color = "#e74c3c"  # red
+            
+            self.status_label.setText(
+                f"<span style='color: {color}; font-weight: bold;'>"
+                f"Similarity: {sim_percent:.1f}%</span> (calculated in {duration:.3f}s)"
+            )
+        else:
+            error = result.get("error", "Unknown error")
+            self.status_label.setText(f"Error: {error}")
+    
+    def _update_table(self):
+        self.stored_table.setRowCount(len(self.stored_embeddings))
+        
+        for row, (name, data) in enumerate(self.stored_embeddings.items()):
+            embedding = data.get("embedding", [])
+            
+            self.stored_table.setItem(row, 0, QTableWidgetItem(name))
+            self.stored_table.setItem(row, 1, QTableWidgetItem(str(len(embedding))))
+            
+            # Preview first few values
+            preview = str(embedding[:3])[:-1] + "..." if len(embedding) > 3 else str(embedding)
+            self.stored_table.setItem(row, 2, QTableWidgetItem(preview))
+    
+    def _export_embeddings(self):
+        if not self.stored_embeddings:
+            QMessageBox.warning(self, "Nothing to Export", "No embeddings stored")
+            return
+        
+        timestamp = int(time.time())
+        filename = f"embeddings_{timestamp}.json"
+        filepath = OUTPUT_DIR / filename
+        
+        with open(filepath, 'w') as f:
+            json.dump(self.stored_embeddings, f, indent=2)
+        
+        self.status_label.setText(f"Exported to: {filepath}")
+    
+    def _clear_embeddings(self):
+        if not self.stored_embeddings:
+            return
+        
+        reply = QMessageBox.question(
+            self, "Clear All",
+            "Clear all stored embeddings?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.stored_embeddings.clear()
+            self._update_table()
+            self.status_label.setText("Cleared all embeddings")
 
 
 def create_embeddings_tab(parent) -> QWidget:
     """Factory function for creating the embeddings tab."""
-    return EmbeddingsTab(parent)
-
-
-if not HAS_PYQT:
-    class EmbeddingsTab:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("PyQt5 is required for the Embeddings Tab")
-    
-    def create_embeddings_tab(parent):
+    if not HAS_PYQT:
         raise ImportError("PyQt5 is required for the Embeddings Tab")
+    return EmbeddingsTab(parent)

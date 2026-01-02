@@ -1,9 +1,9 @@
 """
-Video Generation Tab - Generate videos using local or cloud models.
+3D Generation Tab - Generate 3D models from text prompts.
 
 Providers:
-  - LOCAL: AnimateDiff (requires diffusers with video support)
-  - REPLICATE: Cloud video generation (requires replicate, API key)
+  - LOCAL: Shap-E or Point-E (requires diffusers with shap-e support)
+  - REPLICATE: Cloud 3D generation (requires replicate, API key)
 """
 
 import os
@@ -15,8 +15,8 @@ try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
-        QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-        QDoubleSpinBox
+        QMessageBox, QGroupBox, QSpinBox, QDoubleSpinBox,
+        QFileDialog
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
@@ -27,50 +27,43 @@ except ImportError:
 from ...config import CONFIG
 
 # Output directory
-OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "videos"
+OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "3d"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =============================================================================
-# Video Generation Implementations
+# 3D Generation Implementations
 # =============================================================================
 
-class LocalVideo:
-    """Local video generation using AnimateDiff."""
+class Local3DGen:
+    """Local 3D generation using Shap-E."""
     
-    def __init__(self, model_id: str = "guoyww/animatediff-motion-adapter-v1-5-2"):
-        self.model_id = model_id
+    def __init__(self, model: str = "shap-e"):
+        self.model_type = model
         self.pipe = None
         self.is_loaded = False
     
     def load(self) -> bool:
         try:
-            from diffusers import AnimateDiffPipeline, MotionAdapter, DDIMScheduler
             import torch
+            from diffusers import ShapEPipeline
             
-            adapter = MotionAdapter.from_pretrained(self.model_id)
-            model_id = "SG161222/Realistic_Vision_V5.1_noVAE"
-            
-            self.pipe = AnimateDiffPipeline.from_pretrained(
-                model_id,
-                motion_adapter=adapter,
-            )
-            self.pipe.scheduler = DDIMScheduler.from_config(
-                self.pipe.scheduler.config,
-                beta_schedule="linear"
+            self.pipe = ShapEPipeline.from_pretrained(
+                "openai/shap-e",
+                torch_dtype=torch.float16
             )
             
-            import torch
             if torch.cuda.is_available():
                 self.pipe = self.pipe.to("cuda")
             
             self.is_loaded = True
             return True
-        except ImportError:
-            print("Install: pip install diffusers[torch] transformers accelerate")
+        except ImportError as e:
+            print(f"Install: pip install diffusers[torch] transformers accelerate")
+            print(f"Missing: {e}")
             return False
         except Exception as e:
-            print(f"Failed to load video model: {e}")
+            print(f"Failed to load 3D model: {e}")
             return False
     
     def unload(self):
@@ -85,55 +78,63 @@ class LocalVideo:
                 pass
         self.is_loaded = False
     
-    def generate(self, prompt: str, duration: float = 2.0, fps: int = 8,
-                 **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, guidance_scale: float = 15.0,
+                 num_inference_steps: int = 64, **kwargs) -> Dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
         
         try:
             start = time.time()
             
-            num_frames = int(duration * fps)
-            
             output = self.pipe(
                 prompt,
-                num_frames=num_frames,
-                guidance_scale=7.5,
+                guidance_scale=guidance_scale,
+                num_inference_steps=num_inference_steps,
             )
             
-            frames = output.frames[0]
-            
-            # Save as GIF
+            # Save as PLY mesh
             timestamp = int(time.time())
-            filename = f"video_{timestamp}.gif"
+            filename = f"3d_{timestamp}.ply"
             filepath = OUTPUT_DIR / filename
             
-            frames[0].save(
-                str(filepath),
-                format='GIF',
-                save_all=True,
-                append_images=frames[1:],
-                duration=1000 // fps,
-                loop=0
-            )
+            # Export mesh
+            mesh = output.images[0]
+            
+            # Try to save as PLY
+            try:
+                import trimesh
+                if hasattr(mesh, 'export'):
+                    mesh.export(str(filepath))
+                else:
+                    # Convert vertices/faces if needed
+                    tmesh = trimesh.Trimesh(
+                        vertices=mesh.verts.cpu().numpy() if hasattr(mesh, 'verts') else mesh,
+                        faces=mesh.faces.cpu().numpy() if hasattr(mesh, 'faces') else None
+                    )
+                    tmesh.export(str(filepath))
+            except ImportError:
+                # Fallback - save raw data
+                import pickle
+                filepath = OUTPUT_DIR / f"3d_{timestamp}.pkl"
+                with open(filepath, 'wb') as f:
+                    pickle.dump(mesh, f)
             
             return {
                 "success": True,
                 "path": str(filepath),
-                "duration": time.time() - start,
-                "frames": len(frames)
+                "duration": time.time() - start
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
 
-class ReplicateVideo:
-    """Replicate video generation (CLOUD - requires API key)."""
+class Cloud3DGen:
+    """Cloud 3D generation via Replicate."""
     
     def __init__(self, api_key: Optional[str] = None,
-                 model: str = "anotherjesse/zeroscope-v2-xl:latest"):
+                 service: str = "replicate"):
         self.api_key = api_key or os.environ.get("REPLICATE_API_TOKEN")
-        self.model = model
+        self.service = service
         self.client = None
         self.is_loaded = False
     
@@ -152,8 +153,7 @@ class ReplicateVideo:
         self.client = None
         self.is_loaded = False
     
-    def generate(self, prompt: str, duration: float = 4.0, fps: int = 24,
-                 **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -161,22 +161,28 @@ class ReplicateVideo:
             import requests
             start = time.time()
             
+            # Use Shap-E on Replicate
             output = self.client.run(
-                self.model,
+                "cjwbw/shap-e:cf86502e5ffeb7f4c8f68cdf57f3bea50c18a5e3e5f42e37be4e5f3a16dcd62e",
                 input={
                     "prompt": prompt,
-                    "num_frames": int(duration * fps),
-                    "fps": fps,
+                    "guidance_scale": kwargs.get('guidance_scale', 15.0),
                 }
             )
             
-            # Download video
-            video_url = output if isinstance(output, str) else output[0]
-            resp = requests.get(video_url)
+            # Download the result
+            result_url = output if isinstance(output, str) else output[0]
+            resp = requests.get(result_url)
             
-            # Save to file
             timestamp = int(time.time())
-            filename = f"replicate_video_{timestamp}.mp4"
+            # Determine extension from URL or default to .glb
+            ext = ".glb"
+            if ".ply" in result_url:
+                ext = ".ply"
+            elif ".obj" in result_url:
+                ext = ".obj"
+            
+            filename = f"cloud_3d_{timestamp}{ext}"
             filepath = OUTPUT_DIR / filename
             filepath.write_bytes(resp.content)
             
@@ -203,23 +209,23 @@ def get_provider(name: str):
     global _providers
     
     if name == 'local' and _providers['local'] is None:
-        _providers['local'] = LocalVideo()
+        _providers['local'] = Local3DGen()
     elif name == 'replicate' and _providers['replicate'] is None:
-        _providers['replicate'] = ReplicateVideo()
+        _providers['replicate'] = Cloud3DGen()
     
     return _providers.get(name)
 
 
-class VideoGenerationWorker(QThread):
-    """Background worker for video generation."""
+class ThreeDGenerationWorker(QThread):
+    """Background worker for 3D generation."""
     finished = pyqtSignal(dict)
     progress = pyqtSignal(int)
     
-    def __init__(self, prompt, duration, fps, provider_name, parent=None):
+    def __init__(self, prompt, guidance_scale, steps, provider_name, parent=None):
         super().__init__(parent)
         self.prompt = prompt
-        self.duration = duration
-        self.fps = fps
+        self.guidance_scale = guidance_scale
+        self.steps = steps
         self.provider_name = provider_name
     
     def run(self):
@@ -241,8 +247,8 @@ class VideoGenerationWorker(QThread):
             
             result = provider.generate(
                 self.prompt,
-                duration=self.duration,
-                fps=self.fps
+                guidance_scale=self.guidance_scale,
+                num_inference_steps=self.steps
             )
             
             self.progress.emit(100)
@@ -252,23 +258,23 @@ class VideoGenerationWorker(QThread):
             self.finished.emit({"success": False, "error": str(e)})
 
 
-class VideoTab(QWidget):
-    """Tab for video generation."""
+class ThreeDTab(QWidget):
+    """Tab for 3D model generation."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = parent
         self.worker = None
-        self.last_video_path = None
+        self.last_3d_path = None
         self.setup_ui()
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel("Video Generation")
+        header = QLabel("3D Generation")
         header.setFont(QFont('Arial', 14, QFont.Bold))
-        header.setStyleSheet("color: #9b59b6;")
+        header.setStyleSheet("color: #e67e22;")
         layout.addWidget(header)
         
         # Provider selection
@@ -277,7 +283,7 @@ class VideoTab(QWidget):
         
         self.provider_combo = QComboBox()
         self.provider_combo.addItems([
-            'Local (AnimateDiff)',
+            'Local (Shap-E)',
             'Replicate (Cloud)'
         ])
         provider_layout.addWidget(self.provider_combo)
@@ -296,7 +302,7 @@ class VideoTab(QWidget):
         
         self.prompt_input = QTextEdit()
         self.prompt_input.setMaximumHeight(80)
-        self.prompt_input.setPlaceholderText("Describe the video you want to generate...")
+        self.prompt_input.setPlaceholderText("Describe the 3D object you want to generate...")
         prompt_layout.addWidget(self.prompt_input)
         
         prompt_group.setLayout(prompt_layout)
@@ -306,18 +312,18 @@ class VideoTab(QWidget):
         options_group = QGroupBox("Options")
         options_layout = QHBoxLayout()
         
-        options_layout.addWidget(QLabel("Duration (sec):"))
-        self.duration_spin = QDoubleSpinBox()
-        self.duration_spin.setRange(0.5, 10.0)
-        self.duration_spin.setValue(2.0)
-        self.duration_spin.setSingleStep(0.5)
-        options_layout.addWidget(self.duration_spin)
+        options_layout.addWidget(QLabel("Guidance Scale:"))
+        self.guidance_spin = QDoubleSpinBox()
+        self.guidance_spin.setRange(1.0, 20.0)
+        self.guidance_spin.setValue(15.0)
+        self.guidance_spin.setSingleStep(0.5)
+        options_layout.addWidget(self.guidance_spin)
         
-        options_layout.addWidget(QLabel("FPS:"))
-        self.fps_spin = QSpinBox()
-        self.fps_spin.setRange(4, 30)
-        self.fps_spin.setValue(8)
-        options_layout.addWidget(self.fps_spin)
+        options_layout.addWidget(QLabel("Steps:"))
+        self.steps_spin = QSpinBox()
+        self.steps_spin.setRange(10, 100)
+        self.steps_spin.setValue(64)
+        options_layout.addWidget(self.steps_spin)
         
         options_layout.addStretch()
         options_group.setLayout(options_layout)
@@ -326,14 +332,14 @@ class VideoTab(QWidget):
         # Buttons
         btn_layout = QHBoxLayout()
         
-        self.generate_btn = QPushButton("Generate Video")
-        self.generate_btn.setStyleSheet("background-color: #9b59b6; font-weight: bold; padding: 10px;")
-        self.generate_btn.clicked.connect(self._generate_video)
+        self.generate_btn = QPushButton("Generate 3D Model")
+        self.generate_btn.setStyleSheet("background-color: #e67e22; font-weight: bold; padding: 10px;")
+        self.generate_btn.clicked.connect(self._generate_3d)
         btn_layout.addWidget(self.generate_btn)
         
-        self.open_btn = QPushButton("Open Video")
+        self.open_btn = QPushButton("Open 3D File")
         self.open_btn.setEnabled(False)
-        self.open_btn.clicked.connect(self._open_video)
+        self.open_btn.clicked.connect(self._open_3d)
         btn_layout.addWidget(self.open_btn)
         
         self.open_folder_btn = QPushButton("Open Output Folder")
@@ -354,8 +360,8 @@ class VideoTab(QWidget):
         
         # Info
         info_label = QLabel(
-            "⚠️ Video generation requires significant GPU memory.\n"
-            "Local generation may take several minutes on CPU."
+            "⚠️ 3D generation requires significant GPU memory (4GB+ VRAM).\n"
+            "Output formats: PLY, GLB, OBJ depending on provider."
         )
         info_label.setStyleSheet("color: #888; font-style: italic;")
         layout.addWidget(info_label)
@@ -389,7 +395,7 @@ class VideoTab(QWidget):
             
             QTimer.singleShot(100, do_load)
     
-    def _generate_video(self):
+    def _generate_3d(self):
         prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
@@ -400,12 +406,12 @@ class VideoTab(QWidget):
         self.generate_btn.setEnabled(False)
         self.progress.setVisible(True)
         self.progress.setValue(0)
-        self.status_label.setText("Generating video (this may take a while)...")
+        self.status_label.setText("Generating 3D model (this may take a while)...")
         
-        self.worker = VideoGenerationWorker(
+        self.worker = ThreeDGenerationWorker(
             prompt,
-            self.duration_spin.value(),
-            self.fps_spin.value(),
+            self.guidance_spin.value(),
+            self.steps_spin.value(),
             provider_name
         )
         self.worker.progress.connect(self.progress.setValue)
@@ -420,24 +426,24 @@ class VideoTab(QWidget):
             path = result.get("path", "")
             duration = result.get("duration", 0)
             
-            self.last_video_path = path
+            self.last_3d_path = path
             self.open_btn.setEnabled(True)
             self.status_label.setText(f"Generated in {duration:.1f}s - Saved to: {path}")
         else:
             error = result.get("error", "Unknown error")
             self.status_label.setText(f"Error: {error}")
     
-    def _open_video(self):
-        if self.last_video_path and Path(self.last_video_path).exists():
+    def _open_3d(self):
+        if self.last_3d_path and Path(self.last_3d_path).exists():
             import subprocess
             import sys
             
             if sys.platform == 'darwin':
-                subprocess.run(['open', self.last_video_path])
+                subprocess.run(['open', self.last_3d_path])
             elif sys.platform == 'win32':
-                os.startfile(self.last_video_path)
+                os.startfile(self.last_3d_path)
             else:
-                subprocess.run(['xdg-open', self.last_video_path])
+                subprocess.run(['xdg-open', self.last_3d_path])
     
     def _open_output_folder(self):
         import subprocess
@@ -451,8 +457,8 @@ class VideoTab(QWidget):
             subprocess.run(['xdg-open', str(OUTPUT_DIR)])
 
 
-def create_video_tab(parent) -> QWidget:
-    """Factory function for creating the video tab."""
+def create_threed_tab(parent) -> QWidget:
+    """Factory function for creating the 3D tab."""
     if not HAS_PYQT:
-        raise ImportError("PyQt5 is required for the Video Tab")
-    return VideoTab(parent)
+        raise ImportError("PyQt5 is required for the 3D Tab")
+    return ThreeDTab(parent)
