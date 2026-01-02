@@ -202,13 +202,13 @@ def _apply_all_settings(parent):
         level = PowerLevel(mode)
         power_mgr.set_level(level)
         
-        # Update description
+        # Update description - match the mode values from resource_mode_combo
         descriptions = {
-            "full": "Full: Uses all available resources for maximum performance.",
+            "minimal": "Minimal: Uses 1 CPU thread, low priority. Best while gaming!",
+            "gaming": "Gaming: AI runs in background, prioritizes gaming performance.",
             "balanced": "Balanced: Moderate resource usage. Good for normal use.",
-            "low": "Low: Minimal resources, slower responses. CPU only.",
-            "gaming": "Gaming: Pauses background tasks, minimal CPU/GPU. Best while gaming!",
-            "background": "Background: Lowest priority, minimal resources.",
+            "performance": "Performance: Uses more resources for faster AI responses.",
+            "max": "Maximum: Uses all available resources. May slow other apps."
         }
         parent.power_mode_details_label.setText(descriptions.get(mode, ""))
         
