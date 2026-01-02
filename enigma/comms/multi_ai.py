@@ -56,8 +56,16 @@ class AIParticipant:
         """Get inference engine (lazy loaded)."""
         if self._engine is None and self.model_name:
             try:
-                from ..core.inference import InferenceEngine
-                self._engine = InferenceEngine(model_name=self.model_name)
+                from ..core.inference import EnigmaEngine
+                from ..core.model_registry import ModelRegistry
+                
+                registry = ModelRegistry()
+                if self.model_name in registry.registry.get("models", {}):
+                    model_path = registry.registry["models"][self.model_name]["path"]
+                    self._engine = EnigmaEngine(model_path=model_path)
+                else:
+                    # Use default model
+                    self._engine = EnigmaEngine()
             except Exception as e:
                 print(f"[!] Could not load engine for {self.name}: {e}")
         return self._engine
