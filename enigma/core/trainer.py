@@ -206,10 +206,8 @@ class EnigmaTrainer:
         print(f"[Training] Device: {self.device}")
         if self.device.type == "cuda":
             print(f"[Training] GPU: {torch.cuda.get_device_name(0)}")
-            print(
-                f"[Training] GPU Memory: {
-                    torch.cuda.get_device_properties(0).total_memory //
-                    1024**2} MB")
+            gpu_mem_mb = torch.cuda.get_device_properties(0).total_memory // 1024**2
+            print(f"[Training] GPU Memory: {gpu_mem_mb} MB")
         print(f"[Training] CPU Threads: {torch.get_num_threads()}")
 
         # Mixed precision setup
@@ -378,12 +376,8 @@ class EnigmaTrainer:
 
                     if self.global_step % log_every == 0:
                         current_lr = scheduler.get_last_lr()[0]
-                        print(
-                            f"  Step {
-                                self.global_step} | Loss: {
-                                loss.item() *
-                                self.gradient_accumulation_steps:.4f} | LR: {
-                                current_lr:.2e}")
+                        step_loss = loss.item() * self.gradient_accumulation_steps
+                        print(f"  Step {self.global_step} | Loss: {step_loss:.4f} | LR: {current_lr:.2e}")
 
                 epoch_loss += loss.item() * self.gradient_accumulation_steps
                 num_batches += 1

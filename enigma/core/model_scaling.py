@@ -192,11 +192,11 @@ def grow_registered_model(
     registry.save_model(target_name, new_model)
 
     # Update metadata
+    source_size = registry.registry['models'][source_name]['size']
     registry.update_metadata(
         target_name,
         grown_from=source_name,
-        growth_note=f"Grew from {source_name} ({
-            registry.registry['models'][source_name]['size']} -> {target_size})")
+        growth_note=f"Grew from {source_name} ({source_size} -> {target_size})")
 
     print(f"[OK] Created '{target_name}' by growing '{source_name}'")
     return new_model

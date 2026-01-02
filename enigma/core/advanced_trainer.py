@@ -333,10 +333,8 @@ class Trainer:
         print(f"Total steps: {total_steps:,}")
         print(f"Batch size: {self.config.batch_size}")
         print(f"Gradient accumulation: {self.config.gradient_accumulation_steps}")
-        print(
-            f"Effective batch size: {
-                self.config.batch_size *
-                self.config.gradient_accumulation_steps}")
+        effective_batch = self.config.batch_size * self.config.gradient_accumulation_steps
+        print(f"Effective batch size: {effective_batch}")
         print(f"Learning rate: {self.config.learning_rate}")
         print(f"{'=' * 60}\n")
 

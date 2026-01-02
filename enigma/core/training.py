@@ -446,10 +446,8 @@ class Trainer:
             print(info_msg(f"Dataset size: {len(dataset):,} sequences"))
             print(info_msg(f"Batch size: {self.config.batch_size}"))
             print(info_msg(f"Gradient accumulation: {self.config.grad_accumulation_steps}"))
-            print(
-                info_msg(f"Effective batch size: {
-                    self.config.batch_size *
-                    self.config.grad_accumulation_steps}"))
+            effective_batch = self.config.batch_size * self.config.grad_accumulation_steps
+            print(info_msg(f"Effective batch size: {effective_batch}"))
             print(info_msg(f"Steps per epoch: {steps_per_epoch}"))
             print(info_msg(f"Total steps: {total_steps}"))
             print(info_msg(f"Epochs: {epochs}"))

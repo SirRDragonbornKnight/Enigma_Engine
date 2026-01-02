@@ -293,14 +293,10 @@ class ModuleManager:
             return False, "Module requires GPU but none available"
 
         if info.min_vram_mb > self.hardware_profile['vram_mb']:
-            return False, f"Module requires {
-                info.min_vram_mb}MB VRAM, only {
-                self.hardware_profile['vram_mb']}MB available"
+            return False, f"Module requires {info.min_vram_mb}MB VRAM, only {self.hardware_profile['vram_mb']}MB available"
 
         if info.min_ram_mb > self.hardware_profile['ram_mb']:
-            return False, f"Module requires {
-                info.min_ram_mb}MB RAM, only {
-                self.hardware_profile['ram_mb']}MB available"
+            return False, f"Module requires {info.min_ram_mb}MB RAM, only {self.hardware_profile['ram_mb']}MB available"
 
         # Check explicit conflicts
         for conflict_id in info.conflicts:

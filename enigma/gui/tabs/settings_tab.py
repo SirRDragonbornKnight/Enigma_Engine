@@ -77,7 +77,7 @@ def create_settings_tab(parent):
     parent.resource_mode_combo.currentIndexChanged.connect(
         lambda idx: _apply_resource_mode(parent)
     )
-    mode_row.addWidget(parent.power_mode_combo)
+    mode_row.addWidget(parent.resource_mode_combo)
     mode_row.addStretch()
     power_layout.addLayout(mode_row)
     

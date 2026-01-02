@@ -265,10 +265,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         """
         name = name.lower().strip()
         if name not in self.registry["models"]:
-            raise ValueError(
-                f"Model '{name}' not found. Available: {
-                    list(
-                        self.registry['models'].keys())}")
+            available = list(self.registry['models'].keys())
+            raise ValueError(f"Model '{name}' not found. Available: {available}")
 
         model_dir = Path(self.registry["models"][name]["path"])
 
