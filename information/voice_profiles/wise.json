@@ -1,0 +1,10 @@
+{
+  "name": "Wise",
+  "pitch": 0.8,
+  "speed": 0.9,
+  "volume": 0.85,
+  "voice": "male",
+  "effects": [],
+  "language": "en",
+  "description": "Slow, thoughtful mentor voice"
+}

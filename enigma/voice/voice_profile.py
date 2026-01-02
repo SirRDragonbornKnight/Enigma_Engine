@@ -44,7 +44,7 @@ except ImportError:
 HAVE_ESPEAK = shutil.which("espeak") is not None
 
 # Voice profiles directory
-PROFILES_DIR = Path(__file__).parent.parent.parent / "data" / "voice_profiles"
+PROFILES_DIR = Path(__file__).parent.parent.parent / "information" / "voice_profiles"
 PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 
 

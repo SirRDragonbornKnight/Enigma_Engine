@@ -1,0 +1,12 @@
+{
+  "name": "Robot",
+  "pitch": 0.7,
+  "speed": 0.8,
+  "volume": 1.0,
+  "voice": "default",
+  "effects": [
+    "robotic"
+  ],
+  "language": "en",
+  "description": "Classic robotic voice"
+}
