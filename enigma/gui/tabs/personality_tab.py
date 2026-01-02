@@ -354,9 +354,11 @@ def _reset_personality(parent):
         return
 
     try:
-        from ...core.personality import PersonalityTraits
-
-        parent.personality.traits = PersonalityTraits()
+        # Reset all traits to default values (0.5)
+        for trait_name in parent.personality.traits.__annotations__:
+            setattr(parent.personality.traits, trait_name, 0.5)
+        
+        # Clear overrides and reset other state
         parent.personality.clear_all_overrides()
         parent.personality.allow_evolution = True
         parent.personality.interests.clear()
