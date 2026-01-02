@@ -675,6 +675,75 @@ EDIT_VIDEO = ToolDefinition(
     ],
 )
 
+# --- Module Management Tools ---
+
+LOAD_MODULE = ToolDefinition(
+    name="load_module",
+    description="Load/enable a module to add AI capabilities. Check resources first if unsure.",
+    category="system",
+    module=None,  # Built-in, uses ModuleManager
+    parameters=[
+        ToolParameter(
+            name="module_id",
+            type="string",
+            description="Module ID to load (e.g., 'image_gen_local', 'voice_output')",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Load image generation capability",
+        "Enable voice output",
+        "Turn on the vision module",
+    ],
+)
+
+UNLOAD_MODULE = ToolDefinition(
+    name="unload_module",
+    description="Unload/disable a module to free up resources",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="module_id",
+            type="string",
+            description="Module ID to unload",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Unload image generation to save memory",
+        "Disable video generation",
+        "Turn off the avatar module",
+    ],
+)
+
+LIST_MODULES = ToolDefinition(
+    name="list_modules",
+    description="List all available modules and their status (loaded/unloaded)",
+    category="system",
+    module=None,
+    parameters=[],
+    examples=[
+        "What modules are available?",
+        "Show me what's currently loaded",
+        "List all AI capabilities",
+    ],
+)
+
+CHECK_RESOURCES = ToolDefinition(
+    name="check_resources",
+    description="Check current system resource usage (RAM, VRAM, CPU) and get recommendations",
+    category="system",
+    module=None,
+    parameters=[],
+    examples=[
+        "Check if I have enough resources",
+        "Can I run video generation?",
+        "What's my current memory usage?",
+        "Am I using too much RAM?",
+    ],
+)
+
 
 # =============================================================================
 # Registry of All Tools
@@ -707,6 +776,12 @@ ALL_TOOLS = [
     LIST_DIRECTORY,
     WEB_SEARCH,
     FETCH_WEBPAGE,
+    
+    # Module Management
+    LOAD_MODULE,
+    UNLOAD_MODULE,
+    LIST_MODULES,
+    CHECK_RESOURCES,
 ]
 
 # Dictionary for fast lookup
