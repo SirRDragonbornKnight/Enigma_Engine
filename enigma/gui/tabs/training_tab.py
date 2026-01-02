@@ -163,17 +163,81 @@ def _save_training_file(parent):
 
 
 def _browse_training_file(parent):
-    """Browse for a training file."""
+    """Browse for a training file using system file dialog."""
+    # Start in data directory
+    start_dir = str(Path(CONFIG.get("data_dir", "data")))
+    
     filepath, _ = QFileDialog.getOpenFileName(
-        parent, "Select Training File", "", "Text Files (*.txt);;All Files (*)"
+        parent, "Open Training File", start_dir, "Text Files (*.txt);;All Files (*)"
     )
+    
     if filepath:
+        # Update paths
         parent.training_data_path = filepath
         parent.data_path_label.setText(filepath)
-        # Add to combo if not there
-        name = Path(filepath).name
-        if parent.training_file_combo.findText(name) < 0:
-            parent.training_file_combo.addItem(name, filepath)
-        idx = parent.training_file_combo.findData(filepath)
-        if idx >= 0:
-            parent.training_file_combo.setCurrentIndex(idx)
+        parent._current_training_file = filepath
+        parent.training_file_label.setText(f"📄 {Path(filepath).name}")
+        
+        # Load file content
+        try:
+            content = Path(filepath).read_text(encoding='utf-8', errors='replace')
+            parent.training_editor.setPlainText(content)
+        except Exception as e:
+            parent.training_editor.setPlainText(f"Error loading file: {e}")
+
+
+def _create_new_training_file(parent):
+    """Create a new training data file."""
+    # Get filename from user
+    name, ok = QInputDialog.getText(
+        parent, "New Training File", 
+        "Enter filename (without .txt):",
+        text="my_training_data"
+    )
+    
+    if not ok or not name.strip():
+        return
+    
+    name = name.strip()
+    if not name.endswith('.txt'):
+        name += '.txt'
+    
+    # Save to data directory
+    data_dir = Path(CONFIG.get("data_dir", "data"))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    new_file = data_dir / name
+    
+    if new_file.exists():
+        reply = QMessageBox.question(
+            parent, "File Exists",
+            f"'{name}' already exists. Open it instead?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.No:
+            return
+    else:
+        # Create new file with template
+        template = """# Training Data
+# Add Q&A pairs below for your AI to learn from
+
+Q: Hello
+A: Hi there! How can I help you today?
+
+Q: What is your name?
+A: I'm your AI assistant.
+
+# Add more Q&A pairs here...
+"""
+        new_file.write_text(template, encoding='utf-8')
+    
+    # Load the file
+    parent.training_data_path = str(new_file)
+    parent.data_path_label.setText(str(new_file))
+    parent._current_training_file = str(new_file)
+    parent.training_file_label.setText(f"📄 {new_file.name}")
+    
+    try:
+        content = new_file.read_text(encoding='utf-8', errors='replace')
+        parent.training_editor.setPlainText(content)
+    except Exception as e:
+        parent.training_editor.setPlainText(f"Error loading file: {e}")

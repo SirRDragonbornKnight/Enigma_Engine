@@ -123,112 +123,88 @@ def create_instructions_tab(parent):
     header.setObjectName("header")
     layout.addWidget(header)
     
-    # File selector row
+    # File buttons row
     file_layout = QHBoxLayout()
-    file_layout.addWidget(QLabel("File:"))
     
-    parent.instructions_file_combo = QComboBox()
-    parent.instructions_file_combo.setMinimumWidth(200)
-    parent.instructions_file_combo.currentIndexChanged.connect(
-        lambda idx: _load_instructions_file(parent, idx)
-    )
+    btn_open = QPushButton("📂 Open File...")
+    btn_open.setToolTip("Open a file from your system")
+    btn_open.clicked.connect(lambda: _open_instructions_file(parent))
+    file_layout.addWidget(btn_open)
     
-    btn_new = QPushButton("Open")
-    btn_new.setToolTip("Open a file from the data folder")
-    btn_new.clicked.connect(lambda: _create_instructions_file(parent))
-    
-    btn_save = QPushButton("Save")
+    btn_save = QPushButton("💾 Save")
     btn_save.setToolTip("Save current file")
     btn_save.clicked.connect(lambda: _save_instructions_file(parent))
-    
-    file_layout.addWidget(parent.instructions_file_combo)
-    file_layout.addWidget(btn_new)
     file_layout.addWidget(btn_save)
+    
+    btn_new = QPushButton("📝 New File")
+    btn_new.setToolTip("Create a new file")
+    btn_new.clicked.connect(lambda: _create_new_instructions_file(parent))
+    file_layout.addWidget(btn_new)
+    
+    file_layout.addStretch()
     layout.addLayout(file_layout)
+    
+    # Current file name display
+    parent.instructions_file_label = QLabel("No file open")
+    parent.instructions_file_label.setStyleSheet("color: #a6e3a1; font-style: italic; padding: 4px;")
+    layout.addWidget(parent.instructions_file_label)
     
     # Editor
     parent.instructions_editor = QPlainTextEdit()
-    parent.instructions_editor.setPlaceholderText("Select a file above...")
+    parent.instructions_editor.setPlaceholderText("Open a file to edit...")
     layout.addWidget(parent.instructions_editor, stretch=1)
     
-    # Refresh files list - instructions.txt shown first
-    _refresh_instructions_files(parent)
+    # Load default instructions file on startup
+    _load_default_instructions(parent)
     
     w.setLayout(layout)
     return w
 
 
-def _refresh_instructions_files(parent):
-    """Refresh list of instruction/notes files."""
-    parent.instructions_file_combo.clear()
-    
-    # Always use global data directory
+def _load_default_instructions(parent):
+    """Load the default instructions.txt file."""
     global_data_dir = Path(CONFIG.get("data_dir", "data"))
     global_data_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Also check model-specific data dir if a model is loaded
-    model_data_dir = None
-    if parent.current_model_name:
-        model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
-        model_data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-        if isinstance(model_data_dir, str):
-            model_data_dir = Path(model_data_dir)
-        if model_data_dir and model_data_dir.exists():
-            model_data_dir.mkdir(parents=True, exist_ok=True)
     
     # Ensure instructions.txt exists with default content
     instructions_file = global_data_dir / "instructions.txt"
     if not instructions_file.exists():
         instructions_file.write_text(DEFAULT_INSTRUCTIONS)
     
-    # Ensure training.txt exists
-    training_file = global_data_dir / "training.txt"
-    if not training_file.exists():
-        training_file.write_text("# Training Data\n# Add Q&A pairs below\n\nQ: Hello\nA: Hi there!\n")
+    # Load it
+    parent._current_instructions_file = str(instructions_file)
+    parent.instructions_file_label.setText(f"📄 {instructions_file.name}")
     
-    # Collect all txt files from both directories
-    seen_files = set()
-    
-    # Add instructions.txt first
-    parent.instructions_file_combo.addItem("instructions.txt", str(instructions_file))
-    seen_files.add("instructions.txt")
-    
-    # Add training.txt second
-    parent.instructions_file_combo.addItem("training.txt", str(training_file))
-    seen_files.add("training.txt")
-    
-    # Add other files from global data directory
-    for f in sorted(global_data_dir.glob("*.txt")):
-        if f.name not in seen_files:
-            seen_files.add(f.name)
-            parent.instructions_file_combo.addItem(f.name, str(f))
-    
-    # Add model-specific files (if different directory)
-    if model_data_dir and model_data_dir != global_data_dir and model_data_dir.exists():
-        for f in sorted(model_data_dir.glob("*.txt")):
-            if f.name not in seen_files:
-                seen_files.add(f.name)
-                parent.instructions_file_combo.addItem(f"[Model] {f.name}", str(f))
-    
-    # Select instructions.txt by default
-    parent.instructions_file_combo.setCurrentIndex(0)
+    try:
+        content = instructions_file.read_text(encoding='utf-8', errors='replace')
+        parent.instructions_editor.setPlainText(content)
+    except Exception as e:
+        parent.instructions_editor.setPlainText(f"Error loading file: {e}")
 
 
-def _load_instructions_file(parent, index):
-    """Load an instructions file into the editor."""
-    if index < 0:
-        return
+def _open_instructions_file(parent):
+    """Open a file using system file dialog."""
+    start_dir = str(Path(CONFIG.get("data_dir", "data")))
     
-    filepath = parent.instructions_file_combo.itemData(index)
-    if filepath and Path(filepath).exists():
-        parent.instructions_editor.setPlainText(Path(filepath).read_text(encoding='utf-8', errors='replace'))
+    filepath, _ = QFileDialog.getOpenFileName(
+        parent, "Open File", start_dir, "Text Files (*.txt);;All Files (*)"
+    )
+    
+    if filepath:
         parent._current_instructions_file = filepath
+        parent.instructions_file_label.setText(f"📄 {Path(filepath).name}")
+        
+        try:
+            content = Path(filepath).read_text(encoding='utf-8', errors='replace')
+            parent.instructions_editor.setPlainText(content)
+        except Exception as e:
+            parent.instructions_editor.setPlainText(f"Error loading file: {e}")
 
 
 def _save_instructions_file(parent):
     """Save the current instructions file."""
     if not hasattr(parent, '_current_instructions_file') or not parent._current_instructions_file:
-        QMessageBox.warning(parent, "No File", "Select a file first")
+        QMessageBox.warning(parent, "No File", "Open a file first")
         return
     
     try:
@@ -238,37 +214,46 @@ def _save_instructions_file(parent):
         QMessageBox.warning(parent, "Error", f"Failed to save: {e}")
 
 
-def _create_instructions_file(parent):
-    """Open file dialog to add a file to the data directory."""
-    # Get data directory
-    if parent.current_model_name:
-        model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
-        data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-        if isinstance(data_dir, str):
-            data_dir = Path(data_dir)
-    else:
-        data_dir = Path(CONFIG.get("data_dir", "data"))
+def _create_new_instructions_file(parent):
+    """Create a new file."""
+    from PyQt5.QtWidgets import QInputDialog
     
-    data_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Open file browser to select an existing file
-    filepath, _ = QFileDialog.getOpenFileName(
-        parent, 
-        "Open File",
-        str(data_dir),
-        "Text Files (*.txt);;All Files (*)"
+    name, ok = QInputDialog.getText(
+        parent, "New File", 
+        "Enter filename (without .txt):",
+        text="my_notes"
     )
     
-    if filepath:
-        # Refresh and select the file
-        _refresh_instructions_files(parent)
-        
-        # Find and select the file in the combo
-        filename = Path(filepath).name
-        idx = parent.instructions_file_combo.findText(filename)
-        if idx >= 0:
-            parent.instructions_file_combo.setCurrentIndex(idx)
-        else:
-            # File might be outside data dir, add it
-            parent.instructions_file_combo.addItem(filename, filepath)
-            parent.instructions_file_combo.setCurrentIndex(parent.instructions_file_combo.count() - 1)
+    if not ok or not name.strip():
+        return
+    
+    name = name.strip()
+    if not name.endswith('.txt'):
+        name += '.txt'
+    
+    # Save to data directory
+    data_dir = Path(CONFIG.get("data_dir", "data"))
+    data_dir.mkdir(parents=True, exist_ok=True)
+    new_file = data_dir / name
+    
+    if new_file.exists():
+        reply = QMessageBox.question(
+            parent, "File Exists",
+            f"'{name}' already exists. Open it instead?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.No:
+            return
+    else:
+        # Create new empty file
+        new_file.write_text("# Notes\n\n", encoding='utf-8')
+    
+    # Load the file
+    parent._current_instructions_file = str(new_file)
+    parent.instructions_file_label.setText(f"📄 {new_file.name}")
+    
+    try:
+        content = new_file.read_text(encoding='utf-8', errors='replace')
+        parent.instructions_editor.setPlainText(content)
+    except Exception as e:
+        parent.instructions_editor.setPlainText(f"Error loading file: {e}")
