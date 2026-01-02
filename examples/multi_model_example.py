@@ -12,7 +12,6 @@ NO NEED TO COPY THE ENGINE - one engine, many models!
 from enigma.core.model_registry import ModelRegistry
 from enigma.core.model_config import print_model_info
 from enigma.core.trainer import EnigmaTrainer, train_model_by_name
-from enigma.core.inference import EnigmaEngine
 
 # =============================================================================
 # STEP 1: See available model sizes
@@ -172,11 +171,13 @@ print("""
    - Clean data = cleaner outputs
 
 5. MODEL SIZES
-   - tiny:   Testing only, won't learn much
-   - small:  Learning experiments, ~10M params
+   - tiny:   Testing/mobile, ~2M params
+   - small:  Learning experiments, ~15M params
    - medium: Real use, needs GPU, ~50M params
-   - large:  Serious, needs good GPU, ~150M params
-   - xl/xxl: Multi-GPU territory
+   - large:  Serious, needs good GPU, ~125M params (GPT-2 small)
+   - xl:     High quality, ~350M params (GPT-2 medium)
+   - xxl:    Production, ~770M params (GPT-2 large)
+   - xxxl:   Maximum, ~1.5B params (GPT-2 XL)
 
 ================================================================================
 """)

@@ -57,11 +57,8 @@ pip install pytest black flake8 mypy
 ### Verify Installation
 
 ```bash
-# Run system check
-python test_system.py
-
 # Run test suite
-python -m unittest discover tests
+python -m pytest tests/ -v
 
 # Check imports
 python -c "from enigma.modules import ModuleManager; print('✓ OK')"

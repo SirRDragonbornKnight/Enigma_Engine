@@ -12,11 +12,11 @@ from enigma.comms.remote_client import RemoteClient
 
 
 def main():
-    # Connect to API server (start with: python -m scripts.serve)
+    # Connect to API server (start with: python run.py --serve)
     client = RemoteClient("http://127.0.0.1:5000")
     
     print("=== Enigma API Client ===")
-    print("Make sure the server is running: python -m scripts.serve")
+    print("Make sure the server is running: python run.py --serve")
     print()
     
     try:

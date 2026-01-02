@@ -226,8 +226,7 @@ See [docs/LOCAL_VS_CLOUD.md](docs/LOCAL_VS_CLOUD.md) for complete details on:
 
 - **[Getting Started](GETTING_STARTED.md)** - Quick start guide
 - **[Module System Guide](docs/MODULE_GUIDE.md)** - Complete guide to the module system
-- **[Project Overview](PROJECT_OVERVIEW.txt)** - Architecture and features
-- **[How To Make AI](HOW_TO_MAKE_AI.txt)** - AI creation tutorial
+- **[How To Train](docs/HOW_TO_TRAIN.md)** - Training guide and tips
 - **[What NOT To Do](docs/WHAT_NOT_TO_DO.txt)** - Common mistakes to avoid
 
 ## Contributing

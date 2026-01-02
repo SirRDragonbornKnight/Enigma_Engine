@@ -1,0 +1,2 @@
+# This file keeps the memory directory in git
+# Actual database files (memory.db) are created at runtime
