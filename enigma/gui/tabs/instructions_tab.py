@@ -39,6 +39,36 @@ More data = smarter AI. Add lots of examples!
 - Medium: ~50M params - Needs 8GB+ RAM
 - Large: ~150M params - Needs GPU 8GB+
 
+## Model Scaling - How It Works
+
+Enigma supports 15 model sizes from nano to omega:
+
+### Size Tiers:
+| Tier       | Sizes                 | Hardware Needed              |
+|------------|----------------------|------------------------------|
+| Embedded   | nano (~1M), micro (~2M) | Microcontrollers, IoT       |
+| Edge       | tiny (~5M), mini (~10M) | Raspberry Pi, Mobile        |
+| Consumer   | small (~27M), medium (~85M), base (~125M) | Desktop GPU |
+| Prosumer   | large (~200M), xl (~600M) | RTX 3080+, RTX 4090        |
+| Server     | xxl (~1.5B), huge (~3B)   | Multi-GPU Server           |
+| Datacenter | giant (~7B), colossal (~13B) | A100/H100 Clusters       |
+| Ultimate   | titan (~30B), omega (~70B+)  | Full Datacenter Racks     |
+
+### Growing a Model:
+You can grow a model while preserving learned knowledge!
+- Train a small model on your laptop
+- Grow it to medium when you get a better GPU
+- Continue training the larger model
+
+### Shrinking a Model:
+You can shrink for deployment (some capacity lost):
+- Train a large model on a powerful machine
+- Shrink it to run on a Raspberry Pi
+
+### Knowledge Distillation:
+Train a small "student" model to mimic a large "teacher"
+for efficient edge deployment.
+
 ## Connecting to Games/Robots/APIs
 Protocol configs are in: data/protocols/
   - game/   : Game connections (Unity, Godot, etc)
@@ -64,6 +94,16 @@ On Raspberry Pi, install: sudo apt install scrot
 ## Voice Features
 - Options -> AI Auto-Speak: AI speaks responses
 - Options -> Microphone: Voice input
+
+## Module System
+Everything in Enigma is a toggleable module:
+- Core: model, tokenizer, training, inference
+- Generation: image_gen, code_gen, video_gen, audio_gen
+- Memory: memory, embeddings
+- Perception: voice_input, vision
+- Output: voice_output, avatar
+
+Use the Modules tab to enable/disable capabilities.
 
 ## Tips
 - Back up your model before making big changes

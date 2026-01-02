@@ -1310,10 +1310,11 @@ class EnhancedMainWindow(QMainWindow):
         self.current_model_name = None
         self.engine = None
         
-        # Initialize module manager
+        # Initialize module manager and register all built-in modules
         try:
-            from enigma.modules import ModuleManager
+            from enigma.modules import ModuleManager, register_all
             self.module_manager = ModuleManager()
+            register_all(self.module_manager)
         except Exception as e:
             print(f"Could not initialize ModuleManager: {e}")
             self.module_manager = None
