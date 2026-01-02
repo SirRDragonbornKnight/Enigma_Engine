@@ -648,7 +648,7 @@ The AI will use the `load_module`, `unload_module`, `list_modules`, and `check_r
 
 **Useful Commands**:
 ```bash
-python test_system.py          # Test all components
+python -m pytest tests/ -v      # Run test suite
 python run.py --train           # Train from terminal
 pip list                        # Show installed packages
 ```

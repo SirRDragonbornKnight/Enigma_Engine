@@ -430,7 +430,7 @@ python run.py --build --model small      # Build from scratch
 python run.py --gui                      # Use GUI trainer
 
 # Validation
-python test_system.py                    # Test system
+python -m pytest tests/ -v               # Run tests
 python run.py --run                      # Test inference
 
 # Files

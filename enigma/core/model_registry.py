@@ -73,7 +73,16 @@ class ModelRegistry:
             # Clean up orphaned entries (registered but folder doesn't exist)
             orphaned = []
             for name, info in self.registry.get("models", {}).items():
-                model_path = Path(info.get("path", ""))
+                # Get path from registry, or construct from models_dir/name
+                model_path_str = info.get("path", "")
+                if model_path_str:
+                    model_path = Path(model_path_str)
+                    # Handle relative paths
+                    if not model_path.is_absolute():
+                        model_path = self.models_dir.parent / model_path
+                else:
+                    model_path = self.models_dir / name
+                
                 if not model_path.exists():
                     orphaned.append(name)
             
