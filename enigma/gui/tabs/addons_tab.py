@@ -523,18 +523,21 @@ class AddonsTab(QWidget):
     def _save_hf_token(self):
         """Save HuggingFace token."""
         from pathlib import Path
+        import os
         
         token = self.hf_token_input.text().strip()
         if not token:
             QMessageBox.warning(self, "No Token", "Please enter a HuggingFace token")
             return
         
-        # Save to file
+        # Save to file with restricted permissions
         try:
             enigma_dir = Path.home() / ".enigma"
-            enigma_dir.mkdir(exist_ok=True)
+            enigma_dir.mkdir(exist_ok=True, mode=0o700)  # Owner-only access
             token_file = enigma_dir / "hf_token"
             token_file.write_text(token)
+            # Set file permissions to owner-only (600)
+            os.chmod(token_file, 0o600)
             
             self.hf_status_label.setText("✓ Token saved")
             self.hf_status_label.setStyleSheet("color: #2ecc71;")
@@ -551,6 +554,7 @@ class AddonsTab(QWidget):
         
         try:
             from huggingface_hub import HfApi
+            from huggingface_hub.utils import HfHubHTTPError
             api = HfApi(token=token)
             user = api.whoami()
             username = user.get('name', 'Unknown')
@@ -565,9 +569,26 @@ class AddonsTab(QWidget):
                 "Install with: pip install huggingface-hub"
             )
         except Exception as e:
+            error_msg = str(e)
             self.hf_status_label.setText(f"✗ Connection failed")
             self.hf_status_label.setStyleSheet("color: #e74c3c;")
-            QMessageBox.warning(self, "Connection Failed", f"Could not connect: {e}")
+            
+            # Provide more specific error feedback
+            if "401" in error_msg or "Unauthorized" in error_msg.lower():
+                QMessageBox.warning(
+                    self, "Authentication Failed",
+                    "Invalid or expired token.\n\n"
+                    "Please check your HuggingFace token and try again.\n"
+                    "Get a new token at: huggingface.co/settings/tokens"
+                )
+            elif "network" in error_msg.lower() or "connection" in error_msg.lower():
+                QMessageBox.warning(
+                    self, "Network Error",
+                    "Could not connect to HuggingFace.\n\n"
+                    "Please check your internet connection."
+                )
+            else:
+                QMessageBox.warning(self, "Connection Failed", f"Could not connect: {error_msg}")
     
     def _create_type_tab(self, addon_type: str, addons: dict) -> QWidget:
         """Create a tab for a specific addon type."""

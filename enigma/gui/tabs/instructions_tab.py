@@ -218,8 +218,22 @@ def _refresh_file_tree(parent):
     # Get paths
     data_dir = Path(CONFIG.get("data_dir", "data"))
     
-    # Find docs folder - check multiple possible locations
-    enigma_root = Path(__file__).resolve().parent.parent.parent.parent
+    # Find project root by looking for marker files
+    def find_project_root(start_path: Path) -> Path:
+        """Find project root by looking for common marker files."""
+        current = start_path
+        markers = ['pyproject.toml', 'setup.py', 'README.md', '.git']
+        for _ in range(10):  # Limit search depth
+            for marker in markers:
+                if (current / marker).exists():
+                    return current
+            if current.parent == current:
+                break
+            current = current.parent
+        # Fallback: go up 4 levels from this file
+        return start_path.parent.parent.parent.parent
+    
+    enigma_root = find_project_root(Path(__file__).resolve())
     docs_dir = enigma_root / "docs"
     
     # Add data folder section

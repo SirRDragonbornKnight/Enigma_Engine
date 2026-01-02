@@ -839,16 +839,21 @@ class EnigmaTokenizer:
             Identity string
         """
         info = self.get_info()
-        return (
-            f"╔══════════════════════════════════════════╗\n"
-            f"║       {info['name']} v{info['version']}       ║\n"
-            f"╠══════════════════════════════════════════╣\n"
-            f"║ Engine: {info['engine']:<30} ║\n"
-            f"║ Type:   {info['type']:<30} ║\n"
-            f"║ Vocab:  {self.vocab_size:<30,} ║\n"
-            f"║ Merges: {len(self.bpe_ranks):<30,} ║\n"
-            f"╚══════════════════════════════════════════╝"
-        )
+        # Use string formatting for consistent width
+        vocab_str = f"{self.vocab_size:,}"
+        merges_str = f"{len(self.bpe_ranks):,}"
+        
+        lines = [
+            "╔══════════════════════════════════════════╗",
+            f"║       {info['name']} v{info['version']}       ║",
+            "╠══════════════════════════════════════════╣",
+            f"║ Engine: {info['engine']:<31}║",
+            f"║ Type:   {info['type']:<31}║",
+            f"║ Vocab:  {vocab_str:<31}║",
+            f"║ Merges: {merges_str:<31}║",
+            "╚══════════════════════════════════════════╝",
+        ]
+        return "\n".join(lines)
     
     def __repr__(self) -> str:
         """Return a string representation."""
