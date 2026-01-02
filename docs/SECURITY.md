@@ -137,7 +137,7 @@ The network discovery system broadcasts on the local network. In untrusted envir
 Enigma Engine is designed to run locally by default:
 - ✅ No data sent to external services without explicit opt-in
 - ✅ All processing happens on your machine
-- ✅ API keys only needed for cloud addons
+- ✅ API keys only needed for cloud providers
 
 ### Cloud Services
 
@@ -146,7 +146,7 @@ When enabling cloud services (OpenAI, Replicate, etc.):
 - ⚠️ Review the provider's privacy policy
 - ⚠️ Don't send sensitive or private information
 
-The system warns when loading cloud addons:
+The system warns when loading cloud modules:
 ```
 ⚠️  Warning: Module 'image_gen_api' connects to external cloud services
 ```

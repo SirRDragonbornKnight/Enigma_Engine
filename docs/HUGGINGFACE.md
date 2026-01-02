@@ -2,158 +2,153 @@
 
 ## Overview
 
-Enigma supports HuggingFace models for:
-- Text generation
-- Image generation
-- Text embeddings
-- Text-to-speech
+Enigma supports HuggingFace models through the GUI tabs and module system for:
+- Text generation (via Code Tab or chat)
+- Image generation (via Image Tab using Stable Diffusion)
+- Text embeddings (via Embeddings Tab using sentence-transformers)
+- Text-to-speech (via Audio Tab)
 
 ## Installation
 
 ```bash
-pip install huggingface-hub transformers
+pip install huggingface-hub transformers diffusers sentence-transformers
 ```
 
-## Usage
+## Usage Through GUI Tabs
 
-### Text Generation
+### Image Generation (Image Tab)
 
-```python
-from enigma.addons.huggingface import HuggingFaceTextGeneration
-
-# Use HuggingFace Inference API
-addon = HuggingFaceTextGeneration(
-    model_name="gpt2",
-    api_key="your_hf_token"  # or set HUGGINGFACE_TOKEN env var
-)
-addon.load()
-
-result = addon.generate(
-    prompt="Tell me a story",
-    max_tokens=200,
-    temperature=0.7
-)
-print(result.data)
-
-# Or use local model
-addon_local = HuggingFaceTextGeneration(
-    model_name="gpt2",
-    use_local=True
-)
-```
-
-### Image Generation
+The Image Tab uses Stable Diffusion models from HuggingFace:
 
 ```python
-from enigma.addons.huggingface import HuggingFaceImageGeneration
+from enigma.gui.tabs.image_tab import StableDiffusionLocal
 
-addon = HuggingFaceImageGeneration(
-    model_name="stabilityai/stable-diffusion-2-1",
-    use_local=True  # Download and run locally
+# Create local image generator
+generator = StableDiffusionLocal(
+    model_id="stabilityai/stable-diffusion-2-1"  # HuggingFace model
 )
-addon.load()
+generator.load()
 
-result = addon.generate(
+result = generator.generate(
     prompt="a beautiful sunset",
     width=512,
     height=512
 )
-
-# Save image
-with open("output.png", "wb") as f:
-    f.write(result.data)
+print(f"Saved to: {result['path']}")
 ```
 
-### Embeddings
+### Embeddings (Embeddings Tab)
+
+The Embeddings Tab uses sentence-transformers from HuggingFace:
 
 ```python
-from enigma.addons.huggingface import HuggingFaceEmbeddings
+from enigma.gui.tabs.embeddings_tab import LocalEmbedding
 
-addon = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
-    use_local=True
+# Create local embedding generator
+embedder = LocalEmbedding(
+    model_name="all-MiniLM-L6-v2"  # sentence-transformers model
 )
-addon.load()
+embedder.load()
 
-result = addon.generate("Hello world")
-embedding = result.data  # List of floats
+result = embedder.embed("Hello world")
+embedding = result["embedding"]  # List of floats
+
+# Compare similarity
+similarity = embedder.similarity("Hello", "Hi there")
+print(f"Similarity: {similarity['similarity']:.2%}")
 ```
 
-### Text-to-Speech
+### Audio/TTS (Audio Tab)
 
 ```python
-from enigma.addons.huggingface import HuggingFaceTTS
+from enigma.gui.tabs.audio_tab import LocalTTS
 
-addon = HuggingFaceTTS(
-    model_name="facebook/mms-tts-eng",
-    use_local=True
-)
-addon.load()
+# Create local TTS
+tts = LocalTTS()
+tts.load()
 
-result = addon.text_to_speech("Hello, world!")
+result = tts.generate("Hello, world!")
+print(f"Saved to: {result['path']}")
 ```
 
-## Using with Addon Registry
+## Using Through Module System
+
+The module system wraps the tab implementations:
 
 ```python
-from enigma.addons.builtin import BUILTIN_ADDONS
+from enigma.modules import ModuleManager
 
-# Check if available
-if 'huggingface_text' in BUILTIN_ADDONS:
-    addon_class = BUILTIN_ADDONS['huggingface_text']
-    addon = addon_class(model_name="gpt2")
-    addon.load()
+manager = ModuleManager()
+
+# Load local image generation (Stable Diffusion)
+manager.load('image_gen_local')
+image_mod = manager.get_module('image_gen_local')
+result = image_mod.generate("a sunset")
+
+# Load local embeddings (sentence-transformers)
+manager.load('embedding_local')
+embed_mod = manager.get_module('embedding_local')
+result = embed_mod.embed("Hello world")
 ```
 
 ## Supported Models
 
-### Text Generation
-- gpt2, gpt2-medium, gpt2-large
-- meta-llama/Llama-2-7b-chat-hf (requires authentication)
-- bigscience/bloom-560m
-- Any HuggingFace causal LM model
+### Image Generation (Stable Diffusion)
+- `stabilityai/stable-diffusion-2-1` (default)
+- `runwayml/stable-diffusion-v1-5`
+- `stabilityai/stable-diffusion-xl-base-1.0`
+- `stabilityai/sdxl-turbo`
 
-### Image Generation
-- stabilityai/stable-diffusion-2-1
-- runwayml/stable-diffusion-v1-5
-- CompVis/stable-diffusion-v1-4
+### Embeddings (sentence-transformers)
+- `all-MiniLM-L6-v2` (default, 384 dims)
+- `all-mpnet-base-v2` (768 dims)
+- Any sentence-transformers model
 
-### Embeddings
-- sentence-transformers/all-MiniLM-L6-v2
-- sentence-transformers/all-mpnet-base-v2
+### 3D Generation (Shap-E)
+- `openai/shap-e` (via 3D Tab)
 
-### TTS
-- facebook/mms-tts-eng
-- facebook/fastspeech2-en-ljspeech
+### Video Generation (AnimateDiff)
+- `guoyww/animatediff-motion-adapter-v1-5-2` (via Video Tab)
 
 ## API Keys
 
-Set your HuggingFace token:
+For cloud providers (not HuggingFace specific):
 
 ```bash
-export HUGGINGFACE_TOKEN="your_token_here"
+# OpenAI (for cloud image/code/embeddings)
+export OPENAI_API_KEY="your_key"
+
+# Replicate (for cloud video/audio/3D)
+export REPLICATE_API_TOKEN="your_key"
+
+# ElevenLabs (for cloud TTS)
+export ELEVENLABS_API_KEY="your_key"
 ```
 
-Or pass directly:
+## Local vs Cloud
 
-```python
-addon = HuggingFaceTextGeneration(
-    model_name="gpt2",
-    api_key="your_token"
-)
-```
+**Local Providers** (default, HuggingFace-based):
+- `StableDiffusionLocal` - Image generation
+- `LocalEmbedding` - Text embeddings
+- `LocalVideo` - Video generation (AnimateDiff)
+- `Local3DGen` - 3D generation (Shap-E)
+- `LocalTTS` - Text-to-speech (pyttsx3)
 
-## Local vs API
+**Cloud Providers** (require API keys):
+- `OpenAIImage`, `ReplicateImage` - Cloud images
+- `OpenAIEmbedding` - Cloud embeddings
+- `ReplicateVideo` - Cloud video
+- `Cloud3DGen` - Cloud 3D
+- `ElevenLabsTTS`, `ReplicateAudio` - Cloud audio
 
-**Local (use_local=True)**:
-- Pros: Free, private, no internet needed
-- Cons: Requires disk space, slower on CPU
+## Note on Legacy Addons
 
-**API (use_local=False)**:
-- Pros: Fast, no local resources needed
-- Cons: Requires API key, internet, may have rate limits
+The previous addon system (`enigma.addons`) has been removed. All functionality is now in the GUI tabs:
+- `enigma/gui/tabs/image_tab.py`
+- `enigma/gui/tabs/code_tab.py`
+- `enigma/gui/tabs/video_tab.py`
+- `enigma/gui/tabs/audio_tab.py`
+- `enigma/gui/tabs/embeddings_tab.py`
+- `enigma/gui/tabs/threed_tab.py`
 
-## See Also
-
-- [Addon System](../docs/MODULE_GUIDE.md)
-- [HuggingFace Models](https://huggingface.co/models)
+Each tab contains both the implementation classes and the GUI.

@@ -402,30 +402,14 @@ class AdvancedModule(Module):
         return True
 ```
 
-### Generation Module (Wrapper)
+### Generation Module (Using Tab Providers)
 
 ```python
-from enigma.modules.registry import GenerationModule
-from enigma.addons.base import ImageAddon, AddonConfig, AddonType, AddonProvider
-
-class MyImageGen(ImageAddon):
-    def __init__(self):
-        super().__init__(AddonConfig(
-            name="my_image_gen",
-            addon_type=AddonType.IMAGE,
-            provider=AddonProvider.LOCAL,
-        ))
-    
-    def load(self) -> bool:
-        # Initialize your image generator
-        self.is_loaded = True
-        return True
-    
-    def generate(self, prompt, **kwargs):
-        # Generate image
-        return {"success": True, "image": b"..."}
+from enigma.modules.registry import GenerationModule, ModuleInfo, ModuleCategory
 
 class MyImageGenModule(GenerationModule):
+    """Custom image generation module using tab providers."""
+    
     INFO = ModuleInfo(
         id="my_image_gen",
         name="My Image Generator",
@@ -435,8 +419,13 @@ class MyImageGenModule(GenerationModule):
     )
     
     def load(self) -> bool:
-        self._addon = MyImageGen()
-        return self._addon.load()
+        # Import from the tab where implementations live
+        from enigma.gui.tabs.image_tab import StableDiffusionLocal
+        self._provider = StableDiffusionLocal()
+        return self._provider.load()
+    
+    def generate(self, prompt: str, **kwargs):
+        return self._provider.generate(prompt, **kwargs)
 ```
 
 ---

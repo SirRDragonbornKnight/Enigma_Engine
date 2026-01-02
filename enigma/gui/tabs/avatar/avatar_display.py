@@ -3,18 +3,21 @@ Avatar Display Module
 
 Displays the AI's visual avatar representation.
 The same AI that learns and responds controls this avatar.
+
+This is the GUI component. The backend controller is in enigma.avatar.controller
 """
 
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QFileDialog, QComboBox
+    QFileDialog, QComboBox, QCheckBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 import json
 
 from ....config import CONFIG
+from ....avatar import get_avatar, AvatarState
 
 
 # Avatar config directory
@@ -31,9 +34,23 @@ def create_avatar_subtab(parent):
     widget = QWidget()
     layout = QVBoxLayout()
     
+    # Get the avatar controller
+    avatar = get_avatar()
+    
+    # Avatar enable/disable toggle
+    enable_layout = QHBoxLayout()
+    parent.avatar_enabled_checkbox = QCheckBox("Enable Avatar")
+    parent.avatar_enabled_checkbox.setChecked(avatar.is_enabled)
+    parent.avatar_enabled_checkbox.toggled.connect(
+        lambda checked: _toggle_avatar(parent, checked)
+    )
+    enable_layout.addWidget(parent.avatar_enabled_checkbox)
+    enable_layout.addStretch()
+    layout.addLayout(enable_layout)
+    
     # Avatar display - large centered image (flexible size)
     parent.avatar_image_label = QLabel()
-    parent.avatar_image_label.setMinimumSize(200, 200)  # Reduced for smaller screens
+    parent.avatar_image_label.setMinimumSize(200, 200)
     parent.avatar_image_label.setAlignment(Qt.AlignCenter)
     parent.avatar_image_label.setStyleSheet("""
         border: 2px solid #45475a; 
@@ -75,7 +92,8 @@ def create_avatar_subtab(parent):
     
     # Info label
     info = QLabel("[i] The AI you train controls this avatar. When the AI responds,\n"
-                  "    it can change expressions based on its learned behavior.")
+                  "    it can change expressions based on its learned behavior.\n"
+                  "    Enable avatar to show overlay on desktop.")
     info.setStyleSheet("color: #6c7086; font-size: 10px;")
     layout.addWidget(info)
     
@@ -84,12 +102,26 @@ def create_avatar_subtab(parent):
     # Initialize
     parent.avatar_expressions = {}
     parent.current_expression = "neutral"
+    parent._avatar_controller = avatar
     AVATAR_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     
     # Load configs
     _refresh_avatar_configs(parent)
     
     return widget
+
+
+def _toggle_avatar(parent, enabled: bool):
+    """Toggle avatar on/off."""
+    avatar = parent._avatar_controller
+    if enabled:
+        avatar.enable()
+        parent.avatar_status_label.setText("Avatar enabled")
+        parent.avatar_status_label.setStyleSheet("color: #a6e3a1;")
+    else:
+        avatar.disable()
+        parent.avatar_status_label.setText("Avatar disabled")
+        parent.avatar_status_label.setStyleSheet("color: #6c7086;")
 
 
 def load_avatar_config(config_path: Path) -> dict:
@@ -192,3 +224,40 @@ def create_sample_avatar_config():
             json.dump(sample, f, indent=2)
     
     return sample_path
+
+
+def set_avatar_expression(parent, expression: str):
+    """
+    Set avatar expression and update display.
+    
+    Called by the AI when generating responses to show appropriate emotion.
+    
+    Args:
+        parent: The main window with avatar widgets
+        expression: One of 'neutral', 'happy', 'sad', 'thinking', 'surprised', 'confused'
+    """
+    if not hasattr(parent, '_avatar_controller'):
+        return
+    
+    # Update controller
+    parent._avatar_controller.set_expression(expression)
+    parent.current_expression = expression
+    
+    # Update image if we have expression images
+    if expression in parent.avatar_expressions:
+        img_path = parent.avatar_expressions[expression]
+        if not Path(img_path).is_absolute():
+            # Try relative to config dir
+            img_path = AVATAR_CONFIG_DIR / img_path
+        
+        if Path(img_path).exists():
+            pixmap = QPixmap(str(img_path))
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    350, 350, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+                parent.avatar_image_label.setPixmap(scaled)
+    
+    # Update status
+    if hasattr(parent, 'avatar_status_label'):
+        parent.avatar_status_label.setText(f"Expression: {expression}")

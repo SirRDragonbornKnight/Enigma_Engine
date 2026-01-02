@@ -11,7 +11,7 @@
 3. [🎓 Train Tab](#-train-tab---teach-your-ai)
 4. [📏 Scale Tab](#-scale-tab---choose-model-size)
 5. [🎛️ Modules Tab](#%EF%B8%8F-modules-tab---control-ai-capabilities)
-6. [✨ Addons Tab](#-addons-tab---ai-generation-features)
+6. [✨ Generation Tabs](#-generation-tabs---ai-generation-features)
 7. [🎭 Avatar Tab](#-avatar-tab---visual-representation)
 8. [👁️ Vision Tab](#%EF%B8%8F-vision-tab---see-your-screen)
 9. [💻 Terminal Tab](#-terminal-tab---command-line-access)
@@ -500,11 +500,11 @@ The AI will use the `load_module`, `unload_module`, `list_modules`, and `check_r
 
 ---
 
-## ✨ Addons Tab - AI Generation Features
+## ✨ Generation Tabs - AI Generation Features
 
-**What it does**: Test and configure AI generation capabilities (images, code, video, audio).
+**What it does**: Test and configure AI generation capabilities (images, code, video, audio, 3D, embeddings).
 
-### Sub-Tabs
+### Generation Tabs
 
 **🖼️ Image Tab**:
 - Generate images from text prompts
@@ -521,23 +521,29 @@ The AI will use the `load_module`, `unload_module`, `list_modules`, and `check_r
 **🎬 Video Tab**:
 - Generate short video clips
 - Set duration
-- Cloud-based generation
+- Local (AnimateDiff) or cloud (Replicate)
 - Save as MP4 or GIF
 
 **🎵 Audio Tab**:
 - Text-to-speech
-- Music generation
-- Set duration and style
+- Local (pyttsx3) or cloud (ElevenLabs, Replicate)
+- Set voice, rate, volume
 - Save as audio file
 
 **🔢 Embeddings Tab**:
 - Generate vector embeddings
-- For semantic search
-- Local or cloud options
+- Compare text similarity
+- Local (sentence-transformers) or cloud (OpenAI)
+- Export embeddings to JSON
+
+**🎲 3D Tab**:
+- Generate 3D models from text
+- Local (Shap-E) or cloud (Replicate)
+- Save as PLY/GLB/OBJ
 
 ### How to Use
 
-1. **Select sub-tab** for feature you want
+1. **Select tab** for feature you want
 2. **Choose provider** (local vs cloud)
    - Local = runs on your machine, private, unlimited
    - Cloud = high quality, costs money, needs API key
@@ -926,7 +932,9 @@ Choose visual theme:
 | Train model | Train tab | Select data, set epochs, click Start |
 | Change model size | Scale tab | Select model, click Apply |
 | Enable feature | Modules tab | Find module, toggle switch on |
-| Generate image | Addons tab → Image | Enter prompt, click Generate |
+| Generate image | Image tab | Enter prompt, click Generate |
+| Generate code | Code tab | Describe code, click Generate |
+| Text-to-speech | Audio tab | Enter text, click Speak/Save |
 | View past chats | History tab | Click conversation to load |
 | Edit training data | Files tab | Select file, edit, save |
 | Adjust resources | Settings tab | Choose power mode |
