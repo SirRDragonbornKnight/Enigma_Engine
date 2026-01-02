@@ -469,6 +469,171 @@ class ModuleManager:
                 for mid, module in self.modules.items()
             }
         }
+    
+    def get_resource_usage(self) -> Dict[str, Any]:
+        """
+        Get current resource usage with all loaded modules.
+        
+        Returns detailed metrics about:
+        - Memory (RAM and VRAM)
+        - CPU usage
+        - Module counts and sizes
+        - Estimated overhead
+        """
+        metrics = {
+            'timestamp': datetime.now().isoformat(),
+            'modules_loaded': len(self.modules),
+            'modules_registered': len(self.module_classes),
+            'categories_active': {},
+        }
+        
+        # Count modules by category
+        for module in self.modules.values():
+            info = module.get_info()
+            cat = info.category.value
+            metrics['categories_active'][cat] = metrics['categories_active'].get(cat, 0) + 1
+        
+        # Get system resource usage
+        try:
+            import psutil
+            import os
+            
+            # Current process
+            process = psutil.Process(os.getpid())
+            
+            # Memory usage
+            mem_info = process.memory_info()
+            metrics['memory'] = {
+                'rss_mb': mem_info.rss / (1024 * 1024),  # Resident Set Size
+                'vms_mb': mem_info.vms / (1024 * 1024),  # Virtual Memory Size
+                'percent': process.memory_percent(),
+                'system_total_mb': psutil.virtual_memory().total / (1024 * 1024),
+                'system_available_mb': psutil.virtual_memory().available / (1024 * 1024),
+                'system_used_percent': psutil.virtual_memory().percent,
+            }
+            
+            # CPU usage
+            metrics['cpu'] = {
+                'percent': process.cpu_percent(interval=0.1),
+                'num_threads': process.num_threads(),
+                'system_percent': psutil.cpu_percent(interval=0.1),
+                'cores': psutil.cpu_count(),
+            }
+            
+        except ImportError:
+            metrics['memory'] = {'note': 'psutil not available for detailed metrics'}
+            metrics['cpu'] = {'note': 'psutil not available for detailed metrics'}
+        except Exception as e:
+            metrics['error'] = f"Error getting resource usage: {e}"
+        
+        # GPU/VRAM usage if available
+        torch = _get_torch()
+        if torch and torch.cuda.is_available():
+            try:
+                metrics['gpu'] = {
+                    'device_name': torch.cuda.get_device_name(0),
+                    'allocated_mb': torch.cuda.memory_allocated(0) / (1024 * 1024),
+                    'reserved_mb': torch.cuda.memory_reserved(0) / (1024 * 1024),
+                    'max_allocated_mb': torch.cuda.max_memory_allocated(0) / (1024 * 1024),
+                    'total_mb': torch.cuda.get_device_properties(0).total_memory / (1024 * 1024),
+                }
+                metrics['gpu']['used_percent'] = (
+                    metrics['gpu']['allocated_mb'] / metrics['gpu']['total_mb'] * 100
+                )
+            except Exception as e:
+                metrics['gpu'] = {'error': str(e)}
+        else:
+            metrics['gpu'] = {'available': False}
+        
+        # Module-specific requirements
+        total_min_ram = 0
+        total_min_vram = 0
+        gpu_modules = []
+        cloud_modules = []
+        
+        for module in self.modules.values():
+            info = module.get_info()
+            total_min_ram += info.min_ram_mb
+            total_min_vram += info.min_vram_mb
+            if info.requires_gpu:
+                gpu_modules.append(info.id)
+            if info.is_cloud_service:
+                cloud_modules.append(info.id)
+        
+        metrics['requirements'] = {
+            'total_min_ram_mb': total_min_ram,
+            'total_min_vram_mb': total_min_vram,
+            'gpu_modules': gpu_modules,
+            'gpu_module_count': len(gpu_modules),
+            'cloud_modules': cloud_modules,
+            'cloud_module_count': len(cloud_modules),
+        }
+        
+        # Estimate overhead
+        if 'memory' in metrics and 'rss_mb' in metrics['memory']:
+            base_overhead_mb = 200  # Estimated base Python + Enigma overhead
+            estimated_module_memory = metrics['memory']['rss_mb'] - base_overhead_mb
+            metrics['estimates'] = {
+                'base_overhead_mb': base_overhead_mb,
+                'modules_memory_mb': max(0, estimated_module_memory),
+                'avg_per_module_mb': (
+                    estimated_module_memory / len(self.modules) if self.modules else 0
+                ),
+            }
+        
+        # Performance impact assessment
+        metrics['assessment'] = self._assess_performance(metrics)
+        
+        return metrics
+    
+    def _assess_performance(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Assess overall performance and provide recommendations."""
+        assessment = {
+            'status': 'good',
+            'warnings': [],
+            'recommendations': [],
+        }
+        
+        # Check memory
+        if 'memory' in metrics and 'system_used_percent' in metrics['memory']:
+            mem_percent = metrics['memory']['system_used_percent']
+            if mem_percent > 90:
+                assessment['status'] = 'critical'
+                assessment['warnings'].append(f"System memory at {mem_percent:.1f}% - may cause instability")
+                assessment['recommendations'].append("Unload unused modules or close other applications")
+            elif mem_percent > 75:
+                assessment['status'] = 'warning'
+                assessment['warnings'].append(f"System memory at {mem_percent:.1f}% - getting high")
+                assessment['recommendations'].append("Consider unloading some modules")
+        
+        # Check GPU memory
+        if 'gpu' in metrics and 'used_percent' in metrics['gpu']:
+            gpu_percent = metrics['gpu']['used_percent']
+            if gpu_percent > 90:
+                assessment['status'] = 'critical'
+                assessment['warnings'].append(f"GPU memory at {gpu_percent:.1f}% - may cause OOM errors")
+                assessment['recommendations'].append("Unload GPU-intensive modules (image/video generation)")
+            elif gpu_percent > 75:
+                if assessment['status'] == 'good':
+                    assessment['status'] = 'warning'
+                assessment['warnings'].append(f"GPU memory at {gpu_percent:.1f}%")
+        
+        # Check module count
+        loaded_count = metrics.get('modules_loaded', 0)
+        if loaded_count > 15:
+            assessment['recommendations'].append(
+                f"{loaded_count} modules loaded - consider unloading unused ones for better performance"
+            )
+        
+        # Check if too many cloud services (privacy concern)
+        if 'requirements' in metrics:
+            cloud_count = metrics['requirements'].get('cloud_module_count', 0)
+            if cloud_count > 3:
+                assessment['warnings'].append(
+                    f"{cloud_count} cloud modules active - data is being sent to external services"
+                )
+        
+        return assessment
 
     def save_config(self, path: Optional[Path] = None):
         """Save current module configuration."""

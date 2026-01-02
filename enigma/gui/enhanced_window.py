@@ -1310,6 +1310,14 @@ class EnhancedMainWindow(QMainWindow):
         self.current_model_name = None
         self.engine = None
         
+        # Initialize module manager
+        try:
+            from enigma.modules import ModuleManager
+            self.module_manager = ModuleManager()
+        except Exception as e:
+            print(f"Could not initialize ModuleManager: {e}")
+            self.module_manager = None
+        
         # Initialize toggle states
         self.auto_speak = False
         self.microphone_enabled = False
@@ -1513,7 +1521,7 @@ class EnhancedMainWindow(QMainWindow):
         tabs.addTab(create_chat_tab(self), "Chat")
         tabs.addTab(create_training_tab(self), "Train")
         tabs.addTab(ScalingTab(self), "Scale")    # Model scaling visualization
-        tabs.addTab(ModulesTab(self), "Modules")  # Module manager
+        tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")  # Module manager with ModuleManager instance
         tabs.addTab(AddonsTab(self), "Addons")    # AI capabilities (image, code, video, audio)
         tabs.addTab(create_avatar_tab(self), "Avatar")
         tabs.addTab(create_vision_tab(self), "Vision")
@@ -1531,22 +1539,58 @@ class EnhancedMainWindow(QMainWindow):
             self.current_theme = theme_name
     
     def _toggle_auto_speak(self, checked):
-        """Toggle auto-speak mode."""
-        self.auto_speak = checked
-        if hasattr(self, 'auto_speak_action'):
+        """Toggle auto-speak mode by loading/unloading voice output module."""
+        if self.module_manager:
             if checked:
-                self.auto_speak_action.setText("AI Auto-Speak (ON)")
+                # Load voice output module
+                success = self.module_manager.load('voice_output')
+                if success:
+                    self.auto_speak = True
+                    self.auto_speak_action.setText("AI Auto-Speak (ON)")
+                else:
+                    self.auto_speak_action.setChecked(False)
+                    self.auto_speak_action.setText("AI Auto-Speak (OFF)")
+                    QMessageBox.warning(self, "Voice Error", "Failed to load voice output module")
             else:
+                # Unload voice output module
+                self.module_manager.unload('voice_output')
+                self.auto_speak = False
                 self.auto_speak_action.setText("AI Auto-Speak (OFF)")
+        else:
+            # Fallback if no module manager
+            self.auto_speak = checked
+            if hasattr(self, 'auto_speak_action'):
+                if checked:
+                    self.auto_speak_action.setText("AI Auto-Speak (ON)")
+                else:
+                    self.auto_speak_action.setText("AI Auto-Speak (OFF)")
     
     def _toggle_microphone(self, checked):
-        """Toggle microphone listening."""
-        self.microphone_enabled = checked
-        if hasattr(self, 'microphone_action'):
+        """Toggle microphone listening by loading/unloading voice input module."""
+        if self.module_manager:
             if checked:
-                self.microphone_action.setText("Microphone (ON)")
+                # Load voice input module
+                success = self.module_manager.load('voice_input')
+                if success:
+                    self.microphone_enabled = True
+                    self.microphone_action.setText("Microphone (ON)")
+                else:
+                    self.microphone_action.setChecked(False)
+                    self.microphone_action.setText("Microphone (OFF)")
+                    QMessageBox.warning(self, "Microphone Error", "Failed to load voice input module")
             else:
+                # Unload voice input module
+                self.module_manager.unload('voice_input')
+                self.microphone_enabled = False
                 self.microphone_action.setText("Microphone (OFF)")
+        else:
+            # Fallback if no module manager
+            self.microphone_enabled = checked
+            if hasattr(self, 'microphone_action'):
+                if checked:
+                    self.microphone_action.setText("Microphone (ON)")
+                else:
+                    self.microphone_action.setText("Microphone (OFF)")
     
     def _toggle_learning(self, checked):
         """Toggle learn-while-chatting mode."""
@@ -1562,18 +1606,37 @@ class EnhancedMainWindow(QMainWindow):
             self.brain.auto_learn = checked
     
     def _toggle_avatar(self, checked):
-        """Toggle avatar enabled/disabled."""
+        """Toggle avatar enabled/disabled by loading/unloading the avatar module."""
         try:
-            if checked:
-                self._enable_avatar()
-                self.avatar_action.setText("Avatar (ON)")
+            if self.module_manager:
+                if checked:
+                    # Load avatar module
+                    success = self.module_manager.load('avatar')
+                    if success:
+                        self._enable_avatar()
+                        self.avatar_action.setText("Avatar (ON)")
+                    else:
+                        self.avatar_action.setChecked(False)
+                        self.avatar_action.setText("Avatar (OFF)")
+                        QMessageBox.warning(self, "Avatar Error", "Failed to load avatar module")
+                else:
+                    # Unload avatar module
+                    self.module_manager.unload('avatar')
+                    self._disable_avatar()
+                    self.avatar_action.setText("Avatar (OFF)")
             else:
-                self._disable_avatar()
-                self.avatar_action.setText("Avatar (OFF)")
+                # Fallback if no module manager
+                if checked:
+                    self._enable_avatar()
+                    self.avatar_action.setText("Avatar (ON)")
+                else:
+                    self._disable_avatar()
+                    self.avatar_action.setText("Avatar (OFF)")
         except Exception as e:
             # Don't crash if avatar fails
             self.avatar_action.setChecked(False)
             self.avatar_action.setText("Avatar (OFF)")
+            print(f"Avatar toggle error: {e}")
     
     def _toggle_screen_watching(self, checked):
         """Toggle continuous screen watching."""

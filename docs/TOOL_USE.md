@@ -114,6 +114,71 @@ Generate audio or music from descriptions.
   - `prompt` (string, required): Description of audio
   - `duration` (float, optional, default=5.0): Duration in seconds
 
+#### generate_gif
+Generate an animated GIF from a list of image prompts.
+- **Module:** `image_gen_local` or `image_gen_api`
+- **Parameters:**
+  - `frames` (list, required): List of text prompts for each frame
+  - `fps` (int, optional, default=5): Frames per second
+  - `loop` (int, optional, default=0): Number of loops (0 = infinite)
+  - `width` (int, optional, default=512): Width of each frame
+  - `height` (int, optional, default=512): Height of each frame
+- **Examples:**
+  - "Create a GIF showing sunrise, noon, and sunset"
+  - "Generate an animated GIF of a cat walking"
+  - "Make a GIF of a flower blooming"
+
+### Media Editing Tools
+
+#### edit_image
+Edit an existing image with various transformations.
+- **Module:** Built-in (uses Pillow)
+- **Parameters:**
+  - `image_path` (string, required): Path to the image file
+  - `edit_type` (string, required): Type of edit - "resize", "rotate", "flip", "brightness", "contrast", "blur", "sharpen", "grayscale", "crop"
+  - `width` (int, optional): New width for resize
+  - `height` (int, optional): New height for resize
+  - `angle` (int, optional): Rotation angle in degrees
+  - `direction` (string, optional): Flip direction - "horizontal" or "vertical"
+  - `factor` (float, optional, default=1.0): Adjustment factor for brightness/contrast
+  - `crop_box` (list, optional): Crop coordinates [left, top, right, bottom]
+- **Examples:**
+  - "Resize the image to 800x600"
+  - "Rotate the image 90 degrees"
+  - "Increase the brightness"
+
+#### edit_gif
+Edit an existing GIF animation.
+- **Module:** Built-in (uses Pillow)
+- **Parameters:**
+  - `gif_path` (string, required): Path to the GIF file
+  - `edit_type` (string, required): Type of edit - "speed", "reverse", "crop", "resize", "extract_frames"
+  - `speed_factor` (float, optional, default=1.0): Speed multiplier (2.0 = 2x faster)
+  - `width` (int, optional): New width for resize
+  - `height` (int, optional): New height for resize
+  - `crop_box` (list, optional): Crop coordinates [left, top, right, bottom]
+- **Examples:**
+  - "Make the GIF play twice as fast"
+  - "Reverse the GIF animation"
+  - "Extract all frames from the GIF"
+
+#### edit_video
+Edit an existing video file.
+- **Module:** Built-in (requires moviepy)
+- **Parameters:**
+  - `video_path` (string, required): Path to the video file
+  - `edit_type` (string, required): Type of edit - "trim", "speed", "extract_frames", "resize", "to_gif"
+  - `start_time` (float, optional, default=0.0): Start time for trim
+  - `end_time` (float, optional): End time for trim
+  - `speed_factor` (float, optional, default=1.0): Speed multiplier
+  - `width` (int, optional): New width for resize
+  - `height` (int, optional): New height for resize
+  - `fps` (int, optional, default=10): Frames per second for extract_frames or to_gif
+- **Examples:**
+  - "Trim the video from 10 to 30 seconds"
+  - "Convert video to GIF"
+  - "Speed up the video 2x"
+
 ### Perception Tools
 
 #### analyze_image

@@ -90,6 +90,12 @@ class EnigmaEngine:
         # Store configuration
         self.enable_tools = enable_tools
         self.module_manager = module_manager
+        
+        # Initialize tool executor if tools are enabled
+        self._tool_executor = None
+        if enable_tools:
+            from ..tools.tool_executor import ToolExecutor
+            self._tool_executor = ToolExecutor(module_manager=module_manager)
 
         # Load tokenizer
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)

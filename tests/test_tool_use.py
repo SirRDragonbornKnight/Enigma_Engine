@@ -397,5 +397,227 @@ More text"""
         assert len(results) >= 0  # May succeed or fail depending on tool availability
 
 
+class TestGIFGeneration:
+    """Tests for GIF generation tool."""
+    
+    def test_generate_gif_tool_definition(self):
+        """Test that generate_gif tool is properly defined."""
+        from enigma.tools.tool_definitions import get_tool_definition
+        
+        tool = get_tool_definition("generate_gif")
+        
+        assert tool is not None
+        assert tool.name == "generate_gif"
+        assert tool.category == "generation"
+        assert len(tool.parameters) > 0
+        
+        # Check for required parameters
+        param_names = [p.name for p in tool.parameters]
+        assert "frames" in param_names
+        assert "fps" in param_names
+        assert "loop" in param_names
+    
+    def test_generate_gif_params_validation(self):
+        """Test parameter validation for generate_gif."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        # Test valid params
+        is_valid, error, validated = executor.validate_params(
+            "generate_gif",
+            {"frames": ["sunrise", "noon", "sunset"], "fps": 5, "loop": 0}
+        )
+        
+        assert is_valid
+        assert error is None
+        assert "frames" in validated
+        assert validated["fps"] == 5
+        assert validated["loop"] == 0
+    
+    def test_generate_gif_missing_frames(self):
+        """Test generate_gif with missing frames parameter."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        # Missing required 'frames'
+        is_valid, error, validated = executor.validate_params(
+            "generate_gif",
+            {"fps": 5}
+        )
+        
+        assert not is_valid
+        assert error is not None
+        assert "frames" in error.lower()
+    
+    def test_generate_gif_default_values(self):
+        """Test that default values are applied for optional parameters."""
+        from enigma.tools.tool_definitions import get_tool_definition
+        
+        tool = get_tool_definition("generate_gif")
+        
+        # Find fps parameter
+        fps_param = next(p for p in tool.parameters if p.name == "fps")
+        assert fps_param.default == 5
+        
+        loop_param = next(p for p in tool.parameters if p.name == "loop")
+        assert loop_param.default == 0
+
+
+class TestMediaEditingTools:
+    """Tests for image/GIF/video editing tools."""
+    
+    def test_edit_image_tool_definition(self):
+        """Test that edit_image tool is properly defined."""
+        from enigma.tools.tool_definitions import get_tool_definition
+        
+        tool = get_tool_definition("edit_image")
+        
+        assert tool is not None
+        assert tool.name == "edit_image"
+        
+        # Check edit_type has enum values
+        edit_type_param = next(p for p in tool.parameters if p.name == "edit_type")
+        assert edit_type_param.enum is not None
+        assert "resize" in edit_type_param.enum
+        assert "rotate" in edit_type_param.enum
+    
+    def test_edit_gif_tool_definition(self):
+        """Test that edit_gif tool is properly defined."""
+        from enigma.tools.tool_definitions import get_tool_definition
+        
+        tool = get_tool_definition("edit_gif")
+        
+        assert tool is not None
+        assert tool.name == "edit_gif"
+        
+        # Check edit_type parameter
+        edit_type_param = next(p for p in tool.parameters if p.name == "edit_type")
+        assert "speed" in edit_type_param.enum
+        assert "reverse" in edit_type_param.enum
+    
+    def test_edit_video_tool_definition(self):
+        """Test that edit_video tool is properly defined."""
+        from enigma.tools.tool_definitions import get_tool_definition
+        
+        tool = get_tool_definition("edit_video")
+        
+        assert tool is not None
+        assert tool.name == "edit_video"
+        
+        # Check edit_type parameter
+        edit_type_param = next(p for p in tool.parameters if p.name == "edit_type")
+        assert "trim" in edit_type_param.enum
+        assert "to_gif" in edit_type_param.enum
+    
+    def test_edit_image_params_validation(self):
+        """Test parameter validation for edit_image."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        # Test valid params
+        is_valid, error, validated = executor.validate_params(
+            "edit_image",
+            {"image_path": "test.png", "edit_type": "resize", "width": 800, "height": 600}
+        )
+        
+        assert is_valid
+        assert error is None
+        assert validated["edit_type"] == "resize"
+    
+    def test_edit_image_invalid_edit_type(self):
+        """Test edit_image with invalid edit type."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        # Invalid edit_type
+        is_valid, error, validated = executor.validate_params(
+            "edit_image",
+            {"image_path": "test.png", "edit_type": "invalid_operation"}
+        )
+        
+        assert not is_valid
+        assert "edit_type" in error.lower()
+    
+    def test_edit_image_execution_file_not_found(self):
+        """Test edit_image with non-existent file."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        result = executor.execute_tool(
+            "edit_image",
+            {"image_path": "nonexistent.png", "edit_type": "resize", "width": 100, "height": 100}
+        )
+        
+        assert not result["success"]
+        assert "not found" in result["error"].lower()
+    
+    def test_edit_gif_execution_file_not_found(self):
+        """Test edit_gif with non-existent file."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        result = executor.execute_tool(
+            "edit_gif",
+            {"gif_path": "nonexistent.gif", "edit_type": "reverse"}
+        )
+        
+        assert not result["success"]
+        assert "not found" in result["error"].lower()
+    
+    def test_edit_video_execution_file_not_found(self):
+        """Test edit_video with non-existent file."""
+        from enigma.tools.tool_executor import ToolExecutor
+        
+        executor = ToolExecutor()
+        
+        result = executor.execute_tool(
+            "edit_video",
+            {"video_path": "nonexistent.mp4", "edit_type": "trim"}
+        )
+        
+        assert not result["success"]
+        assert "not found" in result["error"].lower()
+
+
+class TestToolIntegration:
+    """Tests for new tools integration with inference engine."""
+    
+    def test_all_new_tools_registered(self):
+        """Test that all new tools are in the registry."""
+        from enigma.tools.tool_definitions import TOOLS_BY_NAME
+        
+        assert "generate_gif" in TOOLS_BY_NAME
+        assert "edit_image" in TOOLS_BY_NAME
+        assert "edit_gif" in TOOLS_BY_NAME
+        assert "edit_video" in TOOLS_BY_NAME
+    
+    def test_new_tools_have_examples(self):
+        """Test that new tools have usage examples."""
+        from enigma.tools.tool_definitions import get_tool_definition
+        
+        gif_tool = get_tool_definition("generate_gif")
+        assert len(gif_tool.examples) > 0
+        
+        edit_img_tool = get_tool_definition("edit_image")
+        assert len(edit_img_tool.examples) > 0
+    
+    def test_tool_schemas_include_new_tools(self):
+        """Test that tool schemas include new tools."""
+        from enigma.tools.tool_definitions import get_tool_schemas
+        
+        schemas = get_tool_schemas()
+        
+        assert "generate_gif" in schemas
+        assert "edit_image" in schemas
+        assert "edit_gif" in schemas
+        assert "edit_video" in schemas
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

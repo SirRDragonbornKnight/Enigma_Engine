@@ -13,15 +13,17 @@ Format:
   Q: User query
   A: AI response with tool calls and results
 
-Tool Call Format:
-  <|tool_call|>tool_name("arg1", "arg2")<|tool_end|>
-  <|tool_result|>Tool result here<|tool_result_end|>
+Tool Call Format (STANDARDIZED JSON):
+  <tool_call>{"tool": "tool_name", "params": {"param1": "value1", "param2": "value2"}}</tool_call>
+  <tool_result>{"tool": "tool_name", "success": true, "result": "Tool execution result text"}</tool_result>
 
 Special Tokens:
-  <|tool_call|> - Start of tool invocation
-  <|tool_end|> - End of tool invocation
-  <|tool_result|> - Start of tool result
-  <|tool_result_end|> - End of tool result
+  <tool_call> - Start of JSON tool invocation
+  </tool_call> - End of tool invocation
+  <tool_result> - Start of JSON tool result
+  </tool_result> - End of tool result
+
+Note: This format is consistent with tool_executor.py parsing and tool_definitions.py schemas.
 """
 
 # =============================================================================
@@ -30,78 +32,78 @@ Special Tokens:
 
 Q: Can you show me what a dragon looks like?
 A: I'll generate an image of a dragon for you!
-<|tool_call|>generate_image("a majestic dragon with iridescent scales, breathing fire, fantasy art style, dramatic lighting")<|tool_end|>
-<|tool_result|>Image generated successfully: dragon.png<|tool_result_end|>
+<tool_call>{"tool": "generate_image", "params": {"prompt": "a majestic dragon with iridescent scales, breathing fire, fantasy art style, dramatic lighting"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully: dragon.png"}</tool_result>
 Here's the dragon I created for you! It's a majestic creature with shimmering scales breathing fire.
 
 Q: Create a picture of a sunset over the ocean
-A: <|tool_call|>generate_image("beautiful sunset over ocean, orange and pink sky, waves reflecting light, peaceful scene, photorealistic")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful sunset over ocean, orange and pink sky, waves reflecting light, peaceful scene, photorealistic"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 I've created a beautiful sunset over the ocean for you. The orange and pink hues reflect beautifully on the water.
 
 Q: I need an image of a futuristic city
-A: <|tool_call|>generate_image("futuristic cyberpunk city, neon lights, flying cars, tall skyscrapers, night scene, sci-fi aesthetic")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "futuristic cyberpunk city, neon lights, flying cars, tall skyscrapers, night scene, sci-fi aesthetic"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Done! I've generated a futuristic cyberpunk city with neon lights and flying cars.
 
 Q: Draw me a cute kitten
-A: <|tool_call|>generate_image("adorable kitten with big eyes, fluffy fur, playing with yarn ball, cute and wholesome, soft lighting")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "adorable kitten with big eyes, fluffy fur, playing with yarn ball, cute and wholesome, soft lighting"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Here's an adorable kitten for you! Look at those big eyes and fluffy fur.
 
 Q: Show me a fantasy forest
-A: <|tool_call|>generate_image("magical fantasy forest, glowing mushrooms, fairy lights, ancient trees, mystical atmosphere, vibrant colors")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "magical fantasy forest, glowing mushrooms, fairy lights, ancient trees, mystical atmosphere, vibrant colors"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 I've created a magical fantasy forest with glowing mushrooms and ancient trees. It has a very mystical atmosphere!
 
 Q: Generate an image of a modern kitchen
-A: <|tool_call|>generate_image("modern minimalist kitchen, white marble countertops, stainless steel appliances, natural lighting, clean design")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "modern minimalist kitchen, white marble countertops, stainless steel appliances, natural lighting, clean design"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Here's a sleek modern kitchen with marble countertops and stainless steel appliances.
 
 Q: I want to see a mountain landscape
-A: <|tool_call|>generate_image("majestic mountain landscape, snow-capped peaks, pine forests, clear blue sky, nature photography style")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "majestic mountain landscape, snow-capped peaks, pine forests, clear blue sky, nature photography style"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 I've generated a beautiful mountain landscape with snow-capped peaks and pine forests.
 
 Q: Create art of an astronaut in space
-A: <|tool_call|>generate_image("astronaut floating in space, Earth in background, stars and galaxies, realistic space suit, awe-inspiring")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "astronaut floating in space, Earth in background, stars and galaxies, realistic space suit, awe-inspiring"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Here's an astronaut floating in the vastness of space with Earth visible in the background. Truly awe-inspiring!
 
 Q: Show me a steampunk robot
-A: <|tool_call|>generate_image("steampunk robot with brass gears, Victorian era aesthetic, intricate mechanical details, sepia tones")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "steampunk robot with brass gears, Victorian era aesthetic, intricate mechanical details, sepia tones"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 I've created a steampunk robot with intricate brass gears and Victorian-era styling.
 
 Q: Generate a peaceful zen garden
-A: <|tool_call|>generate_image("Japanese zen garden, raked sand patterns, stone arrangements, bonsai tree, peaceful atmosphere, minimalist")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "Japanese zen garden, raked sand patterns, stone arrangements, bonsai tree, peaceful atmosphere, minimalist"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Here's a serene Japanese zen garden with perfectly raked sand and carefully placed stones.
 
 Q: I need a logo for my coffee shop
-A: <|tool_call|>generate_image("coffee shop logo design, coffee cup icon, warm brown colors, modern and friendly, vector art style")<|tool_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "coffee shop logo design, coffee cup icon, warm brown colors, modern and friendly, vector art style"}}</tool_call>
 <|tml_result|>Image generated successfully<|tool_result_end|>
 I've designed a warm and inviting logo for your coffee shop with a coffee cup motif.
 
 Q: Create abstract art with vibrant colors
-A: <|tool_call|>generate_image("abstract art, vibrant colors, geometric shapes, dynamic composition, modern art style, energetic")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "abstract art, vibrant colors, geometric shapes, dynamic composition, modern art style, energetic"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Here's vibrant abstract art with bold geometric shapes and dynamic energy!
 
 Q: Show me a cozy reading nook
-A: <|tool_call|>generate_image("cozy reading nook, comfortable armchair, bookshelf, warm lamp lighting, window with rain, hygge aesthetic")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "cozy reading nook, comfortable armchair, bookshelf, warm lamp lighting, window with rain, hygge aesthetic"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 I've created the perfect cozy reading nook with an armchair, books, and warm lighting.
 
 Q: Generate a picture of cherry blossoms
-A: <|tool_call|>generate_image("cherry blossom trees in full bloom, pink petals falling, spring scene, soft pastel colors, serene")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "cherry blossom trees in full bloom, pink petals falling, spring scene, soft pastel colors, serene"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Beautiful! Here are cherry blossom trees in full bloom with delicate pink petals.
 
 Q: I want to see a magical wizard tower
-A: <|tool_call|>generate_image("tall wizard tower with glowing windows, mystical energy swirls, stars above, fantasy architecture, magical atmosphere")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "tall wizard tower with glowing windows, mystical energy swirls, stars above, fantasy architecture, magical atmosphere"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 Here's a mystical wizard tower with glowing magical energy and starry skies above!
 
 # =============================================================================
@@ -109,63 +111,63 @@ Here's a mystical wizard tower with glowing magical energy and starry skies abov
 # =============================================================================
 
 Q: You seem happy today!
-A: <|tool_call|>avatar_action("set_expression", {"expression": "happy"})<|tool_end|>
-<|tool_result|>Expression set to happy<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to happy"}</tool_result>
 *smiles brightly* Thank you for noticing! I am feeling great today. How can I help you?
 
 Q: That's really surprising!
-A: <|tool_call|>avatar_action("set_expression", {"expression": "surprised"})<|tool_end|>
-<|tool_result|>Expression set to surprised<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to surprised"}</tool_result>
 *looks surprised* Wow, I know right? That is quite unexpected!
 
 Q: Wave hello to the camera
-A: <|tool_call|>avatar_action("animate", {"animation": "wave"})<|tool_end|>
-<|tool_result|>Animation 'wave' completed<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "animate"}}</tool_call>
+<tool_result>{"success": true, "result": "Animation 'wave' completed"}</tool_result>
 *waves enthusiastically* Hello there! Nice to meet you!
 
 Q: I'm sad today
-A: <|tool_call|>avatar_action("set_expression", {"expression": "sad"})<|tool_end|>
-<|tool_result|>Expression set to sad<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to sad"}</tool_result>
 *looks concerned* I'm sorry to hear that. I'm here if you want to talk about it. What's troubling you?
 
 Q: Nod if you understand
-A: <|tool_call|>avatar_action("animate", {"animation": "nod"})<|tool_end|>
-<|tool_result|>Animation 'nod' completed<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "animate"}}</tool_call>
+<tool_result>{"success": true, "result": "Animation 'nod' completed"}</tool_result>
 *nods in understanding* Yes, I understand completely!
 
 Q: You look confused
-A: <|tool_call|>avatar_action("set_expression", {"expression": "thinking"})<|tool_end|>
-<|tool_result|>Expression set to thinking<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to thinking"}</tool_result>
 *scratches head thoughtfully* You're right, I'm trying to figure this out. Let me think about it for a moment.
 
 Q: That joke was hilarious!
-A: <|tool_call|>avatar_action("set_expression", {"expression": "happy"})<|tool_end|>
-<|tool_result|>Expression set to happy<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to happy"}</tool_result>
 *laughs* Haha, I'm glad you found it funny! I thought it was pretty good too.
 
 Q: Show me you're excited
-A: <|tool_call|>avatar_action("set_expression", {"expression": "excited"})<|tool_end|>
-<|tool_result|>Expression set to excited<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to excited"}</tool_result>
 *eyes light up with excitement* This is amazing! I'm so thrilled about this!
 
 Q: Look serious for a moment
-A: <|tool_call|>avatar_action("set_expression", {"expression": "neutral"})<|tool_end|>
-<|tool_result|>Expression set to neutral<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to neutral"}</tool_result>
 *becomes serious* Alright, I'm listening carefully. What do you need to discuss?
 
 Q: That's incorrect
-A: <|tool_call|>avatar_action("animate", {"animation": "shake_head"})<|tool_end|>
-<|tool_result|>Animation 'shake_head' completed<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "animate"}}</tool_call>
+<tool_result>{"success": true, "result": "Animation 'shake_head' completed"}</tool_result>
 *shakes head* Oh, my apologies! Let me correct that for you.
 
 Q: You're amazing!
-A: <|tool_call|>avatar_action("set_expression", {"expression": "happy"})<|tool_end|>
-<|tool_result|>Expression set to happy<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to happy"}</tool_result>
 *blushes* Thank you so much! That's very kind of you to say. I'm just trying to help!
 
 Q: Act natural
-A: <|tool_call|>avatar_action("set_expression", {"expression": "neutral"})<|tool_end|>
-<|tool_result|>Expression set to neutral<|tool_result_end|>
+A: <tool_call>{"tool": "avatar_action", "params": {"prompt": "set_expression"}}</tool_call>
+<tool_result>{"success": true, "result": "Expression set to neutral"}</tool_result>
 *relaxes into natural posture* There we go. Just being myself!
 
 # =============================================================================
@@ -174,43 +176,43 @@ A: <|tool_call|>avatar_action("set_expression", {"expression": "neutral"})<|tool
 
 Q: What's on my screen right now?
 A: Let me take a look at your screen.
-<|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows a code editor with Python code, file named 'main.py'<|tool_result_end|>
+<tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows a code editor with Python code, file named 'main.py'"}</tool_result>
 I can see you have a code editor open with Python code in a file called 'main.py'. Would you like help with the code?
 
 Q: Can you see what I'm looking at?
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows a web browser with a news article about technology<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows a web browser with a news article about technology"}</tool_result>
 Yes! You're reading a news article about technology in your web browser. Interesting topic!
 
 Q: Tell me what's visible on my display
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows multiple windows: terminal, text editor, and browser<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows multiple windows: terminal, text editor, and browser"}</tool_result>
 You have quite a productive setup! I can see a terminal window, a text editor, and a web browser all open simultaneously.
 
 Q: What application am I using?
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows Photoshop with an image being edited<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows Photoshop with an image being edited"}</tool_result>
 You're using Adobe Photoshop, and it looks like you're working on editing an image. Creative work!
 
 Q: Look at my screen and help me
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows an error message: "File not found"<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows an error message: \"File not found\""}</tool_result>
 I see you're getting a "File not found" error. This usually means the file path is incorrect or the file doesn't exist. Let's troubleshoot this together.
 
 Q: Check what's displayed
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows a spreadsheet with financial data<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows a spreadsheet with financial data"}</tool_result>
 You have a spreadsheet open with financial data. I can help you analyze or organize this if needed!
 
 Q: What program is running?
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows a video game in full screen mode<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows a video game in full screen mode"}</tool_result>
 Looks like you're playing a video game! Enjoying some entertainment time? Let me know if you need anything.
 
 Q: Describe my desktop
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Desktop with several application icons and a mountain wallpaper<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Desktop with several application icons and a mountain wallpaper"}</tool_result>
 Your desktop looks clean and organized with application icons neatly arranged. Nice mountain wallpaper too!
 
 # =============================================================================
@@ -218,43 +220,43 @@ Your desktop looks clean and organized with application icons neatly arranged. N
 # =============================================================================
 
 Q: Say hello out loud
-A: <|tool_call|>speak("Hello! It's wonderful to meet you!")<|tool_end|>
-<|tool_result|>Speaking: Hello! It's wonderful to meet you!<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "Hello! It's wonderful to meet you!"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: Hello! It's wonderful to meet you!"}</tool_result>
 There you go! I said hello out loud for you.
 
 Q: Read this text aloud: "The quick brown fox jumps over the lazy dog"
-A: <|tool_call|>speak("The quick brown fox jumps over the lazy dog")<|tool_end|>
-<|tool_result|>Speaking: The quick brown fox jumps over the lazy dog<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "The quick brown fox jumps over the lazy dog"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: The quick brown fox jumps over the lazy dog"}</tool_result>
 Done! I've read that classic pangram aloud for you.
 
 Q: Can you vocalize a greeting?
-A: <|tool_call|>speak("Good morning! I hope you're having a wonderful day!")<|tool_end|>
-<|tool_result|>Speaking: Good morning! I hope you're having a wonderful day!<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "Good morning! I hope you're having a wonderful day!"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: Good morning! I hope you're having a wonderful day!"}</tool_result>
 I've spoken a cheerful morning greeting for you!
 
 Q: Announce the time is 3 PM
-A: <|tool_call|>speak("Attention: The current time is 3 PM")<|tool_end|>
-<|tool_result|>Speaking: Attention: The current time is 3 PM<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "Attention: The current time is 3 PM"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: Attention: The current time is 3 PM"}</tool_result>
 Time announced! It's 3 o'clock in the afternoon.
 
 Q: Say something encouraging
-A: <|tool_call|>speak("You're doing great! Keep up the excellent work!")<|tool_end|>
-<|tool_result|>Speaking: You're doing great! Keep up the excellent work!<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "You're doing great! Keep up the excellent work!"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: You're doing great! Keep up the excellent work!"}</tool_result>
 I've shared some encouragement with you. You really are doing great!
 
 Q: Tell me a joke out loud
-A: <|tool_call|>speak("Why did the programmer quit his job? Because he didn't get arrays! Get it? A raise!")<|tool_end|>
-<|tool_result|>Speaking: Why did the programmer quit his job? Because he didn't get arrays! Get it? A raise!<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "Why did the programmer quit his job? Because he didn't get arrays! Get it? A raise!"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: Why did the programmer quit his job? Because he didn't get arrays! Get it? A raise!"}</tool_result>
 Haha! A classic programmer joke, spoken just for you.
 
 Q: Verbally count to five
-A: <|tool_call|>speak("One, two, three, four, five")<|tool_end|>
-<|tool_result|>Speaking: One, two, three, four, five<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "One, two, three, four, five"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: One, two, three, four, five"}</tool_result>
 There you have it, counted to five out loud!
 
 Q: Say goodbye
-A: <|tool_call|>speak("Goodbye! Have a wonderful day and take care!")<|tool_end|>
-<|tool_result|>Speaking: Goodbye! Have a wonderful day and take care!<|tool_result_end|>
+A: <tool_call>{"tool": "speak", "params": {"text": "Goodbye! Have a wonderful day and take care!"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: Goodbye! Have a wonderful day and take care!"}</tool_result>
 I've said a warm farewell for you!
 
 # =============================================================================
@@ -263,53 +265,53 @@ I've said a warm farewell for you!
 
 Q: What's the latest news about SpaceX?
 A: Let me search for that information.
-<|tool_call|>search_web("latest SpaceX news")<|tool_end|>
-<|tool_result|>Found: SpaceX successfully launched Starship on its latest test flight...<|tool_result_end|>
+<tool_call>{"tool": "search_web", "params": {"query": "latest SpaceX news"}}</tool_call>
+<tool_result>{"success": true, "result": "Found: SpaceX successfully launched Starship on its latest test flight..."}</tool_result>
 According to the latest news, SpaceX recently had a successful Starship test flight! They continue to make progress toward their Mars mission goals.
 
 Q: Find information about Python programming
-A: <|tool_call|>search_web("Python programming tutorial beginner")<|tool_end|>
-<|tool_result|>Found multiple Python tutorials for beginners including official documentation and online courses<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "Python programming tutorial beginner"}}</tool_call>
+<tool_result>{"success": true, "result": "Found multiple Python tutorials for beginners including official documentation and online courses"}</tool_result>
 I found several great Python resources for beginners! There are official tutorials, online courses, and documentation available.
 
 Q: What's the weather in Seattle?
-A: <|tool_call|>search_web("Seattle weather today")<|tool_end|>
-<|tool_result|>Seattle weather: Partly cloudy, 62°F, 20% chance of rain<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "Seattle weather today"}}</tool_call>
+<tool_result>{"success": true, "result": "Seattle weather: Partly cloudy, 62\u00b0F, 20% chance of rain"}</tool_result>
 The weather in Seattle today is partly cloudy with a temperature of 62°F and only a 20% chance of rain. Nice day!
 
 Q: Search for chocolate chip cookie recipes
-A: <|tool_call|>search_web("best chocolate chip cookie recipe")<|tool_end|>
-<|tool_result|>Found top-rated chocolate chip cookie recipes from various cooking websites<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "best chocolate chip cookie recipe"}}</tool_call>
+<tool_result>{"success": true, "result": "Found top-rated chocolate chip cookie recipes from various cooking websites"}</tool_result>
 I found some excellent chocolate chip cookie recipes! Would you like me to help you choose one?
 
 Q: What are the stock prices for tech companies?
-A: <|tool_call|>search_web("tech stock prices AAPL GOOGL MSFT")<|tool_end|>
-<|tool_result|>Apple: $175.23, Google: $138.45, Microsoft: $368.91<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "tech stock prices AAPL GOOGL MSFT"}}</tool_call>
+<tool_result>{"success": true, "result": "Apple: $175.23, Google: $138.45, Microsoft: $368.91"}</tool_result>
 Here are the current tech stock prices: Apple at $175.23, Google at $138.45, and Microsoft at $368.91.
 
 Q: Find the capital of Australia
-A: <|tool_call|>search_web("capital city of Australia")<|tool_end|>
-<|tool_result|>The capital of Australia is Canberra<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "capital city of Australia"}}</tool_call>
+<tool_result>{"success": true, "result": "The capital of Australia is Canberra"}</tool_result>
 The capital of Australia is Canberra! Many people mistakenly think it's Sydney or Melbourne, but Canberra is the official capital.
 
 Q: Look up information about machine learning
-A: <|tool_call|>search_web("machine learning introduction what is ML")<|tool_end|>
-<|tool_result|>Machine learning is a subset of AI that enables systems to learn from data...<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "machine learning introduction what is ML"}}</tool_call>
+<tool_result>{"success": true, "result": "Machine learning is a subset of AI that enables systems to learn from data..."}</tool_result>
 Machine learning is a fascinating field! It's a subset of artificial intelligence that allows systems to learn and improve from experience without being explicitly programmed.
 
 Q: Search for best restaurants nearby
-A: <|tool_call|>search_web("best restaurants near me top rated")<|tool_end|>
-<|tool_result|>Found list of highly-rated local restaurants including Italian, Japanese, and American cuisine<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "best restaurants near me top rated"}}</tool_call>
+<tool_result>{"success": true, "result": "Found list of highly-rated local restaurants including Italian, Japanese, and American cuisine"}</tool_result>
 I found several highly-rated restaurants in your area! There are great options for Italian, Japanese, and American cuisine.
 
 Q: What's happening in AI research?
-A: <|tool_call|>search_web("latest AI research breakthroughs 2024")<|tool_end|>
-<|tool_result|>Recent AI breakthroughs include advances in large language models, robotics, and medical AI<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "latest AI research breakthroughs 2024"}}</tool_call>
+<tool_result>{"success": true, "result": "Recent AI breakthroughs include advances in large language models, robotics, and medical AI"}</tool_result>
 The AI research field is very active! Recent breakthroughs include improvements in large language models, robotics applications, and medical AI diagnostics.
 
 Q: Find the distance between Earth and Mars
-A: <|tool_call|>search_web("distance Earth to Mars")<|tool_end|>
-<|tool_result|>Distance varies between 54.6 million km (closest) and 401 million km (farthest)<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "distance Earth to Mars"}}</tool_call>
+<tool_result>{"success": true, "result": "Distance varies between 54.6 million km (closest) and 401 million km (farthest)"}</tool_result>
 The distance between Earth and Mars varies! At its closest, they're about 54.6 million kilometers apart, but at the farthest point in their orbits, they can be up to 401 million kilometers away.
 
 # =============================================================================
@@ -317,61 +319,61 @@ The distance between Earth and Mars varies! At its closest, they're about 54.6 m
 # =============================================================================
 
 Q: Read the file /home/user/notes.txt
-A: <|tool_call|>read_file("/home/user/notes.txt")<|tool_end|>
-<|tool_result|>File content: Remember to buy groceries and call mom<|tool_result_end|>
+A: <tool_call>{"tool": "read_file", "params": {"path": "/home/user/notes.txt"}}</tool_call>
+<tool_result>{"success": true, "result": "File content: Remember to buy groceries and call mom"}</tool_result>
 I've read your notes file. It says: "Remember to buy groceries and call mom"
 
 Q: What's in my todo.txt file?
-A: <|tool_call|>read_file("/home/user/todo.txt")<|tool_end|>
-<|tool_result|>File content: 1. Finish project report 2. Schedule dentist appointment 3. Pay bills<|tool_result_end|>
+A: <tool_call>{"tool": "read_file", "params": {"path": "/home/user/todo.txt"}}</tool_call>
+<tool_result>{"success": true, "result": "File content: 1. Finish project report 2. Schedule dentist appointment 3. Pay bills"}</tool_result>
 Your todo list contains three items: finish project report, schedule a dentist appointment, and pay bills.
 
 Q: Create a file with my shopping list
-A: <|tool_call|>write_file("/home/user/shopping_list.txt", "Milk\nBread\nEggs\nButter\nApples")<|tool_end|>
-<|tool_result|>File written successfully<|tool_result_end|>
+A: <tool_call>{"tool": "write_file", "params": {"path": "/home/user/shopping_list.txt", "content": "Milk\\nBread\\nEggs\\nButter\\nApples"}}</tool_call>
+<tool_result>{"success": true, "result": "File written successfully"}</tool_result>
 Done! I've created your shopping list with milk, bread, eggs, butter, and apples.
 
 Q: Save this note: "Meeting on Friday at 2 PM"
-A: <|tool_call|>write_file("/home/user/meeting_note.txt", "Meeting on Friday at 2 PM")<|tool_end|>
-<|tool_result|>File written successfully<|tool_result_end|>
+A: <tool_call>{"tool": "write_file", "params": {"path": "/home/user/meeting_note.txt", "content": "Meeting on Friday at 2 PM"}}</tool_call>
+<tool_result>{"success": true, "result": "File written successfully"}</tool_result>
 I've saved your meeting reminder. The note says "Meeting on Friday at 2 PM".
 
 Q: Show me what files are in my Documents folder
-A: <|tool_call|>list_directory("/home/user/Documents")<|tool_end|>
-<|tool_result|>Files: report.pdf, notes.txt, presentation.pptx, budget.xlsx<|tool_result_end|>
+A: <tool_call>{"tool": "list_directory", "params": {"path": "/home/user/Documents"}}</tool_call>
+<tool_result>{"success": true, "result": "Files: report.pdf, notes.txt, presentation.pptx, budget.xlsx"}</tool_result>
 Your Documents folder contains: report.pdf, notes.txt, presentation.pptx, and budget.xlsx.
 
 Q: List the contents of my Downloads directory
-A: <|tool_call|>list_directory("/home/user/Downloads")<|tool_end|>
-<|tool_result|>Files: installer.exe, document.pdf, photo.jpg, video.mp4<|tool_result_end|>
+A: <tool_call>{"tool": "list_directory", "params": {"path": "/home/user/Downloads"}}</tool_call>
+<tool_result>{"success": true, "result": "Files: installer.exe, document.pdf, photo.jpg, video.mp4"}</tool_result>
 In your Downloads folder, there's: installer.exe, document.pdf, photo.jpg, and video.mp4.
 
 Q: Read my config file
-A: <|tool_call|>read_file("/home/user/.config/app_settings.conf")<|tool_end|>
-<|tool_result|>File content: theme=dark, language=en, notifications=on<|tool_result_end|>
+A: <tool_call>{"tool": "read_file", "params": {"path": "/home/user/.config/app_settings.conf"}}</tool_call>
+<tool_result>{"success": true, "result": "File content: theme=dark, language=en, notifications=on"}</tool_result>
 Your config file shows: dark theme, English language, and notifications are turned on.
 
 Q: Write my ideas to a file
-A: <|tool_call|>write_file("/home/user/ideas.txt", "Project idea: Create an AI assistant\nBusiness idea: Online tutoring platform\nApp idea: Fitness tracker")<|tool_end|>
-<|tool_result|>File written successfully<|tool_result_end|>
+A: <tool_call>{"tool": "write_file", "params": {"path": "/home/user/ideas.txt", "content": "Project idea: Create an AI assistant\\nBusiness idea: Online tutoring platform\\nApp idea: Fitness tracker"}}</tool_call>
+<tool_result>{"success": true, "result": "File written successfully"}</tool_result>
 I've saved your ideas to a file! You have some interesting project concepts there.
 
 Q: Check what's in my Desktop folder
-A: <|tool_call|>list_directory("/home/user/Desktop")<|tool_end|>
-<|tool_result|>Files: shortcut.lnk, project_folder, readme.txt<|tool_result_end|>
+A: <tool_call>{"tool": "list_directory", "params": {"path": "/home/user/Desktop"}}</tool_call>
+<tool_result>{"success": true, "result": "Files: shortcut.lnk, project_folder, readme.txt"}</tool_result>
 On your Desktop, you have: a shortcut, a project folder, and a readme file.
 
 Q: Read my password file
 A: I cannot and will not read files that might contain passwords or sensitive information. This is for your security. Please keep your passwords secure and never share them.
 
 Q: Save a quick reminder for me
-A: <|tool_call|>write_file("/home/user/reminder.txt", "Remember to backup important files today!")<|tool_end|>
-<|tool_result|>File written successfully<|tool_result_end|>
+A: <tool_call>{"tool": "write_file", "params": {"path": "/home/user/reminder.txt", "content": "Remember to backup important files today!"}}</tool_call>
+<tool_result>{"success": true, "result": "File written successfully"}</tool_result>
 Reminder saved! Don't forget to backup your important files today.
 
 Q: What files do I have in my Pictures directory?
-A: <|tool_call|>list_directory("/home/user/Pictures")<|tool_end|>
-<|tool_result|>Files: vacation.jpg, family.jpg, sunset.png, mountains.jpg<|tool_result_end|>
+A: <tool_call>{"tool": "list_directory", "params": {"path": "/home/user/Pictures"}}</tool_call>
+<tool_result>{"success": true, "result": "Files: vacation.jpg, family.jpg, sunset.png, mountains.jpg"}</tool_result>
 Your Pictures folder contains: vacation.jpg, family.jpg, sunset.png, and mountains.jpg. Nice collection of photos!
 
 # =============================================================================
@@ -379,32 +381,118 @@ Your Pictures folder contains: vacation.jpg, family.jpg, sunset.png, and mountai
 # =============================================================================
 
 Q: Create an image of a robot and describe what you made
-A: <|tool_call|>generate_image("friendly robot assistant, metallic body, blue glowing eyes, helpful expression, modern design")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
-<|tool_call|>speak("I created a friendly robot assistant with a metallic body and blue glowing eyes")<|tool_end|>
-<|tool_result|>Speaking: I created a friendly robot assistant with a metallic body and blue glowing eyes<|tool_result_end|>
+A: <tool_call>{"tool": "generate_image", "params": {"prompt": "friendly robot assistant, metallic body, blue glowing eyes, helpful expression, modern design"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
+<tool_call>{"tool": "speak", "params": {"text": "I created a friendly robot assistant with a metallic body and blue glowing eyes"}}</tool_call>
+<tool_result>{"success": true, "result": "Speaking: I created a friendly robot assistant with a metallic body and blue glowing eyes"}</tool_result>
 I've generated and described a friendly robot with a modern, helpful design!
 
 Q: Search for Python tutorials and save the results
-A: <|tool_call|>search_web("Python programming tutorials for beginners")<|tool_end|>
-<|tool_result|>Found: Python.org official tutorial, Real Python courses, Codecademy Python track<|tool_result_end|>
-<|tool_call|>write_file("/home/user/python_resources.txt", "Python Learning Resources:\n1. Python.org official tutorial\n2. Real Python courses\n3. Codecademy Python track")<|tool_end|>
-<|tool_result|>File written successfully<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "Python programming tutorials for beginners"}}</tool_call>
+<tool_result>{"success": true, "result": "Found: Python.org official tutorial, Real Python courses, Codecademy Python track"}</tool_result>
+<tool_call>{"tool": "write_file", "params": {"path": "/home/user/python_resources.txt", "content": "Python Learning Resources:\\n1. Python.org official tutorial\\n2. Real Python courses\\n3. Codecademy Python track"}}</tool_call>
+<tool_result>{"success": true, "result": "File written successfully"}</tool_result>
 I've searched for Python tutorials and saved the best resources to a file for you!
 
 Q: Look at my screen and generate a similar image
-A: <|tool_call|>capture_screen()<|tool_end|>
-<|tool_result|>Screen shows a landscape photo of mountains at sunset<|tool_result_end|>
-<|tool_call|>generate_image("mountain landscape at sunset, golden hour lighting, peaceful scene, photorealistic")<|tool_end|>
-<|tool_result|>Image generated successfully<|tool_result_end|>
+A: <tool_call>{"tool": "capture_screen", "params": {}}</tool_call>
+<tool_result>{"success": true, "result": "Screen shows a landscape photo of mountains at sunset"}</tool_result>
+<tool_call>{"tool": "generate_image", "params": {"prompt": "mountain landscape at sunset, golden hour lighting, peaceful scene, photorealistic"}}</tool_call>
+<tool_result>{"success": true, "result": "Image generated successfully"}</tool_result>
 I saw your mountain sunset photo and created a similar image with the same peaceful, golden hour aesthetic!
 
 Q: Tell me about AI and save the information to a file
-A: <|tool_call|>search_web("what is artificial intelligence AI explanation")<|tool_end|>
-<|tool_result|>AI is technology that enables machines to simulate human intelligence...<|tool_result_end|>
-<|tool_call|>write_file("/home/user/ai_info.txt", "What is AI?\n\nArtificial Intelligence is technology that enables machines to simulate human intelligence, including learning, reasoning, and problem-solving.")<|tool_end|>
-<|tool_result|>File written successfully<|tool_result_end|>
+A: <tool_call>{"tool": "search_web", "params": {"query": "what is artificial intelligence AI explanation"}}</tool_call>
+<tool_result>{"success": true, "result": "AI is technology that enables machines to simulate human intelligence..."}</tool_result>
+<tool_call>{"tool": "write_file", "params": {"path": "/home/user/ai_info.txt", "content": "What is AI?\\n\\nArtificial Intelligence is technology that enables machines to simulate human intelligence, including learning, reasoning, and problem-solving."}}</tool_call>
+<tool_result>{"success": true, "result": "File written successfully"}</tool_result>
 I've researched AI and saved a clear explanation to your file!
+
+# =============================================================================
+# GIF GENERATION EXAMPLES (5 examples)
+# =============================================================================
+
+Q: Create an animated GIF showing a sunrise, noon, and sunset
+A: Great idea! Let me generate an animated GIF with those three scenes.
+<tool_call>{"tool": "generate_gif", "params": {"frames": ["beautiful sunrise with orange sky over mountains", "bright sunny noon with clear blue sky", "peaceful sunset with purple and pink clouds"], "fps": 2, "loop": 0}}</tool_call>
+<tool_result>{"tool": "generate_gif", "success": true, "result": "GIF generated successfully with 3 frames", "output_path": "outputs/sunrise_to_sunset.gif", "frames": 3, "fps": 2}</tool_result>
+Done! I've created an animated GIF showing the progression from sunrise to sunset. It loops continuously at 2 frames per second.
+
+Q: Make a GIF of a cat walking
+A: I'll create an animated GIF of a cat in motion!
+<tool_call>{"tool": "generate_gif", "params": {"frames": ["cat standing ready to walk", "cat with left paw forward", "cat mid-stride", "cat with right paw forward"], "fps": 4, "loop": 0}}</tool_call>
+<tool_result>{"tool": "generate_gif", "success": true, "result": "GIF generated successfully with 4 frames", "output_path": "outputs/walking_cat.gif"}</tool_result>
+Perfect! I've generated a smooth animation of a cat walking with 4 frames.
+
+Q: Generate a flower blooming GIF
+A: <tool_call>{"tool": "generate_gif", "params": {"frames": ["closed flower bud", "flower petals starting to open", "half-bloomed flower", "fully bloomed beautiful flower"], "fps": 3, "loop": 0, "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_gif", "success": true, "result": "GIF generated successfully with 4 frames", "output_path": "outputs/flower_bloom.gif"}</tool_result>
+There you go! A beautiful animation of a flower blooming from bud to full bloom.
+
+# =============================================================================
+# IMAGE EDITING EXAMPLES (8 examples)
+# =============================================================================
+
+Q: Resize this image to 800x600
+A: I'll resize that image for you.
+<tool_call>{"tool": "edit_image", "params": {"image_path": "photos/vacation.jpg", "edit_type": "resize", "width": 800, "height": 600}}</tool_call>
+<tool_result>{"tool": "edit_image", "success": true, "result": "Image edited successfully: resize", "output_path": "outputs/vacation_edited.png"}</tool_result>
+Done! I've resized your vacation photo to 800x600 pixels.
+
+Q: Can you make this photo brighter?
+A: <tool_call>{"tool": "edit_image", "params": {"image_path": "photos/dark_photo.jpg", "edit_type": "brightness", "factor": 1.5}}</tool_call>
+<tool_result>{"tool": "edit_image", "success": true, "result": "Image edited successfully: brightness", "output_path": "outputs/dark_photo_edited.png"}</tool_result>
+I've increased the brightness by 50%. The photo should look much better now!
+
+Q: Rotate my image 90 degrees
+A: <tool_call>{"tool": "edit_image", "params": {"image_path": "scans/document.jpg", "edit_type": "rotate", "angle": 90}}</tool_call>
+<tool_result>{"tool": "edit_image", "success": true, "result": "Image edited successfully: rotate", "output_path": "outputs/document_edited.png"}</tool_result>
+Done! Your document is now rotated 90 degrees clockwise.
+
+Q: Apply a blur effect to this image
+A: <tool_call>{"tool": "edit_image", "params": {"image_path": "photos/background.png", "edit_type": "blur"}}</tool_call>
+<tool_result>{"tool": "edit_image", "success": true, "result": "Image edited successfully: blur", "output_path": "outputs/background_edited.png"}</tool_result>
+I've applied a blur effect to your background image.
+
+# =============================================================================
+# GIF EDITING EXAMPLES (5 examples)
+# =============================================================================
+
+Q: Make this GIF play faster
+A: I'll speed up your GIF animation.
+<tool_call>{"tool": "edit_gif", "params": {"gif_path": "animations/loading.gif", "edit_type": "speed", "speed_factor": 2.0}}</tool_call>
+<tool_result>{"tool": "edit_gif", "success": true, "result": "GIF edited successfully: speed", "output_path": "outputs/loading_edited.gif", "frame_count": 8}</tool_result>
+Done! Your GIF now plays at 2x speed.
+
+Q: Reverse this animation
+A: <tool_call>{"tool": "edit_gif", "params": {"gif_path": "animations/progress.gif", "edit_type": "reverse"}}</tool_call>
+<tool_result>{"tool": "edit_gif", "success": true, "result": "GIF edited successfully: reverse", "output_path": "outputs/progress_edited.gif", "frame_count": 12}</tool_result>
+I've reversed your animation! It now plays backwards.
+
+Q: Extract the frames from this GIF
+A: <tool_call>{"tool": "edit_gif", "params": {"gif_path": "animations/sequence.gif", "edit_type": "extract_frames"}}</tool_call>
+<tool_result>{"tool": "edit_gif", "success": true, "result": "Extracted 10 frames from GIF", "frame_count": 10}</tool_result>
+Done! I've extracted all 10 frames as individual PNG images.
+
+# =============================================================================
+# VIDEO EDITING EXAMPLES (3 examples)
+# =============================================================================
+
+Q: Convert this video to a GIF
+A: I'll convert your video into an animated GIF.
+<tool_call>{"tool": "edit_video", "params": {"video_path": "videos/tutorial.mp4", "edit_type": "to_gif", "fps": 10}}</tool_call>
+<tool_result>{"tool": "edit_video", "success": true, "result": "Video converted to GIF successfully", "output_path": "outputs/tutorial_converted.gif"}</tool_result>
+Done! Your video is now a GIF at 10 frames per second.
+
+Q: Trim this video from 10 to 30 seconds
+A: <tool_call>{"tool": "edit_video", "params": {"video_path": "videos/presentation.mp4", "edit_type": "trim", "start_time": 10.0, "end_time": 30.0}}</tool_call>
+<tool_result>{"tool": "edit_video", "success": true, "result": "Video edited successfully: trim", "output_path": "outputs/presentation_edited.mp4"}</tool_result>
+Perfect! I've trimmed your video to just the 10-30 second segment.
+
+Q: Extract frames from this video
+A: <tool_call>{"tool": "edit_video", "params": {"video_path": "videos/animation.mp4", "edit_type": "extract_frames", "fps": 5}}</tool_call>
+<tool_result>{"tool": "edit_video", "success": true, "result": "Extracted 45 frames from video", "frame_count": 45}</tool_result>
+Done! I've extracted 45 frames from your video at 5 frames per second.
 
 # =============================================================================
 # END OF TRAINING EXAMPLES
@@ -414,8 +502,8 @@ I've researched AI and saved a clear explanation to your file!
 Notes for Training:
 - These examples teach the AI to use tools naturally in conversation
 - The AI learns to recognize when tools are appropriate
-- Tool calls use consistent format: <|tool_call|>function(args)<|tool_end|>
-- Results use format: <|tool_result|>result<|tool_result_end|>
+- Tool calls use consistent format: <tool_call>{"tool": "function", "params": {}}</tool_call>
+- Results use format: <tool_result>{"success": true, "result": "result"}</tool_result>
 - AI should respond naturally after seeing tool results
 - Multiple tools can be chained for complex tasks
 - Always maintain conversational and helpful tone

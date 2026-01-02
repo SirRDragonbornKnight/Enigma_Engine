@@ -229,7 +229,8 @@ class ToolExecutor:
             }
         
         # Check if module is loaded
-        if not self.module_manager.is_loaded(module_name):
+        loaded_modules = self.module_manager.list_loaded()
+        if module_name not in loaded_modules:
             return {
                 "success": False,
                 "error": f"Module '{module_name}' is not loaded. Load it first to use {tool_name}",
@@ -249,6 +250,8 @@ class ToolExecutor:
         # Execute based on tool type
         if tool_name == "generate_image":
             return self._execute_generate_image(module, params)
+        elif tool_name == "generate_gif":
+            return self._execute_generate_gif(module, params)
         elif tool_name == "analyze_image":
             return self._execute_analyze_image(module, params)
         elif tool_name == "control_avatar":
@@ -270,6 +273,25 @@ class ToolExecutor:
     
     def _execute_builtin_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a built-in tool (doesn't require module)."""
+        # Handle module management tools
+        if tool_name == "load_module":
+            return self._execute_load_module(params)
+        elif tool_name == "unload_module":
+            return self._execute_unload_module(params)
+        elif tool_name == "list_modules":
+            return self._execute_list_modules(params)
+        elif tool_name == "check_resources":
+            return self._execute_check_resources(params)
+        
+        # Handle editing tools directly
+        elif tool_name == "edit_image":
+            return self._execute_edit_image(params)
+        elif tool_name == "edit_gif":
+            return self._execute_edit_gif(params)
+        elif tool_name == "edit_video":
+            return self._execute_edit_video(params)
+        
+        # For other builtin tools, use registry
         registry = self._get_tool_registry()
         
         if not registry:
@@ -527,6 +549,717 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "generate_audio",
+            }
+    
+    def _execute_generate_gif(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute GIF generation by creating multiple image frames."""
+        try:
+            from pathlib import Path
+            from PIL import Image
+            import os
+            
+            frames_prompts = params.get("frames", [])
+            fps = params.get("fps", 5)
+            loop = params.get("loop", 0)
+            width = params.get("width", 512)
+            height = params.get("height", 512)
+            
+            if not frames_prompts or len(frames_prompts) == 0:
+                return {
+                    "success": False,
+                    "error": "No frame prompts provided",
+                    "tool": "generate_gif",
+                }
+            
+            # Generate each frame as an image
+            frame_images = []
+            
+            for i, prompt in enumerate(frames_prompts):
+                logger.info(f"Generating frame {i+1}/{len(frames_prompts)}: {prompt}")
+                
+                # Call module's generate method for each frame
+                if hasattr(module, "generate"):
+                    result = module.generate(prompt=prompt, width=width, height=height)
+                elif hasattr(module, "_instance") and hasattr(module._instance, "generate"):
+                    result = module._instance.generate(prompt=prompt, width=width, height=height)
+                else:
+                    return {
+                        "success": False,
+                        "error": "Image generation module does not have generate() method",
+                        "tool": "generate_gif",
+                    }
+                
+                # Open the generated image
+                if isinstance(result, str) or isinstance(result, Path):
+                    img = Image.open(result)
+                elif hasattr(result, 'images') and len(result.images) > 0:
+                    img = result.images[0]
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Could not get image from frame {i+1}",
+                        "tool": "generate_gif",
+                    }
+                
+                # Ensure consistent size
+                if img.size != (width, height):
+                    img = img.resize((width, height), Image.Resampling.LANCZOS)
+                
+                frame_images.append(img)
+            
+            # Create output directory if needed
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Generate filename
+            import time
+            timestamp = int(time.time())
+            output_path = output_dir / f"animated_{timestamp}.gif"
+            
+            # Calculate duration per frame (in milliseconds)
+            duration_ms = int(1000 / fps) if fps > 0 else 200
+            
+            # Save as animated GIF
+            frame_images[0].save(
+                output_path,
+                save_all=True,
+                append_images=frame_images[1:],
+                duration=duration_ms,
+                loop=loop,
+                optimize=False
+            )
+            
+            return {
+                "success": True,
+                "result": f"GIF generated successfully with {len(frame_images)} frames",
+                "tool": "generate_gif",
+                "output_path": str(output_path),
+                "frames": len(frame_images),
+                "fps": fps,
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error generating GIF: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "generate_gif",
+            }
+    
+    def _execute_edit_image(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute image editing operations."""
+        try:
+            from pathlib import Path
+            from PIL import Image, ImageEnhance, ImageFilter
+            import os
+            
+            image_path = params.get("image_path", "")
+            edit_type = params.get("edit_type", "")
+            
+            if not os.path.exists(image_path):
+                return {
+                    "success": False,
+                    "error": f"Image file not found: {image_path}",
+                    "tool": "edit_image",
+                }
+            
+            # Open the image
+            img = Image.open(image_path)
+            
+            # Apply the requested edit
+            if edit_type == "resize":
+                width = params.get("width")
+                height = params.get("height")
+                if width and height:
+                    img = img.resize((width, height), Image.Resampling.LANCZOS)
+                else:
+                    return {
+                        "success": False,
+                        "error": "Width and height required for resize",
+                        "tool": "edit_image",
+                    }
+            
+            elif edit_type == "rotate":
+                angle = params.get("angle", 0)
+                img = img.rotate(angle, expand=True)
+            
+            elif edit_type == "flip":
+                direction = params.get("direction", "horizontal")
+                if direction == "horizontal":
+                    img = img.transpose(Image.FLIP_LEFT_RIGHT)
+                elif direction == "vertical":
+                    img = img.transpose(Image.FLIP_TOP_BOTTOM)
+            
+            elif edit_type == "brightness":
+                factor = params.get("factor", 1.0)
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(factor)
+            
+            elif edit_type == "contrast":
+                factor = params.get("factor", 1.0)
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(factor)
+            
+            elif edit_type == "blur":
+                img = img.filter(ImageFilter.BLUR)
+            
+            elif edit_type == "sharpen":
+                img = img.filter(ImageFilter.SHARPEN)
+            
+            elif edit_type == "grayscale":
+                img = img.convert("L")
+            
+            elif edit_type == "crop":
+                crop_box = params.get("crop_box")
+                if crop_box and len(crop_box) == 4:
+                    img = img.crop(tuple(crop_box))
+                else:
+                    return {
+                        "success": False,
+                        "error": "Crop box [left, top, right, bottom] required for crop",
+                        "tool": "edit_image",
+                    }
+            
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown edit type: {edit_type}",
+                    "tool": "edit_image",
+                }
+            
+            # Save edited image
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            import time
+            timestamp = int(time.time())
+            input_name = Path(image_path).stem
+            output_path = output_dir / f"{input_name}_edited_{timestamp}.png"
+            
+            img.save(output_path)
+            
+            return {
+                "success": True,
+                "result": f"Image edited successfully: {edit_type}",
+                "tool": "edit_image",
+                "output_path": str(output_path),
+                "edit_type": edit_type,
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error editing image: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "edit_image",
+            }
+    
+    def _execute_edit_gif(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute GIF editing operations."""
+        try:
+            from pathlib import Path
+            from PIL import Image
+            import os
+            
+            gif_path = params.get("gif_path", "")
+            edit_type = params.get("edit_type", "")
+            
+            if not os.path.exists(gif_path):
+                return {
+                    "success": False,
+                    "error": f"GIF file not found: {gif_path}",
+                    "tool": "edit_gif",
+                }
+            
+            # Open the GIF and extract frames
+            gif = Image.open(gif_path)
+            frames = []
+            durations = []
+            
+            try:
+                while True:
+                    frames.append(gif.copy())
+                    durations.append(gif.info.get('duration', 100))
+                    gif.seek(gif.tell() + 1)
+            except EOFError:
+                pass
+            
+            if not frames:
+                return {
+                    "success": False,
+                    "error": "No frames found in GIF",
+                    "tool": "edit_gif",
+                }
+            
+            # Apply the requested edit
+            if edit_type == "reverse":
+                frames = frames[::-1]
+                durations = durations[::-1]
+            
+            elif edit_type == "speed":
+                speed_factor = params.get("speed_factor", 1.0)
+                durations = [int(d / speed_factor) for d in durations]
+            
+            elif edit_type == "resize":
+                width = params.get("width")
+                height = params.get("height")
+                if width and height:
+                    frames = [f.resize((width, height), Image.Resampling.LANCZOS) for f in frames]
+                else:
+                    return {
+                        "success": False,
+                        "error": "Width and height required for resize",
+                        "tool": "edit_gif",
+                    }
+            
+            elif edit_type == "crop":
+                crop_box = params.get("crop_box")
+                if crop_box and len(crop_box) == 4:
+                    frames = [f.crop(tuple(crop_box)) for f in frames]
+                else:
+                    return {
+                        "success": False,
+                        "error": "Crop box [left, top, right, bottom] required for crop",
+                        "tool": "edit_gif",
+                    }
+            
+            elif edit_type == "extract_frames":
+                # Save individual frames
+                from ..config import CONFIG
+                output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                import time
+                timestamp = int(time.time())
+                frame_paths = []
+                
+                for i, frame in enumerate(frames):
+                    frame_path = output_dir / f"frame_{timestamp}_{i:04d}.png"
+                    frame.save(frame_path)
+                    frame_paths.append(str(frame_path))
+                
+                return {
+                    "success": True,
+                    "result": f"Extracted {len(frames)} frames from GIF",
+                    "tool": "edit_gif",
+                    "frame_paths": frame_paths,
+                    "frame_count": len(frames),
+                }
+            
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown edit type: {edit_type}",
+                    "tool": "edit_gif",
+                }
+            
+            # Save edited GIF
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            import time
+            timestamp = int(time.time())
+            input_name = Path(gif_path).stem
+            output_path = output_dir / f"{input_name}_edited_{timestamp}.gif"
+            
+            # Get original loop setting
+            loop = gif.info.get('loop', 0)
+            
+            # Save the edited GIF
+            frames[0].save(
+                output_path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=durations,
+                loop=loop,
+                optimize=False
+            )
+            
+            return {
+                "success": True,
+                "result": f"GIF edited successfully: {edit_type}",
+                "tool": "edit_gif",
+                "output_path": str(output_path),
+                "edit_type": edit_type,
+                "frame_count": len(frames),
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error editing GIF: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "edit_gif",
+            }
+    
+    def _execute_edit_video(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute video editing operations."""
+        try:
+            from pathlib import Path
+            import os
+            
+            video_path = params.get("video_path", "")
+            edit_type = params.get("edit_type", "")
+            
+            if not os.path.exists(video_path):
+                return {
+                    "success": False,
+                    "error": f"Video file not found: {video_path}",
+                    "tool": "edit_video",
+                }
+            
+            # Try to import moviepy
+            try:
+                from moviepy.editor import VideoFileClip
+            except ImportError:
+                return {
+                    "success": False,
+                    "error": "MoviePy not installed. Install with: pip install moviepy",
+                    "tool": "edit_video",
+                }
+            
+            # Load video
+            video = VideoFileClip(video_path)
+            
+            # Apply the requested edit
+            if edit_type == "trim":
+                start_time = params.get("start_time", 0.0)
+                end_time = params.get("end_time", video.duration)
+                video = video.subclip(start_time, end_time)
+            
+            elif edit_type == "speed":
+                speed_factor = params.get("speed_factor", 1.0)
+                video = video.speedx(speed_factor)
+            
+            elif edit_type == "resize":
+                width = params.get("width")
+                height = params.get("height")
+                if width and height:
+                    video = video.resize((width, height))
+                else:
+                    return {
+                        "success": False,
+                        "error": "Width and height required for resize",
+                        "tool": "edit_video",
+                    }
+            
+            elif edit_type == "to_gif":
+                # Convert video to GIF
+                from ..config import CONFIG
+                output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                import time
+                timestamp = int(time.time())
+                input_name = Path(video_path).stem
+                output_path = output_dir / f"{input_name}_converted_{timestamp}.gif"
+                
+                fps = params.get("fps", 10)
+                video.write_gif(str(output_path), fps=fps)
+                video.close()
+                
+                return {
+                    "success": True,
+                    "result": f"Video converted to GIF successfully",
+                    "tool": "edit_video",
+                    "output_path": str(output_path),
+                    "edit_type": edit_type,
+                }
+            
+            elif edit_type == "extract_frames":
+                # Extract frames from video
+                from ..config import CONFIG
+                output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                import time
+                timestamp = int(time.time())
+                fps = params.get("fps", 1)
+                
+                frame_paths = []
+                for i, frame in enumerate(video.iter_frames(fps=fps)):
+                    from PIL import Image
+                    frame_path = output_dir / f"video_frame_{timestamp}_{i:04d}.png"
+                    img = Image.fromarray(frame)
+                    img.save(frame_path)
+                    frame_paths.append(str(frame_path))
+                
+                video.close()
+                
+                return {
+                    "success": True,
+                    "result": f"Extracted {len(frame_paths)} frames from video",
+                    "tool": "edit_video",
+                    "frame_paths": frame_paths,
+                    "frame_count": len(frame_paths),
+                }
+            
+            else:
+                video.close()
+                return {
+                    "success": False,
+                    "error": f"Unknown edit type: {edit_type}",
+                    "tool": "edit_video",
+                }
+            
+            # Save edited video
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs"))
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            import time
+            timestamp = int(time.time())
+            input_name = Path(video_path).stem
+            output_path = output_dir / f"{input_name}_edited_{timestamp}.mp4"
+            
+            video.write_videofile(str(output_path), codec='libx264', audio_codec='aac')
+            video.close()
+            
+            return {
+                "success": True,
+                "result": f"Video edited successfully: {edit_type}",
+                "tool": "edit_video",
+                "output_path": str(output_path),
+                "edit_type": edit_type,
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error editing video: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "edit_video",
+            }
+    
+    def _execute_load_module(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Load/enable a module."""
+        try:
+            module_id = params.get("module_id", "")
+            
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available. Cannot load modules.",
+                    "tool": "load_module",
+                }
+            
+            # Check if already loaded
+            loaded = self.module_manager.list_loaded()
+            if module_id in loaded:
+                return {
+                    "success": True,
+                    "result": f"Module '{module_id}' is already loaded",
+                    "tool": "load_module",
+                    "already_loaded": True,
+                }
+            
+            # Try to load
+            success = self.module_manager.load(module_id)
+            
+            if success:
+                return {
+                    "success": True,
+                    "result": f"Successfully loaded module '{module_id}'",
+                    "tool": "load_module",
+                    "module_id": module_id,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to load module '{module_id}'. Check dependencies and requirements.",
+                    "tool": "load_module",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error loading module: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "load_module",
+            }
+    
+    def _execute_unload_module(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Unload/disable a module."""
+        try:
+            module_id = params.get("module_id", "")
+            
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available. Cannot unload modules.",
+                    "tool": "unload_module",
+                }
+            
+            # Check if loaded
+            loaded = self.module_manager.list_loaded()
+            if module_id not in loaded:
+                return {
+                    "success": True,
+                    "result": f"Module '{module_id}' is not loaded (already unloaded)",
+                    "tool": "unload_module",
+                    "already_unloaded": True,
+                }
+            
+            # Try to unload
+            success = self.module_manager.unload(module_id)
+            
+            if success:
+                return {
+                    "success": True,
+                    "result": f"Successfully unloaded module '{module_id}'",
+                    "tool": "unload_module",
+                    "module_id": module_id,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to unload module '{module_id}'",
+                    "tool": "unload_module",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error unloading module: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "unload_module",
+            }
+    
+    def _execute_list_modules(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List all modules and their status."""
+        try:
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available",
+                    "tool": "list_modules",
+                }
+            
+            status = self.module_manager.get_status()
+            loaded_ids = set(self.module_manager.list_loaded())
+            
+            # Get all registered modules
+            from enigma.modules.registry import MODULE_REGISTRY
+            
+            modules_info = []
+            for mod_id, mod_class in MODULE_REGISTRY.items():
+                info = mod_class.INFO
+                modules_info.append({
+                    "id": mod_id,
+                    "name": info.name,
+                    "category": info.category.value,
+                    "loaded": mod_id in loaded_ids,
+                    "description": info.description,
+                    "requires_gpu": info.requires_gpu,
+                    "is_cloud": info.is_cloud_service,
+                })
+            
+            # Organize by category
+            by_category = {}
+            for mod in modules_info:
+                cat = mod["category"]
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(mod)
+            
+            result_text = f"Total modules: {len(modules_info)} ({len(loaded_ids)} loaded)\n\n"
+            
+            for category, mods in sorted(by_category.items()):
+                result_text += f"{category.upper()}:\n"
+                for mod in mods:
+                    status_icon = "✓" if mod["loaded"] else "○"
+                    result_text += f"  {status_icon} {mod['id']} - {mod['name']}\n"
+                result_text += "\n"
+            
+            return {
+                "success": True,
+                "result": result_text.strip(),
+                "tool": "list_modules",
+                "modules": modules_info,
+                "loaded_count": len(loaded_ids),
+                "total_count": len(modules_info),
+                "by_category": by_category,
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error listing modules: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "list_modules",
+            }
+    
+    def _execute_check_resources(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Check current system resources and get recommendations."""
+        try:
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available",
+                    "tool": "check_resources",
+                }
+            
+            # Get resource usage
+            usage = self.module_manager.get_resource_usage()
+            
+            # Build human-readable summary
+            result_text = f"Resource Usage Report\n"
+            result_text += f"{'='*50}\n\n"
+            
+            # Modules
+            result_text += f"Modules Loaded: {usage['modules_loaded']}/{usage['modules_registered']}\n\n"
+            
+            # Memory
+            if 'memory' in usage and 'rss_mb' in usage['memory']:
+                mem = usage['memory']
+                result_text += f"Memory:\n"
+                result_text += f"  Process: {mem['rss_mb']:.1f} MB\n"
+                result_text += f"  System: {mem['system_used_percent']:.1f}% used\n"
+                result_text += f"  Available: {mem['system_available_mb']:.1f} MB\n\n"
+            
+            # GPU
+            if 'gpu' in usage and usage['gpu'].get('available'):
+                gpu = usage['gpu']
+                result_text += f"GPU ({gpu.get('device_name', 'Unknown')}):\n"
+                result_text += f"  Allocated: {gpu['allocated_mb']:.1f} MB\n"
+                result_text += f"  Used: {gpu['used_percent']:.1f}%\n\n"
+            else:
+                result_text += "GPU: Not available\n\n"
+            
+            # Assessment
+            if 'assessment' in usage:
+                assess = usage['assessment']
+                status_emoji = {"good": "✓", "warning": "⚠", "critical": "✗"}
+                result_text += f"Status: {status_emoji.get(assess['status'], '?')} {assess['status'].upper()}\n\n"
+                
+                if assess['warnings']:
+                    result_text += "Warnings:\n"
+                    for warn in assess['warnings']:
+                        result_text += f"  ⚠ {warn}\n"
+                    result_text += "\n"
+                
+                if assess['recommendations']:
+                    result_text += "Recommendations:\n"
+                    for rec in assess['recommendations']:
+                        result_text += f"  → {rec}\n"
+            
+            return {
+                "success": True,
+                "result": result_text.strip(),
+                "tool": "check_resources",
+                "usage": usage,
+                "status": usage.get('assessment', {}).get('status', 'unknown'),
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error checking resources: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "check_resources",
             }
     
     def format_tool_result(self, result: Dict[str, Any]) -> str:
