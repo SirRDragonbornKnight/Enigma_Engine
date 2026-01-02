@@ -226,7 +226,11 @@ def _apply_theme(parent):
             if main_window:
                 main_window.setStyleSheet(stylesheet)
     except ImportError:
-        QMessageBox.warning(parent, "Error", "Theme system not available")
+        QMessageBox.warning(
+            parent, "Theme Error",
+            "Theme system module (theme_system) not found.\n\n"
+            "Please ensure the enigma.gui.theme_system module is properly installed."
+        )
     except Exception as e:
         QMessageBox.warning(parent, "Error", f"Failed to apply theme: {e}")
 

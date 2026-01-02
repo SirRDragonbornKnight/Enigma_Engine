@@ -195,7 +195,7 @@ class TriggerPhraseDetector:
             try:
                 # Listen for speech
                 text = self._stt_module.transcribe_from_mic(
-                    timeout=int(self.config.listen_duration)
+                    timeout=round(self.config.listen_duration)
                 )
                 
                 if text:
@@ -271,8 +271,8 @@ class TriggerPhraseDetector:
     def _speak_confirmation(self):
         """Speak the confirmation phrase."""
         try:
-            from . import tts_simple
-            tts_simple.speak(self.config.confirmation_phrase)
+            from .tts_simple import speak
+            speak(self.config.confirmation_phrase)
         except ImportError:
             pass  # TTS not available
         except Exception as e:
@@ -292,7 +292,7 @@ class TriggerPhraseDetector:
             return None
         
         try:
-            text = self._stt_module.transcribe_from_mic(timeout=int(timeout))
+            text = self._stt_module.transcribe_from_mic(timeout=round(timeout))
             if text:
                 return self._check_phrases(text.lower().strip())
         except Exception as e:
