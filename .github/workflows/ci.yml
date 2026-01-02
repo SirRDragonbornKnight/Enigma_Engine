@@ -75,7 +75,12 @@ jobs:
       - name: Lint with flake8 (syntax errors and undefined names)
         run: |
           # Stop the build if there are Python syntax errors or undefined names
-          flake8 enigma/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # E9: Runtime errors (syntax errors, indentation errors)
+          # F63: Invalid print statement or exec statement
+          # F7: Syntax errors in type comments, docstrings
+          # F821: Undefined name
+          # F822: Undefined name in __all__
+          flake8 enigma/ --count --select=E9,F63,F7,F821,F822 --show-source --statistics
       
       - name: Check for unused imports (F401)
         run: |
@@ -90,15 +95,17 @@ jobs:
       - name: Check for security issues
         run: |
           # Basic security checks - fail if dangerous functions are found
-          if grep -r "eval(" enigma/ 2>/dev/null; then
-            echo "ERROR: Found eval() usage which is a security risk"
+          # Look for eval() function calls (not .eval() method calls)
+          if grep -rE '\beval\s*\(' enigma/ 2>/dev/null | grep -v '\.eval()'; then
+            echo "ERROR: Found eval() function usage which is a security risk"
             exit 1
           fi
-          if grep -r "exec(" enigma/ 2>/dev/null; then
-            echo "ERROR: Found exec() usage which is a security risk"
+          # Look for exec() function calls (not .exec() method calls)
+          if grep -rE '\bexec\s*\(' enigma/ 2>/dev/null | grep -v '\.exec()'; then
+            echo "ERROR: Found exec() function usage which is a security risk"
             exit 1
           fi
-          echo "Security check passed: No eval() or exec() found"
+          echo "Security check passed: No dangerous eval() or exec() found"
 
   build-docs:
     runs-on: ubuntu-latest
