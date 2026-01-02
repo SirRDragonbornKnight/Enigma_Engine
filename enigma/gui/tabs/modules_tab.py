@@ -12,7 +12,7 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
         QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
         QLineEdit, QProgressBar, QMessageBox, QSplitter,
-        QTextEdit
+        QTextEdit, QSizePolicy
     )
     from PyQt5.QtCore import Qt, QTimer
     from PyQt5.QtGui import QFont
@@ -59,8 +59,10 @@ class ModuleCard(QFrame):
     def setup_ui(self):
         self.setFrameStyle(QFrame.Box | QFrame.Raised)
         self.setLineWidth(1)
-        self.setMinimumWidth(280)
-        self.setMaximumWidth(350)
+        self.setMinimumWidth(200)
+        self.setMinimumHeight(100)
+        # Allow cards to expand with window
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         
         category = self.module_info.get('category', 'extension').lower()
         style = CATEGORY_STYLES.get(category, CATEGORY_STYLES['extension'])
@@ -294,15 +296,17 @@ class ModulesTab(QWidget):
         
         # Main content - splitter
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)  # Prevent panels from being hidden
         
         # Left: Modules organized by category
         left_widget = QWidget()
+        left_widget.setMinimumWidth(400)  # Minimum width to prevent collapse
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
         self.modules_widget = QWidget()
         self.modules_layout = QVBoxLayout(self.modules_widget)
@@ -315,6 +319,7 @@ class ModulesTab(QWidget):
         
         # Right: Status panel
         right_widget = QWidget()
+        right_widget.setMinimumWidth(200)  # Minimum width to prevent collapse
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
         
@@ -348,6 +353,11 @@ class ModulesTab(QWidget):
         self.log_text.setFont(QFont('Consolas', 9))
         self.log_text.setMaximumHeight(200)
         log_layout.addWidget(self.log_text)
+        
+        # Clear activity button
+        self.clear_log_btn = QPushButton("🗑️ Clear Activity")
+        self.clear_log_btn.clicked.connect(self.clear_activity_log)
+        log_layout.addWidget(self.clear_log_btn)
         
         right_layout.addWidget(log_group)
         
@@ -669,6 +679,11 @@ class ModulesTab(QWidget):
         from datetime import datetime
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.log_text.append(f"[{timestamp}] {message}")
+    
+    def clear_activity_log(self):
+        """Clear the activity log."""
+        self.log_text.clear()
+        self.log("Activity log cleared")
 
 
 if not HAS_PYQT:
