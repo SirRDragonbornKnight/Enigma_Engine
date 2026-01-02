@@ -8,31 +8,48 @@ try:
         QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QTextEdit
     )
     from PyQt5.QtCore import Qt, pyqtSignal
-    from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush
+    from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 
-# Model tier colors
+# Model tier colors - softer, more modern palette
 TIER_COLORS = {
-    'embedded': '#e74c3c',    # Red - tiny/constrained
-    'edge': '#e67e22',        # Orange - RPi/mobile
-    'consumer': '#f1c40f',    # Yellow - typical GPU
-    'prosumer': '#2ecc71',    # Green - high-end GPU
-    'server': '#3498db',      # Blue - multi-GPU
-    'datacenter': '#9b59b6',  # Purple - cloud
-    'ultimate': '#1abc9c',    # Teal - maximum
+    'embedded': '#ff6b6b',    # Coral red
+    'edge': '#ffa94d',        # Orange
+    'consumer': '#ffd43b',    # Yellow
+    'prosumer': '#69db7c',    # Green
+    'server': '#74c0fc',      # Light blue
+    'datacenter': '#b197fc',  # Purple
+    'ultimate': '#63e6be',    # Teal
+}
+
+TIER_BG_COLORS = {
+    'embedded': '#ff6b6b22',
+    'edge': '#ffa94d22',
+    'consumer': '#ffd43b22',
+    'prosumer': '#69db7c22',
+    'server': '#74c0fc22',
+    'datacenter': '#b197fc22',
+    'ultimate': '#63e6be22',
 }
 
 
 class ModelScaleWidget(QFrame):
-    """Visual representation of model scale."""
+    """Visual representation of model scale - improved design."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(200)
-        self.setStyleSheet("background-color: #1e1e2e; border-radius: 10px;")
+        self.setMinimumHeight(180)
+        self.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #1a1a2e, stop:0.5 #16213e, stop:1 #1a1a2e);
+                border-radius: 12px;
+                border: 1px solid #333;
+            }
+        """)
         
         self.models = [
             ('nano', 1, 'embedded'),
@@ -62,18 +79,12 @@ class ModelScaleWidget(QFrame):
         w = self.width()
         h = self.height()
         
-        # Background
-        painter.fillRect(0, 0, w, h, QColor('#1e1e2e'))
-        
-        # Draw scale visualization
-        margin = 40
+        margin = 50
         scale_width = w - 2 * margin
-        bar_height = 30
+        bar_height = 24
+        bar_y = h // 2
         
-        # Draw main scale bar
-        bar_y = h // 2 - bar_height // 2
-        
-        # Draw tier segments
+        # Draw tier segments with rounded ends
         tier_positions = [0, 0.1, 0.2, 0.35, 0.5, 0.7, 0.85, 1.0]
         tier_names = ['Embedded', 'Edge', 'Consumer', 'Prosumer', 'Server', 'Datacenter', 'Ultimate']
         tier_color_keys = ['embedded', 'edge', 'consumer', 'prosumer', 'server', 'datacenter', 'ultimate']
@@ -83,45 +94,59 @@ class ModelScaleWidget(QFrame):
             x2 = margin + int(tier_positions[i + 1] * scale_width)
             color = QColor(TIER_COLORS[tier_color_keys[i]])
             
-            painter.fillRect(x1, bar_y, x2 - x1, bar_height, color)
+            # Draw segment
+            painter.setBrush(QBrush(color))
+            painter.setPen(Qt.NoPen)
             
-            # Tier label
-            painter.setPen(QPen(QColor('white')))
-            painter.setFont(QFont('Arial', 8))
-            painter.drawText(x1 + 5, bar_y + bar_height + 15, tier_names[i])
+            if i == 0:  # First segment - rounded left
+                painter.drawRoundedRect(x1, bar_y, x2 - x1 + 5, bar_height, 6, 6)
+            elif i == len(tier_positions) - 2:  # Last segment - rounded right
+                painter.drawRoundedRect(x1 - 5, bar_y, x2 - x1 + 5, bar_height, 6, 6)
+            else:
+                painter.fillRect(x1, bar_y, x2 - x1, bar_height, color)
+            
+            # Tier label below
+            painter.setPen(QPen(QColor('#888')))
+            painter.setFont(QFont('Segoe UI', 8))
+            text_width = painter.fontMetrics().horizontalAdvance(tier_names[i])
+            text_x = x1 + (x2 - x1 - text_width) // 2
+            painter.drawText(text_x, bar_y + bar_height + 18, tier_names[i])
         
         # Draw model markers
         for i, (name, size, tier) in enumerate(self.models):
-            # Calculate position based on log scale
             import math
-            log_pos = math.log10(size) / math.log10(100000)  # Normalize to 0-1
+            log_pos = math.log10(size) / math.log10(100000)
             x = margin + int(log_pos * scale_width)
             
-            # Draw marker
-            marker_y = bar_y - 10
-            marker_size = 8 if name == self.selected_model else 5
+            marker_y = bar_y - 8
+            is_selected = name == self.selected_model
+            marker_size = 14 if is_selected else 8
             
-            color = QColor(TIER_COLORS[tier])
-            if name == self.selected_model:
-                color = QColor('#ffffff')
-            elif name == self.hover_model:
-                color = color.lighter(130)
+            color = QColor('#ffffff') if is_selected else QColor(TIER_COLORS[tier]).lighter(120)
             
+            # Draw marker circle
             painter.setBrush(QBrush(color))
-            painter.setPen(QPen(QColor('white'), 1))
+            painter.setPen(QPen(QColor('#fff'), 2 if is_selected else 1))
             painter.drawEllipse(x - marker_size//2, marker_y - marker_size//2, marker_size, marker_size)
             
-            # Draw label for selected or hovered
-            if name == self.selected_model or name == self.hover_model:
-                painter.setFont(QFont('Arial', 9, QFont.Bold))
-                painter.drawText(x - 20, marker_y - 15, f"{name.upper()}")
-                painter.setFont(QFont('Arial', 8))
-                painter.drawText(x - 20, marker_y - 3, f"~{size}M params")
+            # Draw label for selected model
+            if is_selected:
+                painter.setPen(QPen(QColor('#fff')))
+                painter.setFont(QFont('Segoe UI', 10, QFont.Bold))
+                painter.drawText(x - 30, marker_y - 20, f"{name.upper()}")
+                painter.setFont(QFont('Segoe UI', 8))
+                painter.setPen(QPen(QColor('#aaa')))
+                painter.drawText(x - 30, marker_y - 6, f"~{size}M")
         
         # Title
-        painter.setPen(QPen(QColor('#cdd6f4')))
-        painter.setFont(QFont('Arial', 12, QFont.Bold))
-        painter.drawText(margin, 25, "Model Scale Spectrum")
+        painter.setPen(QPen(QColor('#fff')))
+        painter.setFont(QFont('Segoe UI', 13, QFont.Bold))
+        painter.drawText(margin, 28, "Model Scale Spectrum")
+        
+        # Subtitle
+        painter.setPen(QPen(QColor('#888')))
+        painter.setFont(QFont('Segoe UI', 9))
+        painter.drawText(margin, 45, "Click a card below to select a model size")
         
         painter.end()
     
@@ -133,7 +158,7 @@ class ModelScaleWidget(QFrame):
 class ScalingTab(QWidget):
     """Tab for understanding and configuring model scaling."""
     
-    model_changed = pyqtSignal(str)  # Emitted when model size changes
+    model_changed = pyqtSignal(str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -141,47 +166,54 @@ class ScalingTab(QWidget):
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        
-        # Title
-        title = QLabel("Model Scaling")
-        title.setFont(QFont('Arial', 16, QFont.Bold))
-        title.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(title)
-        
-        subtitle = QLabel("From Raspberry Pi to Datacenter - Enigma scales with your hardware")
-        subtitle.setStyleSheet("color: #aaa; font-size: 12px;")  # Increased subtitle size
-        subtitle.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(subtitle)
+        layout.setSpacing(12)
         
         # Visual scale widget
         self.scale_widget = ModelScaleWidget()
         layout.addWidget(self.scale_widget)
         
-        # Model cards grid
+        # Model cards in scrollable grid
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: #2a2a3e;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #555;
+                border-radius: 5px;
+                min-height: 30px;
+            }
+        """)
         
         grid_widget = QWidget()
         grid_layout = QGridLayout(grid_widget)
-        grid_layout.setSpacing(10)
+        grid_layout.setSpacing(12)
+        grid_layout.setContentsMargins(4, 4, 4, 4)
         
         models = [
-            ('nano', '~1M', 'Embedded', 'Microcontrollers, basic responses', '128', '4', '256'),
-            ('micro', '~2M', 'Embedded', 'IoT devices, simple tasks', '192', '4', '384'),
-            ('tiny', '~5M', 'Edge', 'Raspberry Pi, edge devices', '256', '6', '512'),
-            ('mini', '~10M', 'Edge', 'Mobile, low-power devices', '384', '6', '512'),
-            ('small', '~27M', 'Consumer', 'Entry GPU, good learning', '512', '8', '1024'),
-            ('medium', '~85M', 'Consumer', 'Mid-range GPU, solid results', '768', '12', '2048'),
-            ('base', '~125M', 'Consumer', 'Good GPU, versatile', '896', '14', '2048'),
-            ('large', '~200M', 'Prosumer', 'RTX 3080+, high quality', '1024', '16', '4096'),
-            ('xl', '~600M', 'Prosumer', 'RTX 4090, excellent results', '1536', '24', '4096'),
-            ('xxl', '~1.5B', 'Server', 'Multi-GPU, near-production', '2048', '32', '8192'),
-            ('huge', '~3B', 'Server', 'Server GPU, production ready', '2560', '40', '8192'),
-            ('giant', '~7B', 'Datacenter', 'Multi-node, commercial grade', '4096', '32', '8192'),
-            ('colossal', '~13B', 'Datacenter', 'Distributed, competitive', '4096', '48', '16384'),
-            ('titan', '~30B', 'Ultimate', 'Full datacenter, state-of-art', '6144', '48', '16384'),
-            ('omega', '~70B+', 'Ultimate', 'Cluster, research frontier', '8192', '64', '32768'),
+            ('nano', '~1M', 'Embedded', 'Microcontrollers', '128', '4', '256'),
+            ('micro', '~2M', 'Embedded', 'IoT devices', '192', '4', '384'),
+            ('tiny', '~5M', 'Edge', 'Raspberry Pi', '256', '6', '512'),
+            ('mini', '~10M', 'Edge', 'Mobile devices', '384', '6', '512'),
+            ('small', '~27M', 'Consumer', 'Entry GPU', '512', '8', '1024'),
+            ('medium', '~85M', 'Consumer', 'Mid-range GPU', '768', '12', '2048'),
+            ('base', '~125M', 'Consumer', 'Good GPU', '896', '14', '2048'),
+            ('large', '~200M', 'Prosumer', 'RTX 3080+', '1024', '16', '4096'),
+            ('xl', '~600M', 'Prosumer', 'RTX 4090', '1536', '24', '4096'),
+            ('xxl', '~1.5B', 'Server', 'Multi-GPU', '2048', '32', '8192'),
+            ('huge', '~3B', 'Server', 'Server GPU', '2560', '40', '8192'),
+            ('giant', '~7B', 'Datacenter', 'Multi-node', '4096', '32', '8192'),
+            ('colossal', '~13B', 'Datacenter', 'Distributed', '4096', '48', '16384'),
+            ('titan', '~30B', 'Ultimate', 'Full datacenter', '6144', '48', '16384'),
+            ('omega', '~70B+', 'Ultimate', 'Research frontier', '8192', '64', '32768'),
         ]
         
         row, col = 0, 0
@@ -191,94 +223,122 @@ class ScalingTab(QWidget):
             card = self._create_model_card(name, params, tier, desc, dim, layers, seq_len)
             grid_layout.addWidget(card, row, col)
             col += 1
-            if col >= 3:
+            if col >= 5:  # 5 columns for better fit
                 col = 0
                 row += 1
         
         scroll.setWidget(grid_widget)
         layout.addWidget(scroll, stretch=1)
         
-        # Hardware requirements section
-        hw_group = QGroupBox("Hardware Recommendations")
-        hw_layout = QVBoxLayout(hw_group)
+        # Bottom bar with selection info and apply button
+        bottom_bar = QFrame()
+        bottom_bar.setStyleSheet("""
+            QFrame {
+                background: #1e1e2e;
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
+        bottom_layout = QHBoxLayout(bottom_bar)
         
-        self.hw_label = QTextEdit()
-        self.hw_label.setReadOnly(True)
-        self.hw_label.setMaximumHeight(100)
-        self.hw_label.setHtml(self._get_hw_requirements('small'))
-        hw_layout.addWidget(self.hw_label)
+        self.current_label = QLabel("Selected: SMALL (~27M params)")
+        self.current_label.setFont(QFont('Segoe UI', 11, QFont.Bold))
+        self.current_label.setStyleSheet("color: #69db7c;")
+        bottom_layout.addWidget(self.current_label)
         
-        layout.addWidget(hw_group)
+        # Hardware info inline
+        self.hw_inline = QLabel("RAM: 4GB • VRAM: 2GB • Laptop/Entry GPU")
+        self.hw_inline.setStyleSheet("color: #888; font-size: 10px;")
+        bottom_layout.addWidget(self.hw_inline)
         
-        # Actions
-        actions = QHBoxLayout()
+        bottom_layout.addStretch()
         
-        self.current_label = QLabel("Current Model: small (~27M params)")
-        self.current_label.setFont(QFont('Arial', 11, QFont.Bold))  # Increased from 10
-        self.current_label.setStyleSheet("color: #cdd6f4;")  # Better contrast
-        self.current_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        actions.addWidget(self.current_label)
-        
-        actions.addStretch()
-        
-        self.apply_btn = QPushButton("Apply Model Size")
+        self.apply_btn = QPushButton("✓ Apply Model Size")
+        self.apply_btn.setStyleSheet("""
+            QPushButton {
+                background: #69db7c;
+                color: #1e1e2e;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background: #8ce99a;
+            }
+        """)
         self.apply_btn.clicked.connect(self._apply_model)
-        actions.addWidget(self.apply_btn)
+        bottom_layout.addWidget(self.apply_btn)
         
-        layout.addLayout(actions)
+        layout.addWidget(bottom_bar)
     
     def _create_model_card(self, name: str, params: str, tier: str, desc: str, 
                           dim: str, layers: str, seq_len: str) -> QFrame:
         card = QFrame()
-        card.setFrameStyle(QFrame.Box | QFrame.Raised)
-        card.setLineWidth(1)
+        card.setFixedSize(160, 120)
         
         tier_lower = tier.lower()
         color = TIER_COLORS.get(tier_lower, '#666')
+        bg_color = TIER_BG_COLORS.get(tier_lower, '#66666622')
+        
         card.setStyleSheet(f"""
             QFrame {{
-                border: 2px solid {color};
-                border-radius: 8px;
-                padding: 10px;
+                background: {bg_color};
+                border: 2px solid {color}55;
+                border-radius: 10px;
             }}
             QFrame:hover {{
-                border: 2px solid white;
-                background-color: {color}33;
+                border: 2px solid {color};
+                background: {bg_color.replace('22', '44')};
             }}
         """)
         
         layout = QVBoxLayout(card)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
         
-        # Header
+        # Model name and params on same line
         header = QHBoxLayout()
         name_label = QLabel(name.upper())
-        name_label.setFont(QFont('Arial', 13, QFont.Bold))  # Increased from 12
+        name_label.setFont(QFont('Segoe UI', 11, QFont.Bold))
         name_label.setStyleSheet(f"color: {color};")
-        name_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         header.addWidget(name_label)
         
         params_label = QLabel(params)
-        params_label.setStyleSheet("color: #aaa; font-size: 11px;")  # Increased contrast and size
-        params_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        params_label.setStyleSheet("color: #888; font-size: 9px;")
+        header.addStretch()
         header.addWidget(params_label)
-        
         layout.addLayout(header)
         
         # Description
         desc_label = QLabel(desc)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("font-size: 11px; color: #cdd6f4;")  # Increased size, better contrast
-        desc_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        desc_label.setStyleSheet("color: #ccc; font-size: 9px;")
         layout.addWidget(desc_label)
         
-        # Specs
-        specs = QLabel(f"dim={dim} • layers={layers} • seq={seq_len}")
-        specs.setStyleSheet("font-size: 10px; color: #888; font-family: monospace;")  # Increased size
-        specs.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        # Specs in smaller font
+        specs = QLabel(f"d{dim} • L{layers}")
+        specs.setStyleSheet("color: #666; font-size: 8px; font-family: monospace;")
         layout.addWidget(specs)
+        
+        layout.addStretch()
         
         # Select button
         btn = QPushButton("Select")
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {color};
+                border: 1px solid {color};
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 10px;
+            }}
+            QPushButton:hover {{
+                background: {color};
+                color: #1e1e2e;
+            }}
+        """)
         btn.clicked.connect(lambda: self._select_model(name))
         layout.addWidget(btn)
         
@@ -288,46 +348,84 @@ class ScalingTab(QWidget):
     
     def _select_model(self, name: str):
         self.scale_widget.set_model(name)
-        self.current_label.setText(f"Selected: {name.upper()}")
-        self.hw_label.setHtml(self._get_hw_requirements(name))
+        
+        # Get params for display
+        params_map = {
+            'nano': '~1M', 'micro': '~2M', 'tiny': '~5M', 'mini': '~10M',
+            'small': '~27M', 'medium': '~85M', 'base': '~125M', 'large': '~200M',
+            'xl': '~600M', 'xxl': '~1.5B', 'huge': '~3B', 'giant': '~7B',
+            'colossal': '~13B', 'titan': '~30B', 'omega': '~70B+'
+        }
+        
+        self.current_label.setText(f"Selected: {name.upper()} ({params_map.get(name, '?')} params)")
+        self.hw_inline.setText(self._get_hw_short(name))
         
         # Update button states
         for model_name, btn in self.model_buttons.items():
+            tier = self._get_tier(model_name)
+            color = TIER_COLORS.get(tier, '#666')
+            
             if model_name == name:
-                btn.setStyleSheet("background-color: #2ecc71;")
-                btn.setText("Selected ✓")
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {color};
+                        color: #1e1e2e;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 4px;
+                        font-size: 10px;
+                        font-weight: bold;
+                    }}
+                """)
+                btn.setText("✓ Selected")
             else:
-                btn.setStyleSheet("")
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: transparent;
+                        color: {color};
+                        border: 1px solid {color};
+                        border-radius: 4px;
+                        padding: 4px;
+                        font-size: 10px;
+                    }}
+                    QPushButton:hover {{
+                        background: {color};
+                        color: #1e1e2e;
+                    }}
+                """)
                 btn.setText("Select")
     
-    def _get_hw_requirements(self, model: str) -> str:
-        requirements = {
-            'nano': ('256MB RAM', 'Any CPU', 'None', 'Microcontrollers, Arduino'),
-            'micro': ('512MB RAM', 'Any CPU', 'None', 'IoT, ESP32'),
-            'tiny': ('1GB RAM', 'ARM/x86', 'None', 'Raspberry Pi 3+'),
-            'mini': ('2GB RAM', 'Quad-core', 'None', 'Raspberry Pi 4, Mobile'),
-            'small': ('4GB RAM', 'Modern CPU', '2GB VRAM', 'Laptop, Entry GPU'),
-            'medium': ('8GB RAM', 'i5/Ryzen 5+', '4GB VRAM', 'Desktop, GTX 1650+'),
-            'base': ('12GB RAM', 'i7/Ryzen 7', '6GB VRAM', 'Gaming PC, RTX 3060'),
-            'large': ('16GB RAM', 'i7/Ryzen 7', '8GB VRAM', 'Workstation, RTX 3070+'),
-            'xl': ('32GB RAM', 'High-end CPU', '12GB VRAM', 'Creator PC, RTX 3080+'),
-            'xxl': ('64GB RAM', 'Server CPU', '24GB VRAM', 'Workstation, RTX 4090'),
-            'huge': ('128GB RAM', 'Server/Multi-CPU', '48GB VRAM', 'Server, 2x RTX 4090'),
-            'giant': ('256GB RAM', 'Multi-CPU', '80GB+ VRAM', 'Server, A100/H100'),
-            'colossal': ('512GB RAM', 'Server Cluster', '160GB+ VRAM', 'Multi-node, 2x A100'),
-            'titan': ('1TB RAM', 'HPC Cluster', '320GB+ VRAM', 'Cluster, 4+ A100/H100'),
-            'omega': ('2TB+ RAM', 'Datacenter', '640GB+ VRAM', 'Full rack, 8+ H100'),
+    def _get_tier(self, name: str) -> str:
+        tier_map = {
+            'nano': 'embedded', 'micro': 'embedded',
+            'tiny': 'edge', 'mini': 'edge',
+            'small': 'consumer', 'medium': 'consumer', 'base': 'consumer',
+            'large': 'prosumer', 'xl': 'prosumer',
+            'xxl': 'server', 'huge': 'server',
+            'giant': 'datacenter', 'colossal': 'datacenter',
+            'titan': 'ultimate', 'omega': 'ultimate'
         }
-        
-        if model in requirements:
-            ram, cpu, vram, systems = requirements[model]
-            return f"""
-            <table style='width:100%; color:#cdd6f4;'>
-                <tr><td><b>RAM:</b></td><td>{ram}</td><td><b>CPU:</b></td><td>{cpu}</td></tr>
-                <tr><td><b>VRAM:</b></td><td>{vram}</td><td><b>Typical Systems:</b></td><td>{systems}</td></tr>
-            </table>
-            """
-        return "<p>Unknown model</p>"
+        return tier_map.get(name, 'consumer')
+    
+    def _get_hw_short(self, model: str) -> str:
+        hw = {
+            'nano': 'RAM: 256MB • No GPU • Microcontrollers',
+            'micro': 'RAM: 512MB • No GPU • IoT/ESP32',
+            'tiny': 'RAM: 1GB • No GPU • Raspberry Pi 3+',
+            'mini': 'RAM: 2GB • No GPU • RPi 4/Mobile',
+            'small': 'RAM: 4GB • VRAM: 2GB • Laptop/Entry GPU',
+            'medium': 'RAM: 8GB • VRAM: 4GB • GTX 1650+',
+            'base': 'RAM: 12GB • VRAM: 6GB • RTX 3060',
+            'large': 'RAM: 16GB • VRAM: 8GB • RTX 3070+',
+            'xl': 'RAM: 32GB • VRAM: 12GB • RTX 3080+',
+            'xxl': 'RAM: 64GB • VRAM: 24GB • RTX 4090',
+            'huge': 'RAM: 128GB • VRAM: 48GB • 2x RTX 4090',
+            'giant': 'RAM: 256GB • VRAM: 80GB+ • A100/H100',
+            'colossal': 'RAM: 512GB • VRAM: 160GB+ • 2x A100',
+            'titan': 'RAM: 1TB • VRAM: 320GB+ • 4+ A100/H100',
+            'omega': 'RAM: 2TB+ • VRAM: 640GB+ • 8+ H100',
+        }
+        return hw.get(model, 'Unknown requirements')
     
     def _apply_model(self):
         model = self.scale_widget.selected_model
