@@ -5,8 +5,9 @@ This package provides:
 - Default configuration
 - User configuration loading
 - Environment variable support
+- Config persistence
 """
 
-from .defaults import CONFIG, get_config, update_config
+from .defaults import CONFIG, get_config, update_config, save_config
 
-__all__ = ["CONFIG", "get_config", "update_config"]
+__all__ = ["CONFIG", "get_config", "update_config", "save_config"]

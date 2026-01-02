@@ -32,10 +32,10 @@ CONFIG = {
     # === Model Architecture ===
     "default_model": "enigma",
     "embed_dim": 256,
-    "depth": 6,
-    "num_layers": 6,
-    "heads": 8,
-    "num_heads": 8,
+    "depth": 6,            # Alias: num_layers (for compatibility)
+    "num_layers": 6,       # Alias: depth
+    "heads": 8,            # Alias: num_heads (for compatibility)
+    "num_heads": 8,        # Alias: heads
     "max_len": 2048,
     "ff_mult": 4.0,
     "dropout": 0.0,
@@ -43,11 +43,11 @@ CONFIG = {
 
     # === Training Defaults ===
     "learning_rate": 1e-4,
-    "default_learning_rate": 1e-4,
+    "default_learning_rate": 1e-4,  # Alias for GUI
     "batch_size": 32,
-    "default_batch_size": 32,
+    "default_batch_size": 32,       # Alias for GUI
     "epochs": 10,
-    "default_epochs": 10,
+    "default_epochs": 10,           # Alias for GUI
     "warmup_steps": 100,
     "gradient_accumulation_steps": 1,
     "weight_decay": 0.1,
@@ -69,8 +69,8 @@ CONFIG = {
     "enable_cors": True,
 
     # === Hardware ===
-    "device": "auto",
-    "precision": "float32",
+    "device": "auto",       # "auto", "cpu", "cuda", "mps"
+    "precision": "float32", # "float32", "float16", "bfloat16"
 
     # === Features ===
     "enable_voice": True,
@@ -82,9 +82,9 @@ CONFIG = {
     "max_concurrent_models": 4,
 
     # === Resource Limiting ===
-    "resource_mode": "balanced",
-    "cpu_threads": 0,
-    "memory_limit_mb": 0,
+    "resource_mode": "balanced",  # "minimal", "balanced", "performance"
+    "cpu_threads": 0,             # 0 = auto
+    "memory_limit_mb": 0,         # 0 = no limit
     "gpu_memory_fraction": 0.5,
     "low_priority": False,
 
