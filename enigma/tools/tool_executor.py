@@ -273,8 +273,18 @@ class ToolExecutor:
     
     def _execute_builtin_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a built-in tool (doesn't require module)."""
+        # Handle module management tools
+        if tool_name == "load_module":
+            return self._execute_load_module(params)
+        elif tool_name == "unload_module":
+            return self._execute_unload_module(params)
+        elif tool_name == "list_modules":
+            return self._execute_list_modules(params)
+        elif tool_name == "check_resources":
+            return self._execute_check_resources(params)
+        
         # Handle editing tools directly
-        if tool_name == "edit_image":
+        elif tool_name == "edit_image":
             return self._execute_edit_image(params)
         elif tool_name == "edit_gif":
             return self._execute_edit_gif(params)
@@ -1022,6 +1032,234 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "edit_video",
+            }
+    
+    def _execute_load_module(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Load/enable a module."""
+        try:
+            module_id = params.get("module_id", "")
+            
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available. Cannot load modules.",
+                    "tool": "load_module",
+                }
+            
+            # Check if already loaded
+            loaded = self.module_manager.list_loaded()
+            if module_id in loaded:
+                return {
+                    "success": True,
+                    "result": f"Module '{module_id}' is already loaded",
+                    "tool": "load_module",
+                    "already_loaded": True,
+                }
+            
+            # Try to load
+            success = self.module_manager.load(module_id)
+            
+            if success:
+                return {
+                    "success": True,
+                    "result": f"Successfully loaded module '{module_id}'",
+                    "tool": "load_module",
+                    "module_id": module_id,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to load module '{module_id}'. Check dependencies and requirements.",
+                    "tool": "load_module",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error loading module: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "load_module",
+            }
+    
+    def _execute_unload_module(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Unload/disable a module."""
+        try:
+            module_id = params.get("module_id", "")
+            
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available. Cannot unload modules.",
+                    "tool": "unload_module",
+                }
+            
+            # Check if loaded
+            loaded = self.module_manager.list_loaded()
+            if module_id not in loaded:
+                return {
+                    "success": True,
+                    "result": f"Module '{module_id}' is not loaded (already unloaded)",
+                    "tool": "unload_module",
+                    "already_unloaded": True,
+                }
+            
+            # Try to unload
+            success = self.module_manager.unload(module_id)
+            
+            if success:
+                return {
+                    "success": True,
+                    "result": f"Successfully unloaded module '{module_id}'",
+                    "tool": "unload_module",
+                    "module_id": module_id,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Failed to unload module '{module_id}'",
+                    "tool": "unload_module",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error unloading module: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "unload_module",
+            }
+    
+    def _execute_list_modules(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """List all modules and their status."""
+        try:
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available",
+                    "tool": "list_modules",
+                }
+            
+            status = self.module_manager.get_status()
+            loaded_ids = set(self.module_manager.list_loaded())
+            
+            # Get all registered modules
+            from enigma.modules.registry import MODULE_REGISTRY
+            
+            modules_info = []
+            for mod_id, mod_class in MODULE_REGISTRY.items():
+                info = mod_class.INFO
+                modules_info.append({
+                    "id": mod_id,
+                    "name": info.name,
+                    "category": info.category.value,
+                    "loaded": mod_id in loaded_ids,
+                    "description": info.description,
+                    "requires_gpu": info.requires_gpu,
+                    "is_cloud": info.is_cloud_service,
+                })
+            
+            # Organize by category
+            by_category = {}
+            for mod in modules_info:
+                cat = mod["category"]
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(mod)
+            
+            result_text = f"Total modules: {len(modules_info)} ({len(loaded_ids)} loaded)\n\n"
+            
+            for category, mods in sorted(by_category.items()):
+                result_text += f"{category.upper()}:\n"
+                for mod in mods:
+                    status_icon = "✓" if mod["loaded"] else "○"
+                    result_text += f"  {status_icon} {mod['id']} - {mod['name']}\n"
+                result_text += "\n"
+            
+            return {
+                "success": True,
+                "result": result_text.strip(),
+                "tool": "list_modules",
+                "modules": modules_info,
+                "loaded_count": len(loaded_ids),
+                "total_count": len(modules_info),
+                "by_category": by_category,
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error listing modules: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "list_modules",
+            }
+    
+    def _execute_check_resources(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Check current system resources and get recommendations."""
+        try:
+            if not self.module_manager:
+                return {
+                    "success": False,
+                    "error": "ModuleManager not available",
+                    "tool": "check_resources",
+                }
+            
+            # Get resource usage
+            usage = self.module_manager.get_resource_usage()
+            
+            # Build human-readable summary
+            result_text = f"Resource Usage Report\n"
+            result_text += f"{'='*50}\n\n"
+            
+            # Modules
+            result_text += f"Modules Loaded: {usage['modules_loaded']}/{usage['modules_registered']}\n\n"
+            
+            # Memory
+            if 'memory' in usage and 'rss_mb' in usage['memory']:
+                mem = usage['memory']
+                result_text += f"Memory:\n"
+                result_text += f"  Process: {mem['rss_mb']:.1f} MB\n"
+                result_text += f"  System: {mem['system_used_percent']:.1f}% used\n"
+                result_text += f"  Available: {mem['system_available_mb']:.1f} MB\n\n"
+            
+            # GPU
+            if 'gpu' in usage and usage['gpu'].get('available'):
+                gpu = usage['gpu']
+                result_text += f"GPU ({gpu.get('device_name', 'Unknown')}):\n"
+                result_text += f"  Allocated: {gpu['allocated_mb']:.1f} MB\n"
+                result_text += f"  Used: {gpu['used_percent']:.1f}%\n\n"
+            else:
+                result_text += "GPU: Not available\n\n"
+            
+            # Assessment
+            if 'assessment' in usage:
+                assess = usage['assessment']
+                status_emoji = {"good": "✓", "warning": "⚠", "critical": "✗"}
+                result_text += f"Status: {status_emoji.get(assess['status'], '?')} {assess['status'].upper()}\n\n"
+                
+                if assess['warnings']:
+                    result_text += "Warnings:\n"
+                    for warn in assess['warnings']:
+                        result_text += f"  ⚠ {warn}\n"
+                    result_text += "\n"
+                
+                if assess['recommendations']:
+                    result_text += "Recommendations:\n"
+                    for rec in assess['recommendations']:
+                        result_text += f"  → {rec}\n"
+            
+            return {
+                "success": True,
+                "result": result_text.strip(),
+                "tool": "check_resources",
+                "usage": usage,
+                "status": usage.get('assessment', {}).get('status', 'unknown'),
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error checking resources: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "check_resources",
             }
     
     def format_tool_result(self, result: Dict[str, Any]) -> str:
