@@ -13,6 +13,11 @@ from .terminal_tab import create_terminal_tab, log_to_terminal
 from .modules_tab import ModulesTab
 from .scaling_tab import ScalingTab, create_scaling_tab
 from .examples_tab import ExamplesTab, create_examples_tab
+from .image_tab import ImageTab, create_image_tab
+from .code_tab import CodeTab, create_code_tab
+from .video_tab import VideoTab, create_video_tab
+from .audio_tab import AudioTab, create_audio_tab
+from .embeddings_tab import EmbeddingsTab, create_embeddings_tab
 
 __all__ = [
     'create_chat_tab',
@@ -28,4 +33,14 @@ __all__ = [
     'create_scaling_tab',
     'ExamplesTab',
     'create_examples_tab',
+    'ImageTab',
+    'create_image_tab',
+    'CodeTab',
+    'create_code_tab',
+    'VideoTab',
+    'create_video_tab',
+    'AudioTab',
+    'create_audio_tab',
+    'EmbeddingsTab',
+    'create_embeddings_tab',
 ]

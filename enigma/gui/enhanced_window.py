@@ -1628,7 +1628,9 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs import (
             create_chat_tab, create_training_tab, create_avatar_tab,
             create_vision_tab, create_sessions_tab, create_instructions_tab,
-            create_terminal_tab, create_examples_tab
+            create_terminal_tab, create_examples_tab,
+            create_image_tab, create_code_tab, create_video_tab,
+            create_audio_tab, create_embeddings_tab
         )
         from .tabs.settings_tab import create_settings_tab
         from .tabs.personality_tab import create_personality_tab
@@ -1646,6 +1648,11 @@ class EnhancedMainWindow(QMainWindow):
         tabs.addTab(create_avatar_tab(self), "Avatar")
         tabs.addTab(create_personality_tab(self), "Personality")  # Personality configuration
         tabs.addTab(create_vision_tab(self), "Vision")
+        tabs.addTab(create_image_tab(self), "Image")      # Image generation
+        tabs.addTab(create_code_tab(self), "Code")        # Code generation
+        tabs.addTab(create_video_tab(self), "Video")      # Video generation
+        tabs.addTab(create_audio_tab(self), "Audio")      # Audio/TTS generation
+        tabs.addTab(create_embeddings_tab(self), "Search")  # Embeddings/semantic search
         tabs.addTab(create_terminal_tab(self), "Terminal")
         tabs.addTab(create_sessions_tab(self), "History")
         tabs.addTab(create_instructions_tab(self), "Files")
