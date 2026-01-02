@@ -69,6 +69,8 @@ try:
         create_scaling_tab,
         AddonsTab,
         create_addons_tab,
+        ExamplesTab,
+        create_examples_tab,
     )
 except ImportError:
     # Tabs may not be available in all installations
@@ -85,6 +87,8 @@ except ImportError:
     create_scaling_tab = None
     AddonsTab = None
     create_addons_tab = None
+    ExamplesTab = None
+    create_examples_tab = None
 
 
 def launch_gui():
@@ -130,10 +134,12 @@ __all__ = [
     'create_instructions_tab',
     'create_terminal_tab',
     'log_to_terminal',
+    'create_examples_tab',
     # Tab classes
     'ModulesTab',
     'ScalingTab',
     'create_scaling_tab',
     'AddonsTab',
     'create_addons_tab',
+    'ExamplesTab',
 ]
