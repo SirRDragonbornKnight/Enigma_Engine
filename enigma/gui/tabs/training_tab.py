@@ -3,9 +3,10 @@
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QLineEdit, QProgressBar, QComboBox, QFileDialog,
-    QPlainTextEdit, QMessageBox
+    QSpinBox, QLineEdit, QProgressBar, QFileDialog,
+    QPlainTextEdit, QMessageBox, QInputDialog
 )
+from PyQt5.QtCore import Qt
 
 from ...config import CONFIG
 
@@ -25,25 +26,32 @@ def create_training_tab(parent):
     parent.training_model_label.setStyleSheet("color: #89b4fa; font-weight: bold;")
     layout.addWidget(parent.training_model_label)
     
-    # Training data file selector
+    # Training data file selector - file browser with filename display
     file_layout = QHBoxLayout()
-    file_layout.addWidget(QLabel("Training File:"))
     
-    parent.training_file_combo = QComboBox()
-    parent.training_file_combo.setMinimumWidth(150)
-    parent.training_file_combo.currentIndexChanged.connect(lambda idx: _load_training_file(parent, idx))
-    file_layout.addWidget(parent.training_file_combo)
+    btn_open = QPushButton("📂 Open File...")
+    btn_open.setToolTip("Open a training data file from your system")
+    btn_open.clicked.connect(lambda: _browse_training_file(parent))
+    file_layout.addWidget(btn_open)
     
-    btn_browse = QPushButton("Browse...")
-    btn_browse.clicked.connect(lambda: _browse_training_file(parent))
-    file_layout.addWidget(btn_browse)
-    
-    btn_save = QPushButton("Save")
+    btn_save = QPushButton("💾 Save")
+    btn_save.setToolTip("Save changes to the current file")
     btn_save.clicked.connect(lambda: _save_training_file(parent))
     file_layout.addWidget(btn_save)
     
+    btn_new = QPushButton("📝 New File")
+    btn_new.setToolTip("Create a new training data file")
+    btn_new.clicked.connect(lambda: _create_new_training_file(parent))
+    file_layout.addWidget(btn_new)
+    
     file_layout.addStretch()
     layout.addLayout(file_layout)
+    
+    # Current file name display
+    parent.training_file_label = QLabel("No file open")
+    parent.training_file_label.setStyleSheet("color: #a6e3a1; font-style: italic; padding: 4px;")
+    parent.training_file_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    layout.addWidget(parent.training_file_label)
     
     # File content editor
     parent.training_editor = QPlainTextEdit()
@@ -112,78 +120,32 @@ def create_training_tab(parent):
 
 
 def _refresh_training_files(parent):
-    """Populate the training file dropdown."""
-    parent.training_file_combo.blockSignals(True)
-    parent.training_file_combo.clear()
-    
+    """Initialize training data - open default file if exists."""
     # Always use global data directory for training files
     global_data_dir = Path(CONFIG.get("data_dir", "data"))
     global_data_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Also check model-specific data dir if a model is loaded
-    model_data_dir = None
-    if parent.current_model_name:
-        model_info = parent.registry.registry.get("models", {}).get(parent.current_model_name, {})
-        model_data_dir = model_info.get("data_dir") or (Path(model_info.get("path", "")) / "data")
-        if isinstance(model_data_dir, str):
-            model_data_dir = Path(model_data_dir)
-        if model_data_dir.exists():
-            model_data_dir.mkdir(parents=True, exist_ok=True)
     
     # Ensure training.txt exists in global data dir
     training_file = global_data_dir / "training.txt"
     if not training_file.exists():
         training_file.write_text("# Training Data\n\nQ: Hello\nA: Hi there!\n")
     
-    # Collect all txt files from both directories
-    seen_files = set()
-    all_files = []
-    
-    # Add files from global data directory first
-    for f in sorted(global_data_dir.glob("*.txt")):
-        if f.name not in seen_files:
-            seen_files.add(f.name)
-            all_files.append((f.name, str(f)))
-    
-    # Add model-specific files (if different directory)
-    if model_data_dir and model_data_dir != global_data_dir and model_data_dir.exists():
-        for f in sorted(model_data_dir.glob("*.txt")):
-            if f.name not in seen_files:
-                seen_files.add(f.name)
-                all_files.append((f"[Model] {f.name}", str(f)))
-    
-    # Add all files to combo
-    for name, path in all_files:
-        parent.training_file_combo.addItem(name, path)
-    
-    # Select training.txt by default
-    idx = parent.training_file_combo.findText("training.txt")
-    if idx >= 0:
-        parent.training_file_combo.setCurrentIndex(idx)
-    
-    parent.training_file_combo.blockSignals(False)
-    
-    # Set default path and load content
+    # Load the default training file
     parent.training_data_path = str(training_file)
     parent.data_path_label.setText(str(training_file))
-    _load_training_file(parent, parent.training_file_combo.currentIndex())
+    parent._current_training_file = str(training_file)
+    parent.training_file_label.setText(f"📄 {training_file.name}")
+    
+    try:
+        content = training_file.read_text(encoding='utf-8', errors='replace')
+        parent.training_editor.setPlainText(content)
+    except Exception as e:
+        parent.training_editor.setPlainText(f"Error loading file: {e}")
 
 
 def _load_training_file(parent, index):
-    """Load a training file into the editor."""
-    if index < 0:
-        return
-    
-    filepath = parent.training_file_combo.itemData(index)
-    if filepath and Path(filepath).exists():
-        try:
-            content = Path(filepath).read_text(encoding='utf-8', errors='replace')
-            parent.training_editor.setPlainText(content)
-            parent.training_data_path = filepath
-            parent.data_path_label.setText(filepath)
-            parent._current_training_file = filepath
-        except Exception as e:
-            parent.training_editor.setPlainText(f"Error loading file: {e}")
+    """Load a training file into the editor - deprecated, kept for compatibility."""
+    pass
 
 
 def _save_training_file(parent):
