@@ -96,12 +96,12 @@ jobs:
         run: |
           # Basic security checks - fail if dangerous functions are found
           # Look for eval() function calls (not .eval() method calls)
-          if grep -rE '\beval\s*\(' enigma/ 2>/dev/null | grep -v '\.eval()'; then
+          if grep -rE '(\s|^|[^\w\.])eval\s*\(' enigma/ 2>/dev/null; then
             echo "ERROR: Found eval() function usage which is a security risk"
             exit 1
           fi
           # Look for exec() function calls (not .exec() method calls)
-          if grep -rE '\bexec\s*\(' enigma/ 2>/dev/null | grep -v '\.exec()'; then
+          if grep -rE '(\s|^|[^\w\.])exec\s*\(' enigma/ 2>/dev/null; then
             echo "ERROR: Found exec() function usage which is a security risk"
             exit 1
           fi
