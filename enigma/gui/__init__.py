@@ -67,8 +67,6 @@ try:
         ModulesTab,
         ScalingTab,
         create_scaling_tab,
-        AddonsTab,
-        create_addons_tab,
         ExamplesTab,
         create_examples_tab,
     )
@@ -85,8 +83,6 @@ except ImportError:
     ModulesTab = None
     ScalingTab = None
     create_scaling_tab = None
-    AddonsTab = None
-    create_addons_tab = None
     ExamplesTab = None
     create_examples_tab = None
 
@@ -139,7 +135,5 @@ __all__ = [
     'ModulesTab',
     'ScalingTab',
     'create_scaling_tab',
-    'AddonsTab',
-    'create_addons_tab',
     'ExamplesTab',
 ]

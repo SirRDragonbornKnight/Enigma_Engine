@@ -12,7 +12,6 @@ from .instructions_tab import create_instructions_tab
 from .terminal_tab import create_terminal_tab, log_to_terminal
 from .modules_tab import ModulesTab
 from .scaling_tab import ScalingTab, create_scaling_tab
-from .addons_tab import AddonsTab, create_addons_tab
 from .examples_tab import ExamplesTab, create_examples_tab
 
 __all__ = [
@@ -27,8 +26,6 @@ __all__ = [
     'ModulesTab',
     'ScalingTab',
     'create_scaling_tab',
-    'AddonsTab',
-    'create_addons_tab',
     'ExamplesTab',
     'create_examples_tab',
 ]
