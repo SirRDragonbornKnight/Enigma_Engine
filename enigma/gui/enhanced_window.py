@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
     QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
-    QInputDialog, QActionGroup
+    QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
@@ -802,144 +802,292 @@ class SetupWizard(QWizard):
 
 
 class ModelManagerDialog(QDialog):
-    """Dialog for managing models - grow, shrink, backup, delete."""
+    """Modern model manager dialog - manage, scale, backup, and organize models."""
     
     def __init__(self, registry: ModelRegistry, current_model: str = None, parent=None):
         super().__init__(parent)
         self.registry = registry
         self.current_model = current_model
+        self.selected_model = None
         
         self.setWindowTitle("Model Manager")
-        self.resize(500, 400)
+        self.setMinimumSize(700, 500)
+        self.resize(800, 550)
+        
+        # Make dialog non-modal so it doesn't block
+        self.setModal(False)
+        
         self._build_ui()
         self._refresh_list()
+        
+        # Apply dark style to dialog
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+            }
+            QListWidget {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QListWidget::item:selected {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+            }
+            QListWidget::item:hover {
+                background-color: #45475a;
+            }
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 16px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+            }
+            QPushButton:pressed {
+                background-color: #313244;
+            }
+            QPushButton:disabled {
+                background-color: #313244;
+                color: #6c7086;
+            }
+            QGroupBox {
+                border: 1px solid #45475a;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 12px;
+                font-weight: bold;
+            }
+            QGroupBox::title {
+                color: #89b4fa;
+                subcontrol-origin: margin;
+                left: 12px;
+            }
+            QLabel {
+                color: #cdd6f4;
+            }
+        """)
     
     def _build_ui(self):
-        layout = QVBoxLayout()
+        layout = QHBoxLayout(self)
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Left panel - Model list
+        left_panel = QVBoxLayout()
+        
+        # Header with refresh
+        header = QHBoxLayout()
+        title = QLabel("📦 Your Models")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
+        header.addWidget(title)
+        header.addStretch()
+        
+        refresh_btn = QPushButton("↻")
+        refresh_btn.setFixedSize(32, 32)
+        refresh_btn.setToolTip("Refresh list")
+        refresh_btn.clicked.connect(self._refresh_list)
+        header.addWidget(refresh_btn)
+        left_panel.addLayout(header)
         
         # Model list
-        layout.addWidget(QLabel("Registered Models:"))
         self.model_list = QListWidget()
         self.model_list.itemClicked.connect(self._on_select_model)
-        layout.addWidget(self.model_list)
+        self.model_list.itemDoubleClicked.connect(self._on_load_model)
+        left_panel.addWidget(self.model_list)
         
-        # Info display
-        self.info_label = QLabel("Select a model to see details")
-        self.info_label.setWordWrap(True)
-        layout.addWidget(self.info_label)
+        # Quick actions under list
+        quick_btns = QHBoxLayout()
         
-        # Buttons
-        btn_layout = QHBoxLayout()
+        new_btn = QPushButton("+ New")
+        new_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e;")
+        new_btn.clicked.connect(self._on_new_model)
+        quick_btns.addWidget(new_btn)
         
-        self.btn_new = QPushButton("New Model")
-        self.btn_new.clicked.connect(self._on_new_model)
+        load_btn = QPushButton("▶ Load")
+        load_btn.setStyleSheet("background-color: #89b4fa; color: #1e1e2e;")
+        load_btn.clicked.connect(self._on_load_model)
+        quick_btns.addWidget(load_btn)
         
-        self.btn_backup = QPushButton("Backup")
+        left_panel.addLayout(quick_btns)
+        
+        layout.addLayout(left_panel, stretch=1)
+        
+        # Right panel - Details and actions
+        right_panel = QVBoxLayout()
+        
+        # Model info card
+        info_group = QGroupBox("Model Details")
+        info_layout = QVBoxLayout(info_group)
+        
+        self.info_name = QLabel("Select a model")
+        self.info_name.setStyleSheet("font-size: 18px; font-weight: bold; color: #f9e2af;")
+        info_layout.addWidget(self.info_name)
+        
+        self.info_details = QLabel("Click a model from the list to see its details")
+        self.info_details.setWordWrap(True)
+        self.info_details.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        info_layout.addWidget(self.info_details)
+        
+        right_panel.addWidget(info_group)
+        
+        # Actions grouped
+        actions_group = QGroupBox("Actions")
+        actions_layout = QGridLayout(actions_group)
+        actions_layout.setSpacing(8)
+        
+        # Row 1 - Safe actions
+        self.btn_backup = QPushButton("💾 Backup")
         self.btn_backup.clicked.connect(self._on_backup)
+        self.btn_backup.setEnabled(False)
+        actions_layout.addWidget(self.btn_backup, 0, 0)
         
-        self.btn_open_folder = QPushButton("📁 Open Folder")
-        self.btn_open_folder.clicked.connect(self._on_open_folder)
-        
-        self.btn_grow = QPushButton("Grow >>")
-        self.btn_grow.clicked.connect(self._on_grow)
-        
-        self.btn_shrink = QPushButton("<< Shrink")
-        self.btn_shrink.clicked.connect(self._on_shrink)
-        
-        self.btn_delete = QPushButton("Delete")
-        self.btn_delete.clicked.connect(self._on_delete)
-        self.btn_delete.setStyleSheet("color: red")
-        
-        btn_layout.addWidget(self.btn_new)
-        btn_layout.addWidget(self.btn_backup)
-        btn_layout.addWidget(self.btn_open_folder)
-        btn_layout.addWidget(self.btn_grow)
-        btn_layout.addWidget(self.btn_shrink)
-        btn_layout.addWidget(self.btn_delete)
-        
-        layout.addLayout(btn_layout)
-        
-        # Second row of buttons for Clone and Rename
-        btn_layout2 = QHBoxLayout()
-        
-        self.btn_clone = QPushButton("🔀 Clone Model")
-        self.btn_clone.setToolTip("Create a copy of this model as a base for a new character")
+        self.btn_clone = QPushButton("📋 Clone")
         self.btn_clone.clicked.connect(self._on_clone)
+        self.btn_clone.setEnabled(False)
+        actions_layout.addWidget(self.btn_clone, 0, 1)
+        
+        self.btn_folder = QPushButton("📁 Open Folder")
+        self.btn_folder.clicked.connect(self._on_open_folder)
+        self.btn_folder.setEnabled(False)
+        actions_layout.addWidget(self.btn_folder, 0, 2)
+        
+        # Row 2 - Scaling
+        self.btn_grow = QPushButton("📈 Grow")
+        self.btn_grow.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e;")
+        self.btn_grow.clicked.connect(self._on_grow)
+        self.btn_grow.setEnabled(False)
+        actions_layout.addWidget(self.btn_grow, 1, 0)
+        
+        self.btn_shrink = QPushButton("📉 Shrink")
+        self.btn_shrink.setStyleSheet("background-color: #f9e2af; color: #1e1e2e;")
+        self.btn_shrink.clicked.connect(self._on_shrink)
+        self.btn_shrink.setEnabled(False)
+        actions_layout.addWidget(self.btn_shrink, 1, 1)
         
         self.btn_rename = QPushButton("✏️ Rename")
-        self.btn_rename.setToolTip("Rename this model")
         self.btn_rename.clicked.connect(self._on_rename)
+        self.btn_rename.setEnabled(False)
+        actions_layout.addWidget(self.btn_rename, 1, 2)
         
-        btn_layout2.addWidget(self.btn_clone)
-        btn_layout2.addWidget(self.btn_rename)
-        btn_layout2.addStretch()
+        # Row 3 - Danger zone
+        self.btn_delete = QPushButton("🗑️ Delete")
+        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e;")
+        self.btn_delete.clicked.connect(self._on_delete)
+        self.btn_delete.setEnabled(False)
+        actions_layout.addWidget(self.btn_delete, 2, 0)
         
-        layout.addLayout(btn_layout2)
+        right_panel.addWidget(actions_group)
         
-        # Load button
-        self.btn_load = QPushButton("Load Selected Model")
-        self.btn_load.clicked.connect(self.accept)
-        layout.addWidget(self.btn_load)
+        # Close button at bottom
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.close)
+        right_panel.addWidget(close_btn)
         
-        self.setLayout(layout)
+        layout.addLayout(right_panel, stretch=1)
     
     def _refresh_list(self):
-        # Reload registry from disk to get fresh data
-        self.registry._load_registry()
+        """Refresh the model list from disk."""
+        try:
+            self.registry._load_registry()
+        except:
+            pass
         
         self.model_list.clear()
-        if hasattr(self, 'selected_model'):
-            delattr(self, 'selected_model')
-        self.info_label.setText("Select a model to see details")
+        self.selected_model = None
+        self._update_buttons_state()
+        self.info_name.setText("Select a model")
+        self.info_details.setText("Click a model from the list to see its details")
         
-        for name, info in self.registry.registry.get("models", {}).items():
-            # Also verify the model folder actually exists
+        models = self.registry.registry.get("models", {})
+        for name, info in sorted(models.items()):
             model_path = Path(self.registry.models_dir) / name
             if model_path.exists():
-                status = "[+]" if info.get("has_weights") else "[ ]"
-                self.model_list.addItem(f"{status} {name} ({info.get('size', '?')})")
+                has_weights = info.get("has_weights", False)
+                size = info.get("size", "?")
+                icon = "✅" if has_weights else "⚪"
+                self.model_list.addItem(f"{icon} {name} ({size})")
+    
+    def _update_buttons_state(self):
+        """Enable/disable buttons based on selection."""
+        has_selection = self.selected_model is not None
+        self.btn_backup.setEnabled(has_selection)
+        self.btn_clone.setEnabled(has_selection)
+        self.btn_folder.setEnabled(has_selection)
+        self.btn_grow.setEnabled(has_selection)
+        self.btn_shrink.setEnabled(has_selection)
+        self.btn_rename.setEnabled(has_selection)
+        self.btn_delete.setEnabled(has_selection)
     
     def _on_select_model(self, item):
+        """Handle model selection."""
         text = item.text()
-        # Extract name from "[+] name (size)" or "[ ] name (size)"
-        # The status prefix is either "[+]" or "[ ]" followed by space
-        # Remove status prefix and extract name before the size in parentheses
-        if text.startswith("[+] "):
-            rest = text[4:]  # Remove "[+] "
-        elif text.startswith("[ ] "):
-            rest = text[4:]  # Remove "[ ] "
+        # Parse "✅ name (size)" or "⚪ name (size)"
+        parts = text.split(" ", 1)
+        if len(parts) > 1:
+            rest = parts[1]  # "name (size)"
+            name = rest.rsplit(" (", 1)[0]
         else:
-            rest = text
+            name = text
         
-        # Now rest is "name (size)" - extract name before last parentheses
-        name = rest.rsplit(" (", 1)[0]
-        
-        # Set selected model FIRST so buttons work even if info loading fails
         self.selected_model = name
+        self._update_buttons_state()
         
         try:
             info = self.registry.get_model_info(name)
             meta = info.get("metadata", {})
-            config = info.get("config", {})
+            reg_info = info.get("registry", {})
             
-            # Safely get created date
-            created = meta.get('created', '?')
-            if created and created != '?':
-                created = str(created)[:10]
+            self.info_name.setText(f"🤖 {name}")
             
-            self.info_label.setText(f"""
-            <b>{name}</b><br>
-            Size: {info['registry'].get('size', '?')}<br>
-            Created: {created}<br>
-            Last trained: {meta.get('last_trained', 'Never')}<br>
-            Epochs: {meta.get('total_epochs', 0)}<br>
-            Parameters: {meta.get('estimated_parameters', '?'):,}<br>
-            Checkpoints: {len(info.get('checkpoints', []))}
-            """)
+            created = str(meta.get('created', 'Unknown'))[:10]
+            last_trained = meta.get('last_trained', 'Never')
+            if last_trained and last_trained != 'Never':
+                last_trained = str(last_trained)[:10]
+            
+            epochs = meta.get('total_epochs', 0)
+            params = meta.get('estimated_parameters', 0)
+            params_str = f"{params:,}" if params else "Unknown"
+            checkpoints = len(info.get('checkpoints', []))
+            size = reg_info.get('size', '?')
+            
+            details = f"""
+Size: {size.upper()}
+Parameters: {params_str}
+Created: {created}
+Last trained: {last_trained}
+Total epochs: {epochs}
+Checkpoints: {checkpoints}
+            """.strip()
+            
+            self.info_details.setText(details)
         except Exception as e:
-            self.info_label.setText(f"<b>{name}</b><br>Error loading details: {e}")
+            self.info_details.setText(f"Error loading details:\n{e}")
+    
+    def _on_load_model(self, item=None):
+        """Load the selected model."""
+        if not self.selected_model:
+            QMessageBox.warning(self, "No Selection", "Select a model first")
+            return
+        
+        # Store selected model and close dialog
+        self.accept()
     
     def _on_new_model(self):
+        """Create a new model via wizard."""
         wizard = SetupWizard(self.registry, self)
         if wizard.exec_() == QWizard.Accepted:
             result = wizard.get_result()
@@ -955,346 +1103,315 @@ class ModelManagerDialog(QDialog):
                 QMessageBox.warning(self, "Error", str(e))
     
     def _on_backup(self):
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
+        """Backup the selected model to a zip file."""
+        if not self.selected_model:
             return
         
         name = self.selected_model
         model_dir = Path(self.registry.models_dir) / name
-        backup_dir = Path(self.registry.models_dir) / f"{name}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Create backup as a zip file in a backups folder (not as another model)
+        backups_dir = Path(self.registry.models_dir) / "_backups"
+        backups_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_name = f"{name}_backup_{timestamp}"
+        backup_zip = backups_dir / f"{backup_name}.zip"
         
         try:
-            shutil.copytree(model_dir, backup_dir)
-            QMessageBox.information(self, "Backup Complete", f"Backed up to:\n{backup_dir}")
-            self._refresh_list()
+            import zipfile
+            with zipfile.ZipFile(backup_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for file_path in model_dir.rglob('*'):
+                    if file_path.is_file():
+                        arcname = file_path.relative_to(model_dir)
+                        zf.write(file_path, arcname)
+            
+            QMessageBox.information(
+                self, "Backup Complete", 
+                f"Backup saved to:\n{backup_zip}\n\n"
+                f"To restore, unzip to the models folder."
+            )
         except Exception as e:
             QMessageBox.warning(self, "Backup Failed", str(e))
     
-    def _on_grow(self):
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
+    def _on_clone(self):
+        """Clone the selected model."""
+        if not self.selected_model:
             return
         
-        # Check if model still exists
-        if self.selected_model not in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists. Please select another.")
-            delattr(self, 'selected_model')
+        original_name = self.selected_model  # Store before any changes
+        
+        from PyQt5.QtWidgets import QInputDialog
+        new_name, ok = QInputDialog.getText(
+            self, "Clone Model",
+            f"Enter name for clone of '{original_name}':",
+            text=f"{original_name}_clone"
+        )
+        
+        if not ok or not new_name.strip():
+            return
+        
+        new_name = new_name.strip().replace(' ', '_').lower()
+        
+        if new_name in self.registry.registry.get("models", {}):
+            QMessageBox.warning(self, "Name Exists", f"'{new_name}' already exists")
+            return
+        
+        try:
+            src = Path(self.registry.models_dir) / original_name
+            dst = Path(self.registry.models_dir) / new_name
+            shutil.copytree(src, dst)
+            
+            # Create NEW registry entry with CORRECT path (not copy of old)
+            old_info = self.registry.registry["models"][original_name]
+            new_info = {
+                "path": str(dst),  # NEW path for the clone!
+                "size": old_info.get("size", "tiny"),
+                "created": datetime.now().isoformat(),
+                "has_weights": old_info.get("has_weights", False),
+                "data_dir": str(dst / "data"),  # NEW data dir!
+                "cloned_from": original_name
+            }
+            self.registry.registry["models"][new_name] = new_info
+            self.registry._save_registry()
+            
             self._refresh_list()
+            
+            # Auto-select the new clone so user can see it's selected
+            self.selected_model = new_name
+            self._update_buttons_state()
+            self.info_name.setText(f"🤖 {new_name}")
+            self.info_details.setText(f"Clone of: {original_name}\n\nClick to select a different model.")
+            
+            # Highlight the clone in the list
+            for i in range(self.model_list.count()):
+                item = self.model_list.item(i)
+                if new_name in item.text():
+                    self.model_list.setCurrentItem(item)
+                    break
+            
+            QMessageBox.information(self, "Cloned", f"Created clone: {new_name}\n\nThe clone is now selected.")
+        except Exception as e:
+            QMessageBox.warning(self, "Clone Failed", str(e))
+    
+    def _on_open_folder(self):
+        """Open model folder in file explorer."""
+        if not self.selected_model:
             return
         
-        # Show size selection dialog
-        sizes = ["small", "medium", "large", "xl"]
-        current_size = self.registry.registry["models"][self.selected_model].get("size", "tiny")
+        from ..config import CONFIG
+        folder = Path(CONFIG['models_dir']) / self.selected_model
         
-        # Filter to only larger sizes
-        current_idx = sizes.index(current_size) if current_size in sizes else -1
-        available = sizes[current_idx + 1:] if current_idx >= 0 else sizes
+        if not folder.exists():
+            QMessageBox.warning(self, "Not Found", "Model folder not found")
+            return
+        
+        import subprocess
+        import platform
+        
+        try:
+            if platform.system() == "Windows":
+                import os
+                os.startfile(str(folder))
+            elif platform.system() == "Darwin":
+                subprocess.run(["open", str(folder)])
+            else:
+                subprocess.run(["xdg-open", str(folder)])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not open folder: {e}")
+    
+    def _on_grow(self):
+        """Grow the model to a larger size."""
+        if not self.selected_model:
+            return
+        
+        current_size = self.registry.registry["models"].get(self.selected_model, {}).get("size", "tiny")
+        sizes = ["tiny", "small", "medium", "large", "xl"]
+        
+        try:
+            idx = sizes.index(current_size)
+            available = sizes[idx + 1:]
+        except ValueError:
+            available = sizes
         
         if not available:
-            QMessageBox.information(self, "Max Size", "Model is already at maximum size")
+            QMessageBox.information(self, "Max Size", "Already at maximum size")
             return
         
-        size, ok = self._show_size_dialog("Grow Model", available, 
-            f"Current size: {current_size}\nSelect target size:")
+        size, ok = self._size_dialog("Grow Model", available, f"Current: {current_size}")
+        if not ok or not size:
+            return
         
-        if ok and size:
-            # Confirm with backup warning
-            reply = QMessageBox.question(
-                self, "Confirm Grow",
-                f"Grow '{self.selected_model}' from {current_size} to {size}?\n\n"
-                "A backup will be created automatically.\n"
-                "The grown model will keep existing knowledge.",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            
-            if reply == QMessageBox.Yes:
-                # Auto-backup first
-                self._on_backup()
-                
-                # Grow - replace the model in place
-                try:
-                    from ..core.model_scaling import grow_registered_model
-                    grow_registered_model(
-                        self.registry,
-                        self.selected_model,
-                        self.selected_model,  # Keep same name
-                        size
-                    )
-                    self._refresh_list()
-                    QMessageBox.information(self, "Success", 
-                        f"Model '{self.selected_model}' grown to {size}!\n"
-                        f"A backup was created.")
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", str(e))
+        reply = QMessageBox.question(
+            self, "Confirm Grow",
+            f"Grow '{self.selected_model}' from {current_size} to {size}?\n\nA backup will be created first."
+        )
+        
+        if reply == QMessageBox.Yes:
+            self._on_backup()  # Auto backup
+            try:
+                from ..core.model_scaling import grow_registered_model
+                grow_registered_model(self.registry, self.selected_model, self.selected_model, size)
+                self._refresh_list()
+                QMessageBox.information(self, "Success", f"Model grown to {size}!")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
     
     def _on_shrink(self):
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
+        """Shrink the model to a smaller size."""
+        if not self.selected_model:
             return
         
-        # Check if model still exists
-        if self.selected_model not in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists. Please select another.")
-            delattr(self, 'selected_model')
-            self._refresh_list()
-            return
+        current_size = self.registry.registry["models"].get(self.selected_model, {}).get("size", "large")
+        sizes = ["nano", "micro", "tiny", "small", "medium", "large"]
         
-        sizes = ["tiny", "small", "medium", "large"]
-        current_size = self.registry.registry["models"][self.selected_model].get("size", "xl")
-        
-        current_idx = sizes.index(current_size) if current_size in sizes else len(sizes)
-        available = sizes[:current_idx]
+        try:
+            idx = sizes.index(current_size)
+            available = sizes[:idx]
+        except ValueError:
+            available = sizes[:-1]
         
         if not available:
-            QMessageBox.information(self, "Min Size", "Model is already at minimum size")
+            QMessageBox.information(self, "Min Size", "Already at minimum size")
             return
         
-        size, ok = self._show_size_dialog("Shrink Model", available,
-            f"Current size: {current_size}\nSelect target size:\n\n"
-            "WARNING: Shrinking loses some capacity!")
-        
-        if ok and size:
-            reply = QMessageBox.warning(
-                self, "Confirm Shrink",
-                f"Shrink '{self.selected_model}' from {current_size} to {size}?\n\n"
-                "A backup will be created first.\n"
-                "WARNING: Some knowledge may be lost in shrinking.",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            
-            if reply == QMessageBox.Yes:
-                try:
-                    # Auto-backup first
-                    self._on_backup()
-                    
-                    # Load model
-                    model, config = self.registry.load_model(self.selected_model)
-                    
-                    # Shrink
-                    shrunk = shrink_model(model, size, config["vocab_size"])
-                    
-                    # Update the existing model
-                    self.registry.save_model(self.selected_model, shrunk)
-                    self.registry.registry["models"][self.selected_model]["size"] = size
-                    self.registry._save_registry()
-                    
-                    self._refresh_list()
-                    QMessageBox.information(self, "Success",
-                        f"Model '{self.selected_model}' shrunk to {size}!\n"
-                        f"A backup was created.")
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", str(e))
-    
-    def _on_delete(self):
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
-            return
-        
-        # Check if model still exists
-        if self.selected_model not in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists.")
-            delattr(self, 'selected_model')
-            self._refresh_list()
+        size, ok = self._size_dialog("Shrink Model", available, f"Current: {current_size}\n⚠️ May lose capacity!")
+        if not ok or not size:
             return
         
         reply = QMessageBox.warning(
-            self, "Confirm Delete",
-            f"DELETE model '{self.selected_model}'?\n\n"
-            "TIP: If you made a backup, it will still exist.\n"
-            "WARNING: The model folder and weights will be removed!",
+            self, "Confirm Shrink",
+            f"Shrink '{self.selected_model}' to {size}?\n\n⚠️ This may reduce model quality.\nA backup will be created first.",
             QMessageBox.Yes | QMessageBox.No
         )
         
         if reply == QMessageBox.Yes:
-            # Double confirm
-            reply2 = QMessageBox.critical(
-                self, "FINAL WARNING",
-                f"Are you ABSOLUTELY SURE you want to delete '{self.selected_model}'?",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            
-            if reply2 == QMessageBox.Yes:
-                try:
-                    self.registry.delete_model(self.selected_model, confirm=True)
-                    delattr(self, 'selected_model')  # Clear selection after delete
-                    self._refresh_list()
-                    self.info_label.setText("Select a model to see details")
-                    QMessageBox.information(self, "Deleted", "Model deleted.")
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", str(e))
-    
-    def _on_open_folder(self):
-        """Open the model's folder in file explorer."""
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
-            return
-        
-        # Get model folder path
-        from ..config import CONFIG
-        model_folder = Path(CONFIG['models_dir']) / self.selected_model
-        
-        if not model_folder.exists():
-            QMessageBox.warning(self, "Not Found", f"Model folder not found:\n{model_folder}")
-            return
-        
-        # Open in file explorer
-        import os
-        import platform
-        import subprocess
-        
-        try:
-            if platform.system() == "Windows":
-                os.startfile(str(model_folder))
-            elif platform.system() == "Darwin":  # macOS
-                subprocess.run(["open", str(model_folder)])
-            else:  # Linux
-                subprocess.run(["xdg-open", str(model_folder)])
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not open folder: {e}")
-    
-    def _on_clone(self):
-        """Clone the selected model to create a new model (e.g., for a new character)."""
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
-            return
-        
-        # Check if model still exists
-        if self.selected_model not in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists.")
-            delattr(self, 'selected_model')
-            self._refresh_list()
-            return
-        
-        # Get new name
-        from PyQt5.QtWidgets import QInputDialog
-        new_name, ok = QInputDialog.getText(
-            self, "Clone Model",
-            f"Enter name for the cloned model:\n(Clone of '{self.selected_model}')",
-            text=f"{self.selected_model}_clone"
-        )
-        
-        if not ok or not new_name.strip():
-            return
-        
-        new_name = new_name.strip()
-        
-        # Validate name
-        if new_name in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Name Exists", f"A model named '{new_name}' already exists.")
-            return
-        
-        # Clone the model folder
-        from ..config import CONFIG
-        src_folder = Path(CONFIG['models_dir']) / self.selected_model
-        dst_folder = Path(CONFIG['models_dir']) / new_name
-        
-        try:
-            shutil.copytree(src_folder, dst_folder)
-            
-            # Register the new model
-            old_info = self.registry.registry["models"][self.selected_model].copy()
-            self.registry.registry["models"][new_name] = old_info
-            self.registry._save_registry()
-            
-            # Update metadata in the cloned model
-            metadata_path = dst_folder / "metadata.json"
-            if metadata_path.exists():
-                import json
-                with open(metadata_path, 'r') as f:
-                    meta = json.load(f)
-                meta["cloned_from"] = self.selected_model
-                meta["created"] = datetime.now().isoformat()
-                with open(metadata_path, 'w') as f:
-                    json.dump(meta, f, indent=2)
-            
-            self._refresh_list()
-            QMessageBox.information(
-                self, "Clone Complete",
-                f"Model '{self.selected_model}' cloned to '{new_name}'!\n\n"
-                f"You can now train '{new_name}' with character-specific data\n"
-                f"without affecting the original model."
-            )
-        except Exception as e:
-            QMessageBox.warning(self, "Clone Failed", str(e))
+            self._on_backup()
+            try:
+                model, config = self.registry.load_model(self.selected_model)
+                shrunk = shrink_model(model, size, config["vocab_size"])
+                self.registry.save_model(self.selected_model, shrunk)
+                self.registry.registry["models"][self.selected_model]["size"] = size
+                self.registry._save_registry()
+                self._refresh_list()
+                QMessageBox.information(self, "Success", f"Model shrunk to {size}!")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
     
     def _on_rename(self):
         """Rename the selected model."""
-        if not hasattr(self, 'selected_model'):
-            QMessageBox.warning(self, "No Selection", "Select a model first")
+        if not self.selected_model:
             return
         
-        # Check if model still exists
-        if self.selected_model not in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Model Not Found", "Selected model no longer exists.")
-            delattr(self, 'selected_model')
-            self._refresh_list()
-            return
-        
-        # Get new name
         from PyQt5.QtWidgets import QInputDialog
         new_name, ok = QInputDialog.getText(
             self, "Rename Model",
-            f"Enter new name for '{self.selected_model}':",
+            f"New name for '{self.selected_model}':",
             text=self.selected_model
         )
         
-        if not ok or not new_name.strip():
+        if not ok or not new_name.strip() or new_name == self.selected_model:
             return
         
-        new_name = new_name.strip()
+        new_name = new_name.strip().replace(' ', '_')
         
-        # Check if same name
-        if new_name == self.selected_model:
-            return
-        
-        # Validate name
         if new_name in self.registry.registry.get("models", {}):
-            QMessageBox.warning(self, "Name Exists", f"A model named '{new_name}' already exists.")
+            QMessageBox.warning(self, "Name Exists", f"'{new_name}' already exists")
             return
-        
-        # Rename the model folder
-        from ..config import CONFIG
-        old_folder = Path(CONFIG['models_dir']) / self.selected_model
-        new_folder = Path(CONFIG['models_dir']) / new_name
         
         try:
-            old_folder.rename(new_folder)
+            from ..config import CONFIG
+            old = Path(CONFIG['models_dir']) / self.selected_model
+            new = Path(CONFIG['models_dir']) / new_name
+            old.rename(new)
             
-            # Update registry
-            old_info = self.registry.registry["models"].pop(self.selected_model)
-            self.registry.registry["models"][new_name] = old_info
+            info = self.registry.registry["models"].pop(self.selected_model)
+            self.registry.registry["models"][new_name] = info
             self.registry._save_registry()
             
             self.selected_model = new_name
             self._refresh_list()
             QMessageBox.information(self, "Renamed", f"Model renamed to '{new_name}'")
         except Exception as e:
-            QMessageBox.warning(self, "Rename Failed", str(e))
+            QMessageBox.warning(self, "Error", str(e))
     
-    def _show_size_dialog(self, title, sizes, message):
+    def _on_delete(self):
+        """Delete the selected model."""
+        if not self.selected_model:
+            QMessageBox.warning(self, "No Selection", "Please select a model first")
+            return
+        
+        model_to_delete = self.selected_model  # Store the name
+        
+        # First confirmation - show name prominently
+        reply = QMessageBox.warning(
+            self, "Delete Model",
+            f"⚠️ DELETE THIS MODEL:\n\n"
+            f"   📦 {model_to_delete}\n\n"
+            f"This action cannot be undone!",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        # Second confirmation - make user type the name
+        from PyQt5.QtWidgets import QInputDialog
+        confirm_name, ok = QInputDialog.getText(
+            self, "CONFIRM DELETE",
+            f"Type the model name to confirm deletion:\n\n"
+            f"Model to delete: {model_to_delete}"
+        )
+        
+        if not ok:
+            return
+        
+        if confirm_name.strip() != model_to_delete:
+            QMessageBox.warning(
+                self, "Cancelled",
+                f"Names don't match. Deletion cancelled.\n\n"
+                f"You typed: '{confirm_name}'\n"
+                f"Expected: '{model_to_delete}'"
+            )
+            return
+        
+        try:
+            self.registry.delete_model(model_to_delete, confirm=True)
+            self.selected_model = None
+            self._refresh_list()
+            QMessageBox.information(self, "Deleted", f"Model '{model_to_delete}' has been deleted.")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+    
+    def _size_dialog(self, title, sizes, message):
+        """Show size selection dialog."""
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
-        layout = QVBoxLayout()
+        dialog.setStyleSheet(self.styleSheet())
+        layout = QVBoxLayout(dialog)
         
         layout.addWidget(QLabel(message))
         
         combo = QComboBox()
         combo.addItems(sizes)
+        combo.setStyleSheet("padding: 8px; background: #313244; color: #cdd6f4; border-radius: 4px;")
         layout.addWidget(combo)
         
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        
-        dialog.setLayout(layout)
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addWidget(btns)
         
         if dialog.exec_() == QDialog.Accepted:
             return combo.currentText(), True
         return None, False
     
     def get_selected_model(self):
-        return getattr(self, 'selected_model', None)
+        return self.selected_model
+    
+    def closeEvent(self, event):
+        """Handle close - just close, don't block."""
+        event.accept()
 
 
 class EnhancedMainWindow(QMainWindow):
@@ -1303,6 +1420,8 @@ class EnhancedMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Enigma Engine")
+        # Allow window to resize freely (no fixed constraints)
+        self.setMinimumSize(600, 400)  # Reasonable minimum
         self.resize(1000, 700)
         
         # Initialize registry

@@ -204,12 +204,12 @@ class GenerationPanel(QWidget):
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
         
-        # Result area
+        # Result area - flexible height
         self.result_label = QLabel("Result will appear here")
         self.result_label.setAlignment(Qt.AlignCenter)
-        self.result_label.setMinimumHeight(200)
+        self.result_label.setMinimumHeight(100)  # Reduced for smaller screens
         self.result_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
-        layout.addWidget(self.result_label)
+        layout.addWidget(self.result_label, stretch=1)  # Allow to grow/shrink
 
 
 class AddonsTab(QWidget):

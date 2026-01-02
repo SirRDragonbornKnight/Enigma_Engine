@@ -60,9 +60,9 @@ class ModuleCard(QFrame):
         self.setFrameStyle(QFrame.Box | QFrame.Raised)
         self.setLineWidth(1)
         self.setMinimumWidth(200)
-        self.setMinimumHeight(100)
-        # Allow cards to expand with window
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.setMinimumHeight(80)  # Reduced for smaller screens
+        # Allow cards to shrink vertically when window resizes
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
         category = self.module_info.get('category', 'extension').lower()
         style = CATEGORY_STYLES.get(category, CATEGORY_STYLES['extension'])
