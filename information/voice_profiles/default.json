@@ -1,0 +1,10 @@
+{
+  "name": "Default",
+  "pitch": 1.0,
+  "speed": 1.0,
+  "volume": 1.0,
+  "voice": "default",
+  "effects": [],
+  "language": "en",
+  "description": "Standard neutral voice"
+}

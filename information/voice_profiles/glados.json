@@ -1,0 +1,12 @@
+{
+  "name": "GLaDOS",
+  "pitch": 0.85,
+  "speed": 0.95,
+  "volume": 0.9,
+  "voice": "female",
+  "effects": [
+    "robotic"
+  ],
+  "language": "en",
+  "description": "Cold, sarcastic AI from Portal"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "HAL9000",
+  "pitch": 0.9,
+  "speed": 0.85,
+  "volume": 0.7,
+  "voice": "male",
+  "effects": [
+    "calm"
+  ],
+  "language": "en",
+  "description": "Calm, deliberate AI from 2001"
+}

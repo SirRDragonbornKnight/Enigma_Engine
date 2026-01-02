@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).parent.parent.parent
 CONFIG = {
     # === Paths ===
     "root": str(BASE_DIR),
-    "data_dir": str(BASE_DIR / "data"),
+    "data_dir": str(BASE_DIR / "information"),
     "models_dir": str(BASE_DIR / "models"),
     "memory_dir": str(BASE_DIR / "memory"),
     "db_path": str(BASE_DIR / "memory" / "memory.db"),

@@ -1,0 +1,10 @@
+{
+  "name": "Jarvis",
+  "pitch": 0.95,
+  "speed": 1.0,
+  "volume": 0.85,
+  "voice": "male",
+  "effects": [],
+  "language": "en",
+  "description": "Formal British AI assistant"
+}
