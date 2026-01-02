@@ -154,22 +154,9 @@ def _load_saved_settings(parent):
     
     # Load resource mode
     saved_mode = CONFIG.get("resource_mode", "balanced")
-    mode_map = {"minimal": 0, "balanced": 1, "performance": 2, "max": 3}
+    mode_map = {"minimal": 0, "gaming": 1, "balanced": 2, "performance": 3, "max": 4}
     if saved_mode in mode_map:
         parent.resource_mode_combo.setCurrentIndex(mode_map[saved_mode])
-    
-    # Load CPU threads
-    saved_threads = CONFIG.get("cpu_threads", 0)
-    parent.cpu_threads_spin.setValue(saved_threads)
-    
-    # Load GPU memory fraction
-    saved_gpu = CONFIG.get("gpu_memory_fraction", 0.5)
-    parent.gpu_slider.setValue(int(saved_gpu * 100))
-    _update_gpu_label(parent, int(saved_gpu * 100))
-    
-    # Load low priority setting
-    saved_priority = CONFIG.get("low_priority", False)
-    parent.low_priority_check.setChecked(saved_priority)
 
 
 def _apply_resource_mode(parent):
@@ -184,26 +171,13 @@ def _apply_resource_mode(parent):
         "performance": "Performance: Uses more resources for faster AI responses.",
         "max": "Maximum: Uses all available resources. May slow other apps."
     }
-    parent.mode_details_label.setText(descriptions.get(mode, ""))
-    
-    # Update advanced controls to match mode
-    mode_settings = {
-        "minimal": {"threads": 1, "gpu": 20, "priority": True},
-        "gaming": {"threads": 2, "gpu": 30, "priority": True},
-        "balanced": {"threads": 0, "gpu": 50, "priority": False},
-        "performance": {"threads": 0, "gpu": 70, "priority": False},
-        "max": {"threads": 0, "gpu": 90, "priority": False},
-    }
-    
-    settings = mode_settings.get(mode, mode_settings["balanced"])
-    parent.cpu_threads_spin.setValue(settings["threads"])
-    parent.gpu_slider.setValue(settings["gpu"])
-    parent.low_priority_check.setChecked(settings["priority"])
+    parent.power_mode_details_label.setText(descriptions.get(mode, ""))
 
 
 def _update_gpu_label(parent, value):
-    """Update GPU percentage label."""
-    parent.gpu_label.setText(f"{value}%")
+    """Update GPU percentage label - only if gpu_label exists."""
+    if hasattr(parent, 'gpu_label'):
+        parent.gpu_label.setText(f"{value}%")
 
 
 def _update_cpu_threads(parent, value):
@@ -221,7 +195,7 @@ def _apply_all_settings(parent):
     try:
         from ...core.power_mode import get_power_manager, PowerLevel
         
-        mode = parent.power_mode_combo.currentData()
+        mode = parent.resource_mode_combo.currentData()
         power_mgr = get_power_manager()
         
         # Convert string to PowerLevel enum
