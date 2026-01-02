@@ -1,0 +1,101 @@
+# Enigma Engine - Quick Start Guide
+
+## Getting Started
+1. Create a Model: File -> New Model
+2. Add Training Data: Go to Train tab, select a file
+3. Train: Set parameters and click Train
+4. Chat: Talk to your AI in the Chat tab!
+
+## Training Data Format
+Your AI learns from conversations. Use these formats:
+
+Q: What is your name?
+A: I'm your AI assistant.
+
+User: Hello!
+AI: Hi there! How can I help?
+
+More data = smarter AI. Add lots of examples!
+
+## Training Parameters
+- Epochs: Times through data (10-50 to start)
+- Batch: Pi: 1-2, GPU: 4-16
+- LR: Learning rate (0.0001 is usually good)
+
+## Model Sizes
+- Tiny: ~0.5M params - Works on any device
+- Small: ~10M params - Good for Pi 4GB+
+- Medium: ~50M params - Needs 8GB+ RAM
+- Large: ~150M params - Needs GPU 8GB+
+
+## Model Scaling - How It Works
+
+Enigma supports 15 model sizes from nano to omega:
+
+### Size Tiers:
+| Tier       | Sizes                 | Hardware Needed              |
+|------------|----------------------|------------------------------|
+| Embedded   | nano (~1M), micro (~2M) | Microcontrollers, IoT       |
+| Edge       | tiny (~5M), mini (~10M) | Raspberry Pi, Mobile        |
+| Consumer   | small (~27M), medium (~85M), base (~125M) | Desktop GPU |
+| Prosumer   | large (~200M), xl (~600M) | RTX 3080+, RTX 4090        |
+| Server     | xxl (~1.5B), huge (~3B)   | Multi-GPU Server           |
+| Datacenter | giant (~7B), colossal (~13B) | A100/H100 Clusters       |
+| Ultimate   | titan (~30B), omega (~70B+)  | Full Datacenter Racks     |
+
+### Growing a Model:
+You can grow a model while preserving learned knowledge!
+- Train a small model on your laptop
+- Grow it to medium when you get a better GPU
+- Continue training the larger model
+
+### Shrinking a Model:
+You can shrink for deployment (some capacity lost):
+- Train a large model on a powerful machine
+- Shrink it to run on a Raspberry Pi
+
+### Knowledge Distillation:
+Train a small "student" model to mimic a large "teacher"
+for efficient edge deployment.
+
+## Connecting to Games/Robots/APIs
+Protocol configs are in: data/protocols/
+  - game/   : Game connections (Unity, Godot, etc)
+  - robot/  : Robot connections (Arduino, ROS, GPIO)
+  - api/    : API connections (REST, MQTT, etc)
+
+To add a new connection:
+1. Copy an example JSON from the folder
+2. Edit the settings (host, port, protocol)
+3. Set "enabled": true
+4. Restart or click Refresh in the tab
+
+See data/protocols/README.txt for full details.
+
+## Avatar
+Load an image or model in the Avatar tab.
+Enable display via Options -> Avatar
+
+## Vision
+Take screenshots for the AI to analyze.
+On Raspberry Pi, install: sudo apt install scrot
+
+## Voice Features
+- Options -> AI Auto-Speak: AI speaks responses
+- Options -> Microphone: Voice input
+
+## Module System
+Everything in Enigma is a toggleable module:
+- Core: model, tokenizer, training, inference
+- Generation: image_gen, code_gen, video_gen, audio_gen
+- Memory: memory, embeddings
+- Perception: voice_input, vision
+- Output: voice_output, avatar
+
+Use the Modules tab to enable/disable capabilities.
+
+## Tips
+- Back up your model before making big changes
+- Train in small batches - you can always train more
+- The more diverse your training data, the better
+- Check the models/ folder for your AI's files

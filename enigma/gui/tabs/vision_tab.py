@@ -27,13 +27,13 @@ def create_vision_tab(parent):
     header.setObjectName("header")
     layout.addWidget(header)
     
-    # Preview area
+    # Preview area - flexible height
     parent.vision_preview = QLabel("Vision not started")
-    parent.vision_preview.setMinimumHeight(250)
+    parent.vision_preview.setMinimumHeight(150)  # Reduced for smaller screens
     parent.vision_preview.setAlignment(Qt.AlignCenter)
     parent.vision_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 4px; background: #313244;")
     parent.vision_preview.setTextInteractionFlags(Qt.TextSelectableByMouse)
-    layout.addWidget(parent.vision_preview)
+    layout.addWidget(parent.vision_preview, stretch=1)  # Allow to grow/shrink
     
     # Source selection group
     source_group = QGroupBox("Capture Source")

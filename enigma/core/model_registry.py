@@ -69,6 +69,18 @@ class ModelRegistry:
         if self.registry_file.exists():
             with open(self.registry_file, "r") as f:
                 self.registry = json.load(f)
+            
+            # Clean up orphaned entries (registered but folder doesn't exist)
+            orphaned = []
+            for name, info in self.registry.get("models", {}).items():
+                model_path = Path(info.get("path", ""))
+                if not model_path.exists():
+                    orphaned.append(name)
+            
+            if orphaned:
+                for name in orphaned:
+                    del self.registry["models"][name]
+                self._save_registry()
         else:
             self.registry = {"models": {}, "created": datetime.now().isoformat()}
             self._save_registry()
@@ -103,6 +115,13 @@ class ModelRegistry:
         name = name.lower().strip().replace(" ", "_")
         if name in self.registry["models"]:
             raise ValueError(f"Model '{name}' already exists. Use load_model() or delete it first.")
+
+        # Check if folder exists but isn't registered (orphaned folder)
+        model_dir = self.models_dir / name
+        if model_dir.exists():
+            # Clean up orphaned folder so we can create fresh
+            import shutil
+            shutil.rmtree(model_dir)
 
         # Get config
         if custom_config:

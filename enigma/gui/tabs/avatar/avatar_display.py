@@ -31,9 +31,9 @@ def create_avatar_subtab(parent):
     widget = QWidget()
     layout = QVBoxLayout()
     
-    # Avatar display - large centered image
+    # Avatar display - large centered image (flexible size)
     parent.avatar_image_label = QLabel()
-    parent.avatar_image_label.setMinimumSize(350, 350)
+    parent.avatar_image_label.setMinimumSize(200, 200)  # Reduced for smaller screens
     parent.avatar_image_label.setAlignment(Qt.AlignCenter)
     parent.avatar_image_label.setStyleSheet("""
         border: 2px solid #45475a; 
