@@ -47,6 +47,41 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 | large | ~300M | Quality focus |
 | xl-omega | 1B-70B+ | Datacenter |
 
+## Key Files & Classes Reference
+
+### Module Management
+- **enigma/modules/manager.py**: `ModuleManager` class - Central controller for loading/unloading modules
+- **enigma/modules/registry.py**: `MODULE_REGISTRY` dict - Lists all available modules with metadata
+- **enigma/modules/base.py**: `BaseModule` class - Base class all modules inherit from
+
+### Core AI Components
+- **enigma/core/model.py**: `EnigmaModel` class - Main transformer model implementation
+- **enigma/core/tokenizer.py**: `EnigmaTokenizer` class - Text tokenization and vocabulary
+- **enigma/core/training.py**: `Trainer` class - Model training loop and optimization
+- **enigma/core/inference.py**: `InferenceEngine` class - Model inference and generation
+
+### AI Generation Addons (in enigma/addons/)
+- **image_gen_local.py**: Local image generation using Stable Diffusion
+- **image_gen_api.py**: Cloud image generation (DALL-E, Replicate)
+- **code_gen_local.py**: Local code generation using Enigma model
+- **audio_gen_local.py**: Local TTS with pyttsx3
+- **embedding_local.py**: Local embeddings with sentence-transformers
+
+### Memory System
+- **enigma/memory/conversation.py**: `ConversationMemory` class - Stores chat history
+- **enigma/memory/vector_store.py**: `VectorStore` class - Semantic search over memories
+
+### Communication & Networking
+- **enigma/comms/api_server.py**: `APIServer` class - REST API for remote access
+- **enigma/comms/network.py**: Multi-device networking and synchronization
+
+### User Interface
+- **enigma/gui/main_window.py**: `MainWindow` class - PyQt5 main application window
+- **enigma/gui/module_manager_tab.py**: UI for toggling modules on/off
+
+### Configuration
+- **enigma/config.py**: `CONFIG` object - Global configuration (paths, model sizes, hyperparameters)
+
 ## Module System
 
 ### How It Works

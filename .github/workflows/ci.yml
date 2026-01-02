@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
     
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       
       - name: Cache pip packages
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
@@ -38,41 +38,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov flake8 mypy autopep8
-      
-      - name: Lint with flake8 (syntax errors and undefined names)
-        run: |
-          # Stop the build if there are Python syntax errors or undefined names
-          flake8 enigma/ --count --select=E9,F63,F7,F82 --show-source --statistics
-      
-      - name: Check for unused imports (F401)
-        run: |
-          # Check that we have no unused imports
-          flake8 enigma/ --count --select=F401 --statistics || true
-      
-      - name: Lint with flake8 (full check)
-        run: |
-          # Exit-zero treats all errors as warnings
-          flake8 enigma/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          pip install pytest pytest-cov
       
       - name: Run tests
         run: |
           pytest tests/ -v --tb=short --continue-on-collection-errors
-        continue-on-error: true
       
       - name: Generate coverage report
         run: |
           pytest tests/ --cov=enigma --cov-report=xml --cov-report=term
-        continue-on-error: true
       
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5.5.2
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
-        continue-on-error: true
 
   lint:
     runs-on: ubuntu-latest
@@ -90,16 +72,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install flake8 autopep8 mypy
       
+      - name: Lint with flake8 (syntax errors and undefined names)
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 enigma/ --count --select=E9,F63,F7,F82 --show-source --statistics
+      
+      - name: Check for unused imports (F401)
+        run: |
+          # Check that we have no unused imports (warning only)
+          flake8 enigma/ --count --select=F401 --statistics || true
+      
       - name: Check code style with flake8
         run: |
-          flake8 enigma/ --count --statistics --show-source || true
+          # Full style check (exit-zero treats all errors as warnings)
+          flake8 enigma/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --show-source
       
       - name: Check for security issues
         run: |
-          # Basic security checks
-          grep -r "eval(" enigma/ && exit 1 || echo "No eval() found"
-          grep -r "exec(" enigma/ && exit 1 || echo "No exec() found"
-        continue-on-error: true
+          # Basic security checks - fail if dangerous functions are found
+          if grep -r "eval(" enigma/ 2>/dev/null; then
+            echo "ERROR: Found eval() usage which is a security risk"
+            exit 1
+          fi
+          if grep -r "exec(" enigma/ 2>/dev/null; then
+            echo "ERROR: Found exec() usage which is a security risk"
+            exit 1
+          fi
+          echo "Security check passed: No eval() or exec() found"
 
   build-docs:
     runs-on: ubuntu-latest
