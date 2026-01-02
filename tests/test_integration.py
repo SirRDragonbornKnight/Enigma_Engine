@@ -116,7 +116,7 @@ class TestModelRegistry:
             # Cleanup
             try:
                 registry.delete_model(name)
-            except:
+            except (KeyError, FileNotFoundError, OSError):
                 pass
 
 
