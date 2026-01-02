@@ -89,7 +89,44 @@ def create_settings_tab(parent):
     power_layout.addWidget(parent.power_mode_details_label)
     
     layout.addWidget(power_group)
-    
+
+    # === THEME SELECTOR ===
+    theme_group = QGroupBox("🎨 Theme")
+    theme_layout = QVBoxLayout(theme_group)
+
+    theme_desc = QLabel(
+        "Choose a visual theme for the application. "
+        "Changes apply immediately."
+    )
+    theme_desc.setWordWrap(True)
+    theme_layout.addWidget(theme_desc)
+
+    theme_row = QHBoxLayout()
+    theme_row.addWidget(QLabel("Theme:"))
+
+    parent.theme_combo = QComboBox()
+    parent.theme_combo.addItem("🌙 Dark (Default)", "dark")
+    parent.theme_combo.addItem("☀️ Light", "light")
+    parent.theme_combo.addItem("👁️ High Contrast", "high_contrast")
+    parent.theme_combo.addItem("🌌 Midnight", "midnight")
+    parent.theme_combo.addItem("🌲 Forest", "forest")
+    parent.theme_combo.addItem("🌅 Sunset", "sunset")
+    parent.theme_combo.currentIndexChanged.connect(
+        lambda idx: _apply_theme(parent)
+    )
+    theme_row.addWidget(parent.theme_combo)
+
+    theme_row.addStretch()
+    theme_layout.addLayout(theme_row)
+
+    parent.theme_description_label = QLabel(
+        "Dark theme with soft colors (default)"
+    )
+    parent.theme_description_label.setStyleSheet("color: #888; font-style: italic;")
+    theme_layout.addWidget(parent.theme_description_label)
+
+    layout.addWidget(theme_group)
+
     # === AUTONOMOUS MODE ===
     autonomous_group = QGroupBox("🤖 Autonomous Mode")
     autonomous_layout = QVBoxLayout(autonomous_group)
@@ -157,6 +194,45 @@ def _load_saved_settings(parent):
     mode_map = {"minimal": 0, "gaming": 1, "balanced": 2, "performance": 3, "max": 4}
     if saved_mode in mode_map:
         parent.resource_mode_combo.setCurrentIndex(mode_map[saved_mode])
+
+
+def _apply_theme(parent):
+    """Apply selected theme to the application."""
+    theme_id = parent.theme_combo.currentData()
+
+    # Theme descriptions
+    descriptions = {
+        "dark": "Dark theme with soft colors (default)",
+        "light": "Light theme for bright environments",
+        "high_contrast": "High contrast for accessibility",
+        "midnight": "Deep blue midnight theme",
+        "forest": "Nature-inspired green theme",
+        "sunset": "Warm sunset colors"
+    }
+    parent.theme_description_label.setText(descriptions.get(theme_id, ""))
+
+    try:
+        from ..theme_system import ThemeManager
+
+        # Get or create theme manager
+        if not hasattr(parent, 'theme_manager'):
+            parent.theme_manager = ThemeManager()
+
+        # Apply theme
+        if parent.theme_manager.set_theme(theme_id):
+            stylesheet = parent.theme_manager.get_current_stylesheet()
+            # Apply to main window
+            main_window = parent.window()
+            if main_window:
+                main_window.setStyleSheet(stylesheet)
+    except ImportError:
+        QMessageBox.warning(
+            parent, "Theme Error",
+            "Theme system module (theme_system) not found.\n\n"
+            "Please ensure the enigma.gui.theme_system module is properly installed."
+        )
+    except Exception as e:
+        QMessageBox.warning(parent, "Error", f"Failed to apply theme: {e}")
 
 
 def _apply_resource_mode(parent):

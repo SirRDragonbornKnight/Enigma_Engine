@@ -95,7 +95,12 @@ This PR successfully implements fundamental features and quality-of-life upgrade
   - Categories: Navigation, Actions, Edit, Model, View, Tools, Application
   - Conflict detection
   
-- **Trigger Phrases**: ⏳ Marked for future enhancement
+- **Trigger Phrases**: ✅ `enigma/voice/trigger_phrases.py` (320 lines)
+  - Wake word detection ("Hey Enigma", "OK Enigma")
+  - Background listening mode
+  - Configurable confidence threshold
+  - Callback system for wake events
+  - Sound/voice confirmation on trigger
 
 #### 6. Training & Documentation (NEW)
 - **Training Validator**: `enigma/utils/training_validator.py` (526 lines)

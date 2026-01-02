@@ -1512,6 +1512,7 @@ class EnhancedMainWindow(QMainWindow):
             create_terminal_tab
         )
         from .tabs.settings_tab import create_settings_tab
+        from .tabs.personality_tab import create_personality_tab
         from .tabs.modules_tab import ModulesTab
         from .tabs.scaling_tab import ScalingTab
         from .tabs.addons_tab import AddonsTab
@@ -1525,6 +1526,7 @@ class EnhancedMainWindow(QMainWindow):
         tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")  # Module manager with ModuleManager instance
         tabs.addTab(AddonsTab(self), "Addons")    # AI capabilities (image, code, video, audio)
         tabs.addTab(create_avatar_tab(self), "Avatar")
+        tabs.addTab(create_personality_tab(self), "Personality")  # Personality configuration
         tabs.addTab(create_vision_tab(self), "Vision")
         tabs.addTab(create_terminal_tab(self), "Terminal")
         tabs.addTab(create_sessions_tab(self), "History")
