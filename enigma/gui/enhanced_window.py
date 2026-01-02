@@ -1310,6 +1310,14 @@ class EnhancedMainWindow(QMainWindow):
         self.current_model_name = None
         self.engine = None
         
+        # Initialize module manager
+        try:
+            from enigma.modules import ModuleManager
+            self.module_manager = ModuleManager()
+        except Exception as e:
+            print(f"Could not initialize ModuleManager: {e}")
+            self.module_manager = None
+        
         # Initialize toggle states
         self.auto_speak = False
         self.microphone_enabled = False
@@ -1513,7 +1521,7 @@ class EnhancedMainWindow(QMainWindow):
         tabs.addTab(create_chat_tab(self), "Chat")
         tabs.addTab(create_training_tab(self), "Train")
         tabs.addTab(ScalingTab(self), "Scale")    # Model scaling visualization
-        tabs.addTab(ModulesTab(self), "Modules")  # Module manager
+        tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")  # Module manager with ModuleManager instance
         tabs.addTab(AddonsTab(self), "Addons")    # AI capabilities (image, code, video, audio)
         tabs.addTab(create_avatar_tab(self), "Avatar")
         tabs.addTab(create_vision_tab(self), "Vision")
