@@ -498,6 +498,10 @@ class ModulesTab(QWidget):
                     if not success:
                         self.log(f"✗ Failed to unload {module_id}")
                         return
+                
+                # Sync with Options menu toggles in main window
+                self._sync_options_menu(module_id, enabled)
+                
             except Exception as e:
                 self.log(f"✗ Error: {str(e)}")
                 return
@@ -508,6 +512,48 @@ class ModulesTab(QWidget):
         
         self.log(f"✓ {module_id} {'enabled' if enabled else 'disabled'}")
         self._update_stats()
+    
+    def _sync_options_menu(self, module_id: str, enabled: bool):
+        """Sync Options menu toggles when module state changes."""
+        try:
+            parent = self.parent()
+            if not parent:
+                return
+            
+            # Find the main window (may need to go up multiple levels)
+            main_window = parent
+            while main_window and not hasattr(main_window, 'avatar_action'):
+                main_window = main_window.parent()
+            
+            if not main_window:
+                return
+            
+            # Sync avatar
+            if module_id == 'avatar' and hasattr(main_window, 'avatar_action'):
+                main_window.avatar_action.blockSignals(True)
+                main_window.avatar_action.setChecked(enabled)
+                main_window.avatar_action.setText(f"Avatar ({'ON' if enabled else 'OFF'})")
+                main_window.avatar_action.blockSignals(False)
+            
+            # Sync voice output (auto-speak)
+            elif module_id == 'voice_output' and hasattr(main_window, 'auto_speak_action'):
+                main_window.auto_speak_action.blockSignals(True)
+                main_window.auto_speak_action.setChecked(enabled)
+                main_window.auto_speak_action.setText(f"AI Auto-Speak ({'ON' if enabled else 'OFF'})")
+                main_window.auto_speak = enabled
+                main_window.auto_speak_action.blockSignals(False)
+            
+            # Sync voice input (microphone)
+            elif module_id == 'voice_input' and hasattr(main_window, 'microphone_action'):
+                main_window.microphone_action.blockSignals(True)
+                main_window.microphone_action.setChecked(enabled)
+                main_window.microphone_action.setText(f"Microphone ({'ON' if enabled else 'OFF'})")
+                main_window.microphone_enabled = enabled
+                main_window.microphone_action.blockSignals(False)
+                
+        except Exception as e:
+            # Don't crash if sync fails
+            print(f"Options menu sync error: {e}")
     
     def _sync_loaded_modules(self):
         """Sync UI state with actually loaded modules."""

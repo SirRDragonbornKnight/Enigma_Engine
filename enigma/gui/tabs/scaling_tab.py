@@ -145,10 +145,12 @@ class ScalingTab(QWidget):
         # Title
         title = QLabel("Model Scaling")
         title.setFont(QFont('Arial', 16, QFont.Bold))
+        title.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(title)
         
         subtitle = QLabel("From Raspberry Pi to Datacenter - Enigma scales with your hardware")
-        subtitle.setStyleSheet("color: #888;")
+        subtitle.setStyleSheet("color: #aaa; font-size: 12px;")  # Increased subtitle size
+        subtitle.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(subtitle)
         
         # Visual scale widget
@@ -212,7 +214,9 @@ class ScalingTab(QWidget):
         actions = QHBoxLayout()
         
         self.current_label = QLabel("Current Model: small (~27M params)")
-        self.current_label.setFont(QFont('Arial', 10, QFont.Bold))
+        self.current_label.setFont(QFont('Arial', 11, QFont.Bold))  # Increased from 10
+        self.current_label.setStyleSheet("color: #cdd6f4;")  # Better contrast
+        self.current_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         actions.addWidget(self.current_label)
         
         actions.addStretch()
@@ -248,12 +252,14 @@ class ScalingTab(QWidget):
         # Header
         header = QHBoxLayout()
         name_label = QLabel(name.upper())
-        name_label.setFont(QFont('Arial', 12, QFont.Bold))
+        name_label.setFont(QFont('Arial', 13, QFont.Bold))  # Increased from 12
         name_label.setStyleSheet(f"color: {color};")
+        name_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         header.addWidget(name_label)
         
         params_label = QLabel(params)
-        params_label.setStyleSheet("color: #888;")
+        params_label.setStyleSheet("color: #aaa; font-size: 11px;")  # Increased contrast and size
+        params_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         header.addWidget(params_label)
         
         layout.addLayout(header)
@@ -261,12 +267,14 @@ class ScalingTab(QWidget):
         # Description
         desc_label = QLabel(desc)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        desc_label.setStyleSheet("font-size: 11px; color: #cdd6f4;")  # Increased size, better contrast
+        desc_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(desc_label)
         
         # Specs
         specs = QLabel(f"dim={dim} • layers={layers} • seq={seq_len}")
-        specs.setStyleSheet("font-size: 9px; color: #666; font-family: monospace;")
+        specs.setStyleSheet("font-size: 10px; color: #888; font-family: monospace;")  # Increased size
+        specs.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(specs)
         
         # Select button
