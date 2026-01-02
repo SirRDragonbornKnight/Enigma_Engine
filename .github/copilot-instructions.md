@@ -154,5 +154,4 @@ The module manager automatically prevents:
 
 ❌ **DON'T block the UI thread** - Use QThread for long operations
 
-❌ **DON'T mix model sizes carelessly** - Requires proper conversion</content>
-<parameter name="filePath">c:\Users\sirkn_gbhnunq\Documents\GitHub\enigma_engine\.github\copilot-instructions.md
+❌ **DON'T mix model sizes carelessly** - Requires proper conversion
