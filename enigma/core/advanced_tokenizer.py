@@ -190,6 +190,9 @@ class EnigmaTokenizer:
 
         # Encoding cache
         self.cache: Dict[str, str] = {}
+        
+        # Streaming buffer
+        self._stream_buffer = ""
 
         # Load or initialize
         if vocab_file and vocab_file.exists():
@@ -794,6 +797,71 @@ class EnigmaTokenizer:
             'avg_token_length': sum(len(t) for t in tokens) / len(tokens) if tokens else 0.0,
             'tokens': tokens[:50],  # First 50 tokens
         }
+    
+    @staticmethod
+    def get_info() -> Dict[str, Any]:
+        """
+        Get information about the Enigma Tokenizer.
+        
+        Returns:
+            Dictionary with tokenizer identity and capabilities
+        """
+        return {
+            'name': 'EnigmaTokenizer',
+            'version': '2.1.0',
+            'engine': 'Enigma Engine',
+            'type': 'Byte-level BPE',
+            'description': "Enigma Engine's native tokenizer with unique [E:token] format",
+            'features': [
+                'Byte-level BPE (handles any text, any language)',
+                'Custom [E:token] format for special tokens',
+                'Multi-modal support (images, audio, video, avatar)',
+                'Tool invocation tokens built-in',
+                'Thinking/reasoning tokens for chain-of-thought',
+                'BPE dropout for training regularization',
+                'Efficient caching for fast encoding',
+                'Streaming encode support',
+            ],
+            'special_token_format': '[E:name]',
+            'differentiators': [
+                'Unique [E:token] format vs GPT\'s <|token|> format',
+                'Built-in multi-modal and tool tokens',
+                'Native Enigma Engine integration',
+                'Optimized for both code and natural language',
+            ],
+        }
+    
+    def identity(self) -> str:
+        """
+        Return a human-readable identity string for the tokenizer.
+        
+        Returns:
+            Identity string
+        """
+        info = self.get_info()
+        # Use string formatting for consistent width
+        vocab_str = f"{self.vocab_size:,}"
+        merges_str = f"{len(self.bpe_ranks):,}"
+        
+        lines = [
+            "╔══════════════════════════════════════════╗",
+            f"║       {info['name']} v{info['version']}       ║",
+            "╠══════════════════════════════════════════╣",
+            f"║ Engine: {info['engine']:<31}║",
+            f"║ Type:   {info['type']:<31}║",
+            f"║ Vocab:  {vocab_str:<31}║",
+            f"║ Merges: {merges_str:<31}║",
+            "╚══════════════════════════════════════════╝",
+        ]
+        return "\n".join(lines)
+    
+    def __repr__(self) -> str:
+        """Return a string representation."""
+        return f"EnigmaTokenizer(vocab_size={self.vocab_size}, merges={len(self.bpe_ranks)})"
+    
+    def __str__(self) -> str:
+        """Return a human-readable string."""
+        return f"EnigmaTokenizer v2.1.0 - Vocab: {self.vocab_size:,} tokens"
 
 
 def train_tokenizer(
