@@ -198,7 +198,7 @@ class ExtractTextTool(Tool):
             try:
                 with open(path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-            except:
+            except (IOError, OSError, UnicodeDecodeError):
                 # Try binary read and decode
                 with open(path, "rb") as f:
                     raw = f.read()

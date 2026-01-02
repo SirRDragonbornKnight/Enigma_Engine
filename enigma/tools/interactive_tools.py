@@ -34,7 +34,7 @@ class ChecklistManager:
             try:
                 with open(self.storage_path, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError):
                 return {}
         return {}
     
@@ -112,7 +112,7 @@ class TaskScheduler:
             try:
                 with open(self.storage_path, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError):
                 return {}
         return {}
     
@@ -171,7 +171,7 @@ class TaskScheduler:
                 try:
                     due = datetime.fromisoformat(task['due_date'])
                     task_info['overdue'] = due < datetime.now()
-                except:
+                except (ValueError, TypeError):
                     task_info['overdue'] = False
             
             tasks.append(task_info)
@@ -213,7 +213,7 @@ class ReminderSystem:
             try:
                 with open(self.storage_path, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError):
                 return {}
         return {}
     
@@ -291,7 +291,7 @@ class ReminderSystem:
                     else:
                         reminder['triggered'] = True
                         reminder['active'] = False
-            except:
+            except (ValueError, KeyError, TypeError):
                 continue
         
         if due_reminders:

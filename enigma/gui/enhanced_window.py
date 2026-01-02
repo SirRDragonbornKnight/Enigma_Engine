@@ -1003,7 +1003,7 @@ class ModelManagerDialog(QDialog):
         """Refresh the model list from disk."""
         try:
             self.registry._load_registry()
-        except:
+        except (IOError, OSError, json.JSONDecodeError):
             pass
         
         self.model_list.clear()

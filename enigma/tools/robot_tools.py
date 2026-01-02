@@ -41,7 +41,9 @@ IMPLEMENTING YOUR OWN ROBOT:
 """
 
 import json
+import socket
 import time
+import urllib.error
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
@@ -290,7 +292,7 @@ class NetworkRobotInterface(RobotInterface):
             with urllib.request.urlopen(req, timeout=10) as response:
                 result = json.loads(response.read().decode())
                 return result.get("success", False)
-        except:
+        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, socket.timeout, OSError):
             return False
     
     def gripper(self, action: str) -> bool:
@@ -305,7 +307,7 @@ class NetworkRobotInterface(RobotInterface):
             with urllib.request.urlopen(req, timeout=10) as response:
                 result = json.loads(response.read().decode())
                 return result.get("success", False)
-        except:
+        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, socket.timeout, OSError):
             return False
 
 

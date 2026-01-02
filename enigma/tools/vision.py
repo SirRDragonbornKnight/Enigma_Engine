@@ -227,7 +227,7 @@ class ScreenVision:
         try:
             from .simple_ocr import AdvancedOCR
             return AdvancedOCR()
-        except:
+        except ImportError:
             pass
         
         # Fallback to tesseract check
@@ -235,7 +235,7 @@ class ScreenVision:
             import pytesseract
             pytesseract.get_tesseract_version()
             return "tesseract"
-        except:
+        except (ImportError, RuntimeError, OSError):
             return None
     
     def see(self, describe: bool = True, detect_text: bool = True) -> Dict[str, Any]:
@@ -307,7 +307,7 @@ class ScreenVision:
             arr = np.array(img)
             brightness = arr.mean()
             is_dark = brightness < 128
-        except:
+        except ImportError:
             is_dark = False
         
         desc_parts = [
@@ -367,7 +367,7 @@ class ScreenVision:
                 "difference": round(diff, 3),
                 "threshold": threshold,
             }
-        except:
+        except (ImportError, ValueError, TypeError):
             return {"changed": True, "reason": "comparison_failed"}
     
     def find_text_on_screen(self, search_text: str) -> List[Dict]:

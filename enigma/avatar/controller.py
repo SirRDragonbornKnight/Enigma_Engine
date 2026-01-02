@@ -17,7 +17,10 @@ The avatar system is designed to be modular:
   - ScreenInteractor: Visual effects for "touching" windows
 """
 
+import ctypes
 import json
+import re
+import subprocess
 import time
 import threading
 from pathlib import Path
@@ -659,7 +662,7 @@ class ScreenInteractor:
                             "width": int(parts[4]),
                             "height": int(parts[5]),
                         }
-        except:
+        except (subprocess.SubprocessError, ValueError, IndexError, OSError):
             pass
         
         try:
@@ -687,7 +690,7 @@ class ScreenInteractor:
                         "width": int(size_match.group(1)),
                         "height": int(size_match.group(2)),
                     }
-        except:
+        except (subprocess.SubprocessError, ValueError, IndexError, OSError):
             pass
         
         return None
@@ -729,7 +732,7 @@ class ScreenInteractor:
                     "width": rect.right - rect.left,
                     "height": rect.bottom - rect.top,
                 }
-        except:
+        except (ImportError, OSError, ctypes.ArgumentError):
             pass
         
         return None
@@ -766,7 +769,7 @@ class ScreenInteractor:
                         "width": int(parts[2]),
                         "height": int(parts[3]),
                     }
-        except:
+        except (subprocess.SubprocessError, ValueError, IndexError, OSError):
             pass
         
         return None

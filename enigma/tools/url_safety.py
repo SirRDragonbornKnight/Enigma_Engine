@@ -252,7 +252,7 @@ class URLSafety:
         from urllib.parse import urlparse
         try:
             return urlparse(url).netloc
-        except:
+        except (ValueError, AttributeError):
             return ""
     
     def get_statistics(self) -> Dict[str, Any]:

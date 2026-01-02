@@ -503,7 +503,7 @@ class WebServer:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except (OSError, socket.error):
             return "localhost"
     
     def run(self, debug: bool = False):

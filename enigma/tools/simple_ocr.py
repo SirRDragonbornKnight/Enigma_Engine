@@ -357,7 +357,7 @@ class AdvancedOCR:
             import pytesseract
             pytesseract.get_tesseract_version()
             return "tesseract"
-        except:
+        except (ImportError, RuntimeError, OSError):
             pass
         
         # Fallback to simple

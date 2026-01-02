@@ -132,7 +132,7 @@ class PowerManager:
                     import psutil
                     p = psutil.Process()
                     p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS if hasattr(psutil, 'BELOW_NORMAL_PRIORITY_CLASS') else 16384)
-                except:
+                except (ImportError, OSError, AttributeError):
                     pass
     
     def pause(self):

@@ -112,11 +112,11 @@ class AutonomousMode:
                     results = search(topic, max_results=3)
                     if results and self.on_learning:
                         self.on_learning(f"Learned about {topic}: {results[0].get('snippet', '')[:100]}...")
-                except:
+                except (ImportError, Exception):
                     pass
                 
                 brain.mark_curiosity_explored(topic)
-        except:
+        except (ImportError, Exception):
             pass
     
     def _reflect_on_conversations(self):
@@ -145,7 +145,7 @@ class AutonomousMode:
             
             if self.on_thought:
                 self.on_thought(f"Personality evolving... ({trait})")
-        except:
+        except (ImportError, IOError, OSError):
             pass
 
 

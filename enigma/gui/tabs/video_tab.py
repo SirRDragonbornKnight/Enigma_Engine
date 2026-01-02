@@ -81,7 +81,7 @@ class LocalVideo:
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            except:
+            except ImportError:
                 pass
         self.is_loaded = False
     

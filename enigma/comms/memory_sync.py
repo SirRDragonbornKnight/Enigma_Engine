@@ -62,7 +62,7 @@ class MemorySync:
                     data = json.load(f)
                     data["_file"] = file.name
                     memories.append(data)
-            except:
+            except (json.JSONDecodeError, IOError, OSError):
                 pass
         return memories
     
@@ -83,7 +83,7 @@ class MemorySync:
                         data = json.load(f)
                         data["_file"] = file.name
                         memories.append(data)
-                except:
+                except (json.JSONDecodeError, IOError, OSError):
                     pass
         
         return memories

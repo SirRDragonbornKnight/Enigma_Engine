@@ -62,7 +62,7 @@ class LocalTTS:
         if self.engine:
             try:
                 self.engine.stop()
-            except:
+            except RuntimeError:
                 pass
             self.engine = None
         self.is_loaded = False
