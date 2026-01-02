@@ -40,7 +40,7 @@ class ResourceMonitor(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         
         # Title
-        title = QLabel("📊 Resource Monitor")
+        title = QLabel("Resource Monitor")
         title_font = QFont()
         title_font.setPointSize(12)
         title_font.setBold(True)

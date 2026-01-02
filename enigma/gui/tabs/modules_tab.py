@@ -34,13 +34,13 @@ def make_selectable_label(text: str, **kwargs) -> QLabel:
 
 # Category colors and icons
 CATEGORY_STYLES = {
-    'core': {'color': '#e74c3c', 'icon': '⚙️', 'name': 'Core'},
-    'memory': {'color': '#3498db', 'icon': '🧠', 'name': 'Memory'},
-    'interface': {'color': '#2ecc71', 'icon': '🖥️', 'name': 'Interface'},
-    'perception': {'color': '#9b59b6', 'icon': '👁️', 'name': 'Perception'},
+    'core': {'color': '#e74c3c', 'icon': '', 'name': 'Core'},
+    'memory': {'color': '#3498db', 'icon': '', 'name': 'Memory'},
+    'interface': {'color': '#2ecc71', 'icon': '', 'name': 'Interface'},
+    'perception': {'color': '#9b59b6', 'icon': '', 'name': 'Perception'},
     'output': {'color': '#f39c12', 'icon': '📤', 'name': 'Output'},
-    'generation': {'color': '#e91e63', 'icon': '✨', 'name': 'AI Generation'},
-    'tools': {'color': '#1abc9c', 'icon': '🔧', 'name': 'Tools'},
+    'generation': {'color': '#e91e63', 'icon': '', 'name': 'AI Generation'},
+    'tools': {'color': '#1abc9c', 'icon': '', 'name': 'Tools'},
     'network': {'color': '#e67e22', 'icon': '🌐', 'name': 'Network'},
     'extension': {'color': '#95a5a6', 'icon': '🔌', 'name': 'Extension'},
 }
@@ -135,7 +135,7 @@ class ModuleCard(QFrame):
             info_parts.append(f"Adds: {', '.join(provides[:2])}")
         
         if self.module_info.get('needs_api_key'):
-            info_parts.append("🔑 API key")
+            info_parts.append("API key")
         
         if self.module_info.get('needs_gpu'):
             info_parts.append("🎮 GPU")
@@ -271,7 +271,7 @@ class ModulesTab(QWidget):
         # Title and controls
         header = QHBoxLayout()
         
-        title = QLabel("🎛️ Module Manager")
+        title = QLabel("Module Manager")
         title.setFont(QFont('Arial', 16, QFont.Bold))
         header.addWidget(title)
         
@@ -355,7 +355,7 @@ class ModulesTab(QWidget):
         log_layout.addWidget(self.log_text)
         
         # Clear activity button
-        self.clear_log_btn = QPushButton("🗑️ Clear Activity")
+        self.clear_log_btn = QPushButton("Clear Activity")
         self.clear_log_btn.clicked.connect(self.clear_activity_log)
         log_layout.addWidget(self.clear_log_btn)
         

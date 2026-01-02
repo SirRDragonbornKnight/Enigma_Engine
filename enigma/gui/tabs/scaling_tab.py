@@ -31,13 +31,13 @@ MODEL_SPECS = {
     'micro':    {'params': 2,     'dim': 192,  'layers': 4,  'heads': 4,  'ctx': 384,   'ram': 512,   'vram': 0,    'tier': 'embedded',   'emoji': '📟', 'desc': 'IoT devices, ESP32'},
     'tiny':     {'params': 5,     'dim': 256,  'layers': 6,  'heads': 8,  'ctx': 512,   'ram': 1024,  'vram': 0,    'tier': 'edge',       'emoji': '🍓', 'desc': 'Raspberry Pi 3/4'},
     'mini':     {'params': 10,    'dim': 384,  'layers': 6,  'heads': 6,  'ctx': 512,   'ram': 2048,  'vram': 0,    'tier': 'edge',       'emoji': '📱', 'desc': 'Mobile, tablets'},
-    'small':    {'params': 27,    'dim': 512,  'layers': 8,  'heads': 8,  'ctx': 1024,  'ram': 4096,  'vram': 2048, 'tier': 'consumer',   'emoji': '💻', 'desc': 'Laptops, entry GPU'},
-    'medium':   {'params': 85,    'dim': 768,  'layers': 12, 'heads': 12, 'ctx': 2048,  'ram': 8192,  'vram': 4096, 'tier': 'consumer',   'emoji': '🖥️', 'desc': 'Desktop, GTX 1660+'},
+    'small':    {'params': 27,    'dim': 512,  'layers': 8,  'heads': 8,  'ctx': 1024,  'ram': 4096,  'vram': 2048, 'tier': 'consumer',   'emoji': '', 'desc': 'Laptops, entry GPU'},
+    'medium':   {'params': 85,    'dim': 768,  'layers': 12, 'heads': 12, 'ctx': 2048,  'ram': 8192,  'vram': 4096, 'tier': 'consumer',   'emoji': '', 'desc': 'Desktop, GTX 1660+'},
     'base':     {'params': 125,   'dim': 896,  'layers': 14, 'heads': 14, 'ctx': 2048,  'ram': 12288, 'vram': 6144, 'tier': 'consumer',   'emoji': '🎮', 'desc': 'Gaming PC, RTX 3060'},
-    'large':    {'params': 200,   'dim': 1024, 'layers': 16, 'heads': 16, 'ctx': 4096,  'ram': 16384, 'vram': 8192, 'tier': 'prosumer',   'emoji': '⚡', 'desc': 'Workstation, RTX 3070+'},
+    'large':    {'params': 200,   'dim': 1024, 'layers': 16, 'heads': 16, 'ctx': 4096,  'ram': 16384, 'vram': 8192, 'tier': 'prosumer',   'emoji': '', 'desc': 'Workstation, RTX 3070+'},
     'xl':       {'params': 600,   'dim': 1536, 'layers': 24, 'heads': 24, 'ctx': 4096,  'ram': 32768, 'vram': 12288,'tier': 'prosumer',   'emoji': '🚀', 'desc': 'High-end, RTX 3080+'},
     'xxl':      {'params': 1500,  'dim': 2048, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 65536, 'vram': 24576,'tier': 'server',     'emoji': '🏢', 'desc': 'Server, RTX 4090'},
-    'huge':     {'params': 3000,  'dim': 2560, 'layers': 40, 'heads': 40, 'ctx': 8192,  'ram': 131072,'vram': 49152,'tier': 'server',     'emoji': '🏗️', 'desc': 'Multi-GPU server'},
+    'huge':     {'params': 3000,  'dim': 2560, 'layers': 40, 'heads': 40, 'ctx': 8192,  'ram': 131072,'vram': 49152,'tier': 'server',     'emoji': '', 'desc': 'Multi-GPU server'},
     'giant':    {'params': 7000,  'dim': 4096, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 262144,'vram': 81920,'tier': 'datacenter', 'emoji': '🌐', 'desc': 'A100/H100 cluster'},
     'colossal': {'params': 13000, 'dim': 4096, 'layers': 48, 'heads': 32, 'ctx': 16384, 'ram': 524288,'vram': 163840,'tier': 'datacenter','emoji': '🌍', 'desc': 'Distributed training'},
     'titan':    {'params': 30000, 'dim': 6144, 'layers': 48, 'heads': 48, 'ctx': 16384, 'ram': 1048576,'vram': 327680,'tier': 'ultimate', 'emoji': '🌟', 'desc': 'Full datacenter'},
@@ -59,8 +59,8 @@ TIER_COLORS = {
 TIER_NAMES = {
     'embedded': '🔬 Embedded',
     'edge': '🍓 Edge',
-    'consumer': '💻 Consumer',
-    'prosumer': '⚡ Prosumer',
+    'consumer': 'Consumer',
+    'prosumer': ' Prosumer',
     'server': '🏢 Server',
     'datacenter': '🌐 Datacenter',
     'ultimate': '🔮 Ultimate'
@@ -219,7 +219,7 @@ class SpecsPanel(QFrame):
         layout.setContentsMargins(20, 20, 20, 20)
         
         # Header with model name and emoji
-        self.header = QLabel("💻 SMALL")
+        self.header = QLabel("SMALL")
         self.header.setFont(QFont('Segoe UI', 24, QFont.Bold))
         self.header.setStyleSheet("color: #ffd43b;")
         layout.addWidget(self.header)
@@ -230,7 +230,7 @@ class SpecsPanel(QFrame):
         layout.addWidget(self.desc)
         
         # Tier badge
-        self.tier_badge = QLabel("💻 Consumer Tier")
+        self.tier_badge = QLabel("Consumer Tier")
         self.tier_badge.setStyleSheet("""
             background: #ffd43b33;
             color: #ffd43b;
@@ -244,7 +244,7 @@ class SpecsPanel(QFrame):
         layout.addSpacing(10)
         
         # Architecture specs
-        arch_group = QGroupBox("🏗️ Architecture")
+        arch_group = QGroupBox("Architecture")
         arch_group.setStyleSheet("""
             QGroupBox {
                 color: #ffffff;
@@ -285,7 +285,7 @@ class SpecsPanel(QFrame):
         layout.addWidget(arch_group)
         
         # Hardware requirements
-        hw_group = QGroupBox("🖥️ Hardware Requirements")
+        hw_group = QGroupBox(" Hardware Requirements")
         hw_group.setStyleSheet(arch_group.styleSheet())
         hw_layout = QGridLayout(hw_group)
         
@@ -336,7 +336,7 @@ class SpecsPanel(QFrame):
         layout.addWidget(hw_group)
         
         # Performance estimate
-        perf_group = QGroupBox("⚡ Performance Estimate")
+        perf_group = QGroupBox(" Performance Estimate")
         perf_group.setStyleSheet(arch_group.styleSheet())
         perf_layout = QVBoxLayout(perf_group)
         
@@ -462,7 +462,7 @@ class CompareWidget(QFrame):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(4)
         
-        title = QLabel("📊 Quick Compare")
+        title = QLabel("Quick Compare")
         title.setFont(QFont('Segoe UI', 11, QFont.Bold))
         title.setStyleSheet("color: #ffffff;")
         layout.addWidget(title)
@@ -479,15 +479,15 @@ class CompareWidget(QFrame):
         
         # More comprehensive comparison rows
         comparisons = [
-            ('nano',   '1M',    '256',   '256MB',  '⚡⚡⚡⚡⚡'),
-            ('micro',  '2M',    '384',   '512MB',  '⚡⚡⚡⚡⚡'),
-            ('tiny',   '5M',    '512',   '1GB',    '⚡⚡⚡⚡'),
-            ('mini',   '10M',   '512',   '2GB',    '⚡⚡⚡⚡'),
-            ('small',  '27M',   '1K',    '4GB',    '⚡⚡⚡'),
-            ('medium', '85M',   '2K',    '8GB',    '⚡⚡⚡'),
-            ('base',   '125M',  '2K',    '12GB',   '⚡⚡'),
-            ('large',  '200M',  '4K',    '16GB',   '⚡⚡'),
-            ('xl',     '600M',  '4K',    '32GB',   '⚡'),
+            ('nano',   '1M',    '256',   '256MB',  ''),
+            ('micro',  '2M',    '384',   '512MB',  ''),
+            ('tiny',   '5M',    '512',   '1GB',    ''),
+            ('mini',   '10M',   '512',   '2GB',    ''),
+            ('small',  '27M',   '1K',    '4GB',    ''),
+            ('medium', '85M',   '2K',    '8GB',    ''),
+            ('base',   '125M',  '2K',    '12GB',   ''),
+            ('large',  '200M',  '4K',    '16GB',   ''),
+            ('xl',     '600M',  '4K',    '32GB',   ''),
             ('xxl',    '1.5B',  '8K',    '64GB',   '🐢'),
         ]
         
@@ -586,7 +586,7 @@ class ScalingTab(QWidget):
         self.create_btn.clicked.connect(self.create_model)
         btn_layout.addWidget(self.create_btn)
         
-        self.benchmark_btn = QPushButton("📊 Benchmark")
+        self.benchmark_btn = QPushButton("Benchmark")
         self.benchmark_btn.setStyleSheet("""
             QPushButton {
                 background: #30363d;
@@ -628,8 +628,8 @@ class ScalingTab(QWidget):
             self,
             f"Create {model.upper()} Model",
             f"Enter a name for your new {model.upper()} model:\n\n"
-            f"📊 Parameters: ~{params_str}\n"
-            f"💾 RAM Required: {ram_str}\n"
+            f"Parameters: ~{params_str}\n"
+            f"RAM Required: {ram_str}\n"
             f"🎮 VRAM Required: {vram_str}",
             text=f"my_{model}_model"
         )
@@ -685,7 +685,7 @@ class ScalingTab(QWidget):
         QMessageBox.information(
             self,
             "Benchmark",
-            "🔧 Benchmark feature coming soon!\n\n"
+            " Benchmark feature coming soon!\n\n"
             "This will test your hardware and\n"
             "recommend the best model size for you."
         )

@@ -40,11 +40,11 @@ def create_personality_tab(parent):
     parent.personality_preset_combo.addItem("-- Select Preset --", "")
     parent.personality_preset_combo.addItem("💼 Professional", "professional")
     parent.personality_preset_combo.addItem("😊 Friendly", "friendly")
-    parent.personality_preset_combo.addItem("🎨 Creative", "creative")
+    parent.personality_preset_combo.addItem("Creative", "creative")
     parent.personality_preset_combo.addItem("🔬 Analytical", "analytical")
     parent.personality_preset_combo.addItem("👩‍🏫 Teacher", "teacher")
     parent.personality_preset_combo.addItem("😂 Comedian", "comedian")
-    parent.personality_preset_combo.addItem("🏋️ Coach", "coach")
+    parent.personality_preset_combo.addItem("Coach", "coach")
     preset_row.addWidget(parent.personality_preset_combo)
 
     apply_preset_btn = QPushButton("Apply Preset")
@@ -57,7 +57,7 @@ def create_personality_tab(parent):
     layout.addWidget(presets_group)
 
     # === PERSONALITY TRAITS ===
-    traits_group = QGroupBox("📊 Personality Traits")
+    traits_group = QGroupBox("Personality Traits")
     traits_layout = QVBoxLayout(traits_group)
 
     traits_desc = QLabel(
@@ -71,10 +71,10 @@ def create_personality_tab(parent):
     trait_info = [
         ('humor_level', '😄 Humor', 'Serious ↔ Silly'),
         ('formality', '👔 Formality', 'Casual ↔ Formal'),
-        ('verbosity', '📝 Verbosity', 'Brief ↔ Detailed'),
+        ('verbosity', 'Verbosity', 'Brief ↔ Detailed'),
         ('curiosity', '🤔 Curiosity', 'Answers Only ↔ Asks Questions'),
         ('empathy', '💚 Empathy', 'Logical ↔ Emotional'),
-        ('creativity', '🎨 Creativity', 'Factual ↔ Imaginative'),
+        ('creativity', 'Creativity', 'Factual ↔ Imaginative'),
         ('confidence', '💪 Confidence', 'Hedging ↔ Assertive'),
         ('playfulness', '🎮 Playfulness', 'Professional ↔ Fun'),
     ]
@@ -167,11 +167,11 @@ def create_personality_tab(parent):
     # Button row
     btn_row = QHBoxLayout()
 
-    refresh_btn = QPushButton("🔄 Refresh")
+    refresh_btn = QPushButton("Refresh")
     refresh_btn.clicked.connect(lambda: _refresh_personality(parent))
     btn_row.addWidget(refresh_btn)
 
-    save_btn = QPushButton("💾 Save Personality")
+    save_btn = QPushButton("Save Personality")
     save_btn.clicked.connect(lambda: _save_personality(parent))
     btn_row.addWidget(save_btn)
 

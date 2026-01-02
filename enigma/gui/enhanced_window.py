@@ -950,7 +950,7 @@ class ModelManagerDialog(QDialog):
         actions_layout.setSpacing(8)
         
         # Row 1 - Safe actions
-        self.btn_backup = QPushButton("💾 Backup")
+        self.btn_backup = QPushButton("Backup")
         self.btn_backup.clicked.connect(self._on_backup)
         self.btn_backup.setEnabled(False)
         actions_layout.addWidget(self.btn_backup, 0, 0)
@@ -978,13 +978,13 @@ class ModelManagerDialog(QDialog):
         self.btn_shrink.setEnabled(False)
         actions_layout.addWidget(self.btn_shrink, 1, 1)
         
-        self.btn_rename = QPushButton("✏️ Rename")
+        self.btn_rename = QPushButton("Rename")
         self.btn_rename.clicked.connect(self._on_rename)
         self.btn_rename.setEnabled(False)
         actions_layout.addWidget(self.btn_rename, 1, 2)
         
         # Row 3 - Danger zone
-        self.btn_delete = QPushButton("🗑️ Delete")
+        self.btn_delete = QPushButton("Delete")
         self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e;")
         self.btn_delete.clicked.connect(self._on_delete)
         self.btn_delete.setEnabled(False)
@@ -1051,7 +1051,7 @@ class ModelManagerDialog(QDialog):
             meta = info.get("metadata", {})
             reg_info = info.get("registry", {})
             
-            self.info_name.setText(f"🤖 {name}")
+            self.info_name.setText(f"{name}")
             
             created = str(meta.get('created', 'Unknown'))[:10]
             last_trained = meta.get('last_trained', 'Never')
@@ -1180,7 +1180,7 @@ Checkpoints: {checkpoints}
             # Auto-select the new clone so user can see it's selected
             self.selected_model = new_name
             self._update_buttons_state()
-            self.info_name.setText(f"🤖 {new_name}")
+            self.info_name.setText(f"{new_name}")
             self.info_details.setText(f"Clone of: {original_name}\n\nClick to select a different model.")
             
             # Highlight the clone in the list
@@ -1275,13 +1275,13 @@ Checkpoints: {checkpoints}
             QMessageBox.information(self, "Min Size", "Already at minimum size")
             return
         
-        size, ok = self._size_dialog("Shrink Model", available, f"Current: {current_size}\n⚠️ May lose capacity!")
+        size, ok = self._size_dialog("Shrink Model", available, f"Current: {current_size}\nWarning: May lose capacity!")
         if not ok or not size:
             return
         
         reply = QMessageBox.warning(
             self, "Confirm Shrink",
-            f"Shrink '{self.selected_model}' to {size}?\n\n⚠️ This may reduce model quality.\nA backup will be created first.",
+            f"Shrink '{self.selected_model}' to {size}?\n\nWarning: This may reduce model quality.\nA backup will be created first.",
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -1346,7 +1346,7 @@ Checkpoints: {checkpoints}
         # First confirmation - show name prominently
         reply = QMessageBox.warning(
             self, "Delete Model",
-            f"⚠️ DELETE THIS MODEL:\n\n"
+            f"Warning: DELETE THIS MODEL:\n\n"
             f"   📦 {model_to_delete}\n\n"
             f"This action cannot be undone!",
             QMessageBox.Yes | QMessageBox.No
@@ -1634,16 +1634,15 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.personality_tab import create_personality_tab
         from .tabs.modules_tab import ModulesTab
         from .tabs.scaling_tab import ScalingTab
-        from .tabs.addons_tab import AddonsTab
         
-        # Main tabs
+        # Main tabs - moveable for user customization
         tabs = QTabWidget()
+        tabs.setMovable(True)  # Allow tab reordering by drag
         self.tabs = tabs  # Store reference for AI control
         tabs.addTab(create_chat_tab(self), "Chat")
         tabs.addTab(create_training_tab(self), "Train")
         tabs.addTab(ScalingTab(self), "Scale")    # Model scaling visualization
         tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")  # Module manager with ModuleManager instance
-        tabs.addTab(AddonsTab(self), "Addons")    # AI capabilities (image, code, video, audio)
         tabs.addTab(create_avatar_tab(self), "Avatar")
         tabs.addTab(create_personality_tab(self), "Personality")  # Personality configuration
         tabs.addTab(create_vision_tab(self), "Vision")

@@ -141,7 +141,7 @@ def create_instructions_tab(parent):
     tree_label.setStyleSheet("font-weight: bold;")
     tree_header.addWidget(tree_label)
     
-    refresh_btn = QPushButton("🔄")
+    refresh_btn = QPushButton("")
     refresh_btn.setToolTip("Refresh file list")
     refresh_btn.setMaximumWidth(30)
     refresh_btn.clicked.connect(lambda: _refresh_file_tree(parent))
@@ -172,12 +172,12 @@ def create_instructions_tab(parent):
     btn_open.clicked.connect(lambda: _open_instructions_file(parent))
     file_layout.addWidget(btn_open)
     
-    btn_save = QPushButton("💾 Save")
+    btn_save = QPushButton("Save")
     btn_save.setToolTip("Save current file")
     btn_save.clicked.connect(lambda: _save_instructions_file(parent))
     file_layout.addWidget(btn_save)
     
-    btn_new = QPushButton("📝 New File")
+    btn_new = QPushButton("New File")
     btn_new.setToolTip("Create a new file")
     btn_new.clicked.connect(lambda: _create_new_instructions_file(parent))
     file_layout.addWidget(btn_new)
@@ -253,11 +253,11 @@ def _refresh_file_tree(parent):
     # Add root level .txt files
     root_txt_files = list(enigma_root.glob("*.txt"))
     if root_txt_files:
-        root_item = QTreeWidgetItem(parent.file_tree, ["📄 Root Files"])
+        root_item = QTreeWidgetItem(parent.file_tree, ["Root Files"])
         root_item.setData(0, Qt.UserRole, str(enigma_root))
         root_item.setExpanded(True)
         for txt_file in sorted(root_txt_files):
-            file_item = QTreeWidgetItem(root_item, [f"📄 {txt_file.name}"])
+            file_item = QTreeWidgetItem(root_item, [f"{txt_file.name}"])
             file_item.setData(0, Qt.UserRole, str(txt_file))
 
 
@@ -272,7 +272,7 @@ def _add_txt_files_to_tree(parent_item, folder: Path, include_md: bool = False):
         files.extend(folder.glob("*.md"))
     
     for txt_file in sorted(files, key=lambda x: x.name.lower()):
-        icon = "📄" if txt_file.suffix == ".txt" else "📝"
+        icon = "" if txt_file.suffix == ".txt" else "📝"
         file_item = QTreeWidgetItem(parent_item, [f"{icon} {txt_file.name}"])
         file_item.setData(0, Qt.UserRole, str(txt_file))
 
@@ -289,7 +289,7 @@ def _on_tree_item_clicked(parent, item):
 def _load_file_into_editor(parent, filepath: Path):
     """Load a file into the editor."""
     parent._current_instructions_file = str(filepath)
-    parent.instructions_file_label.setText(f"📄 {filepath.name}")
+    parent.instructions_file_label.setText(f"{filepath.name}")
     
     try:
         content = filepath.read_text(encoding='utf-8', errors='replace')

@@ -20,7 +20,7 @@ def create_settings_tab(parent):
     layout.setSpacing(15)
     
     # === DEVICE INFO ===
-    device_group = QGroupBox("🖥️ Hardware Detection")
+    device_group = QGroupBox(" Hardware Detection")
     device_layout = QVBoxLayout(device_group)
     
     # Check for GPU
@@ -38,7 +38,7 @@ def create_settings_tab(parent):
         cpu_count = torch.get_num_threads()
         cpu_info = f"CPU Threads: {cpu_count}"
     except Exception:
-        device_info = "⚠️ PyTorch not available"
+        device_info = "Warning: PyTorch not available"
         device_style = "color: #ef4444;"
         cpu_info = ""
     
@@ -53,7 +53,7 @@ def create_settings_tab(parent):
     layout.addWidget(device_group)
     
     # === POWER MODE ===
-    power_group = QGroupBox("⚡ Power Mode")
+    power_group = QGroupBox(" Power Mode")
     power_layout = QVBoxLayout(power_group)
     
     # Mode description
@@ -69,8 +69,8 @@ def create_settings_tab(parent):
     
     parent.resource_mode_combo = QComboBox()
     parent.resource_mode_combo.addItem("🎮 Minimal - Best for gaming", "minimal")
-    parent.resource_mode_combo.addItem("🕹️ Gaming - AI in background", "gaming")
-    parent.resource_mode_combo.addItem("⚖️ Balanced - Normal use (default)", "balanced")
+    parent.resource_mode_combo.addItem("Gaming - AI in background", "gaming")
+    parent.resource_mode_combo.addItem("Balanced - Normal use (default)", "balanced")
     parent.resource_mode_combo.addItem("🚀 Performance - Faster AI responses", "performance")
     parent.resource_mode_combo.addItem("💪 Maximum - Use all resources", "max")
     parent.resource_mode_combo.setCurrentIndex(2)  # Default to balanced
@@ -91,7 +91,7 @@ def create_settings_tab(parent):
     layout.addWidget(power_group)
 
     # === THEME SELECTOR ===
-    theme_group = QGroupBox("🎨 Theme")
+    theme_group = QGroupBox("Theme")
     theme_layout = QVBoxLayout(theme_group)
 
     theme_desc = QLabel(
@@ -105,9 +105,9 @@ def create_settings_tab(parent):
     theme_row.addWidget(QLabel("Theme:"))
 
     parent.theme_combo = QComboBox()
-    parent.theme_combo.addItem("🌙 Dark (Default)", "dark")
-    parent.theme_combo.addItem("☀️ Light", "light")
-    parent.theme_combo.addItem("👁️ High Contrast", "high_contrast")
+    parent.theme_combo.addItem("Dark (Default)", "dark")
+    parent.theme_combo.addItem("Light", "light")
+    parent.theme_combo.addItem(" High Contrast", "high_contrast")
     parent.theme_combo.addItem("🌌 Midnight", "midnight")
     parent.theme_combo.addItem("🌲 Forest", "forest")
     parent.theme_combo.addItem("🌅 Sunset", "sunset")
@@ -128,7 +128,7 @@ def create_settings_tab(parent):
     layout.addWidget(theme_group)
 
     # === AUTONOMOUS MODE ===
-    autonomous_group = QGroupBox("🤖 Autonomous Mode")
+    autonomous_group = QGroupBox("Autonomous Mode")
     autonomous_layout = QVBoxLayout(autonomous_group)
     
     autonomous_desc = QLabel(
@@ -162,7 +162,7 @@ def create_settings_tab(parent):
     layout.addWidget(autonomous_group)
     
     # === CURRENT STATUS ===
-    status_group = QGroupBox("📊 Current Status")
+    status_group = QGroupBox("Current Status")
     status_layout = QVBoxLayout(status_group)
     
     parent.power_status = QTextEdit()
@@ -171,7 +171,7 @@ def create_settings_tab(parent):
     parent.power_status.setStyleSheet("font-family: Consolas, monospace;")
     status_layout.addWidget(parent.power_status)
     
-    refresh_btn = QPushButton("🔄 Refresh Status")
+    refresh_btn = QPushButton("Refresh Status")
     refresh_btn.clicked.connect(lambda: _refresh_power_status(parent))
     status_layout.addWidget(refresh_btn)
     

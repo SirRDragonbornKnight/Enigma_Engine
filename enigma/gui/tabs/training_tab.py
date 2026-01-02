@@ -34,12 +34,12 @@ def create_training_tab(parent):
     btn_open.clicked.connect(lambda: _browse_training_file(parent))
     file_layout.addWidget(btn_open)
     
-    btn_save = QPushButton("💾 Save")
+    btn_save = QPushButton("Save")
     btn_save.setToolTip("Save changes to the current file")
     btn_save.clicked.connect(lambda: _save_training_file(parent))
     file_layout.addWidget(btn_save)
     
-    btn_new = QPushButton("📝 New File")
+    btn_new = QPushButton("New File")
     btn_new.setToolTip("Create a new training data file")
     btn_new.clicked.connect(lambda: _create_new_training_file(parent))
     file_layout.addWidget(btn_new)
@@ -134,7 +134,7 @@ def _refresh_training_files(parent):
     parent.training_data_path = str(training_file)
     parent.data_path_label.setText(str(training_file))
     parent._current_training_file = str(training_file)
-    parent.training_file_label.setText(f"📄 {training_file.name}")
+    parent.training_file_label.setText(f"{training_file.name}")
     
     try:
         content = training_file.read_text(encoding='utf-8', errors='replace')
@@ -176,7 +176,7 @@ def _browse_training_file(parent):
         parent.training_data_path = filepath
         parent.data_path_label.setText(filepath)
         parent._current_training_file = filepath
-        parent.training_file_label.setText(f"📄 {Path(filepath).name}")
+        parent.training_file_label.setText(f"{Path(filepath).name}")
         
         # Load file content
         try:
@@ -234,7 +234,7 @@ A: I'm your AI assistant.
     parent.training_data_path = str(new_file)
     parent.data_path_label.setText(str(new_file))
     parent._current_training_file = str(new_file)
-    parent.training_file_label.setText(f"📄 {new_file.name}")
+    parent.training_file_label.setText(f"{new_file.name}")
     
     try:
         content = new_file.read_text(encoding='utf-8', errors='replace')
