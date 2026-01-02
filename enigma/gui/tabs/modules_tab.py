@@ -21,6 +21,17 @@ except ImportError:
     HAS_PYQT = False
 
 
+# Helper function to make labels selectable
+def make_selectable_label(text: str, **kwargs) -> QLabel:
+    """Create a QLabel with selectable text."""
+    label = QLabel(text)
+    label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    for key, value in kwargs.items():
+        if hasattr(label, f'set{key.capitalize()}'):
+            getattr(label, f'set{key.capitalize()}')(value)
+    return label
+
+
 # Category colors and icons
 CATEGORY_STYLES = {
     'core': {'color': '#e74c3c', 'icon': '⚙️', 'name': 'Core'},
@@ -76,7 +87,7 @@ class ModuleCard(QFrame):
         # Icon + Name
         icon = style['icon']
         name = self.module_info.get('name', self.module_id)
-        name_label = QLabel(f"{icon} {name}")
+        name_label = make_selectable_label(f"{icon} {name}")
         name_label.setFont(QFont('Arial', 10, QFont.Bold))
         header.addWidget(name_label)
         
@@ -104,7 +115,7 @@ class ModuleCard(QFrame):
         
         # Description
         desc = self.module_info.get('description', 'No description')
-        desc_label = QLabel(desc)
+        desc_label = make_selectable_label(desc)
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet("color: #aaa; font-size: 9px;")
         desc_label.setMaximumHeight(40)
@@ -128,14 +139,14 @@ class ModuleCard(QFrame):
             info_parts.append("🎮 GPU")
         
         if info_parts:
-            info_label = QLabel(" • ".join(info_parts))
+            info_label = make_selectable_label(" • ".join(info_parts))
             info_label.setStyleSheet("color: #666; font-size: 8px;")
             layout.addWidget(info_label)
         
         # Status + Configure button
         bottom = QHBoxLayout()
         
-        self.status_label = QLabel("○ Off")
+        self.status_label = make_selectable_label("○ Off")
         self.status_label.setStyleSheet("color: #666; font-size: 9px;")
         bottom.addWidget(self.status_label)
         

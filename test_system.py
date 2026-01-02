@@ -167,14 +167,14 @@ def test_model_registry():
         ok(f"Found {len(models)} existing model(s)")
         
         # Try creating a test model
-        test_name = "_test_model_delete_me"
+        test_name = "sacrifice"
         if test_name not in models:
-            registry.create_model(test_name, size="tiny", description="Test")
+            registry.create_model(test_name, size="tiny", description="Test sacrifice model")
             ok("Can create models")
-            registry.delete_model(test_name, confirm=True)
-            ok("Can delete models")
+            # Don't delete it - keep it as the default test model
+            ok("Test model 'sacrifice' created")
         else:
-            ok("Model creation works (test model exists)")
+            ok("Model creation works (sacrifice model exists)")
         
         return True
     except Exception as e:
