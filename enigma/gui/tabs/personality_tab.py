@@ -23,7 +23,7 @@ def create_personality_tab(parent):
     layout.setSpacing(15)
 
     # === PERSONALITY PRESETS ===
-    presets_group = QGroupBox("🎭 Personality Presets")
+    presets_group = QGroupBox("Personality Presets")
     presets_layout = QVBoxLayout(presets_group)
 
     preset_desc = QLabel(
@@ -38,12 +38,12 @@ def create_personality_tab(parent):
 
     parent.personality_preset_combo = QComboBox()
     parent.personality_preset_combo.addItem("-- Select Preset --", "")
-    parent.personality_preset_combo.addItem("💼 Professional", "professional")
-    parent.personality_preset_combo.addItem("😊 Friendly", "friendly")
+    parent.personality_preset_combo.addItem("Professional", "professional")
+    parent.personality_preset_combo.addItem("Friendly", "friendly")
     parent.personality_preset_combo.addItem("Creative", "creative")
-    parent.personality_preset_combo.addItem("🔬 Analytical", "analytical")
-    parent.personality_preset_combo.addItem("👩‍🏫 Teacher", "teacher")
-    parent.personality_preset_combo.addItem("😂 Comedian", "comedian")
+    parent.personality_preset_combo.addItem("Analytical", "analytical")
+    parent.personality_preset_combo.addItem("Teacher", "teacher")
+    parent.personality_preset_combo.addItem("Comedian", "comedian")
     parent.personality_preset_combo.addItem("Coach", "coach")
     preset_row.addWidget(parent.personality_preset_combo)
 
@@ -69,14 +69,14 @@ def create_personality_tab(parent):
 
     # Create sliders for each trait
     trait_info = [
-        ('humor_level', '😄 Humor', 'Serious ↔ Silly'),
-        ('formality', '👔 Formality', 'Casual ↔ Formal'),
-        ('verbosity', 'Verbosity', 'Brief ↔ Detailed'),
-        ('curiosity', '🤔 Curiosity', 'Answers Only ↔ Asks Questions'),
-        ('empathy', '💚 Empathy', 'Logical ↔ Emotional'),
-        ('creativity', 'Creativity', 'Factual ↔ Imaginative'),
-        ('confidence', '💪 Confidence', 'Hedging ↔ Assertive'),
-        ('playfulness', '🎮 Playfulness', 'Professional ↔ Fun'),
+        ('humor_level', 'Humor', 'Serious - Silly'),
+        ('formality', 'Formality', 'Casual - Formal'),
+        ('verbosity', 'Verbosity', 'Brief - Detailed'),
+        ('curiosity', 'Curiosity', 'Answers Only - Asks Questions'),
+        ('empathy', 'Empathy', 'Logical - Emotional'),
+        ('creativity', 'Creativity', 'Factual - Imaginative'),
+        ('confidence', 'Confidence', 'Hedging - Assertive'),
+        ('playfulness', 'Playfulness', 'Professional - Fun'),
     ]
 
     parent.trait_sliders = {}
@@ -135,7 +135,7 @@ def create_personality_tab(parent):
     layout.addWidget(traits_group)
 
     # === EVOLUTION SETTINGS ===
-    evolution_group = QGroupBox("🧬 Personality Evolution")
+    evolution_group = QGroupBox("Personality Evolution")
     evolution_layout = QVBoxLayout(evolution_group)
 
     evolution_desc = QLabel(
@@ -155,7 +155,7 @@ def create_personality_tab(parent):
     layout.addWidget(evolution_group)
 
     # === PERSONALITY STATUS ===
-    status_group = QGroupBox("📋 Personality Status")
+    status_group = QGroupBox("Personality Status")
     status_layout = QVBoxLayout(status_group)
 
     parent.personality_status = QTextEdit()
@@ -175,7 +175,7 @@ def create_personality_tab(parent):
     save_btn.clicked.connect(lambda: _save_personality(parent))
     btn_row.addWidget(save_btn)
 
-    reset_btn = QPushButton("🔁 Reset to Default")
+    reset_btn = QPushButton("Reset to Default")
     reset_btn.clicked.connect(lambda: _reset_personality(parent))
     btn_row.addWidget(reset_btn)
 

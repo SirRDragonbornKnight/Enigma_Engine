@@ -102,7 +102,7 @@ class ExamplesTab(QWidget):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel("📚 Example Scripts")
+        header = QLabel("Example Scripts")
         header_font = QFont()
         header_font.setPointSize(14)
         header_font.setBold(True)
@@ -178,7 +178,7 @@ class ExamplesTab(QWidget):
         # Buttons
         btn_layout = QHBoxLayout()
         
-        self.run_btn = QPushButton("▶ Run Example")
+        self.run_btn = QPushButton("Run Example")
         self.run_btn.clicked.connect(self._on_run_example)
         self.run_btn.setEnabled(False)
         self.run_btn.setStyleSheet("""
@@ -198,12 +198,12 @@ class ExamplesTab(QWidget):
         """)
         btn_layout.addWidget(self.run_btn)
         
-        self.open_btn = QPushButton("📂 Open in Editor")
+        self.open_btn = QPushButton("Open in Editor")
         self.open_btn.clicked.connect(self._on_open_file)
         self.open_btn.setEnabled(False)
         btn_layout.addWidget(self.open_btn)
         
-        self.stop_btn = QPushButton("⬛ Stop")
+        self.stop_btn = QPushButton("Stop")
         self.stop_btn.clicked.connect(self._on_stop)
         self.stop_btn.setEnabled(False)
         self.stop_btn.setStyleSheet("""
@@ -253,7 +253,7 @@ class ExamplesTab(QWidget):
         for category in ["Getting Started", "Training", "Inference", "Networking", "Advanced", "Tools", "Media"]:
             if category in categories:
                 # Category header
-                header_item = QListWidgetItem(f"── {category} ──")
+                header_item = QListWidgetItem(f"-- {category} --")
                 header_item.setFlags(Qt.NoItemFlags)
                 header_item.setForeground(Qt.gray)
                 self.example_list.addItem(header_item)

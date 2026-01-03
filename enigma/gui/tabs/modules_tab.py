@@ -38,11 +38,11 @@ CATEGORY_STYLES = {
     'memory': {'color': '#3498db', 'icon': '', 'name': 'Memory'},
     'interface': {'color': '#2ecc71', 'icon': '', 'name': 'Interface'},
     'perception': {'color': '#9b59b6', 'icon': '', 'name': 'Perception'},
-    'output': {'color': '#f39c12', 'icon': '📤', 'name': 'Output'},
+    'output': {'color': '#f39c12', 'icon': '', 'name': 'Output'},
     'generation': {'color': '#e91e63', 'icon': '', 'name': 'AI Generation'},
     'tools': {'color': '#1abc9c', 'icon': '', 'name': 'Tools'},
-    'network': {'color': '#e67e22', 'icon': '🌐', 'name': 'Network'},
-    'extension': {'color': '#95a5a6', 'icon': '🔌', 'name': 'Extension'},
+    'network': {'color': '#e67e22', 'icon': '', 'name': 'Network'},
+    'extension': {'color': '#95a5a6', 'icon': '', 'name': 'Extension'},
 }
 
 
@@ -138,23 +138,23 @@ class ModuleCard(QFrame):
             info_parts.append("API key")
         
         if self.module_info.get('needs_gpu'):
-            info_parts.append("🎮 GPU")
+            info_parts.append("GPU")
         
         if info_parts:
-            info_label = make_selectable_label(" • ".join(info_parts))
+            info_label = make_selectable_label(" | ".join(info_parts))
             info_label.setStyleSheet("color: #666; font-size: 8px;")
             layout.addWidget(info_label)
         
         # Status + Configure button
         bottom = QHBoxLayout()
         
-        self.status_label = make_selectable_label("○ Off")
+        self.status_label = make_selectable_label("Off")
         self.status_label.setStyleSheet("color: #666; font-size: 9px;")
         bottom.addWidget(self.status_label)
         
         bottom.addStretch()
         
-        self.config_btn = QPushButton("⚙")
+        self.config_btn = QPushButton("Cfg")
         self.config_btn.setMaximumWidth(30)
         self.config_btn.setToolTip("Configure")
         self.config_btn.setEnabled(self.module_info.get('has_config', True))
@@ -166,10 +166,10 @@ class ModuleCard(QFrame):
         self.is_loaded = loaded
         self.toggle.setChecked(loaded)
         if loaded:
-            self.status_label.setText("● On")
+            self.status_label.setText("On")
             self.status_label.setStyleSheet("color: #2ecc71; font-size: 9px;")
         else:
-            self.status_label.setText("○ Off")
+            self.status_label.setText("Off")
             self.status_label.setStyleSheet("color: #666; font-size: 9px;")
 
 
@@ -193,7 +193,7 @@ class CategorySection(QWidget):
         # Header
         header = QHBoxLayout()
         
-        self.collapse_btn = QPushButton("▼")
+        self.collapse_btn = QPushButton("-")
         self.collapse_btn.setMaximumWidth(25)
         self.collapse_btn.setFlat(True)
         self.collapse_btn.clicked.connect(self.toggle_collapse)
@@ -239,7 +239,7 @@ class CategorySection(QWidget):
     def toggle_collapse(self):
         self.is_collapsed = not self.is_collapsed
         self.cards_widget.setVisible(not self.is_collapsed)
-        self.collapse_btn.setText("▶" if self.is_collapsed else "▼")
+        self.collapse_btn.setText("+" if self.is_collapsed else "-")
     
     def enable_all(self):
         for card in self.cards:
@@ -288,7 +288,7 @@ class ModulesTab(QWidget):
         self.search_input.textChanged.connect(self.filter_modules)
         header.addWidget(self.search_input)
         
-        self.refresh_btn = QPushButton("↻ Refresh")
+        self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self.refresh_status)
         header.addWidget(self.refresh_btn)
         
@@ -496,7 +496,7 @@ class ModulesTab(QWidget):
                 if enabled:
                     success = self.module_manager.load(module_id)
                     if not success:
-                        self.log(f"✗ Failed to load {module_id}")
+                        self.log(f"[FAIL] Failed to load {module_id}")
                         # Revert toggle
                         if module_id in self.all_cards:
                             self.all_cards[module_id].toggle.blockSignals(True)
@@ -506,21 +506,21 @@ class ModulesTab(QWidget):
                 else:
                     success = self.module_manager.unload(module_id)
                     if not success:
-                        self.log(f"✗ Failed to unload {module_id}")
+                        self.log(f"[FAIL] Failed to unload {module_id}")
                         return
                 
                 # Sync with Options menu toggles in main window
                 self._sync_options_menu(module_id, enabled)
                 
             except Exception as e:
-                self.log(f"✗ Error: {str(e)}")
+                self.log(f"[ERROR] Error: {str(e)}")
                 return
         
         # Update card
         if module_id in self.all_cards:
             self.all_cards[module_id].set_loaded(enabled)
         
-        self.log(f"✓ {module_id} {'enabled' if enabled else 'disabled'}")
+        self.log(f"[OK] {module_id} {'enabled' if enabled else 'disabled'}")
         self._update_stats()
     
     def _sync_options_menu(self, module_id: str, enabled: bool):
@@ -584,7 +584,7 @@ class ModulesTab(QWidget):
     def _auto_enable_essential_modules(self):
         """Auto-enable essential modules that should be on by default."""
         if not self.module_manager:
-            self.log("⚠ No module manager - modules won't auto-load")
+            self.log("[WARN] No module manager - modules won't auto-load")
             return
         
         # Essential modules that should be loaded by default
@@ -607,11 +607,11 @@ class ModulesTab(QWidget):
                             self.all_cards[mod_id].toggle.blockSignals(True)
                             self.all_cards[mod_id].set_loaded(True)
                             self.all_cards[mod_id].toggle.blockSignals(False)
-                            self.log(f"✓ {mod_id} loaded automatically")
+                            self.log(f"[OK] {mod_id} loaded automatically")
                         else:
-                            self.log(f"⚠ Could not auto-load {mod_id}")
+                            self.log(f"[WARN] Could not auto-load {mod_id}")
                     except Exception as e:
-                        self.log(f"⚠ Error loading {mod_id}: {e}")
+                        self.log(f"[WARN] Error loading {mod_id}: {e}")
         except Exception as e:
             self.log(f"Error during auto-enable: {e}")
     

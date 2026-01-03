@@ -121,7 +121,7 @@ def create_instructions_tab(parent):
     layout = QVBoxLayout()
     
     # Header
-    header = QLabel("📁 File Browser")
+    header = QLabel("File Browser")
     header.setObjectName("header")
     layout.addWidget(header)
     
@@ -137,7 +137,7 @@ def create_instructions_tab(parent):
     
     # File tree header
     tree_header = QHBoxLayout()
-    tree_label = QLabel("📂 Folders")
+    tree_label = QLabel("Folders")
     tree_label.setStyleSheet("font-weight: bold;")
     tree_header.addWidget(tree_label)
     
@@ -167,7 +167,7 @@ def create_instructions_tab(parent):
     # File buttons row
     file_layout = QHBoxLayout()
     
-    btn_open = QPushButton("📂 Open File...")
+    btn_open = QPushButton("Open File...")
     btn_open.setToolTip("Open a file from your system")
     btn_open.clicked.connect(lambda: _open_instructions_file(parent))
     file_layout.addWidget(btn_open)
@@ -238,14 +238,14 @@ def _refresh_file_tree(parent):
     
     # Add data folder section
     if data_dir.exists():
-        data_item = QTreeWidgetItem(parent.file_tree, ["📁 Data Files"])
+        data_item = QTreeWidgetItem(parent.file_tree, ["Data Files"])
         data_item.setData(0, Qt.UserRole, str(data_dir))
         data_item.setExpanded(True)
         _add_txt_files_to_tree(data_item, data_dir)
     
     # Add docs folder section
     if docs_dir.exists():
-        docs_item = QTreeWidgetItem(parent.file_tree, ["📚 Documentation"])
+        docs_item = QTreeWidgetItem(parent.file_tree, ["Documentation"])
         docs_item.setData(0, Qt.UserRole, str(docs_dir))
         docs_item.setExpanded(True)
         _add_txt_files_to_tree(docs_item, docs_dir, include_md=True)
@@ -272,8 +272,8 @@ def _add_txt_files_to_tree(parent_item, folder: Path, include_md: bool = False):
         files.extend(folder.glob("*.md"))
     
     for txt_file in sorted(files, key=lambda x: x.name.lower()):
-        icon = "" if txt_file.suffix == ".txt" else "📝"
-        file_item = QTreeWidgetItem(parent_item, [f"{icon} {txt_file.name}"])
+        icon = "" if txt_file.suffix == ".txt" else ""
+        file_item = QTreeWidgetItem(parent_item, [f"{icon}{txt_file.name}" if icon else txt_file.name])
         file_item.setData(0, Qt.UserRole, str(txt_file))
 
 

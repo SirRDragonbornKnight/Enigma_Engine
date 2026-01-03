@@ -449,7 +449,7 @@ class EmbeddingsTab(QWidget):
         
         # Info
         info_label = QLabel(
-            "💡 Embeddings convert text into numerical vectors for semantic search.\n"
+            "Embeddings convert text into numerical vectors for semantic search.\n"
             "Local uses sentence-transformers (384 dims). OpenAI uses text-embedding-3-small (1536 dims)."
         )
         info_label.setStyleSheet("color: #888; font-style: italic;")

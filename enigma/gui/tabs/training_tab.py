@@ -29,7 +29,7 @@ def create_training_tab(parent):
     # Training data file selector - file browser with filename display
     file_layout = QHBoxLayout()
     
-    btn_open = QPushButton("📂 Open File...")
+    btn_open = QPushButton("Open File...")
     btn_open.setToolTip("Open a training data file from your system")
     btn_open.clicked.connect(lambda: _browse_training_file(parent))
     file_layout.addWidget(btn_open)

@@ -27,21 +27,21 @@ import math
 
 # Model definitions with full specs
 MODEL_SPECS = {
-    'nano':     {'params': 1,     'dim': 128,  'layers': 4,  'heads': 4,  'ctx': 256,   'ram': 256,   'vram': 0,    'tier': 'embedded',   'emoji': '🔬', 'desc': 'Microcontrollers, testing'},
-    'micro':    {'params': 2,     'dim': 192,  'layers': 4,  'heads': 4,  'ctx': 384,   'ram': 512,   'vram': 0,    'tier': 'embedded',   'emoji': '📟', 'desc': 'IoT devices, ESP32'},
-    'tiny':     {'params': 5,     'dim': 256,  'layers': 6,  'heads': 8,  'ctx': 512,   'ram': 1024,  'vram': 0,    'tier': 'edge',       'emoji': '🍓', 'desc': 'Raspberry Pi 3/4'},
-    'mini':     {'params': 10,    'dim': 384,  'layers': 6,  'heads': 6,  'ctx': 512,   'ram': 2048,  'vram': 0,    'tier': 'edge',       'emoji': '📱', 'desc': 'Mobile, tablets'},
+    'nano':     {'params': 1,     'dim': 128,  'layers': 4,  'heads': 4,  'ctx': 256,   'ram': 256,   'vram': 0,    'tier': 'embedded',   'emoji': '', 'desc': 'Microcontrollers, testing'},
+    'micro':    {'params': 2,     'dim': 192,  'layers': 4,  'heads': 4,  'ctx': 384,   'ram': 512,   'vram': 0,    'tier': 'embedded',   'emoji': '', 'desc': 'IoT devices, ESP32'},
+    'tiny':     {'params': 5,     'dim': 256,  'layers': 6,  'heads': 8,  'ctx': 512,   'ram': 1024,  'vram': 0,    'tier': 'edge',       'emoji': '', 'desc': 'Raspberry Pi 3/4'},
+    'mini':     {'params': 10,    'dim': 384,  'layers': 6,  'heads': 6,  'ctx': 512,   'ram': 2048,  'vram': 0,    'tier': 'edge',       'emoji': '', 'desc': 'Mobile, tablets'},
     'small':    {'params': 27,    'dim': 512,  'layers': 8,  'heads': 8,  'ctx': 1024,  'ram': 4096,  'vram': 2048, 'tier': 'consumer',   'emoji': '', 'desc': 'Laptops, entry GPU'},
     'medium':   {'params': 85,    'dim': 768,  'layers': 12, 'heads': 12, 'ctx': 2048,  'ram': 8192,  'vram': 4096, 'tier': 'consumer',   'emoji': '', 'desc': 'Desktop, GTX 1660+'},
-    'base':     {'params': 125,   'dim': 896,  'layers': 14, 'heads': 14, 'ctx': 2048,  'ram': 12288, 'vram': 6144, 'tier': 'consumer',   'emoji': '🎮', 'desc': 'Gaming PC, RTX 3060'},
+    'base':     {'params': 125,   'dim': 896,  'layers': 14, 'heads': 14, 'ctx': 2048,  'ram': 12288, 'vram': 6144, 'tier': 'consumer',   'emoji': '', 'desc': 'Gaming PC, RTX 3060'},
     'large':    {'params': 200,   'dim': 1024, 'layers': 16, 'heads': 16, 'ctx': 4096,  'ram': 16384, 'vram': 8192, 'tier': 'prosumer',   'emoji': '', 'desc': 'Workstation, RTX 3070+'},
-    'xl':       {'params': 600,   'dim': 1536, 'layers': 24, 'heads': 24, 'ctx': 4096,  'ram': 32768, 'vram': 12288,'tier': 'prosumer',   'emoji': '🚀', 'desc': 'High-end, RTX 3080+'},
-    'xxl':      {'params': 1500,  'dim': 2048, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 65536, 'vram': 24576,'tier': 'server',     'emoji': '🏢', 'desc': 'Server, RTX 4090'},
+    'xl':       {'params': 600,   'dim': 1536, 'layers': 24, 'heads': 24, 'ctx': 4096,  'ram': 32768, 'vram': 12288,'tier': 'prosumer',   'emoji': '', 'desc': 'High-end, RTX 3080+'},
+    'xxl':      {'params': 1500,  'dim': 2048, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 65536, 'vram': 24576,'tier': 'server',     'emoji': '', 'desc': 'Server, RTX 4090'},
     'huge':     {'params': 3000,  'dim': 2560, 'layers': 40, 'heads': 40, 'ctx': 8192,  'ram': 131072,'vram': 49152,'tier': 'server',     'emoji': '', 'desc': 'Multi-GPU server'},
-    'giant':    {'params': 7000,  'dim': 4096, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 262144,'vram': 81920,'tier': 'datacenter', 'emoji': '🌐', 'desc': 'A100/H100 cluster'},
-    'colossal': {'params': 13000, 'dim': 4096, 'layers': 48, 'heads': 32, 'ctx': 16384, 'ram': 524288,'vram': 163840,'tier': 'datacenter','emoji': '🌍', 'desc': 'Distributed training'},
-    'titan':    {'params': 30000, 'dim': 6144, 'layers': 48, 'heads': 48, 'ctx': 16384, 'ram': 1048576,'vram': 327680,'tier': 'ultimate', 'emoji': '🌟', 'desc': 'Full datacenter'},
-    'omega':    {'params': 70000, 'dim': 8192, 'layers': 64, 'heads': 64, 'ctx': 32768, 'ram': 2097152,'vram': 655360,'tier': 'ultimate', 'emoji': '🔮', 'desc': 'Research frontier'},
+    'giant':    {'params': 7000,  'dim': 4096, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 262144,'vram': 81920,'tier': 'datacenter', 'emoji': '', 'desc': 'A100/H100 cluster'},
+    'colossal': {'params': 13000, 'dim': 4096, 'layers': 48, 'heads': 32, 'ctx': 16384, 'ram': 524288,'vram': 163840,'tier': 'datacenter','emoji': '', 'desc': 'Distributed training'},
+    'titan':    {'params': 30000, 'dim': 6144, 'layers': 48, 'heads': 48, 'ctx': 16384, 'ram': 1048576,'vram': 327680,'tier': 'ultimate', 'emoji': '', 'desc': 'Full datacenter'},
+    'omega':    {'params': 70000, 'dim': 8192, 'layers': 64, 'heads': 64, 'ctx': 32768, 'ram': 2097152,'vram': 655360,'tier': 'ultimate', 'emoji': '', 'desc': 'Research frontier'},
 }
 
 MODEL_ORDER = ['nano', 'micro', 'tiny', 'mini', 'small', 'medium', 'base', 'large', 'xl', 'xxl', 'huge', 'giant', 'colossal', 'titan', 'omega']
@@ -57,13 +57,13 @@ TIER_COLORS = {
 }
 
 TIER_NAMES = {
-    'embedded': '🔬 Embedded',
-    'edge': '🍓 Edge',
+    'embedded': 'Embedded',
+    'edge': 'Edge',
     'consumer': 'Consumer',
-    'prosumer': ' Prosumer',
-    'server': '🏢 Server',
-    'datacenter': '🌐 Datacenter',
-    'ultimate': '🔮 Ultimate'
+    'prosumer': 'Prosumer',
+    'server': 'Server',
+    'datacenter': 'Datacenter',
+    'ultimate': 'Ultimate'
 }
 
 
@@ -171,7 +171,7 @@ class PyramidWidget(QFrame):
         # Subtitle
         painter.setPen(QPen(QColor('#8b949e')))
         painter.setFont(QFont('Segoe UI', 10))
-        painter.drawText(w - 250, 35, "Click to select • Smaller = Faster")
+        painter.drawText(w - 250, 35, "Click to select - Smaller = Faster")
         
         painter.end()
         
@@ -488,7 +488,7 @@ class CompareWidget(QFrame):
             ('base',   '125M',  '2K',    '12GB',   ''),
             ('large',  '200M',  '4K',    '16GB',   ''),
             ('xl',     '600M',  '4K',    '32GB',   ''),
-            ('xxl',    '1.5B',  '8K',    '64GB',   '🐢'),
+            ('xxl',    '1.5B',  '8K',    '64GB',   'Slow'),
         ]
         
         self.compare_rows = []
@@ -566,7 +566,7 @@ class ScalingTab(QWidget):
         # Action buttons
         btn_layout = QHBoxLayout()
         
-        self.create_btn = QPushButton("🚀 Create This Model")
+        self.create_btn = QPushButton("Create This Model")
         self.create_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -630,7 +630,7 @@ class ScalingTab(QWidget):
             f"Enter a name for your new {model.upper()} model:\n\n"
             f"Parameters: ~{params_str}\n"
             f"RAM Required: {ram_str}\n"
-            f"🎮 VRAM Required: {vram_str}",
+            f"VRAM Required: {vram_str}",
             text=f"my_{model}_model"
         )
         
@@ -661,7 +661,7 @@ class ScalingTab(QWidget):
                     QMessageBox.information(
                         self,
                         "Model Created",
-                        f"✅ {model.upper()} model '{name}' created!\n\n"
+                        f"{model.upper()} model '{name}' created!\n\n"
                         "Next steps:\n"
                         "1. Go to the Train tab\n"
                         "2. Add your training data\n"

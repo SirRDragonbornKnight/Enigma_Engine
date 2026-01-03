@@ -891,13 +891,13 @@ class ModelManagerDialog(QDialog):
         
         # Header with refresh
         header = QHBoxLayout()
-        title = QLabel("📦 Your Models")
+        title = QLabel("Your Models")
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
         header.addWidget(title)
         header.addStretch()
         
-        refresh_btn = QPushButton("↻")
-        refresh_btn.setFixedSize(32, 32)
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setFixedSize(60, 32)
         refresh_btn.setToolTip("Refresh list")
         refresh_btn.clicked.connect(self._refresh_list)
         header.addWidget(refresh_btn)
@@ -917,7 +917,7 @@ class ModelManagerDialog(QDialog):
         new_btn.clicked.connect(self._on_new_model)
         quick_btns.addWidget(new_btn)
         
-        load_btn = QPushButton("▶ Load")
+        load_btn = QPushButton("Load")
         load_btn.setStyleSheet("background-color: #89b4fa; color: #1e1e2e;")
         load_btn.clicked.connect(self._on_load_model)
         quick_btns.addWidget(load_btn)
@@ -955,24 +955,24 @@ class ModelManagerDialog(QDialog):
         self.btn_backup.setEnabled(False)
         actions_layout.addWidget(self.btn_backup, 0, 0)
         
-        self.btn_clone = QPushButton("📋 Clone")
+        self.btn_clone = QPushButton("Clone")
         self.btn_clone.clicked.connect(self._on_clone)
         self.btn_clone.setEnabled(False)
         actions_layout.addWidget(self.btn_clone, 0, 1)
         
-        self.btn_folder = QPushButton("📁 Open Folder")
+        self.btn_folder = QPushButton("Open Folder")
         self.btn_folder.clicked.connect(self._on_open_folder)
         self.btn_folder.setEnabled(False)
         actions_layout.addWidget(self.btn_folder, 0, 2)
         
         # Row 2 - Scaling
-        self.btn_grow = QPushButton("📈 Grow")
+        self.btn_grow = QPushButton("Grow")
         self.btn_grow.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e;")
         self.btn_grow.clicked.connect(self._on_grow)
         self.btn_grow.setEnabled(False)
         actions_layout.addWidget(self.btn_grow, 1, 0)
         
-        self.btn_shrink = QPushButton("📉 Shrink")
+        self.btn_shrink = QPushButton("Shrink")
         self.btn_shrink.setStyleSheet("background-color: #f9e2af; color: #1e1e2e;")
         self.btn_shrink.clicked.connect(self._on_shrink)
         self.btn_shrink.setEnabled(False)
@@ -1018,7 +1018,7 @@ class ModelManagerDialog(QDialog):
             if model_path.exists():
                 has_weights = info.get("has_weights", False)
                 size = info.get("size", "?")
-                icon = "✅" if has_weights else "⚪"
+                icon = "[OK]" if has_weights else "[--]"
                 self.model_list.addItem(f"{icon} {name} ({size})")
     
     def _update_buttons_state(self):
@@ -1035,7 +1035,7 @@ class ModelManagerDialog(QDialog):
     def _on_select_model(self, item):
         """Handle model selection."""
         text = item.text()
-        # Parse "✅ name (size)" or "⚪ name (size)"
+        # Parse "[OK] name (size)" or "[--] name (size)"
         parts = text.split(" ", 1)
         if len(parts) > 1:
             rest = parts[1]  # "name (size)"
@@ -1347,7 +1347,7 @@ Checkpoints: {checkpoints}
         reply = QMessageBox.warning(
             self, "Delete Model",
             f"Warning: DELETE THIS MODEL:\n\n"
-            f"   📦 {model_to_delete}\n\n"
+            f"   {model_to_delete}\n\n"
             f"This action cannot be undone!",
             QMessageBox.Yes | QMessageBox.No
         )

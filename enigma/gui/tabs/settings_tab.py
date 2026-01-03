@@ -29,10 +29,10 @@ def create_settings_tab(parent):
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
             gpu_mem = torch.cuda.get_device_properties(0).total_memory // (1024**2)
-            device_info = f"✅ GPU Available: {gpu_name} ({gpu_mem} MB)"
+            device_info = f"GPU Available: {gpu_name} ({gpu_mem} MB)"
             device_style = "color: #22c55e; font-weight: bold;"
         else:
-            device_info = "❌ No GPU - Using CPU only"
+            device_info = "No GPU - Using CPU only"
             device_style = "color: #f59e0b; font-weight: bold;"
         
         cpu_count = torch.get_num_threads()
@@ -68,11 +68,11 @@ def create_settings_tab(parent):
     mode_row.addWidget(QLabel("Mode:"))
     
     parent.resource_mode_combo = QComboBox()
-    parent.resource_mode_combo.addItem("🎮 Minimal - Best for gaming", "minimal")
+    parent.resource_mode_combo.addItem("Minimal - Best for gaming", "minimal")
     parent.resource_mode_combo.addItem("Gaming - AI in background", "gaming")
     parent.resource_mode_combo.addItem("Balanced - Normal use (default)", "balanced")
-    parent.resource_mode_combo.addItem("🚀 Performance - Faster AI responses", "performance")
-    parent.resource_mode_combo.addItem("💪 Maximum - Use all resources", "max")
+    parent.resource_mode_combo.addItem("Performance - Faster AI responses", "performance")
+    parent.resource_mode_combo.addItem("Maximum - Use all resources", "max")
     parent.resource_mode_combo.setCurrentIndex(2)  # Default to balanced
     parent.resource_mode_combo.currentIndexChanged.connect(
         lambda idx: _apply_resource_mode(parent)
@@ -107,10 +107,10 @@ def create_settings_tab(parent):
     parent.theme_combo = QComboBox()
     parent.theme_combo.addItem("Dark (Default)", "dark")
     parent.theme_combo.addItem("Light", "light")
-    parent.theme_combo.addItem(" High Contrast", "high_contrast")
-    parent.theme_combo.addItem("🌌 Midnight", "midnight")
-    parent.theme_combo.addItem("🌲 Forest", "forest")
-    parent.theme_combo.addItem("🌅 Sunset", "sunset")
+    parent.theme_combo.addItem("High Contrast", "high_contrast")
+    parent.theme_combo.addItem("Midnight", "midnight")
+    parent.theme_combo.addItem("Forest", "forest")
+    parent.theme_combo.addItem("Sunset", "sunset")
     parent.theme_combo.currentIndexChanged.connect(
         lambda idx: _apply_theme(parent)
     )

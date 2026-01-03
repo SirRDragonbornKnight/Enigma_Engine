@@ -360,7 +360,7 @@ class ThreeDTab(QWidget):
         
         # Info
         info_label = QLabel(
-            "⚠️ 3D generation requires significant GPU memory (4GB+ VRAM).\n"
+            "Note: 3D generation requires significant GPU memory (4GB+ VRAM).\n"
             "Output formats: PLY, GLB, OBJ depending on provider."
         )
         info_label.setStyleSheet("color: #888; font-style: italic;")

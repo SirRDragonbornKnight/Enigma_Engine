@@ -432,5 +432,47 @@
         "completed": false
       }
     ]
+  },
+  "checklist_32": {
+    "name": "Test List",
+    "created": "2026-01-02T19:54:07.917972",
+    "items": [
+      {
+        "text": "Item 1",
+        "completed": false
+      },
+      {
+        "text": "Item 2",
+        "completed": false
+      }
+    ]
+  },
+  "checklist_33": {
+    "name": "Test List",
+    "created": "2026-01-02T19:54:24.224903",
+    "items": [
+      {
+        "text": "Item 1",
+        "completed": false
+      },
+      {
+        "text": "Item 2",
+        "completed": false
+      }
+    ]
+  },
+  "checklist_34": {
+    "name": "Test List",
+    "created": "2026-01-02T19:54:44.016854",
+    "items": [
+      {
+        "text": "Item 1",
+        "completed": false
+      },
+      {
+        "text": "Item 2",
+        "completed": false
+      }
+    ]
   }
 }

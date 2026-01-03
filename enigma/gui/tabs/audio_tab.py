@@ -417,21 +417,21 @@ class AudioTab(QWidget):
         # Buttons
         btn_layout = QHBoxLayout()
         
-        self.speak_btn = QPushButton("🔊 Speak")
+        self.speak_btn = QPushButton("Speak")
         self.speak_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 10px;")
         self.speak_btn.clicked.connect(self._speak_text)
         btn_layout.addWidget(self.speak_btn)
         
-        self.save_btn = QPushButton("💾 Save to File")
+        self.save_btn = QPushButton("Save to File")
         self.save_btn.clicked.connect(self._save_to_file)
         btn_layout.addWidget(self.save_btn)
         
-        self.play_btn = QPushButton("▶ Play Last")
+        self.play_btn = QPushButton("Play Last")
         self.play_btn.setEnabled(False)
         self.play_btn.clicked.connect(self._play_last)
         btn_layout.addWidget(self.play_btn)
         
-        self.open_folder_btn = QPushButton("📁 Output Folder")
+        self.open_folder_btn = QPushButton("Output Folder")
         self.open_folder_btn.clicked.connect(self._open_output_folder)
         btn_layout.addWidget(self.open_folder_btn)
         
@@ -449,7 +449,7 @@ class AudioTab(QWidget):
         
         # Info
         info_label = QLabel(
-            "💡 Local TTS works offline. Cloud services require API keys.\n"
+            "Local TTS works offline. Cloud services require API keys.\n"
             "ElevenLabs: Set ELEVENLABS_API_KEY | Replicate: Set REPLICATE_API_TOKEN"
         )
         info_label.setStyleSheet("color: #888; font-style: italic;")

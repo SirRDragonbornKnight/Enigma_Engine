@@ -354,7 +354,7 @@ class VideoTab(QWidget):
         
         # Info
         info_label = QLabel(
-            "⚠️ Video generation requires significant GPU memory.\n"
+            "Note: Video generation requires significant GPU memory.\n"
             "Local generation may take several minutes on CPU."
         )
         info_label.setStyleSheet("color: #888; font-style: italic;")
