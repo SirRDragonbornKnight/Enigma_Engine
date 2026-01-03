@@ -4,21 +4,22 @@ Module Manager Tab - Control all Enigma capabilities
 
 Clean, functional interface for managing modules.
 """
-from typing import Dict, List
+from typing import Dict, List, TYPE_CHECKING, Any, cast
 
-try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-        QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
-        QLineEdit, QProgressBar, QMessageBox, QSplitter,
-        QTextEdit, QSizePolicy, QListWidget, QListWidgetItem,
-        QStackedWidget, QComboBox
-    )
-    from PyQt5.QtCore import Qt, QTimer
-    from PyQt5.QtGui import QFont, QColor
-    HAS_PYQT = True
-except ImportError:
-    HAS_PYQT = False
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
+    QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
+    QLineEdit, QProgressBar, QMessageBox, QSplitter,
+    QTextEdit, QSizePolicy, QListWidget, QListWidgetItem,
+    QStackedWidget, QComboBox
+)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QColor
+
+# Qt enum constants
+AlignCenter = Qt.AlignmentFlag.AlignCenter
+ScrollBarAlwaysOff = Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+Checked = Qt.CheckState.Checked
 
 
 # Category definitions (no emojis, just colors)
@@ -91,7 +92,7 @@ class ModuleListItem(QFrame):
         # Status indicator
         self.status_label = QLabel("OFF")
         self.status_label.setFixedWidth(40)
-        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setAlignment(AlignCenter)
         self.status_label.setStyleSheet("""
             QLabel {
                 color: #666;
@@ -224,7 +225,7 @@ class ModulesTab(QWidget):
         # Module list in scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(ScrollBarAlwaysOff)
         scroll.setStyleSheet("""
             QScrollArea {
                 border: 1px solid #333;
@@ -258,6 +259,34 @@ class ModulesTab(QWidget):
         self.loaded_label = QLabel("Loaded: 0 / 0")
         self.loaded_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         stats_layout.addWidget(self.loaded_label)
+        
+        # AI Connection indicator
+        conn_box = QFrame()
+        conn_box.setStyleSheet("""
+            QFrame {
+                background: #1a1a1a;
+                border-radius: 4px;
+                padding: 8px;
+            }
+        """)
+        conn_layout = QVBoxLayout(conn_box)
+        conn_layout.setContentsMargins(8, 8, 8, 8)
+        conn_layout.setSpacing(4)
+        
+        conn_title = QLabel("AI Status")
+        conn_title.setStyleSheet("font-weight: bold; font-size: 11px;")
+        conn_layout.addWidget(conn_title)
+        
+        self.ai_status_indicator = QLabel("○ Disconnected")
+        self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
+        conn_layout.addWidget(self.ai_status_indicator)
+        
+        self.ai_status_detail = QLabel("No modules loaded")
+        self.ai_status_detail.setStyleSheet("color: #888; font-size: 10px;")
+        self.ai_status_detail.setWordWrap(True)
+        conn_layout.addWidget(self.ai_status_detail)
+        
+        stats_layout.addWidget(conn_box)
         
         # Resource bars
         stats_layout.addWidget(QLabel("CPU Usage:"))
@@ -409,7 +438,7 @@ class ModulesTab(QWidget):
     
     def _on_toggle(self, module_id: str, state: int):
         """Handle module toggle."""
-        enabled = state == Qt.Checked
+        enabled = state == Checked
         action = "Loading" if enabled else "Unloading"
         self._log(f"{action} {module_id}...")
         
@@ -445,7 +474,7 @@ class ModulesTab(QWidget):
     def _sync_options_menu(self, module_id: str, enabled: bool):
         """Sync with main window Options menu."""
         try:
-            main_window = self.parent()
+            main_window: Any = self.parent()
             while main_window and not hasattr(main_window, 'avatar_action'):
                 main_window = main_window.parent()
             
@@ -529,6 +558,29 @@ class ModulesTab(QWidget):
         loaded = sum(1 for i in self.module_items.values() if i.is_loaded)
         total = len(self.module_items)
         self.loaded_label.setText(f"Loaded: {loaded} / {total}")
+        
+        # Update AI connection status
+        loaded_ids = [mid for mid, item in self.module_items.items() if item.is_loaded]
+        
+        core_loaded = any(m in loaded_ids for m in ['model', 'tokenizer', 'inference'])
+        gen_loaded = any('gen' in m for m in loaded_ids)
+        
+        if core_loaded and gen_loaded:
+            self.ai_status_indicator.setText("● Connected (Full)")
+            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
+            self.ai_status_detail.setText("Core AI + generation ready")
+        elif core_loaded:
+            self.ai_status_indicator.setText("● Connected (Core)")
+            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
+            self.ai_status_detail.setText("Chat available, enable gen modules for more")
+        elif loaded > 0:
+            self.ai_status_indicator.setText("◐ Partial")
+            self.ai_status_indicator.setStyleSheet("color: #f59e0b; font-size: 12px; font-weight: bold;")
+            self.ai_status_detail.setText(f"{loaded} modules loaded, enable core for chat")
+        else:
+            self.ai_status_indicator.setText("○ Disconnected")
+            self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
+            self.ai_status_detail.setText("Enable modules to start")
     
     def _refresh_status(self):
         """Refresh status indicators."""
@@ -571,9 +623,3 @@ class ModulesTab(QWidget):
         from datetime import datetime
         ts = datetime.now().strftime("%H:%M:%S")
         self.log_text.append(f"[{ts}] {message}")
-
-
-if not HAS_PYQT:
-    class ModulesTab:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("PyQt5 required")

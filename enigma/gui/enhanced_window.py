@@ -1748,6 +1748,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.personality_tab import create_personality_tab
         from .tabs.modules_tab import ModulesTab
         from .tabs.scaling_tab import ScalingTab
+        from .tabs.model_router_tab import ModelRouterTab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -1799,6 +1800,7 @@ class EnhancedMainWindow(QMainWindow):
             ("section", "MODEL"),
             ("", "Scale", "scale"),
             ("", "Modules", "modules"),
+            ("", "Router", "router"),
             # Generate
             ("section", "GENERATE"),
             ("", "Image", "image"),
@@ -1871,6 +1873,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
         self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
+        self.content_stack.addWidget(wrap_in_scroll(ModelRouterTab(self)))  # Router
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
         self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
@@ -1914,6 +1917,10 @@ class EnhancedMainWindow(QMainWindow):
             'image': 'image', 'video': 'video', 'code': 'code',
             'audio': 'audio', '3d': '3d', 'search': 'search',
             'chat': 'chat', 'train': 'train', 'settings': 'settings',
+            'router': 'router', 'modules': 'modules', 'scale': 'scale',
+            'history': 'history', 'avatar': 'avatar', 'game': 'game',
+            'robot': 'robot', 'vision': 'vision', 'personality': 'personality',
+            'terminal': 'terminal', 'files': 'files', 'examples': 'examples',
         }
         key = key_map.get(tab_name.lower())
         if key and key in self._nav_map:

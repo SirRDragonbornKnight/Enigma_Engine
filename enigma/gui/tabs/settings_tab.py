@@ -13,6 +13,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+# Qt enum constant for checkbox state
+Checked = Qt.CheckState.Checked
+
 
 def _get_env_key(key_name: str) -> str:
     """Get an environment variable value, return empty string if not set."""
@@ -100,7 +103,7 @@ def _toggle_key_visibility(parent):
 
 def _toggle_ai_lock(parent, state):
     """Toggle AI control lock - prevents user from changing settings."""
-    is_locked = state == Qt.Checked
+    is_locked = state == Checked
     
     # If trying to unlock and PIN is set, verify it
     if not is_locked and hasattr(parent, '_ai_lock_pin_set') and parent._ai_lock_pin_set:
@@ -442,6 +445,87 @@ def create_settings_tab(parent):
     
     layout.addWidget(api_group)
     
+    # === AI CONNECTION STATUS ===
+    connection_group = QGroupBox("AI Connection Status")
+    connection_layout = QVBoxLayout(connection_group)
+    
+    conn_desc = QLabel("Shows what AI is currently active and which components are loaded.")
+    conn_desc.setWordWrap(True)
+    connection_layout.addWidget(conn_desc)
+    
+    # Active AI Model display
+    parent.active_ai_label = QLabel("Active AI: Not configured")
+    parent.active_ai_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px;")
+    connection_layout.addWidget(parent.active_ai_label)
+    
+    # Connection indicators
+    parent.connection_indicators = QWidget()
+    conn_grid = QHBoxLayout(parent.connection_indicators)
+    conn_grid.setSpacing(20)
+    
+    # Create indicator labels
+    parent.model_status = _create_status_indicator("Model", "disconnected")
+    parent.tokenizer_status = _create_status_indicator("Tokenizer", "disconnected")
+    parent.inference_status = _create_status_indicator("Inference", "disconnected")
+    parent.memory_status = _create_status_indicator("Memory", "disconnected")
+    
+    conn_grid.addWidget(parent.model_status)
+    conn_grid.addWidget(parent.tokenizer_status)
+    conn_grid.addWidget(parent.inference_status)
+    conn_grid.addWidget(parent.memory_status)
+    conn_grid.addStretch()
+    
+    connection_layout.addWidget(parent.connection_indicators)
+    
+    # Refresh connection button
+    conn_refresh_btn = QPushButton("Check Connections")
+    conn_refresh_btn.clicked.connect(lambda: _refresh_connections(parent))
+    connection_layout.addWidget(conn_refresh_btn)
+    
+    layout.addWidget(connection_group)
+    
+    # === CACHE MANAGEMENT ===
+    cache_group = QGroupBox("Downloaded Models (Cache)")
+    cache_layout = QVBoxLayout(cache_group)
+    
+    cache_desc = QLabel(
+        "HuggingFace models are downloaded to your cache folder. "
+        "Delete unused models to free up disk space."
+    )
+    cache_desc.setWordWrap(True)
+    cache_layout.addWidget(cache_desc)
+    
+    # Cache info
+    parent.cache_size_label = QLabel("Calculating cache size...")
+    parent.cache_size_label.setStyleSheet("font-weight: bold;")
+    cache_layout.addWidget(parent.cache_size_label)
+    
+    parent.cache_path_label = QLabel("")
+    parent.cache_path_label.setStyleSheet("color: #888; font-size: 10px;")
+    parent.cache_path_label.setWordWrap(True)
+    cache_layout.addWidget(parent.cache_path_label)
+    
+    # Cache buttons
+    cache_buttons = QHBoxLayout()
+    
+    open_cache_btn = QPushButton("Open Cache Folder")
+    open_cache_btn.clicked.connect(lambda: _open_cache_folder(parent))
+    cache_buttons.addWidget(open_cache_btn)
+    
+    refresh_cache_btn = QPushButton("Refresh Size")
+    refresh_cache_btn.clicked.connect(lambda: _refresh_cache_info(parent))
+    cache_buttons.addWidget(refresh_cache_btn)
+    
+    clear_cache_btn = QPushButton("Clear All Cache")
+    clear_cache_btn.setStyleSheet("background: #7f1d1d; color: white;")
+    clear_cache_btn.clicked.connect(lambda: _clear_cache(parent))
+    cache_buttons.addWidget(clear_cache_btn)
+    
+    cache_buttons.addStretch()
+    cache_layout.addLayout(cache_buttons)
+    
+    layout.addWidget(cache_group)
+    
     # === CURRENT STATUS ===
     status_group = QGroupBox("Current Status")
     status_layout = QVBoxLayout(status_group)
@@ -462,8 +546,297 @@ def create_settings_tab(parent):
     
     # Initial status refresh
     _refresh_power_status(parent)
+    _refresh_cache_info(parent)
+    _refresh_connections(parent)
     
     return tab
+
+
+def _create_status_indicator(name: str, status: str) -> QLabel:
+    """Create a status indicator widget."""
+    colors = {
+        "connected": "#22c55e",  # Green
+        "disconnected": "#ef4444",  # Red
+        "loading": "#f59e0b",  # Yellow
+    }
+    symbols = {
+        "connected": "●",
+        "disconnected": "○",
+        "loading": "◐",
+    }
+    
+    color = colors.get(status, colors["disconnected"])
+    symbol = symbols.get(status, symbols["disconnected"])
+    
+    label = QLabel(f"{symbol} {name}")
+    label.setStyleSheet(f"color: {color}; font-weight: bold;")
+    label.setProperty("status", status)
+    label.setProperty("name", name)
+    return label
+
+
+def _update_status_indicator(label: QLabel, status: str):
+    """Update a status indicator."""
+    colors = {
+        "connected": "#22c55e",
+        "disconnected": "#ef4444", 
+        "loading": "#f59e0b",
+    }
+    symbols = {
+        "connected": "●",
+        "disconnected": "○",
+        "loading": "◐",
+    }
+    
+    name = label.property("name")
+    color = colors.get(status, colors["disconnected"])
+    symbol = symbols.get(status, symbols["disconnected"])
+    
+    label.setText(f"{symbol} {name}")
+    label.setStyleSheet(f"color: {color}; font-weight: bold;")
+    label.setProperty("status", status)
+
+
+def _refresh_connections(parent):
+    """Check and update AI connection status."""
+    try:
+        # First check if we have a model assigned via ToolRouter
+        active_ai_text = "Active AI: Not configured"
+        active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #888;"
+        
+        try:
+            from ...core.tool_router import get_router
+            router = get_router()
+            
+            # Use the public get_active_ai() method
+            active_ai = router.get_active_ai()
+            
+            if active_ai:
+                model_type = active_ai["model_type"]
+                model_name = active_ai["model_name"]
+                is_loaded = active_ai["loaded"]
+                
+                # Parse model type for display
+                if model_type == "huggingface":
+                    active_ai_text = f"Active AI: 🤗 {model_name}"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #f59e0b;"
+                    
+                    if is_loaded:
+                        _update_status_indicator(parent.model_status, "connected")
+                        _update_status_indicator(parent.tokenizer_status, "connected")
+                        _update_status_indicator(parent.inference_status, "connected")
+                    else:
+                        _update_status_indicator(parent.model_status, "loading")
+                        _update_status_indicator(parent.tokenizer_status, "loading")
+                        _update_status_indicator(parent.inference_status, "disconnected")
+                        active_ai_text += " (not loaded yet)"
+                        
+                elif model_type == "enigma":
+                    active_ai_text = f"Active AI: Enigma - {model_name}"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #22c55e;"
+                    
+                    if is_loaded:
+                        _update_status_indicator(parent.model_status, "connected")
+                        _update_status_indicator(parent.tokenizer_status, "connected")
+                        _update_status_indicator(parent.inference_status, "connected")
+                    else:
+                        _update_status_indicator(parent.model_status, "loading")
+                        _update_status_indicator(parent.tokenizer_status, "loading")
+                        _update_status_indicator(parent.inference_status, "disconnected")
+                        
+                elif model_type == "api":
+                    active_ai_text = f"Active AI: ☁️ {model_name.upper()} API"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #3b82f6;"
+                    _update_status_indicator(parent.model_status, "connected")
+                    _update_status_indicator(parent.tokenizer_status, "connected")
+                    _update_status_indicator(parent.inference_status, "connected")
+                    
+                elif model_type == "local":
+                    active_ai_text = f"Active AI: 🖥️ {model_name}"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #a855f7;"
+                    if is_loaded:
+                        _update_status_indicator(parent.model_status, "connected")
+                        _update_status_indicator(parent.tokenizer_status, "connected")
+                        _update_status_indicator(parent.inference_status, "connected")
+                    else:
+                        _update_status_indicator(parent.model_status, "loading")
+                        _update_status_indicator(parent.tokenizer_status, "loading")
+                        _update_status_indicator(parent.inference_status, "disconnected")
+                else:
+                    active_ai_text = f"Active AI: {active_ai['model_id']}"
+                    
+        except ImportError:
+            pass  # ToolRouter not available, fall back to module check
+        except Exception as e:
+            print(f"Router check error: {e}")
+        
+        # Update active AI label
+        parent.active_ai_label.setText(active_ai_text)
+        parent.active_ai_label.setStyleSheet(active_ai_style)
+        
+        # Check for module manager (fallback/additional checks)
+        main_window = parent.window()
+        module_manager = getattr(main_window, 'module_manager', None) if main_window else None
+        
+        if module_manager:
+            loaded = module_manager.list_loaded()
+            
+            # Only update if not already set by router check
+            if parent.model_status.property("status") == "disconnected":
+                _update_status_indicator(
+                    parent.model_status, 
+                    "connected" if "model" in loaded else "disconnected"
+                )
+            if parent.tokenizer_status.property("status") == "disconnected":
+                _update_status_indicator(
+                    parent.tokenizer_status,
+                    "connected" if "tokenizer" in loaded else "disconnected"
+                )
+            if parent.inference_status.property("status") == "disconnected":
+                _update_status_indicator(
+                    parent.inference_status,
+                    "connected" if "inference" in loaded else "disconnected"
+                )
+            _update_status_indicator(
+                parent.memory_status,
+                "connected" if "memory" in loaded else "disconnected"
+            )
+        else:
+            # Try direct checks for memory
+            try:
+                from ...memory import ConversationManager
+                _update_status_indicator(parent.memory_status, "connected")
+            except Exception:
+                _update_status_indicator(parent.memory_status, "disconnected")
+            
+    except Exception as e:
+        print(f"Connection check error: {e}")
+
+
+def _get_cache_path():
+    """Get the HuggingFace cache path."""
+    import os
+    from pathlib import Path
+    
+    # Check environment variable first
+    hf_home = os.environ.get("HF_HOME")
+    if hf_home:
+        return Path(hf_home)
+    
+    # Default paths
+    home = Path.home()
+    
+    # Windows
+    if os.name == 'nt':
+        return home / ".cache" / "huggingface"
+    # Unix
+    return home / ".cache" / "huggingface"
+
+
+def _get_folder_size(path):
+    """Calculate total size of a folder in bytes."""
+    from pathlib import Path
+    total = 0
+    try:
+        for item in Path(path).rglob("*"):
+            if item.is_file():
+                total += item.stat().st_size
+    except Exception:
+        pass
+    return total
+
+
+def _format_size(size_bytes):
+    """Format size in human-readable format."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} PB"
+
+
+def _refresh_cache_info(parent):
+    """Refresh cache size information."""
+    try:
+        cache_path = _get_cache_path()
+        parent.cache_path_label.setText(f"Location: {cache_path}")
+        
+        if cache_path.exists():
+            size = _get_folder_size(cache_path)
+            parent.cache_size_label.setText(f"Cache Size: {_format_size(size)}")
+            
+            if size > 10 * 1024 * 1024 * 1024:  # > 10GB
+                parent.cache_size_label.setStyleSheet("font-weight: bold; color: #f59e0b;")
+            elif size > 1 * 1024 * 1024 * 1024:  # > 1GB
+                parent.cache_size_label.setStyleSheet("font-weight: bold; color: #22c55e;")
+            else:
+                parent.cache_size_label.setStyleSheet("font-weight: bold;")
+        else:
+            parent.cache_size_label.setText("Cache folder not found (no models downloaded yet)")
+    except Exception as e:
+        parent.cache_size_label.setText(f"Error: {e}")
+
+
+def _open_cache_folder(parent):
+    """Open the cache folder in file explorer."""
+    import subprocess
+    import os
+    
+    cache_path = _get_cache_path()
+    
+    if not cache_path.exists():
+        QMessageBox.information(
+            parent, "No Cache",
+            "The cache folder doesn't exist yet.\n"
+            "It will be created when you first use a HuggingFace model."
+        )
+        return
+    
+    # Open in file explorer
+    if os.name == 'nt':  # Windows
+        subprocess.run(['explorer', str(cache_path)])
+    elif os.name == 'posix':  # Linux/Mac
+        subprocess.run(['xdg-open' if os.uname().sysname == 'Linux' else 'open', str(cache_path)])
+
+
+def _clear_cache(parent):
+    """Clear all HuggingFace cache."""
+    import shutil
+    
+    cache_path = _get_cache_path()
+    
+    if not cache_path.exists():
+        QMessageBox.information(parent, "No Cache", "Cache folder is already empty.")
+        return
+    
+    # Get size first
+    size = _get_folder_size(cache_path)
+    
+    reply = QMessageBox.warning(
+        parent,
+        "Clear Cache?",
+        f"This will delete ALL downloaded models ({_format_size(size)}).\n\n"
+        f"Location: {cache_path}\n\n"
+        "Models will need to be re-downloaded when you use them again.\n\n"
+        "Are you sure?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.No
+    )
+    
+    if reply == QMessageBox.Yes:
+        try:
+            # Delete hub folder (where models are stored)
+            hub_path = cache_path / "hub"
+            if hub_path.exists():
+                shutil.rmtree(hub_path)
+            
+            _refresh_cache_info(parent)
+            QMessageBox.information(
+                parent, "Cache Cleared",
+                f"Successfully freed {_format_size(size)} of disk space."
+            )
+        except Exception as e:
+            QMessageBox.critical(parent, "Error", f"Failed to clear cache: {e}")
 
 
 def _load_saved_settings(parent):
@@ -593,7 +966,7 @@ def _toggle_autonomous(parent, state):
         model_name = getattr(parent, 'current_model_name', 'enigma')
         autonomous = AutonomousManager.get(model_name)
         
-        if state == Qt.Checked:
+        if state == Checked:
             # Set activity level
             max_actions = parent.autonomous_activity_spin.value()
             autonomous.max_actions_per_hour = max_actions
