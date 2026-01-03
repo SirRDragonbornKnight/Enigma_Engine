@@ -25,10 +25,11 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
     QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
-    QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter
+    QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter, QWidget,
+    QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPixmap, QFont, QIcon
 import time
 
 # Import text formatting
@@ -156,6 +157,58 @@ QLabel {
     selection-background-color: #89b4fa;
     selection-color: #1e1e2e;
 }
+/* Sidebar Navigation Styling */
+QListWidget#sidebar {
+    background-color: #11111b;
+    border: none;
+    border-right: 2px solid #1e1e2e;
+    outline: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 0;
+}
+QListWidget#sidebar::item {
+    padding: 10px 20px;
+    border-left: 3px solid transparent;
+    margin: 1px 8px;
+    border-radius: 6px;
+    color: #a6adc8;
+}
+QListWidget#sidebar::item:selected {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #313244, stop:1 #1e1e2e);
+    border-left: 3px solid #89b4fa;
+    color: #cdd6f4;
+    font-weight: bold;
+}
+QListWidget#sidebar::item:hover:!selected {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+}
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background-color: transparent;
+}
+/* Scrollbar in sidebar */
+QListWidget#sidebar QScrollBar:vertical {
+    background: #11111b;
+    width: 8px;
+    margin: 0;
+}
+QListWidget#sidebar QScrollBar::handle:vertical {
+    background: #313244;
+    border-radius: 4px;
+    min-height: 30px;
+}
+QListWidget#sidebar QScrollBar::handle:vertical:hover {
+    background: #45475a;
+}
+QListWidget#sidebar QScrollBar::add-line:vertical,
+QListWidget#sidebar QScrollBar::sub-line:vertical {
+    height: 0;
+}
 """
 
 LIGHT_STYLE = """
@@ -264,6 +317,40 @@ QLabel#header {
 QLabel {
     selection-background-color: #1e66f5;
     selection-color: #ffffff;
+}
+/* Sidebar Navigation Styling - Light */
+QListWidget#sidebar {
+    background-color: #dce0e8;
+    border: none;
+    border-right: 2px solid #ccd0da;
+    outline: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 0;
+}
+QListWidget#sidebar::item {
+    padding: 10px 20px;
+    border-left: 3px solid transparent;
+    margin: 1px 8px;
+    border-radius: 6px;
+    color: #5c5f77;
+}
+QListWidget#sidebar::item:selected {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #bcc0cc, stop:1 #dce0e8);
+    border-left: 3px solid #1e66f5;
+    color: #1e66f5;
+    font-weight: bold;
+}
+QListWidget#sidebar::item:hover:!selected {
+    background-color: #ccd0da;
+    color: #4c4f69;
+}
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background-color: transparent;
 }
 """
 
@@ -1662,44 +1749,181 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.modules_tab import ModulesTab
         from .tabs.scaling_tab import ScalingTab
         
-        # Main tabs - moveable for user customization
-        tabs = QTabWidget()
-        tabs.setMovable(True)  # Allow tab reordering by drag
-        tabs.setTabsClosable(False)
-        tabs.setDocumentMode(True)
-        self.tabs = tabs  # Store reference for AI control
+        # Create main container with sidebar navigation
+        main_widget = QWidget()
+        main_layout = QHBoxLayout(main_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         
-        # Core tabs - Chat, Train, History
-        tabs.addTab(create_chat_tab(self), "Chat")
-        tabs.addTab(create_training_tab(self), "Train")
-        tabs.addTab(create_sessions_tab(self), "History")
+        # === SIDEBAR NAVIGATION ===
+        sidebar_container = QWidget()
+        sidebar_container.setFixedWidth(180)
+        sidebar_container.setStyleSheet("background-color: #11111b;")
+        sidebar_layout = QVBoxLayout(sidebar_container)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
         
-        # Model management - Scale, Modules
-        tabs.addTab(ScalingTab(self), "Scale")
-        tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")
+        # App title/logo area
+        title_widget = QWidget()
+        title_widget.setFixedHeight(50)
+        title_widget.setStyleSheet("""
+            background-color: #11111b;
+            border-bottom: 1px solid #1e1e2e;
+        """)
+        title_layout = QHBoxLayout(title_widget)
+        title_layout.setContentsMargins(16, 0, 16, 0)
+        app_title = QLabel("ENIGMA")
+        app_title.setStyleSheet("""
+            color: #89b4fa;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        """)
+        title_layout.addWidget(app_title)
+        sidebar_layout.addWidget(title_widget)
         
-        # AI generation tabs
-        tabs.addTab(create_image_tab(self), "Image")
-        tabs.addTab(create_code_tab(self), "Code")
-        tabs.addTab(create_video_tab(self), "Video")
-        tabs.addTab(create_audio_tab(self), "Audio")
-        tabs.addTab(create_threed_tab(self), "3D")
-        tabs.addTab(create_embeddings_tab(self), "Search")
+        # Sidebar list widget
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
-        # Interaction tabs - Avatar, Game, Robot each get their own tab
-        tabs.addTab(create_avatar_subtab(self), "Avatar")
-        tabs.addTab(create_game_subtab(self), "Game")
-        tabs.addTab(create_robot_subtab(self), "Robot")
-        tabs.addTab(create_vision_tab(self), "Vision")
-        tabs.addTab(create_personality_tab(self), "Personality")
+        # Define navigation items with sections
+        nav_items = [
+            # Core
+            ("section", "CORE"),
+            ("", "Chat", "chat"),
+            ("", "Train", "train"),
+            ("", "History", "history"),
+            # Model
+            ("section", "MODEL"),
+            ("", "Scale", "scale"),
+            ("", "Modules", "modules"),
+            # Generate
+            ("section", "GENERATE"),
+            ("", "Image", "image"),
+            ("", "Code", "code"),
+            ("", "Video", "video"),
+            ("", "Audio", "audio"),
+            ("", "3D", "3d"),
+            ("", "Search", "search"),
+            # Connect
+            ("section", "CONNECT"),
+            ("", "Avatar", "avatar"),
+            ("", "Game", "game"),
+            ("", "Robot", "robot"),
+            ("", "Vision", "vision"),
+            ("", "Personality", "personality"),
+            # Tools
+            ("section", "TOOLS"),
+            ("", "Terminal", "terminal"),
+            ("", "Files", "files"),
+            ("", "Examples", "examples"),
+            ("", "Settings", "settings"),
+        ]
         
-        # Utility tabs
-        tabs.addTab(create_terminal_tab(self), "Terminal")
-        tabs.addTab(create_instructions_tab(self), "Files")
-        tabs.addTab(create_examples_tab(self), "Examples")
-        tabs.addTab(create_settings_tab(self), "Settings")
+        # Add items to sidebar
+        self._nav_map = {}  # Map item text to stack index
+        stack_index = 0
         
-        self.setCentralWidget(tabs)
+        for item in nav_items:
+            if item[0] == "section":
+                # Section header - styled differently
+                section_item = QListWidgetItem(item[1])
+                section_item.setFlags(Qt.NoItemFlags)  # Not selectable
+                font = section_item.font()
+                font.setPointSize(8)
+                font.setBold(True)
+                section_item.setFont(font)
+                section_item.setSizeHint(QSize(170, 28))
+                # Use custom styling via foreground
+                from PyQt5.QtGui import QColor, QBrush
+                section_item.setForeground(QBrush(QColor("#6c7086")))
+                self.sidebar.addItem(section_item)
+            else:
+                icon, name, key = item
+                list_item = QListWidgetItem(f"   {name}")
+                list_item.setData(Qt.UserRole, key)
+                list_item.setSizeHint(QSize(170, 38))
+                self.sidebar.addItem(list_item)
+                self._nav_map[key] = stack_index
+                stack_index += 1
+        
+        sidebar_layout.addWidget(self.sidebar)
+        main_layout.addWidget(sidebar_container)
+        
+        # === CONTENT STACK ===
+        self.content_stack = QStackedWidget()
+        
+        # Create scrollable containers for each tab
+        def wrap_in_scroll(widget):
+            """Wrap a widget in a scroll area."""
+            scroll = QScrollArea()
+            scroll.setWidget(widget)
+            scroll.setWidgetResizable(True)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            return scroll
+        
+        # Add all tabs to the stack (in order matching nav_items)
+        self.content_stack.addWidget(wrap_in_scroll(create_chat_tab(self)))  # Chat
+        self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Train
+        self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
+        self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
+        self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
+        self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
+        self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
+        self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
+        self.content_stack.addWidget(wrap_in_scroll(create_audio_tab(self)))  # Audio
+        self.content_stack.addWidget(wrap_in_scroll(create_threed_tab(self)))  # 3D
+        self.content_stack.addWidget(wrap_in_scroll(create_embeddings_tab(self)))  # Search
+        self.content_stack.addWidget(wrap_in_scroll(create_avatar_subtab(self)))  # Avatar
+        self.content_stack.addWidget(wrap_in_scroll(create_game_subtab(self)))  # Game
+        self.content_stack.addWidget(wrap_in_scroll(create_robot_subtab(self)))  # Robot
+        self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision
+        self.content_stack.addWidget(wrap_in_scroll(create_personality_tab(self)))  # Personality
+        self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
+        self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
+        self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples
+        self.content_stack.addWidget(wrap_in_scroll(create_settings_tab(self)))  # Settings
+        
+        main_layout.addWidget(self.content_stack, stretch=1)
+        
+        # Connect sidebar selection to content stack
+        self.sidebar.currentItemChanged.connect(self._on_sidebar_changed)
+        
+        # Select first real item (skip first section header)
+        self.sidebar.setCurrentRow(1)
+        
+        # Store reference for compatibility (tabs -> content_stack)
+        self.tabs = self.content_stack
+        
+        self.setCentralWidget(main_widget)
+    
+    def _on_sidebar_changed(self, current, previous):
+        """Handle sidebar navigation change."""
+        if current:
+            key = current.data(Qt.UserRole)
+            if key and key in self._nav_map:
+                self.content_stack.setCurrentIndex(self._nav_map[key])
+    
+    def _switch_to_tab(self, tab_name: str):
+        """Switch to a specific tab by name (for chat commands)."""
+        # Find the tab key that matches
+        key_map = {
+            'image': 'image', 'video': 'video', 'code': 'code',
+            'audio': 'audio', '3d': '3d', 'search': 'search',
+            'chat': 'chat', 'train': 'train', 'settings': 'settings',
+        }
+        key = key_map.get(tab_name.lower())
+        if key and key in self._nav_map:
+            self.content_stack.setCurrentIndex(self._nav_map[key])
+            # Also update sidebar selection
+            for i in range(self.sidebar.count()):
+                item = self.sidebar.item(i)
+                if item and item.data(Qt.UserRole) == key:
+                    self.sidebar.setCurrentRow(i)
+                    break
     
     def _set_theme(self, theme_name):
         """Set the application theme."""
@@ -2596,6 +2820,11 @@ class EnhancedMainWindow(QMainWindow):
         if not text:
             return
         
+        # Handle chat commands (e.g., /image, /video, /code, /audio, /help)
+        if text.startswith('/'):
+            self._handle_chat_command(text)
+            return
+        
         if not self.engine:
             self.chat_display.append("<b style='color:#f38ba8;'>System:</b> No model loaded. "
                                       "Create or load a model first (File menu).")
@@ -2687,6 +2916,114 @@ class EnhancedMainWindow(QMainWindow):
                 self._speak_text(response)
         except Exception as e:
             self.chat_display.append(f"<i>Error: {e}</i>")
+    
+    def _handle_chat_command(self, text: str):
+        """Handle chat commands like /image, /video, /code, /audio, /help."""
+        self.chat_input.clear()
+        parts = text.split(maxsplit=1)
+        command = parts[0].lower()
+        prompt = parts[1] if len(parts) > 1 else ""
+        
+        self.chat_display.append(f"<b>You:</b> {text}")
+        
+        # Command mapping to tab indices and handlers
+        commands = {
+            '/help': self._show_command_help,
+            '/image': lambda p: self._run_generation_from_chat('image', p),
+            '/video': lambda p: self._run_generation_from_chat('video', p),
+            '/code': lambda p: self._run_generation_from_chat('code', p),
+            '/audio': lambda p: self._run_generation_from_chat('audio', p),
+            '/3d': lambda p: self._run_generation_from_chat('3d', p),
+            '/embed': lambda p: self._run_generation_from_chat('embed', p),
+            '/clear': lambda p: self._clear_chat_from_command(),
+        }
+        
+        if command in commands:
+            if command == '/help':
+                commands[command]()
+            else:
+                if not prompt:
+                    self.chat_display.append(
+                        f"<b style='color:#f9e2af;'>Usage:</b> {command} &lt;your prompt&gt;"
+                    )
+                else:
+                    commands[command](prompt)
+        else:
+            self.chat_display.append(
+                f"<b style='color:#f38ba8;'>Unknown command:</b> {command}<br>"
+                "Type <b>/help</b> for available commands."
+            )
+    
+    def _show_command_help(self):
+        """Show available chat commands."""
+        help_text = """
+<b style='color:#89b4fa;'>Available Commands:</b><br>
+<b>/image &lt;prompt&gt;</b> - Generate an image<br>
+<b>/video &lt;prompt&gt;</b> - Generate a video/GIF<br>
+<b>/code &lt;description&gt;</b> - Generate code<br>
+<b>/audio &lt;text&gt;</b> - Generate speech audio<br>
+<b>/3d &lt;prompt&gt;</b> - Generate 3D model<br>
+<b>/embed &lt;text&gt;</b> - Generate embeddings<br>
+<b>/clear</b> - Clear chat history<br>
+<br>
+<i>Example: /image a sunset over mountains</i>
+"""
+        self.chat_display.append(help_text)
+    
+    def _clear_chat_from_command(self):
+        """Clear chat via command."""
+        self.chat_display.clear()
+        self.chat_messages = []
+        self.chat_display.append("<b style='color:#a6e3a1;'>Chat cleared.</b>")
+    
+    def _run_generation_from_chat(self, gen_type: str, prompt: str):
+        """Run a generation task from chat and show results."""
+        # Map generation types to tab names
+        tab_map = {
+            'image': ('Image', 'image_prompt', '_generate_image'),
+            'video': ('Video', 'video_prompt', '_generate_video'),
+            'code': ('Code', 'code_prompt', '_generate_code'),
+            'audio': ('Audio', 'audio_text', '_generate_audio'),
+            '3d': ('3D', 'threed_prompt', '_generate_3d'),
+            'embed': ('Embeddings', 'embed_text', '_generate_embeddings'),
+        }
+        
+        if gen_type not in tab_map:
+            self.chat_display.append(f"<i>Unknown generation type: {gen_type}</i>")
+            return
+        
+        tab_name, prompt_attr, gen_method = tab_map[gen_type]
+        
+        self.chat_display.append(
+            f"<b style='color:#89b4fa;'>Generating {gen_type}:</b> {prompt}"
+        )
+        
+        # Set the prompt in the appropriate tab if the input widget exists
+        if hasattr(self, prompt_attr):
+            widget = getattr(self, prompt_attr)
+            if hasattr(widget, 'setPlainText'):
+                widget.setPlainText(prompt)
+            elif hasattr(widget, 'setText'):
+                widget.setText(prompt)
+        
+        # Try to run the generation method
+        if hasattr(self, gen_method):
+            try:
+                getattr(self, gen_method)()
+                self.chat_display.append(
+                    f"<b style='color:#a6e3a1;'>✓</b> {gen_type.title()} generation started! "
+                    f"Check the <b>{tab_name}</b> tab for results."
+                )
+            except Exception as e:
+                self.chat_display.append(
+                    f"<b style='color:#f38ba8;'>Error:</b> {e}"
+                )
+        else:
+            # Switch to the tab instead
+            self.chat_display.append(
+                f"<i>Switching to {tab_name} tab. Enter your prompt there.</i>"
+            )
+            self._switch_to_tab(tab_name)
     
     def _speak_text(self, text):
         """Speak text using TTS."""
@@ -3004,7 +3341,127 @@ class EnhancedMainWindow(QMainWindow):
             "ai_get_screen_text()",
             "ai_send_to_game(command)",
             "ai_send_to_robot(command)",
+            "ai_generate_image(prompt)",
+            "ai_generate_code(description, language='python')",
+            "ai_generate_audio(text)",
+            "ai_speak(text)",
+            "ai_train(epochs=10)",
+            "ai_clear_chat()",
+            "ai_get_status()",
+            "ai_lock_controls(pin=None)",
+            "ai_unlock_controls(pin=None)",
+            "ai_is_locked()",
         ]
+    
+    def ai_generate_image(self, prompt: str):
+        """AI can generate an image."""
+        if hasattr(self, 'image_prompt'):
+            self.image_prompt.setPlainText(prompt)
+        if hasattr(self, '_generate_image'):
+            self._generate_image()
+            return f"Generating image: {prompt}"
+        return "Image generation not available"
+    
+    def ai_generate_code(self, description: str, language: str = "python"):
+        """AI can generate code."""
+        if hasattr(self, 'code_prompt'):
+            self.code_prompt.setPlainText(description)
+        if hasattr(self, 'code_language'):
+            idx = self.code_language.findText(language, Qt.MatchContains)
+            if idx >= 0:
+                self.code_language.setCurrentIndex(idx)
+        if hasattr(self, '_generate_code'):
+            self._generate_code()
+            return f"Generating {language} code: {description}"
+        return "Code generation not available"
+    
+    def ai_generate_audio(self, text: str):
+        """AI can generate audio/TTS."""
+        if hasattr(self, 'audio_text'):
+            self.audio_text.setPlainText(text)
+        if hasattr(self, '_generate_audio'):
+            self._generate_audio()
+            return f"Generating audio: {text}"
+        return "Audio generation not available"
+    
+    def ai_speak(self, text: str):
+        """AI can speak text using TTS."""
+        self._speak_text(text)
+        return f"Speaking: {text[:50]}..."
+    
+    def ai_train(self, epochs: int = 10):
+        """AI can start training."""
+        if hasattr(self, 'epochs_spin'):
+            self.epochs_spin.setValue(epochs)
+        if hasattr(self, '_start_training'):
+            self._start_training()
+            return f"Started training for {epochs} epochs"
+        return "Training not available"
+    
+    def ai_clear_chat(self):
+        """AI can clear the chat history."""
+        if hasattr(self, 'chat_display'):
+            self.chat_display.clear()
+        if hasattr(self, 'chat_messages'):
+            self.chat_messages = []
+        return "Chat cleared"
+    
+    def ai_get_status(self):
+        """AI can get current system status."""
+        status = {
+            "model": self.current_model_name if hasattr(self, 'current_model_name') else None,
+            "model_loaded": self.engine is not None,
+            "chat_messages": len(getattr(self, 'chat_messages', [])),
+            "auto_speak": getattr(self, 'auto_speak', False),
+            "microphone": getattr(self, 'microphone_enabled', False),
+        }
+        return status
+    
+    def ai_set_personality(self, trait: str, value: int):
+        """AI can adjust its own personality traits (0-100)."""
+        trait_map = {
+            "curiosity": "curiosity_slider",
+            "friendliness": "friendliness_slider", 
+            "creativity": "creativity_slider",
+            "formality": "formality_slider",
+            "humor": "humor_slider",
+        }
+        slider_name = trait_map.get(trait.lower())
+        if slider_name and hasattr(self, slider_name):
+            slider = getattr(self, slider_name)
+            slider.setValue(max(0, min(100, value)))
+            return f"Set {trait} to {value}"
+        return f"Unknown trait: {trait}"
+    
+    def ai_navigate(self, destination: str):
+        """AI can navigate to any section."""
+        self._switch_to_tab(destination)
+        return f"Navigated to {destination}"
+    
+    def ai_lock_controls(self, pin: str = None):
+        """AI can lock controls to prevent user interference."""
+        if hasattr(self, 'ai_lock_checkbox'):
+            if pin:
+                self._ai_lock_pin_set = pin
+            self.ai_lock_checkbox.setChecked(True)
+            self._ai_control_locked = True
+            return "Controls locked"
+        return "Lock control not available"
+    
+    def ai_unlock_controls(self, pin: str = None):
+        """AI can unlock controls (requires PIN if set)."""
+        if hasattr(self, '_ai_lock_pin_set') and self._ai_lock_pin_set:
+            if pin != self._ai_lock_pin_set:
+                return "Incorrect PIN"
+        if hasattr(self, 'ai_lock_checkbox'):
+            self.ai_lock_checkbox.setChecked(False)
+            self._ai_control_locked = False
+            return "Controls unlocked"
+        return "Lock control not available"
+    
+    def ai_is_locked(self):
+        """Check if controls are currently locked."""
+        return getattr(self, '_ai_control_locked', False)
 
 
 def run_app():

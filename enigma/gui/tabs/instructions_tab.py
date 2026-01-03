@@ -119,10 +119,13 @@ def create_instructions_tab(parent):
     """Create the files tab - edit model data and notes with folder browser."""
     w = QWidget()
     layout = QVBoxLayout()
+    layout.setContentsMargins(5, 5, 5, 5)
+    layout.setSpacing(5)
     
-    # Header
-    header = QLabel("File Browser")
+    # Header - compact, fixed height
+    header = QLabel("📁 Files")
     header.setObjectName("header")
+    header.setFixedHeight(28)
     layout.addWidget(header)
     
     # Create splitter for file tree and editor
