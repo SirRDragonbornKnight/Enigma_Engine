@@ -342,6 +342,11 @@ class ThreeDTab(QWidget):
         self.open_btn.clicked.connect(self._open_3d)
         btn_layout.addWidget(self.open_btn)
         
+        self.save_btn = QPushButton("Save As...")
+        self.save_btn.setEnabled(False)
+        self.save_btn.clicked.connect(self._save_3d)
+        btn_layout.addWidget(self.save_btn)
+        
         self.open_folder_btn = QPushButton("Open Output Folder")
         self.open_folder_btn.clicked.connect(self._open_output_folder)
         btn_layout.addWidget(self.open_folder_btn)
@@ -428,6 +433,7 @@ class ThreeDTab(QWidget):
             
             self.last_3d_path = path
             self.open_btn.setEnabled(True)
+            self.save_btn.setEnabled(True)
             self.status_label.setText(f"Generated in {duration:.1f}s - Saved to: {path}")
         else:
             error = result.get("error", "Unknown error")
@@ -444,6 +450,23 @@ class ThreeDTab(QWidget):
                 os.startfile(self.last_3d_path)
             else:
                 subprocess.run(['xdg-open', self.last_3d_path])
+    
+    def _save_3d(self):
+        """Save the generated 3D model to a custom location."""
+        if not self.last_3d_path:
+            return
+        
+        ext = Path(self.last_3d_path).suffix
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save 3D Model",
+            str(Path.home() / f"generated_model{ext}"),
+            f"3D Files (*{ext});;PLY Files (*.ply);;GLB Files (*.glb);;OBJ Files (*.obj);;All Files (*.*)"
+        )
+        if path:
+            import shutil
+            shutil.copy(self.last_3d_path, path)
+            QMessageBox.information(self, "Saved", f"3D model saved to:\n{path}")
     
     def _open_output_folder(self):
         import subprocess

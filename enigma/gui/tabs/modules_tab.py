@@ -2,8 +2,7 @@
 Module Manager Tab - Control all Enigma capabilities
 ====================================================
 
-Unified control panel for all modules and AI capabilities.
-Everything toggleable, organized by category.
+Clean, functional interface for managing modules.
 """
 from typing import Dict, List
 
@@ -12,416 +11,357 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
         QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
         QLineEdit, QProgressBar, QMessageBox, QSplitter,
-        QTextEdit, QSizePolicy
+        QTextEdit, QSizePolicy, QListWidget, QListWidgetItem,
+        QStackedWidget, QComboBox
     )
     from PyQt5.QtCore import Qt, QTimer
-    from PyQt5.QtGui import QFont
+    from PyQt5.QtGui import QFont, QColor
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 
-# Helper function to make labels selectable
-def make_selectable_label(text: str, **kwargs) -> QLabel:
-    """Create a QLabel with selectable text."""
-    label = QLabel(text)
-    label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-    for key, value in kwargs.items():
-        if hasattr(label, f'set{key.capitalize()}'):
-            getattr(label, f'set{key.capitalize()}')(value)
-    return label
-
-
-# Category colors and icons
-CATEGORY_STYLES = {
-    'core': {'color': '#e74c3c', 'icon': '', 'name': 'Core'},
-    'memory': {'color': '#3498db', 'icon': '', 'name': 'Memory'},
-    'interface': {'color': '#2ecc71', 'icon': '', 'name': 'Interface'},
-    'perception': {'color': '#9b59b6', 'icon': '', 'name': 'Perception'},
-    'output': {'color': '#f39c12', 'icon': '', 'name': 'Output'},
-    'generation': {'color': '#e91e63', 'icon': '', 'name': 'AI Generation'},
-    'tools': {'color': '#1abc9c', 'icon': '', 'name': 'Tools'},
-    'network': {'color': '#e67e22', 'icon': '', 'name': 'Network'},
-    'extension': {'color': '#95a5a6', 'icon': '', 'name': 'Extension'},
+# Category definitions (no emojis, just colors)
+CATEGORIES = {
+    'core': {'color': '#e74c3c', 'name': 'Core'},
+    'generation': {'color': '#e91e63', 'name': 'AI Generation'},
+    'memory': {'color': '#3498db', 'name': 'Memory'},
+    'perception': {'color': '#9b59b6', 'name': 'Perception'},
+    'output': {'color': '#f39c12', 'name': 'Output'},
+    'tools': {'color': '#1abc9c', 'name': 'Tools'},
+    'network': {'color': '#e67e22', 'name': 'Network'},
+    'interface': {'color': '#2ecc71', 'name': 'Interface'},
+    'extension': {'color': '#95a5a6', 'name': 'Extension'},
 }
 
 
-class ModuleCard(QFrame):
-    """Visual card for a single module."""
+class ModuleListItem(QFrame):
+    """A single module row in the list."""
     
     def __init__(self, module_id: str, module_info: dict, parent=None):
         super().__init__(parent)
         self.module_id = module_id
         self.module_info = module_info
         self.is_loaded = False
-        self.setup_ui()
+        self._setup_ui()
         
-    def setup_ui(self):
-        self.setFrameStyle(QFrame.Box | QFrame.Raised)
-        self.setLineWidth(1)
-        self.setMinimumWidth(200)
-        self.setMinimumHeight(80)  # Reduced for smaller screens
-        # Allow cards to shrink vertically when window resizes
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+    def _setup_ui(self):
+        self.setFixedHeight(50)
+        self.setFrameStyle(QFrame.NoFrame)
         
         category = self.module_info.get('category', 'extension').lower()
-        style = CATEGORY_STYLES.get(category, CATEGORY_STYLES['extension'])
-        color = style['color']
+        color = CATEGORIES.get(category, CATEGORIES['extension'])['color']
         
         self.setStyleSheet(f"""
-            ModuleCard {{
-                border: 2px solid {color};
-                border-radius: 8px;
-                background-color: rgba(0,0,0,0.2);
+            ModuleListItem {{
+                background: transparent;
+                border-left: 3px solid {color};
+                padding-left: 8px;
             }}
-            ModuleCard:hover {{
-                background-color: rgba(255,255,255,0.05);
+            ModuleListItem:hover {{
+                background: rgba(255,255,255,0.05);
             }}
         """)
         
-        layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 5, 10, 5)
+        layout.setSpacing(15)
         
-        # Header row
-        header = QHBoxLayout()
-        
-        # Icon + Name
-        icon = style['icon']
-        name = self.module_info.get('name', self.module_id)
-        name_label = make_selectable_label(f"{icon} {name}")
-        name_label.setFont(QFont('Arial', 10, QFont.Bold))
-        header.addWidget(name_label)
-        
-        header.addStretch()
-        
-        # Toggle switch
+        # Toggle checkbox
         self.toggle = QCheckBox()
-        self.toggle.setStyleSheet(f"""
-            QCheckBox::indicator {{
-                width: 40px;
-                height: 20px;
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: {color};
-                border-radius: 10px;
-            }}
-            QCheckBox::indicator:unchecked {{
-                background-color: #444;
-                border-radius: 10px;
-            }}
+        self.toggle.setFixedWidth(20)
+        layout.addWidget(self.toggle)
+        
+        # Name and description
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+        
+        name = self.module_info.get('name', self.module_id)
+        self.name_label = QLabel(name)
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        info_layout.addWidget(self.name_label)
+        
+        desc = self.module_info.get('description', '')
+        self.desc_label = QLabel(desc)
+        self.desc_label.setStyleSheet("color: #888; font-size: 10px;")
+        info_layout.addWidget(self.desc_label)
+        
+        layout.addLayout(info_layout, stretch=1)
+        
+        # Status indicator
+        self.status_label = QLabel("OFF")
+        self.status_label.setFixedWidth(40)
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #666;
+                font-size: 10px;
+                font-weight: bold;
+            }
         """)
-        header.addWidget(self.toggle)
+        layout.addWidget(self.status_label)
         
-        layout.addLayout(header)
-        
-        # Description
-        desc = self.module_info.get('description', 'No description')
-        desc_label = make_selectable_label(desc)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #aaa; font-size: 9px;")
-        desc_label.setMaximumHeight(40)
-        layout.addWidget(desc_label)
-        
-        # Requirements/info row
-        info_parts = []
-        
-        reqs = self.module_info.get('requirements', [])
-        if reqs:
-            info_parts.append(f"Needs: {', '.join(reqs[:2])}")
-        
-        provides = self.module_info.get('provides', [])
-        if provides:
-            info_parts.append(f"Adds: {', '.join(provides[:2])}")
-        
-        if self.module_info.get('needs_api_key'):
-            info_parts.append("API key")
-        
+        # Requirements indicator
+        needs = []
         if self.module_info.get('needs_gpu'):
-            info_parts.append("GPU")
+            needs.append("GPU")
+        if self.module_info.get('needs_api_key'):
+            needs.append("API")
         
-        if info_parts:
-            info_label = make_selectable_label(" | ".join(info_parts))
-            info_label.setStyleSheet("color: #666; font-size: 8px;")
-            layout.addWidget(info_label)
-        
-        # Status + Configure button
-        bottom = QHBoxLayout()
-        
-        self.status_label = make_selectable_label("Off")
-        self.status_label.setStyleSheet("color: #666; font-size: 9px;")
-        bottom.addWidget(self.status_label)
-        
-        bottom.addStretch()
-        
-        self.config_btn = QPushButton("Cfg")
-        self.config_btn.setMaximumWidth(30)
-        self.config_btn.setToolTip("Configure")
-        self.config_btn.setEnabled(self.module_info.get('has_config', True))
-        bottom.addWidget(self.config_btn)
-        
-        layout.addLayout(bottom)
+        if needs:
+            req_label = QLabel(" | ".join(needs))
+            req_label.setStyleSheet("color: #f39c12; font-size: 9px;")
+            req_label.setFixedWidth(50)
+            layout.addWidget(req_label)
     
     def set_loaded(self, loaded: bool):
         self.is_loaded = loaded
         self.toggle.setChecked(loaded)
         if loaded:
-            self.status_label.setText("On")
-            self.status_label.setStyleSheet("color: #2ecc71; font-size: 9px;")
+            self.status_label.setText("ON")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #2ecc71;
+                    font-size: 10px;
+                    font-weight: bold;
+                }
+            """)
         else:
-            self.status_label.setText("Off")
-            self.status_label.setStyleSheet("color: #666; font-size: 9px;")
-
-
-class CategorySection(QWidget):
-    """A collapsible section for a category of modules."""
-    
-    def __init__(self, category: str, parent=None):
-        super().__init__(parent)
-        self.category = category
-        self.cards: List[ModuleCard] = []
-        self.is_collapsed = False
-        self.setup_ui()
-    
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(0, 0, 0, 10)
-        
-        style = CATEGORY_STYLES.get(self.category.lower(), CATEGORY_STYLES['extension'])
-        
-        # Header
-        header = QHBoxLayout()
-        
-        self.collapse_btn = QPushButton("-")
-        self.collapse_btn.setMaximumWidth(25)
-        self.collapse_btn.setFlat(True)
-        self.collapse_btn.clicked.connect(self.toggle_collapse)
-        header.addWidget(self.collapse_btn)
-        
-        title = QLabel(f"{style['icon']} {style['name']}")
-        title.setFont(QFont('Arial', 12, QFont.Bold))
-        title.setStyleSheet(f"color: {style['color']};")
-        header.addWidget(title)
-        
-        header.addStretch()
-        
-        self.count_label = QLabel("0 modules")
-        self.count_label.setStyleSheet("color: #666;")
-        header.addWidget(self.count_label)
-        
-        # Enable all / Disable all
-        self.enable_all_btn = QPushButton("All On")
-        self.enable_all_btn.setMaximumWidth(60)
-        self.enable_all_btn.clicked.connect(self.enable_all)
-        header.addWidget(self.enable_all_btn)
-        
-        self.disable_all_btn = QPushButton("All Off")
-        self.disable_all_btn.setMaximumWidth(60)
-        self.disable_all_btn.clicked.connect(self.disable_all)
-        header.addWidget(self.disable_all_btn)
-        
-        layout.addLayout(header)
-        
-        # Cards container
-        self.cards_widget = QWidget()
-        self.cards_layout = QGridLayout(self.cards_widget)
-        self.cards_layout.setSpacing(10)
-        layout.addWidget(self.cards_widget)
-    
-    def add_card(self, card: ModuleCard):
-        self.cards.append(card)
-        row = (len(self.cards) - 1) // 3
-        col = (len(self.cards) - 1) % 3
-        self.cards_layout.addWidget(card, row, col)
-        self.count_label.setText(f"{len(self.cards)} modules")
-    
-    def toggle_collapse(self):
-        self.is_collapsed = not self.is_collapsed
-        self.cards_widget.setVisible(not self.is_collapsed)
-        self.collapse_btn.setText("+" if self.is_collapsed else "-")
-    
-    def enable_all(self):
-        for card in self.cards:
-            card.toggle.setChecked(True)
-    
-    def disable_all(self):
-        for card in self.cards:
-            card.toggle.setChecked(False)
+            self.status_label.setText("OFF")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #666;
+                    font-size: 10px;
+                    font-weight: bold;
+                }
+            """)
 
 
 class ModulesTab(QWidget):
-    """Tab for managing all Enigma modules."""
+    """Clean module management interface."""
     
     def __init__(self, parent=None, module_manager=None):
         super().__init__(parent)
         self.module_manager = module_manager
-        self.categories: Dict[str, CategorySection] = {}
-        self.all_cards: Dict[str, ModuleCard] = {}
-        self.setup_ui()
+        self.module_items: Dict[str, ModuleListItem] = {}
+        self._setup_ui()
         
         # Refresh timer
         self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self.refresh_status)
+        self.refresh_timer.timeout.connect(self._refresh_status)
         self.refresh_timer.start(5000)
         
-    def setup_ui(self):
+    def _setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
         
-        # Title and controls
-        header = QHBoxLayout()
+        # Header
+        header_layout = QHBoxLayout()
         
         title = QLabel("Module Manager")
-        title.setFont(QFont('Arial', 16, QFont.Bold))
-        header.addWidget(title)
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        header_layout.addWidget(title)
         
-        subtitle = QLabel("Enable/disable any capability")
-        subtitle.setStyleSheet("color: #888;")
-        header.addWidget(subtitle)
-        
-        header.addStretch()
+        header_layout.addStretch()
         
         # Search
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search modules...")
-        self.search_input.setMaximumWidth(200)
-        self.search_input.textChanged.connect(self.filter_modules)
-        header.addWidget(self.search_input)
+        self.search_input.setPlaceholderText("Search...")
+        self.search_input.setFixedWidth(200)
+        self.search_input.textChanged.connect(self._filter_modules)
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                padding: 6px 10px;
+                border-radius: 4px;
+            }
+        """)
+        header_layout.addWidget(self.search_input)
         
-        self.refresh_btn = QPushButton("Refresh")
-        self.refresh_btn.clicked.connect(self.refresh_status)
-        header.addWidget(self.refresh_btn)
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setFixedWidth(80)
+        refresh_btn.clicked.connect(self._refresh_status)
+        header_layout.addWidget(refresh_btn)
         
-        layout.addLayout(header)
+        layout.addLayout(header_layout)
         
-        # Main content - splitter
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setChildrenCollapsible(False)  # Prevent panels from being hidden
+        # Main content
+        content_layout = QHBoxLayout()
         
-        # Left: Modules organized by category
-        left_widget = QWidget()
-        left_widget.setMinimumWidth(400)  # Minimum width to prevent collapse
-        left_layout = QVBoxLayout(left_widget)
+        # Left side - Category filter + Module list
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(10)
         
+        # Category filter
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Category:"))
+        
+        self.category_combo = QComboBox()
+        self.category_combo.addItem("All Categories", "all")
+        for cat_id, cat_info in CATEGORIES.items():
+            self.category_combo.addItem(cat_info['name'], cat_id)
+        self.category_combo.currentIndexChanged.connect(self._filter_modules)
+        self.category_combo.setFixedWidth(180)
+        filter_layout.addWidget(self.category_combo)
+        
+        filter_layout.addStretch()
+        
+        # Quick actions
+        self.enable_all_btn = QPushButton("Enable All")
+        self.enable_all_btn.setFixedWidth(90)
+        self.enable_all_btn.clicked.connect(self._enable_all_visible)
+        filter_layout.addWidget(self.enable_all_btn)
+        
+        self.disable_all_btn = QPushButton("Disable All")
+        self.disable_all_btn.setFixedWidth(90)
+        self.disable_all_btn.clicked.connect(self._disable_all_visible)
+        filter_layout.addWidget(self.disable_all_btn)
+        
+        left_layout.addLayout(filter_layout)
+        
+        # Module list in scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #333;
+                border-radius: 4px;
+                background: transparent;
+            }
+        """)
         
-        self.modules_widget = QWidget()
-        self.modules_layout = QVBoxLayout(self.modules_widget)
-        self.modules_layout.setSpacing(15)
+        self.modules_container = QWidget()
+        self.modules_layout = QVBoxLayout(self.modules_container)
+        self.modules_layout.setSpacing(2)
+        self.modules_layout.setContentsMargins(5, 5, 5, 5)
         
-        scroll.setWidget(self.modules_widget)
+        scroll.setWidget(self.modules_container)
         left_layout.addWidget(scroll)
         
-        splitter.addWidget(left_widget)
+        content_layout.addWidget(left_panel, stretch=2)
         
-        # Right: Status panel
-        right_widget = QWidget()
-        right_widget.setMinimumWidth(200)  # Minimum width to prevent collapse
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        # Right side - Status panel
+        right_panel = QWidget()
+        right_panel.setFixedWidth(280)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(10, 0, 0, 0)
+        right_layout.setSpacing(15)
         
-        # Quick stats
-        stats_group = QGroupBox("Status")
-        stats_layout = QVBoxLayout(stats_group)
+        # Stats box
+        stats_box = QGroupBox("Status")
+        stats_layout = QVBoxLayout(stats_box)
+        stats_layout.setSpacing(10)
         
         self.loaded_label = QLabel("Loaded: 0 / 0")
+        self.loaded_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         stats_layout.addWidget(self.loaded_label)
         
-        self.cpu_bar = self._create_resource_bar("CPU")
+        # Resource bars
+        stats_layout.addWidget(QLabel("CPU Usage:"))
+        self.cpu_bar = QProgressBar()
+        self.cpu_bar.setMaximum(100)
+        self.cpu_bar.setTextVisible(True)
+        self.cpu_bar.setFixedHeight(20)
         stats_layout.addWidget(self.cpu_bar)
         
-        self.mem_bar = self._create_resource_bar("Memory")
+        stats_layout.addWidget(QLabel("Memory:"))
+        self.mem_bar = QProgressBar()
+        self.mem_bar.setMaximum(100)
+        self.mem_bar.setTextVisible(True)
+        self.mem_bar.setFixedHeight(20)
         stats_layout.addWidget(self.mem_bar)
         
-        self.gpu_bar = self._create_resource_bar("GPU")
-        stats_layout.addWidget(self.gpu_bar)
-        
-        self.vram_bar = self._create_resource_bar("VRAM")
+        stats_layout.addWidget(QLabel("GPU VRAM:"))
+        self.vram_bar = QProgressBar()
+        self.vram_bar.setMaximum(100)
+        self.vram_bar.setTextVisible(True)
+        self.vram_bar.setFixedHeight(20)
         stats_layout.addWidget(self.vram_bar)
         
-        right_layout.addWidget(stats_group)
+        right_layout.addWidget(stats_box)
         
         # Activity log
-        log_group = QGroupBox("Activity")
-        log_layout = QVBoxLayout(log_group)
+        log_box = QGroupBox("Activity Log")
+        log_layout = QVBoxLayout(log_box)
         
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont('Consolas', 9))
-        self.log_text.setMaximumHeight(200)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background: #1a1a1a;
+                border: none;
+            }
+        """)
         log_layout.addWidget(self.log_text)
         
-        # Clear activity button
-        self.clear_log_btn = QPushButton("Clear Activity")
-        self.clear_log_btn.clicked.connect(self.clear_activity_log)
-        log_layout.addWidget(self.clear_log_btn)
+        clear_btn = QPushButton("Clear Log")
+        clear_btn.clicked.connect(lambda: self.log_text.clear())
+        log_layout.addWidget(clear_btn)
         
-        right_layout.addWidget(log_group)
+        right_layout.addWidget(log_box)
         
         right_layout.addStretch()
         
-        splitter.addWidget(right_widget)
-        splitter.setSizes([700, 250])
+        content_layout.addWidget(right_panel)
         
-        layout.addWidget(splitter)
+        layout.addLayout(content_layout)
         
-        # Populate
-        self.populate_modules()
-        self.log("Module Manager initialized")
+        # Populate modules
+        self._populate_modules()
+        self._log("Module Manager ready")
         
-    def _create_resource_bar(self, name: str) -> QProgressBar:
-        bar = QProgressBar()
-        bar.setMaximum(100)
-        bar.setValue(0)
-        bar.setTextVisible(True)
-        bar.setFormat(f"{name}: %p%")
-        return bar
-    
-    def populate_modules(self):
-        """Populate with all modules organized by category."""
+    def _populate_modules(self):
+        """Populate the module list."""
         modules = self._get_all_modules()
         
-        # Group by category
-        by_category = {}
-        for mod_id, info in modules.items():
-            cat = info.get('category', 'extension').lower()
-            if cat not in by_category:
-                by_category[cat] = {}
-            by_category[cat][mod_id] = info
+        # Sort by category then name
+        sorted_modules = sorted(
+            modules.items(), 
+            key=lambda x: (x[1].get('category', 'z'), x[1].get('name', x[0]))
+        )
         
-        # Create sections in order
-        category_order = ['core', 'generation', 'memory', 'perception', 'output', 'tools', 'network', 'interface', 'extension']
+        current_category = None
         
-        for cat in category_order:
-            if cat in by_category:
-                section = CategorySection(cat)
-                self.categories[cat] = section
+        for mod_id, info in sorted_modules:
+            category = info.get('category', 'extension').lower()
+            
+            # Add category header if changed
+            if category != current_category:
+                current_category = category
+                cat_info = CATEGORIES.get(category, CATEGORIES['extension'])
                 
-                for mod_id, info in by_category[cat].items():
-                    card = ModuleCard(mod_id, info)
-                    card.toggle.stateChanged.connect(lambda state, mid=mod_id: self._on_toggle(mid, state))
-                    card.config_btn.clicked.connect(lambda _, mid=mod_id: self._on_configure(mid))
-                    section.add_card(card)
-                    self.all_cards[mod_id] = card
-                
-                self.modules_layout.addWidget(section)
+                header = QLabel(cat_info['name'].upper())
+                header.setStyleSheet(f"""
+                    QLabel {{
+                        color: {cat_info['color']};
+                        font-size: 11px;
+                        font-weight: bold;
+                        padding: 10px 5px 5px 5px;
+                        border-bottom: 1px solid {cat_info['color']};
+                    }}
+                """)
+                self.modules_layout.addWidget(header)
+            
+            # Add module item
+            item = ModuleListItem(mod_id, info)
+            item.toggle.stateChanged.connect(
+                lambda state, mid=mod_id: self._on_toggle(mid, state)
+            )
+            self.modules_layout.addWidget(item)
+            self.module_items[mod_id] = item
         
         self.modules_layout.addStretch()
         
-        # Sync with actually loaded modules from ModuleManager
+        # Sync with loaded modules
         self._sync_loaded_modules()
-        
-        # Auto-enable essential modules if ModuleManager is available
-        self._auto_enable_essential_modules()
-        
         self._update_stats()
-    
+        
     def _get_all_modules(self) -> dict:
-        """Get all modules from registry."""
-        # Try to get from actual registry
+        """Get all available modules."""
         try:
             from enigma.modules.registry import MODULE_REGISTRY
             modules = {}
@@ -433,119 +373,91 @@ class ModulesTab(QWidget):
                     'category': info.category.value,
                     'requirements': info.requires,
                     'provides': info.provides,
-                    'has_config': bool(info.config_schema),
                     'needs_gpu': info.requires_gpu or info.min_vram_mb > 0,
                     'needs_api_key': 'api_key' in str(info.config_schema),
                 }
             return modules
-        except Exception as e:
-            print(f"Could not load from registry: {e}")
+        except Exception:
+            pass
         
-        # Fallback to hardcoded list
+        # Fallback list
         return {
-            # Core
-            'model': {'name': 'Enigma Model', 'category': 'core', 'description': 'Core transformer model (nano to omega)', 'requirements': ['torch'], 'provides': ['text_generation'], 'has_config': True, 'needs_gpu': True},
-            'tokenizer': {'name': 'Tokenizer', 'category': 'core', 'description': 'BPE tokenizer for text encoding', 'requirements': [], 'provides': ['tokenization'], 'has_config': True},
-            'training': {'name': 'Training', 'category': 'core', 'description': 'Model training with AMP', 'requirements': ['model', 'tokenizer'], 'provides': ['model_training'], 'has_config': True, 'needs_gpu': True},
-            'inference': {'name': 'Inference', 'category': 'core', 'description': 'Text generation engine', 'requirements': ['model', 'tokenizer'], 'provides': ['inference'], 'has_config': True},
-            
-            # Generation (AI Capabilities)
-            'image_gen_local': {'name': 'Image Gen (Local)', 'category': 'generation', 'description': 'Stable Diffusion on your GPU', 'requirements': ['torch', 'diffusers'], 'provides': ['image_generation'], 'has_config': True, 'needs_gpu': True},
-            'image_gen_api': {'name': 'Image Gen (Cloud)', 'category': 'generation', 'description': 'DALL-E / Replicate images', 'requirements': [], 'provides': ['image_generation'], 'has_config': True, 'needs_api_key': True},
-            'code_gen_local': {'name': 'Code Gen (Local)', 'category': 'generation', 'description': 'Code using Enigma model', 'requirements': ['inference'], 'provides': ['code_generation'], 'has_config': True},
-            'code_gen_api': {'name': 'Code Gen (Cloud)', 'category': 'generation', 'description': 'GPT-4 code generation', 'requirements': [], 'provides': ['code_generation'], 'has_config': True, 'needs_api_key': True},
-            'video_gen_local': {'name': 'Video Gen (Local)', 'category': 'generation', 'description': 'AnimateDiff videos', 'requirements': ['torch', 'diffusers'], 'provides': ['video_generation'], 'has_config': True, 'needs_gpu': True},
-            'video_gen_api': {'name': 'Video Gen (Cloud)', 'category': 'generation', 'description': 'Replicate video gen', 'requirements': [], 'provides': ['video_generation'], 'has_config': True, 'needs_api_key': True},
-            'audio_gen_local': {'name': 'Audio/TTS (Local)', 'category': 'generation', 'description': 'Local text-to-speech', 'requirements': ['pyttsx3'], 'provides': ['tts'], 'has_config': True},
-            'audio_gen_api': {'name': 'Audio/TTS (Cloud)', 'category': 'generation', 'description': 'ElevenLabs / MusicGen', 'requirements': [], 'provides': ['tts', 'music'], 'has_config': True, 'needs_api_key': True},
-            
-            # Memory
-            'memory': {'name': 'Memory Manager', 'category': 'memory', 'description': 'Conversation storage', 'requirements': [], 'provides': ['memory'], 'has_config': True},
-            'embedding_local': {'name': 'Embeddings (Local)', 'category': 'memory', 'description': 'Semantic search vectors', 'requirements': ['sentence-transformers'], 'provides': ['embeddings'], 'has_config': True},
-            'embedding_api': {'name': 'Embeddings (Cloud)', 'category': 'memory', 'description': 'OpenAI embeddings', 'requirements': [], 'provides': ['embeddings'], 'has_config': True, 'needs_api_key': True},
-            
-            # Perception
-            'voice_input': {'name': 'Voice Input', 'category': 'perception', 'description': 'Speech-to-text', 'requirements': [], 'provides': ['stt'], 'has_config': True},
-            'vision': {'name': 'Vision', 'category': 'perception', 'description': 'Camera and image analysis', 'requirements': ['opencv'], 'provides': ['vision'], 'has_config': True},
-            
-            # Output
-            'voice_output': {'name': 'Voice Output', 'category': 'output', 'description': 'Text-to-speech', 'requirements': [], 'provides': ['tts'], 'has_config': True},
-            'avatar': {'name': 'Avatar', 'category': 'output', 'description': 'Visual AI representation', 'requirements': [], 'provides': ['avatar'], 'has_config': True},
-            
-            # Tools
-            'web_tools': {'name': 'Web Tools', 'category': 'tools', 'description': 'Web search and fetch', 'requirements': ['requests'], 'provides': ['web'], 'has_config': True},
-            'file_tools': {'name': 'File Tools', 'category': 'tools', 'description': 'File operations', 'requirements': [], 'provides': ['files'], 'has_config': True},
-            
-            # Network
-            'api_server': {'name': 'API Server', 'category': 'network', 'description': 'REST API endpoint', 'requirements': ['flask'], 'provides': ['api'], 'has_config': True},
-            'network': {'name': 'Multi-Device', 'category': 'network', 'description': 'Distributed inference', 'requirements': [], 'provides': ['distributed'], 'has_config': True},
-            
-            # Interface
-            'gui': {'name': 'GUI', 'category': 'interface', 'description': 'Graphical interface', 'requirements': ['PyQt5'], 'provides': ['gui'], 'has_config': True},
+            'model': {'name': 'Enigma Model', 'category': 'core', 'description': 'Core transformer model', 'needs_gpu': True},
+            'tokenizer': {'name': 'Tokenizer', 'category': 'core', 'description': 'Text tokenization'},
+            'training': {'name': 'Training', 'category': 'core', 'description': 'Model training', 'needs_gpu': True},
+            'inference': {'name': 'Inference', 'category': 'core', 'description': 'Text generation'},
+            'image_gen_local': {'name': 'Image Gen (Local)', 'category': 'generation', 'description': 'Stable Diffusion', 'needs_gpu': True},
+            'image_gen_api': {'name': 'Image Gen (Cloud)', 'category': 'generation', 'description': 'DALL-E / Replicate', 'needs_api_key': True},
+            'code_gen_local': {'name': 'Code Gen (Local)', 'category': 'generation', 'description': 'Local code generation'},
+            'code_gen_api': {'name': 'Code Gen (Cloud)', 'category': 'generation', 'description': 'GPT-4 code', 'needs_api_key': True},
+            'video_gen_local': {'name': 'Video Gen (Local)', 'category': 'generation', 'description': 'AnimateDiff', 'needs_gpu': True},
+            'video_gen_api': {'name': 'Video Gen (Cloud)', 'category': 'generation', 'description': 'Replicate video', 'needs_api_key': True},
+            'audio_gen_local': {'name': 'Audio (Local)', 'category': 'generation', 'description': 'Local TTS'},
+            'audio_gen_api': {'name': 'Audio (Cloud)', 'category': 'generation', 'description': 'ElevenLabs', 'needs_api_key': True},
+            'memory': {'name': 'Memory', 'category': 'memory', 'description': 'Conversation storage'},
+            'embedding_local': {'name': 'Embeddings (Local)', 'category': 'memory', 'description': 'Semantic vectors'},
+            'embedding_api': {'name': 'Embeddings (Cloud)', 'category': 'memory', 'description': 'OpenAI embeddings', 'needs_api_key': True},
+            'voice_input': {'name': 'Voice Input', 'category': 'perception', 'description': 'Speech-to-text'},
+            'vision': {'name': 'Vision', 'category': 'perception', 'description': 'Image analysis'},
+            'voice_output': {'name': 'Voice Output', 'category': 'output', 'description': 'Text-to-speech'},
+            'avatar': {'name': 'Avatar', 'category': 'output', 'description': 'Visual representation'},
+            'web_tools': {'name': 'Web Tools', 'category': 'tools', 'description': 'Web search/fetch'},
+            'file_tools': {'name': 'File Tools', 'category': 'tools', 'description': 'File operations'},
+            'api_server': {'name': 'API Server', 'category': 'network', 'description': 'REST API'},
+            'network': {'name': 'Multi-Device', 'category': 'network', 'description': 'Distributed inference'},
         }
     
     def _on_toggle(self, module_id: str, state: int):
         """Handle module toggle."""
         enabled = state == Qt.Checked
         action = "Loading" if enabled else "Unloading"
-        self.log(f"{action} {module_id}...")
+        self._log(f"{action} {module_id}...")
         
-        # Actually load/unload the module if ModuleManager is available
         if self.module_manager:
             try:
                 if enabled:
                     success = self.module_manager.load(module_id)
-                    if not success:
-                        self.log(f"[FAIL] Failed to load {module_id}")
-                        # Revert toggle
-                        if module_id in self.all_cards:
-                            self.all_cards[module_id].toggle.blockSignals(True)
-                            self.all_cards[module_id].toggle.setChecked(False)
-                            self.all_cards[module_id].toggle.blockSignals(False)
-                        return
                 else:
                     success = self.module_manager.unload(module_id)
-                    if not success:
-                        self.log(f"[FAIL] Failed to unload {module_id}")
-                        return
                 
-                # Sync with Options menu toggles in main window
+                if not success:
+                    self._log(f"FAILED: Could not {'load' if enabled else 'unload'} {module_id}")
+                    # Revert
+                    if module_id in self.module_items:
+                        item = self.module_items[module_id]
+                        item.toggle.blockSignals(True)
+                        item.toggle.setChecked(not enabled)
+                        item.toggle.blockSignals(False)
+                    return
+                
                 self._sync_options_menu(module_id, enabled)
                 
             except Exception as e:
-                self.log(f"[ERROR] Error: {str(e)}")
+                self._log(f"ERROR: {str(e)}")
                 return
         
-        # Update card
-        if module_id in self.all_cards:
-            self.all_cards[module_id].set_loaded(enabled)
+        if module_id in self.module_items:
+            self.module_items[module_id].set_loaded(enabled)
         
-        self.log(f"[OK] {module_id} {'enabled' if enabled else 'disabled'}")
+        self._log(f"OK: {module_id} {'enabled' if enabled else 'disabled'}")
         self._update_stats()
     
     def _sync_options_menu(self, module_id: str, enabled: bool):
-        """Sync Options menu toggles when module state changes."""
+        """Sync with main window Options menu."""
         try:
-            parent = self.parent()
-            if not parent:
-                return
-            
-            # Find the main window (may need to go up multiple levels)
-            main_window = parent
+            main_window = self.parent()
             while main_window and not hasattr(main_window, 'avatar_action'):
                 main_window = main_window.parent()
             
             if not main_window:
                 return
             
-            # Sync avatar
             if module_id == 'avatar' and hasattr(main_window, 'avatar_action'):
                 main_window.avatar_action.blockSignals(True)
                 main_window.avatar_action.setChecked(enabled)
                 main_window.avatar_action.setText(f"Avatar ({'ON' if enabled else 'OFF'})")
                 main_window.avatar_action.blockSignals(False)
             
-            # Sync voice output (auto-speak)
             elif module_id == 'voice_output' and hasattr(main_window, 'auto_speak_action'):
                 main_window.auto_speak_action.blockSignals(True)
                 main_window.auto_speak_action.setChecked(enabled)
@@ -553,7 +465,6 @@ class ModulesTab(QWidget):
                 main_window.auto_speak = enabled
                 main_window.auto_speak_action.blockSignals(False)
             
-            # Sync voice input (microphone)
             elif module_id == 'voice_input' and hasattr(main_window, 'microphone_action'):
                 main_window.microphone_action.blockSignals(True)
                 main_window.microphone_action.setChecked(enabled)
@@ -561,96 +472,76 @@ class ModulesTab(QWidget):
                 main_window.microphone_enabled = enabled
                 main_window.microphone_action.blockSignals(False)
                 
-        except Exception as e:
-            # Don't crash if sync fails
-            print(f"Options menu sync error: {e}")
+        except Exception:
+            pass
     
     def _sync_loaded_modules(self):
-        """Sync UI state with actually loaded modules."""
+        """Sync UI with actually loaded modules."""
         if not self.module_manager:
             return
         
-        try:
-            loaded_modules = self.module_manager.list_loaded()
-            for mod_id in loaded_modules:
-                if mod_id in self.all_cards:
-                    self.all_cards[mod_id].toggle.blockSignals(True)
-                    self.all_cards[mod_id].set_loaded(True)
-                    self.all_cards[mod_id].toggle.blockSignals(False)
-            self.log(f"Synced {len(loaded_modules)} loaded modules")
-        except Exception as e:
-            self.log(f"Could not sync modules: {e}")
-    
-    def _auto_enable_essential_modules(self):
-        """Auto-enable essential modules that should be on by default."""
-        if not self.module_manager:
-            self.log("[WARN] No module manager - modules won't auto-load")
-            return
-        
-        # Essential modules that should be loaded by default
-        essential_modules = [
-            'model',      # Core model
-            'tokenizer',  # Tokenizer
-            'inference',  # Inference engine
-        ]
-        
-        # Check which ones aren't loaded yet
         try:
             loaded = self.module_manager.list_loaded()
-            for mod_id in essential_modules:
-                if mod_id not in loaded and mod_id in self.all_cards:
-                    # Try to load it
-                    self.log(f"Auto-loading essential module: {mod_id}")
-                    try:
-                        success = self.module_manager.load(mod_id)
-                        if success:
-                            self.all_cards[mod_id].toggle.blockSignals(True)
-                            self.all_cards[mod_id].set_loaded(True)
-                            self.all_cards[mod_id].toggle.blockSignals(False)
-                            self.log(f"[OK] {mod_id} loaded automatically")
-                        else:
-                            self.log(f"[WARN] Could not auto-load {mod_id}")
-                    except Exception as e:
-                        self.log(f"[WARN] Error loading {mod_id}: {e}")
+            for mod_id in loaded:
+                if mod_id in self.module_items:
+                    item = self.module_items[mod_id]
+                    item.toggle.blockSignals(True)
+                    item.set_loaded(True)
+                    item.toggle.blockSignals(False)
+            self._log(f"Synced {len(loaded)} loaded modules")
         except Exception as e:
-            self.log(f"Error during auto-enable: {e}")
+            self._log(f"Sync error: {e}")
     
-    def _on_configure(self, module_id: str):
-        """Show configuration for a module."""
-        QMessageBox.information(
-            self,
-            f"Configure: {module_id}",
-            f"Configuration for {module_id}\n\n(Full config dialog coming soon)"
-        )
+    def _filter_modules(self):
+        """Filter modules by search and category."""
+        search_text = self.search_input.text().lower()
+        selected_cat = self.category_combo.currentData()
+        
+        for mod_id, item in self.module_items.items():
+            info = item.module_info
+            
+            # Category match
+            cat_match = (selected_cat == "all" or 
+                        info.get('category', '').lower() == selected_cat)
+            
+            # Search match
+            search_match = (not search_text or
+                          search_text in mod_id.lower() or
+                          search_text in info.get('name', '').lower() or
+                          search_text in info.get('description', '').lower())
+            
+            item.setVisible(cat_match and search_match)
     
-    def filter_modules(self, text: str):
-        """Filter modules by search text."""
-        text = text.lower()
-        for mod_id, card in self.all_cards.items():
-            visible = (not text or 
-                       text in mod_id.lower() or 
-                       text in card.module_info.get('name', '').lower() or
-                       text in card.module_info.get('description', '').lower())
-            card.setVisible(visible)
+    def _enable_all_visible(self):
+        """Enable all visible modules."""
+        for item in self.module_items.values():
+            if item.isVisible() and not item.is_loaded:
+                item.toggle.setChecked(True)
+    
+    def _disable_all_visible(self):
+        """Disable all visible modules."""
+        for item in self.module_items.values():
+            if item.isVisible() and item.is_loaded:
+                item.toggle.setChecked(False)
     
     def _update_stats(self):
-        """Update loaded/total stats."""
-        loaded = sum(1 for c in self.all_cards.values() if c.is_loaded)
-        total = len(self.all_cards)
+        """Update statistics display."""
+        loaded = sum(1 for i in self.module_items.values() if i.is_loaded)
+        total = len(self.module_items)
         self.loaded_label.setText(f"Loaded: {loaded} / {total}")
     
-    def refresh_status(self):
-        """Refresh system status and module states."""
-        # Sync module states with ModuleManager
+    def _refresh_status(self):
+        """Refresh status indicators."""
+        # Sync module states
         if self.module_manager:
             try:
                 loaded = self.module_manager.list_loaded()
-                for mod_id, card in self.all_cards.items():
+                for mod_id, item in self.module_items.items():
                     is_loaded = mod_id in loaded
-                    if card.is_loaded != is_loaded:
-                        card.toggle.blockSignals(True)
-                        card.set_loaded(is_loaded)
-                        card.toggle.blockSignals(False)
+                    if item.is_loaded != is_loaded:
+                        item.toggle.blockSignals(True)
+                        item.set_loaded(is_loaded)
+                        item.toggle.blockSignals(False)
                 self._update_stats()
             except Exception:
                 pass
@@ -661,32 +552,28 @@ class ModulesTab(QWidget):
             self.cpu_bar.setValue(int(psutil.cpu_percent()))
             self.mem_bar.setValue(int(psutil.virtual_memory().percent))
         except ImportError:
-            pass
+            self.cpu_bar.setValue(0)
+            self.mem_bar.setValue(0)
         
         try:
             import torch
             if torch.cuda.is_available():
                 allocated = torch.cuda.memory_allocated()
-                reserved = torch.cuda.memory_reserved()
                 total = torch.cuda.get_device_properties(0).total_memory
                 self.vram_bar.setValue(int(allocated / total * 100))
-                self.gpu_bar.setValue(50)  # Would need pynvml for actual GPU usage
+            else:
+                self.vram_bar.setValue(0)
         except Exception:
-            pass
+            self.vram_bar.setValue(0)
     
-    def log(self, message: str):
-        """Add message to log."""
+    def _log(self, message: str):
+        """Add to activity log."""
         from datetime import datetime
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_text.append(f"[{timestamp}] {message}")
-    
-    def clear_activity_log(self):
-        """Clear the activity log."""
-        self.log_text.clear()
-        self.log("Activity log cleared")
+        ts = datetime.now().strftime("%H:%M:%S")
+        self.log_text.append(f"[{ts}] {message}")
 
 
 if not HAS_PYQT:
     class ModulesTab:
         def __init__(self, *args, **kwargs):
-            raise ImportError("PyQt5 is required for the Module Manager")
+            raise ImportError("PyQt5 required")

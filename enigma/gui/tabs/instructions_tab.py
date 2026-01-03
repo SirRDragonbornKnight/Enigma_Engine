@@ -185,9 +185,18 @@ def create_instructions_tab(parent):
     file_layout.addStretch()
     right_layout.addLayout(file_layout)
     
-    # Current file name display
+    # Current file name display - compact, non-expanding
     parent.instructions_file_label = QLabel("No file open")
-    parent.instructions_file_label.setStyleSheet("color: #a6e3a1; font-style: italic; padding: 4px;")
+    parent.instructions_file_label.setFixedHeight(24)
+    parent.instructions_file_label.setStyleSheet("""
+        QLabel {
+            color: #a6e3a1; 
+            font-style: italic; 
+            padding: 2px 4px;
+            background: rgba(166, 227, 161, 0.1);
+            border-radius: 3px;
+        }
+    """)
     right_layout.addWidget(parent.instructions_file_label)
     
     # Editor

@@ -1523,6 +1523,23 @@ class EnhancedMainWindow(QMainWindow):
                 if hasattr(self, 'training_model_label'):
                     self.training_model_label.setText(f"Model: {self.current_model_name}")
                 
+                # Update chat tab model label
+                if hasattr(self, 'chat_model_label'):
+                    self.chat_model_label.setText(f"🤖 {self.current_model_name}")
+                
+                # Show welcome message in chat
+                if hasattr(self, 'chat_display'):
+                    device_info = "GPU" if self.engine.device == "cuda" else "CPU"
+                    self.chat_display.append(
+                        f"<p style='color: #a6e3a1;'><b>✓ Model loaded:</b> {self.current_model_name} ({device_info})</p>"
+                        f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
+                        "<hr>"
+                    )
+                
+                # Update chat status
+                if hasattr(self, 'chat_status'):
+                    self.chat_status.setText(f"Model ready ({self.engine.device})")
+                
                 # Refresh notes files for new model
                 if hasattr(self, 'notes_file_combo'):
                     self._refresh_notes_files()
@@ -1531,6 +1548,13 @@ class EnhancedMainWindow(QMainWindow):
                 QMessageBox.warning(self, "Load Error", f"Could not load model: {e}")
                 self.engine = None
                 self.brain = None
+                
+                # Show error in chat
+                if hasattr(self, 'chat_display'):
+                    self.chat_display.append(
+                        f"<p style='color: #f38ba8;'><b>⚠ Error:</b> Could not load model</p>"
+                        f"<p style='color: #6c7086;'>{e}</p>"
+                    )
     
     def _build_ui(self):
         """Build the main UI."""
@@ -1626,11 +1650,12 @@ class EnhancedMainWindow(QMainWindow):
         
         # Import tabs from separate modules
         from .tabs import (
-            create_chat_tab, create_training_tab, create_avatar_tab,
+            create_chat_tab, create_training_tab, 
+            create_avatar_subtab, create_game_subtab, create_robot_subtab,
             create_vision_tab, create_sessions_tab, create_instructions_tab,
             create_terminal_tab, create_examples_tab,
             create_image_tab, create_code_tab, create_video_tab,
-            create_audio_tab, create_embeddings_tab
+            create_audio_tab, create_embeddings_tab, create_threed_tab
         )
         from .tabs.settings_tab import create_settings_tab
         from .tabs.personality_tab import create_personality_tab
@@ -1640,21 +1665,36 @@ class EnhancedMainWindow(QMainWindow):
         # Main tabs - moveable for user customization
         tabs = QTabWidget()
         tabs.setMovable(True)  # Allow tab reordering by drag
+        tabs.setTabsClosable(False)
+        tabs.setDocumentMode(True)
         self.tabs = tabs  # Store reference for AI control
+        
+        # Core tabs - Chat, Train, History
         tabs.addTab(create_chat_tab(self), "Chat")
         tabs.addTab(create_training_tab(self), "Train")
-        tabs.addTab(ScalingTab(self), "Scale")    # Model scaling visualization
-        tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")  # Module manager with ModuleManager instance
-        tabs.addTab(create_avatar_tab(self), "Avatar")
-        tabs.addTab(create_personality_tab(self), "Personality")  # Personality configuration
-        tabs.addTab(create_vision_tab(self), "Vision")
-        tabs.addTab(create_image_tab(self), "Image")      # Image generation
-        tabs.addTab(create_code_tab(self), "Code")        # Code generation
-        tabs.addTab(create_video_tab(self), "Video")      # Video generation
-        tabs.addTab(create_audio_tab(self), "Audio")      # Audio/TTS generation
-        tabs.addTab(create_embeddings_tab(self), "Search")  # Embeddings/semantic search
-        tabs.addTab(create_terminal_tab(self), "Terminal")
         tabs.addTab(create_sessions_tab(self), "History")
+        
+        # Model management - Scale, Modules
+        tabs.addTab(ScalingTab(self), "Scale")
+        tabs.addTab(ModulesTab(self, module_manager=self.module_manager), "Modules")
+        
+        # AI generation tabs
+        tabs.addTab(create_image_tab(self), "Image")
+        tabs.addTab(create_code_tab(self), "Code")
+        tabs.addTab(create_video_tab(self), "Video")
+        tabs.addTab(create_audio_tab(self), "Audio")
+        tabs.addTab(create_threed_tab(self), "3D")
+        tabs.addTab(create_embeddings_tab(self), "Search")
+        
+        # Interaction tabs - Avatar, Game, Robot each get their own tab
+        tabs.addTab(create_avatar_subtab(self), "Avatar")
+        tabs.addTab(create_game_subtab(self), "Game")
+        tabs.addTab(create_robot_subtab(self), "Robot")
+        tabs.addTab(create_vision_tab(self), "Vision")
+        tabs.addTab(create_personality_tab(self), "Personality")
+        
+        # Utility tabs
+        tabs.addTab(create_terminal_tab(self), "Terminal")
         tabs.addTab(create_instructions_tab(self), "Files")
         tabs.addTab(create_examples_tab(self), "Examples")
         tabs.addTab(create_settings_tab(self), "Settings")
@@ -1729,6 +1769,15 @@ class EnhancedMainWindow(QMainWindow):
                 self.learn_action.setText("Learn While Chatting (ON)")
             else:
                 self.learn_action.setText("Learn While Chatting (OFF)")
+        
+        # Update chat tab indicator
+        if hasattr(self, 'learning_indicator'):
+            if checked:
+                self.learning_indicator.setText("📚 Learning: ON")
+                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+            else:
+                self.learning_indicator.setText("📚 Learning: OFF")
+                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
         
         # Update brain if loaded
         if hasattr(self, 'brain') and self.brain:
@@ -2809,9 +2858,29 @@ class EnhancedMainWindow(QMainWindow):
     
     def ai_switch_tab(self, tab_name: str):
         """AI can switch tabs."""
+        # Updated tab indices to match new ordering:
+        # 0: Chat, 1: Train, 2: History, 3: Scale, 4: Modules
+        # 5: Image, 6: Code, 7: Video, 8: Audio, 9: Search
+        # 10: Avatar, 11: Vision, 12: Personality
+        # 13: Terminal, 14: Files, 15: Examples, 16: Settings
         tab_map = {
-            "chat": 0, "train": 1, "training": 1, "avatar": 2, 
-            "vision": 3, "history": 4, "sessions": 4, "files": 5, "help": 5, "notes": 5
+            "chat": 0, 
+            "train": 1, "training": 1, 
+            "history": 2, "sessions": 2,
+            "scale": 3, "scaling": 3,
+            "modules": 4,
+            "image": 5, "images": 5,
+            "code": 6,
+            "video": 7,
+            "audio": 8, "tts": 8,
+            "search": 9, "embeddings": 9,
+            "avatar": 10,
+            "vision": 11,
+            "personality": 12,
+            "terminal": 13,
+            "files": 14, "notes": 14, "help": 14,
+            "examples": 15,
+            "settings": 16,
         }
         idx = tab_map.get(tab_name.lower())
         if idx is not None:

@@ -4,7 +4,8 @@ from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSpinBox, QLineEdit, QProgressBar, QFileDialog,
-    QPlainTextEdit, QMessageBox, QInputDialog
+    QPlainTextEdit, QMessageBox, QInputDialog, QGroupBox,
+    QFrame
 )
 from PyQt5.QtCore import Qt
 
@@ -15,96 +16,201 @@ def create_training_tab(parent):
     """Create the train tab with model training controls."""
     w = QWidget()
     layout = QVBoxLayout()
+    layout.setSpacing(12)
+    layout.setContentsMargins(10, 10, 10, 10)
     
-    # Header
+    # Header with model info
+    header_layout = QHBoxLayout()
+    
     header = QLabel("Train Your AI")
     header.setObjectName("header")
-    layout.addWidget(header)
+    header.setStyleSheet("font-size: 16px; font-weight: bold;")
+    header_layout.addWidget(header)
+    
+    header_layout.addStretch()
     
     # Current model info
     parent.training_model_label = QLabel("No model loaded")
-    parent.training_model_label.setStyleSheet("color: #89b4fa; font-weight: bold;")
-    layout.addWidget(parent.training_model_label)
+    parent.training_model_label.setStyleSheet("""
+        color: #89b4fa; 
+        font-weight: bold;
+        padding: 4px 8px;
+        background: rgba(137, 180, 250, 0.1);
+        border-radius: 4px;
+    """)
+    header_layout.addWidget(parent.training_model_label)
     
-    # Training data file selector - file browser with filename display
-    file_layout = QHBoxLayout()
+    layout.addLayout(header_layout)
     
-    btn_open = QPushButton("Open File...")
+    # File management group
+    file_group = QGroupBox("Training Data")
+    file_layout = QVBoxLayout(file_group)
+    
+    # File action buttons
+    btn_row = QHBoxLayout()
+    
+    btn_open = QPushButton("Open File")
     btn_open.setToolTip("Open a training data file from your system")
     btn_open.clicked.connect(lambda: _browse_training_file(parent))
-    file_layout.addWidget(btn_open)
+    btn_row.addWidget(btn_open)
     
     btn_save = QPushButton("Save")
     btn_save.setToolTip("Save changes to the current file")
     btn_save.clicked.connect(lambda: _save_training_file(parent))
-    file_layout.addWidget(btn_save)
+    btn_row.addWidget(btn_save)
     
     btn_new = QPushButton("New File")
     btn_new.setToolTip("Create a new training data file")
     btn_new.clicked.connect(lambda: _create_new_training_file(parent))
-    file_layout.addWidget(btn_new)
+    btn_row.addWidget(btn_new)
     
-    file_layout.addStretch()
-    layout.addLayout(file_layout)
+    btn_row.addStretch()
+    file_layout.addLayout(btn_row)
     
-    # Current file name display
+    # Current file display
     parent.training_file_label = QLabel("No file open")
-    parent.training_file_label.setStyleSheet("color: #a6e3a1; font-style: italic; padding: 4px;")
+    parent.training_file_label.setStyleSheet("""
+        color: #a6e3a1; 
+        font-style: italic; 
+        padding: 4px 8px;
+        background: rgba(166, 227, 161, 0.1);
+        border-radius: 4px;
+    """)
     parent.training_file_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-    layout.addWidget(parent.training_file_label)
+    file_layout.addWidget(parent.training_file_label)
+    
+    layout.addWidget(file_group)
     
     # File content editor
     parent.training_editor = QPlainTextEdit()
-    parent.training_editor.setPlaceholderText("Training data will appear here...\n\nFormat:\nQ: Question?\nA: Answer.\n\nOr plain text for the AI to learn from.")
+    parent.training_editor.setPlaceholderText(
+        "Training data will appear here...\n\n"
+        "Format your data like this:\n"
+        "Q: User question?\n"
+        "A: AI response.\n\n"
+        "Or plain text for the AI to learn patterns from."
+    )
+    parent.training_editor.setStyleSheet("""
+        QPlainTextEdit {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+    """)
     layout.addWidget(parent.training_editor, stretch=1)
     
-    # Parameters row (inline)
-    params_layout = QHBoxLayout()
+    # Training parameters group
+    params_group = QGroupBox("Training Parameters")
+    params_layout = QHBoxLayout(params_group)
+    params_layout.setSpacing(15)
     
-    params_layout.addWidget(QLabel("Epochs:"))
+    # Epochs
+    epochs_layout = QVBoxLayout()
+    epochs_label = QLabel("Epochs")
+    epochs_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+    epochs_layout.addWidget(epochs_label)
     parent.epochs_spin = QSpinBox()
     parent.epochs_spin.setRange(1, 10000)
     parent.epochs_spin.setValue(10)
     parent.epochs_spin.setToolTip("How many times to go through all data")
-    parent.epochs_spin.setMaximumWidth(80)
-    params_layout.addWidget(parent.epochs_spin)
+    parent.epochs_spin.setMinimumWidth(80)
+    epochs_layout.addWidget(parent.epochs_spin)
+    params_layout.addLayout(epochs_layout)
     
-    params_layout.addWidget(QLabel("Batch:"))
+    # Batch size
+    batch_layout = QVBoxLayout()
+    batch_label = QLabel("Batch Size")
+    batch_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+    batch_layout.addWidget(batch_label)
     parent.batch_spin = QSpinBox()
     parent.batch_spin.setRange(1, 64)
     parent.batch_spin.setValue(4)
     parent.batch_spin.setToolTip("Examples per step (Pi: 1-2, GPU: 4-16)")
-    parent.batch_spin.setMaximumWidth(60)
-    params_layout.addWidget(parent.batch_spin)
+    parent.batch_spin.setMinimumWidth(70)
+    batch_layout.addWidget(parent.batch_spin)
+    params_layout.addLayout(batch_layout)
     
-    params_layout.addWidget(QLabel("LR:"))
+    # Learning rate
+    lr_layout = QVBoxLayout()
+    lr_label = QLabel("Learning Rate")
+    lr_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+    lr_layout.addWidget(lr_label)
     parent.lr_input = QLineEdit("0.0001")
     parent.lr_input.setToolTip("How fast AI learns (lower = slower but stable)")
-    parent.lr_input.setMaximumWidth(80)
-    params_layout.addWidget(parent.lr_input)
+    parent.lr_input.setMinimumWidth(80)
+    lr_layout.addWidget(parent.lr_input)
+    params_layout.addLayout(lr_layout)
     
     params_layout.addStretch()
-    layout.addLayout(params_layout)
+    layout.addWidget(params_group)
     
-    # Progress bar
+    # Progress section
+    progress_layout = QVBoxLayout()
+    
+    # Progress bar with label
+    progress_header = QHBoxLayout()
+    parent.training_progress_label = QLabel("Ready to train")
+    parent.training_progress_label.setStyleSheet("color: #6c7086;")
+    progress_header.addWidget(parent.training_progress_label)
+    progress_header.addStretch()
+    progress_layout.addLayout(progress_header)
+    
     parent.train_progress = QProgressBar()
     parent.train_progress.setValue(0)
-    layout.addWidget(parent.train_progress)
+    parent.train_progress.setStyleSheet("""
+        QProgressBar {
+            border-radius: 4px;
+            text-align: center;
+            height: 20px;
+        }
+        QProgressBar::chunk {
+            background-color: #a6e3a1;
+            border-radius: 4px;
+        }
+    """)
+    progress_layout.addWidget(parent.train_progress)
+    
+    layout.addLayout(progress_layout)
     
     # Train and Stop buttons row
     btn_layout = QHBoxLayout()
+    btn_layout.setSpacing(10)
     
-    parent.btn_train = QPushButton("Train")
+    parent.btn_train = QPushButton("Start Training")
     parent.btn_train.clicked.connect(parent._on_start_training)
+    parent.btn_train.setStyleSheet("""
+        QPushButton {
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            background-color: #a6e3a1;
+            color: #1e1e2e;
+        }
+        QPushButton:hover {
+            background-color: #b4f0b4;
+        }
+    """)
     btn_layout.addWidget(parent.btn_train)
     
     parent.btn_stop_train = QPushButton("Stop")
     parent.btn_stop_train.setToolTip("Stop training after current epoch")
     parent.btn_stop_train.clicked.connect(parent._on_stop_training)
     parent.btn_stop_train.setEnabled(False)
-    parent.btn_stop_train.setStyleSheet("background-color: #dc2626;")
+    parent.btn_stop_train.setStyleSheet("""
+        QPushButton {
+            padding: 12px 24px;
+            font-size: 14px;
+            background-color: #f38ba8;
+            color: #1e1e2e;
+        }
+        QPushButton:disabled {
+            background-color: #45475a;
+            color: #6c7086;
+        }
+    """)
     btn_layout.addWidget(parent.btn_stop_train)
     
+    btn_layout.addStretch()
     layout.addLayout(btn_layout)
     
     # Hidden data path label (for compatibility)
@@ -112,7 +218,7 @@ def create_training_tab(parent):
     parent.data_path_label.setVisible(False)
     layout.addWidget(parent.data_path_label)
     
-    # Populate training file list and load first file
+    # Initialize training file
     _refresh_training_files(parent)
     
     w.setLayout(layout)
