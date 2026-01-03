@@ -111,7 +111,6 @@ class TestPersonas(unittest.TestCase):
 class TestShortcutsBasic(unittest.TestCase):
     """Test keyboard shortcuts system (without PyQt5)."""
     
-    @unittest.skip("Requires PyQt5")
     def test_undo_redo_manager(self):
         """Test undo/redo functionality."""
         from enigma.utils.shortcuts import UndoRedoManager
@@ -273,44 +272,47 @@ A: Lists store multiple items.
 class TestResourceAllocator(unittest.TestCase):
     """Test resource allocation system."""
     
-    @unittest.skip("Requires psutil")
     def test_mode_setting(self):
         """Test setting resource mode."""
         from enigma.utils.resource_allocator import ResourceAllocator
+        import tempfile
         
-        allocator = ResourceAllocator()
-        success = allocator.set_mode('balanced')
-        
-        self.assertTrue(success)
-        self.assertEqual(allocator.current_mode, 'balanced')
+        with tempfile.TemporaryDirectory() as tmp:
+            allocator = ResourceAllocator(storage_path=Path(tmp) / "settings.json")
+            success = allocator.set_mode('balanced')
+            
+            self.assertTrue(success)
+            self.assertEqual(allocator.current_mode, 'balanced')
     
-    @unittest.skip("Requires psutil")
     def test_system_info(self):
         """Test getting system information."""
         from enigma.utils.resource_allocator import ResourceAllocator
+        import tempfile
         
-        allocator = ResourceAllocator()
-        info = allocator.get_system_info()
-        
-        self.assertIn('cpu_count', info)
-        self.assertIn('memory_total_gb', info)
+        with tempfile.TemporaryDirectory() as tmp:
+            allocator = ResourceAllocator(storage_path=Path(tmp) / "settings.json")
+            info = allocator.get_system_info()
+            
+            self.assertIn('cpu_count', info)
+            self.assertIn('memory_total_gb', info)
     
-    @unittest.skip("Requires psutil")
     def test_generation_params(self):
         """Test generation parameter selection."""
         from enigma.utils.resource_allocator import ResourceAllocator
+        import tempfile
         
-        allocator = ResourceAllocator()
-        
-        # Test speed mode
-        allocator.set_speed_vs_quality('speed')
-        params = allocator.get_generation_params()
-        self.assertLess(params['max_tokens'], 200)
-        
-        # Test quality mode
-        allocator.set_speed_vs_quality('quality')
-        params = allocator.get_generation_params()
-        self.assertGreater(params['max_tokens'], 300)
+        with tempfile.TemporaryDirectory() as tmp:
+            allocator = ResourceAllocator(storage_path=Path(tmp) / "settings.json")
+            
+            # Test speed mode
+            allocator.set_speed_vs_quality('speed')
+            params = allocator.get_generation_params()
+            self.assertLess(params['max_tokens'], 200)
+            
+            # Test quality mode
+            allocator.set_speed_vs_quality('quality')
+            params = allocator.get_generation_params()
+            self.assertGreater(params['max_tokens'], 300)
 
 
 class TestToolIntegration(unittest.TestCase):

@@ -14,6 +14,21 @@ from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QFont
 import time
 
+# Optional imports for resource monitoring
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    HAS_PSUTIL = False
+
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    torch = None
+    HAS_TORCH = False
+
 
 class ResourceMonitor(QWidget):
     """
@@ -124,8 +139,7 @@ class ResourceMonitor(QWidget):
     def update_metrics(self):
         """Update all resource metrics."""
         # CPU usage
-        try:
-            import psutil
+        if HAS_PSUTIL:
             cpu_percent = psutil.cpu_percent(interval=0.1)
             self.cpu_bar.setValue(int(cpu_percent))
             self.cpu_bar.setFormat(f"{cpu_percent:.1f}%")
@@ -137,13 +151,12 @@ class ResourceMonitor(QWidget):
                 self.cpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #f59e0b; }")
             else:
                 self.cpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
-        except ImportError:
+        else:
             self.cpu_bar.setValue(0)
             self.cpu_bar.setFormat("N/A")
         
         # Memory usage
-        try:
-            import psutil
+        if HAS_PSUTIL:
             mem = psutil.virtual_memory()
             mem_percent = mem.percent
             self.mem_bar.setValue(int(mem_percent))
@@ -155,48 +168,41 @@ class ResourceMonitor(QWidget):
                 self.mem_bar.setStyleSheet("QProgressBar::chunk { background-color: #f59e0b; }")
             else:
                 self.mem_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
-        except ImportError:
+        else:
             self.mem_bar.setValue(0)
             self.mem_bar.setFormat("N/A")
         
         # GPU usage
-        try:
-            import torch
-            if torch.cuda.is_available():
-                # GPU utilization
-                # Note: This is a simplified version - real GPU monitoring
-                # would require nvidia-ml-py3 or similar
-                self.gpu_bar.setValue(0)
-                self.gpu_bar.setFormat("Available")
-                self.gpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
-                
-                # VRAM usage
-                vram_used = torch.cuda.memory_allocated(0) / (1024**3)
-                vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                vram_percent = (vram_used / vram_total * 100) if vram_total > 0 else 0
-                
-                self.vram_bar.setValue(int(vram_percent))
-                self.vram_bar.setFormat(f"{vram_percent:.1f}% ({vram_used:.2f} GB / {vram_total:.1f} GB)")
-                
-                if vram_percent > 90:
-                    self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #ef4444; }")
-                elif vram_percent > 75:
-                    self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #f59e0b; }")
-                else:
-                    self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
-            else:
-                self.gpu_bar.setValue(0)
-                self.gpu_bar.setFormat("No GPU")
-                self.gpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #888; }")
-                
-                self.vram_bar.setValue(0)
-                self.vram_bar.setFormat("N/A")
-                self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #888; }")
-        except ImportError:
+        if HAS_TORCH and torch.cuda.is_available():
+            # GPU utilization
+            # Note: This is a simplified version - real GPU monitoring
+            # would require nvidia-ml-py3 or similar
             self.gpu_bar.setValue(0)
-            self.gpu_bar.setFormat("N/A")
+            self.gpu_bar.setFormat("Available")
+            self.gpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
+            
+            # VRAM usage
+            vram_used = torch.cuda.memory_allocated(0) / (1024**3)
+            vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            vram_percent = (vram_used / vram_total * 100) if vram_total > 0 else 0
+            
+            self.vram_bar.setValue(int(vram_percent))
+            self.vram_bar.setFormat(f"{vram_percent:.1f}% ({vram_used:.2f} GB / {vram_total:.1f} GB)")
+            
+            if vram_percent > 90:
+                self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #ef4444; }")
+            elif vram_percent > 75:
+                self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #f59e0b; }")
+            else:
+                self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
+        else:
+            self.gpu_bar.setValue(0)
+            self.gpu_bar.setFormat("No GPU")
+            self.gpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #888; }")
+            
             self.vram_bar.setValue(0)
             self.vram_bar.setFormat("N/A")
+            self.vram_bar.setStyleSheet("QProgressBar::chunk { background-color: #888; }")
         
         # Update mode info
         try:

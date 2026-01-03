@@ -47,23 +47,34 @@ class TestEnhancedURLSafety:
     
     def test_import_blocklist(self):
         """Test importing blocklist from file."""
+        import uuid
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Use unique domain names to avoid cache collisions
+            unique1 = f"test-{uuid.uuid4().hex[:8]}.com"
+            unique2 = f"test-{uuid.uuid4().hex[:8]}.com"
+            
             # Create blocklist file
             blocklist_path = Path(tmpdir) / 'blocklist.txt'
-            blocklist_path.write_text('malicious1.com\nmalicious2.com\n')
+            blocklist_path.write_text(f'{unique1}\n{unique2}\n')
             
             safety = URLSafety()
             added = safety.import_blocklist_from_file(blocklist_path)
             
+            # Should add 2 unique domains
             assert added == 2
-            assert not safety.is_safe('https://malicious1.com')
-            assert not safety.is_safe('https://malicious2.com')
+            assert not safety.is_safe(f'https://{unique1}')
+            assert not safety.is_safe(f'https://{unique2}')
     
     def test_import_json_blocklist(self):
         """Test importing JSON format blocklist."""
+        import uuid
         with tempfile.TemporaryDirectory() as tmpdir:
+            # Use unique domain names
+            unique1 = f"json-{uuid.uuid4().hex[:8]}.com"
+            unique2 = f"json-{uuid.uuid4().hex[:8]}.com"
+            
             blocklist_path = Path(tmpdir) / 'blocklist.json'
-            data = {'domains': ['bad1.com', 'bad2.com']}
+            data = {'domains': [unique1, unique2]}
             blocklist_path.write_text(json.dumps(data))
             
             safety = URLSafety()

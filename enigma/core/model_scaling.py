@@ -12,17 +12,24 @@ This is EXPERIMENTAL but allows your AI to "grow up" over time.
 import torch
 import torch.nn.functional as F
 
-from .model import TinyEnigma
-from .model_config import get_model_config
+from .model import Enigma, EnigmaConfig, MODEL_PRESETS
 from .model_registry import ModelRegistry
 
 
+def get_model_config(size: str) -> dict:
+    """Get model config dict from MODEL_PRESETS."""
+    if size not in MODEL_PRESETS:
+        raise ValueError(f"Unknown model size: {size}. Available: {list(MODEL_PRESETS.keys())}")
+    preset = MODEL_PRESETS[size]
+    return preset.to_dict()
+
+
 def grow_model(
-    source_model: TinyEnigma,
+    source_model: Enigma,
     target_size: str,
     vocab_size: int,
     copy_weights: bool = True
-) -> TinyEnigma:
+) -> Enigma:
     """
     Grow a model to a larger size while preserving learned weights.
 
@@ -41,17 +48,18 @@ def grow_model(
         New larger model with transferred knowledge
     """
     source_config = {
-        "dim": source_model.dim,
-        "depth": len(source_model.layers),
+        "dim": source_model.config.dim,
+        "depth": source_model.config.n_layers,
     }
-    target_config = get_model_config(target_size)
-    target_config["vocab_size"] = vocab_size
+    target_config_dict = get_model_config(target_size)
+    target_config_dict["vocab_size"] = vocab_size
+    target_config = EnigmaConfig.from_dict(target_config_dict)
 
-    print(f"Growing model: dim {source_config['dim']} -> {target_config['dim']}, "
-          f"depth {source_config['depth']} -> {target_config['depth']}")
+    print(f"Growing model: dim {source_config['dim']} -> {target_config.dim}, "
+          f"depth {source_config['depth']} -> {target_config.n_layers}")
 
     # Create new model
-    new_model = TinyEnigma(**target_config)
+    new_model = Enigma(config=target_config)
 
     if copy_weights:
         with torch.no_grad():
@@ -65,14 +73,8 @@ def grow_model(
             new_model.token_embed.weight[:, :min_dim] = src_embed[:, :min_dim]
 
             # Copy output head
-            src_head = source_model.head.weight
-            new_model.head.weight[:, :min_dim] = src_head[:, :min_dim]
-            new_model.head.bias[:] = source_model.head.bias[:]
-
-            # Copy positional embeddings
-            src_pos = source_model.pos
-            min_len = min(src_pos.shape[1], new_model.pos.shape[1])
-            new_model.pos[:, :min_len, :min_dim] = src_pos[:, :min_len, :min_dim]
+            src_head = source_model.output.weight
+            new_model.output.weight[:, :min_dim] = src_head[:, :min_dim]
 
             # Copy transformer layers (as many as we have)
             min_layers = min(len(source_model.layers), len(new_model.layers))
@@ -80,22 +82,24 @@ def grow_model(
                 src_layer = source_model.layers[i]
                 tgt_layer = new_model.layers[i]
 
-                # Copy self-attention weights (partial)
-                _copy_partial_linear(src_layer.self_attn.in_proj_weight,
-                                     tgt_layer.self_attn.in_proj_weight)
-                _copy_partial_linear(src_layer.self_attn.out_proj.weight,
-                                     tgt_layer.self_attn.out_proj.weight)
+                # Copy attention weights (partial) - these use MultiHeadAttention
+                _copy_partial_tensor(src_layer.attention.wq.weight, tgt_layer.attention.wq.weight)
+                _copy_partial_tensor(src_layer.attention.wk.weight, tgt_layer.attention.wk.weight)
+                _copy_partial_tensor(src_layer.attention.wv.weight, tgt_layer.attention.wv.weight)
+                _copy_partial_tensor(src_layer.attention.wo.weight, tgt_layer.attention.wo.weight)
 
-                # Copy feedforward weights (partial)
-                _copy_partial_linear(src_layer.linear1.weight, tgt_layer.linear1.weight)
-                _copy_partial_linear(src_layer.linear2.weight, tgt_layer.linear2.weight)
+                # Copy feedforward weights (partial) - SwiGLU has w1, w2, w3
+                if hasattr(src_layer.ffn, 'w1'):
+                    _copy_partial_tensor(src_layer.ffn.w1.weight, tgt_layer.ffn.w1.weight)
+                    _copy_partial_tensor(src_layer.ffn.w2.weight, tgt_layer.ffn.w2.weight)
+                    _copy_partial_tensor(src_layer.ffn.w3.weight, tgt_layer.ffn.w3.weight)
 
     print(
         f"[OK] Model grown successfully. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
     return new_model
 
 
-def _copy_partial_linear(src: torch.Tensor, tgt: torch.Tensor):
+def _copy_partial_tensor(src: torch.Tensor, tgt: torch.Tensor):
     """Copy weights from smaller to larger tensor."""
     min_0 = min(src.shape[0], tgt.shape[0])
     min_1 = min(src.shape[1], tgt.shape[1]) if len(src.shape) > 1 else 1
@@ -107,43 +111,46 @@ def _copy_partial_linear(src: torch.Tensor, tgt: torch.Tensor):
 
 
 def shrink_model(
-    source_model: TinyEnigma,
+    source_model: Enigma,
     target_size: str,
     vocab_size: int,
-) -> TinyEnigma:
+) -> Enigma:
     """
     Shrink a model to a smaller size (loses some capacity).
 
     Useful for deploying on weaker hardware.
     Note: This is lossy - some knowledge will be lost.
     """
-    target_config = get_model_config(target_size)
-    target_config["vocab_size"] = vocab_size
+    target_config_dict = get_model_config(target_size)
+    target_config_dict["vocab_size"] = vocab_size
+    target_config = EnigmaConfig.from_dict(target_config_dict)
 
-    new_model = TinyEnigma(**target_config)
+    new_model = Enigma(config=target_config)
 
     with torch.no_grad():
         # Copy what fits
-        new_dim = new_model.dim
+        new_dim = target_config.dim
 
         new_model.token_embed.weight[:] = source_model.token_embed.weight[:, :new_dim]
-        new_model.head.weight[:] = source_model.head.weight[:, :new_dim]
-        new_model.head.bias[:] = source_model.head.bias[:]
-
-        min_len = min(source_model.pos.shape[1], new_model.pos.shape[1])
-        new_model.pos[:, :min_len, :] = source_model.pos[:, :min_len, :new_dim]
+        new_model.output.weight[:] = source_model.output.weight[:, :new_dim]
 
         # Copy layers
         for i in range(len(new_model.layers)):
             if i < len(source_model.layers):
                 src_layer = source_model.layers[i]
                 tgt_layer = new_model.layers[i]
-                _copy_partial_linear(src_layer.self_attn.in_proj_weight,
-                                     tgt_layer.self_attn.in_proj_weight)
-                _copy_partial_linear(src_layer.self_attn.out_proj.weight,
-                                     tgt_layer.self_attn.out_proj.weight)
-                _copy_partial_linear(src_layer.linear1.weight, tgt_layer.linear1.weight)
-                _copy_partial_linear(src_layer.linear2.weight, tgt_layer.linear2.weight)
+                
+                # Copy attention weights
+                _copy_partial_tensor(src_layer.attention.wq.weight, tgt_layer.attention.wq.weight)
+                _copy_partial_tensor(src_layer.attention.wk.weight, tgt_layer.attention.wk.weight)
+                _copy_partial_tensor(src_layer.attention.wv.weight, tgt_layer.attention.wv.weight)
+                _copy_partial_tensor(src_layer.attention.wo.weight, tgt_layer.attention.wo.weight)
+                
+                # Copy FFN weights (SwiGLU)
+                if hasattr(src_layer.ffn, 'w1'):
+                    _copy_partial_tensor(src_layer.ffn.w1.weight, tgt_layer.ffn.w1.weight)
+                    _copy_partial_tensor(src_layer.ffn.w2.weight, tgt_layer.ffn.w2.weight)
+                    _copy_partial_tensor(src_layer.ffn.w3.weight, tgt_layer.ffn.w3.weight)
 
     print(f"[OK] Model shrunk. New parameters: {sum(p.numel() for p in new_model.parameters()):,}")
     return new_model
@@ -155,7 +162,7 @@ def grow_registered_model(
     target_name: str,
     target_size: str,
     description: str = ""
-) -> TinyEnigma:
+) -> Enigma:
     """
     Grow a model from the registry and save as a new model.
 
@@ -215,8 +222,8 @@ class KnowledgeDistiller:
 
     def __init__(
         self,
-        teacher: TinyEnigma,
-        student: TinyEnigma,
+        teacher: Enigma,
+        student: Enigma,
         temperature: float = 2.0,
         alpha: float = 0.5
     ):

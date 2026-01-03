@@ -171,7 +171,7 @@ class TestFileTools:
         test_file = tmp_path / "to_delete.txt"
         test_file.write_text("delete me")
         
-        result = execute_tool("delete_file", path=str(test_file))
+        result = execute_tool("delete_file", path=str(test_file), confirm="yes")
         assert result.get("success") is True
         assert not test_file.exists()
 

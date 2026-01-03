@@ -31,8 +31,7 @@ class ModelModule(Module):
         requires=[],
         provides=[
             "language_model",
-            "text_generation",
-            "embeddings"],
+            "model_embeddings"],
         config_schema={
             "size": {
                 "type": "choice",

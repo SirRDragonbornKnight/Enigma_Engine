@@ -18,6 +18,7 @@ Usage:
 import logging
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from pathlib import Path
 from typing import List, Optional
 from dataclasses import dataclass
@@ -177,8 +178,27 @@ class LoRATrainer:
                 # Forward pass
                 outputs = self.forward_with_lora(batch['input_ids'])
                 
-                # Calculate loss (simplified - actual would use proper loss function)
-                loss = outputs.loss if hasattr(outputs, 'loss') else 0
+                # Calculate loss
+                if hasattr(outputs, 'loss') and outputs.loss is not None:
+                    loss = outputs.loss
+                elif isinstance(outputs, torch.Tensor):
+                    # Compute cross-entropy loss manually if outputs are logits
+                    if 'labels' in batch:
+                        loss = F.cross_entropy(
+                            outputs.view(-1, outputs.size(-1)),
+                            batch['labels'].view(-1)
+                        )
+                    else:
+                        # Use input_ids shifted as labels (language modeling)
+                        labels = batch['input_ids'][:, 1:].contiguous()
+                        logits = outputs[:, :-1, :].contiguous()
+                        loss = F.cross_entropy(
+                            logits.view(-1, logits.size(-1)),
+                            labels.view(-1)
+                        )
+                else:
+                    logger.warning("Could not compute loss - skipping batch")
+                    continue
                 
                 # Backward pass
                 loss.backward()

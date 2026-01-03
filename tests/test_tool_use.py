@@ -16,15 +16,15 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_has_tool_tokens(self):
         """Test that tokenizer has tool use special tokens."""
-        from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+        from enigma.core.advanced_tokenizer import EnigmaTokenizer as AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         
-        # Check for tool tokens
-        assert "<|tool_call|>" in tokenizer.special_tokens
-        assert "<|/tool_call|>" in tokenizer.special_tokens
-        assert "<|tool_result|>" in tokenizer.special_tokens
-        assert "<|/tool_result|>" in tokenizer.special_tokens
+        # Check for tool tokens (Enigma's [E:token] format)
+        assert "[E:tool]" in tokenizer.special_tokens
+        assert "[E:tool_end]" in tokenizer.special_tokens
+        assert "[E:tool_out]" in tokenizer.special_tokens
+        assert "[E:out_end]" in tokenizer.special_tokens
     
     def test_tokenizer_bpe_dropout(self):
         """Test BPE dropout functionality."""
@@ -316,20 +316,19 @@ class TestToolTrainingData:
         with open(data_file, 'r') as f:
             content = f.read()
         
-        # Should contain Q: and A: markers
-        assert "Q:" in content
-        assert "A:" in content
+        # Should contain User: and AI: markers (Enigma format)
+        assert "User:" in content or "Q:" in content
+        assert "AI:" in content or "A:" in content
         
-        # Should contain tool call examples
-        assert "<tool_call>" in content
-        assert "</tool_call>" in content
-        assert "<tool_result>" in content
-        assert "</tool_result>" in content
+        # Should contain Enigma tool call format [E:tool]
+        assert "[E:tool]" in content
+        assert "[E:tool_end]" in content
+        assert "[E:tool_out]" in content
+        assert "[E:out_end]" in content
         
         # Should have examples for major tools
         assert "generate_image" in content
-        assert "analyze_image" in content
-        assert "control_avatar" in content
+        assert "screenshot" in content
     
     def test_training_data_tokenizable(self):
         """Test that training data can be tokenized."""

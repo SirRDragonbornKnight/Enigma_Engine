@@ -76,6 +76,34 @@ except ImportError:
     quantize_model = None
     load_quantized = None
 
+# HuggingFace model loading (optional - lazy load to avoid slow imports)
+HuggingFaceModel = None
+HuggingFaceEngine = None
+load_huggingface_model = None
+
+def _lazy_load_huggingface():
+    """Lazy load HuggingFace components on first use."""
+    global HuggingFaceModel, HuggingFaceEngine, load_huggingface_model
+    if HuggingFaceModel is None:
+        try:
+            from .huggingface_loader import (
+                HuggingFaceModel as _HFM,
+                HuggingFaceEngine as _HFE,
+                load_huggingface_model as _load,
+            )
+            HuggingFaceModel = _HFM
+            HuggingFaceEngine = _HFE
+            load_huggingface_model = _load
+        except ImportError:
+            pass
+    return HuggingFaceModel, HuggingFaceEngine, load_huggingface_model
+
+# GGUF model loading (optional)
+try:
+    from .gguf_loader import GGUFModel
+except ImportError:
+    GGUFModel = None
+
 
 __all__ = [
     # Model
@@ -118,4 +146,10 @@ __all__ = [
     # Quantization
     "quantize_model",
     "load_quantized",
+    
+    # External model loading
+    "HuggingFaceModel",
+    "HuggingFaceEngine",
+    "load_huggingface_model",
+    "GGUFModel",
 ]

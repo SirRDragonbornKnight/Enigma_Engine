@@ -1,0 +1,59 @@
+# Combined Action Training Data
+# Teaches the AI to use multiple tools in sequence for complex tasks
+
+User: Take a screenshot and describe what you see.
+AI: I'll capture your screen and analyze it.
+[E:tool]screenshot{}[E:tool_end]
+[E:tool_out]{"path": "outputs/screenshot_001.png", "success": true}[E:out_end]
+Now let me analyze the image.
+[E:tool]vision{"image_path": "outputs/screenshot_001.png"}[E:tool_end]
+[E:tool_out]{"description": "A code editor with Python code visible, showing a function definition"}[E:out_end]
+I can see you have a code editor open with Python code. There's a function definition visible on the screen.
+
+User: Search for information about Python decorators and save it to a file.
+AI: I'll search for information about decorators and save what I find.
+[E:tool]web_search{"query": "Python decorators tutorial"}[E:tool_end]
+[E:tool_out]{"results": [{"title": "Python Decorators Tutorial", "snippet": "Decorators allow you to modify functions..."}]}[E:out_end]
+I found some good information. Now let me save it for you.
+[E:tool]write_file{"path": "notes/decorators.md", "content": "# Python Decorators\n\nDecorators allow you to modify functions using the @decorator syntax."}[E:tool_end]
+[E:tool_out]{"success": true, "path": "notes/decorators.md"}[E:out_end]
+Done! I searched for Python decorators and saved a summary to notes/decorators.md.
+
+User: Generate an image of a sunset and show me.
+AI: I'll generate that image for you.
+[E:tool]generate_image{"prompt": "beautiful sunset over ocean, dramatic sky, orange and purple colors", "width": 512, "height": 512}[E:tool_end]
+[E:tool_out]{"path": "outputs/sunset.png", "success": true}[E:out_end]
+I've generated a sunset image! It shows a beautiful ocean sunset with dramatic orange and purple colors. The image has been saved to outputs/sunset.png.
+
+User: What files are in my documents folder? Then read the most recent one.
+AI: Let me check your documents folder first.
+[E:tool]list_directory{"path": "documents"}[E:tool_end]
+[E:tool_out]{"files": ["report.txt", "notes.md", "todo.txt"], "count": 3}[E:out_end]
+I see 3 files. Let me read the most relevant one for you.
+[E:tool]read_file{"path": "documents/todo.txt"}[E:tool_end]
+[E:tool_out]{"content": "1. Review code\n2. Write tests\n3. Deploy app"}[E:out_end]
+Your documents folder contains: report.txt, notes.md, and todo.txt. Here's what's in your todo.txt:
+1. Review code
+2. Write tests
+3. Deploy app
+
+User: Help me create a presentation. Search for presentation tips and generate a title slide image.
+AI: I'll help you with both research and visuals.
+[E:tool]web_search{"query": "effective presentation tips best practices"}[E:tool_end]
+[E:tool_out]{"results": [{"title": "10 Tips for Great Presentations", "snippet": "Keep slides simple, use visuals..."}]}[E:out_end]
+Found some great tips! Now let me create a title slide for you.
+[E:tool]generate_image{"prompt": "professional presentation title slide, clean minimal design, business meeting background", "width": 1024, "height": 576}[E:tool_end]
+[E:tool_out]{"path": "outputs/title_slide.png", "success": true}[E:out_end]
+I've gathered presentation tips and created a title slide image. Key tips: keep slides simple, use visuals effectively, and practice your delivery. Your title slide is saved at outputs/title_slide.png.
+
+User: Check what's on my screen, then create a summary document.
+AI: Let me capture and analyze your screen first.
+[E:tool]screenshot{}[E:tool_end]
+[E:tool_out]{"path": "outputs/current_screen.png"}[E:out_end]
+[E:tool]vision{"image_path": "outputs/current_screen.png"}[E:tool_end]
+[E:tool_out]{"description": "Browser showing an article about machine learning"}[E:out_end]
+I can see you're reading an article about machine learning. Let me create a summary document.
+[E:tool]write_file{"path": "summaries/ml_article.md", "content": "# ML Article Summary\n\nCurrently reading: Article about machine learning\n\nKey topics to research further:\n- Neural networks\n- Training data\n- Model evaluation"}[E:tool_end]
+[E:tool_out]{"success": true}[E:out_end]
+Done! I captured your screen showing a machine learning article and created a summary document at summaries/ml_article.md with notes for further research.
+

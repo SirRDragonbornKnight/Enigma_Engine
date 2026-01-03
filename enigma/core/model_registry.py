@@ -32,9 +32,27 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Tuple, Any
 
-from .model import TinyEnigma
-from .model_config import get_model_config, estimate_parameters
+from .model import Enigma, EnigmaConfig, MODEL_PRESETS
 from ..config import CONFIG
+
+
+def get_model_config(size: str) -> dict:
+    """Get model config dict from MODEL_PRESETS."""
+    if size not in MODEL_PRESETS:
+        raise ValueError(f"Unknown model size: {size}. Available: {list(MODEL_PRESETS.keys())}")
+    preset = MODEL_PRESETS[size]
+    return preset.to_dict()
+
+
+def estimate_parameters(vocab_size: int, dim: int, n_layers: int, **kwargs) -> int:
+    """Estimate parameter count for a model configuration."""
+    # Embedding: vocab_size * dim
+    embed_params = vocab_size * dim
+    # Output: vocab_size * dim
+    output_params = vocab_size * dim
+    # Per layer: ~12 * dim^2 (attention + FFN approximation)
+    layer_params = 12 * dim * dim * n_layers
+    return embed_params + output_params + layer_params
 
 
 class ModelRegistry:
@@ -106,7 +124,7 @@ class ModelRegistry:
         vocab_size: int = 32000,
         description: str = "",
         custom_config: Optional[Dict] = None
-    ) -> TinyEnigma:
+    ) -> Enigma:
         """
         Create a new named model.
 
@@ -279,7 +297,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         name: str,
         device: Optional[str] = None,
         checkpoint: Optional[str] = None
-    ) -> Tuple[TinyEnigma, Dict]:
+    ) -> Tuple[Enigma, Dict]:
         """
         Load a model by name.
 
@@ -306,14 +324,11 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Extract only model-relevant parameters (filter out metadata)
-        model_params = {
-            k: v for k, v in config.items()
-            if k in ['vocab_size', 'dim', 'depth', 'heads', 'max_len']
-        }
+        # Create EnigmaConfig from saved config (handles legacy parameter names)
+        model_config = EnigmaConfig.from_dict(config)
 
-        # Create model with filtered params
-        model = TinyEnigma(**model_params)
+        # Create model
+        model = Enigma(model_config)
 
         # Load weights
         if checkpoint:
@@ -335,7 +350,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
     def save_model(
         self,
         name: str,
-        model: TinyEnigma,
+        model: Enigma,
         epoch: Optional[int] = None,
         save_checkpoint: bool = True,
         checkpoint_name: Optional[str] = None

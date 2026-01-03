@@ -1,7 +1,7 @@
 # Enigma Module System Guide
 
 **Version:** 2.0  
-**Last Updated:** December 2024
+**Last Updated:** January 2026
 
 ## Table of Contents
 

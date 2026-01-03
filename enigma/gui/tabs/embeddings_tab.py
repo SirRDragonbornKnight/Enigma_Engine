@@ -112,9 +112,12 @@ class LocalEmbedding:
             
             # Cosine similarity
             import numpy as np
-            cos_sim = np.dot(embeddings[0], embeddings[1]) / (
-                np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
-            )
+            norm1 = np.linalg.norm(embeddings[0])
+            norm2 = np.linalg.norm(embeddings[1])
+            if norm1 == 0 or norm2 == 0:
+                cos_sim = 0.0  # Handle zero vectors
+            else:
+                cos_sim = np.dot(embeddings[0], embeddings[1]) / (norm1 * norm2)
             
             return {
                 "success": True,
@@ -222,7 +225,12 @@ class OpenAIEmbedding:
             # Cosine similarity
             emb1 = np.array(emb1)
             emb2 = np.array(emb2)
-            cos_sim = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+            norm1 = np.linalg.norm(emb1)
+            norm2 = np.linalg.norm(emb2)
+            if norm1 == 0 or norm2 == 0:
+                cos_sim = 0.0  # Handle zero vectors
+            else:
+                cos_sim = np.dot(emb1, emb2) / (norm1 * norm2)
             
             return {
                 "success": True,

@@ -1,0 +1,75 @@
+# Tool Training Data
+# Teaches the AI to use tools properly with correct syntax
+
+User: Search the web for Python tutorials
+AI: [E:tool]web_search{"query": "Python tutorials for beginners"}[E:tool_end]
+[E:tool_out]{"results": [{"title": "Python.org Tutorial", "url": "https://python.org/tutorial", "snippet": "Official Python tutorial for beginners"}]}[E:out_end]
+I found the official Python tutorial at python.org. It's a great starting point for beginners.
+
+User: Generate an image of a cat
+AI: [E:tool]generate_image{"prompt": "cute fluffy cat sitting, photorealistic", "width": 512, "height": 512}[E:tool_end]
+[E:tool_out]{"path": "outputs/cat_image.png", "success": true}[E:out_end]
+I've generated an image of a cute fluffy cat and saved it to outputs/cat_image.png.
+
+User: Read the README file
+AI: [E:tool]read_file{"path": "README.md"}[E:tool_end]
+[E:tool_out]{"content": "# Project Name\n\nThis is a sample project.", "success": true}[E:out_end]
+Here's the README file content - it describes this as a sample project.
+
+User: Take a screenshot
+AI: [E:tool]screenshot{}[E:tool_end]
+[E:tool_out]{"path": "outputs/screenshot.png", "success": true}[E:out_end]
+Done! I've captured a screenshot and saved it to outputs/screenshot.png.
+
+User: List files in the current directory
+AI: [E:tool]list_directory{"path": "."}[E:tool_end]
+[E:tool_out]{"files": ["README.md", "main.py", "config.json"], "directories": ["src", "tests"], "count": 5}[E:out_end]
+The current directory contains: README.md, main.py, config.json, and two folders (src, tests).
+
+User: Write "Hello World" to a file called hello.txt
+AI: [E:tool]write_file{"path": "hello.txt", "content": "Hello World"}[E:tool_end]
+[E:tool_out]{"success": true, "path": "hello.txt"}[E:out_end]
+Done! I've written "Hello World" to hello.txt.
+
+User: Get the current system info
+AI: [E:tool]get_system_info{}[E:tool_end]
+[E:tool_out]{"os": "Windows", "cpu": "AMD Ryzen", "ram_gb": 16, "gpu": "NVIDIA RTX 2080"}[E:out_end]
+Your system: Windows with AMD Ryzen CPU, 16GB RAM, and NVIDIA RTX 2080 GPU.
+
+User: Move the file old.txt to archive/old.txt
+AI: [E:tool]move_file{"source": "old.txt", "destination": "archive/old.txt"}[E:tool_end]
+[E:tool_out]{"success": true}[E:out_end]
+Done! I've moved old.txt to the archive folder.
+
+User: Describe what you see on the screen
+AI: [E:tool]screenshot{}[E:tool_end]
+[E:tool_out]{"path": "outputs/screen.png"}[E:out_end]
+[E:tool]vision{"image_path": "outputs/screen.png"}[E:tool_end]
+[E:tool_out]{"description": "A desktop with code editor showing Python code"}[E:out_end]
+I can see your desktop with a code editor open, showing some Python code.
+
+User: Say hello out loud
+AI: [E:tool]speak{"text": "Hello! How can I help you today?"}[E:tool_end]
+[E:tool_out]{"success": true, "spoken": true}[E:out_end]
+I've spoken the greeting through your speakers.
+
+User: Generate a video of a cat
+AI: [E:tool]generate_video{"prompt": "cute cat playing with yarn, soft lighting", "duration": 3}[E:tool_end]
+[E:tool_out]{"path": "outputs/cat_video.mp4", "success": true}[E:out_end]
+I've generated a 3-second video of a cat playing with yarn and saved it to outputs/cat_video.mp4.
+
+User: Make my avatar wave
+AI: [E:tool]avatar_action{"action": "wave", "duration": 2}[E:tool_end]
+[E:tool_out]{"success": true, "action": "wave"}[E:out_end]
+The avatar is waving!
+
+User: Create a checklist for my project
+AI: [E:tool]create_checklist{"title": "Project Tasks", "items": ["Plan features", "Write code", "Test functionality", "Deploy"]}[E:tool_end]
+[E:tool_out]{"success": true, "id": "checklist_001"}[E:out_end]
+I've created a project checklist with 4 items: Plan features, Write code, Test functionality, and Deploy.
+
+User: Fetch the content from example.com
+AI: [E:tool]fetch_webpage{"url": "https://example.com"}[E:tool_end]
+[E:tool_out]{"content": "This domain is for use in illustrative examples...", "title": "Example Domain"}[E:out_end]
+Example.com is a domain reserved for use in documentation and examples.
+

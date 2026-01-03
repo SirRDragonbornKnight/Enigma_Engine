@@ -91,12 +91,14 @@ Choose based on your hardware:
 
 | Size | Parameters | RAM Needed | Best For |
 |------|------------|------------|----------|
-| tiny | ~2M | 1GB | Testing, Raspberry Pi |
-| small | ~10M | 2GB | Pi 4, basic responses |
-| medium | ~50M | 4GB | Good conversations |
-| large | ~150M | 8GB | High quality |
-| xl | ~300M | 12GB | Very high quality |
-| xxl | ~500M | 16GB | Near-commercial quality |
+| nano | ~1M | 512MB | Embedded, microcontrollers |
+| micro | ~2M | 512MB | IoT devices |
+| tiny | ~5M | 1GB | Raspberry Pi, edge devices |
+| small | ~27M | 2GB | Entry GPU, desktop default |
+| medium | ~85M | 4GB | Mid-range GPU, good balance |
+| large | ~200M | 8GB | RTX 3080+, high quality |
+| xl | ~600M | 12GB | RTX 4090, excellent results |
+| xxl | ~1.5B | 16GB+ | Multi-GPU, near-production |
 
 ## Project Structure
 

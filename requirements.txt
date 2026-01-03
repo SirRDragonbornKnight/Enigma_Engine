@@ -1,5 +1,5 @@
 # Enigma Engine Requirements
-# Last Updated: December 2024
+# Last Updated: January 2026
 # Minimum Python version: 3.9+
 
 # === CORE (Required) ===

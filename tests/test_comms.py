@@ -58,13 +58,13 @@ class TestMobileAPI:
     
     def test_mobile_api_init(self):
         """Test MobileAPI initialization."""
-        from enigma.comms.mobile_api import MobileAPI
-        # MobileAPI needs an engine, skip if not available
         try:
-            api = MobileAPI(engine=None)
+            from enigma.comms.mobile_api import MobileAPI
+            api = MobileAPI(port=5001)  # Use non-default port
             assert api is not None
-        except Exception:
-            pytest.skip("MobileAPI requires engine")
+            assert api.port == 5001
+        except ImportError:
+            pytest.skip("Flask not available for MobileAPI")
 
 
 if __name__ == "__main__":
