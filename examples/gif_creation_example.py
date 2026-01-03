@@ -63,11 +63,11 @@ def example_basic_gif():
     )
     
     if result["success"]:
-        print(f"✓ Success! GIF saved to: {result['output_path']}")
+        print(f"[OK] Success! GIF saved to: {result['output_path']}")
         print(f"  Frames: {result['frames']}")
         print(f"  FPS: {result['fps']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_fast_gif():
@@ -99,9 +99,9 @@ def example_fast_gif():
     )
     
     if result["success"]:
-        print(f"✓ Success! GIF saved to: {result['output_path']}")
+        print(f"[OK] Success! GIF saved to: {result['output_path']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_loop_limited_gif():
@@ -130,10 +130,10 @@ def example_loop_limited_gif():
     )
     
     if result["success"]:
-        print(f"✓ Success! GIF saved to: {result['output_path']}")
+        print(f"[OK] Success! GIF saved to: {result['output_path']}")
         print(f"  This GIF will play 3 times then stop")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_validation():
@@ -147,14 +147,14 @@ def example_validation():
     result = executor.execute_tool("generate_gif", {"fps": 5})
     
     if not result["success"]:
-        print(f"✓ Correctly caught error: {result['error']}")
+        print(f"[OK] Correctly caught error: {result['error']}")
     
     # Test with empty frames list
     print("\nTesting with empty frames list...")
     result = executor.execute_tool("generate_gif", {"frames": []})
     
     if not result["success"]:
-        print(f"✓ Correctly caught error: {result['error']}")
+        print(f"[OK] Correctly caught error: {result['error']}")
     
     # Test with valid parameters
     print("\nTesting parameter validation with valid params...")
@@ -164,10 +164,10 @@ def example_validation():
     )
     
     if is_valid:
-        print(f"✓ Parameters validated successfully!")
+        print(f"[OK] Parameters validated successfully!")
         print(f"  Validated params: {validated}")
     else:
-        print(f"✗ Validation failed: {error}")
+        print(f"[FAIL] Validation failed: {error}")
 
 
 def main():

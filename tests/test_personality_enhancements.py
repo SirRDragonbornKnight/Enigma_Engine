@@ -76,7 +76,7 @@ class TestPersonalityEnhancements:
         
         description = personality.get_personality_description()
         
-        assert '⭐' in description  # Override marker
+        assert '*' in description  # Override marker
         assert 'test_model' in description
     
     def test_save_and_load_with_overrides(self):

@@ -30,9 +30,9 @@ def main():
     try:
         manager.load('model')
         manager.load('tokenizer')
-        print("   ✓ Core modules loaded")
+        print("   [OK] Core modules loaded")
     except Exception as e:
-        print(f"   ✗ Could not load modules: {e}")
+        print(f"   [FAIL] Could not load modules: {e}")
         print("   Note: Modules may not be available in this environment")
     
     # Initialize inference engine with tools enabled
@@ -43,9 +43,9 @@ def main():
             enable_tools=True,
             module_manager=manager
         )
-        print("   ✓ Engine initialized with tool support")
+        print("   [OK] Engine initialized with tool support")
     except Exception as e:
-        print(f"   ✗ Could not initialize engine: {e}")
+        print(f"   [FAIL] Could not initialize engine: {e}")
         return
     
     print()
@@ -59,7 +59,7 @@ def main():
     
     print(f"\nThe AI has access to {len(tools)} tools:")
     for tool in tools[:5]:  # Show first 5
-        print(f"  • {tool.name}: {tool.description[:60]}...")
+        print(f"  - {tool.name}: {tool.description[:60]}...")
     print(f"  ... and {len(tools) - 5} more")
     
     print()

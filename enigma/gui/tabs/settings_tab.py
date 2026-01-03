@@ -73,11 +73,11 @@ def _save_api_keys(parent):
         # Write back
         env_file.write_text("\n".join(new_lines) + "\n")
         
-        parent.api_status_label.setText(f"✓ Saved {saved_count} key(s) to .env file")
+        parent.api_status_label.setText(f"Saved {saved_count} key(s) to .env file")
         parent.api_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
     except Exception as e:
         # Still saved to environment, just not persisted
-        parent.api_status_label.setText(f"✓ Keys set for this session (couldn't save .env: {e})")
+        parent.api_status_label.setText(f"Keys set for this session (couldn't save .env: {e})")
         parent.api_status_label.setStyleSheet("color: #f59e0b; font-style: italic;")
 
 
@@ -376,7 +376,7 @@ def create_settings_tab(parent):
     layout.addWidget(autonomous_group)
     
     # === API KEYS ===
-    api_group = QGroupBox("🔑 API Keys")
+    api_group = QGroupBox("API Keys")
     api_layout = QVBoxLayout(api_group)
     
     api_desc = QLabel(
@@ -560,9 +560,9 @@ def _create_status_indicator(name: str, status: str) -> QLabel:
         "loading": "#f59e0b",  # Yellow
     }
     symbols = {
-        "connected": "●",
-        "disconnected": "○",
-        "loading": "◐",
+        "connected": "[ON]",
+        "disconnected": "[OFF]",
+        "loading": "[...]",
     }
     
     color = colors.get(status, colors["disconnected"])
@@ -583,9 +583,9 @@ def _update_status_indicator(label: QLabel, status: str):
         "loading": "#f59e0b",
     }
     symbols = {
-        "connected": "●",
-        "disconnected": "○",
-        "loading": "◐",
+        "connected": "[ON]",
+        "disconnected": "[OFF]",
+        "loading": "[...]",
     }
     
     name = label.property("name")
@@ -618,7 +618,7 @@ def _refresh_connections(parent):
                 
                 # Parse model type for display
                 if model_type == "huggingface":
-                    active_ai_text = f"Active AI: 🤗 {model_name}"
+                    active_ai_text = f"Active AI: [HF] {model_name}"
                     active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #f59e0b;"
                     
                     if is_loaded:
@@ -645,14 +645,14 @@ def _refresh_connections(parent):
                         _update_status_indicator(parent.inference_status, "disconnected")
                         
                 elif model_type == "api":
-                    active_ai_text = f"Active AI: ☁️ {model_name.upper()} API"
+                    active_ai_text = f"Active AI: [API] {model_name.upper()} API"
                     active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #3b82f6;"
                     _update_status_indicator(parent.model_status, "connected")
                     _update_status_indicator(parent.tokenizer_status, "connected")
                     _update_status_indicator(parent.inference_status, "connected")
                     
                 elif model_type == "local":
-                    active_ai_text = f"Active AI: 🖥️ {model_name}"
+                    active_ai_text = f"Active AI: [Local] {model_name}"
                     active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #a855f7;"
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")

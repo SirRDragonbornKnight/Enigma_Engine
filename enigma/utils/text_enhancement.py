@@ -282,7 +282,7 @@ def format_error_message(
     Returns:
         Formatted error message
     """
-    message = f"❌ Error: {error}"
+    message = f"[ERROR] {error}"
     
     if context:
         message += "\n"
@@ -290,7 +290,7 @@ def format_error_message(
             message += f"\n  {key}: {value}"
     
     if suggestions:
-        message += "\n\n💡 Suggestions:"
+        message += "\n\nSuggestions:"
         for i, suggestion in enumerate(suggestions, 1):
             message += f"\n  {i}. {suggestion}"
     

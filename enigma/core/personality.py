@@ -445,7 +445,7 @@ class AIPersonality:
         lines.append(f"User Overrides: {len(self.user_overrides)}")
         lines.append(f"Last Updated: {self.last_updated}")
         lines.append("")
-        lines.append("Traits (⭐ = user override):")
+        lines.append("Traits (* = user override):")
         
         trait_names = [
             ('humor_level', 'Humor'),
@@ -460,7 +460,7 @@ class AIPersonality:
         
         for key, label in trait_names:
             value = traits_effective.get(key, 0.5)
-            override_marker = ' ⭐' if key in self.user_overrides else ''
+            override_marker = ' *' if key in self.user_overrides else ''
             bar = '█' * int(value * 10)
             lines.append(f"  {label:12s} {bar:10s} {value:.2f}{override_marker}")
         

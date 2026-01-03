@@ -336,14 +336,14 @@ def test_motion_tracking():
     print("Testing motion tracking...")
     
     if not HAVE_MEDIAPIPE or not HAVE_CV2:
-        print("❌ MediaPipe or OpenCV not available")
+        print("[ERROR] MediaPipe or OpenCV not available")
         return False
     
     try:
         tracker = MotionTracker(camera_id=0, tracking_mode='pose')
         tracker.start()
         
-        print("✓ Tracking started, reading poses for 5 seconds...")
+        print("[OK] Tracking started, reading poses for 5 seconds...")
         start_time = time.time()
         pose_count = 0
         
@@ -354,11 +354,11 @@ def test_motion_tracking():
             time.sleep(0.1)
         
         tracker.stop()
-        print(f"✓ Captured {pose_count} poses")
+        print(f"[OK] Captured {pose_count} poses")
         return True
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] Error: {e}")
         return False
 
 

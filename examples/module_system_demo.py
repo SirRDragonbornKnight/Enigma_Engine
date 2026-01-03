@@ -71,13 +71,13 @@ def demo_simple_loading():
     success = manager.load('memory')
     
     if success:
-        print("✓ Memory module loaded successfully")
+        print("[OK] Memory module loaded successfully")
         print(f"  State: {manager.get_module('memory').state.value}")
         
         interface = manager.get_interface('memory')
         print(f"  Interface type: {type(interface).__name__}")
     else:
-        print("✗ Failed to load memory module")
+        print("[FAIL] Failed to load memory module")
 
 
 def demo_dependency_chain():
@@ -95,11 +95,11 @@ def demo_dependency_chain():
     print("Loading dependencies in order:")
     print("  1. Loading 'model'...")
     manager.load('model', {'size': 'nano', 'vocab_size': 1000})
-    print("     ✓ Model loaded")
+    print("     [OK] Model loaded")
     
     print("  2. Loading 'tokenizer'...")
     manager.load('tokenizer')
-    print("     ✓ Tokenizer loaded")
+    print("     [OK] Tokenizer loaded")
     
     print("  3. Now trying 'inference' again...")
     can_load, reason = manager.can_load('inference')
@@ -107,7 +107,7 @@ def demo_dependency_chain():
     
     if can_load:
         manager.load('inference')
-        print("     ✓ Inference loaded")
+        print("     [OK] Inference loaded")
     
     print(f"\nCurrently loaded: {manager.list_loaded()}")
 
@@ -129,7 +129,7 @@ def demo_conflict_detection():
     
     if not can_load_local:
         print(f"  Reason: {reason}")
-        print("\n  → Falling back to API version instead")
+        print("\n  -> Falling back to API version instead")
         can_load_api, reason_api = manager.can_load('image_gen_api')
         print(f"  Can load image_gen_api: {can_load_api}")
     else:
@@ -139,8 +139,8 @@ def demo_conflict_detection():
         
         # Simulate it being loaded
         print("\n  Now trying to load image_gen_api too...")
-        print("  Result: ✗ Conflict! Both provide 'image_generation'")
-        print("  → Module system prevents this automatically")
+        print("  Result: [CONFLICT] Both provide 'image_generation'")
+        print("  -> Module system prevents this automatically")
 
 
 def demo_module_swapping():
@@ -162,18 +162,18 @@ def demo_module_swapping():
     
     hw = manager.hardware_profile
     if hw['ram_mb'] >= 4096:
-        print(f"  RAM: {hw['ram_mb']} MB ✓")
-        print("  → Loading code_gen_local (free, private)")
+        print(f"  RAM: {hw['ram_mb']} MB [OK]")
+        print("  -> Loading code_gen_local (free, private)")
         # Would actually load if dependencies met
         print("  (Demo mode - skipping actual load)")
     else:
-        print(f"  RAM: {hw['ram_mb']} MB ✗")
-        print("  → Would recommend code_gen_api instead")
+        print(f"  RAM: {hw['ram_mb']} MB [LOW]")
+        print("  -> Would recommend code_gen_api instead")
     
     print("\nUser changes mind, wants images instead...")
     print("  Unloading code_gen_local...")
     print("  Loading image_gen_api (with API key)...")
-    print("  ✓ Swapped successfully")
+    print("  [OK] Swapped successfully"))
 
 
 def demo_configuration():
@@ -223,9 +223,9 @@ def demo_list_by_category():
         print(f"    Provides: {', '.join(mod.provides)}")
         
         if mod.requires_gpu:
-            print(f"    ⚠ Requires GPU")
+            print(f"    [!] Requires GPU")
         if mod.min_vram_mb > 0:
-            print(f"    ⚠ Needs {mod.min_vram_mb}MB VRAM")
+            print(f"    [!] Needs {mod.min_vram_mb}MB VRAM"))
         
         print()
 
@@ -233,18 +233,18 @@ def demo_list_by_category():
 def main():
     """Run all demos."""
     print("""
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║           ENIGMA ENGINE - MODULE SYSTEM DEMO                 ║
-║                                                              ║
-║  This script demonstrates how the module system works:      ║
-║  - Hardware detection                                        ║
-║  - Module discovery and registration                         ║
-║  - Dependency resolution                                     ║
-║  - Conflict prevention                                       ║
-║  - Dynamic loading/unloading                                 ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
+================================================================
+                                                              
+           ENIGMA ENGINE - MODULE SYSTEM DEMO                 
+                                                              
+  This script demonstrates how the module system works:      
+  - Hardware detection                                        
+  - Module discovery and registration                         
+  - Dependency resolution                                     
+  - Conflict prevention                                       
+  - Dynamic loading/unloading                                 
+                                                              
+================================================================
     """)
     
     try:
@@ -266,7 +266,7 @@ def main():
                 input("\nPress Enter to continue to next demo...")
         
         print_header("Demo Complete!")
-        print("✓ All demos completed successfully")
+        print("[OK] All demos completed successfully")
         print("\nNext steps:")
         print("  1. Read docs/MODULE_GUIDE.md for full documentation")
         print("  2. Try loading modules yourself in python shell")
@@ -276,7 +276,7 @@ def main():
     except KeyboardInterrupt:
         print("\n\nDemo interrupted. Goodbye!")
     except Exception as e:
-        print(f"\n\n✗ Error during demo: {e}")
+        print(f"\n\n[FAIL] Error during demo: {e}")
         import traceback
         traceback.print_exc()
 

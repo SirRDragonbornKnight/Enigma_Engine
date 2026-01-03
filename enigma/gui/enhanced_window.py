@@ -1612,13 +1612,13 @@ class EnhancedMainWindow(QMainWindow):
                 
                 # Update chat tab model label
                 if hasattr(self, 'chat_model_label'):
-                    self.chat_model_label.setText(f"🤖 {self.current_model_name}")
+                    self.chat_model_label.setText(f"[AI] {self.current_model_name}")
                 
                 # Show welcome message in chat
                 if hasattr(self, 'chat_display'):
                     device_info = "GPU" if self.engine.device == "cuda" else "CPU"
                     self.chat_display.append(
-                        f"<p style='color: #a6e3a1;'><b>✓ Model loaded:</b> {self.current_model_name} ({device_info})</p>"
+                        f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
                         f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
                         "<hr>"
                     )
@@ -1639,7 +1639,7 @@ class EnhancedMainWindow(QMainWindow):
                 # Show error in chat
                 if hasattr(self, 'chat_display'):
                     self.chat_display.append(
-                        f"<p style='color: #f38ba8;'><b>⚠ Error:</b> Could not load model</p>"
+                        f"<p style='color: #f38ba8;'><b>[!] Error:</b> Could not load model</p>"
                         f"<p style='color: #6c7086;'>{e}</p>"
                     )
     
@@ -2004,10 +2004,10 @@ class EnhancedMainWindow(QMainWindow):
         # Update chat tab indicator
         if hasattr(self, 'learning_indicator'):
             if checked:
-                self.learning_indicator.setText("📚 Learning: ON")
+                self.learning_indicator.setText("Learning: ON")
                 self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
             else:
-                self.learning_indicator.setText("📚 Learning: OFF")
+                self.learning_indicator.setText("Learning: OFF")
                 self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
         
         # Update brain if loaded
@@ -3018,7 +3018,7 @@ class EnhancedMainWindow(QMainWindow):
             try:
                 getattr(self, gen_method)()
                 self.chat_display.append(
-                    f"<b style='color:#a6e3a1;'>✓</b> {gen_type.title()} generation started! "
+                    f"<b style='color:#a6e3a1;'>[OK]</b> {gen_type.title()} generation started! "
                     f"Check the <b>{tab_name}</b> tab for results."
                 )
             except Exception as e:

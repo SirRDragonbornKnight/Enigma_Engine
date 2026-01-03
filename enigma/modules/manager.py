@@ -341,7 +341,7 @@ class ModuleManager:
         # Warn about cloud services
         if module_info.is_cloud_service:
             logger.warning(
-                f"⚠️  Warning: Module '{module_id}' connects to external cloud services and requires API keys + internet.")
+                f"Warning: Module '{module_id}' connects to external cloud services and requires API keys + internet.")
 
         try:
             # Create instance

@@ -123,7 +123,7 @@ def create_instructions_tab(parent):
     layout.setSpacing(5)
     
     # Header - compact, fixed height
-    header = QLabel("📁 Files")
+    header = QLabel("Files")
     header.setObjectName("header")
     header.setFixedHeight(28)
     layout.addWidget(header)

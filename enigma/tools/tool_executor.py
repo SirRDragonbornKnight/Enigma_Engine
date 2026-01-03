@@ -1170,7 +1170,7 @@ class ToolExecutor:
             for category, mods in sorted(by_category.items()):
                 result_text += f"{category.upper()}:\n"
                 for mod in mods:
-                    status_icon = "✓" if mod["loaded"] else "○"
+                    status_icon = "[+]" if mod["loaded"] else "[-]"
                     result_text += f"  {status_icon} {mod['id']} - {mod['name']}\n"
                 result_text += "\n"
             
@@ -1232,19 +1232,19 @@ class ToolExecutor:
             # Assessment
             if 'assessment' in usage:
                 assess = usage['assessment']
-                status_emoji = {"good": "✓", "warning": "⚠", "critical": "✗"}
+                status_emoji = {"good": "[OK]", "warning": "[!]", "critical": "[X]"}
                 result_text += f"Status: {status_emoji.get(assess['status'], '?')} {assess['status'].upper()}\n\n"
                 
                 if assess['warnings']:
                     result_text += "Warnings:\n"
                     for warn in assess['warnings']:
-                        result_text += f"  ⚠ {warn}\n"
+                        result_text += f"  [!] {warn}\n"
                     result_text += "\n"
                 
                 if assess['recommendations']:
                     result_text += "Recommendations:\n"
                     for rec in assess['recommendations']:
-                        result_text += f"  → {rec}\n"
+                        result_text += f"  -> {rec}\n"
             
             return {
                 "success": True,
