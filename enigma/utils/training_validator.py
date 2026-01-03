@@ -301,9 +301,9 @@ class TrainingDataValidator:
         
         # Status
         if validation_result['valid']:
-            lines.append("✓ Status: VALID - Ready for training")
+            lines.append("[OK] Status: VALID - Ready for training")
         else:
-            lines.append("✗ Status: INVALID - Issues must be fixed")
+            lines.append("[FAIL] Status: INVALID - Issues must be fixed")
         
         lines.append("")
         
@@ -324,7 +324,7 @@ class TrainingDataValidator:
             lines.append("Issues (must fix):")
             lines.append("-" * 60)
             for issue in validation_result['issues']:
-                lines.append(f"  ✗ {issue}")
+                lines.append(f"  [X] {issue}")
             lines.append("")
         
         # Warnings
@@ -340,7 +340,7 @@ class TrainingDataValidator:
             lines.append("Suggestions:")
             lines.append("-" * 60)
             for suggestion in validation_result['suggestions']:
-                lines.append(f"  → {suggestion}")
+                lines.append(f"  -> {suggestion}")
             lines.append("")
         
         return "\n".join(lines)

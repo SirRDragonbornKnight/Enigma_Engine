@@ -56,22 +56,22 @@ Examples:
     # If no arguments, show help and suggest GUI
     if not any([args.train, args.build, args.serve, args.run, args.gui, args.web]):
         print("\n" + "=" * 60)
-        print("  ⚡ ENIGMA ENGINE - Build Your Own AI")
+        print("  ENIGMA ENGINE - Build Your Own AI")
         print("=" * 60)
-        print("\n🚀 Quick Start Options:\n")
+        print("\nQuick Start Options:\n")
         print("  python run.py --gui")
-        print("    └─ Launch GUI (recommended for beginners)")
+        print("    -> Launch GUI (recommended for beginners)")
         print("\n  python run.py --train")
-        print("    └─ Train a model with default settings")
+        print("    -> Train a model with default settings")
         print("\n  python run.py --train --model medium")
-        print("    └─ Train a medium-sized model")
+        print("    -> Train a medium-sized model")
         print("\n  python run.py --run")
-        print("    └─ Start CLI chat interface")
+        print("    -> Start CLI chat interface")
         print("\n  python run.py --serve")
-        print("    └─ Start API server on localhost:5000")
+        print("    -> Start API server on localhost:5000")
         print("\n  python run.py --web")
-        print("    └─ Start web dashboard on localhost:8080")
-        print("\n📚 For detailed options: python run.py --help")
+        print("    -> Start web dashboard on localhost:8080")
+        print("\nFor detailed options: python run.py --help")
         print("=" * 60 + "\n")
         return
 
@@ -147,30 +147,30 @@ Examples:
         try:
             engine = EnigmaEngine()
         except FileNotFoundError as e:
-            print(f"\n❌ Error: Model not found")
+            print(f"\n[ERROR] Model not found")
             print(f"   {e}")
-            print("\n💡 To fix this:")
+            print("\nTo fix this:")
             print("   1. Train a model first:")
             print("      python run.py --train")
             print("   2. Or use the GUI to train:")
             print("      python run.py --gui")
             return
         except ImportError as e:
-            print(f"\n❌ Error: Missing dependency")
+            print(f"\n[ERROR] Missing dependency")
             print(f"   {e}")
-            print("\n💡 To fix this:")
+            print("\nTo fix this:")
             print("   Install required packages:")
             print("      pip install -r requirements.txt")
             return
         except Exception as e:
-            print(f"\n❌ Error loading model: {e}")
-            print("\n💡 Troubleshooting:")
-            print("   • Check if the model file exists in the models/ directory")
-            print("   • Try retraining: python run.py --train --force")
-            print("   • Check logs for more details")
+            print(f"\n[ERROR] Error loading model: {e}")
+            print("\nTroubleshooting:")
+            print("   - Check if the model file exists in the models/ directory")
+            print("   - Try retraining: python run.py --train --force")
+            print("   - Check logs for more details")
             return
 
-        print("✓ Model loaded successfully!\n")
+        print("[OK] Model loaded successfully!\n")
 
         while True:
             try:
@@ -187,7 +187,7 @@ Examples:
                     for token in engine.stream_generate(prompt, max_gen=200):
                         print(token, end="", flush=True)
                 except Exception as e:
-                    print(f"\n\n⚠️  Generation error: {e}")
+                    print(f"\n\n[WARNING] Generation error: {e}")
                     print("Try a different prompt or check the model.")
                 print("\n")
 
@@ -199,9 +199,9 @@ Examples:
         try:
             from enigma.gui.enhanced_window import run_app
         except ImportError as e:
-            print(f"\n❌ GUI requires PyQt5")
+            print(f"\n[ERROR] GUI requires PyQt5")
             print(f"   Error: {e}")
-            print("\n💡 To fix this:")
+            print("\nTo fix this:")
             print("   Install PyQt5:")
             print("      pip install PyQt5")
             print("\n   On Raspberry Pi, use the system package:")
@@ -213,9 +213,9 @@ Examples:
         try:
             from enigma.web.app import run_web
         except ImportError as e:
-            print(f"\n❌ Web dashboard requires flask-socketio")
+            print(f"\n[ERROR] Web dashboard requires flask-socketio")
             print(f"   Error: {e}")
-            print("\n💡 To fix this:")
+            print("\nTo fix this:")
             print("   Install required packages:")
             print("      pip install flask-socketio")
             sys.exit(1)

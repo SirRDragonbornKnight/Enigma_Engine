@@ -95,9 +95,9 @@ def example_image_resize():
     )
     
     if result["success"]:
-        print(f"✓ Success! Edited image saved to: {result['output_path']}")
+        print(f"[OK] Success! Edited image saved to: {result['output_path']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_image_rotate():
@@ -118,9 +118,9 @@ def example_image_rotate():
     )
     
     if result["success"]:
-        print(f"✓ Success! Rotated image saved to: {result['output_path']}")
+        print(f"[OK] Success! Rotated image saved to: {result['output_path']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_image_brightness():
@@ -141,9 +141,9 @@ def example_image_brightness():
     )
     
     if result["success"]:
-        print(f"✓ Success! Brightened image saved to: {result['output_path']}")
+        print(f"[OK] Success! Brightened image saved to: {result['output_path']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_image_filters():
@@ -166,9 +166,9 @@ def example_image_filters():
         )
         
         if result["success"]:
-            print(f"  ✓ {filter_type.capitalize()} applied: {result['output_path']}")
+            print(f"  [OK] {filter_type.capitalize()} applied: {result['output_path']}")
         else:
-            print(f"  ✗ Error: {result['error']}")
+            print(f"  [FAIL] Error: {result['error']}")
 
 
 def example_gif_reverse():
@@ -188,10 +188,10 @@ def example_gif_reverse():
     )
     
     if result["success"]:
-        print(f"✓ Success! Reversed GIF saved to: {result['output_path']}")
+        print(f"[OK] Success! Reversed GIF saved to: {result['output_path']}")
         print(f"  Frame count: {result['frame_count']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_gif_speed():
@@ -212,9 +212,9 @@ def example_gif_speed():
     )
     
     if result["success"]:
-        print(f"✓ Success! Faster GIF saved to: {result['output_path']}")
+        print(f"[OK] Success! Faster GIF saved to: {result['output_path']}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_gif_extract_frames():
@@ -234,10 +234,10 @@ def example_gif_extract_frames():
     )
     
     if result["success"]:
-        print(f"✓ Success! Extracted {result['frame_count']} frames")
+        print(f"[OK] Success! Extracted {result['frame_count']} frames")
         print(f"  First frame: {result['frame_paths'][0]}")
     else:
-        print(f"✗ Error: {result['error']}")
+        print(f"[FAIL] Error: {result['error']}")
 
 
 def example_video_editing():
@@ -290,7 +290,7 @@ def example_error_handling():
     )
     
     if not result["success"]:
-        print(f"✓ Correctly caught error: {result['error']}")
+        print(f"[OK] Correctly caught error: {result['error']}")
     
     # Test with invalid edit type
     print("\nTesting with invalid edit type...")
@@ -303,7 +303,7 @@ def example_error_handling():
     )
     
     if not result["success"]:
-        print(f"✓ Correctly caught error: {result['error']}")
+        print(f"[OK] Correctly caught error: {result['error']}")
 
 
 def main():
@@ -342,7 +342,7 @@ def main():
         print()
         
     except Exception as e:
-        print(f"\n✗ Error running examples: {e}")
+        print(f"\n[FAIL] Error running examples: {e}")
         import traceback
         traceback.print_exc()
 

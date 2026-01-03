@@ -277,7 +277,7 @@ class ModulesTab(QWidget):
         conn_title.setStyleSheet("font-weight: bold; font-size: 11px;")
         conn_layout.addWidget(conn_title)
         
-        self.ai_status_indicator = QLabel("○ Disconnected")
+        self.ai_status_indicator = QLabel("[OFF] Disconnected")
         self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
         conn_layout.addWidget(self.ai_status_indicator)
         
@@ -566,19 +566,19 @@ class ModulesTab(QWidget):
         gen_loaded = any('gen' in m for m in loaded_ids)
         
         if core_loaded and gen_loaded:
-            self.ai_status_indicator.setText("● Connected (Full)")
+            self.ai_status_indicator.setText("[ON] Connected (Full)")
             self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
             self.ai_status_detail.setText("Core AI + generation ready")
         elif core_loaded:
-            self.ai_status_indicator.setText("● Connected (Core)")
+            self.ai_status_indicator.setText("[ON] Connected (Core)")
             self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
             self.ai_status_detail.setText("Chat available, enable gen modules for more")
         elif loaded > 0:
-            self.ai_status_indicator.setText("◐ Partial")
+            self.ai_status_indicator.setText("[...] Partial")
             self.ai_status_indicator.setStyleSheet("color: #f59e0b; font-size: 12px; font-weight: bold;")
             self.ai_status_detail.setText(f"{loaded} modules loaded, enable core for chat")
         else:
-            self.ai_status_indicator.setText("○ Disconnected")
+            self.ai_status_indicator.setText("[OFF] Disconnected")
             self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
             self.ai_status_detail.setText("Enable modules to start")
     

@@ -21,14 +21,14 @@ from PyQt5.QtGui import QFont
 
 # Tool icons/colors
 TOOL_STYLES = {
-    "chat": {"color": "#3498db", "icon": "💬"},
-    "image": {"color": "#e91e63", "icon": "🎨"},
-    "code": {"color": "#9b59b6", "icon": "💻"},
-    "video": {"color": "#e74c3c", "icon": "🎬"},
-    "audio": {"color": "#f39c12", "icon": "🔊"},
-    "3d": {"color": "#1abc9c", "icon": "🎲"},
-    "web": {"color": "#2ecc71", "icon": "🌐"},
-    "memory": {"color": "#34495e", "icon": "🧠"},
+    "chat": {"color": "#3498db", "icon": "[C]"},
+    "image": {"color": "#e91e63", "icon": "[I]"},
+    "code": {"color": "#9b59b6", "icon": "[<>]"},
+    "video": {"color": "#e74c3c", "icon": "[V]"},
+    "audio": {"color": "#f39c12", "icon": "[A]"},
+    "3d": {"color": "#1abc9c", "icon": "[3D]"},
+    "web": {"color": "#2ecc71", "icon": "[W]"},
+    "memory": {"color": "#34495e", "icon": "[M]"},
 }
 
 
@@ -45,7 +45,7 @@ class ToolAssignmentWidget(QFrame):
         self._setup_ui()
         
     def _setup_ui(self):
-        style = TOOL_STYLES.get(self.tool_name, {"color": "#888", "icon": "⚙"})
+        style = TOOL_STYLES.get(self.tool_name, {"color": "#888", "icon": "[?]"})
         
         self.setFrameStyle(QFrame.Box)
         self.setStyleSheet(f"""
@@ -139,18 +139,19 @@ class ToolAssignmentWidget(QFrame):
         self.model_input.clear()
         
         # Add categories
-        self.model_input.addItem("── Enigma Models ──")
+        self.model_input.addItem("-- Enigma Models --")
         
         # Get Enigma models
         try:
             from enigma.core.model_registry import ModelRegistry
             registry = ModelRegistry()
             for model in registry.list_models():
-                self.model_input.addItem(f"enigma:{model['name']}")
+                model_name = model.get("name", model) if isinstance(model, dict) else str(model)
+                self.model_input.addItem(f"enigma:{model_name}")
         except Exception:
             self.model_input.addItem("enigma:default")
             
-        self.model_input.addItem("── HuggingFace Models ──")
+        self.model_input.addItem("-- HuggingFace Models --")
         # Popular HuggingFace models for text
         hf_models = [
             "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
@@ -161,7 +162,7 @@ class ToolAssignmentWidget(QFrame):
         for model in hf_models:
             self.model_input.addItem(model)
             
-        self.model_input.addItem("── Local Modules ──")
+        self.model_input.addItem("-- Local Modules --")
         local_modules = [
             "local:stable-diffusion",
             "local:animatediff", 
@@ -173,7 +174,7 @@ class ToolAssignmentWidget(QFrame):
         for module in local_modules:
             self.model_input.addItem(module)
             
-        self.model_input.addItem("── API Providers ──")
+        self.model_input.addItem("-- API Providers --")
         api_providers = [
             "api:openai",
             "api:replicate",
@@ -188,7 +189,7 @@ class ToolAssignmentWidget(QFrame):
     def _add_model(self):
         """Add a model assignment."""
         model_id = self.model_input.currentText().strip()
-        if not model_id or model_id.startswith("──"):
+        if not model_id or model_id.startswith("--"):
             return
             
         priority = self.priority_spin.value()
@@ -214,7 +215,7 @@ class ToolAssignmentWidget(QFrame):
         if not current:
             return
             
-        model_id = current.data(Qt.UserRole)
+        model_id = current.data(Qt.ItemDataRole.UserRole)
         self.assignments = [a for a in self.assignments if a["model_id"] != model_id]
         
         self._refresh_list()
@@ -234,23 +235,23 @@ class ToolAssignmentWidget(QFrame):
             # Determine type and color
             if model_id.startswith("enigma:"):
                 color = "#3498db"
-                icon = "🔷"
+                icon = "[E]"
             elif model_id.startswith("huggingface:"):
                 color = "#f39c12"
-                icon = "🤗"
+                icon = "[HF]"
             elif model_id.startswith("local:"):
                 color = "#2ecc71"
-                icon = "💻"
+                icon = "[L]"
             elif model_id.startswith("api:"):
                 color = "#e91e63"
-                icon = "☁️"
+                icon = "[API]"
             else:
                 color = "#888"
-                icon = "?"
+                icon = "[?]"
                 
             item = QListWidgetItem(f"{icon} {model_id} (P:{priority})")
-            item.setData(Qt.UserRole, model_id)
-            item.setForeground(Qt.white)
+            item.setData(Qt.ItemDataRole.UserRole, model_id)
+            item.setForeground(Qt.GlobalColor.white)
             self.model_list.addItem(item)
             
         # Update status

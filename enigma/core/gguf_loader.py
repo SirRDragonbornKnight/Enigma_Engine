@@ -98,7 +98,7 @@ class GGUFModel:
             )
             
             self.is_loaded = True
-            logger.info(f"✓ Model loaded successfully")
+            logger.info(f"[OK] Model loaded successfully")
             logger.info(f"  Context size: {self.n_ctx}")
             logger.info(f"  GPU layers: {self.n_gpu_layers}")
             logger.info(f"  Threads: {self.n_threads or 'auto'}")
@@ -326,7 +326,7 @@ def test_gguf_loading(model_path: str = None):
     print("Testing GGUF loading...")
     
     if not HAVE_LLAMA_CPP:
-        print("❌ llama-cpp-python not available")
+        print("[ERROR] llama-cpp-python not available")
         print("Install with: pip install llama-cpp-python")
         return False
     
@@ -334,7 +334,7 @@ def test_gguf_loading(model_path: str = None):
         # Try to find a GGUF model
         models = list_gguf_models()
         if not models:
-            print("❌ No GGUF models found in models/ directory")
+            print("[ERROR] No GGUF models found in models/ directory")
             return False
         model_path = str(models[0])
         print(f"Using model: {model_path}")
@@ -343,21 +343,21 @@ def test_gguf_loading(model_path: str = None):
         model = GGUFModel(model_path, n_ctx=512, verbose=False)
         
         if model.load():
-            print("✓ Model loaded successfully")
+            print("[OK] Model loaded successfully")
             
             # Test generation
             response = model.generate("Hello!", max_tokens=20)
-            print(f"✓ Generated: {response[:50]}...")
+            print(f"[OK] Generated: {response[:50]}...")
             
             model.unload()
-            print("✓ Model unloaded")
+            print("[OK] Model unloaded")
             return True
         else:
-            print("❌ Failed to load model")
+            print("[ERROR] Failed to load model")
             return False
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] Error: {e}")
         return False
 
 

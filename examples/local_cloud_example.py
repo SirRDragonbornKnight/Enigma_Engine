@@ -32,14 +32,14 @@ print("-" * 70)
 local_modules = registry.list_local_modules()
 print(f"Found {len(local_modules)} modules that work 100% offline:")
 for module in local_modules[:5]:
-    print(f"  • {module.id} - {module.name}")
+    print(f"  - {module.id} - {module.name}")
 print()
 
 # Get all cloud modules (require API keys)
 cloud_modules = registry.list_cloud_modules()
 print(f"Found {len(cloud_modules)} cloud API modules:")
 for module in cloud_modules:
-    print(f"  • {module.id} - {module.name}")
+    print(f"  - {module.id} - {module.name}")
 print()
 
 # ============================================================================
@@ -53,10 +53,10 @@ For maximum privacy, use local-only mode (this is the DEFAULT):
     manager = ModuleManager()  # local_only=True by default
     
 This ensures:
-  ✓ No API keys needed
-  ✓ No data leaves your machine
-  ✓ Works completely offline
-  ✓ Cloud modules cannot be loaded
+  - No API keys needed
+  - No data leaves your machine
+  - Works completely offline
+  - Cloud modules cannot be loaded
   
 Perfect for: Privacy-conscious users, offline environments, learning AI
 """)
@@ -100,11 +100,11 @@ Before loading a module, check if it's cloud-based:
     info = module_class.get_info()
     
     if info.is_cloud_service:
-        print("⚠️  This module requires internet and API keys")
+        print("[!] This module requires internet and API keys")
         print(f"   Description: {info.description}")
         # Ask user for confirmation before loading
     else:
-        print("✓ This module runs 100% locally")
+        print("[OK] This module runs 100% locally")
         # Safe to load without concerns
 """)
 
