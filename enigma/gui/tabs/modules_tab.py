@@ -180,7 +180,7 @@ class ModulesTab(QWidget):
         header_layout.addWidget(self.search_input)
         
         refresh_btn = QPushButton("Refresh")
-        refresh_btn.setFixedWidth(80)
+        refresh_btn.setMinimumWidth(80)
         refresh_btn.clicked.connect(self._refresh_status)
         header_layout.addWidget(refresh_btn)
         
@@ -211,12 +211,12 @@ class ModulesTab(QWidget):
         
         # Quick actions
         self.enable_all_btn = QPushButton("Enable All")
-        self.enable_all_btn.setFixedWidth(90)
+        self.enable_all_btn.setMinimumWidth(90)
         self.enable_all_btn.clicked.connect(self._enable_all_visible)
         filter_layout.addWidget(self.enable_all_btn)
         
         self.disable_all_btn = QPushButton("Disable All")
-        self.disable_all_btn.setFixedWidth(90)
+        self.disable_all_btn.setMinimumWidth(90)
         self.disable_all_btn.clicked.connect(self._disable_all_visible)
         filter_layout.addWidget(self.disable_all_btn)
         

@@ -1139,23 +1139,39 @@ System:
 def _apply_zoom(parent, value: int):
     """Apply zoom level to the application."""
     try:
-        # Get the main window
+        from PyQt5.QtWidgets import QApplication, QWidget
+        from PyQt5.QtGui import QFont
+        from typing import cast
+        
+        app = QApplication.instance()
+        if app is None:
+            return
+            
+        app = cast(QApplication, app)
+        
+        # Calculate font size based on zoom (base size is ~10pt at 100%)
+        base_size = 10
+        new_size = max(6, int(base_size * value / 100))
+        
+        # Create and apply new font
+        font = QFont()
+        font.setPointSize(new_size)
+        app.setFont(font)
+        
+        # Force all widgets to update with new font
         main_window = parent.window()
         if main_window:
-            # Calculate font size based on zoom (base size is ~10pt at 100%)
-            base_size = 10
-            new_size = int(base_size * value / 100)
+            # Recursively update all child widgets
+            for widget in main_window.findChildren(QWidget):
+                widget.setFont(font)
+                widget.update()
             
-            # Apply to application font
-            from PyQt5.QtWidgets import QApplication
-            from PyQt5.QtGui import QFont
-            from typing import cast
+            # Force a repaint
+            main_window.update()
+            main_window.repaint()
             
-            app = QApplication.instance()
-            if app is not None:
-                font = QFont()
-                font.setPointSize(new_size)
-                cast(QApplication, app).setFont(font)
+        # Store zoom value for persistence
+        parent._current_zoom = value
                     
     except Exception as e:
         print(f"Zoom error: {e}")

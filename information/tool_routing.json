@@ -2,7 +2,7 @@
   "assignments": {
     "chat": [
       {
-        "model_id": "huggingface:xai-org/grok-1",
+        "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         "model_type": "huggingface",
         "priority": 100,
         "config": {}
@@ -71,5 +71,5 @@
       }
     ]
   },
-  "updated": "2026-01-03T23:04:39.405734"
+  "updated": "2026-01-04T16:05:28.994620"
 }

@@ -315,10 +315,33 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             available = list(self.registry['models'].keys())
             raise ValueError(f"Model '{name}' not found. Available: {available}")
 
-        model_dir = Path(self.registry["models"][name]["path"])
+        reg_info = self.registry["models"][name]
+        model_dir = Path(reg_info["path"])
+        
+        # Check if this is a HuggingFace model
+        if reg_info.get("source") == "huggingface":
+            hf_model_id = reg_info.get("huggingface_id")
+            if not hf_model_id:
+                raise ValueError(f"HuggingFace model '{name}' missing huggingface_id in registry")
+            
+            # Use HuggingFace model class
+            from .huggingface_loader import HuggingFaceModel
+            hf_model = HuggingFaceModel(hf_model_id, device=device)
+            hf_model.load()
+            config = {"source": "huggingface", "model_id": hf_model_id}
+            # Return the HuggingFaceModel wrapper (has .generate(), .chat(), etc.)
+            return hf_model, config
 
-        # Load config
-        with open(model_dir / "config.json", "r") as f:
+        # Load config for local Enigma models
+        config_path = model_dir / "config.json"
+        if not config_path.exists():
+            raise FileNotFoundError(
+                f"Model '{name}' is missing config.json. "
+                f"The model directory exists but wasn't properly initialized. "
+                f"Try creating a new model or check if files were deleted."
+            )
+        
+        with open(config_path, "r") as f:
             config = json.load(f)
 
         # Determine device
@@ -436,21 +459,46 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
     def get_model_info(self, name: str) -> Dict:
         """Get detailed info about a model."""
         name = name.lower().strip()
-        model_dir = Path(self.registry["models"][name]["path"])
+        reg_info = self.registry["models"][name]
+        model_dir = Path(reg_info["path"])
 
-        with open(model_dir / "config.json", "r") as f:
-            config = json.load(f)
-        with open(model_dir / "metadata.json", "r") as f:
-            metadata = json.load(f)
+        # Load config if exists, otherwise use defaults
+        config = {}
+        config_path = model_dir / "config.json"
+        if config_path.exists():
+            try:
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+            except Exception:
+                pass
+        
+        # Load metadata if exists, otherwise use registry info
+        metadata = {}
+        metadata_path = model_dir / "metadata.json"
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, "r") as f:
+                    metadata = json.load(f)
+            except Exception:
+                pass
+        
+        # For HuggingFace models, populate metadata from registry
+        if reg_info.get("source") == "huggingface":
+            metadata.setdefault("created", reg_info.get("created", "Unknown"))
+            metadata.setdefault("source", "huggingface")
+            metadata.setdefault("huggingface_id", reg_info.get("huggingface_id", "Unknown"))
 
         # List checkpoints
-        checkpoints = list((model_dir / "checkpoints").glob("*.pth"))
+        checkpoints_dir = model_dir / "checkpoints"
+        checkpoints = []
+        if checkpoints_dir.exists():
+            checkpoints = list(checkpoints_dir.glob("*.pth"))
 
         return {
             "config": config,
             "metadata": metadata,
             "checkpoints": [cp.stem for cp in checkpoints],
-            "registry": self.registry["models"][name],
+            "registry": reg_info,
         }
 
 

@@ -119,16 +119,18 @@ class ToolAssignmentWidget(QFrame):
         self.priority_spin.setRange(1, 100)
         self.priority_spin.setValue(10)
         self.priority_spin.setPrefix("Priority: ")
-        self.priority_spin.setFixedWidth(100)
+        self.priority_spin.setMinimumWidth(100)
         add_layout.addWidget(self.priority_spin)
         
-        add_btn = QPushButton("+")
-        add_btn.setFixedWidth(30)
+        add_btn = QPushButton("Add")
+        add_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        add_btn.setToolTip("Add selected model to this tool")
         add_btn.clicked.connect(self._add_model)
         add_layout.addWidget(add_btn)
         
-        remove_btn = QPushButton("-")
-        remove_btn.setFixedWidth(30)
+        remove_btn = QPushButton("Remove")
+        remove_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        remove_btn.setToolTip("Remove selected model from this tool")
         remove_btn.clicked.connect(self._remove_model)
         add_layout.addWidget(remove_btn)
         
@@ -152,16 +154,21 @@ class ToolAssignmentWidget(QFrame):
             self.model_input.addItem("enigma:default")
             
         self.model_input.addItem("-- HuggingFace Models --")
-        # Popular HuggingFace models
-        hf_models = [
-            "huggingface:gpt2",
-            "huggingface:gpt2-medium",
-            "huggingface:microsoft/DialoGPT-medium",
-            "huggingface:xai-org/grok-1",
-            "huggingface:Salesforce/codegen-350M-mono",
-        ]
-        for hf_model in hf_models:
-            self.model_input.addItem(hf_model)
+        # Get HuggingFace models from registry
+        try:
+            from enigma.core.model_registry import ModelRegistry
+            registry = ModelRegistry()
+            for model_name, model_info in registry.registry.get("models", {}).items():
+                if model_info.get("source") == "huggingface":
+                    hf_id = model_info.get("huggingface_id", model_name)
+                    self.model_input.addItem(f"huggingface:{hf_id}")
+        except Exception:
+            pass
+        
+        # Common HuggingFace presets (user can add more)
+        self.model_input.addItem("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+        self.model_input.addItem("huggingface:Qwen/Qwen2-1.5B-Instruct")
+        self.model_input.addItem("huggingface:Salesforce/codegen-350M-mono")
             
         self.model_input.addItem("-- API Providers --")
         api_providers = [
@@ -379,6 +386,12 @@ class ModelRouterTab(QWidget):
             self.status_label.setText("Configuration loaded")
         except Exception as e:
             self.status_label.setText(f"Error loading config: {e}")
+    
+    def refresh_models(self):
+        """Refresh model dropdowns in all tool widgets."""
+        for tool_name, widget in self.tool_widgets.items():
+            widget._populate_model_options()
+        self.status_label.setText("Model list refreshed")
             
     def _save_config(self):
         """Save routing configuration."""

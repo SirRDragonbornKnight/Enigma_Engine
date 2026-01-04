@@ -1019,13 +1019,14 @@ class ModelManagerDialog(QDialog):
         # Preset dropdown
         self.hf_preset_combo = QComboBox()
         self.hf_preset_combo.addItem("Select a preset model...")
-        self.hf_preset_combo.addItem("gpt2 (124M) - Fast, classic")
-        self.hf_preset_combo.addItem("gpt2-medium (355M) - Better quality")
-        self.hf_preset_combo.addItem("microsoft/DialoGPT-medium - Chat")
+        self.hf_preset_combo.addItem("TinyLlama/TinyLlama-1.1B-Chat-v1.0 - Fast chat")
+        self.hf_preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct - Multilingual")
+        self.hf_preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b - Stable chat")
+        self.hf_preset_combo.addItem("google/gemma-2b-it - Google Gemma")
+        self.hf_preset_combo.addItem("HuggingFaceH4/zephyr-7b-beta - Quality chat")
         self.hf_preset_combo.addItem("Salesforce/codegen-350M-mono - Code")
-        self.hf_preset_combo.addItem("xai-org/grok-1 - Grok (Large)")
-        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 - Mistral")
         self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf - Llama 2")
+        self.hf_preset_combo.addItem("xai-org/grok-1 - Grok (Large)")
         hf_layout.addWidget(self.hf_preset_combo)
         
         # Custom input
@@ -1075,41 +1076,45 @@ class ModelManagerDialog(QDialog):
         
         # Row 1 - Safe actions
         self.btn_backup = QPushButton("Backup")
+        self.btn_backup.setStyleSheet("background-color: #74c7ec; color: #1e1e2e; font-weight: bold;")
         self.btn_backup.clicked.connect(self._on_backup)
         self.btn_backup.setEnabled(False)
         actions_layout.addWidget(self.btn_backup, 0, 0)
         
         self.btn_clone = QPushButton("Clone")
+        self.btn_clone.setStyleSheet("background-color: #cba6f7; color: #1e1e2e; font-weight: bold;")
         self.btn_clone.clicked.connect(self._on_clone)
         self.btn_clone.setEnabled(False)
         actions_layout.addWidget(self.btn_clone, 0, 1)
         
-        self.btn_folder = QPushButton("Open Folder")
+        self.btn_folder = QPushButton("Folder")
+        self.btn_folder.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold;")
         self.btn_folder.clicked.connect(self._on_open_folder)
         self.btn_folder.setEnabled(False)
         actions_layout.addWidget(self.btn_folder, 0, 2)
         
         # Row 2 - Scaling
         self.btn_grow = QPushButton("Grow")
-        self.btn_grow.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e;")
+        self.btn_grow.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
         self.btn_grow.clicked.connect(self._on_grow)
         self.btn_grow.setEnabled(False)
         actions_layout.addWidget(self.btn_grow, 1, 0)
         
         self.btn_shrink = QPushButton("Shrink")
-        self.btn_shrink.setStyleSheet("background-color: #f9e2af; color: #1e1e2e;")
+        self.btn_shrink.setStyleSheet("background-color: #f9e2af; color: #1e1e2e; font-weight: bold;")
         self.btn_shrink.clicked.connect(self._on_shrink)
         self.btn_shrink.setEnabled(False)
         actions_layout.addWidget(self.btn_shrink, 1, 1)
         
         self.btn_rename = QPushButton("Rename")
+        self.btn_rename.setStyleSheet("background-color: #94e2d5; color: #1e1e2e; font-weight: bold;")
         self.btn_rename.clicked.connect(self._on_rename)
         self.btn_rename.setEnabled(False)
         actions_layout.addWidget(self.btn_rename, 1, 2)
         
         # Row 3 - Danger zone
         self.btn_delete = QPushButton("Delete")
-        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e;")
+        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
         self.btn_delete.clicked.connect(self._on_delete)
         self.btn_delete.setEnabled(False)
         actions_layout.addWidget(self.btn_delete, 2, 0)
@@ -1135,6 +1140,9 @@ class ModelManagerDialog(QDialog):
         self._update_buttons_state()
         self.info_name.setText("Select a model")
         self.info_details.setText("Click a model from the list to see its details")
+        
+        # Sync models to other tabs (like router)
+        self._sync_models_everywhere()
         
         models = self.registry.registry.get("models", {})
         for name, info in sorted(models.items()):
@@ -1181,6 +1189,15 @@ class ModelManagerDialog(QDialog):
         else:
             self.btn_grow.setToolTip("Grow model to a larger size")
             self.btn_shrink.setToolTip("Shrink model to a smaller size")
+    
+    def _sync_models_everywhere(self):
+        """Notify all components that model list has changed."""
+        try:
+            # Refresh router tab dropdowns
+            if hasattr(self, 'router_tab') and self.router_tab:
+                self.router_tab.refresh_models()
+        except Exception:
+            pass  # Don't crash if sync fails
     
     def _on_select_model(self, item):
         """Handle model selection."""
@@ -1566,6 +1583,8 @@ Checkpoints: {checkpoints}
             old.rename(new)
             
             info = self.registry.registry["models"].pop(self.selected_model)
+            # Update the path to reflect new name
+            info["path"] = str(new)
             self.registry.registry["models"][new_name] = info
             self.registry._save_registry()
             
@@ -1583,12 +1602,25 @@ Checkpoints: {checkpoints}
         
         model_to_delete = self.selected_model  # Store the name
         
+        # Check for backups
+        from pathlib import Path
+        models_dir = Path("models")
+        backup_found = []
+        for backup_dir in models_dir.glob(f"{model_to_delete}_backup*"):
+            if backup_dir.is_dir():
+                backup_found.append(backup_dir.name)
+        
+        backup_msg = ""
+        if backup_found:
+            backup_msg = f"\n\nBackups found:\n" + "\n".join(f"  - {b}" for b in backup_found)
+            backup_msg += "\n\n(Backups will NOT be deleted)"
+        
         # First confirmation - show name prominently
         reply = QMessageBox.warning(
             self, "Delete Model",
             f"Warning: DELETE THIS MODEL:\n\n"
             f"   {model_to_delete}\n\n"
-            f"This action cannot be undone!",
+            f"This action cannot be undone!{backup_msg}",
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -1619,9 +1651,47 @@ Checkpoints: {checkpoints}
             self.registry.delete_model(model_to_delete, confirm=True)
             self.selected_model = None
             self._refresh_list()
-            QMessageBox.information(self, "Deleted", f"Model '{model_to_delete}' has been deleted.")
+            
+            # Also clean up tool_routing.json if model was assigned
+            self._cleanup_tool_routing(model_to_delete)
+            
+            msg = f"Model '{model_to_delete}' has been deleted."
+            if backup_found:
+                msg += f"\n\nBackups still exist:\n" + "\n".join(f"  - {b}" for b in backup_found)
+            QMessageBox.information(self, "Deleted", msg)
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
+    
+    def _cleanup_tool_routing(self, deleted_model: str):
+        """Remove deleted model from tool_routing.json assignments."""
+        try:
+            import json
+            from pathlib import Path
+            routing_path = Path("information/tool_routing.json")
+            if not routing_path.exists():
+                return
+            
+            with open(routing_path, "r") as f:
+                routing = json.load(f)
+            
+            changed = False
+            for tool_name, assignments in routing.items():
+                if isinstance(assignments, list):
+                    # Remove any assignment using this model
+                    new_assignments = [
+                        a for a in assignments 
+                        if not (a.get("model", "").lower() == deleted_model.lower() or
+                                deleted_model.lower() in a.get("model", "").lower())
+                    ]
+                    if len(new_assignments) != len(assignments):
+                        routing[tool_name] = new_assignments
+                        changed = True
+            
+            if changed:
+                with open(routing_path, "w") as f:
+                    json.dump(routing, f, indent=2)
+        except Exception:
+            pass  # Non-critical, don't block deletion
     
     def _size_dialog(self, title, sizes, message):
         """Show size selection dialog."""
@@ -1669,6 +1739,9 @@ class EnhancedMainWindow(QMainWindow):
         self.current_model_name = None
         self.engine = None
         
+        # Load GUI settings (last model, window size, etc.)
+        self._gui_settings = self._load_gui_settings()
+        
         # Initialize module manager and register all built-in modules
         try:
             from enigma.modules import ModuleManager, register_all
@@ -1697,6 +1770,38 @@ class EnhancedMainWindow(QMainWindow):
         
         self._build_ui()
     
+    def _load_gui_settings(self):
+        """Load GUI settings from file."""
+        from ..config import CONFIG
+        settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
+        try:
+            if settings_path.exists():
+                with open(settings_path, "r") as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Could not load GUI settings: {e}")
+        return {}
+    
+    def _save_gui_settings(self):
+        """Save GUI settings to file."""
+        from ..config import CONFIG
+        settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
+        try:
+            settings = {
+                "last_model": self.current_model_name,
+                "window_width": self.width(),
+                "window_height": self.height(),
+            }
+            with open(settings_path, "w") as f:
+                json.dump(settings, f, indent=2)
+        except Exception as e:
+            print(f"Could not save GUI settings: {e}")
+    
+    def closeEvent(self, event):
+        """Handle window close - save settings."""
+        self._save_gui_settings()
+        event.accept()
+    
     def _run_setup_wizard(self):
         """Run first-time setup wizard."""
         wizard = SetupWizard(self.registry, self)
@@ -1721,14 +1826,13 @@ class EnhancedMainWindow(QMainWindow):
     def _show_model_selector(self):
         """Show model selection on startup."""
         models = list(self.registry.registry.get("models", {}).keys())
-        if len(models) == 1:
-            self.current_model_name = models[0]
-        else:
-            dialog = ModelManagerDialog(self.registry, parent=self)
-            if dialog.exec_() == QDialog.Accepted:
-                self.current_model_name = dialog.get_selected_model()
-            
-            if not self.current_model_name and models:
+        if models:
+            # Try to use the last model from saved settings
+            last_model = self._gui_settings.get("last_model")
+            if last_model and last_model in models:
+                self.current_model_name = last_model
+            else:
+                # Fall back to first model
                 self.current_model_name = models[0]
         
         self._load_current_model()
@@ -1740,15 +1844,33 @@ class EnhancedMainWindow(QMainWindow):
                 # Create engine with selected model
                 model, config = self.registry.load_model(self.current_model_name)
                 
-                # Create a custom engine with this model
+                # Check if this is a HuggingFace model (wrapper class)
+                is_huggingface = config.get("source") == "huggingface"
+                
+                # Create engine instance without calling __init__
                 from ..core.inference import EnigmaEngine
                 self.engine = EnigmaEngine.__new__(EnigmaEngine)
-                self.engine.device = "cuda" if __import__('torch').cuda.is_available() else "cpu"
-                self.engine.model = model
-                self.engine.model.to(self.engine.device)
-                self.engine.model.eval()
-                from ..core.tokenizer import load_tokenizer
-                self.engine.tokenizer = load_tokenizer()
+                
+                # Set required attributes that __init__ would normally set
+                import torch
+                self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                self.engine.use_half = False
+                self.engine.enable_tools = False
+                self.engine.module_manager = getattr(self, 'module_manager', None)
+                self.engine._tool_executor = None
+                self.engine._is_huggingface = is_huggingface
+                
+                if is_huggingface:
+                    # HuggingFaceModel is already loaded and ready
+                    self.engine.model = model  # This is a HuggingFaceModel wrapper
+                    self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
+                else:
+                    # Local Enigma model
+                    self.engine.model = model
+                    self.engine.model.to(self.engine.device)
+                    self.engine.model.eval()
+                    from ..core.tokenizer import load_tokenizer
+                    self.engine.tokenizer = load_tokenizer()
                 
                 # Initialize the AI's brain for learning
                 from ..core.ai_brain import get_brain
@@ -1769,7 +1891,8 @@ class EnhancedMainWindow(QMainWindow):
                 
                 # Show welcome message in chat
                 if hasattr(self, 'chat_display'):
-                    device_info = "GPU" if self.engine.device == "cuda" else "CPU"
+                    device_type = self.engine.device.type if hasattr(self.engine.device, 'type') else str(self.engine.device)
+                    device_info = "GPU" if device_type == "cuda" else "CPU"
                     self.chat_display.append(
                         f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
                         f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
@@ -1837,6 +1960,13 @@ class EnhancedMainWindow(QMainWindow):
         theme_midnight.setCheckable(True)
         theme_midnight.triggered.connect(lambda: self._set_theme("midnight"))
         self.theme_group.addAction(theme_midnight)
+        
+        options_menu.addSeparator()
+        
+        # Zoom - opens input dialog
+        zoom_action = options_menu.addAction("Zoom...")
+        zoom_action.setShortcut("Ctrl+Z")
+        zoom_action.triggered.connect(self._show_zoom_dialog)
         
         options_menu.addSeparator()
         
@@ -2026,7 +2156,8 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
         self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
-        self.content_stack.addWidget(wrap_in_scroll(ModelRouterTab(self)))  # Router
+        self.router_tab = ModelRouterTab(self)  # Store reference for syncing
+        self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
         self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
@@ -2166,6 +2297,169 @@ class EnhancedMainWindow(QMainWindow):
         # Update brain if loaded
         if hasattr(self, 'brain') and self.brain:
             self.brain.auto_learn = checked
+    
+    def _set_zoom(self, value: int):
+        """Set zoom to a specific value."""
+        self._current_zoom = value
+        self._apply_zoom_value(value)
+        # Update settings spinbox if it exists
+        if hasattr(self, 'zoom_spinbox'):
+            self.zoom_spinbox.setValue(value)
+    
+    def _adjust_zoom(self, delta: int):
+        """Adjust zoom by a delta amount."""
+        current = getattr(self, '_current_zoom', 100)
+        new_value = max(80, min(200, current + delta))
+        self._set_zoom(new_value)
+    
+    def _apply_zoom_value(self, value: int):
+        """Apply zoom level to the application using stylesheet scaling."""
+        try:
+            from PyQt5.QtWidgets import QApplication
+            
+            app = QApplication.instance()
+            if app is None:
+                return
+            
+            # Calculate font size based on zoom (base size is ~10pt at 100%)
+            base_font = max(7, int(10 * value / 100))
+            small_font = max(6, int(8 * value / 100))
+            large_font = max(9, int(12 * value / 100))
+            header_font = max(11, int(14 * value / 100))
+            
+            # Apply global stylesheet with scaled fonts
+            # This preserves the existing theme while adjusting sizes
+            zoom_style = f"""
+                * {{
+                    font-size: {base_font}pt;
+                }}
+                QLabel {{
+                    font-size: {base_font}pt;
+                }}
+                QPushButton {{
+                    font-size: {base_font}pt;
+                    padding: {max(4, int(6 * value / 100))}px {max(8, int(12 * value / 100))}px;
+                }}
+                QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox {{
+                    font-size: {base_font}pt;
+                    padding: {max(3, int(5 * value / 100))}px;
+                }}
+                QListWidget, QTreeWidget, QTableWidget {{
+                    font-size: {base_font}pt;
+                }}
+                QTabBar::tab {{
+                    font-size: {base_font}pt;
+                    padding: {max(6, int(8 * value / 100))}px {max(10, int(14 * value / 100))}px;
+                }}
+                QMenuBar {{
+                    font-size: {base_font}pt;
+                }}
+                QMenu {{
+                    font-size: {base_font}pt;
+                }}
+                QGroupBox {{
+                    font-size: {base_font}pt;
+                }}
+                QGroupBox::title {{
+                    font-size: {large_font}pt;
+                }}
+                QStatusBar {{
+                    font-size: {small_font}pt;
+                }}
+            """
+            
+            # Get existing stylesheet and append zoom overrides
+            current_style = self.styleSheet() or ""
+            # Remove any previous zoom styles (between markers)
+            if "/* ZOOM_START */" in current_style:
+                parts = current_style.split("/* ZOOM_START */")
+                before = parts[0]
+                if "/* ZOOM_END */" in parts[1]:
+                    after = parts[1].split("/* ZOOM_END */")[1]
+                else:
+                    after = ""
+                current_style = before + after
+            
+            # Add new zoom styles with markers
+            new_style = current_style + f"\n/* ZOOM_START */\n{zoom_style}\n/* ZOOM_END */\n"
+            self.setStyleSheet(new_style)
+            
+            # Also update QTextEdit default font for HTML content
+            # This affects chat_display and other rich text widgets
+            from PyQt5.QtGui import QFont
+            from PyQt5.QtWidgets import QTextEdit
+            text_font = QFont()
+            text_font.setPointSize(base_font)
+            for widget in self.findChildren(QTextEdit):
+                widget.document().setDefaultFont(text_font)
+                widget.update()
+            
+            self.statusBar().showMessage(f"Zoom: {value}%", 2000)
+                    
+        except Exception as e:
+            print(f"Zoom error: {e}")
+    
+    def _show_zoom_dialog(self):
+        """Show a dialog with live preview zoom slider."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QSpinBox, QPushButton, QDialogButtonBox
+        from PyQt5.QtCore import Qt
+        
+        current = getattr(self, '_current_zoom', 100)
+        original_zoom = current
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Zoom")
+        dialog.setMinimumWidth(300)
+        layout = QVBoxLayout(dialog)
+        
+        # Label
+        label = QLabel("Drag slider or enter value (live preview):")
+        layout.addWidget(label)
+        
+        # Slider + spinbox row
+        slider_layout = QHBoxLayout()
+        
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(80, 200)
+        slider.setValue(current)
+        slider.setTickPosition(QSlider.TicksBelow)
+        slider.setTickInterval(20)
+        slider_layout.addWidget(slider)
+        
+        spinbox = QSpinBox()
+        spinbox.setRange(80, 200)
+        spinbox.setValue(current)
+        spinbox.setSuffix("%")
+        spinbox.setMinimumWidth(70)
+        slider_layout.addWidget(spinbox)
+        
+        layout.addLayout(slider_layout)
+        
+        # Live preview - connect slider/spinbox to apply zoom immediately
+        def on_value_changed(value):
+            slider.blockSignals(True)
+            spinbox.blockSignals(True)
+            slider.setValue(value)
+            spinbox.setValue(value)
+            slider.blockSignals(False)
+            spinbox.blockSignals(False)
+            self._apply_zoom_value(value)  # Live preview
+        
+        slider.valueChanged.connect(on_value_changed)
+        spinbox.valueChanged.connect(on_value_changed)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            self._current_zoom = spinbox.value()
+        else:
+            # Restore original zoom if cancelled
+            self._apply_zoom_value(original_zoom)
+            self._current_zoom = original_zoom
     
     def _toggle_avatar(self, checked):
         """Toggle avatar enabled/disabled by loading/unloading the avatar module."""
@@ -2727,9 +3021,15 @@ class EnhancedMainWindow(QMainWindow):
                     role = msg.get("role", "user")
                     text = msg.get("text", "")
                     if role == "user":
-                        self.chat_display.append(f"<b>You:</b> {text}")
+                        self.chat_display.append(
+                            f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
+                            f'<b style="color: #89b4fa;">You:</b> {text}</div>'
+                        )
                     else:
-                        self.chat_display.append(f"<b>{ai_name}:</b> {text}")
+                        self.chat_display.append(
+                            f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+                            f'<b style="color: #a6e3a1;">{ai_name}:</b> {text}</div>'
+                        )
                 self.tabs.setCurrentIndex(0)
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to load session: {e}")
@@ -3006,7 +3306,10 @@ class EnhancedMainWindow(QMainWindow):
         if not hasattr(self, 'chat_messages'):
             self.chat_messages = []
         
-        self.chat_display.append(f"<b>You:</b> {text}")
+        self.chat_display.append(
+            f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
+            f'<b style="color: #89b4fa;">You:</b> {text}</div>'
+        )
         self.chat_input.clear()
         
         # Track user message
@@ -3017,28 +3320,33 @@ class EnhancedMainWindow(QMainWindow):
         })
         
         try:
-            # Format prompt to match training data format (Q: ... A: ...)
-            formatted_prompt = f"Q: {text}\nA:"
-            response = self.engine.generate(formatted_prompt, max_gen=100)
+            # Check if this is a HuggingFace model
+            is_hf = getattr(self.engine, '_is_huggingface', False)
             
-            # Strip the prompt from the response (model returns prompt + generated)
-            if response.startswith(formatted_prompt):
-                response = response[len(formatted_prompt):].strip()
-            elif response.startswith(text):
-                response = response[len(text):].strip()
-            
-            # Clean up any Q:/A: artifacts in the response
-            # Stop at the next Q: if present (model generating next Q&A pair)
-            if "\nQ:" in response:
-                response = response.split("\nQ:")[0].strip()
-            if "Q:" in response:
-                response = response.split("Q:")[0].strip()
-            
-            # Remove leading A: or : if still present
-            if response.startswith("A:"):
-                response = response[2:].strip()
-            if response.startswith(":"):
-                response = response[1:].strip()
+            if is_hf:
+                # HuggingFace model - use its generate method directly
+                # Don't use Q:/A: format for pretrained HF models
+                response = self.engine.model.generate(text, max_new_tokens=100)
+            else:
+                # Local Enigma model - use Q:/A: training format
+                formatted_prompt = f"Q: {text}\nA:"
+                response = self.engine.generate(formatted_prompt, max_gen=100)
+                
+                # Strip the prompt from the response (model returns prompt + generated)
+                if response.startswith(formatted_prompt):
+                    response = response[len(formatted_prompt):].strip()
+                elif response.startswith(text):
+                    response = response[len(text):].strip()
+                
+                # Clean up any Q:/A: artifacts in the response
+                if "\nQ:" in response:
+                    response = response.split("\nQ:")[0].strip()
+                if "Q:" in response:
+                    response = response.split("Q:")[0].strip()
+                if response.startswith("A:"):
+                    response = response[2:].strip()
+                if response.startswith(":"):
+                    response = response[1:].strip()
             
             # If response is empty after stripping, the model might not have learned well
             if not response:
@@ -3050,7 +3358,10 @@ class EnhancedMainWindow(QMainWindow):
             else:
                 formatted_response = response
             
-            self.chat_display.append(f"<b>{self.current_model_name}:</b> {formatted_response}")
+            self.chat_display.append(
+                f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}</div>'
+            )
             self.last_response = response
             
             # Track AI response
@@ -3084,7 +3395,10 @@ class EnhancedMainWindow(QMainWindow):
         command = parts[0].lower()
         prompt = parts[1] if len(parts) > 1 else ""
         
-        self.chat_display.append(f"<b>You:</b> {text}")
+        self.chat_display.append(
+            f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
+            f'<b style="color: #89b4fa;">You:</b> {text}</div>'
+        )
         
         # Command mapping to tab indices and handlers
         commands = {

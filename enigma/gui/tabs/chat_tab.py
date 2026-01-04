@@ -115,8 +115,21 @@ def create_chat_tab(parent):
     # Speak button (for TTS)
     parent.btn_speak = QPushButton("Voice")
     parent.btn_speak.setToolTip("Speak last response")
-    parent.btn_speak.setMinimumWidth(65)
-    parent.btn_speak.setMaximumWidth(70)
+    parent.btn_speak.setMinimumWidth(90)
+    parent.btn_speak.setMinimumHeight(40)
+    parent.btn_speak.setStyleSheet("""
+        QPushButton {
+            background-color: #cba6f7;
+            color: #1e1e2e;
+            font-weight: bold;
+            font-size: 13px;
+            border-radius: 6px;
+            padding: 8px 12px;
+        }
+        QPushButton:hover {
+            background-color: #f5c2e7;
+        }
+    """)
     parent.btn_speak.clicked.connect(parent._on_speak_last)
     input_layout.addWidget(parent.btn_speak)
     
