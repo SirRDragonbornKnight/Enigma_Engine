@@ -2,6 +2,12 @@
   "assignments": {
     "chat": [
       {
+        "model_id": "huggingface:xai-org/grok-1",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {}
+      },
+      {
         "model_id": "enigma:default",
         "model_type": "enigma",
         "priority": 10,
@@ -65,5 +71,5 @@
       }
     ]
   },
-  "updated": "2026-01-03T17:20:08.105018"
+  "updated": "2026-01-03T23:04:39.405734"
 }

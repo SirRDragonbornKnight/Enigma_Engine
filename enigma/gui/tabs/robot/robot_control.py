@@ -290,7 +290,7 @@ def _connect_robot(parent):
             parent.robot_log.append(f"[>] Serial: {port} @ {baud} baud...")
             # Actual serial connection
             try:
-                import serial
+                import serial  # type: ignore
             except ImportError:
                 parent.robot_log.append("[!] pyserial not installed. Install with: pip install pyserial")
                 parent.robot_connection = None
@@ -315,7 +315,7 @@ def _connect_robot(parent):
             parent.robot_log.append(f"[*] ROS Master: {host}:{port}")
             # ROS connection
             try:
-                import rospy
+                import rospy  # type: ignore
                 if not rospy.core.is_initialized():
                     rospy.init_node('enigma_robot_client', anonymous=True)
                 parent.robot_connection = {"type": "ros", "host": host, "port": port}
@@ -328,7 +328,7 @@ def _connect_robot(parent):
             parent.robot_log.append("[>] GPIO initialized")
             # GPIO setup for Raspberry Pi
             try:
-                import RPi.GPIO as GPIO
+                import RPi.GPIO as GPIO  # type: ignore
                 GPIO.setmode(GPIO.BCM)
                 parent.robot_connection = {"type": "gpio", "GPIO": GPIO}
                 parent.robot_log.append("[OK] GPIO configured (BCM mode)")
@@ -342,7 +342,7 @@ def _connect_robot(parent):
             parent.robot_log.append(f"[>] MQTT: {host}:{port}")
             # MQTT connection
             try:
-                import paho.mqtt.client as mqtt
+                import paho.mqtt.client as mqtt  # type: ignore
                 client = mqtt.Client()
                 client.connect(host, int(port))
                 client.loop_start()
