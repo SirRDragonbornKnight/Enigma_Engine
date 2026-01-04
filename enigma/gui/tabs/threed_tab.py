@@ -16,7 +16,7 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
         QMessageBox, QGroupBox, QSpinBox, QDoubleSpinBox,
-        QFileDialog
+        QFileDialog, QLineEdit
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
@@ -273,105 +273,100 @@ class ThreeDTab(QWidget):
         
         # Header
         header = QLabel("3D Generation")
-        header.setFont(QFont('Arial', 14, QFont.Bold))
-        header.setStyleSheet("color: #e67e22;")
+        header.setObjectName("header")
         layout.addWidget(header)
         
-        # Provider selection
-        provider_group = QGroupBox("Provider")
-        provider_layout = QHBoxLayout()
+        # 3D Preview at TOP
+        self.preview_label = QLabel("Generated 3D model info will appear here")
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setMinimumHeight(180)
+        self.preview_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
+        layout.addWidget(self.preview_label, stretch=1)
         
+        # Progress and Status
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+        
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+        
+        # Provider and Options in one row
+        settings_layout = QHBoxLayout()
+        
+        settings_layout.addWidget(QLabel("Provider:"))
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems([
-            'Local (Shap-E)',
-            'Replicate (Cloud)'
-        ])
-        provider_layout.addWidget(self.provider_combo)
+        self.provider_combo.addItems(['Local (Shap-E)', 'Replicate (Cloud)'])
+        settings_layout.addWidget(self.provider_combo)
         
-        self.load_btn = QPushButton("Load Model")
+        self.load_btn = QPushButton("Load")
         self.load_btn.clicked.connect(self._load_provider)
-        provider_layout.addWidget(self.load_btn)
+        settings_layout.addWidget(self.load_btn)
         
-        provider_layout.addStretch()
-        provider_group.setLayout(provider_layout)
-        layout.addWidget(provider_group)
-        
-        # Prompt
-        prompt_group = QGroupBox("Prompt")
-        prompt_layout = QVBoxLayout()
-        
-        self.prompt_input = QTextEdit()
-        self.prompt_input.setMaximumHeight(80)
-        self.prompt_input.setPlaceholderText("Describe the 3D object you want to generate...")
-        prompt_layout.addWidget(self.prompt_input)
-        
-        prompt_group.setLayout(prompt_layout)
-        layout.addWidget(prompt_group)
-        
-        # Options
-        options_group = QGroupBox("Options")
-        options_layout = QHBoxLayout()
-        
-        options_layout.addWidget(QLabel("Guidance Scale:"))
+        settings_layout.addWidget(QLabel("Guidance:"))
         self.guidance_spin = QDoubleSpinBox()
         self.guidance_spin.setRange(1.0, 20.0)
         self.guidance_spin.setValue(15.0)
-        self.guidance_spin.setSingleStep(0.5)
-        options_layout.addWidget(self.guidance_spin)
+        settings_layout.addWidget(self.guidance_spin)
         
-        options_layout.addWidget(QLabel("Steps:"))
+        settings_layout.addWidget(QLabel("Steps:"))
         self.steps_spin = QSpinBox()
         self.steps_spin.setRange(10, 100)
         self.steps_spin.setValue(64)
-        options_layout.addWidget(self.steps_spin)
+        settings_layout.addWidget(self.steps_spin)
         
-        options_layout.addStretch()
-        options_group.setLayout(options_layout)
-        layout.addWidget(options_group)
+        settings_layout.addStretch()
+        layout.addLayout(settings_layout)
+        
+        # Prompt - compact
+        prompt_layout = QHBoxLayout()
+        prompt_layout.addWidget(QLabel("Prompt:"))
+        self.prompt_input = QLineEdit()
+        self.prompt_input.setPlaceholderText("Describe the 3D object you want to generate...")
+        prompt_layout.addWidget(self.prompt_input)
+        layout.addLayout(prompt_layout)
+        
+        # Reference - compact
+        ref_layout = QHBoxLayout()
+        ref_layout.addWidget(QLabel("Reference:"))
+        self.ref_input_path = QLineEdit()
+        self.ref_input_path.setPlaceholderText("Optional image for image-to-3D")
+        self.ref_input_path.setReadOnly(True)
+        ref_layout.addWidget(self.ref_input_path)
+        
+        browse_ref_btn = QPushButton("Browse")
+        browse_ref_btn.clicked.connect(self._browse_reference)
+        ref_layout.addWidget(browse_ref_btn)
+        
+        clear_ref_btn = QPushButton("Clear")
+        clear_ref_btn.clicked.connect(self._clear_reference)
+        ref_layout.addWidget(clear_ref_btn)
+        layout.addLayout(ref_layout)
         
         # Buttons
         btn_layout = QHBoxLayout()
         
-        self.generate_btn = QPushButton("Generate 3D Model")
-        self.generate_btn.setStyleSheet("background-color: #e67e22; font-weight: bold; padding: 10px;")
+        self.generate_btn = QPushButton("Generate 3D")
+        self.generate_btn.setStyleSheet("background-color: #e67e22; font-weight: bold; padding: 8px;")
         self.generate_btn.clicked.connect(self._generate_3d)
         btn_layout.addWidget(self.generate_btn)
         
-        self.open_btn = QPushButton("Open 3D File")
+        self.open_btn = QPushButton("Open")
         self.open_btn.setEnabled(False)
         self.open_btn.clicked.connect(self._open_3d)
         btn_layout.addWidget(self.open_btn)
         
-        self.save_btn = QPushButton("Save As...")
+        self.save_btn = QPushButton("Save As")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self._save_3d)
         btn_layout.addWidget(self.save_btn)
         
-        self.open_folder_btn = QPushButton("Open Output Folder")
+        self.open_folder_btn = QPushButton("Output Folder")
         self.open_folder_btn.clicked.connect(self._open_output_folder)
         btn_layout.addWidget(self.open_folder_btn)
         
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
-        
-        # Progress
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
-        
-        # Status
-        self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
-        
-        # Info
-        info_label = QLabel(
-            "Note: 3D generation requires significant GPU memory (4GB+ VRAM).\n"
-            "Output formats: PLY, GLB, OBJ depending on provider."
-        )
-        info_label.setStyleSheet("color: #888; font-style: italic;")
-        layout.addWidget(info_label)
-        
-        layout.addStretch()
     
     def _get_provider_name(self) -> str:
         text = self.provider_combo.currentText()
@@ -401,7 +396,7 @@ class ThreeDTab(QWidget):
             QTimer.singleShot(100, do_load)
     
     def _generate_3d(self):
-        prompt = self.prompt_input.toPlainText().strip()
+        prompt = self.prompt_input.text().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
             return
@@ -478,6 +473,21 @@ class ThreeDTab(QWidget):
             subprocess.run(['explorer', str(OUTPUT_DIR)])
         else:
             subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+    
+    def _browse_reference(self):
+        """Browse for a reference image for image-to-3D generation."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Reference Image",
+            str(Path.home()),
+            "Image Files (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*.*)"
+        )
+        if path:
+            self.ref_input_path.setText(path)
+    
+    def _clear_reference(self):
+        """Clear the reference input."""
+        self.ref_input_path.clear()
 
 
 def create_threed_tab(parent) -> QWidget:

@@ -100,28 +100,28 @@ class ExamplesTab(QWidget):
     def init_ui(self):
         """Initialize the UI."""
         layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
         
-        # Header
+        # Compact header row
+        header_row = QHBoxLayout()
         header = QLabel("Example Scripts")
-        header_font = QFont()
-        header_font.setPointSize(14)
-        header_font.setBold(True)
-        header.setFont(header_font)
-        layout.addWidget(header)
+        header.setStyleSheet("font-size: 14px; font-weight: bold;")
+        header_row.addWidget(header)
+        header_row.addStretch()
+        layout.addLayout(header_row)
         
-        desc = QLabel("Browse and run example scripts to learn how Enigma works.")
-        desc.setStyleSheet("color: #888;")
-        layout.addWidget(desc)
-        
-        # Main splitter
+        # Main splitter (takes up most of the space)
         splitter = QSplitter(Qt.Horizontal)
         
         # Left side - Example list
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(4)
         
-        list_label = QLabel("Examples:")
+        list_label = QLabel("Select an example:")
+        list_label.setStyleSheet("color: #888; font-size: 11px;")
         left_layout.addWidget(list_label)
         
         self.example_list = QListWidget()
@@ -136,30 +136,26 @@ class ExamplesTab(QWidget):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(6)
         
-        # Info group
-        info_group = QGroupBox("Details")
-        info_layout = QVBoxLayout(info_group)
-        
+        # Compact info section (not in a group box)
         self.title_label = QLabel("Select an example")
-        title_font = QFont()
-        title_font.setBold(True)
-        self.title_label.setFont(title_font)
-        info_layout.addWidget(self.title_label)
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        right_layout.addWidget(self.title_label)
         
         self.desc_label = QLabel("")
         self.desc_label.setWordWrap(True)
-        self.desc_label.setStyleSheet("color: #aaa;")
-        info_layout.addWidget(self.desc_label)
+        self.desc_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        self.desc_label.setMaximumHeight(40)
+        right_layout.addWidget(self.desc_label)
         
         self.category_label = QLabel("")
-        self.category_label.setStyleSheet("color: #89b4fa;")
-        info_layout.addWidget(self.category_label)
+        self.category_label.setStyleSheet("color: #89b4fa; font-size: 10px;")
+        right_layout.addWidget(self.category_label)
         
-        right_layout.addWidget(info_group)
-        
-        # Code preview
+        # Code preview (main area)
         code_label = QLabel("Code Preview:")
+        code_label.setStyleSheet("font-size: 11px; color: #888;")
         right_layout.addWidget(code_label)
         
         self.code_view = QTextEdit()
@@ -173,12 +169,13 @@ class ExamplesTab(QWidget):
                 border-radius: 4px;
             }
         """)
-        right_layout.addWidget(self.code_view)
+        right_layout.addWidget(self.code_view, stretch=1)  # Give code view the most space
         
-        # Buttons
+        # Compact buttons
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(6)
         
-        self.run_btn = QPushButton("Run Example")
+        self.run_btn = QPushButton("Run")
         self.run_btn.clicked.connect(self._on_run_example)
         self.run_btn.setEnabled(False)
         self.run_btn.setStyleSheet("""
@@ -186,7 +183,7 @@ class ExamplesTab(QWidget):
                 background-color: #a6e3a1;
                 color: #1e1e2e;
                 font-weight: bold;
-                padding: 10px 20px;
+                padding: 6px 16px;
             }
             QPushButton:hover {
                 background-color: #94e2d5;
@@ -198,9 +195,10 @@ class ExamplesTab(QWidget):
         """)
         btn_layout.addWidget(self.run_btn)
         
-        self.open_btn = QPushButton("Open in Editor")
+        self.open_btn = QPushButton("Open")
         self.open_btn.clicked.connect(self._on_open_file)
         self.open_btn.setEnabled(False)
+        self.open_btn.setStyleSheet("padding: 6px 12px;")
         btn_layout.addWidget(self.open_btn)
         
         self.stop_btn = QPushButton("Stop")
@@ -210,20 +208,23 @@ class ExamplesTab(QWidget):
             QPushButton {
                 background-color: #f38ba8;
                 color: #1e1e2e;
+                padding: 6px 12px;
             }
         """)
         btn_layout.addWidget(self.stop_btn)
+        btn_layout.addStretch()
         
         right_layout.addLayout(btn_layout)
         
-        # Output
+        # Compact output area
         output_label = QLabel("Output:")
+        output_label.setStyleSheet("font-size: 11px; color: #888;")
         right_layout.addWidget(output_label)
         
         self.output_view = QTextEdit()
         self.output_view.setReadOnly(True)
         self.output_view.setFont(QFont("Monospace", 9))
-        self.output_view.setMaximumHeight(150)
+        self.output_view.setMaximumHeight(100)
         self.output_view.setStyleSheet("""
             QTextEdit {
                 background-color: #11111b;
@@ -235,9 +236,9 @@ class ExamplesTab(QWidget):
         right_layout.addWidget(self.output_view)
         
         splitter.addWidget(right_widget)
-        splitter.setSizes([250, 550])
+        splitter.setSizes([200, 600])
         
-        layout.addWidget(splitter)
+        layout.addWidget(splitter, stretch=1)  # Give splitter most space
         
     def _populate_examples(self):
         """Populate the example list."""

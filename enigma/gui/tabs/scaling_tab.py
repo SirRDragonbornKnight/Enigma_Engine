@@ -10,17 +10,18 @@ Features:
   - One-click model creation
 """
 
-try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-        QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QProgressBar,
-        QSlider, QSpinBox, QComboBox, QStackedWidget, QSizePolicy
-    )
-    from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
-    from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
-    HAS_PYQT = True
-except ImportError:
-    HAS_PYQT = False
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
+    QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QProgressBar,
+    QSlider, QSpinBox, QComboBox, QStackedWidget, QSizePolicy
+)
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
+
+# Qt enum constants
+NoBrush = Qt.BrushStyle.NoBrush
+FontBold = QFont.Weight.Bold
+FontNormal = QFont.Weight.Normal
 
 import math
 
@@ -74,7 +75,8 @@ class PyramidWidget(QFrame):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(400, 250)  # Reduced for smaller screens
+        self.setMinimumSize(300, 200)  # Smaller minimum for flexibility
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Allow resize
         self.selected = 'small'
         self.hovered = None
         self.setMouseTracking(True)
@@ -92,11 +94,12 @@ class PyramidWidget(QFrame):
         bg.setColorAt(1, QColor('#161b22'))
         painter.fillRect(0, 0, w, h, bg)
         
-        # Draw pyramid layers
-        pyramid_width = w - 100
-        pyramid_height = h - 80
-        pyramid_top = 50
-        pyramid_left = 50
+        # Dynamic sizing based on widget size
+        margin = max(20, min(50, w // 20))  # Scale margin with width
+        pyramid_width = w - (margin * 2)
+        title_height = 45  # Space for title at top
+        bottom_margin = 15  # Small margin at bottom
+        pyramid_left = margin
         
         # Group models by tier for pyramid rows
         tiers = ['embedded', 'edge', 'consumer', 'prosumer', 'server', 'datacenter', 'ultimate']
@@ -104,9 +107,13 @@ class PyramidWidget(QFrame):
         for name in MODEL_ORDER:
             tier_models[MODEL_SPECS[name]['tier']].append(name)
         
+        # Calculate dynamic row heights - pyramid fills available space
+        total_rows = len([t for t in tiers if tier_models[t]])
+        available_height = h - title_height - bottom_margin
+        base_row_height = available_height / total_rows
+        
         # Draw from bottom (ultimate) to top (embedded)
-        row_heights = [50, 45, 45, 40, 40, 35, 35]  # Heights for each tier row
-        current_y = pyramid_top + pyramid_height
+        current_y = h - bottom_margin  # Start from bottom
         
         self.model_rects = {}
         
@@ -115,11 +122,11 @@ class PyramidWidget(QFrame):
             if not models:
                 continue
                 
-            row_height = row_heights[i] if i < len(row_heights) else 35
+            row_height = base_row_height  # Use calculated height to fill space
             current_y -= row_height
             
             # Calculate width for this row (narrower at top)
-            width_factor = 0.3 + (0.7 * (i / (len(tiers) - 1)))
+            width_factor = 0.3 + (0.7 * (i / max(1, len(tiers) - 1)))
             row_width = pyramid_width * width_factor
             row_left = pyramid_left + (pyramid_width - row_width) / 2
             
@@ -144,17 +151,18 @@ class PyramidWidget(QFrame):
                 # Highlight selected/hovered
                 if model == self.selected:
                     painter.setPen(QPen(QColor('#ffffff'), 3))
-                    painter.setBrush(Qt.NoBrush)
+                    painter.setBrush(NoBrush)
                     painter.drawRoundedRect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), 4, 4)
                 elif model == self.hovered:
                     painter.setPen(QPen(QColor('#ffffff88'), 2))
-                    painter.setBrush(Qt.NoBrush)
+                    painter.setBrush(NoBrush)
                     painter.drawRoundedRect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), 4, 4)
                 
                 # Model name
                 spec = MODEL_SPECS[model]
                 painter.setPen(QPen(QColor('#ffffff')))
-                font = QFont('Segoe UI', 9 if row_height < 40 else 10, QFont.Bold if model == self.selected else QFont.Normal)
+                font_size = max(8, int(row_height / 3))  # Scale with row height
+                font = QFont('Segoe UI', font_size, FontBold if model == self.selected else FontNormal)
                 painter.setFont(font)
                 
                 text = f"{spec['emoji']} {model.upper()}"
@@ -163,15 +171,19 @@ class PyramidWidget(QFrame):
                 ty = current_y + row_height / 2 + text_rect.height() / 4
                 painter.drawText(int(tx), int(ty), text)
         
-        # Title
+        # Title - dynamic font size
         painter.setPen(QPen(QColor('#ffffff')))
-        painter.setFont(QFont('Segoe UI', 16, QFont.Bold))
-        painter.drawText(pyramid_left, 35, "Model Size Pyramid")
+        title_font_size = max(12, min(16, w // 40))
+        painter.setFont(QFont('Segoe UI', title_font_size, FontBold))
+        painter.drawText(margin, 30, "Model Size Pyramid")
         
         # Subtitle
         painter.setPen(QPen(QColor('#8b949e')))
-        painter.setFont(QFont('Segoe UI', 10))
-        painter.drawText(w - 250, 35, "Click to select - Smaller = Faster")
+        subtitle_font_size = max(8, min(10, w // 60))
+        painter.setFont(QFont('Segoe UI', subtitle_font_size))
+        subtitle_text = "Click to select"
+        subtitle_width = painter.fontMetrics().boundingRect(subtitle_text).width()
+        painter.drawText(w - margin - subtitle_width, 30, subtitle_text)
         
         painter.end()
         
@@ -204,6 +216,7 @@ class SpecsPanel(QFrame):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet("""
             QFrame {
                 background: #161b22;
@@ -220,7 +233,7 @@ class SpecsPanel(QFrame):
         
         # Header with model name and emoji
         self.header = QLabel("SMALL")
-        self.header.setFont(QFont('Segoe UI', 24, QFont.Bold))
+        self.header.setFont(QFont('Segoe UI', 24, FontBold))
         self.header.setStyleSheet("color: #ffd43b;")
         layout.addWidget(self.header)
         
@@ -448,6 +461,7 @@ class CompareWidget(QFrame):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet("""
             QFrame {
                 background: #161b22;
@@ -459,22 +473,22 @@ class CompareWidget(QFrame):
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(4)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(6)
         
         title = QLabel("Quick Compare")
-        title.setFont(QFont('Segoe UI', 11, QFont.Bold))
+        title.setFont(QFont('Segoe UI', 14, FontBold))
         title.setStyleSheet("color: #ffffff;")
         layout.addWidget(title)
         
         # Comparison table header
         header = QHBoxLayout()
-        header.setSpacing(2)
+        header.setSpacing(8)
         for col in ["Model", "Params", "Context", "RAM", "Speed"]:
             lbl = QLabel(col)
-            lbl.setStyleSheet("color: #8b949e; font-weight: bold; font-size: 9px;")
-            lbl.setFixedWidth(55)
-            header.addWidget(lbl)
+            lbl.setStyleSheet("color: #8b949e; font-weight: bold; font-size: 12px;")
+            lbl.setMinimumWidth(60)
+            header.addWidget(lbl, 1)
         layout.addLayout(header)
         
         # More comprehensive comparison rows
@@ -494,37 +508,39 @@ class CompareWidget(QFrame):
         self.compare_rows = []
         for model, params, ctx, ram, speed in comparisons:
             row = QHBoxLayout()
-            row.setSpacing(2)
+            row.setSpacing(8)
             
             colors = TIER_COLORS[MODEL_SPECS[model]['tier']]
             
             name_lbl = QLabel(model.upper())
-            name_lbl.setStyleSheet(f"color: {colors[0]}; font-weight: bold; font-size: 9px;")
-            name_lbl.setFixedWidth(55)
-            row.addWidget(name_lbl)
+            name_lbl.setStyleSheet(f"color: {colors[0]}; font-weight: bold; font-size: 12px;")
+            name_lbl.setMinimumWidth(60)
+            row.addWidget(name_lbl, 1)
             
             params_lbl = QLabel(params)
-            params_lbl.setStyleSheet("color: #ffffff; font-size: 9px;")
-            params_lbl.setFixedWidth(55)
-            row.addWidget(params_lbl)
+            params_lbl.setStyleSheet("color: #ffffff; font-size: 12px;")
+            params_lbl.setMinimumWidth(60)
+            row.addWidget(params_lbl, 1)
             
             ctx_lbl = QLabel(ctx)
-            ctx_lbl.setStyleSheet("color: #8b949e; font-size: 9px;")
-            ctx_lbl.setFixedWidth(55)
-            row.addWidget(ctx_lbl)
+            ctx_lbl.setStyleSheet("color: #8b949e; font-size: 12px;")
+            ctx_lbl.setMinimumWidth(60)
+            row.addWidget(ctx_lbl, 1)
             
             ram_lbl = QLabel(ram)
-            ram_lbl.setStyleSheet("color: #74c0fc; font-size: 9px;")
-            ram_lbl.setFixedWidth(55)
-            row.addWidget(ram_lbl)
+            ram_lbl.setStyleSheet("color: #74c0fc; font-size: 12px;")
+            ram_lbl.setMinimumWidth(60)
+            row.addWidget(ram_lbl, 1)
             
             speed_lbl = QLabel(speed)
-            speed_lbl.setStyleSheet("font-size: 9px;")
-            speed_lbl.setFixedWidth(55)
-            row.addWidget(speed_lbl)
+            speed_lbl.setStyleSheet("font-size: 12px;")
+            speed_lbl.setMinimumWidth(60)
+            row.addWidget(speed_lbl, 1)
             
             layout.addLayout(row)
             self.compare_rows.append((model, row))
+        
+        layout.addStretch()
 
 
 class ScalingTab(QWidget):
@@ -543,25 +559,26 @@ class ScalingTab(QWidget):
         layout.setSpacing(15)
         layout.setContentsMargins(15, 15, 15, 15)
         
-        # Left side - Pyramid visualization
+        # Left side - Pyramid visualization (takes more space)
         left_panel = QVBoxLayout()
+        left_panel.setSpacing(10)
         
         self.pyramid = PyramidWidget()
         self.pyramid.model_clicked.connect(self.on_model_selected)
-        left_panel.addWidget(self.pyramid)
+        left_panel.addWidget(self.pyramid, stretch=2)  # Pyramid gets more space
         
-        # Quick compare below pyramid
+        # Quick compare below pyramid (scales with window)
         self.compare = CompareWidget()
-        self.compare.setMaximumHeight(200)
-        left_panel.addWidget(self.compare)
+        left_panel.addWidget(self.compare, stretch=1)
         
         layout.addLayout(left_panel, stretch=2)
         
         # Right side - Specs and actions
         right_panel = QVBoxLayout()
+        right_panel.setSpacing(10)
         
         self.specs = SpecsPanel()
-        right_panel.addWidget(self.specs)
+        right_panel.addWidget(self.specs, stretch=1)
         
         # Action buttons
         btn_layout = QHBoxLayout()
@@ -694,9 +711,3 @@ class ScalingTab(QWidget):
 def create_scaling_tab(window) -> QWidget:
     """Factory function to create scaling tab."""
     return ScalingTab(window)
-
-
-if not HAS_PYQT:
-    class ScalingTab:
-        def __init__(self, *args, **kwargs):
-            raise ImportError("PyQt5 is required for the Scaling Tab")

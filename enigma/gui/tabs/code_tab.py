@@ -230,9 +230,33 @@ class CodeTab(QWidget):
         
         # Header
         header = QLabel("Code Generation")
-        header.setFont(QFont('Arial', 14, QFont.Bold))
-        header.setStyleSheet("color: #3498db;")
+        header.setObjectName("header")
         layout.addWidget(header)
+        
+        # Output at TOP
+        output_group = QGroupBox("Generated Code")
+        output_layout = QVBoxLayout()
+        
+        self.code_output = QPlainTextEdit()
+        self.code_output.setReadOnly(True)
+        self.code_output.setPlaceholderText("Generated code will appear here...")
+        
+        # Use monospace font
+        font = QFont("Courier New", 10)
+        font.setStyleHint(QFont.Monospace)
+        self.code_output.setFont(font)
+        
+        output_layout.addWidget(self.code_output)
+        output_group.setLayout(output_layout)
+        layout.addWidget(output_group, stretch=1)
+        
+        # Progress and Status
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+        
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
         
         # Provider and language selection
         settings_layout = QHBoxLayout()
@@ -261,10 +285,9 @@ class CodeTab(QWidget):
         prompt_layout = QVBoxLayout()
         
         self.prompt_input = QTextEdit()
-        self.prompt_input.setMaximumHeight(100)
+        self.prompt_input.setMaximumHeight(60)
         self.prompt_input.setPlaceholderText(
-            "Describe what you want the code to do...\n"
-            "Example: A function that sorts a list of dictionaries by a specific key"
+            "Describe what you want the code to do..."
         )
         prompt_layout.addWidget(self.prompt_input)
         
@@ -289,32 +312,6 @@ class CodeTab(QWidget):
         
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
-        
-        # Progress
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
-        
-        # Status
-        self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
-        
-        # Output
-        output_group = QGroupBox("Generated Code")
-        output_layout = QVBoxLayout()
-        
-        self.code_output = QPlainTextEdit()
-        self.code_output.setReadOnly(True)
-        self.code_output.setPlaceholderText("Generated code will appear here...")
-        
-        # Use monospace font
-        font = QFont("Courier New", 10)
-        font.setStyleHint(QFont.Monospace)
-        self.code_output.setFont(font)
-        
-        output_layout.addWidget(self.code_output)
-        output_group.setLayout(output_layout)
-        layout.addWidget(output_group, stretch=1)
     
     def _get_provider_name(self) -> str:
         text = self.provider_combo.currentText()

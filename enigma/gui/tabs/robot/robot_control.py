@@ -30,124 +30,122 @@ def create_robot_subtab(parent):
     """
     widget = QWidget()
     layout = QVBoxLayout()
+    layout.setSpacing(8)
+    layout.setContentsMargins(10, 10, 10, 10)
     
-    # Config file selector (not presets)
-    config_layout = QHBoxLayout()
-    config_layout.addWidget(QLabel("Robot Config:"))
+    # === OUTPUT AT TOP ===
+    # Log (main output area)
+    parent.robot_log = QTextEdit()
+    parent.robot_log.setReadOnly(True)
+    parent.robot_log.setPlaceholderText("Robot communication will appear here...")
+    parent.robot_log.setStyleSheet("""
+        QTextEdit {
+            background-color: #1e1e2e;
+            border: 1px solid #313244;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: 'Consolas', monospace;
+        }
+    """)
+    layout.addWidget(parent.robot_log, stretch=1)
+    
+    # Status
+    parent.robot_status_label = QLabel("Status: Not connected")
+    parent.robot_status_label.setStyleSheet("color: #f38ba8; font-weight: bold;")
+    layout.addWidget(parent.robot_status_label)
+    
+    # === CONTROLS ===
+    # Config file selector row
+    config_row = QHBoxLayout()
+    config_row.addWidget(QLabel("Config:"))
     parent.robot_config_combo = QComboBox()
     parent.robot_config_combo.currentIndexChanged.connect(
         lambda idx: _on_robot_config_changed(parent, idx)
     )
-    config_layout.addWidget(parent.robot_config_combo, stretch=1)
-    
+    config_row.addWidget(parent.robot_config_combo, stretch=1)
     btn_refresh = QPushButton("Refresh")
-    btn_refresh.setToolTip("Refresh config list")
+    btn_refresh.setMaximumWidth(60)
     btn_refresh.clicked.connect(lambda: _refresh_robot_configs(parent))
-    config_layout.addWidget(btn_refresh)
-    
-    btn_browse = QPushButton("Browse...")
-    btn_browse.clicked.connect(lambda: _browse_robot_config(parent))
-    config_layout.addWidget(btn_browse)
-    
+    config_row.addWidget(btn_refresh)
     btn_new = QPushButton("New")
+    btn_new.setMaximumWidth(40)
     btn_new.clicked.connect(lambda: _create_new_robot_config(parent))
-    config_layout.addWidget(btn_new)
-    layout.addLayout(config_layout)
+    config_row.addWidget(btn_new)
+    layout.addLayout(config_row)
     
-    # Connection settings (editable, loaded from config)
-    conn_group = QGroupBox("Connection Settings")
-    conn_layout = QVBoxLayout()
-    
-    # Connection type selector
-    type_layout = QHBoxLayout()
-    type_layout.addWidget(QLabel("Type:"))
+    # Connection type row
+    type_row = QHBoxLayout()
+    type_row.addWidget(QLabel("Type:"))
     parent.robot_type_combo = QComboBox()
     parent.robot_type_combo.addItems(["serial", "http", "ros", "gpio", "mqtt"])
+    parent.robot_type_combo.setMaximumWidth(80)
     parent.robot_type_combo.currentTextChanged.connect(
         lambda t: _on_robot_type_changed(parent, t)
     )
-    type_layout.addWidget(parent.robot_type_combo)
-    conn_layout.addLayout(type_layout)
-    
-    # Serial settings
-    serial_layout = QHBoxLayout()
-    serial_layout.addWidget(QLabel("Port:"))
+    type_row.addWidget(parent.robot_type_combo)
+    type_row.addWidget(QLabel("Port:"))
     parent.robot_port_input = QLineEdit("/dev/ttyUSB0")
-    serial_layout.addWidget(parent.robot_port_input)
-    serial_layout.addWidget(QLabel("Baud:"))
+    parent.robot_port_input.setMaximumWidth(120)
+    type_row.addWidget(parent.robot_port_input)
+    type_row.addWidget(QLabel("Baud:"))
     parent.robot_baud_combo = QComboBox()
     parent.robot_baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
     parent.robot_baud_combo.setCurrentText("115200")
-    serial_layout.addWidget(parent.robot_baud_combo)
-    conn_layout.addLayout(serial_layout)
+    parent.robot_baud_combo.setMaximumWidth(80)
+    type_row.addWidget(parent.robot_baud_combo)
+    type_row.addStretch()
+    layout.addLayout(type_row)
     
-    # HTTP/ROS host settings
-    host_layout = QHBoxLayout()
-    host_layout.addWidget(QLabel("Host:"))
+    # Network settings row
+    net_row = QHBoxLayout()
+    net_row.addWidget(QLabel("Host:"))
     parent.robot_host_input = QLineEdit("localhost")
-    host_layout.addWidget(parent.robot_host_input)
-    host_layout.addWidget(QLabel("Port:"))
+    parent.robot_host_input.setMaximumWidth(120)
+    net_row.addWidget(parent.robot_host_input)
+    net_row.addWidget(QLabel("Net Port:"))
     parent.robot_net_port_input = QLineEdit("11311")
-    host_layout.addWidget(parent.robot_net_port_input)
-    conn_layout.addLayout(host_layout)
+    parent.robot_net_port_input.setMaximumWidth(70)
+    net_row.addWidget(parent.robot_net_port_input)
+    net_row.addStretch()
+    layout.addLayout(net_row)
     
-    conn_group.setLayout(conn_layout)
-    layout.addWidget(conn_group)
-    
-    # Connect/Disconnect buttons
-    btn_layout = QHBoxLayout()
-    parent.btn_robot_connect = QPushButton("Connect")
-    parent.btn_robot_connect.clicked.connect(lambda: _connect_robot(parent))
-    parent.btn_robot_disconnect = QPushButton("Disconnect")
-    parent.btn_robot_disconnect.clicked.connect(lambda: _disconnect_robot(parent))
-    parent.btn_robot_disconnect.setEnabled(False)
-    btn_save_config = QPushButton("Save Config")
-    btn_save_config.clicked.connect(lambda: _save_current_robot_config(parent))
-    btn_layout.addWidget(parent.btn_robot_connect)
-    btn_layout.addWidget(parent.btn_robot_disconnect)
-    btn_layout.addWidget(btn_save_config)
-    layout.addLayout(btn_layout)
-    
-    # Status
-    parent.robot_status_label = QLabel("Status: Not connected")
-    parent.robot_status_label.setStyleSheet("color: #f38ba8;")
-    layout.addWidget(parent.robot_status_label)
-    
-    # Manual command input
-    cmd_layout = QHBoxLayout()
-    cmd_layout.addWidget(QLabel("Command:"))
+    # Command input row
+    cmd_row = QHBoxLayout()
+    cmd_row.addWidget(QLabel("Command:"))
     parent.robot_cmd_input = QLineEdit()
     parent.robot_cmd_input.setPlaceholderText("Enter command to send...")
     parent.robot_cmd_input.returnPressed.connect(lambda: _send_robot_command(parent))
-    cmd_layout.addWidget(parent.robot_cmd_input)
+    cmd_row.addWidget(parent.robot_cmd_input)
     btn_send = QPushButton("Send")
+    btn_send.setMaximumWidth(50)
     btn_send.clicked.connect(lambda: _send_robot_command(parent))
-    cmd_layout.addWidget(btn_send)
-    layout.addLayout(cmd_layout)
+    cmd_row.addWidget(btn_send)
+    layout.addLayout(cmd_row)
     
-    # Log
-    layout.addWidget(QLabel("Robot Log:"))
-    parent.robot_log = QTextEdit()
-    parent.robot_log.setReadOnly(True)
-    parent.robot_log.setMaximumHeight(150)
-    parent.robot_log.setPlaceholderText("Robot communication will appear here...")
-    layout.addWidget(parent.robot_log)
+    # Buttons row
+    btn_row = QHBoxLayout()
+    parent.btn_robot_connect = QPushButton("Connect")
+    parent.btn_robot_connect.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+    parent.btn_robot_connect.clicked.connect(lambda: _connect_robot(parent))
+    btn_row.addWidget(parent.btn_robot_connect)
+    parent.btn_robot_disconnect = QPushButton("Disconnect")
+    parent.btn_robot_disconnect.clicked.connect(lambda: _disconnect_robot(parent))
+    parent.btn_robot_disconnect.setEnabled(False)
+    btn_row.addWidget(parent.btn_robot_disconnect)
+    btn_save_config = QPushButton("Save Config")
+    btn_save_config.clicked.connect(lambda: _save_current_robot_config(parent))
+    btn_row.addWidget(btn_save_config)
+    btn_row.addStretch()
+    layout.addLayout(btn_row)
     
-    # Info
-    info = QLabel("[i] The AI you train will learn to send commands to this robot.\n"
-                  "    Create config files for each robot you want the AI to control.")
-    info.setStyleSheet("color: #6c7086; font-size: 10px;")
-    layout.addWidget(info)
-    
-    layout.addStretch()
     widget.setLayout(layout)
     
     # Initialize
     parent.robot_connection = None
     ROBOT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Load configs
     _refresh_robot_configs(parent)
+    
+    return widget
     
     return widget
 

@@ -82,6 +82,7 @@ class HuggingFaceModel:
         "xl": "gpt2-xl",                          # ~1.5B params
         "chat": "microsoft/DialoGPT-medium",     # Good for conversation
         "code": "Salesforce/codegen-350M-mono",  # For code generation
+        "grok": "xai-org/grok-1",                 # ~314B params, xAI
     }
     
     def __init__(

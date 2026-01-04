@@ -341,6 +341,33 @@ def create_settings_tab(parent):
 
     layout.addWidget(theme_group)
 
+    # === ZOOM / TEXT SIZE ===
+    zoom_group = QGroupBox("Display Zoom")
+    zoom_layout = QVBoxLayout(zoom_group)
+
+    zoom_row = QHBoxLayout()
+    zoom_row.addWidget(QLabel("Zoom Level:"))
+
+    from PyQt5.QtWidgets import QSpinBox
+    parent.zoom_spinbox = QSpinBox()
+    parent.zoom_spinbox.setRange(80, 200)
+    parent.zoom_spinbox.setValue(100)
+    parent.zoom_spinbox.setSuffix("%")
+    parent.zoom_spinbox.setSingleStep(5)
+    parent.zoom_spinbox.setMinimumWidth(80)
+    parent.zoom_spinbox.valueChanged.connect(
+        lambda val: _apply_zoom(parent, val)
+    )
+    zoom_row.addWidget(parent.zoom_spinbox)
+
+    reset_zoom_btn = QPushButton("Reset to 100%")
+    reset_zoom_btn.clicked.connect(lambda: _reset_zoom(parent))
+    zoom_row.addWidget(reset_zoom_btn)
+    
+    zoom_row.addStretch()
+    zoom_layout.addLayout(zoom_row)
+    layout.addWidget(zoom_group)
+
     # === AUTONOMOUS MODE ===
     autonomous_group = QGroupBox("Autonomous Mode")
     autonomous_layout = QVBoxLayout(autonomous_group)
@@ -374,6 +401,84 @@ def create_settings_tab(parent):
     autonomous_layout.addLayout(autonomous_settings)
     
     layout.addWidget(autonomous_group)
+    
+    # === PERSONALITY SETTINGS (COMPACT) ===
+    personality_group = QGroupBox("AI Personality")
+    personality_layout = QVBoxLayout(personality_group)
+    personality_layout.setSpacing(6)
+    
+    # Preset row
+    preset_row = QHBoxLayout()
+    preset_row.addWidget(QLabel("Preset:"))
+    parent.settings_personality_combo = QComboBox()
+    parent.settings_personality_combo.addItem("Balanced (Default)", "balanced")
+    parent.settings_personality_combo.addItem("Professional", "professional")
+    parent.settings_personality_combo.addItem("Friendly", "friendly")
+    parent.settings_personality_combo.addItem("Creative", "creative")
+    parent.settings_personality_combo.addItem("Analytical", "analytical")
+    parent.settings_personality_combo.addItem("Teacher", "teacher")
+    parent.settings_personality_combo.currentIndexChanged.connect(
+        lambda: _apply_personality_preset(parent)
+    )
+    preset_row.addWidget(parent.settings_personality_combo)
+    preset_row.addStretch()
+    personality_layout.addLayout(preset_row)
+    
+    # Quick trait sliders (compact - most important ones)
+    trait_row1 = QHBoxLayout()
+    trait_row1.addWidget(QLabel("Formal"))
+    parent.formality_slider = QSlider(Qt.Orientation.Horizontal)
+    parent.formality_slider.setRange(0, 100)
+    parent.formality_slider.setValue(50)
+    parent.formality_slider.setMaximumWidth(150)
+    parent.formality_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'formality', v))
+    trait_row1.addWidget(parent.formality_slider)
+    trait_row1.addWidget(QLabel("Casual"))
+    trait_row1.addSpacing(20)
+    trait_row1.addWidget(QLabel("Brief"))
+    parent.verbosity_slider = QSlider(Qt.Orientation.Horizontal)
+    parent.verbosity_slider.setRange(0, 100)
+    parent.verbosity_slider.setValue(50)
+    parent.verbosity_slider.setMaximumWidth(150)
+    parent.verbosity_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'verbosity', v))
+    trait_row1.addWidget(parent.verbosity_slider)
+    trait_row1.addWidget(QLabel("Detailed"))
+    trait_row1.addStretch()
+    personality_layout.addLayout(trait_row1)
+    
+    trait_row2 = QHBoxLayout()
+    trait_row2.addWidget(QLabel("Serious"))
+    parent.humor_slider = QSlider(Qt.Orientation.Horizontal)
+    parent.humor_slider.setRange(0, 100)
+    parent.humor_slider.setValue(50)
+    parent.humor_slider.setMaximumWidth(150)
+    parent.humor_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'humor_level', v))
+    trait_row2.addWidget(parent.humor_slider)
+    trait_row2.addWidget(QLabel("Humorous"))
+    trait_row2.addSpacing(20)
+    trait_row2.addWidget(QLabel("Factual"))
+    parent.creativity_slider = QSlider(Qt.Orientation.Horizontal)
+    parent.creativity_slider.setRange(0, 100)
+    parent.creativity_slider.setValue(50)
+    parent.creativity_slider.setMaximumWidth(150)
+    parent.creativity_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'creativity', v))
+    trait_row2.addWidget(parent.creativity_slider)
+    trait_row2.addWidget(QLabel("Creative"))
+    trait_row2.addStretch()
+    personality_layout.addLayout(trait_row2)
+    
+    # Evolution toggle
+    evolution_row = QHBoxLayout()
+    parent.settings_evolution_check = QCheckBox("Allow personality evolution from conversations")
+    parent.settings_evolution_check.setChecked(True)
+    parent.settings_evolution_check.stateChanged.connect(
+        lambda state: _toggle_personality_evolution(parent, state)
+    )
+    evolution_row.addWidget(parent.settings_evolution_check)
+    evolution_row.addStretch()
+    personality_layout.addLayout(evolution_row)
+    
+    layout.addWidget(personality_group)
     
     # === API KEYS ===
     api_group = QGroupBox("API Keys")
@@ -1029,3 +1134,109 @@ System:
         )
     except Exception as e:
         parent.power_status.setPlainText(f"Error getting status: {e}")
+
+
+def _apply_zoom(parent, value: int):
+    """Apply zoom level to the application."""
+    try:
+        # Get the main window
+        main_window = parent.window()
+        if main_window:
+            # Calculate font size based on zoom (base size is ~10pt at 100%)
+            base_size = 10
+            new_size = int(base_size * value / 100)
+            
+            # Apply to application font
+            from PyQt5.QtWidgets import QApplication
+            from PyQt5.QtGui import QFont
+            from typing import cast
+            
+            app = QApplication.instance()
+            if app is not None:
+                font = QFont()
+                font.setPointSize(new_size)
+                cast(QApplication, app).setFont(font)
+                    
+    except Exception as e:
+        print(f"Zoom error: {e}")
+
+
+def _reset_zoom(parent):
+    """Reset zoom to 100%."""
+    parent.zoom_spinbox.setValue(100)
+
+
+def _apply_personality_preset(parent):
+    """Apply personality preset from settings."""
+    preset = parent.settings_personality_combo.currentData()
+    if not preset:
+        return
+    
+    # Define preset values
+    presets = {
+        "balanced": {"formality": 50, "verbosity": 50, "humor_level": 50, "creativity": 50},
+        "professional": {"formality": 80, "verbosity": 60, "humor_level": 20, "creativity": 40},
+        "friendly": {"formality": 30, "verbosity": 50, "humor_level": 60, "creativity": 50},
+        "creative": {"formality": 40, "verbosity": 60, "humor_level": 50, "creativity": 85},
+        "analytical": {"formality": 70, "verbosity": 70, "humor_level": 15, "creativity": 30},
+        "teacher": {"formality": 50, "verbosity": 75, "humor_level": 40, "creativity": 60},
+    }
+    
+    values = presets.get(preset, presets["balanced"])
+    
+    # Update sliders
+    parent.formality_slider.blockSignals(True)
+    parent.formality_slider.setValue(values["formality"])
+    parent.formality_slider.blockSignals(False)
+    
+    parent.verbosity_slider.blockSignals(True)
+    parent.verbosity_slider.setValue(values["verbosity"])
+    parent.verbosity_slider.blockSignals(False)
+    
+    parent.humor_slider.blockSignals(True)
+    parent.humor_slider.setValue(values["humor_level"])
+    parent.humor_slider.blockSignals(False)
+    
+    parent.creativity_slider.blockSignals(True)
+    parent.creativity_slider.setValue(values["creativity"])
+    parent.creativity_slider.blockSignals(False)
+    
+    # Apply to personality system if available
+    try:
+        from ...core.personality import AIPersonality
+        model_name = getattr(parent, 'current_model_name', 'enigma')
+        personality = AIPersonality(model_name)
+        personality.set_preset(preset)
+        personality.save()
+    except Exception:
+        pass  # Personality system may not be available
+
+
+def _update_personality_trait(parent, trait_key: str, value: int):
+    """Update a single personality trait."""
+    try:
+        from ...core.personality import AIPersonality
+        model_name = getattr(parent, 'current_model_name', 'enigma')
+        personality = AIPersonality(model_name)
+        personality.load()
+        
+        # Set trait value (convert from 0-100 to 0.0-1.0)
+        trait_value = value / 100.0
+        if hasattr(personality.traits, trait_key):
+            setattr(personality.traits, trait_key, trait_value)
+            personality.save()
+    except Exception:
+        pass  # Personality system may not be available
+
+
+def _toggle_personality_evolution(parent, state):
+    """Toggle personality evolution on/off."""
+    try:
+        from ...core.personality import AIPersonality
+        model_name = getattr(parent, 'current_model_name', 'enigma')
+        personality = AIPersonality(model_name)
+        personality.load()
+        personality.allow_evolution = (state == Checked)
+        personality.save()
+    except Exception:
+        pass  # Personality system may not be available

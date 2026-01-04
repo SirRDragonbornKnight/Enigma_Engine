@@ -277,6 +277,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         self.registry["models"][name] = {
             "path": str(model_dir),
             "size": size,
+            "source": "enigma",  # Mark as Enigma model (not HuggingFace)
             "created": metadata["created"],
             "has_weights": False,
             "data_dir": str(model_dir / "data"),

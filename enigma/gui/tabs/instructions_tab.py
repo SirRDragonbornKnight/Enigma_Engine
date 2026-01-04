@@ -185,6 +185,12 @@ def create_instructions_tab(parent):
     btn_new.clicked.connect(lambda: _create_new_instructions_file(parent))
     file_layout.addWidget(btn_new)
     
+    btn_delete = QPushButton("Delete")
+    btn_delete.setToolTip("Delete current file")
+    btn_delete.setStyleSheet("background-color: #7f1d1d; color: white;")
+    btn_delete.clicked.connect(lambda: _delete_current_file(parent))
+    file_layout.addWidget(btn_delete)
+    
     file_layout.addStretch()
     right_layout.addLayout(file_layout)
     
@@ -387,3 +393,36 @@ def _create_new_instructions_file(parent):
     # Load the file
     _load_file_into_editor(parent, new_file)
     _refresh_file_tree(parent)
+
+
+def _delete_current_file(parent):
+    """Delete the current file."""
+    if not hasattr(parent, '_current_instructions_file') or not parent._current_instructions_file:
+        QMessageBox.warning(parent, "No File", "No file is currently open")
+        return
+    
+    filepath = Path(parent._current_instructions_file)
+    
+    # Don't allow deleting instructions.txt
+    if filepath.name == "instructions.txt":
+        QMessageBox.warning(parent, "Protected File", 
+            "Cannot delete instructions.txt - this is a system file.")
+        return
+    
+    reply = QMessageBox.question(
+        parent, "Delete File?",
+        f"Are you sure you want to delete:\n{filepath.name}\n\nThis cannot be undone!",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.No
+    )
+    
+    if reply == QMessageBox.Yes:
+        try:
+            filepath.unlink()
+            parent.instructions_editor.clear()
+            parent.instructions_file_label.setText("No file open")
+            parent._current_instructions_file = None
+            _refresh_file_tree(parent)
+            QMessageBox.information(parent, "Deleted", f"File '{filepath.name}' deleted.")
+        except Exception as e:
+            QMessageBox.warning(parent, "Error", f"Failed to delete file: {e}")

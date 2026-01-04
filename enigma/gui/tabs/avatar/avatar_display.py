@@ -34,6 +34,11 @@ def create_avatar_subtab(parent):
     widget = QWidget()
     layout = QVBoxLayout()
     
+    # Header
+    header = QLabel("Avatar Display")
+    header.setObjectName("header")
+    layout.addWidget(header)
+    
     # Get the avatar controller
     avatar = get_avatar()
     

@@ -1,0 +1,69 @@
+{
+  "assignments": {
+    "chat": [
+      {
+        "model_id": "enigma:default",
+        "model_type": "enigma",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "image": [
+      {
+        "model_id": "local:stable-diffusion",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "code": [
+      {
+        "model_id": "enigma:default",
+        "model_type": "enigma",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "video": [
+      {
+        "model_id": "local:animatediff",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "audio": [
+      {
+        "model_id": "local:tts",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "3d": [
+      {
+        "model_id": "local:shap-e",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "web": [
+      {
+        "model_id": "local:web-tools",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "memory": [
+      {
+        "model_id": "local:memory",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ]
+  },
+  "updated": "2026-01-03T17:20:08.105018"
+}

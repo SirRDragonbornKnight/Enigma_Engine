@@ -152,27 +152,16 @@ class ToolAssignmentWidget(QFrame):
             self.model_input.addItem("enigma:default")
             
         self.model_input.addItem("-- HuggingFace Models --")
-        # Popular HuggingFace models for text
+        # Popular HuggingFace models
         hf_models = [
-            "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
-            "huggingface:microsoft/phi-2",
-            "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-            "huggingface:google/gemma-2b-it",
+            "huggingface:gpt2",
+            "huggingface:gpt2-medium",
+            "huggingface:microsoft/DialoGPT-medium",
+            "huggingface:xai-org/grok-1",
+            "huggingface:Salesforce/codegen-350M-mono",
         ]
-        for model in hf_models:
-            self.model_input.addItem(model)
-            
-        self.model_input.addItem("-- Local Modules --")
-        local_modules = [
-            "local:stable-diffusion",
-            "local:animatediff", 
-            "local:tts",
-            "local:shap-e",
-            "local:web-tools",
-            "local:memory",
-        ]
-        for module in local_modules:
-            self.model_input.addItem(module)
+        for hf_model in hf_models:
+            self.model_input.addItem(hf_model)
             
         self.model_input.addItem("-- API Providers --")
         api_providers = [
