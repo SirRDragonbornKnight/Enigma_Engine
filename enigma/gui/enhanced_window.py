@@ -1105,7 +1105,16 @@ class ModelManagerDialog(QDialog):
             if model_path.exists():
                 has_weights = info.get("has_weights", False)
                 size = info.get("size", "?")
-                icon = "[OK]" if has_weights else "[--]"
+                source = info.get("source", "enigma")
+                
+                # Different icons for different model sources
+                if source == "huggingface":
+                    icon = "[HF]"
+                elif has_weights:
+                    icon = "[OK]"
+                else:
+                    icon = "[--]"
+                    
                 self.model_list.addItem(f"{icon} {name} ({size})")
     
     def _update_buttons_state(self):
@@ -1114,10 +1123,27 @@ class ModelManagerDialog(QDialog):
         self.btn_backup.setEnabled(has_selection)
         self.btn_clone.setEnabled(has_selection)
         self.btn_folder.setEnabled(has_selection)
-        self.btn_grow.setEnabled(has_selection)
-        self.btn_shrink.setEnabled(has_selection)
         self.btn_rename.setEnabled(has_selection)
         self.btn_delete.setEnabled(has_selection)
+        
+        # Check if this is a HuggingFace model - they can't be resized
+        is_huggingface = False
+        if has_selection:
+            model_info = self.registry.registry.get("models", {}).get(self.selected_model, {})
+            is_huggingface = model_info.get("source") == "huggingface"
+        
+        # Disable grow/shrink for HuggingFace models (they have fixed architecture)
+        can_scale = has_selection and not is_huggingface
+        self.btn_grow.setEnabled(can_scale)
+        self.btn_shrink.setEnabled(can_scale)
+        
+        # Update button tooltips to explain why they're disabled
+        if is_huggingface:
+            self.btn_grow.setToolTip("HuggingFace models cannot be resized")
+            self.btn_shrink.setToolTip("HuggingFace models cannot be resized")
+        else:
+            self.btn_grow.setToolTip("Grow model to a larger size")
+            self.btn_shrink.setToolTip("Shrink model to a smaller size")
     
     def _on_select_model(self, item):
         """Handle model selection."""
@@ -1150,8 +1176,10 @@ class ModelManagerDialog(QDialog):
             params_str = f"{params:,}" if params else "Unknown"
             checkpoints = len(info.get('checkpoints', []))
             size = reg_info.get('size', '?')
+            source = reg_info.get('source', 'enigma')
             
             details = f"""
+Source: {source.upper()}
 Size: {size.upper()}
 Parameters: {params_str}
 Created: {created}
@@ -1159,6 +1187,10 @@ Last trained: {last_trained}
 Total epochs: {epochs}
 Checkpoints: {checkpoints}
             """.strip()
+            
+            # Add note for HuggingFace models
+            if source == "huggingface":
+                details += "\n\n[HuggingFace models cannot be resized]"
             
             self.info_details.setText(details)
         except Exception as e:
@@ -1744,8 +1776,8 @@ class EnhancedMainWindow(QMainWindow):
             create_image_tab, create_code_tab, create_video_tab,
             create_audio_tab, create_embeddings_tab, create_threed_tab
         )
+        from .tabs.gif_tab import create_gif_tab
         from .tabs.settings_tab import create_settings_tab
-        from .tabs.personality_tab import create_personality_tab
         from .tabs.modules_tab import ModulesTab
         from .tabs.scaling_tab import ScalingTab
         from .tabs.model_router_tab import ModelRouterTab
@@ -1808,14 +1840,14 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Video", "video"),
             ("", "Audio", "audio"),
             ("", "3D", "3d"),
-            ("", "Search", "search"),
+            ("", "GIF", "gif"),
             # Connect
             ("section", "CONNECT"),
+            ("", "Search", "search"),
             ("", "Avatar", "avatar"),
             ("", "Game", "game"),
             ("", "Robot", "robot"),
             ("", "Vision", "vision"),
-            ("", "Personality", "personality"),
             # Tools
             ("section", "TOOLS"),
             ("", "Terminal", "terminal"),
@@ -1879,12 +1911,12 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
         self.content_stack.addWidget(wrap_in_scroll(create_audio_tab(self)))  # Audio
         self.content_stack.addWidget(wrap_in_scroll(create_threed_tab(self)))  # 3D
+        self.content_stack.addWidget(wrap_in_scroll(create_gif_tab(self)))  # GIF
         self.content_stack.addWidget(wrap_in_scroll(create_embeddings_tab(self)))  # Search
         self.content_stack.addWidget(wrap_in_scroll(create_avatar_subtab(self)))  # Avatar
         self.content_stack.addWidget(wrap_in_scroll(create_game_subtab(self)))  # Game
         self.content_stack.addWidget(wrap_in_scroll(create_robot_subtab(self)))  # Robot
         self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision
-        self.content_stack.addWidget(wrap_in_scroll(create_personality_tab(self)))  # Personality
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples
@@ -1919,7 +1951,7 @@ class EnhancedMainWindow(QMainWindow):
             'chat': 'chat', 'train': 'train', 'settings': 'settings',
             'router': 'router', 'modules': 'modules', 'scale': 'scale',
             'history': 'history', 'avatar': 'avatar', 'game': 'game',
-            'robot': 'robot', 'vision': 'vision', 'personality': 'personality',
+            'robot': 'robot', 'vision': 'vision',
             'terminal': 'terminal', 'files': 'files', 'examples': 'examples',
         }
         key = key_map.get(tab_name.lower())

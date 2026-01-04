@@ -16,7 +16,7 @@ try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
-        QMessageBox, QGroupBox, QSlider, QFileDialog
+        QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
@@ -338,91 +338,102 @@ class AudioTab(QWidget):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel("Audio Generation / Text-to-Speech")
-        header.setFont(QFont('Arial', 14, QFont.Bold))
-        header.setStyleSheet("color: #e74c3c;")
+        header = QLabel("Audio / TTS")
+        header.setObjectName("header")
         layout.addWidget(header)
         
-        # Provider selection
-        provider_group = QGroupBox("Provider")
-        provider_layout = QHBoxLayout()
+        # Waveform/Output preview at TOP
+        self.preview_label = QLabel("Audio output info will appear here")
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setMinimumHeight(100)
+        self.preview_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
+        layout.addWidget(self.preview_label, stretch=1)
         
+        # Progress and Status
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+        
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+        
+        # Provider and Voice settings in one row
+        settings_layout = QHBoxLayout()
+        
+        settings_layout.addWidget(QLabel("Provider:"))
         self.provider_combo = QComboBox()
-        self.provider_combo.addItems([
-            'Local (pyttsx3)',
-            'ElevenLabs (Cloud)',
-            'Replicate (Cloud)'
-        ])
+        self.provider_combo.addItems(['Local (pyttsx3)', 'ElevenLabs (Cloud)', 'Replicate (Cloud)'])
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
-        provider_layout.addWidget(self.provider_combo)
+        settings_layout.addWidget(self.provider_combo)
         
         self.load_btn = QPushButton("Load")
         self.load_btn.clicked.connect(self._load_provider)
-        provider_layout.addWidget(self.load_btn)
+        settings_layout.addWidget(self.load_btn)
         
-        provider_layout.addStretch()
-        provider_group.setLayout(provider_layout)
-        layout.addWidget(provider_group)
-        
-        # Voice selection (for local/elevenlabs)
-        voice_group = QGroupBox("Voice Settings")
-        voice_layout = QVBoxLayout()
-        
-        voice_row = QHBoxLayout()
-        voice_row.addWidget(QLabel("Voice:"))
+        settings_layout.addWidget(QLabel("Voice:"))
         self.voice_combo = QComboBox()
         self.voice_combo.currentIndexChanged.connect(self._on_voice_changed)
-        voice_row.addWidget(self.voice_combo, 1)
-        voice_layout.addLayout(voice_row)
+        settings_layout.addWidget(self.voice_combo)
         
-        # Rate slider (local only)
-        rate_row = QHBoxLayout()
-        rate_row.addWidget(QLabel("Rate:"))
+        settings_layout.addWidget(QLabel("Rate:"))
         self.rate_slider = QSlider(Qt.Horizontal)
         self.rate_slider.setRange(50, 300)
         self.rate_slider.setValue(150)
+        self.rate_slider.setMaximumWidth(80)
         self.rate_slider.valueChanged.connect(self._on_rate_changed)
-        rate_row.addWidget(self.rate_slider)
+        settings_layout.addWidget(self.rate_slider)
         self.rate_label = QLabel("150")
-        rate_row.addWidget(self.rate_label)
-        voice_layout.addLayout(rate_row)
+        self.rate_label.setMinimumWidth(30)
+        settings_layout.addWidget(self.rate_label)
         
-        # Volume slider (local only)
-        vol_row = QHBoxLayout()
-        vol_row.addWidget(QLabel("Volume:"))
+        settings_layout.addWidget(QLabel("Vol:"))
         self.volume_slider = QSlider(Qt.Horizontal)
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setValue(100)
+        self.volume_slider.setMaximumWidth(60)
         self.volume_slider.valueChanged.connect(self._on_volume_changed)
-        vol_row.addWidget(self.volume_slider)
+        settings_layout.addWidget(self.volume_slider)
         self.volume_label = QLabel("100%")
-        vol_row.addWidget(self.volume_label)
-        voice_layout.addLayout(vol_row)
+        self.volume_label.setMinimumWidth(35)
+        settings_layout.addWidget(self.volume_label)
         
-        voice_group.setLayout(voice_layout)
-        layout.addWidget(voice_group)
+        settings_layout.addStretch()
+        layout.addLayout(settings_layout)
         
-        # Text input
-        text_group = QGroupBox("Text to Speak")
-        text_layout = QVBoxLayout()
-        
-        self.text_input = QTextEdit()
-        self.text_input.setMaximumHeight(100)
+        # Text input - compact
+        text_layout = QHBoxLayout()
+        text_layout.addWidget(QLabel("Text:"))
+        self.text_input = QLineEdit()
         self.text_input.setPlaceholderText("Enter text to convert to speech...")
         text_layout.addWidget(self.text_input)
+        layout.addLayout(text_layout)
         
-        text_group.setLayout(text_layout)
-        layout.addWidget(text_group)
+        # Reference Audio - compact
+        ref_layout = QHBoxLayout()
+        ref_layout.addWidget(QLabel("Ref Audio:"))
+        self.ref_audio_path = QLineEdit()
+        self.ref_audio_path.setPlaceholderText("Optional reference for voice cloning")
+        self.ref_audio_path.setReadOnly(True)
+        ref_layout.addWidget(self.ref_audio_path)
+        
+        browse_ref_btn = QPushButton("Browse")
+        browse_ref_btn.clicked.connect(self._browse_reference_audio)
+        ref_layout.addWidget(browse_ref_btn)
+        
+        clear_ref_btn = QPushButton("Clear")
+        clear_ref_btn.clicked.connect(self._clear_reference_audio)
+        ref_layout.addWidget(clear_ref_btn)
+        layout.addLayout(ref_layout)
         
         # Buttons
         btn_layout = QHBoxLayout()
         
         self.speak_btn = QPushButton("Speak")
-        self.speak_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 10px;")
+        self.speak_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 8px;")
         self.speak_btn.clicked.connect(self._speak_text)
         btn_layout.addWidget(self.speak_btn)
         
-        self.save_btn = QPushButton("Save to File")
+        self.save_btn = QPushButton("Save")
         self.save_btn.clicked.connect(self._save_to_file)
         btn_layout.addWidget(self.save_btn)
         
@@ -437,25 +448,6 @@ class AudioTab(QWidget):
         
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
-        
-        # Progress
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
-        
-        # Status
-        self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
-        
-        # Info
-        info_label = QLabel(
-            "Local TTS works offline. Cloud services require API keys.\n"
-            "ElevenLabs: Set ELEVENLABS_API_KEY | Replicate: Set REPLICATE_API_TOKEN"
-        )
-        info_label.setStyleSheet("color: #888; font-style: italic;")
-        layout.addWidget(info_label)
-        
-        layout.addStretch()
     
     def _get_provider_name(self) -> str:
         text = self.provider_combo.currentText()
@@ -526,7 +518,7 @@ class AudioTab(QWidget):
             QTimer.singleShot(100, do_load)
     
     def _speak_text(self):
-        text = self.text_input.toPlainText().strip()
+        text = self.text_input.text().strip()
         if not text:
             QMessageBox.warning(self, "No Text", "Please enter some text to speak")
             return
@@ -559,7 +551,7 @@ class AudioTab(QWidget):
             self.status_label.setText(f"Error: {error}")
     
     def _save_to_file(self):
-        text = self.text_input.toPlainText().strip()
+        text = self.text_input.text().strip()
         if not text:
             QMessageBox.warning(self, "No Text", "Please enter some text")
             return
@@ -619,6 +611,21 @@ class AudioTab(QWidget):
             subprocess.run(['explorer', str(OUTPUT_DIR)])
         else:
             subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+    
+    def _browse_reference_audio(self):
+        """Browse for a reference audio file for voice cloning."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Reference Audio",
+            str(Path.home()),
+            "Audio Files (*.wav *.mp3 *.ogg *.flac *.m4a);;All Files (*.*)"
+        )
+        if path:
+            self.ref_audio_path.setText(path)
+    
+    def _clear_reference_audio(self):
+        """Clear the reference audio input."""
+        self.ref_audio_path.clear()
 
 
 def create_audio_tab(parent) -> QWidget:

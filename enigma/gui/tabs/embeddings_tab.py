@@ -323,137 +323,100 @@ class EmbeddingsTab(QWidget):
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
         
-        # Header
-        header = QLabel("Text Embeddings")
-        header.setFont(QFont('Arial', 14, QFont.Bold))
-        header.setStyleSheet("color: #1abc9c;")
-        layout.addWidget(header)
+        # === OUTPUT AT TOP ===
+        # Results display - takes most space
+        self.results_display = QTextEdit()
+        self.results_display.setReadOnly(True)
+        self.results_display.setPlaceholderText("Embedding results and similarity scores will appear here...")
+        self.results_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e2e;
+                border: 1px solid #313244;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: 'Consolas', monospace;
+            }
+        """)
+        layout.addWidget(self.results_display, stretch=1)
         
-        # Provider selection
-        provider_group = QGroupBox("Provider")
-        provider_layout = QHBoxLayout()
-        
-        self.provider_combo = QComboBox()
-        self.provider_combo.addItems([
-            'Local (sentence-transformers)',
-            'OpenAI (Cloud)'
-        ])
-        provider_layout.addWidget(self.provider_combo)
-        
-        self.load_btn = QPushButton("Load Model")
-        self.load_btn.clicked.connect(self._load_provider)
-        provider_layout.addWidget(self.load_btn)
-        
-        provider_layout.addStretch()
-        provider_group.setLayout(provider_layout)
-        layout.addWidget(provider_group)
-        
-        # Main splitter
-        splitter = QSplitter(Qt.Horizontal)
-        
-        # Left panel - Input
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        
-        # Single embedding
-        single_group = QGroupBox("Generate Embedding")
-        single_layout = QVBoxLayout()
-        
-        self.text_input = QTextEdit()
-        self.text_input.setMaximumHeight(80)
-        self.text_input.setPlaceholderText("Enter text to embed...")
-        single_layout.addWidget(self.text_input)
-        
-        name_row = QHBoxLayout()
-        name_row.addWidget(QLabel("Save as:"))
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("optional name")
-        name_row.addWidget(self.name_input)
-        single_layout.addLayout(name_row)
-        
-        self.embed_btn = QPushButton("Generate Embedding")
-        self.embed_btn.setStyleSheet("background-color: #1abc9c; font-weight: bold;")
-        self.embed_btn.clicked.connect(self._generate_embedding)
-        single_layout.addWidget(self.embed_btn)
-        
-        single_group.setLayout(single_layout)
-        left_layout.addWidget(single_group)
-        
-        # Similarity
-        sim_group = QGroupBox("Compare Similarity")
-        sim_layout = QVBoxLayout()
-        
-        self.text1_input = QTextEdit()
-        self.text1_input.setMaximumHeight(60)
-        self.text1_input.setPlaceholderText("Text 1...")
-        sim_layout.addWidget(self.text1_input)
-        
-        self.text2_input = QTextEdit()
-        self.text2_input.setMaximumHeight(60)
-        self.text2_input.setPlaceholderText("Text 2...")
-        sim_layout.addWidget(self.text2_input)
-        
-        self.similarity_btn = QPushButton("Calculate Similarity")
-        self.similarity_btn.clicked.connect(self._calculate_similarity)
-        sim_layout.addWidget(self.similarity_btn)
-        
-        sim_group.setLayout(sim_layout)
-        left_layout.addWidget(sim_group)
-        
-        left_layout.addStretch()
-        splitter.addWidget(left_panel)
-        
-        # Right panel - Stored embeddings
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        
-        stored_group = QGroupBox("Stored Embeddings")
-        stored_layout = QVBoxLayout()
-        
+        # Stored embeddings table (compact)
         self.stored_table = QTableWidget()
         self.stored_table.setColumnCount(3)
-        self.stored_table.setHorizontalHeaderLabels(["Name", "Dimensions", "Preview"])
+        self.stored_table.setHorizontalHeaderLabels(["Name", "Dims", "Preview"])
         self.stored_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        stored_layout.addWidget(self.stored_table)
+        self.stored_table.setMaximumHeight(120)
+        layout.addWidget(self.stored_table)
         
-        btn_row = QHBoxLayout()
-        
-        self.export_btn = QPushButton("Export All")
-        self.export_btn.clicked.connect(self._export_embeddings)
-        btn_row.addWidget(self.export_btn)
-        
-        self.clear_btn = QPushButton("Clear All")
-        self.clear_btn.clicked.connect(self._clear_embeddings)
-        btn_row.addWidget(self.clear_btn)
-        
-        btn_row.addStretch()
-        stored_layout.addLayout(btn_row)
-        
-        stored_group.setLayout(stored_layout)
-        right_layout.addWidget(stored_group)
-        
-        splitter.addWidget(right_panel)
-        splitter.setSizes([400, 400])
-        
-        layout.addWidget(splitter)
-        
-        # Progress
+        # Progress bar
         self.progress = QProgressBar()
         self.progress.setVisible(False)
+        self.progress.setMaximumHeight(8)
         layout.addWidget(self.progress)
         
         # Status
         self.status_label = QLabel("")
+        self.status_label.setStyleSheet("color: #89b4fa;")
         layout.addWidget(self.status_label)
         
-        # Info
-        info_label = QLabel(
-            "Embeddings convert text into numerical vectors for semantic search.\n"
-            "Local uses sentence-transformers (384 dims). OpenAI uses text-embedding-3-small (1536 dims)."
-        )
-        info_label.setStyleSheet("color: #888; font-style: italic;")
-        layout.addWidget(info_label)
+        # === CONTROLS ===
+        # Provider row
+        provider_row = QHBoxLayout()
+        provider_row.addWidget(QLabel("Provider:"))
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItems(['Local (sentence-transformers)', 'OpenAI (Cloud)'])
+        self.provider_combo.setMaximumWidth(200)
+        provider_row.addWidget(self.provider_combo)
+        self.load_btn = QPushButton("Load")
+        self.load_btn.setMaximumWidth(60)
+        self.load_btn.clicked.connect(self._load_provider)
+        provider_row.addWidget(self.load_btn)
+        provider_row.addStretch()
+        layout.addLayout(provider_row)
+        
+        # Single embedding row
+        embed_row = QHBoxLayout()
+        embed_row.addWidget(QLabel("Text:"))
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("Enter text to embed...")
+        embed_row.addWidget(self.text_input, stretch=1)
+        embed_row.addWidget(QLabel("Name:"))
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("optional")
+        self.name_input.setMaximumWidth(100)
+        embed_row.addWidget(self.name_input)
+        self.embed_btn = QPushButton("Embed")
+        self.embed_btn.setStyleSheet("background-color: #1abc9c; font-weight: bold;")
+        self.embed_btn.clicked.connect(self._generate_embedding)
+        embed_row.addWidget(self.embed_btn)
+        layout.addLayout(embed_row)
+        
+        # Similarity row
+        sim_row = QHBoxLayout()
+        sim_row.addWidget(QLabel("Compare:"))
+        self.text1_input = QLineEdit()
+        self.text1_input.setPlaceholderText("Text 1...")
+        sim_row.addWidget(self.text1_input, stretch=1)
+        self.text2_input = QLineEdit()
+        self.text2_input.setPlaceholderText("Text 2...")
+        sim_row.addWidget(self.text2_input, stretch=1)
+        self.similarity_btn = QPushButton("Similarity")
+        self.similarity_btn.clicked.connect(self._calculate_similarity)
+        sim_row.addWidget(self.similarity_btn)
+        layout.addLayout(sim_row)
+        
+        # Export/Clear row
+        btn_row = QHBoxLayout()
+        self.export_btn = QPushButton("Export All")
+        self.export_btn.clicked.connect(self._export_embeddings)
+        btn_row.addWidget(self.export_btn)
+        self.clear_btn = QPushButton("Clear All")
+        self.clear_btn.clicked.connect(self._clear_embeddings)
+        btn_row.addWidget(self.clear_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
     
     def _get_provider_name(self) -> str:
         text = self.provider_combo.currentText()
@@ -483,7 +446,7 @@ class EmbeddingsTab(QWidget):
             QTimer.singleShot(100, do_load)
     
     def _generate_embedding(self):
-        text = self.text_input.toPlainText().strip()
+        text = self.text_input.text().strip()
         if not text:
             QMessageBox.warning(self, "No Text", "Please enter text to embed")
             return
@@ -517,16 +480,25 @@ class EmbeddingsTab(QWidget):
             }
             self._update_table()
             
+            # Show in results display
+            preview = str(embedding[:5])[:-1] + "..." if len(embedding) > 5 else str(embedding)
+            self.results_display.append(
+                f"<p style='color: #a6e3a1;'><b>{name}</b>: {dims} dimensions ({duration:.3f}s)</p>"
+                f"<p style='color: #6c7086;'>\"{text[:50]}{'...' if len(text) > 50 else ''}\"</p>"
+                f"<p style='color: #89b4fa; font-family: monospace;'>{preview}</p><hr>"
+            )
+            
             self.status_label.setText(
                 f"Generated {dims}-dim embedding in {duration:.3f}s"
             )
         else:
             error = result.get("error", "Unknown error")
+            self.results_display.append(f"<p style='color: #f38ba8;'>Error: {error}</p>")
             self.status_label.setText(f"Error: {error}")
     
     def _calculate_similarity(self):
-        text1 = self.text1_input.toPlainText().strip()
-        text2 = self.text2_input.toPlainText().strip()
+        text1 = self.text1_input.text().strip()
+        text2 = self.text2_input.text().strip()
         
         if not text1 or not text2:
             QMessageBox.warning(self, "Missing Text", "Please enter both texts")
@@ -557,18 +529,22 @@ class EmbeddingsTab(QWidget):
             
             # Color based on similarity
             if sim_percent >= 80:
-                color = "#27ae60"  # green
+                color = "#a6e3a1"  # green
             elif sim_percent >= 50:
-                color = "#f39c12"  # orange
+                color = "#f9e2af"  # yellow
             else:
-                color = "#e74c3c"  # red
+                color = "#f38ba8"  # red
             
-            self.status_label.setText(
-                f"<span style='color: {color}; font-weight: bold;'>"
-                f"Similarity: {sim_percent:.1f}%</span> (calculated in {duration:.3f}s)"
+            # Show in results display
+            self.results_display.append(
+                f"<p style='color: {color}; font-size: 16px;'><b>Similarity: {sim_percent:.1f}%</b></p>"
+                f"<p style='color: #6c7086;'>Calculated in {duration:.3f}s</p><hr>"
             )
+            
+            self.status_label.setText(f"Similarity: {sim_percent:.1f}%")
         else:
             error = result.get("error", "Unknown error")
+            self.results_display.append(f"<p style='color: #f38ba8;'>Error: {error}</p>")
             self.status_label.setText(f"Error: {error}")
     
     def _update_table(self):

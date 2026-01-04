@@ -19,7 +19,7 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
         QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-        QDoubleSpinBox
+        QDoubleSpinBox, QLineEdit
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont, QPixmap
@@ -330,9 +330,23 @@ class ImageTab(QWidget):
         
         # Header
         header = QLabel("Image Generation")
-        header.setFont(QFont('Arial', 14, QFont.Bold))
-        header.setStyleSheet("color: #e74c3c;")
+        header.setObjectName("header")
         layout.addWidget(header)
+        
+        # Result area at TOP
+        self.result_label = QLabel("Generated image will appear here")
+        self.result_label.setAlignment(Qt.AlignCenter)
+        self.result_label.setMinimumHeight(200)
+        self.result_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
+        layout.addWidget(self.result_label, stretch=1)
+        
+        # Progress and Status
+        self.progress = QProgressBar()
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+        
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
         
         # Provider selection
         provider_group = QGroupBox("Provider")
@@ -359,14 +373,32 @@ class ImageTab(QWidget):
         prompt_layout = QVBoxLayout()
         
         self.prompt_input = QTextEdit()
-        self.prompt_input.setMaximumHeight(80)
+        self.prompt_input.setMaximumHeight(60)
         self.prompt_input.setPlaceholderText("Describe the image you want to generate...")
         prompt_layout.addWidget(self.prompt_input)
         
         self.neg_prompt_input = QTextEdit()
-        self.neg_prompt_input.setMaximumHeight(50)
+        self.neg_prompt_input.setMaximumHeight(40)
         self.neg_prompt_input.setPlaceholderText("Negative prompt (what to avoid)...")
         prompt_layout.addWidget(self.neg_prompt_input)
+        
+        # Reference image input
+        ref_layout = QHBoxLayout()
+        ref_layout.addWidget(QLabel("Reference:"))
+        self.ref_image_path = QLineEdit()
+        self.ref_image_path.setPlaceholderText("Optional reference image for img2img")
+        self.ref_image_path.setReadOnly(True)
+        ref_layout.addWidget(self.ref_image_path)
+        
+        self.browse_ref_btn = QPushButton("Browse")
+        self.browse_ref_btn.clicked.connect(self._browse_reference_image)
+        ref_layout.addWidget(self.browse_ref_btn)
+        
+        self.clear_ref_btn = QPushButton("Clear")
+        self.clear_ref_btn.clicked.connect(self._clear_reference_image)
+        ref_layout.addWidget(self.clear_ref_btn)
+        
+        prompt_layout.addLayout(ref_layout)
         
         prompt_group.setLayout(prompt_layout)
         layout.addWidget(prompt_group)
@@ -424,22 +456,6 @@ class ImageTab(QWidget):
         btn_layout.addWidget(self.open_folder_btn)
         
         layout.addLayout(btn_layout)
-        
-        # Progress
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
-        
-        # Status
-        self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
-        
-        # Result area
-        self.result_label = QLabel("Generated image will appear here")
-        self.result_label.setAlignment(Qt.AlignCenter)
-        self.result_label.setMinimumHeight(300)
-        self.result_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
-        layout.addWidget(self.result_label, stretch=1)
     
     def _get_provider_name(self) -> str:
         """Get provider name from combo box."""
@@ -474,6 +490,23 @@ class ImageTab(QWidget):
             QTimer.singleShot(100, do_load)
         else:
             self.status_label.setText(f"{provider_name} already loaded")
+    
+    def _browse_reference_image(self):
+        """Browse for a reference image."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Reference Image",
+            str(Path.home()),
+            "Images (*.png *.jpg *.jpeg *.bmp *.webp)"
+        )
+        if path:
+            self.ref_image_path.setText(path)
+            self.status_label.setText(f"Reference image loaded: {Path(path).name}")
+    
+    def _clear_reference_image(self):
+        """Clear the reference image."""
+        self.ref_image_path.clear()
+        self.status_label.setText("Reference image cleared")
     
     def _generate_image(self):
         """Generate an image."""

@@ -18,8 +18,11 @@ def create_chat_tab(parent):
     # Header with model info and controls
     header_layout = QHBoxLayout()
     
-    # Model indicator
-    parent.chat_model_label = QLabel("No model loaded")
+    # Model indicator - check if model is already loaded
+    initial_model_text = "No model loaded"
+    if hasattr(parent, 'current_model_name') and parent.current_model_name:
+        initial_model_text = f"[AI] {parent.current_model_name}"
+    parent.chat_model_label = QLabel(initial_model_text)
     parent.chat_model_label.setStyleSheet("""
         QLabel {
             color: #89b4fa;
@@ -110,9 +113,10 @@ def create_chat_tab(parent):
     input_layout.addWidget(parent.chat_input, stretch=1)
     
     # Speak button (for TTS)
-    parent.btn_speak = QPushButton("Speak")
+    parent.btn_speak = QPushButton("Voice")
     parent.btn_speak.setToolTip("Speak last response")
-    parent.btn_speak.setMaximumWidth(60)
+    parent.btn_speak.setMinimumWidth(65)
+    parent.btn_speak.setMaximumWidth(70)
     parent.btn_speak.clicked.connect(parent._on_speak_last)
     input_layout.addWidget(parent.btn_speak)
     

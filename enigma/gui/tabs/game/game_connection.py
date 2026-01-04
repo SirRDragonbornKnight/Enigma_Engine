@@ -30,105 +30,97 @@ def create_game_subtab(parent):
     """
     widget = QWidget()
     layout = QVBoxLayout()
+    layout.setSpacing(8)
+    layout.setContentsMargins(10, 10, 10, 10)
     
-    # Config file selector (not presets)
-    config_layout = QHBoxLayout()
-    config_layout.addWidget(QLabel("Game Config:"))
+    # === OUTPUT AT TOP ===
+    # Log (main output area)
+    parent.game_log = QTextEdit()
+    parent.game_log.setReadOnly(True)
+    parent.game_log.setPlaceholderText("Connection events will appear here...")
+    parent.game_log.setStyleSheet("""
+        QTextEdit {
+            background-color: #1e1e2e;
+            border: 1px solid #313244;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: 'Consolas', monospace;
+        }
+    """)
+    layout.addWidget(parent.game_log, stretch=1)
+    
+    # Status
+    parent.game_status_label = QLabel("Status: Not connected")
+    parent.game_status_label.setStyleSheet("color: #f38ba8; font-weight: bold;")
+    layout.addWidget(parent.game_status_label)
+    
+    # === CONTROLS ===
+    # Config file selector row
+    config_row = QHBoxLayout()
+    config_row.addWidget(QLabel("Config:"))
     parent.game_config_combo = QComboBox()
     parent.game_config_combo.currentIndexChanged.connect(
         lambda idx: _on_game_config_changed(parent, idx)
     )
-    config_layout.addWidget(parent.game_config_combo, stretch=1)
-    
+    config_row.addWidget(parent.game_config_combo, stretch=1)
     btn_refresh = QPushButton("Refresh")
-    btn_refresh.setToolTip("Refresh config list")
+    btn_refresh.setMaximumWidth(60)
     btn_refresh.clicked.connect(lambda: _refresh_game_configs(parent))
-    config_layout.addWidget(btn_refresh)
-    
-    btn_browse = QPushButton("Browse...")
-    btn_browse.clicked.connect(lambda: _browse_game_config(parent))
-    config_layout.addWidget(btn_browse)
-    
+    config_row.addWidget(btn_refresh)
     btn_new = QPushButton("New")
+    btn_new.setMaximumWidth(40)
     btn_new.clicked.connect(lambda: _create_new_game_config(parent))
-    config_layout.addWidget(btn_new)
-    layout.addLayout(config_layout)
+    config_row.addWidget(btn_new)
+    layout.addLayout(config_row)
     
-    # Connection settings (editable, loaded from config)
-    conn_group = QGroupBox("Connection Settings")
-    conn_layout = QVBoxLayout()
-    
-    # Protocol selector
-    proto_layout = QHBoxLayout()
-    proto_layout.addWidget(QLabel("Protocol:"))
+    # Connection settings row
+    conn_row = QHBoxLayout()
+    conn_row.addWidget(QLabel("Protocol:"))
     parent.game_protocol_combo = QComboBox()
     parent.game_protocol_combo.addItems(["websocket", "http", "tcp", "udp", "osc"])
-    proto_layout.addWidget(parent.game_protocol_combo)
-    conn_layout.addLayout(proto_layout)
-    
-    # Host/Port
-    host_layout = QHBoxLayout()
-    host_layout.addWidget(QLabel("Host:"))
+    parent.game_protocol_combo.setMaximumWidth(100)
+    conn_row.addWidget(parent.game_protocol_combo)
+    conn_row.addWidget(QLabel("Host:"))
     parent.game_host_input = QLineEdit("localhost")
-    host_layout.addWidget(parent.game_host_input)
-    host_layout.addWidget(QLabel("Port:"))
+    parent.game_host_input.setMaximumWidth(120)
+    conn_row.addWidget(parent.game_host_input)
+    conn_row.addWidget(QLabel("Port:"))
     parent.game_port_spin = QSpinBox()
     parent.game_port_spin.setRange(1, 65535)
     parent.game_port_spin.setValue(8765)
-    host_layout.addWidget(parent.game_port_spin)
-    conn_layout.addLayout(host_layout)
+    parent.game_port_spin.setMaximumWidth(70)
+    conn_row.addWidget(parent.game_port_spin)
+    conn_row.addStretch()
+    layout.addLayout(conn_row)
     
-    # Endpoint/Path (for HTTP/WebSocket)
-    endpoint_layout = QHBoxLayout()
-    endpoint_layout.addWidget(QLabel("Endpoint:"))
+    # Endpoint row
+    endpoint_row = QHBoxLayout()
+    endpoint_row.addWidget(QLabel("Endpoint:"))
     parent.game_endpoint_input = QLineEdit("/")
-    endpoint_layout.addWidget(parent.game_endpoint_input)
-    conn_layout.addLayout(endpoint_layout)
+    endpoint_row.addWidget(parent.game_endpoint_input)
+    layout.addLayout(endpoint_row)
     
-    conn_group.setLayout(conn_layout)
-    layout.addWidget(conn_group)
-    
-    # Connect/Disconnect buttons
-    btn_layout = QHBoxLayout()
+    # Buttons row
+    btn_row = QHBoxLayout()
     parent.btn_game_connect = QPushButton("Connect")
+    parent.btn_game_connect.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
     parent.btn_game_connect.clicked.connect(lambda: _connect_to_game(parent))
+    btn_row.addWidget(parent.btn_game_connect)
     parent.btn_game_disconnect = QPushButton("Disconnect")
     parent.btn_game_disconnect.clicked.connect(lambda: _disconnect_from_game(parent))
     parent.btn_game_disconnect.setEnabled(False)
+    btn_row.addWidget(parent.btn_game_disconnect)
     btn_save_config = QPushButton("Save Config")
     btn_save_config.clicked.connect(lambda: _save_current_game_config(parent))
-    btn_layout.addWidget(parent.btn_game_connect)
-    btn_layout.addWidget(parent.btn_game_disconnect)
-    btn_layout.addWidget(btn_save_config)
-    layout.addLayout(btn_layout)
+    btn_row.addWidget(btn_save_config)
+    btn_row.addStretch()
+    layout.addLayout(btn_row)
     
-    # Status
-    parent.game_status_label = QLabel("Status: Not connected")
-    parent.game_status_label.setStyleSheet("color: #f38ba8;")
-    layout.addWidget(parent.game_status_label)
-    
-    # Log
-    layout.addWidget(QLabel("Connection Log:"))
-    parent.game_log = QTextEdit()
-    parent.game_log.setReadOnly(True)
-    parent.game_log.setMaximumHeight(150)
-    parent.game_log.setPlaceholderText("Connection events will appear here...")
-    layout.addWidget(parent.game_log)
-    
-    # Info
-    info = QLabel("[i] The AI you train will learn to send commands to this game.\n"
-                  "    Create config files for each game you want the AI to control.")
-    info.setStyleSheet("color: #6c7086; font-size: 10px;")
-    layout.addWidget(info)
-    
-    layout.addStretch()
     widget.setLayout(layout)
     
     # Initialize
     parent.game_connection = None
     GAME_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Load configs
     _refresh_game_configs(parent)
     
     return widget
