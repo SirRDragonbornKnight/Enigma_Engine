@@ -10,13 +10,15 @@ Features:
   - One-click model creation
 """
 
+from typing import Optional
+
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
     QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QProgressBar,
     QSlider, QSpinBox, QComboBox, QStackedWidget, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
+from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath, QPaintEvent, QMouseEvent
 
 # Qt enum constants
 NoBrush = Qt.BrushStyle.NoBrush
@@ -82,7 +84,7 @@ class PyramidWidget(QFrame):
         self.setMouseTracking(True)
         self.model_rects = {}
         
-    def paintEvent(self, event):
+    def paintEvent(self, a0: Optional[QPaintEvent]):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
@@ -187,8 +189,10 @@ class PyramidWidget(QFrame):
         
         painter.end()
         
-    def mouseMoveEvent(self, event):
-        pos = event.pos()
+    def mouseMoveEvent(self, a0: Optional[QMouseEvent]):
+        if a0 is None:
+            return
+        pos = a0.pos()
         old_hover = self.hovered
         self.hovered = None
         
@@ -200,7 +204,7 @@ class PyramidWidget(QFrame):
         if old_hover != self.hovered:
             self.update()
             
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, a0: Optional[QMouseEvent]):
         if self.hovered:
             self.selected = self.hovered
             self.model_clicked.emit(self.hovered)

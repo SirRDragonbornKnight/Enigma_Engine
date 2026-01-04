@@ -1011,6 +1011,43 @@ class ModelManagerDialog(QDialog):
         
         left_panel.addLayout(quick_btns)
         
+        # HuggingFace Models Section
+        hf_group = QGroupBox("HuggingFace Models")
+        hf_layout = QVBoxLayout(hf_group)
+        hf_layout.setSpacing(8)
+        
+        # Preset dropdown
+        self.hf_preset_combo = QComboBox()
+        self.hf_preset_combo.addItem("Select a preset model...")
+        self.hf_preset_combo.addItem("gpt2 (124M) - Fast, classic")
+        self.hf_preset_combo.addItem("gpt2-medium (355M) - Better quality")
+        self.hf_preset_combo.addItem("microsoft/DialoGPT-medium - Chat")
+        self.hf_preset_combo.addItem("Salesforce/codegen-350M-mono - Code")
+        self.hf_preset_combo.addItem("xai-org/grok-1 - Grok (Large)")
+        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 - Mistral")
+        self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf - Llama 2")
+        hf_layout.addWidget(self.hf_preset_combo)
+        
+        # Custom input
+        hf_input_layout = QHBoxLayout()
+        self.hf_model_input = QLineEdit()
+        self.hf_model_input.setPlaceholderText("Or enter HuggingFace model ID...")
+        hf_input_layout.addWidget(self.hf_model_input)
+        
+        self.hf_add_btn = QPushButton("Add")
+        self.hf_add_btn.setStyleSheet("background-color: #fab387; color: #1e1e2e;")
+        self.hf_add_btn.clicked.connect(self._on_add_hf_model)
+        hf_input_layout.addWidget(self.hf_add_btn)
+        hf_layout.addLayout(hf_input_layout)
+        
+        # Info label
+        hf_info = QLabel("Note: Large models need good GPU & HF token for gated models")
+        hf_info.setStyleSheet("color: #6c7086; font-size: 10px;")
+        hf_info.setWordWrap(True)
+        hf_layout.addWidget(hf_info)
+        
+        left_panel.addWidget(hf_group)
+        
         layout.addLayout(left_panel, stretch=1)
         
         # Right panel - Details and actions
@@ -1204,6 +1241,90 @@ Checkpoints: {checkpoints}
         
         # Store selected model and close dialog
         self.accept()
+    
+    def _on_add_hf_model(self):
+        """Add a HuggingFace model to the registry and tool router."""
+        # Get model ID from preset or input
+        preset_text = self.hf_preset_combo.currentText()
+        custom_text = self.hf_model_input.text().strip()
+        
+        model_id = None
+        if custom_text:
+            model_id = custom_text
+        elif preset_text and not preset_text.startswith("Select"):
+            # Parse preset: "gpt2 (124M) - Fast, classic" -> "gpt2"
+            model_id = preset_text.split(" (")[0].split(" - ")[0].strip()
+        
+        if not model_id:
+            QMessageBox.warning(self, "No Model", "Select a preset or enter a HuggingFace model ID")
+            return
+        
+        # Clean up the model_id
+        model_id = model_id.strip()
+        
+        # Create a local name for the model
+        local_name = model_id.replace("/", "_").replace("-", "_").lower()
+        
+        # Check if already exists
+        if local_name in self.registry.registry.get("models", {}):
+            # Ask if they want to just assign it to chat
+            reply = QMessageBox.question(
+                self, "Model Exists",
+                f"'{local_name}' already exists in registry.\n\n"
+                "Do you want to set it as the active chat AI?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self._assign_hf_to_chat(model_id, local_name)
+            return
+        
+        # Add to registry
+        try:
+            model_path = Path(self.registry.models_dir) / local_name
+            model_path.mkdir(parents=True, exist_ok=True)
+            
+            # Create registry entry
+            self.registry.registry.setdefault("models", {})[local_name] = {
+                "path": str(model_path),
+                "size": "huggingface",
+                "created": datetime.now().isoformat(),
+                "has_weights": False,  # Weights are in HF cache, not local
+                "source": "huggingface",
+                "huggingface_id": model_id,
+            }
+            self.registry._save_registry()
+            
+            # Assign to chat tool router
+            self._assign_hf_to_chat(model_id, local_name)
+            
+            self._refresh_list()
+            self.hf_model_input.clear()
+            self.hf_preset_combo.setCurrentIndex(0)
+            
+            QMessageBox.information(
+                self, "Model Added",
+                f"Added HuggingFace model: {model_id}\n\n"
+                f"Local name: {local_name}\n\n"
+                "It has been set as the active chat AI.\n"
+                "The model will download when first used."
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to add model: {e}")
+    
+    def _assign_hf_to_chat(self, model_id: str, local_name: str):
+        """Assign a HuggingFace model to the chat tool router."""
+        try:
+            from ..core.tool_router import get_router
+            router = get_router()
+            
+            # Format as huggingface:model_id
+            full_id = f"huggingface:{model_id}"
+            
+            # Assign with high priority
+            router.assign_model("chat", full_id, priority=100)
+            router.save_config()
+        except Exception as e:
+            print(f"Could not assign to router: {e}")
     
     def _on_new_model(self):
         """Create a new model via wizard."""
