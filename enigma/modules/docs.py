@@ -153,11 +153,15 @@ class ModuleDocGenerator:
                 param_type = param_info.get('type', 'any')
                 default = param_info.get('default', 'N/A')
                 
-                # Format default value
-                if isinstance(default, str):
-                    default = f'`"{default}"`'
+                # Format default value properly
+                if default == 'N/A':
+                    default_str = default
+                elif isinstance(default, str):
+                    # Escape for markdown
+                    default_str = f'`{repr(default)}`'
                 else:
-                    default = f"`{default}`"
+                    # Use repr for proper representation
+                    default_str = f'`{repr(default)}`'
                 
                 # Get options if available
                 options = param_info.get('options', [])
@@ -166,7 +170,7 @@ class ModuleDocGenerator:
                 
                 description = param_info.get('description', '')
                 
-                lines.append(f"| `{param_name}` | {param_type} | {default} | {description} |")
+                lines.append(f"| `{param_name}` | {param_type} | {default_str} | {description} |")
             
             lines.append("")
         

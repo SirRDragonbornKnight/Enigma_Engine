@@ -79,8 +79,7 @@ class TestModuleHealthChecks(unittest.TestCase):
         # Start monitor
         self.manager.start_health_monitor(interval_seconds=1)
         
-        self.assertTrue(self.manager._health_monitor_running)
-        self.assertIsNotNone(self.manager._health_monitor_thread)
+        self.assertTrue(self.manager.is_health_monitor_running())
         
         # Wait a bit
         time.sleep(0.5)
@@ -88,7 +87,7 @@ class TestModuleHealthChecks(unittest.TestCase):
         # Stop monitor
         self.manager.stop_health_monitor()
         
-        self.assertFalse(self.manager._health_monitor_running)
+        self.assertFalse(self.manager.is_health_monitor_running())
     
     def test_health_monitor_already_running(self):
         """Test starting monitor when already running."""

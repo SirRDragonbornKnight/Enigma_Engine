@@ -106,7 +106,9 @@ class ModuleUpdater:
                     latest_version = update_info.get('version')
                     
                     # Compare versions (simple string comparison)
-                    # In production, use proper semver comparison
+                    # TODO: Use proper semantic versioning (e.g., packaging.version.parse)
+                    # for production to correctly handle version ordering like:
+                    # 1.0.0 < 2.0.0 < 10.0.0 (not 1.0.0 < 10.0.0 < 2.0.0)
                     if latest_version and latest_version != current_version:
                         update = ModuleUpdate(
                             module_id=mid,

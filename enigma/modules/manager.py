@@ -8,13 +8,13 @@ Handles loading, unloading, dependencies, and configuration.
 
 import json
 import logging
-import time
 import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -391,7 +391,7 @@ class ModuleManager:
     def load_sandboxed(
         self, 
         module_id: str, 
-        sandbox_config: Optional['SandboxConfig'] = None,
+        sandbox_config: Optional[Any] = None,
         config: Dict[str, Any] = None
     ) -> bool:
         """
@@ -399,7 +399,7 @@ class ModuleManager:
         
         Args:
             module_id: Module ID to load
-            sandbox_config: Sandbox configuration (uses defaults if None)
+            sandbox_config: Sandbox configuration (SandboxConfig, uses defaults if None)
             config: Optional module configuration
             
         Returns:
@@ -918,6 +918,15 @@ class ModuleManager:
             self._health_monitor_thread = None
         
         logger.info("Health monitor stopped")
+    
+    def is_health_monitor_running(self) -> bool:
+        """
+        Check if health monitor is currently running.
+        
+        Returns:
+            True if health monitor is active
+        """
+        return self._health_monitor_running
 
     def on_load(self, callback: Callable):
         """Register callback for module load events."""

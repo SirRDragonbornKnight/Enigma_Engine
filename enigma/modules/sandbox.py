@@ -23,6 +23,10 @@ from dataclasses import dataclass, field
 logger = logging.getLogger(__name__)
 
 
+# Default restricted imports
+_DEFAULT_RESTRICTED_IMPORTS = ['os.system', 'subprocess', 'eval', 'exec']
+
+
 @dataclass
 class SandboxConfig:
     """Configuration for module sandbox."""
@@ -33,7 +37,7 @@ class SandboxConfig:
     max_cpu_seconds: int = 300
     allow_network: bool = True
     allow_subprocess: bool = False
-    restricted_imports: List[str] = field(default_factory=lambda: ['os.system', 'subprocess'])
+    restricted_imports: List[str] = field(default_factory=lambda: list(_DEFAULT_RESTRICTED_IMPORTS))
 
 
 class ModuleSandbox:
@@ -160,8 +164,12 @@ class ModuleSandbox:
             logger.warning(f"Could not set resource limits: {e}")
     
     def _install_import_hook(self):
-        """Install import hook to restrict dangerous imports."""
-        # Handle both __builtins__ as dict and as module
+        """
+        Install import hook to restrict dangerous imports.
+        
+        Uses the builtins module to ensure compatibility across Python versions
+        and execution contexts.
+        """
         import builtins
         original_import = builtins.__import__
         restricted = set(self.config.restricted_imports)
