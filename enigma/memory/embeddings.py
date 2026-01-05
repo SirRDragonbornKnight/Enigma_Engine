@@ -105,10 +105,17 @@ class EmbeddingGenerator:
         if not text:
             return np.zeros(self.dimension)
         
-        # Local model
-        if hasattr(self._model_instance, 'encode'):
-            embedding = self._model_instance.encode(text, convert_to_numpy=True)
-            return embedding.astype('float32')
+        # Local model (sentence-transformers)
+        if hasattr(self._model_instance, 'encode') and self._model_instance != "fallback":
+            try:
+                embedding = self._model_instance.encode(text, convert_to_numpy=True)
+                return embedding.astype('float32')
+            except TypeError:
+                # Fallback if convert_to_numpy not supported
+                embedding = self._model_instance.encode(text)
+                if not isinstance(embedding, np.ndarray):
+                    embedding = np.array(embedding)
+                return embedding.astype('float32')
         
         # OpenAI
         elif self._model_instance == "openai":

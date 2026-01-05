@@ -37,7 +37,9 @@ class MemoryDatabase:
         """Initialize database schema."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
-        with self.get_connection() as conn:
+        # Use a direct connection for initialization
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        try:
             cursor = conn.cursor()
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
@@ -60,6 +62,8 @@ class MemoryDatabase:
             """)
             
             conn.commit()
+        finally:
+            conn.close()
     
     @contextmanager
     def get_connection(self):

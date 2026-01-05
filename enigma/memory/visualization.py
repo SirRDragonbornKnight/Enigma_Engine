@@ -3,7 +3,7 @@ Memory Visualization for Enigma Engine
 Generates visualization data for memory analysis and insights.
 """
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import Counter
