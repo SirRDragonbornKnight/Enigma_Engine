@@ -175,9 +175,8 @@ class AIVoiceGenerator:
         """
         Create voice from user audio samples (for TTS cloning).
         
-        Note: Actual voice cloning requires specialized TTS engines
-        like Coqui TTS, XTTS, or commercial services. This method
-        stores the samples and creates a basic profile.
+        Now uses audio analysis to estimate voice parameters.
+        Integration hooks for Coqui XTTS when available.
         
         Args:
             audio_files: List of paths to audio files (.wav, .mp3)
@@ -185,7 +184,7 @@ class AIVoiceGenerator:
             model_name: Optional model name to associate with
         
         Returns:
-            VoiceProfile with sample references
+            VoiceProfile with analyzed parameters
         """
         # Create storage directory
         if model_name:
@@ -206,33 +205,51 @@ class AIVoiceGenerator:
                 shutil.copy2(src, dest)
                 stored_samples.append(str(dest))
         
-        # Analyze samples to guess voice parameters
-        # (In a real implementation, you'd use audio analysis)
-        # For now, use defaults
-        pitch = 1.0
-        speed = 1.0
-        volume = 0.9
-        
-        # Create profile
-        profile = VoiceProfile(
-            name=name,
-            pitch=pitch,
-            speed=speed,
-            volume=volume,
-            voice="custom",
-            description=f"Custom voice from {len(stored_samples)} samples"
-        )
+        # Analyze samples to estimate voice parameters
+        try:
+            from .audio_analyzer import AudioAnalyzer
+            analyzer = AudioAnalyzer()
+            profile = analyzer.estimate_voice_profile(stored_samples, name)
+            profile.description = f"Cloned voice from {len(stored_samples)} samples"
+        except Exception as e:
+            print(f"Warning: Could not analyze audio samples: {e}")
+            # Fallback to defaults
+            profile = VoiceProfile(
+                name=name,
+                pitch=1.0,
+                speed=1.0,
+                volume=0.9,
+                voice="custom",
+                description=f"Custom voice from {len(stored_samples)} samples"
+            )
         
         # Save sample references with profile
         profile_data = profile.save()
         
-        # Add sample info to a metadata file
+        # Add sample info to a metadata file with Coqui TTS hooks
         metadata_file = samples_dir / "metadata.json"
+        
+        # Extract Coqui-compatible features if analyzer is available
+        coqui_features = None
+        try:
+            from .audio_analyzer import AudioAnalyzer
+            analyzer = AudioAnalyzer()
+            coqui_features = analyzer.extract_coqui_features(stored_samples)
+        except Exception:
+            pass
+        
         metadata = {
             "name": name,
             "samples": stored_samples,
             "created": profile_data.stat().st_mtime if profile_data.exists() else 0,
-            "sample_count": len(stored_samples)
+            "sample_count": len(stored_samples),
+            "profile_parameters": {
+                "pitch": profile.pitch,
+                "speed": profile.speed,
+                "volume": profile.volume,
+                "voice": profile.voice
+            },
+            "coqui_features": coqui_features
         }
         
         with open(metadata_file, 'w') as f:
