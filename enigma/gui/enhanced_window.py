@@ -1177,47 +1177,18 @@ class ModelManagerDialog(QDialog):
         self.btn_rename.setEnabled(False)
         actions_layout.addWidget(self.btn_rename, 1, 2)
         
-        # Row 3 - Danger zone with dropdown
-        delete_layout = QHBoxLayout()
-        delete_layout.setSpacing(0)
+        # Row 3 - Delete buttons
+        self.btn_delete = QPushButton("Delete")
+        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
+        self.btn_delete.clicked.connect(lambda: self._on_delete_action(False))
+        self.btn_delete.setEnabled(False)
+        actions_layout.addWidget(self.btn_delete, 2, 0)
         
-        self.delete_combo = QComboBox()
-        self.delete_combo.addItem("Delete")
-        self.delete_combo.addItem("Delete with Backup")
-        self.delete_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #f38ba8;
-                color: #1e1e2e;
-                font-weight: bold;
-                border: none;
-                border-radius: 6px;
-                padding: 8px 12px;
-                min-width: 140px;
-            }
-            QComboBox:hover {
-                background-color: #f5a3b5;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 6px solid #1e1e2e;
-                margin-right: 5px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #313244;
-                color: #cdd6f4;
-                selection-background-color: #f38ba8;
-                selection-color: #1e1e2e;
-            }
-        """)
-        self.delete_combo.setEnabled(False)
-        self.delete_combo.activated.connect(self._on_delete_action)
-        actions_layout.addWidget(self.delete_combo, 2, 0, 1, 2)  # Span 2 columns
+        self.btn_delete_backup = QPushButton("Delete (Keep Backup)")
+        self.btn_delete_backup.setStyleSheet("background-color: #fab387; color: #1e1e2e; font-weight: bold;")
+        self.btn_delete_backup.clicked.connect(lambda: self._on_delete_action(True))
+        self.btn_delete_backup.setEnabled(False)
+        actions_layout.addWidget(self.btn_delete_backup, 2, 1, 1, 2)  # Span 2 columns
         
         right_panel.addWidget(actions_group)
         
@@ -1269,7 +1240,8 @@ class ModelManagerDialog(QDialog):
         self.btn_clone.setEnabled(has_selection)
         self.btn_folder.setEnabled(has_selection)
         self.btn_rename.setEnabled(has_selection)
-        self.delete_combo.setEnabled(has_selection)
+        self.btn_delete.setEnabled(has_selection)
+        self.btn_delete_backup.setEnabled(has_selection)
         
         # Check if this is a HuggingFace model - they can't be resized
         is_huggingface = False
@@ -1694,18 +1666,13 @@ Checkpoints: {checkpoints}
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
     
-    def _on_delete_action(self, index):
-        """Handle delete dropdown selection."""
+    def _on_delete_action(self, create_backup: bool):
+        """Handle delete button click."""
         if not self.selected_model:
             QMessageBox.warning(self, "No Selection", "Please select a model first")
-            self.delete_combo.setCurrentIndex(0)  # Reset dropdown
             return
         
         model_to_delete = self.selected_model
-        create_backup = (index == 1)  # "Delete with Backup" is index 1
-        
-        # Reset dropdown immediately so it shows "Delete" again
-        self.delete_combo.setCurrentIndex(0)
         
         # Check for existing backups
         from pathlib import Path
@@ -1898,12 +1865,6 @@ class EnhancedMainWindow(QMainWindow):
             # Save current tab index if content_stack exists
             if hasattr(self, 'content_stack'):
                 settings["last_tab"] = self.content_stack.currentIndex()
-            
-            # Save window mode
-            if self.windowState() & Qt.WindowFullScreen:
-                settings["window_mode"] = "fullscreen"
-            else:
-                settings["window_mode"] = "windowed"
             
             # Save always on top state
             settings["always_on_top"] = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
@@ -2364,11 +2325,6 @@ class EnhancedMainWindow(QMainWindow):
                         screen_geo.x() + (screen_geo.width() - self.width()) // 2,
                         screen_geo.y() + (screen_geo.height() - self.height()) // 2
                     )
-        
-        # Restore window mode
-        window_mode = settings.get("window_mode", "windowed")
-        if window_mode == "fullscreen":
-            self.showFullScreen()
         
         # Restore always on top
         if settings.get("always_on_top", False):

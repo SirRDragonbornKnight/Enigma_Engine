@@ -244,37 +244,6 @@ def _move_to_monitor(parent, monitor_index):
         _update_display_info(parent)
 
 
-def _apply_window_mode(parent):
-    """Apply the selected window mode."""
-    from PyQt5.QtCore import Qt
-    
-    mode = parent.window_mode_combo.currentData()
-    main_window = parent.window()
-    
-    if not main_window:
-        return
-    
-    # Check if always on top is enabled
-    stay_on_top = getattr(parent, 'always_on_top_check', None)
-    on_top_flag = Qt.WindowStaysOnTopHint if (stay_on_top and stay_on_top.isChecked()) else Qt.WindowType(0)
-    
-    if mode == "windowed":
-        # Normal windowed mode
-        main_window.showNormal()
-        main_window.setWindowFlags(
-            Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint |
-            Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint | on_top_flag
-        )
-        main_window.show()
-        
-    elif mode == "fullscreen":
-        # True fullscreen
-        main_window.setWindowFlags(main_window.windowFlags() | on_top_flag)
-        main_window.showFullScreen()
-    
-    _update_display_info(parent)
-
-
 def _toggle_always_on_top(parent, state):
     """Toggle always on top window flag."""
     from PyQt5.QtCore import Qt
@@ -498,24 +467,10 @@ def create_settings_tab(parent):
     display_layout = QVBoxLayout(display_group)
     
     display_desc = QLabel(
-        "Configure window mode and monitor selection for multi-display setups."
+        "Configure display options for multi-monitor setups."
     )
     display_desc.setWordWrap(True)
     display_layout.addWidget(display_desc)
-    
-    # Window mode row
-    window_mode_row = QHBoxLayout()
-    window_mode_row.addWidget(QLabel("Window Mode:"))
-    
-    parent.window_mode_combo = QComboBox()
-    parent.window_mode_combo.addItem("Windowed", "windowed")
-    parent.window_mode_combo.addItem("Fullscreen", "fullscreen")
-    parent.window_mode_combo.currentIndexChanged.connect(
-        lambda idx: _apply_window_mode(parent)
-    )
-    window_mode_row.addWidget(parent.window_mode_combo)
-    window_mode_row.addStretch()
-    display_layout.addLayout(window_mode_row)
     
     # Always on top checkbox
     parent.always_on_top_check = QCheckBox("Always on Top")
