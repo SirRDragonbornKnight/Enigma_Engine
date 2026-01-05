@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from .vector_utils import SimpleVectorDB
+from .vector_db import SimpleVectorDB
 from ..config import CONFIG
 from ..memory.memory_db import add_memory
 
