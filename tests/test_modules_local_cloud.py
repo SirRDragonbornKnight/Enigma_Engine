@@ -162,7 +162,7 @@ def test_list_cloud_modules():
             f"list_cloud_modules() returned local module: {module_info.id}"
     
     print(f"  [OK] Found {len(cloud_modules)} cloud modules")
-    print("  All are correctly marked as cloud!\n"))
+    print("  All are correctly marked as cloud!\n")
 
 
 def test_all_modules_categorized():

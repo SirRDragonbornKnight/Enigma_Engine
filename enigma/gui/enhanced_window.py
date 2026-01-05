@@ -888,7 +888,67 @@ class SetupWizard(QWizard):
         }
 
 
-class ModelManagerDialog(QDialog):
+class ModelLoadingDialog(QDialog):
+    """Loading dialog with progress bar for model loading."""
+    
+    def __init__(self, model_name: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Loading Model")
+        self.setFixedSize(350, 120)
+        self.setModal(True)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        
+        # Dark style
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1e1e2e;
+                border: 2px solid #89b4fa;
+                border-radius: 12px;
+            }
+            QLabel {
+                color: #cdd6f4;
+            }
+            QProgressBar {
+                background-color: #313244;
+                border: none;
+                border-radius: 6px;
+                height: 12px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #89b4fa;
+                border-radius: 6px;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+        
+        # Title
+        title = QLabel(f"Loading: {model_name}")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #89b4fa;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        
+        # Status label
+        self.status_label = QLabel("Initializing...")
+        self.status_label.setStyleSheet("font-size: 11px; color: #a6adc8;")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.status_label)
+        
+        # Progress bar
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        layout.addWidget(self.progress)
+    
+    def set_status(self, text: str, progress: int):
+        """Update status text and progress."""
+        self.status_label.setText(text)
+        self.progress.setValue(progress)
+        QApplication.processEvents()  # Force UI updateclass ModelManagerDialog(QDialog):
     """Modern model manager dialog - manage, scale, backup, and organize models."""
     
     def __init__(self, registry: ModelRegistry, current_model: str = None, parent=None):
@@ -1019,6 +1079,8 @@ class ModelManagerDialog(QDialog):
         # Preset dropdown
         self.hf_preset_combo = QComboBox()
         self.hf_preset_combo.addItem("Select a preset model...")
+        self.hf_preset_combo.addItem("microsoft/DialoGPT-medium - Conversational")
+        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 - Quality Instruct")
         self.hf_preset_combo.addItem("TinyLlama/TinyLlama-1.1B-Chat-v1.0 - Fast chat")
         self.hf_preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct - Multilingual")
         self.hf_preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b - Stable chat")
@@ -1112,12 +1174,47 @@ class ModelManagerDialog(QDialog):
         self.btn_rename.setEnabled(False)
         actions_layout.addWidget(self.btn_rename, 1, 2)
         
-        # Row 3 - Danger zone
-        self.btn_delete = QPushButton("Delete")
-        self.btn_delete.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
-        self.btn_delete.clicked.connect(self._on_delete)
-        self.btn_delete.setEnabled(False)
-        actions_layout.addWidget(self.btn_delete, 2, 0)
+        # Row 3 - Danger zone with dropdown
+        delete_layout = QHBoxLayout()
+        delete_layout.setSpacing(0)
+        
+        self.delete_combo = QComboBox()
+        self.delete_combo.addItem("Delete")
+        self.delete_combo.addItem("Delete with Backup")
+        self.delete_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #f38ba8;
+                color: #1e1e2e;
+                font-weight: bold;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 12px;
+                min-width: 140px;
+            }
+            QComboBox:hover {
+                background-color: #f5a3b5;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #1e1e2e;
+                margin-right: 5px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #313244;
+                color: #cdd6f4;
+                selection-background-color: #f38ba8;
+                selection-color: #1e1e2e;
+            }
+        """)
+        self.delete_combo.setEnabled(False)
+        self.delete_combo.activated.connect(self._on_delete_action)
+        actions_layout.addWidget(self.delete_combo, 2, 0, 1, 2)  # Span 2 columns
         
         right_panel.addWidget(actions_group)
         
@@ -1169,7 +1266,7 @@ class ModelManagerDialog(QDialog):
         self.btn_clone.setEnabled(has_selection)
         self.btn_folder.setEnabled(has_selection)
         self.btn_rename.setEnabled(has_selection)
-        self.btn_delete.setEnabled(has_selection)
+        self.delete_combo.setEnabled(has_selection)
         
         # Check if this is a HuggingFace model - they can't be resized
         is_huggingface = False
@@ -1594,15 +1691,20 @@ Checkpoints: {checkpoints}
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
     
-    def _on_delete(self):
-        """Delete the selected model."""
+    def _on_delete_action(self, index):
+        """Handle delete dropdown selection."""
         if not self.selected_model:
             QMessageBox.warning(self, "No Selection", "Please select a model first")
+            self.delete_combo.setCurrentIndex(0)  # Reset dropdown
             return
         
-        model_to_delete = self.selected_model  # Store the name
+        model_to_delete = self.selected_model
+        create_backup = (index == 1)  # "Delete with Backup" is index 1
         
-        # Check for backups
+        # Reset dropdown immediately so it shows "Delete" again
+        self.delete_combo.setCurrentIndex(0)
+        
+        # Check for existing backups
         from pathlib import Path
         models_dir = Path("models")
         backup_found = []
@@ -1610,54 +1712,45 @@ Checkpoints: {checkpoints}
             if backup_dir.is_dir():
                 backup_found.append(backup_dir.name)
         
+        # Build confirmation message
+        if create_backup:
+            action_msg = "DELETE WITH BACKUP"
+            extra_info = "\n\nA backup will be created before deletion."
+        else:
+            action_msg = "PERMANENTLY DELETE"
+            extra_info = ""
+        
         backup_msg = ""
         if backup_found:
-            backup_msg = f"\n\nBackups found:\n" + "\n".join(f"  - {b}" for b in backup_found)
-            backup_msg += "\n\n(Backups will NOT be deleted)"
+            backup_msg = f"\n\nExisting backups:\n" + "\n".join(f"  - {b}" for b in backup_found)
         
-        # First confirmation - show name prominently
+        # Single confirmation - no typing required
         reply = QMessageBox.warning(
-            self, "Delete Model",
-            f"Warning: DELETE THIS MODEL:\n\n"
-            f"   {model_to_delete}\n\n"
-            f"This action cannot be undone!{backup_msg}",
+            self, f"{action_msg}",
+            f"Are you sure you want to delete:\n\n"
+            f"   {model_to_delete}\n{extra_info}{backup_msg}",
             QMessageBox.Yes | QMessageBox.No
         )
         
         if reply != QMessageBox.Yes:
             return
         
-        # Second confirmation - make user type the name
-        from PyQt5.QtWidgets import QInputDialog
-        confirm_name, ok = QInputDialog.getText(
-            self, "CONFIRM DELETE",
-            f"Type the model name to confirm deletion:\n\n"
-            f"Model to delete: {model_to_delete}"
-        )
-        
-        if not ok:
-            return
-        
-        if confirm_name.strip() != model_to_delete:
-            QMessageBox.warning(
-                self, "Cancelled",
-                f"Names don't match. Deletion cancelled.\n\n"
-                f"You typed: '{confirm_name}'\n"
-                f"Expected: '{model_to_delete}'"
-            )
-            return
-        
         try:
+            # Create backup if requested
+            if create_backup:
+                self._on_backup()
+            
+            # Actually delete
             self.registry.delete_model(model_to_delete, confirm=True)
             self.selected_model = None
             self._refresh_list()
             
-            # Also clean up tool_routing.json if model was assigned
+            # Clean up tool routing
             self._cleanup_tool_routing(model_to_delete)
             
             msg = f"Model '{model_to_delete}' has been deleted."
-            if backup_found:
-                msg += f"\n\nBackups still exist:\n" + "\n".join(f"  - {b}" for b in backup_found)
+            if create_backup:
+                msg += "\n\nA backup was created in models/_backups/"
             QMessageBox.information(self, "Deleted", msg)
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
@@ -1791,7 +1884,14 @@ class EnhancedMainWindow(QMainWindow):
                 "last_model": self.current_model_name,
                 "window_width": self.width(),
                 "window_height": self.height(),
+                "auto_speak": getattr(self, 'auto_speak', False),
+                "microphone_enabled": getattr(self, 'microphone_enabled', False),
             }
+            
+            # Save current tab index if content_stack exists
+            if hasattr(self, 'content_stack'):
+                settings["last_tab"] = self.content_stack.currentIndex()
+            
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
         except Exception as e:
@@ -1838,86 +1938,109 @@ class EnhancedMainWindow(QMainWindow):
         self._load_current_model()
     
     def _load_current_model(self):
-        """Load the current model into the engine."""
-        if self.current_model_name:
-            try:
-                # Create engine with selected model
-                model, config = self.registry.load_model(self.current_model_name)
-                
-                # Check if this is a HuggingFace model (wrapper class)
-                is_huggingface = config.get("source") == "huggingface"
-                
-                # Create engine instance without calling __init__
-                from ..core.inference import EnigmaEngine
-                self.engine = EnigmaEngine.__new__(EnigmaEngine)
-                
-                # Set required attributes that __init__ would normally set
-                import torch
-                self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                self.engine.use_half = False
-                self.engine.enable_tools = False
-                self.engine.module_manager = getattr(self, 'module_manager', None)
-                self.engine._tool_executor = None
-                self.engine._is_huggingface = is_huggingface
-                
-                if is_huggingface:
-                    # HuggingFaceModel is already loaded and ready
-                    self.engine.model = model  # This is a HuggingFaceModel wrapper
-                    self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
-                else:
-                    # Local Enigma model
-                    self.engine.model = model
-                    self.engine.model.to(self.engine.device)
-                    self.engine.model.eval()
-                    from ..core.tokenizer import load_tokenizer
-                    self.engine.tokenizer = load_tokenizer()
-                
-                # Initialize the AI's brain for learning
-                from ..core.ai_brain import get_brain
-                self.brain = get_brain(
-                    self.current_model_name, 
-                    auto_learn=getattr(self, 'learn_while_chatting', True)
+        """Load the current model into the engine with progress dialog."""
+        if not self.current_model_name:
+            return
+            
+        # Create and show loading dialog
+        loading_dialog = ModelLoadingDialog(self.current_model_name, self)
+        loading_dialog.show()
+        QApplication.processEvents()
+        
+        try:
+            loading_dialog.set_status("Loading model configuration...", 10)
+            
+            # Create engine with selected model
+            model, config = self.registry.load_model(self.current_model_name)
+            loading_dialog.set_status("Model weights loaded", 40)
+            
+            # Check if this is a HuggingFace model (wrapper class)
+            is_huggingface = config.get("source") == "huggingface"
+            
+            loading_dialog.set_status("Initializing inference engine...", 50)
+            
+            # Create engine instance without calling __init__
+            from ..core.inference import EnigmaEngine
+            self.engine = EnigmaEngine.__new__(EnigmaEngine)
+            
+            # Set required attributes that __init__ would normally set
+            import torch
+            self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.engine.use_half = False
+            self.engine.enable_tools = False
+            self.engine.module_manager = getattr(self, 'module_manager', None)
+            self.engine._tool_executor = None
+            self.engine._is_huggingface = is_huggingface
+            
+            loading_dialog.set_status("Moving model to device...", 60)
+            
+            if is_huggingface:
+                # HuggingFaceModel is already loaded and ready
+                self.engine.model = model  # This is a HuggingFaceModel wrapper
+                self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
+            else:
+                # Local Enigma model
+                self.engine.model = model
+                self.engine.model.to(self.engine.device)
+                self.engine.model.eval()
+                loading_dialog.set_status("Loading tokenizer...", 75)
+                from ..core.tokenizer import load_tokenizer
+                self.engine.tokenizer = load_tokenizer()
+            
+            loading_dialog.set_status("Initializing AI brain...", 85)
+            
+            # Initialize the AI's brain for learning
+            from ..core.ai_brain import get_brain
+            self.brain = get_brain(
+                self.current_model_name, 
+                auto_learn=getattr(self, 'learn_while_chatting', True)
+            )
+            
+            loading_dialog.set_status("Finalizing...", 95)
+            
+            self.setWindowTitle(f"Enigma Engine - {self.current_model_name}")
+            
+            # Update training tab label
+            if hasattr(self, 'training_model_label'):
+                self.training_model_label.setText(f"Model: {self.current_model_name}")
+            
+            # Update chat tab model label
+            if hasattr(self, 'chat_model_label'):
+                self.chat_model_label.setText(f"[AI] {self.current_model_name}")
+            
+            loading_dialog.set_status("Ready!", 100)
+            
+            # Show welcome message in chat
+            if hasattr(self, 'chat_display'):
+                device_type = self.engine.device.type if hasattr(self.engine.device, 'type') else str(self.engine.device)
+                device_info = "GPU" if device_type == "cuda" else "CPU"
+                self.chat_display.append(
+                    f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
+                    f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
+                    "<hr>"
                 )
+            
+            # Update chat status
+            if hasattr(self, 'chat_status'):
+                self.chat_status.setText(f"Model ready ({self.engine.device})")
+            
+            # Refresh notes files for new model
+            if hasattr(self, 'notes_file_combo'):
+                self._refresh_notes_files()
                 
-                self.setWindowTitle(f"Enigma Engine - {self.current_model_name}")
-                
-                # Update training tab label
-                if hasattr(self, 'training_model_label'):
-                    self.training_model_label.setText(f"Model: {self.current_model_name}")
-                
-                # Update chat tab model label
-                if hasattr(self, 'chat_model_label'):
-                    self.chat_model_label.setText(f"[AI] {self.current_model_name}")
-                
-                # Show welcome message in chat
-                if hasattr(self, 'chat_display'):
-                    device_type = self.engine.device.type if hasattr(self.engine.device, 'type') else str(self.engine.device)
-                    device_info = "GPU" if device_type == "cuda" else "CPU"
-                    self.chat_display.append(
-                        f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
-                        f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
-                        "<hr>"
-                    )
-                
-                # Update chat status
-                if hasattr(self, 'chat_status'):
-                    self.chat_status.setText(f"Model ready ({self.engine.device})")
-                
-                # Refresh notes files for new model
-                if hasattr(self, 'notes_file_combo'):
-                    self._refresh_notes_files()
-                    
-            except Exception as e:
-                QMessageBox.warning(self, "Load Error", f"Could not load model: {e}")
-                self.engine = None
-                self.brain = None
-                
-                # Show error in chat
-                if hasattr(self, 'chat_display'):
-                    self.chat_display.append(
-                        f"<p style='color: #f38ba8;'><b>[!] Error:</b> Could not load model</p>"
-                        f"<p style='color: #6c7086;'>{e}</p>"
-                    )
+        except Exception as e:
+            QMessageBox.warning(self, "Load Error", f"Could not load model: {e}")
+            self.engine = None
+            self.brain = None
+            
+            # Show error in chat
+            if hasattr(self, 'chat_display'):
+                self.chat_display.append(
+                    f"<p style='color: #f38ba8;'><b>[!] Error:</b> Could not load model</p>"
+                    f"<p style='color: #6c7086;'>{e}</p>"
+                )
+        finally:
+            loading_dialog.close()
     
     def _build_ui(self):
         """Build the main UI."""
@@ -2186,6 +2309,34 @@ class EnhancedMainWindow(QMainWindow):
         self.tabs = self.content_stack
         
         self.setCentralWidget(main_widget)
+        
+        # Restore saved settings after UI is built
+        self._restore_gui_settings()
+    
+    def _restore_gui_settings(self):
+        """Restore GUI settings from saved file."""
+        settings = self._gui_settings
+        
+        # Restore auto-speak state
+        if settings.get("auto_speak", False):
+            self.auto_speak_action.setChecked(True)
+            self._toggle_auto_speak(True)
+        
+        # Restore microphone state
+        if settings.get("microphone_enabled", False):
+            self.microphone_action.setChecked(True)
+            self._toggle_microphone(True)
+        
+        # Restore last tab (sidebar selection)
+        last_tab = settings.get("last_tab")
+        if last_tab is not None and last_tab >= 0:
+            # Find the sidebar item for this tab index
+            for i in range(self.sidebar.count()):
+                item = self.sidebar.item(i)
+                key = item.data(Qt.UserRole) if item else None
+                if key and self._nav_map.get(key) == last_tab:
+                    self.sidebar.setCurrentRow(i)
+                    break
     
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""

@@ -600,6 +600,7 @@ class Enigma(nn.Module):
 
     @classmethod
     def from_pretrained(cls, path: Path) -> 'Enigma':
+        from .model_registry import safe_load_weights
         path = Path(path)
         config_file = path / 'config.json' if path.is_dir() else path.with_suffix('.json')
 
@@ -611,7 +612,7 @@ class Enigma(nn.Module):
 
         weights_file = path / 'weights.pth' if path.is_dir() else path
         if weights_file.exists():
-            state_dict = torch.load(weights_file, map_location='cpu', weights_only=True)
+            state_dict = safe_load_weights(weights_file, map_location='cpu')
             model.load_state_dict(state_dict, strict=False)
 
         return model

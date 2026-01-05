@@ -509,7 +509,8 @@ class Trainer:
 
     def load_checkpoint(self, path: Path):
         """Load training checkpoint."""
-        checkpoint = torch.load(path, map_location=self.device)
+        from .model_registry import safe_load_weights
+        checkpoint = safe_load_weights(path, map_location=self.device)
 
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

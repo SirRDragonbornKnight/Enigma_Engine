@@ -76,6 +76,7 @@ class TestTrainingPipeline:
     def test_model_checkpointing(self, tmp_path):
         """Test saving and loading model checkpoints."""
         from enigma.core.model import Enigma
+        from enigma.core.model_registry import safe_load_weights
         import torch
         
         # Create and save
@@ -85,7 +86,7 @@ class TestTrainingPipeline:
         
         # Load into new model
         model2 = Enigma(vocab_size=1000, dim=32, depth=1, heads=2)
-        model2.load_state_dict(torch.load(save_path, weights_only=True))
+        model2.load_state_dict(safe_load_weights(save_path))
         
         # Parameters should match
         for p1, p2 in zip(model1.parameters(), model2.parameters()):

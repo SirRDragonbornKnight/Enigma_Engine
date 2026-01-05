@@ -799,13 +799,14 @@ def load_trained_model(
     Returns:
         (model, tokenizer) tuple
     """
+    from .model_registry import safe_load_weights
     model_path = Path(model_path)
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load model
-    state_dict = torch.load(model_path, map_location=device)
+    state_dict = safe_load_weights(model_path, map_location=device)
 
     # Infer model size from state dict
     # Look at embedding dimension

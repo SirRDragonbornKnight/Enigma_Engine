@@ -59,7 +59,7 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 - **enigma/core/model.py**: `EnigmaModel` class - Main transformer model implementation
 - **enigma/core/tokenizer.py**: `EnigmaTokenizer` class - Text tokenization and vocabulary
 - **enigma/core/training.py**: `Trainer` class - Model training loop and optimization
-- **enigma/core/inference.py**: `InferenceEngine` class - Model inference and generation
+- **enigma/core/inference.py**: `EnigmaEngine` class - Model inference and generation
 
 ### AI Generation Tabs (in enigma/gui/tabs/)
 Each tab contains both the implementation (provider classes) and the GUI:
@@ -71,16 +71,16 @@ Each tab contains both the implementation (provider classes) and the GUI:
 - **threed_tab.py**: `Local3DGen`, `Cloud3DGen` + `ThreeDTab`
 
 ### Memory System
-- **enigma/memory/conversation.py**: `ConversationMemory` class - Stores chat history
-- **enigma/memory/vector_store.py**: `VectorStore` class - Semantic search over memories
+- **enigma/memory/manager.py**: `ConversationManager` class - Stores chat history
+- **enigma/memory/vector_db.py**: `VectorDBInterface`, `FAISSVectorDB`, `SimpleVectorDB` - Semantic search over memories
 
 ### Communication & Networking
-- **enigma/comms/api_server.py**: `APIServer` class - REST API for remote access
+- **enigma/comms/api_server.py**: `create_api_server()` function - REST API for remote access
 - **enigma/comms/network.py**: Multi-device networking and synchronization
 
 ### User Interface
-- **enigma/gui/main_window.py**: `MainWindow` class - PyQt5 main application window
-- **enigma/gui/module_manager_tab.py**: UI for toggling modules on/off
+- **enigma/gui/enhanced_window.py**: `EnhancedMainWindow` class - PyQt5 main application window
+- **enigma/gui/tabs/modules_tab.py**: UI for toggling modules on/off
 
 ### Configuration
 - **enigma/config.py**: `CONFIG` object - Global configuration (paths, model sizes, hyperparameters)

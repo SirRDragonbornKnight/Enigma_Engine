@@ -1,5 +1,8 @@
 {
-  "last_model": "sacrifice",
+  "last_model": "microsoft",
   "window_width": 2560,
-  "window_height": 1377
+  "window_height": 1377,
+  "auto_speak": false,
+  "microphone_enabled": false,
+  "last_tab": 0
 }

@@ -155,7 +155,15 @@ class EnigmaEngine:
         model_path: Optional[Union[str, Path]]
     ) -> Any:
         """Load the tokenizer."""
-        # Try to load tokenizer saved with model
+        # Try explicit tokenizer path first
+        if tokenizer_path:
+            try:
+                from .advanced_tokenizer import AdvancedBPETokenizer
+                return AdvancedBPETokenizer(vocab_file=Path(tokenizer_path))
+            except Exception as e:
+                logger.warning(f"Could not load tokenizer from {tokenizer_path}: {e}")
+
+        # Try to find tokenizer next to model file
         if model_path:
             model_path = Path(model_path)
             tok_path = model_path.parent / f"{model_path.stem}_tokenizer.json"
@@ -166,13 +174,27 @@ class EnigmaEngine:
                 except Exception as e:
                     logger.warning(f"Could not load tokenizer from {tok_path}: {e}")
 
-        # Try explicit tokenizer path
-        if tokenizer_path:
-            try:
-                from .advanced_tokenizer import AdvancedBPETokenizer
-                return AdvancedBPETokenizer(vocab_file=Path(tokenizer_path))
-            except Exception as e:
-                logger.warning(f"Could not load tokenizer from {tokenizer_path}: {e}")
+        # Auto-detect model file and find tokenizer
+        detected_model = None
+        if DEFAULT_MODEL.exists():
+            detected_model = DEFAULT_MODEL
+        elif LEGACY_MODEL.exists():
+            detected_model = LEGACY_MODEL
+        else:
+            for f in MODELS_DIR.glob("*.pth"):
+                detected_model = f
+                break
+        
+        if detected_model:
+            tok_path = detected_model.parent / f"{detected_model.stem}_tokenizer.json"
+            if tok_path.exists():
+                try:
+                    from .advanced_tokenizer import AdvancedBPETokenizer
+                    tok = AdvancedBPETokenizer(vocab_file=tok_path)
+                    logger.info(f"Loaded tokenizer from {tok_path}")
+                    return tok
+                except Exception as e:
+                    logger.warning(f"Could not load tokenizer from {tok_path}: {e}")
 
         # Fall back to default
         return get_tokenizer()
@@ -201,7 +223,8 @@ class EnigmaEngine:
 
         if model_file and model_file.exists():
             # Load state dict to infer model architecture
-            state_dict = torch.load(model_file, map_location="cpu", weights_only=True)
+            from .model_registry import safe_load_weights
+            state_dict = safe_load_weights(model_file, map_location="cpu")
 
             # Infer model size from state dict
             detected_size = self._infer_model_size(state_dict)
@@ -236,31 +259,32 @@ class EnigmaEngine:
 
     def _infer_model_size(self, state_dict: Dict) -> str:
         """Infer model size from state dict."""
-        # Look for hidden dimension
+        # Look for hidden dimension from embedding layer
         hidden_dim = None
         for key, tensor in state_dict.items():
-            if 'embed' in key.lower() and tensor.dim() == 2:
+            if ('embed' in key.lower() or 'token' in key.lower()) and tensor.dim() == 2:
                 hidden_dim = tensor.shape[1]
                 break
-            if 'ln' in key.lower() or 'norm' in key.lower():
-                hidden_dim = tensor.shape[0]
-                break
+        
+        # Fallback: look for norm weights
+        if hidden_dim is None:
+            for key, tensor in state_dict.items():
+                if ('ln' in key.lower() or 'norm' in key.lower()) and tensor.dim() == 1:
+                    hidden_dim = tensor.shape[0]
+                    break
 
         if hidden_dim is None:
             return "small"
 
-        # Match to preset - MODEL_PRESETS values are dicts with 'hidden_dim' key
+        # Match to preset - MODEL_PRESETS values are EnigmaConfig with 'dim' attribute
         for name, preset in MODEL_PRESETS.items():
-            preset_dim = preset.get('hidden_dim') if isinstance(
-                preset, dict) else getattr(preset, 'hidden_dim', None)
+            preset_dim = getattr(preset, 'dim', None)
             if preset_dim == hidden_dim:
                 return name
 
         # Find closest match
         def get_dim(preset):
-            return preset.get('hidden_dim') if isinstance(
-                preset, dict) else getattr(
-                preset, 'hidden_dim', 512)
+            return getattr(preset, 'dim', 512)
 
         diffs = [(name, abs(get_dim(preset) - hidden_dim))
                  for name, preset in MODEL_PRESETS.items()]

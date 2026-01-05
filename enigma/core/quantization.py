@@ -46,9 +46,9 @@ def quantize_model(model, dtype: str = "int8"):
 def load_quantized(path: str, dtype: str = "int8"):
     """Load a model and quantize it."""
     from .model import create_model
-    import torch
+    from .model_registry import safe_load_weights
     
-    state_dict = torch.load(path, map_location="cpu")
+    state_dict = safe_load_weights(path, map_location="cpu")
     model = create_model("auto")
     model.load_state_dict(state_dict, strict=False)
     

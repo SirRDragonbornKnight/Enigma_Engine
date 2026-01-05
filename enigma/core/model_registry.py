@@ -36,6 +36,50 @@ from .model import Enigma, EnigmaConfig, MODEL_PRESETS
 from ..config import CONFIG
 
 
+def safe_load_weights(path, map_location=None):
+    """
+    Safely load PyTorch weights, handling CVE-2025-32434 vulnerability.
+    
+    Tries methods in order:
+    1. Safetensors (if available and .safetensors file exists)
+    2. torch.load with weights_only=True (torch >= 2.6)
+    3. torch.load without weights_only (older torch, with warning)
+    """
+    path = Path(path)
+    
+    # Try safetensors first (most secure)
+    safetensors_path = path.with_suffix('.safetensors')
+    if safetensors_path.exists():
+        try:
+            from safetensors.torch import load_file
+            return load_file(str(safetensors_path), device=str(map_location) if map_location else 'cpu')
+        except ImportError:
+            pass  # safetensors not installed
+    
+    # Check torch version
+    torch_version = tuple(int(x) for x in torch.__version__.split('.')[:2])
+    
+    if torch_version >= (2, 6):
+        # Torch 2.6+ - use weights_only=True (required for security)
+        return torch.load(path, map_location=map_location, weights_only=True)
+    else:
+        # Older torch - weights_only=True has the vulnerability
+        # Try to use it anyway, but catch the error
+        try:
+            return torch.load(path, map_location=map_location, weights_only=True)
+        except Exception as e:
+            if 'weights_only' in str(e).lower() or 'vulnerability' in str(e).lower():
+                # Fall back to unsafe load with warning
+                import warnings
+                warnings.warn(
+                    f"Loading weights without weights_only=True due to torch version {torch.__version__}. "
+                    f"Consider upgrading torch to 2.6+ or converting to safetensors format.",
+                    UserWarning
+                )
+                return torch.load(path, map_location=map_location)
+            raise
+
+
 def get_model_config(size: str) -> dict:
     """Get model config dict from MODEL_PRESETS."""
     if size not in MODEL_PRESETS:
@@ -361,7 +405,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             weights_path = model_dir / "weights.pth"
 
         if weights_path.exists():
-            state_dict = torch.load(weights_path, map_location=device)
+            state_dict = safe_load_weights(weights_path, map_location=device)
             model.load_state_dict(state_dict)
             # Silent load - no print to avoid confusion with AI output
         else:

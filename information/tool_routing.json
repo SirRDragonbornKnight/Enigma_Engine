@@ -8,6 +8,12 @@
         "config": {}
       },
       {
+        "model_id": "huggingface:microsoft/DialoGPT-medium",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {}
+      },
+      {
         "model_id": "enigma:default",
         "model_type": "enigma",
         "priority": 10,
@@ -71,5 +77,5 @@
       }
     ]
   },
-  "updated": "2026-01-04T16:05:28.994620"
+  "updated": "2026-01-04T20:48:09.407494"
 }

@@ -16,6 +16,9 @@ numpy>=1.21.0
 # Raspberry Pi: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 torch>=1.12; platform_system!="Darwin" or platform_machine=="arm64"
 
+# Safetensors - secure model loading (recommended for torch < 2.6)
+safetensors>=0.4.0
+
 # Tokenizers (for BPE, optional - we have character-level built-in)
 tokenizers>=0.13.0
 transformers>=4.20.0

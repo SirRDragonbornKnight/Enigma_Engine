@@ -474,5 +474,33 @@
         "completed": false
       }
     ]
+  },
+  "checklist_35": {
+    "name": "Test List",
+    "created": "2026-01-04T18:59:31.494405",
+    "items": [
+      {
+        "text": "Item 1",
+        "completed": false
+      },
+      {
+        "text": "Item 2",
+        "completed": false
+      }
+    ]
+  },
+  "checklist_36": {
+    "name": "Test List",
+    "created": "2026-01-04T18:59:50.362213",
+    "items": [
+      {
+        "text": "Item 1",
+        "completed": false
+      },
+      {
+        "text": "Item 2",
+        "completed": false
+      }
+    ]
   }
 }

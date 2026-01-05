@@ -249,7 +249,8 @@ class LoRATrainer:
         Args:
             path: Path to adapter file
         """
-        checkpoint = torch.load(path, map_location='cpu')
+        from .model_registry import safe_load_weights
+        checkpoint = safe_load_weights(path, map_location='cpu')
         
         lora_state = checkpoint['lora_state']
         for name, lora in self.lora_modules.items():
