@@ -47,7 +47,8 @@ class URLSafety:
         self,
         custom_blocklist_path: Optional[Path] = None,
         enable_auto_update: bool = False,
-        update_interval_hours: int = 24
+        update_interval_hours: int = 24,
+        config_path: Optional[Path] = None
     ):
         """
         Initialize URL safety checker.
@@ -56,14 +57,21 @@ class URLSafety:
             custom_blocklist_path: Path to custom blocklist file
             enable_auto_update: Enable automatic blocklist updates
             update_interval_hours: Hours between blocklist updates
+            config_path: Path to configuration file for blocklists and trusted domains
         """
         self.blocked_domains = self.BLOCKED_DOMAINS.copy()
+        self.trusted_domains = self.ALLOWED_DOMAINS.copy()
         self.blocked_patterns = [re.compile(p) for p in self.BLOCKED_PATTERNS]
         self.custom_blocklist_path = custom_blocklist_path
+        self.config_path = config_path
         self.enable_auto_update = enable_auto_update
         self.update_interval = timedelta(hours=update_interval_hours)
         self.last_update = None
         self.blocklist_cache_path = Path("data/url_blocklist_cache.json")
+        
+        # Load config if provided
+        if config_path and config_path.exists():
+            self._load_config(config_path)
         
         # Load custom blocklist if provided
         if custom_blocklist_path and custom_blocklist_path.exists():
@@ -75,6 +83,45 @@ class URLSafety:
         # Auto-update if enabled
         if enable_auto_update:
             self._auto_update_if_needed()
+    
+    def _load_config(self, path: Path):
+        """Load configuration from JSON file."""
+        try:
+            with open(path, 'r') as f:
+                config = json.load(f)
+            
+            # Load blocked domains
+            if 'blocked_domains' in config:
+                self.blocked_domains.update(config['blocked_domains'])
+            
+            # Load trusted domains
+            if 'trusted_domains' in config:
+                self.trusted_domains.update(config['trusted_domains'])
+            
+            logger.info(f"Loaded URL safety config from {path}")
+        except Exception as e:
+            logger.error(f"Failed to load config from {path}: {e}")
+    
+    def _save_config(self):
+        """Save configuration to JSON file."""
+        if not self.config_path:
+            return
+        
+        try:
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            config = {
+                'blocked_domains': list(self.blocked_domains),
+                'trusted_domains': list(self.trusted_domains),
+                'last_updated': datetime.now().isoformat(),
+            }
+            
+            with open(self.config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+            
+            logger.info(f"Saved URL safety config to {self.config_path}")
+        except Exception as e:
+            logger.error(f"Failed to save config: {e}")
     
     def _load_custom_blocklist(self, path: Path):
         """Load additional blocked domains from file."""
@@ -238,7 +285,7 @@ class URLSafety:
     def is_trusted(self, url: str) -> bool:
         """Check if URL is from a trusted source."""
         url_lower = url.lower()
-        for domain in self.ALLOWED_DOMAINS:
+        for domain in self.trusted_domains:
             if domain in url_lower:
                 return True
         return False
@@ -269,7 +316,16 @@ class URLSafety:
         """Manually add a domain to blocklist."""
         self.blocked_domains.add(domain.lower())
         self._save_cached_blocklist()
+        if self.config_path:
+            self._save_config()
         logger.info(f"Added {domain} to blocklist")
+    
+    def add_trusted_domain(self, domain: str):
+        """Manually add a domain to trusted list."""
+        self.trusted_domains.add(domain.lower())
+        if self.config_path:
+            self._save_config()
+        logger.info(f"Added {domain} to trusted list")
     
     def remove_blocked_domain(self, domain: str) -> bool:
         """Remove a domain from blocklist."""
@@ -277,7 +333,20 @@ class URLSafety:
         if domain_lower in self.blocked_domains:
             self.blocked_domains.remove(domain_lower)
             self._save_cached_blocklist()
+            if self.config_path:
+                self._save_config()
             logger.info(f"Removed {domain} from blocklist")
+            return True
+        return False
+    
+    def remove_trusted_domain(self, domain: str) -> bool:
+        """Remove a domain from trusted list."""
+        domain_lower = domain.lower()
+        if domain_lower in self.trusted_domains:
+            self.trusted_domains.remove(domain_lower)
+            if self.config_path:
+                self._save_config()
+            logger.info(f"Removed {domain} from trusted list")
             return True
         return False
 
