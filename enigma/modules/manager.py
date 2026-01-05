@@ -8,11 +8,13 @@ Handles loading, unloading, dependencies, and configuration.
 
 import json
 import logging
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,17 @@ class ModuleInfo:
     state: ModuleState = ModuleState.UNLOADED
     load_time: Optional[datetime] = None
     error_message: Optional[str] = None
+
+
+@dataclass
+class ModuleHealth:
+    """Health status for a module."""
+    module_id: str
+    is_healthy: bool
+    last_check: datetime
+    response_time_ms: float
+    error_count: int
+    warnings: List[str] = field(default_factory=list)
 
 
 class Module:
@@ -203,6 +216,12 @@ class ModuleManager:
         self._on_load: List[Callable] = []
         self._on_unload: List[Callable] = []
         self._on_state_change: List[Callable] = []
+
+        # Health monitoring
+        self._health_monitor_thread: Optional[threading.Thread] = None
+        self._health_monitor_running: bool = False
+        self._health_monitor_interval: int = 60
+        self._module_error_counts: Dict[str, int] = {}
 
         # Detect hardware
         self._detect_hardware()
@@ -367,6 +386,77 @@ class ModuleManager:
 
         except Exception as e:
             logger.error(f"Error loading module '{module_id}': {e}")
+            return False
+
+    def load_sandboxed(
+        self, 
+        module_id: str, 
+        sandbox_config: Optional[Any] = None,
+        config: Dict[str, Any] = None
+    ) -> bool:
+        """
+        Load a module in a sandboxed environment.
+        
+        Args:
+            module_id: Module ID to load
+            sandbox_config: Sandbox configuration (SandboxConfig, uses defaults if None)
+            config: Optional module configuration
+            
+        Returns:
+            True if loaded successfully
+        """
+        from .sandbox import ModuleSandbox, create_default_sandbox_config
+        
+        # Create default sandbox config if not provided
+        if sandbox_config is None:
+            sandbox_config = create_default_sandbox_config(module_id)
+        
+        # Check if module can be loaded
+        can_load, reason = self.can_load(module_id)
+        if not can_load:
+            logger.error(f"Cannot load module '{module_id}': {reason}")
+            return False
+        
+        module_class = self.module_classes[module_id]
+        module_info = module_class.get_info()
+        
+        logger.info(f"Loading module '{module_id}' in sandbox")
+        
+        # Create sandbox
+        sandbox = ModuleSandbox(module_id, sandbox_config)
+        
+        try:
+            # Create module instance
+            module = module_class(self, config)
+            module.state = ModuleState.LOADING
+            
+            # Load module in sandbox
+            def load_func():
+                return module.load()
+            
+            success = sandbox.run_in_sandbox(load_func)
+            
+            if success:
+                module.state = ModuleState.LOADED
+                module.get_info().load_time = datetime.now()
+                self.modules[module_id] = module
+                
+                # Store sandbox reference with module for future use
+                module._sandbox = sandbox
+                
+                # Notify listeners
+                for callback in self._on_load:
+                    callback(module_id)
+                
+                logger.info(f"Loaded module '{module_id}' in sandbox")
+                return True
+            else:
+                module.state = ModuleState.ERROR
+                module.get_info().error_message = "load() returned False in sandbox"
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error loading module '{module_id}' in sandbox: {e}")
             return False
 
     def unload(self, module_id: str) -> bool:
@@ -667,6 +757,176 @@ class ModuleManager:
                     self.activate(module_id)
 
         return True
+
+    def health_check(self, module_id: str) -> Optional[ModuleHealth]:
+        """
+        Run health check on a specific module.
+        
+        Args:
+            module_id: Module ID to check
+            
+        Returns:
+            ModuleHealth object with status, or None if module not loaded
+        """
+        if module_id not in self.modules:
+            logger.warning(f"Cannot check health of unloaded module: {module_id}")
+            return None
+        
+        module = self.modules[module_id]
+        warnings = []
+        is_healthy = True
+        
+        # Measure response time
+        start_time = time.time()
+        
+        try:
+            # Basic health check - try to get module status
+            status = module.get_status()
+            
+            # Check module state
+            if module.state == ModuleState.ERROR:
+                is_healthy = False
+                warnings.append("Module is in ERROR state")
+            
+            # Check if module has error message
+            info = module.get_info()
+            if info.error_message:
+                warnings.append(f"Error message: {info.error_message}")
+            
+            # Check resource usage (basic checks)
+            try:
+                import psutil
+                import os
+                process = psutil.Process(os.getpid())
+                mem_percent = process.memory_percent()
+                
+                if mem_percent > 80:
+                    warnings.append(f"High memory usage: {mem_percent:.1f}%")
+                
+            except (ImportError, Exception):
+                pass  # psutil not available or error
+            
+        except Exception as e:
+            is_healthy = False
+            warnings.append(f"Health check exception: {str(e)}")
+            logger.error(f"Error during health check of '{module_id}': {e}")
+        
+        # Calculate response time
+        response_time_ms = (time.time() - start_time) * 1000
+        
+        # Track error count
+        error_count = self._module_error_counts.get(module_id, 0)
+        if not is_healthy:
+            error_count += 1
+            self._module_error_counts[module_id] = error_count
+        else:
+            # Reset error count on successful check
+            self._module_error_counts[module_id] = 0
+        
+        return ModuleHealth(
+            module_id=module_id,
+            is_healthy=is_healthy,
+            last_check=datetime.now(),
+            response_time_ms=response_time_ms,
+            error_count=error_count,
+            warnings=warnings
+        )
+    
+    def health_check_all(self) -> Dict[str, ModuleHealth]:
+        """
+        Run health checks on all loaded modules.
+        
+        Returns:
+            Dictionary mapping module IDs to their health status
+        """
+        results = {}
+        
+        for module_id in self.modules.keys():
+            health = self.health_check(module_id)
+            if health:
+                results[module_id] = health
+        
+        return results
+    
+    def _health_monitor_loop(self):
+        """Background thread loop for health monitoring."""
+        logger.info(f"Health monitor started (interval: {self._health_monitor_interval}s)")
+        
+        while self._health_monitor_running:
+            try:
+                # Run health checks on all modules
+                results = self.health_check_all()
+                
+                # Log any unhealthy modules
+                for module_id, health in results.items():
+                    if not health.is_healthy:
+                        logger.warning(
+                            f"Module '{module_id}' is unhealthy: "
+                            f"{', '.join(health.warnings)}"
+                        )
+                    elif health.warnings:
+                        logger.info(
+                            f"Module '{module_id}' has warnings: "
+                            f"{', '.join(health.warnings)}"
+                        )
+                
+            except Exception as e:
+                logger.error(f"Error in health monitor loop: {e}")
+            
+            # Sleep in small intervals to allow quick shutdown
+            for _ in range(self._health_monitor_interval):
+                if not self._health_monitor_running:
+                    break
+                time.sleep(1)
+        
+        logger.info("Health monitor stopped")
+    
+    def start_health_monitor(self, interval_seconds: int = 60):
+        """
+        Start background health monitoring.
+        
+        Args:
+            interval_seconds: How often to check module health (default: 60s)
+        """
+        if self._health_monitor_running:
+            logger.warning("Health monitor is already running")
+            return
+        
+        self._health_monitor_interval = interval_seconds
+        self._health_monitor_running = True
+        
+        self._health_monitor_thread = threading.Thread(
+            target=self._health_monitor_loop,
+            daemon=True,
+            name="ModuleHealthMonitor"
+        )
+        self._health_monitor_thread.start()
+        
+        logger.info(f"Started health monitor with {interval_seconds}s interval")
+    
+    def stop_health_monitor(self):
+        """Stop background health monitoring."""
+        if not self._health_monitor_running:
+            logger.warning("Health monitor is not running")
+            return
+        
+        logger.info("Stopping health monitor...")
+        self._health_monitor_running = False
+        
+        if self._health_monitor_thread:
+            self._health_monitor_thread.join(timeout=5.0)
+            self._health_monitor_thread = None
+        
+        logger.info("Health monitor stopped")
+    
+    def is_health_monitor_running(self) -> bool:
+        """
+        Check if health monitor is currently running.
+        
+        Returns:
+            True if health monitor is active
+        """
+        return self._health_monitor_running
 
     def on_load(self, callback: Callable):
         """Register callback for module load events."""
