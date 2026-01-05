@@ -56,28 +56,25 @@ def safe_load_weights(path, map_location=None):
         except ImportError:
             pass  # safetensors not installed
     
-    # Check torch version
-    torch_version = tuple(int(x) for x in torch.__version__.split('.')[:2])
-    
-    if torch_version >= (2, 6):
-        # Torch 2.6+ - use weights_only=True (required for security)
+    # Try torch.load with weights_only=True first
+    try:
         return torch.load(path, map_location=map_location, weights_only=True)
-    else:
-        # Older torch - weights_only=True has the vulnerability
-        # Try to use it anyway, but catch the error
-        try:
-            return torch.load(path, map_location=map_location, weights_only=True)
-        except Exception as e:
-            if 'weights_only' in str(e).lower() or 'vulnerability' in str(e).lower():
-                # Fall back to unsafe load with warning
-                import warnings
-                warnings.warn(
-                    f"Loading weights without weights_only=True due to torch version {torch.__version__}. "
-                    f"Consider upgrading torch to 2.6+ or converting to safetensors format.",
-                    UserWarning
-                )
-                return torch.load(path, map_location=map_location)
-            raise
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check if this is the CVE vulnerability block or version issue
+        if 'vulnerability' in error_msg or 'weights_only' in error_msg or 'v2.6' in error_msg or 'upgrade' in error_msg:
+            # Fall back to loading without weights_only
+            # This is less secure but necessary for older torch versions
+            import warnings
+            warnings.warn(
+                f"Loading weights without weights_only=True. "
+                f"Consider upgrading torch to 2.6+ or converting to safetensors format. "
+                f"To convert: pip install safetensors && python -c \"import torch; from safetensors.torch import save_file; save_file(torch.load('{path}'), '{path.with_suffix('.safetensors')}')\"",
+                UserWarning
+            )
+            return torch.load(path, map_location=map_location, weights_only=False)
+        # Re-raise if it's a different error
+        raise
 
 
 def get_model_config(size: str) -> dict:

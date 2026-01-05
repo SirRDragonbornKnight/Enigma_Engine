@@ -26,7 +26,7 @@ from PyQt5.QtWidgets import (
     QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
     QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
     QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter, QWidget,
-    QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy
+    QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QFont, QIcon
@@ -948,7 +948,10 @@ class ModelLoadingDialog(QDialog):
         """Update status text and progress."""
         self.status_label.setText(text)
         self.progress.setValue(progress)
-        QApplication.processEvents()  # Force UI updateclass ModelManagerDialog(QDialog):
+        QApplication.processEvents()  # Force UI update
+
+
+class ModelManagerDialog(QDialog):
     """Modern model manager dialog - manage, scale, backup, and organize models."""
     
     def __init__(self, registry: ModelRegistry, current_model: str = None, parent=None):
@@ -1878,12 +1881,16 @@ class EnhancedMainWindow(QMainWindow):
     def _save_gui_settings(self):
         """Save GUI settings to file."""
         from ..config import CONFIG
+        from PyQt5.QtGui import QGuiApplication
+        
         settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
         try:
             settings = {
                 "last_model": self.current_model_name,
                 "window_width": self.width(),
                 "window_height": self.height(),
+                "window_x": self.x(),
+                "window_y": self.y(),
                 "auto_speak": getattr(self, 'auto_speak', False),
                 "microphone_enabled": getattr(self, 'microphone_enabled', False),
             }
@@ -1891,6 +1898,20 @@ class EnhancedMainWindow(QMainWindow):
             # Save current tab index if content_stack exists
             if hasattr(self, 'content_stack'):
                 settings["last_tab"] = self.content_stack.currentIndex()
+            
+            # Save window mode
+            if self.windowState() & Qt.WindowFullScreen:
+                settings["window_mode"] = "fullscreen"
+            elif self.windowFlags() & Qt.FramelessWindowHint:
+                settings["window_mode"] = "borderless"
+            else:
+                settings["window_mode"] = "windowed"
+            
+            # Save monitor index
+            screens = QGuiApplication.screens()
+            current_screen = QGuiApplication.screenAt(self.geometry().center())
+            if current_screen and current_screen in screens:
+                settings["monitor_index"] = screens.index(current_screen)
             
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
@@ -2315,7 +2336,47 @@ class EnhancedMainWindow(QMainWindow):
     
     def _restore_gui_settings(self):
         """Restore GUI settings from saved file."""
+        from PyQt5.QtGui import QGuiApplication
+        
         settings = self._gui_settings
+        
+        # Restore window position and monitor
+        monitor_index = settings.get("monitor_index", 0)
+        screens = QGuiApplication.screens()
+        
+        if monitor_index < len(screens):
+            screen = screens[monitor_index]
+            screen_geo = screen.geometry()
+            
+            # Restore position if saved, otherwise center on screen
+            x = settings.get("window_x")
+            y = settings.get("window_y")
+            
+            if x is not None and y is not None:
+                # Verify the position is on a valid screen
+                from PyQt5.QtCore import QPoint
+                if QGuiApplication.screenAt(QPoint(x, y)):
+                    self.move(x, y)
+                else:
+                    # Position is off-screen, center on target monitor
+                    self.move(
+                        screen_geo.x() + (screen_geo.width() - self.width()) // 2,
+                        screen_geo.y() + (screen_geo.height() - self.height()) // 2
+                    )
+        
+        # Restore window mode
+        window_mode = settings.get("window_mode", "windowed")
+        if window_mode == "fullscreen":
+            self.showFullScreen()
+        elif window_mode == "borderless":
+            # Get the screen the window is on
+            current_screen = QGuiApplication.screenAt(self.geometry().center())
+            if not current_screen:
+                current_screen = QGuiApplication.primaryScreen()
+            screen_geo = current_screen.geometry()
+            self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
+            self.setGeometry(screen_geo)
+            self.show()
         
         # Restore auto-speak state
         if settings.get("auto_speak", False):

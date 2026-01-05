@@ -189,6 +189,125 @@ def _get_lockable_widgets(parent):
     return widgets
 
 
+def _populate_monitors(parent):
+    """Populate the monitor dropdown with available displays."""
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtGui import QGuiApplication
+    
+    parent.monitor_combo.clear()
+    screens = QGuiApplication.screens()
+    
+    for i, screen in enumerate(screens):
+        geo = screen.geometry()
+        name = screen.name() or f"Display {i + 1}"
+        # Shorten long display names
+        if len(name) > 20:
+            name = name[:17] + "..."
+        parent.monitor_combo.addItem(
+            f"{i + 1}: {name} ({geo.width()}x{geo.height()})",
+            i
+        )
+    
+    # Select current monitor
+    main_window = parent.window()
+    if main_window:
+        current_screen = QGuiApplication.screenAt(main_window.geometry().center())
+        if current_screen:
+            try:
+                idx = screens.index(current_screen)
+                parent.monitor_combo.setCurrentIndex(idx)
+            except ValueError:
+                pass
+
+
+def _move_to_monitor(parent, monitor_index):
+    """Move the main window to the selected monitor."""
+    from PyQt5.QtGui import QGuiApplication
+    
+    screens = QGuiApplication.screens()
+    if monitor_index < 0 or monitor_index >= len(screens):
+        return
+    
+    screen = screens[monitor_index]
+    geo = screen.geometry()
+    
+    main_window = parent.window()
+    if main_window:
+        # Get current window size
+        win_size = main_window.size()
+        
+        # Center window on the selected screen
+        x = geo.x() + (geo.width() - win_size.width()) // 2
+        y = geo.y() + (geo.height() - win_size.height()) // 2
+        
+        main_window.move(x, y)
+        _update_display_info(parent)
+
+
+def _apply_window_mode(parent):
+    """Apply the selected window mode."""
+    from PyQt5.QtCore import Qt
+    
+    mode = parent.window_mode_combo.currentData()
+    main_window = parent.window()
+    
+    if not main_window:
+        return
+    
+    if mode == "windowed":
+        # Normal windowed mode
+        main_window.showNormal()
+        main_window.setWindowFlags(
+            Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint |
+            Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
+        )
+        main_window.show()
+        
+    elif mode == "fullscreen":
+        # True fullscreen
+        main_window.showFullScreen()
+        
+    elif mode == "borderless":
+        # Windowed fullscreen (borderless)
+        from PyQt5.QtGui import QGuiApplication
+        
+        # Get the screen the window is currently on
+        current_screen = QGuiApplication.screenAt(main_window.geometry().center())
+        if not current_screen:
+            current_screen = QGuiApplication.primaryScreen()
+        
+        screen_geo = current_screen.geometry()
+        
+        # Remove window frame
+        main_window.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
+        main_window.showNormal()
+        main_window.setGeometry(screen_geo)
+        main_window.show()
+    
+    _update_display_info(parent)
+
+
+def _update_display_info(parent):
+    """Update the display info label."""
+    from PyQt5.QtGui import QGuiApplication
+    
+    main_window = parent.window()
+    if not main_window:
+        parent.display_info_label.setText("")
+        return
+    
+    current_screen = QGuiApplication.screenAt(main_window.geometry().center())
+    if current_screen:
+        geo = current_screen.geometry()
+        dpi = current_screen.logicalDotsPerInch()
+        refresh = current_screen.refreshRate()
+        parent.display_info_label.setText(
+            f"Current: {geo.width()}x{geo.height()} @ {refresh:.0f}Hz, {dpi:.0f} DPI"
+        )
+    else:
+        parent.display_info_label.setText("Display info unavailable")
+
+
 def create_settings_tab(parent):
     """Create the settings/resources tab."""
     tab = QWidget()
@@ -367,6 +486,58 @@ def create_settings_tab(parent):
     zoom_row.addStretch()
     zoom_layout.addLayout(zoom_row)
     layout.addWidget(zoom_group)
+
+    # === DISPLAY SETTINGS ===
+    display_group = QGroupBox("Display Settings")
+    display_layout = QVBoxLayout(display_group)
+    
+    display_desc = QLabel(
+        "Configure window mode and monitor selection for multi-display setups."
+    )
+    display_desc.setWordWrap(True)
+    display_layout.addWidget(display_desc)
+    
+    # Window mode row
+    window_mode_row = QHBoxLayout()
+    window_mode_row.addWidget(QLabel("Window Mode:"))
+    
+    parent.window_mode_combo = QComboBox()
+    parent.window_mode_combo.addItem("Windowed", "windowed")
+    parent.window_mode_combo.addItem("Fullscreen", "fullscreen")
+    parent.window_mode_combo.addItem("Windowed Fullscreen (Borderless)", "borderless")
+    parent.window_mode_combo.currentIndexChanged.connect(
+        lambda idx: _apply_window_mode(parent)
+    )
+    window_mode_row.addWidget(parent.window_mode_combo)
+    window_mode_row.addStretch()
+    display_layout.addLayout(window_mode_row)
+    
+    # Monitor selection row
+    monitor_row = QHBoxLayout()
+    monitor_row.addWidget(QLabel("Display:"))
+    
+    parent.monitor_combo = QComboBox()
+    _populate_monitors(parent)
+    parent.monitor_combo.currentIndexChanged.connect(
+        lambda idx: _move_to_monitor(parent, idx)
+    )
+    monitor_row.addWidget(parent.monitor_combo)
+    
+    refresh_monitors_btn = QPushButton("Refresh")
+    refresh_monitors_btn.setMaximumWidth(70)
+    refresh_monitors_btn.clicked.connect(lambda: _populate_monitors(parent))
+    monitor_row.addWidget(refresh_monitors_btn)
+    
+    monitor_row.addStretch()
+    display_layout.addLayout(monitor_row)
+    
+    # Current display info
+    parent.display_info_label = QLabel("")
+    parent.display_info_label.setStyleSheet("color: #888; font-style: italic;")
+    _update_display_info(parent)
+    display_layout.addWidget(parent.display_info_label)
+    
+    layout.addWidget(display_group)
 
     # === AUTONOMOUS MODE ===
     autonomous_group = QGroupBox("Autonomous Mode")
