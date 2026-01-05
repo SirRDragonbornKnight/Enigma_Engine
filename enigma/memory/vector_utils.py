@@ -1,27 +1,18 @@
 """
-Very small placeholder vector utilities. For real vector DB, use FAISS, Annoy, Milvus, or Weaviate.
-We include a simple in-memory store for demo.
+Vector utilities placeholder - DEPRECATED.
+This module is deprecated. Use enigma.memory.vector_db.SimpleVectorDB instead.
 """
-import numpy as np
+import warnings
 
-class SimpleVectorDB:
-    def __init__(self, dim=128):
-        self.dim = dim
-        self.vectors = []
-        self.ids = []
+# Re-export from vector_db for backward compatibility
+from .vector_db import SimpleVectorDB
 
-    def add(self, vec, id_):
-        arr = np.asarray(vec).astype(float)
-        if arr.shape[0] != self.dim:
-            raise ValueError("Expected dim", self.dim)
-        self.vectors.append(arr)
-        self.ids.append(id_)
+# Show deprecation warning when importing
+warnings.warn(
+    "enigma.memory.vector_utils.SimpleVectorDB is deprecated. "
+    "Please use enigma.memory.vector_db.SimpleVectorDB instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-    def search(self, qvec, topk=5):
-        if not self.vectors:
-            return []
-        d = np.stack(self.vectors, axis=0)
-        q = np.asarray(qvec).astype(float)
-        dots = d @ q
-        idx = np.argsort(-dots)[:topk]
-        return [(self.ids[i], float(dots[i])) for i in idx]
+__all__ = ['SimpleVectorDB']

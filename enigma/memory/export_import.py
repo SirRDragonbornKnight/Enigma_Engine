@@ -32,15 +32,17 @@ class MemoryExporter:
         self,
         path: Path,
         memory_types: Optional[List[MemoryType]] = None,
-        include_metadata: bool = True
+        include_metadata: bool = True,
+        compress: bool = False
     ) -> Dict[str, Any]:
         """
-        Export memories to JSON format.
+        Export memories to JSON format with optional compression.
         
         Args:
             path: Path to save JSON file
             memory_types: List of memory types to export (None = all)
             include_metadata: Include metadata in export
+            compress: Use gzip compression
             
         Returns:
             Export statistics
@@ -68,17 +70,49 @@ class MemoryExporter:
             export_data['config'] = self.memory_system.config
         
         # Save to file
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, indent=2, ensure_ascii=False)
+        if compress:
+            import gzip
+            # Add .gz extension if not present
+            if not str(path).endswith('.gz'):
+                path = Path(str(path) + '.gz')
+            
+            with gzip.open(path, 'wt', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+        else:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
         
         stats = {
             'exported_count': len(memories),
             'file_path': str(path),
-            'file_size_bytes': path.stat().st_size
+            'file_size_bytes': path.stat().st_size,
+            'compressed': compress
         }
         
         logger.info(f"Exported {stats['exported_count']} memories to {path}")
         return stats
+    
+    def export_compressed(
+        self,
+        path: Path,
+        memory_types: Optional[List[MemoryType]] = None
+    ) -> Dict[str, Any]:
+        """
+        Export with maximum compression.
+        
+        Args:
+            path: Path to save compressed file
+            memory_types: List of memory types to export
+            
+        Returns:
+            Export statistics
+        """
+        return self.export_to_json(
+            path,
+            memory_types=memory_types,
+            include_metadata=True,
+            compress=True
+        )
     
     def export_to_csv(
         self,
@@ -216,10 +250,10 @@ class MemoryImporter:
         overwrite_duplicates: bool = False
     ) -> Dict[str, Any]:
         """
-        Import memories from JSON format.
+        Import memories from JSON format (supports compressed files).
         
         Args:
-            path: Path to JSON file
+            path: Path to JSON file (can be .json or .json.gz)
             merge: Merge with existing memories (vs replace)
             overwrite_duplicates: Overwrite existing memories with same ID
             
@@ -229,9 +263,14 @@ class MemoryImporter:
         if not path.exists():
             raise FileNotFoundError(f"Import file not found: {path}")
         
-        # Load data
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        # Load data (handle compressed files)
+        if str(path).endswith('.gz'):
+            import gzip
+            with gzip.open(path, 'rt', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
         
         memories = data.get('memories', [])
         
