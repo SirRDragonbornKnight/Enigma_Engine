@@ -254,37 +254,43 @@ def _apply_window_mode(parent):
     if not main_window:
         return
     
+    # Check if always on top is enabled
+    stay_on_top = getattr(parent, 'always_on_top_check', None)
+    on_top_flag = Qt.WindowStaysOnTopHint if (stay_on_top and stay_on_top.isChecked()) else Qt.WindowType(0)
+    
     if mode == "windowed":
         # Normal windowed mode
         main_window.showNormal()
         main_window.setWindowFlags(
             Qt.Window | Qt.WindowTitleHint | Qt.WindowSystemMenuHint |
-            Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
+            Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint | on_top_flag
         )
         main_window.show()
         
     elif mode == "fullscreen":
         # True fullscreen
+        main_window.setWindowFlags(main_window.windowFlags() | on_top_flag)
         main_window.showFullScreen()
-        
-    elif mode == "borderless":
-        # Windowed fullscreen (borderless)
-        from PyQt5.QtGui import QGuiApplication
-        
-        # Get the screen the window is currently on
-        current_screen = QGuiApplication.screenAt(main_window.geometry().center())
-        if not current_screen:
-            current_screen = QGuiApplication.primaryScreen()
-        
-        screen_geo = current_screen.geometry()
-        
-        # Remove window frame
-        main_window.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
-        main_window.showNormal()
-        main_window.setGeometry(screen_geo)
-        main_window.show()
     
     _update_display_info(parent)
+
+
+def _toggle_always_on_top(parent, state):
+    """Toggle always on top window flag."""
+    from PyQt5.QtCore import Qt
+    
+    main_window = parent.window()
+    if not main_window:
+        return
+    
+    current_flags = main_window.windowFlags()
+    
+    if state == Checked:
+        main_window.setWindowFlags(current_flags | Qt.WindowStaysOnTopHint)
+    else:
+        main_window.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
+    
+    main_window.show()
 
 
 def _update_display_info(parent):
@@ -504,13 +510,20 @@ def create_settings_tab(parent):
     parent.window_mode_combo = QComboBox()
     parent.window_mode_combo.addItem("Windowed", "windowed")
     parent.window_mode_combo.addItem("Fullscreen", "fullscreen")
-    parent.window_mode_combo.addItem("Windowed Fullscreen (Borderless)", "borderless")
     parent.window_mode_combo.currentIndexChanged.connect(
         lambda idx: _apply_window_mode(parent)
     )
     window_mode_row.addWidget(parent.window_mode_combo)
     window_mode_row.addStretch()
     display_layout.addLayout(window_mode_row)
+    
+    # Always on top checkbox
+    parent.always_on_top_check = QCheckBox("Always on Top")
+    parent.always_on_top_check.setToolTip("Keep the window above other windows")
+    parent.always_on_top_check.stateChanged.connect(
+        lambda state: _toggle_always_on_top(parent, state)
+    )
+    display_layout.addWidget(parent.always_on_top_check)
     
     # Monitor selection row
     monitor_row = QHBoxLayout()
