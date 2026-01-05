@@ -108,6 +108,37 @@ class EnigmaConfig:
             else:
                 self.hidden_dim = 4 * self.dim
 
+        # Validate parameters
+        if self.vocab_size <= 0:
+            raise ValueError(f"vocab_size must be positive, got {self.vocab_size}")
+        
+        if self.dim <= 0:
+            raise ValueError(f"dim must be positive, got {self.dim}")
+        
+        if self.n_layers <= 0:
+            raise ValueError(f"n_layers must be positive, got {self.n_layers}")
+        
+        if self.n_heads <= 0:
+            raise ValueError(f"n_heads must be positive, got {self.n_heads}")
+        
+        if not (0 <= self.dropout <= 1):
+            raise ValueError(f"dropout must be between 0 and 1, got {self.dropout}")
+        
+        if self.max_seq_len <= 0:
+            raise ValueError(f"max_seq_len must be positive, got {self.max_seq_len}")
+        
+        if self.dim % self.n_heads != 0:
+            raise ValueError(
+                f"n_heads ({self.n_heads}) must divide evenly into dim ({self.dim}). "
+                f"Got remainder: {self.dim % self.n_heads}"
+            )
+        
+        if self.n_heads % self.n_kv_heads != 0:
+            raise ValueError(
+                f"n_kv_heads ({self.n_kv_heads}) must divide evenly into n_heads ({self.n_heads}). "
+                f"Got remainder: {self.n_heads % self.n_kv_heads}"
+            )
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'vocab_size': self.vocab_size,
@@ -152,7 +183,7 @@ MODEL_PRESETS = {
     # Consumer GPU (~27-85M params)
     'small': EnigmaConfig(dim=512, n_layers=8, n_heads=8, n_kv_heads=4, max_seq_len=1024),
     'medium': EnigmaConfig(dim=768, n_layers=12, n_heads=12, n_kv_heads=4, max_seq_len=2048),
-    'base': EnigmaConfig(dim=896, n_layers=14, n_heads=14, n_kv_heads=4, max_seq_len=2048),
+    'base': EnigmaConfig(dim=896, n_layers=14, n_heads=14, n_kv_heads=2, max_seq_len=2048),
 
     # Prosumer GPU (~200M-600M params)
     'large': EnigmaConfig(dim=1024, n_layers=16, n_heads=16, n_kv_heads=4, max_seq_len=4096),

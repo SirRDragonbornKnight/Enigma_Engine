@@ -209,6 +209,12 @@ class EnigmaEngine:
         model_file = None
         if model_path:
             model_file = Path(model_path)
+            if not model_file.exists():
+                raise FileNotFoundError(
+                    f"Model file not found at specified path: {model_file}\n"
+                    f"Please ensure the path is correct or train a model using:\n"
+                    f"  python run.py --train"
+                )
         elif DEFAULT_MODEL.exists():
             model_file = DEFAULT_MODEL
         elif LEGACY_MODEL.exists():
@@ -223,8 +229,18 @@ class EnigmaEngine:
 
         if model_file and model_file.exists():
             # Load state dict to infer model architecture
-            from .model_registry import safe_load_weights
-            state_dict = safe_load_weights(model_file, map_location="cpu")
+            try:
+                from .model_registry import safe_load_weights
+                state_dict = safe_load_weights(model_file, map_location="cpu")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load model weights from {model_file}: {e}\n"
+                    f"The model file may be corrupted or incompatible.\n"
+                    f"Try one of the following:\n"
+                    f"  1. Train a new model: python run.py --train\n"
+                    f"  2. Download a pre-trained model to {MODELS_DIR}\n"
+                    f"  3. Check if the file is a valid PyTorch checkpoint"
+                ) from e
 
             # Infer model size from state dict
             detected_size = self._infer_model_size(state_dict)
@@ -236,24 +252,49 @@ class EnigmaEngine:
                     break
 
             # Create model with correct architecture
-            model = create_model(
-                detected_size,
-                vocab_size=vocab_size
-            )
+            try:
+                model = create_model(
+                    detected_size,
+                    vocab_size=vocab_size
+                )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to create model with size '{detected_size}' and vocab_size={vocab_size}: {e}\n"
+                    f"The model configuration may be invalid.\n"
+                    f"Try creating a model with a standard size: 'tiny', 'small', 'medium', or 'large'"
+                ) from e
 
             # Load weights
             try:
                 model.load_state_dict(state_dict, strict=False)
                 logger.info(f"Loaded model from {model_file}")
             except Exception as e:
+                logger.error(
+                    f"Failed to load model weights from {model_file}: {e}\n"
+                    f"Model architecture mismatch or corrupted weights.\n"
+                    f"The model will be initialized with random weights."
+                )
                 logger.warning(f"Could not load weights: {e}")
         else:
             # Create new model
             if model_size == "auto":
                 model_size = "small"
+                logger.warning(
+                    f"No model file found. Creating new '{model_size}' model with random weights.\n"
+                    f"To use a trained model:\n"
+                    f"  1. Train a model: python run.py --train\n"
+                    f"  2. Place a .pth file in: {MODELS_DIR}\n"
+                    f"  3. Or specify model_path when creating EnigmaEngine"
+                )
 
-            model = create_model(model_size, vocab_size=vocab_size)
-            logger.info(f"Created new {model_size} model (no weights loaded)")
+            try:
+                model = create_model(model_size, vocab_size=vocab_size)
+                logger.info(f"Created new {model_size} model (no weights loaded)")
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to create model with size '{model_size}': {e}\n"
+                    f"Try one of these standard sizes: 'nano', 'micro', 'tiny', 'small', 'medium', 'large'"
+                ) from e
 
         return model
 
