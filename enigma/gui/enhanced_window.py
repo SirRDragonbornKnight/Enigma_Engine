@@ -1902,10 +1902,11 @@ class EnhancedMainWindow(QMainWindow):
             # Save window mode
             if self.windowState() & Qt.WindowFullScreen:
                 settings["window_mode"] = "fullscreen"
-            elif self.windowFlags() & Qt.FramelessWindowHint:
-                settings["window_mode"] = "borderless"
             else:
                 settings["window_mode"] = "windowed"
+            
+            # Save always on top state
+            settings["always_on_top"] = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
             
             # Save monitor index
             screens = QGuiApplication.screens()
@@ -2368,14 +2369,10 @@ class EnhancedMainWindow(QMainWindow):
         window_mode = settings.get("window_mode", "windowed")
         if window_mode == "fullscreen":
             self.showFullScreen()
-        elif window_mode == "borderless":
-            # Get the screen the window is on
-            current_screen = QGuiApplication.screenAt(self.geometry().center())
-            if not current_screen:
-                current_screen = QGuiApplication.primaryScreen()
-            screen_geo = current_screen.geometry()
-            self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
-            self.setGeometry(screen_geo)
+        
+        # Restore always on top
+        if settings.get("always_on_top", False):
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
             self.show()
         
         # Restore auto-speak state
