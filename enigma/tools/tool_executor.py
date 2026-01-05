@@ -13,11 +13,65 @@ Executes tool calls from the AI by:
 import json
 import re
 import logging
+import signal
+import platform
 from typing import Dict, Any, Optional, List, Tuple
+from contextlib import contextmanager
 
 from .tool_definitions import get_tool_definition
 
 logger = logging.getLogger(__name__)
+
+
+class TimeoutError(Exception):
+    """Raised when a tool execution times out."""
+    pass
+
+
+@contextmanager
+def timeout_context(seconds: int):
+    """
+    Context manager for timing out operations.
+    
+    Uses signal.SIGALRM on Unix systems, threading.Timer on Windows.
+    
+    Args:
+        seconds: Timeout in seconds
+        
+    Raises:
+        TimeoutError: If the operation takes longer than specified
+    """
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Operation timed out after {seconds} seconds")
+    
+    # Unix systems: use SIGALRM
+    if platform.system() != "Windows" and hasattr(signal, 'SIGALRM'):
+        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+    else:
+        # Windows fallback: use threading
+        import threading
+        
+        timer_expired = False
+        
+        def set_timeout():
+            nonlocal timer_expired
+            timer_expired = True
+        
+        timer = threading.Timer(seconds, set_timeout)
+        timer.start()
+        
+        try:
+            yield
+            if timer_expired:
+                raise TimeoutError(f"Operation timed out after {seconds} seconds")
+        finally:
+            timer.cancel()
 
 
 class ToolExecutor:
@@ -208,6 +262,42 @@ class ToolExecutor:
         
         except Exception as e:
             logger.exception(f"Error executing tool {tool_name}: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": tool_name,
+            }
+    
+    def execute_tool_with_timeout(
+        self,
+        tool_name: str,
+        params: Dict[str, Any],
+        timeout: int = 60
+    ) -> Dict[str, Any]:
+        """
+        Execute a tool with a timeout to prevent hanging operations.
+        
+        Args:
+            tool_name: Name of the tool to execute
+            params: Parameters for the tool
+            timeout: Timeout in seconds (default: 60)
+            
+        Returns:
+            Result dictionary with 'success', 'result', and optionally 'error'
+        """
+        try:
+            with timeout_context(timeout):
+                return self.execute_tool(tool_name, params)
+        except TimeoutError as e:
+            logger.warning(f"Tool {tool_name} timed out after {timeout}s")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": tool_name,
+                "timeout": True,
+            }
+        except Exception as e:
+            logger.exception(f"Error executing tool {tool_name} with timeout: {e}")
             return {
                 "success": False,
                 "error": str(e),
