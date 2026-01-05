@@ -8,7 +8,7 @@ Prevents unauthorized or accidental execution of destructive operations.
 
 import logging
 from enum import Enum
-from typing import Dict, Set, Optional, Callable
+from typing import Dict, Set, Optional, Callable, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class ToolPermissionManager:
         
         logger.info(f"ToolPermissionManager initialized (level={user_permission_level.name})")
     
-    def can_execute(self, tool_name: str, params: Optional[Dict] = None) -> tuple[bool, Optional[str]]:
+    def can_execute(self, tool_name: str, params: Optional[Dict] = None) -> Tuple[bool, Optional[str]]:
         """
         Check if user can execute a tool.
         

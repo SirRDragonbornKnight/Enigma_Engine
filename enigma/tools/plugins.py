@@ -7,6 +7,7 @@ Discovers and loads custom tool plugins from configured directories.
 
 import logging
 import importlib
+import importlib.util
 import inspect
 import sys
 from pathlib import Path
