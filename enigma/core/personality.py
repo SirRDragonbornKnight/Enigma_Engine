@@ -102,6 +102,10 @@ class AIPersonality:
         self.conversation_count: int = 0        # Total conversations
         self.last_updated: str = datetime.now().isoformat()
         
+        # Voice preferences and evolution
+        self.voice_preferences: Dict[str, Any] = {}  # AI's voice choices
+        self.voice_evolution_history: List[Dict[str, Any]] = []  # Voice changes over time
+        
         # Evolution settings
         self.evolution_rate: float = 0.05       # How fast personality changes
         self.min_confidence: float = 0.2        # Minimum confidence level
@@ -509,7 +513,9 @@ class AIPersonality:
             "conversation_count": self.conversation_count,
             "last_updated": self.last_updated,
             "evolution_rate": self.evolution_rate,
-            "min_confidence": self.min_confidence
+            "min_confidence": self.min_confidence,
+            "voice_preferences": self.voice_preferences,
+            "voice_evolution_history": self.voice_evolution_history
         }
         
         with open(filepath, 'w') as f:
@@ -555,6 +561,8 @@ class AIPersonality:
             self.last_updated = data.get("last_updated", datetime.now().isoformat())
             self.evolution_rate = data.get("evolution_rate", 0.05)
             self.min_confidence = data.get("min_confidence", 0.2)
+            self.voice_preferences = data.get("voice_preferences", {})
+            self.voice_evolution_history = data.get("voice_evolution_history", [])
             
             return True
         except Exception as e:
