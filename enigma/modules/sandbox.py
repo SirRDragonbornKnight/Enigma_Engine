@@ -161,7 +161,9 @@ class ModuleSandbox:
     
     def _install_import_hook(self):
         """Install import hook to restrict dangerous imports."""
-        original_import = __builtins__.__import__
+        # Handle both __builtins__ as dict and as module
+        import builtins
+        original_import = builtins.__import__
         restricted = set(self.config.restricted_imports)
         
         def restricted_import(name, *args, **kwargs):
@@ -181,7 +183,7 @@ class ModuleSandbox:
             
             return original_import(name, *args, **kwargs)
         
-        __builtins__.__import__ = restricted_import
+        builtins.__import__ = restricted_import
         return original_import
     
     def run_in_sandbox(self, func: Callable, *args, **kwargs) -> Any:
@@ -239,7 +241,8 @@ class ModuleSandbox:
         finally:
             # Restore original import
             if original_import:
-                __builtins__.__import__ = original_import
+                import builtins
+                builtins.__import__ = original_import
 
 
 class SandboxViolationError(Exception):
