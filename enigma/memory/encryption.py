@@ -81,16 +81,24 @@ class MemoryEncryption:
         
         Args:
             path: Path to save key
-            password: Optional password protection (uses simple XOR, not cryptographically strong)
+            password: Optional password protection
+            
+        Warning:
+            Password protection uses simple XOR obfuscation, NOT cryptographically
+            secure. For production use, implement proper key derivation with PBKDF2
+            or Argon2. This feature is provided for basic protection only.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
         
         key_data = self.key
         
         if password:
-            # Simple password-based XOR obfuscation (NOT secure for production!)
-            # For production, use a proper KDF like PBKDF2 or Argon2
-            logger.warning("Password protection uses simple obfuscation, not suitable for sensitive data")
+            # WARNING: Simple password-based XOR obfuscation - NOT SECURE!
+            # For production, use proper KDF like PBKDF2 or Argon2
+            logger.critical(
+                "Password protection uses simple obfuscation, NOT suitable for production! "
+                "Implement proper key derivation for sensitive data."
+            )
             
             import hashlib
             password_hash = hashlib.sha256(password.encode()).digest()
