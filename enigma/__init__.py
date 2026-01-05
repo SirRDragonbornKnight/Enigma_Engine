@@ -39,7 +39,7 @@ MODELS_DIR = Path(CONFIG["models_dir"])
 DB_PATH = Path(CONFIG["db_path"])
 
 # Version info
-__version__ = "2.0.0"
+__version__ = "0.1.0"
 __author__ = "Enigma AI Team"
 
 __all__ = [
