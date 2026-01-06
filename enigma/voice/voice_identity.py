@@ -393,7 +393,10 @@ class AIVoiceIdentity:
         
         # Save current identity profile
         if self.current_identity:
-            self.current_identity.save(directory.parent.parent / "information" / "voice_profiles")
+            # Save profile in the same directory as voice_identity
+            profiles_dir = directory / "profiles"
+            profiles_dir.mkdir(parents=True, exist_ok=True)
+            self.current_identity.save(profiles_dir)
         
         # Save discovery history
         identity_file = directory / "voice_identity.json"
