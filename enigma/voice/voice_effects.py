@@ -271,14 +271,26 @@ class VoiceEffects:
     
     def _apply_authoritative(self, text: str) -> str:
         """Apply authoritative effect."""
+        import re
+        
         # Make statements more definitive
         text = text.replace("...", ".")
-        # Remove hedging if present
-        hedging = ["maybe", "perhaps", "possibly", "might"]
-        for word in hedging:
-            text = text.replace(f" {word} ", " ")
-            text = text.replace(f" {word},", ",")
-        return text
+        
+        # Remove hedging with proper word boundaries
+        hedging_patterns = [
+            r'\b(maybe|perhaps|possibly|might)\b',
+        ]
+        
+        for pattern in hedging_patterns:
+            # Remove hedging word and clean up extra spaces
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+        
+        # Clean up multiple spaces
+        text = re.sub(r'\s+', ' ', text)
+        # Clean up space before punctuation
+        text = re.sub(r'\s+([,.])', r'\1', text)
+        
+        return text.strip()
     
     def effect_for_emotion(self, emotion: str) -> Optional[str]:
         """
