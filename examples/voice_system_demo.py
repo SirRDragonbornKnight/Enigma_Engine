@@ -25,11 +25,13 @@ def example_ai_voice_discovery():
     """Example: AI discovers its own voice."""
     print("\n=== AI Voice Self-Discovery ===")
     
-    # Without personality (uses defaults)
-    print("\n1. Discovering voice without personality...")
+    # Note: This example requires an existing personality model
+    # Create one first with: personality = AIPersonality("example_model"); personality.save()
+    print("\n1. Discovering voice with personality...")
     try:
         from enigma.core.personality import AIPersonality
         
+        # Create a temporary personality for demonstration
         personality = AIPersonality("example_model")
         personality.traits.playfulness = 0.8
         personality.traits.confidence = 0.7

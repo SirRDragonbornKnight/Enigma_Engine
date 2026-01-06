@@ -415,29 +415,38 @@ class SmartWakeWords:
         
         # Personality-based suggestions
         if personality and PERSONALITY_AVAILABLE:
-            traits = personality.get_all_effective_traits()
-            
-            # Formal personality
-            if traits.get("formality", 0.5) > 0.7:
-                suggestions.append(f"excuse me {name_lower}")
-                suggestions.append(f"greetings {name_lower}")
-                suggestions.append(f"attention {name_lower}")
-            
-            # Casual/playful personality
-            elif traits.get("playfulness", 0.5) > 0.6:
-                suggestions.append(f"yo {name_lower}")
-                suggestions.append(f"sup {name_lower}")
-                suggestions.append(f"{name_lower} buddy")
-            
-            # Friendly personality
-            if traits.get("empathy", 0.5) > 0.7:
-                suggestions.append(f"hello {name_lower}")
-                suggestions.append(f"{name_lower} friend")
-            
-            # Professional
-            if traits.get("confidence", 0.5) > 0.7:
-                suggestions.append(f"assistant {name_lower}")
-                suggestions.append(f"{name_lower} activate")
+            # Validate that personality has the required method
+            if not hasattr(personality, 'get_all_effective_traits'):
+                # Fallback to default suggestions
+                pass
+            else:
+                try:
+                    traits = personality.get_all_effective_traits()
+                    
+                    # Formal personality
+                    if traits.get("formality", 0.5) > 0.7:
+                        suggestions.append(f"excuse me {name_lower}")
+                        suggestions.append(f"greetings {name_lower}")
+                        suggestions.append(f"attention {name_lower}")
+                    
+                    # Casual/playful personality
+                    elif traits.get("playfulness", 0.5) > 0.6:
+                        suggestions.append(f"yo {name_lower}")
+                        suggestions.append(f"sup {name_lower}")
+                        suggestions.append(f"{name_lower} buddy")
+                    
+                    # Friendly personality
+                    if traits.get("empathy", 0.5) > 0.7:
+                        suggestions.append(f"hello {name_lower}")
+                        suggestions.append(f"{name_lower} friend")
+                    
+                    # Professional
+                    if traits.get("confidence", 0.5) > 0.7:
+                        suggestions.append(f"assistant {name_lower}")
+                        suggestions.append(f"{name_lower} activate")
+                except (AttributeError, TypeError):
+                    # If personality doesn't have expected structure, skip
+                    pass
         else:
             # Default suggestions without personality
             suggestions.extend([

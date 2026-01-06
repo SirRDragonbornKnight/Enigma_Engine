@@ -28,6 +28,7 @@ Usage:
 import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+from dataclasses import asdict
 
 from .voice_profile import VoiceProfile, PRESET_PROFILES, VoiceEngine
 from .voice_effects import VoiceEffects
@@ -264,7 +265,6 @@ class VoiceCustomizer:
         filepath = Path(path)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        from dataclasses import asdict
         data = asdict(profile)
         
         with open(filepath, 'w') as f:

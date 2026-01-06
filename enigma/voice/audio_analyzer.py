@@ -30,6 +30,11 @@ from dataclasses import dataclass
 
 from .voice_profile import VoiceProfile
 
+# Audio constants for fallback analysis
+DEFAULT_SAMPLE_RATE = 44100  # Hz
+DEFAULT_CHANNELS = 2  # Stereo
+DEFAULT_BYTES_PER_SAMPLE = 2  # 16-bit audio
+
 
 @dataclass
 class AudioFeatures:
@@ -164,8 +169,10 @@ class AudioAnalyzer:
         # Get file size as rough estimate of duration
         file_size = audio_path.stat().st_size
         
-        # Rough estimates
-        estimated_duration = file_size / (44100 * 2 * 2)  # Assume 44.1kHz stereo 16-bit
+        # Rough estimates using standard audio format constants
+        estimated_duration = file_size / (
+            DEFAULT_SAMPLE_RATE * DEFAULT_CHANNELS * DEFAULT_BYTES_PER_SAMPLE
+        )
         
         # Return default features with estimates
         return AudioFeatures(
@@ -174,7 +181,7 @@ class AudioAnalyzer:
             speaking_rate=1.0,
             energy=0.7,
             duration=estimated_duration,
-            sample_rate=44100
+            sample_rate=DEFAULT_SAMPLE_RATE
         )
     
     def estimate_voice_profile(

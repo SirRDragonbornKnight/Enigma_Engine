@@ -33,6 +33,7 @@ import random
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
+from datetime import datetime
 
 from .voice_profile import VoiceProfile, PROFILES_DIR
 from ..config import CONFIG
@@ -56,7 +57,6 @@ class VoiceExperiment:
     
     def __post_init__(self):
         if not self.timestamp:
-            from datetime import datetime
             self.timestamp = datetime.now().isoformat()
 
 
@@ -314,7 +314,7 @@ class AIVoiceIdentity:
         self.feedback_history.append({
             "feedback": feedback,
             "profile_before": asdict(current_profile),
-            "timestamp": __import__('datetime').datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         })
         
         # Parse feedback and adjust
