@@ -264,8 +264,25 @@ class SimpleVectorDB(VectorDBInterface):
         self.ids = []
         self.metadata = []
     
-    def add(self, vectors: np.ndarray, ids: List[str], metadata: Optional[List[Dict]] = None) -> None:
-        """Add vectors."""
+    def add(self, vectors, ids, metadata: Optional[List[Dict]] = None) -> None:
+        """
+        Add vectors.
+        
+        Args:
+            vectors: Vector or array of vectors
+            ids: Single ID (legacy) or list of IDs (new API)
+            metadata: Optional metadata list
+        """
+        # Convert to numpy array if needed (backward compatibility)
+        if not isinstance(vectors, np.ndarray):
+            vectors = np.array(vectors)
+        
+        # Handle single ID (legacy API)
+        if isinstance(ids, str):
+            ids = [ids]
+            if vectors.ndim == 1:
+                vectors = vectors.reshape(1, -1)
+        
         if vectors.ndim == 1:
             vectors = vectors.reshape(1, -1)
         
@@ -276,10 +293,28 @@ class SimpleVectorDB(VectorDBInterface):
             self.ids.append(ids[i])
             self.metadata.append(metadata[i] if metadata else {})
     
-    def search(self, query_vector: np.ndarray, top_k: int = 5) -> List[Tuple[str, float, Dict]]:
-        """Search using cosine similarity."""
+    def search(self, query_vector: np.ndarray, top_k: int = 5, topk: int = None) -> List[Tuple[str, float, Dict]]:
+        """
+        Search using cosine similarity.
+        
+        Args:
+            query_vector: Query vector
+            top_k: Number of results (new API)
+            topk: Number of results (legacy API, deprecated)
+            
+        Returns:
+            List of (id, score, metadata) tuples
+        """
+        # Support legacy topk parameter
+        if topk is not None:
+            top_k = topk
+        
         if not self.vectors:
             return []
+        
+        # Convert to numpy array if needed (backward compatibility)
+        if not isinstance(query_vector, np.ndarray):
+            query_vector = np.array(query_vector)
         
         vectors_array = np.stack(self.vectors, axis=0)
         query = query_vector.astype(float)
