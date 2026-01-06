@@ -188,7 +188,7 @@ class AvatarController:
     def _init_renderer(self) -> None:
         """Initialize the renderer component."""
         if self._renderer is None:
-            # Use SpriteRenderer by default (works everywhere)
+            # Lazy import to avoid circular dependencies
             from .renderers import SpriteRenderer
             self._renderer = SpriteRenderer(self)
             
@@ -492,6 +492,7 @@ class AvatarController:
         Args:
             personality: AIPersonality instance
         """
+        # Lazy imports to avoid circular dependencies
         from .avatar_identity import AIAvatarIdentity
         from .emotion_sync import EmotionExpressionSync
         
@@ -531,6 +532,7 @@ class AvatarController:
         Returns:
             AvatarAppearance based on description
         """
+        # Lazy import to avoid circular dependencies
         from .avatar_identity import AIAvatarIdentity
         
         if not self._identity:
@@ -553,6 +555,7 @@ class AvatarController:
             AvatarCustomizer instance
         """
         if self._customizer is None:
+            # Lazy import to avoid circular dependencies
             from .customizer import AvatarCustomizer
             self._customizer = AvatarCustomizer(self)
         return self._customizer
@@ -573,6 +576,7 @@ class AvatarController:
         Args:
             appearance: AvatarAppearance to apply
         """
+        # Lazy import to avoid circular dependencies
         from .avatar_identity import AIAvatarIdentity
         
         if not self._identity:

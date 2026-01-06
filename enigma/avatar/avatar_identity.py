@@ -54,8 +54,12 @@ class AvatarAppearance:
     def from_dict(cls, data: Dict[str, Any]) -> 'AvatarAppearance':
         """Create from dictionary."""
         # Handle list fields properly
-        if 'accessories' in data and isinstance(data['accessories'], str):
-            data['accessories'] = []
+        if 'accessories' in data:
+            if isinstance(data['accessories'], str):
+                # Parse comma-separated string
+                data['accessories'] = [a.strip() for a in data['accessories'].split(',') if a.strip()]
+            elif not isinstance(data['accessories'], list):
+                data['accessories'] = []
         return cls(**data)
 
 
