@@ -34,6 +34,7 @@
         </div>
         
         <button id="train-btn" class="btn btn-primary">Start Training</button>
+        <button id="stop-btn" class="btn btn-secondary" style="display: none;">Stop Training</button>
     </div>
     
     <div class="train-status" id="train-status" style="display: none;">
@@ -42,6 +43,20 @@
             <div class="progress-fill" id="progress-fill"></div>
         </div>
         <p id="status-text">Initializing...</p>
+        <div class="training-stats">
+            <div class="stat-item">
+                <span>Epoch:</span>
+                <strong id="current-epoch">0</strong> / <span id="total-epochs">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Loss:</span>
+                <strong id="current-loss">N/A</strong>
+            </div>
+            <div class="stat-item">
+                <span>Progress:</span>
+                <strong id="current-progress">0%</strong>
+            </div>
+        </div>
     </div>
     
     <div class="train-info">
@@ -56,34 +71,210 @@
         <h3>📊 Training Data</h3>
         <p>Your training data should be in Q&A format or plain text conversations.</p>
         <p>More data = better results (aim for 1000+ lines)</p>
+        
+        <h3>⚠️ Important Note</h3>
+        <p>For full training functionality, use the CLI: <code>python run.py --train</code></p>
+        <p>Web-based training is currently in preview mode.</p>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
 const trainBtn = document.getElementById('train-btn');
+const stopBtn = document.getElementById('stop-btn');
 const trainStatus = document.getElementById('train-status');
+const progressFill = document.getElementById('progress-fill');
+const statusText = document.getElementById('status-text');
+const currentEpoch = document.getElementById('current-epoch');
+const totalEpochs = document.getElementById('total-epochs');
+const currentLoss = document.getElementById('current-loss');
+const currentProgress = document.getElementById('current-progress');
+
+// Try to connect to WebSocket for real-time updates
+let socket = null;
+try {
+    socket = io();
+    
+    socket.on('training_progress', (data) => {
+        updateTrainingProgress(data);
+    });
+} catch (error) {
+    console.log('WebSocket not available');
+}
+
+function updateTrainingProgress(data) {
+    if (data.progress !== undefined) {
+        progressFill.style.width = data.progress + '%';
+        currentProgress.textContent = data.progress.toFixed(1) + '%';
+    }
+    
+    if (data.epoch !== undefined) {
+        currentEpoch.textContent = data.epoch;
+    }
+    
+    if (data.loss !== undefined) {
+        currentLoss.textContent = data.loss.toFixed(4);
+    }
+    
+    if (data.message) {
+        statusText.textContent = data.message;
+    }
+    
+    if (data.status === 'complete') {
+        trainBtn.disabled = false;
+        stopBtn.style.display = 'none';
+        trainBtn.style.display = 'inline-block';
+        statusText.textContent = 'Training complete!';
+    }
+}
+
+async function checkTrainingStatus() {
+    try {
+        const response = await fetch('/api/train/status');
+        const data = await response.json();
+        
+        if (data.success && data.training.running) {
+            trainStatus.style.display = 'block';
+            trainBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            
+            totalEpochs.textContent = data.training.total_epochs;
+            currentEpoch.textContent = data.training.epoch;
+            currentProgress.textContent = data.training.progress + '%';
+            progressFill.style.width = data.training.progress + '%';
+            
+            if (data.training.loss) {
+                currentLoss.textContent = data.training.loss.toFixed(4);
+            }
+            
+            statusText.textContent = data.training.status;
+        }
+    } catch (error) {
+        console.error('Error checking training status:', error);
+    }
+}
 
 trainBtn.addEventListener('click', async () => {
     const modelName = document.getElementById('model-name').value;
     const modelSize = document.getElementById('model-size').value;
-    const epochs = document.getElementById('epochs').value;
+    const epochs = parseInt(document.getElementById('epochs').value);
     
     if (!modelName) {
         alert('Please enter a model name');
         return;
     }
     
-    // Show status
-    trainStatus.style.display = 'block';
-    trainBtn.disabled = true;
+    // Validate epochs
+    if (isNaN(epochs) || epochs < 1 || epochs > 200) {
+        alert('Epochs must be a number between 1 and 200');
+        return;
+    }
     
-    // Note: Actual training would be done via a background process
-    // This is a placeholder UI
-    alert('Training must be started from CLI:\n\npython run.py --train --model ' + modelSize + ' --epochs ' + epochs);
-    
-    trainBtn.disabled = false;
+    try {
+        // Start training via API
+        const response = await fetch('/api/train/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                model_name: modelName,
+                model_size: modelSize,
+                epochs: epochs
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show status
+            trainStatus.style.display = 'block';
+            trainBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            
+            totalEpochs.textContent = epochs;
+            statusText.textContent = 'Training started...';
+            
+            // Start polling for status updates (if WebSocket not available)
+            if (!socket) {
+                const statusInterval = setInterval(async () => {
+                    const statusResp = await fetch('/api/train/status');
+                    const statusData = await statusResp.json();
+                    
+                    if (statusData.success) {
+                        updateTrainingProgress(statusData.training);
+                        
+                        if (!statusData.training.running) {
+                            clearInterval(statusInterval);
+                        }
+                    }
+                }, 2000);
+            }
+        } else {
+            alert(data.note || 'Training could not be started');
+        }
+    } catch (error) {
+        console.error('Error starting training:', error);
+        alert('Error starting training. Please use CLI for full training: python run.py --train');
+    }
 });
+
+stopBtn.addEventListener('click', async () => {
+    if (!confirm('Stop training?')) return;
+    
+    try {
+        const response = await fetch('/api/train/stop', {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            trainBtn.disabled = false;
+            stopBtn.style.display = 'none';
+            trainBtn.style.display = 'inline-block';
+            statusText.textContent = 'Training stopped';
+        }
+    } catch (error) {
+        console.error('Error stopping training:', error);
+    }
+});
+
+// Check training status on page load
+checkTrainingStatus();
 </script>
+
+<style>
+.training-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--light);
+    border-radius: 8px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-item span {
+    font-size: 0.875rem;
+    color: var(--text-light);
+}
+
+.stat-item strong {
+    font-size: 1.125rem;
+    color: var(--dark);
+}
+
+.train-info code {
+    background: var(--light);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+</style>
 {% endblock %}

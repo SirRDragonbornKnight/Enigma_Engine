@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Personality - Enigma Engine{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="personality-container">
+    <h2>🎭 AI Personality Dashboard</h2>
+    
+    <div class="control-mode">
+        <div class="mode-toggle">
+            <label class="toggle-switch">
+                <input type="checkbox" id="ai-evolution-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+            <div class="mode-info">
+                <h3 id="mode-title">Let AI Evolve</h3>
+                <p id="mode-description">AI will develop its own personality naturally</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="traits-grid">
+        <div class="trait-card">
+            <h3>😄 Humor Level</h3>
+            <div class="trait-bar-container">
+                <div class="trait-bar">
+                    <div class="trait-fill trait-evolved" id="humor-evolved" style="width: 50%"></div>
+                    <div class="trait-fill trait-user" id="humor-user" style="width: 0%"></div>
+                </div>
+            </div>
+            <input type="range" id="humor-slider" min="0" max="100" value="50" class="trait-slider">
+            <span class="trait-value" id="humor-value">0.5</span>
+        </div>
+        
+        <div class="trait-card">
+            <h3>🎩 Formality</h3>
+            <div class="trait-bar-container">
+                <div class="trait-bar">
+                    <div class="trait-fill trait-evolved" id="formality-evolved" style="width: 50%"></div>
+                    <div class="trait-fill trait-user" id="formality-user" style="width: 0%"></div>
+                </div>
+            </div>
+            <input type="range" id="formality-slider" min="0" max="100" value="50" class="trait-slider">
+            <span class="trait-value" id="formality-value">0.5</span>
+        </div>
+        
+        <div class="trait-card">
+            <h3>💬 Verbosity</h3>
+            <div class="trait-bar-container">
+                <div class="trait-bar">
+                    <div class="trait-fill trait-evolved" id="verbosity-evolved" style="width: 50%"></div>
+                    <div class="trait-fill trait-user" id="verbosity-user" style="width: 0%"></div>
+                </div>
+            </div>
+            <input type="range" id="verbosity-slider" min="0" max="100" value="50" class="trait-slider">
+            <span class="trait-value" id="verbosity-value">0.5</span>
+        </div>
+        
+        <div class="trait-card">
+            <h3>🎨 Creativity</h3>
+            <div class="trait-bar-container">
+                <div class="trait-bar">
+                    <div class="trait-fill trait-evolved" id="creativity-evolved" style="width: 70%"></div>
+                    <div class="trait-fill trait-user" id="creativity-user" style="width: 0%"></div>
+                </div>
+            </div>
+            <input type="range" id="creativity-slider" min="0" max="100" value="70" class="trait-slider">
+            <span class="trait-value" id="creativity-value">0.7</span>
+        </div>
+    </div>
+    
+    <div class="interests-section">
+        <h3>💡 AI Interests</h3>
+        <div class="interest-tags" id="ai-interests">
+            <span class="tag">AI</span>
+            <span class="tag">Technology</span>
+            <span class="tag">Science</span>
+        </div>
+    </div>
+    
+    <div class="dislikes-section">
+        <h3>👎 AI Dislikes</h3>
+        <div class="interest-tags" id="ai-dislikes">
+            <span class="tag tag-dislike">Repetition</span>
+        </div>
+    </div>
+    
+    <div class="actions">
+        <button id="save-btn" class="btn btn-primary">Save Changes</button>
+        <button id="reset-btn" class="btn btn-secondary">Reset to Defaults</button>
+        <button id="explain-btn" class="btn btn-secondary">Why is the AI like this?</button>
+    </div>
+    
+    <div id="explanation-box" class="explanation-box" style="display: none;">
+        <h3>AI Personality Explanation</h3>
+        <p id="explanation-text"></p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/personality.js') }}"></script>
+{% endblock %}

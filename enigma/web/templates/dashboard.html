@@ -2,9 +2,26 @@
 
 {% block title %}Dashboard - Enigma Engine{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="dashboard">
     <h2>📊 Dashboard</h2>
+    
+    <div class="ai-expression-widget">
+        <div class="ai-mood">
+            <span class="mood-emoji" id="ai-mood-emoji">😊</span>
+            <span class="mood-text" id="ai-mood-text">I'm feeling curious today!</span>
+        </div>
+        <div class="ai-interests">
+            <h4>I enjoy talking about:</h4>
+            <div class="interest-tags" id="ai-interests">
+                <span class="tag">Loading...</span>
+            </div>
+        </div>
+    </div>
     
     <div class="stats-grid">
         <div class="stat-card">
@@ -32,6 +49,8 @@
         <h3>Quick Actions</h3>
         <div class="action-buttons">
             <a href="/chat" class="btn btn-primary">💬 Start Chat</a>
+            <a href="/personality" class="btn btn-secondary">🎭 Personality</a>
+            <a href="/voice" class="btn btn-secondary">🎤 Voice Studio</a>
             <a href="/train" class="btn btn-secondary">🎓 Train Model</a>
             <a href="/settings" class="btn btn-secondary">⚙️ Settings</a>
         </div>
@@ -68,8 +87,34 @@ async function loadDashboard() {
     }
 }
 
+// Load AI mood
+async function loadAIMood() {
+    try {
+        const response = await fetch('/api/ai/mood');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('ai-mood-emoji').textContent = data.emoji;
+            document.getElementById('ai-mood-text').textContent = data.text;
+            
+            // Update interests
+            const interestsDiv = document.getElementById('ai-interests');
+            interestsDiv.innerHTML = '';
+            data.interests.forEach(interest => {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.textContent = interest;
+                interestsDiv.appendChild(tag);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading AI mood:', error);
+    }
+}
+
 // Load on page load
 loadDashboard();
+loadAIMood();
 
 // Refresh every 5 seconds
 setInterval(loadDashboard, 5000);
