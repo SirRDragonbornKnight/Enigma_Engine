@@ -252,7 +252,8 @@ def generate_sprite_png(
     """
     Generate a PNG sprite from SVG template.
     
-    Requires cairosvg or PIL. Falls back to SVG if not available.
+    NOTE: Requires cairosvg for PNG conversion. If not available, returns SVG data.
+    Install with: pip install cairosvg
     
     Args:
         sprite_name: Name of sprite template
@@ -262,12 +263,13 @@ def generate_sprite_png(
         size: Output size in pixels
         
     Returns:
-        PNG image data as bytes
+        PNG image data as bytes (or SVG if cairosvg unavailable)
     """
     svg = generate_sprite(sprite_name, primary_color, secondary_color, accent_color)
     
     try:
         # Try cairosvg first (best quality)
+        # This is an optional dependency
         import cairosvg
         png_data = cairosvg.svg2png(
             bytestring=svg.encode('utf-8'),
@@ -276,6 +278,7 @@ def generate_sprite_png(
         )
         return png_data
     except ImportError:
+        # cairosvg not available, return SVG data
         pass
     
     try:

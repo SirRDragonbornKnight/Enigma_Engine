@@ -7,6 +7,7 @@ User tools for customizing avatar appearance.
 from pathlib import Path
 from typing import List, Optional
 import json
+import shutil
 
 from .avatar_identity import AvatarAppearance
 
@@ -312,11 +313,11 @@ class AvatarCustomizer:
             return False
         
         # Copy to avatar assets directory
+        # Import here to avoid circular dependency with config
         from ..config import CONFIG
         assets_dir = Path(CONFIG["data_dir"]) / "avatar" / "custom_sprites"
         assets_dir.mkdir(parents=True, exist_ok=True)
         
-        import shutil
         dest = assets_dir / f"{sprite_name}{path.suffix}"
         shutil.copy(image_path, dest)
         
