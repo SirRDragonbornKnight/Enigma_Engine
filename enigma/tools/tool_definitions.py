@@ -39,10 +39,14 @@ class ToolDefinition:
     module: Optional[str] = None  # Module that provides this capability
     category: str = "general"  # "generation", "perception", "control", "system", "general"
     examples: List[str] = field(default_factory=list)
+    version: str = "1.0.0"  # Tool version (semantic versioning)
+    deprecated: bool = False  # Whether tool is deprecated
+    deprecated_message: Optional[str] = None  # Deprecation message
+    added_in: Optional[str] = None  # Version when tool was added
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for AI consumption."""
-        return {
+        result = {
             "name": self.name,
             "description": self.description,
             "parameters": {
@@ -56,7 +60,18 @@ class ToolDefinition:
                 for p in self.parameters
             },
             "category": self.category,
+            "version": self.version,
         }
+        
+        if self.deprecated:
+            result["deprecated"] = True
+            if self.deprecated_message:
+                result["deprecated_message"] = self.deprecated_message
+        
+        if self.added_in:
+            result["added_in"] = self.added_in
+        
+        return result
     
     def get_schema(self) -> str:
         """Get human-readable schema for the tool."""
@@ -66,7 +81,59 @@ class ToolDefinition:
             default = f" (default: {p.default})" if p.default is not None else ""
             params.append(f"  - {p.name} ({p.type}, {req}){default}: {p.description}")
         
-        return f"{self.name}\n  {self.description}\nParameters:\n" + "\n".join(params)
+        schema = f"{self.name} (v{self.version})"
+        if self.deprecated:
+            schema += " [DEPRECATED]"
+        schema += f"\n  {self.description}\nParameters:\n" + "\n".join(params)
+        
+        if self.deprecated and self.deprecated_message:
+            schema += f"\n  NOTE: {self.deprecated_message}"
+        
+        return schema
+    
+    def is_compatible(self, required_version: str) -> bool:
+        """
+        Check if tool version is compatible with required version.
+        
+        Uses semantic versioning: MAJOR.MINOR.PATCH
+        - Major version must match
+        - Minor version must be >= required
+        - Patch version doesn't matter for compatibility
+        
+        Args:
+            required_version: Required version string (e.g., "1.2.0")
+            
+        Returns:
+            True if compatible, False otherwise
+        """
+        try:
+            # Parse versions
+            current_parts = [int(x) for x in self.version.split('.')]
+            required_parts = [int(x) for x in required_version.split('.')]
+            
+            # Pad with zeros if needed
+            while len(current_parts) < 3:
+                current_parts.append(0)
+            while len(required_parts) < 3:
+                required_parts.append(0)
+            
+            current_major, current_minor, _ = current_parts[:3]
+            required_major, required_minor, _ = required_parts[:3]
+            
+            # Major version must match
+            if current_major != required_major:
+                return False
+            
+            # Minor version must be >= required
+            if current_minor < required_minor:
+                return False
+            
+            return True
+        
+        except (ValueError, IndexError):
+            # If parsing fails, assume compatible
+            logger.warning(f"Failed to parse versions: {self.version}, {required_version}")
+            return True
 
 
 # =============================================================================

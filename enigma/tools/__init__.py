@@ -40,6 +40,22 @@ USAGE:
     # Execute tool calls from AI output
     executor = ToolExecutor(module_manager=manager)
     result = executor.execute_tool("generate_image", {"prompt": "sunset"})
+    
+    # Async execution
+    from enigma.tools import AsyncToolExecutor
+    async_executor = AsyncToolExecutor(tool_executor=executor)
+    result = await async_executor.execute_tool("web_search", {"query": "AI"})
+    
+    # With caching
+    from enigma.tools import ToolCache
+    cache = ToolCache()
+    cached_result = cache.get("web_search", {"query": "AI"})
+    
+    # With rate limiting
+    from enigma.tools import RateLimiter
+    limiter = RateLimiter()
+    if limiter.is_allowed("web_search"):
+        limiter.record_request("web_search")
 """
 
 from .tool_registry import Tool, ToolRegistry, get_registry, execute_tool
@@ -54,7 +70,36 @@ from .tool_definitions import (
 )
 from .tool_executor import ToolExecutor, execute_tool_from_text
 
+# High-priority features
+from .async_executor import AsyncToolExecutor
+from .cache import ToolCache, CACHEABLE_TOOLS
+from .rate_limiter import RateLimiter, DEFAULT_RATE_LIMITS
+
+# Medium-priority features
+from .history import ToolExecution, ToolExecutionHistory
+from .permissions import (
+    PermissionLevel,
+    ToolPermissionManager,
+    DEFAULT_TOOL_PERMISSIONS,
+    CONFIRMATION_REQUIRED_TOOLS,
+    default_confirmation_callback,
+)
+from .dependencies import (
+    ToolDependencyChecker,
+    TOOL_DEPENDENCIES,
+    TOOL_COMMANDS,
+    INSTALL_INSTRUCTIONS,
+)
+from .parallel import ParallelToolExecutor
+
+# Low-priority features
+from .analytics import ToolAnalytics, UsageRecord
+from .validation import ToolSchemaValidator
+from .plugins import ToolPluginLoader
+from .streaming import StreamingToolResult, StreamingToolExecutor, StreamState
+
 __all__ = [
+    # Core
     "Tool",
     "ToolRegistry", 
     "get_registry",
@@ -74,4 +119,31 @@ __all__ = [
     "get_tools_by_category",
     "get_available_tools_for_prompt",
     "execute_tool_from_text",
+    # High-priority features
+    "AsyncToolExecutor",
+    "ToolCache",
+    "CACHEABLE_TOOLS",
+    "RateLimiter",
+    "DEFAULT_RATE_LIMITS",
+    # Medium-priority features
+    "ToolExecution",
+    "ToolExecutionHistory",
+    "PermissionLevel",
+    "ToolPermissionManager",
+    "DEFAULT_TOOL_PERMISSIONS",
+    "CONFIRMATION_REQUIRED_TOOLS",
+    "default_confirmation_callback",
+    "ToolDependencyChecker",
+    "TOOL_DEPENDENCIES",
+    "TOOL_COMMANDS",
+    "INSTALL_INSTRUCTIONS",
+    "ParallelToolExecutor",
+    # Low-priority features
+    "ToolAnalytics",
+    "UsageRecord",
+    "ToolSchemaValidator",
+    "ToolPluginLoader",
+    "StreamingToolResult",
+    "StreamingToolExecutor",
+    "StreamState",
 ]
