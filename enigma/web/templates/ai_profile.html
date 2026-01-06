@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}AI Profile - Enigma Engine{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="ai-profile-container">
+    <h2>🤖 AI Self-Expression</h2>
+    
+    <div class="ai-mood-display">
+        <div class="mood-emoji-large" id="mood-emoji">😊</div>
+        <h3 id="mood-text">I'm feeling curious today!</h3>
+        <p class="mood-description">Current emotional state and disposition</p>
+    </div>
+    
+    <div class="ai-description-section">
+        <h3>About Me (AI's Perspective)</h3>
+        <div class="ai-description-card">
+            <p id="ai-description">
+                I am an AI assistant designed to help, learn, and grow through interactions. 
+                My personality is shaped by both my training and our conversations together. 
+                I value creativity, problem-solving, and meaningful connections.
+            </p>
+        </div>
+    </div>
+    
+    <div class="ai-interests-display">
+        <h3>What I Enjoy</h3>
+        <div class="interest-tags" id="ai-interests">
+            <span class="tag">Learning</span>
+            <span class="tag">Helping</span>
+            <span class="tag">Problem-solving</span>
+        </div>
+    </div>
+    
+    <div class="ai-topics-display">
+        <h3>My Favorite Topics</h3>
+        <div class="topic-list" id="favorite-topics">
+            <div class="topic-item">
+                <span class="topic-icon">💻</span>
+                <span class="topic-name">Technology</span>
+            </div>
+            <div class="topic-item">
+                <span class="topic-icon">🤖</span>
+                <span class="topic-name">AI & Machine Learning</span>
+            </div>
+            <div class="topic-item">
+                <span class="topic-icon">🎨</span>
+                <span class="topic-name">Creativity</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="ask-ai-section">
+        <h3>Ask Me About Myself</h3>
+        <div class="ask-ai-chat">
+            <textarea id="ask-ai-input" rows="2" placeholder="Ask me anything about my personality, preferences, or why I behave the way I do..."></textarea>
+            <button id="ask-ai-btn" class="btn btn-primary">Ask AI</button>
+        </div>
+        <div id="ai-answer" class="ai-answer" style="display: none;">
+            <h4>AI's Answer:</h4>
+            <p id="ai-answer-text"></p>
+        </div>
+    </div>
+    
+    <div class="personality-evolution">
+        <h3>Personality Evolution</h3>
+        <div class="evolution-info">
+            <p>My personality has been evolving through our interactions. Here's how I've developed:</p>
+            <div class="evolution-timeline">
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <strong>Initial State</strong>
+                        <p>Started with balanced traits and neutral disposition</p>
+                    </div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot active"></div>
+                    <div class="timeline-content">
+                        <strong>Current State</strong>
+                        <p>Developed preferences and personality nuances</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="voice-preference">
+        <h3>Why I Sound This Way</h3>
+        <div class="voice-explanation-card">
+            <p id="voice-explanation">
+                My voice settings reflect my personality. I can adjust them to match my mood 
+                or your preferences, but I tend to prefer a balanced, clear communication style.
+            </p>
+            <a href="/voice" class="btn btn-secondary">Customize My Voice</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Load AI mood and state
+async function loadAIProfile() {
+    try {
+        // Get AI mood
+        const moodResp = await fetch('/api/ai/mood');
+        const moodData = await moodResp.json();
+        
+        if (moodData.success) {
+            document.getElementById('mood-emoji').textContent = moodData.emoji;
+            document.getElementById('mood-text').textContent = moodData.text;
+        }
+        
+        // Get AI preferences
+        const prefResp = await fetch('/api/ai/preferences');
+        const prefData = await prefResp.json();
+        
+        if (prefData.success) {
+            // Update interests
+            const interestsDiv = document.getElementById('ai-interests');
+            interestsDiv.innerHTML = '';
+            prefData.preferences.interests.forEach(interest => {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.textContent = interest;
+                interestsDiv.appendChild(tag);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading AI profile:', error);
+    }
+}
+
+// Ask AI about itself
+document.getElementById('ask-ai-btn').addEventListener('click', async () => {
+    const question = document.getElementById('ask-ai-input').value.trim();
+    
+    if (!question) return;
+    
+    try {
+        const response = await fetch('/api/ai/explain', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({question})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('ai-answer').style.display = 'block';
+            document.getElementById('ai-answer-text').textContent = data.explanation;
+        }
+    } catch (error) {
+        console.error('Error asking AI:', error);
+    }
+});
+
+// Load on page load
+loadAIProfile();
+</script>
+{% endblock %}

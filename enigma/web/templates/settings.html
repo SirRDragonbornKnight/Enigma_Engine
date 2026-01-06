@@ -26,6 +26,7 @@
     <div class="settings-section">
         <h3>Personality Settings</h3>
         <p>Configure your AI's personality traits (0.0 = minimum, 1.0 = maximum)</p>
+        <p class="settings-note" id="personality-note">Settings will be saved automatically</p>
         
         <div class="form-group">
             <label for="humor">Humor Level: <span id="humor-val">0.5</span></label>
@@ -47,7 +48,9 @@
             <input type="range" id="creativity" min="0" max="1" step="0.1" value="0.5">
         </div>
         
-        <button class="btn btn-primary">Save Personality</button>
+        <button id="save-personality-btn" class="btn btn-primary">Save Personality</button>
+        <button id="reset-personality-btn" class="btn btn-secondary">Reset to AI Defaults</button>
+        <a href="/personality" class="btn btn-secondary">Advanced Personality →</a>
     </div>
     
     <div class="settings-section">
@@ -62,7 +65,8 @@
             </select>
         </div>
         
-        <button class="btn btn-primary">Save Voice</button>
+        <button id="save-voice-btn" class="btn btn-primary">Save Voice</button>
+        <a href="/voice" class="btn btn-secondary">Voice Studio →</a>
     </div>
     
     <div class="settings-section">
@@ -96,6 +100,127 @@ async function loadModels() {
     }
 }
 
+// Load personality settings
+async function loadPersonalitySettings() {
+    try {
+        const response = await fetch('/api/personality');
+        const data = await response.json();
+        
+        if (data.success) {
+            const personality = data.personality;
+            document.getElementById('humor').value = personality.humor || 0.5;
+            document.getElementById('formality').value = personality.formality || 0.5;
+            document.getElementById('verbosity').value = personality.verbosity || 0.5;
+            document.getElementById('creativity').value = personality.creativity || 0.5;
+            
+            // Update value displays
+            document.getElementById('humor-val').textContent = (personality.humor || 0.5).toFixed(1);
+            document.getElementById('formality-val').textContent = (personality.formality || 0.5).toFixed(1);
+            document.getElementById('verbosity-val').textContent = (personality.verbosity || 0.5).toFixed(1);
+            document.getElementById('creativity-val').textContent = (personality.creativity || 0.5).toFixed(1);
+            
+            // Show override status
+            if (personality.user_controlled) {
+                document.getElementById('personality-note').textContent = 'Using user-defined settings';
+                document.getElementById('personality-note').style.color = 'var(--warning)';
+            } else {
+                document.getElementById('personality-note').textContent = 'AI is evolving naturally';
+                document.getElementById('personality-note').style.color = 'var(--success)';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading personality:', error);
+    }
+}
+
+// Load voice settings
+async function loadVoiceSettings() {
+    try {
+        const response = await fetch('/api/voice');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('voice-profile').value = data.voice.profile || 'default';
+        }
+    } catch (error) {
+        console.error('Error loading voice settings:', error);
+    }
+}
+
+// Save personality
+async function savePersonality() {
+    const settings = {
+        humor: parseFloat(document.getElementById('humor').value),
+        formality: parseFloat(document.getElementById('formality').value),
+        verbosity: parseFloat(document.getElementById('verbosity').value),
+        creativity: parseFloat(document.getElementById('creativity').value),
+        user_controlled: true
+    };
+    
+    try {
+        const response = await fetch('/api/personality', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Personality settings saved!');
+            loadPersonalitySettings();
+        }
+    } catch (error) {
+        console.error('Error saving personality:', error);
+        alert('Error saving personality settings');
+    }
+}
+
+// Reset personality
+async function resetPersonality() {
+    if (!confirm('Reset personality to AI defaults?')) return;
+    
+    try {
+        const response = await fetch('/api/personality/reset', {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Personality reset to defaults!');
+            loadPersonalitySettings();
+        }
+    } catch (error) {
+        console.error('Error resetting personality:', error);
+        alert('Error resetting personality');
+    }
+}
+
+// Save voice settings
+async function saveVoice() {
+    const settings = {
+        profile: document.getElementById('voice-profile').value
+    };
+    
+    try {
+        const response = await fetch('/api/voice', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Voice settings saved!');
+        }
+    } catch (error) {
+        console.error('Error saving voice:', error);
+        alert('Error saving voice settings');
+    }
+}
+
 // Update slider values
 const sliders = ['humor', 'formality', 'verbosity', 'creativity'];
 sliders.forEach(name => {
@@ -103,10 +228,18 @@ sliders.forEach(name => {
     const valueSpan = document.getElementById(name + '-val');
     
     slider.addEventListener('input', () => {
-        valueSpan.textContent = slider.value;
+        valueSpan.textContent = parseFloat(slider.value).toFixed(1);
     });
 });
 
+// Event listeners
+document.getElementById('save-personality-btn').addEventListener('click', savePersonality);
+document.getElementById('reset-personality-btn').addEventListener('click', resetPersonality);
+document.getElementById('save-voice-btn').addEventListener('click', saveVoice);
+
+// Load on page load
 loadModels();
+loadPersonalitySettings();
+loadVoiceSettings();
 </script>
 {% endblock %}
