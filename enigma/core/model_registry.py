@@ -392,8 +392,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         # Create EnigmaConfig from saved config (handles legacy parameter names)
         model_config = EnigmaConfig.from_dict(config)
 
-        # Create model
-        model = Enigma(model_config)
+        # Create model - MUST use config= keyword argument!
+        model = Enigma(config=model_config)
 
         # Load weights
         if checkpoint:

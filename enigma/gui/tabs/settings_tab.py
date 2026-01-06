@@ -244,6 +244,120 @@ def _move_to_monitor(parent, monitor_index):
         _update_display_info(parent)
 
 
+def _toggle_cloud_mode(parent, state):
+    """Toggle cloud AI mode - routes chat to cloud APIs."""
+    enabled = state == Checked
+    
+    # Enable/disable provider and model dropdowns
+    parent.cloud_provider_combo.setEnabled(enabled)
+    parent.cloud_model_combo.setEnabled(enabled)
+    
+    if enabled:
+        provider = parent.cloud_provider_combo.currentData()
+        
+        # Ollama doesn't need an API key - it's FREE and local!
+        if provider == 'ollama':
+            api_key = None  # Not needed
+        else:
+            # Check if API key is set for paid providers
+            key_map = {
+                'openai': 'OPENAI_API_KEY',
+                'anthropic': 'ANTHROPIC_API_KEY', 
+                'google': 'GOOGLE_API_KEY'
+            }
+            api_key = os.environ.get(key_map.get(provider, ''), '')
+            
+            if not api_key:
+                parent.cloud_status_label.setText(f"⚠️ Set {provider.upper()} API key below first!")
+                parent.cloud_status_label.setStyleSheet("color: #f59e0b;")
+                return
+        
+        # Try to load the chat_api module
+        try:
+            main_window = parent.window()
+            if hasattr(main_window, 'module_manager'):
+                manager = main_window.module_manager
+                
+                # Unload local inference if loaded
+                if manager.is_loaded('inference'):
+                    manager.unload('inference')
+                
+                # Configure and load cloud chat
+                config = {
+                    'provider': provider,
+                    'model': parent.cloud_model_combo.currentData(),
+                }
+                if api_key:
+                    config['api_key'] = api_key
+                    
+                manager.set_config('chat_api', config)
+                
+                success, msg = manager.load('chat_api')
+                if success:
+                    model_name = parent.cloud_model_combo.currentText()
+                    if provider == 'ollama':
+                        parent.cloud_status_label.setText(f"✓ Ollama active: {model_name}")
+                    else:
+                        parent.cloud_status_label.setText(f"✓ Cloud AI active: {model_name}")
+                    parent.cloud_status_label.setStyleSheet("color: #22c55e;")
+                else:
+                    if provider == 'ollama':
+                        parent.cloud_status_label.setText(
+                            f"✗ Ollama not running. Install from https://ollama.ai\n"
+                            f"Then run: ollama run {parent.cloud_model_combo.currentData()}"
+                        )
+                    else:
+                        parent.cloud_status_label.setText(f"✗ Failed: {msg}")
+                    parent.cloud_status_label.setStyleSheet("color: #ef4444;")
+            else:
+                parent.cloud_status_label.setText("✓ API mode enabled (apply on restart)")
+                parent.cloud_status_label.setStyleSheet("color: #22c55e;")
+        except Exception as e:
+            parent.cloud_status_label.setText(f"Error: {e}")
+            parent.cloud_status_label.setStyleSheet("color: #ef4444;")
+    else:
+        parent.cloud_status_label.setText("Cloud AI disabled - using local model")
+        parent.cloud_status_label.setStyleSheet("color: #888;")
+        
+        # Try to switch back to local inference
+        try:
+            main_window = parent.window()
+            if hasattr(main_window, 'module_manager'):
+                manager = main_window.module_manager
+                if manager.is_loaded('chat_api'):
+                    manager.unload('chat_api')
+        except Exception:
+            pass
+
+
+def _update_cloud_model_options(parent):
+    """Update model options when provider changes."""
+    provider = parent.cloud_provider_combo.currentData()
+    
+    parent.cloud_model_combo.clear()
+    
+    if provider == 'ollama':
+        parent.cloud_model_combo.addItem("llama3.2:1b (Fast, FREE)", "llama3.2:1b")
+        parent.cloud_model_combo.addItem("llama3.2:3b (Better, FREE)", "llama3.2:3b")
+        parent.cloud_model_combo.addItem("mistral:7b (Quality, FREE)", "mistral:7b")
+        parent.cloud_model_combo.addItem("phi3:mini (Microsoft, FREE)", "phi3:mini")
+        parent.cloud_model_combo.addItem("gemma2:2b (Google, FREE)", "gemma2:2b")
+    elif provider == 'openai':
+        parent.cloud_model_combo.addItem("gpt-4o (Best)", "gpt-4o")
+        parent.cloud_model_combo.addItem("gpt-4-turbo", "gpt-4-turbo")
+        parent.cloud_model_combo.addItem("gpt-4", "gpt-4")
+        parent.cloud_model_combo.addItem("gpt-3.5-turbo (Cheaper)", "gpt-3.5-turbo")
+    elif provider == 'anthropic':
+        parent.cloud_model_combo.addItem("Claude Sonnet 4.5 (Best)", "claude-sonnet-4-20250514")
+        parent.cloud_model_combo.addItem("Claude Opus 4", "claude-opus-4-20250514")
+        parent.cloud_model_combo.addItem("claude-3-opus", "claude-3-opus-20240229")
+        parent.cloud_model_combo.addItem("claude-3-sonnet", "claude-3-sonnet-20240229")
+        parent.cloud_model_combo.addItem("claude-3-haiku (Fast)", "claude-3-haiku-20240307")
+    elif provider == 'google':
+        parent.cloud_model_combo.addItem("gemini-pro (Free tier!)", "gemini-pro")
+        parent.cloud_model_combo.addItem("gemini-pro-vision", "gemini-pro-vision")
+
+
 def _toggle_always_on_top(parent, state):
     """Toggle always on top window flag."""
     from PyQt5.QtCore import Qt
@@ -461,6 +575,65 @@ def create_settings_tab(parent):
     zoom_row.addStretch()
     zoom_layout.addLayout(zoom_row)
     layout.addWidget(zoom_group)
+
+    # === CLOUD AI MODE ===
+    cloud_group = QGroupBox("☁️ Cloud/API AI Mode")
+    cloud_layout = QVBoxLayout(cloud_group)
+    
+    cloud_desc = QLabel(
+        "<b>FREE option:</b> Ollama runs AI locally (no API key needed!)<br>"
+        "<b>Paid options:</b> GPT-4, Claude, Gemini (need API keys)<br>"
+        "Perfect for Raspberry Pi - use powerful AI without training!"
+    )
+    cloud_desc.setWordWrap(True)
+    cloud_layout.addWidget(cloud_desc)
+    
+    # Enable cloud mode
+    parent.cloud_mode_check = QCheckBox("Enable Cloud/API AI for Chat")
+    parent.cloud_mode_check.setToolTip(
+        "Route chat to API instead of local trained model.\n"
+        "Ollama is FREE! Others need API keys."
+    )
+    parent.cloud_mode_check.stateChanged.connect(
+        lambda state: _toggle_cloud_mode(parent, state)
+    )
+    cloud_layout.addWidget(parent.cloud_mode_check)
+    
+    # Provider selection
+    provider_row = QHBoxLayout()
+    provider_row.addWidget(QLabel("Provider:"))
+    parent.cloud_provider_combo = QComboBox()
+    parent.cloud_provider_combo.addItem("🆓 Ollama (FREE, Local)", "ollama")
+    parent.cloud_provider_combo.addItem("OpenAI (GPT-4)", "openai")
+    parent.cloud_provider_combo.addItem("Anthropic (Claude)", "anthropic")
+    parent.cloud_provider_combo.addItem("Google (Gemini - Free tier)", "google")
+    parent.cloud_provider_combo.setEnabled(False)
+    parent.cloud_provider_combo.currentIndexChanged.connect(
+        lambda: _update_cloud_model_options(parent)
+    )
+    provider_row.addWidget(parent.cloud_provider_combo)
+    provider_row.addStretch()
+    cloud_layout.addLayout(provider_row)
+    
+    # Model selection
+    model_row = QHBoxLayout()
+    model_row.addWidget(QLabel("Model:"))
+    parent.cloud_model_combo = QComboBox()
+    parent.cloud_model_combo.addItem("llama3.2:1b (Fast, FREE)", "llama3.2:1b")
+    parent.cloud_model_combo.addItem("llama3.2:3b (Better, FREE)", "llama3.2:3b")
+    parent.cloud_model_combo.addItem("mistral:7b (Quality, FREE)", "mistral:7b")
+    parent.cloud_model_combo.setEnabled(False)
+    model_row.addWidget(parent.cloud_model_combo)
+    model_row.addStretch()
+    cloud_layout.addLayout(model_row)
+    
+    # Status
+    parent.cloud_status_label = QLabel("For Ollama: Install from https://ollama.ai then run: ollama run llama3.2:1b")
+    parent.cloud_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.cloud_status_label.setWordWrap(True)
+    cloud_layout.addWidget(parent.cloud_status_label)
+    
+    layout.addWidget(cloud_group)
 
     # === DISPLAY SETTINGS ===
     display_group = QGroupBox("Display Settings")

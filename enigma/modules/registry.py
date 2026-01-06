@@ -205,6 +205,204 @@ class InferenceModule(Module):
         return True
 
 
+class ChatAPIModule(Module):
+    """Cloud/API chat via OpenAI, Anthropic, Ollama, or other providers.
+    
+    This module provides cloud or API-based chat, allowing you to use powerful
+    AI models (GPT-4, Claude, Llama via Ollama, etc.) without training your own.
+    Perfect for Raspberry Pi or low-power devices.
+    
+    FREE OPTIONS:
+    - Ollama: Run Llama, Mistral locally (FREE, no API key needed)
+    - Google Gemini: Has a free tier
+    - GitHub Copilot: If you have Copilot subscription
+    """
+
+    INFO = ModuleInfo(
+        id="chat_api",
+        name="Cloud/API Chat",
+        description="Chat via API (Ollama FREE, GPT-4, Claude). No training needed!",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        conflicts=["inference"],  # Can't use both local and cloud inference
+        provides=["text_generation", "streaming", "chat", "cloud_chat"],
+        is_cloud_service=True,
+        config_schema={
+            "provider": {
+                "type": "choice",
+                "options": ["ollama", "openai", "anthropic", "google"],
+                "default": "ollama"
+            },
+            "model": {
+                "type": "choice",
+                "options": [
+                    # Ollama (FREE - local)
+                    "llama3.2:1b",
+                    "llama3.2:3b",
+                    "mistral:7b",
+                    "phi3:mini",
+                    "gemma2:2b",
+                    # OpenAI (paid)
+                    "gpt-4o",
+                    "gpt-4-turbo",
+                    "gpt-3.5-turbo",
+                    # Anthropic (paid)
+                    "claude-sonnet-4-20250514",
+                    "claude-opus-4-20250514",
+                    "claude-3-opus-20240229",
+                    "claude-3-sonnet-20240229",
+                    "claude-3-haiku-20240307",
+                    # Google (free tier available)
+                    "gemini-pro"
+                ],
+                "default": "llama3.2:1b"
+            },
+            "api_key": {"type": "secret", "default": ""},
+            "ollama_url": {"type": "string", "default": "http://localhost:11434"},
+            "max_tokens": {"type": "int", "min": 100, "max": 128000, "default": 4096},
+            "temperature": {"type": "float", "min": 0.0, "max": 2.0, "default": 0.7},
+        },
+    )
+
+    def __init__(self):
+        super().__init__()
+        self._client = None
+        self._provider = None
+
+    def load(self) -> bool:
+        provider = self.config.get('provider', 'ollama')
+        
+        try:
+            if provider == 'ollama':
+                # Ollama is FREE and runs locally - no API key needed!
+                import requests
+                ollama_url = self.config.get('ollama_url', 'http://localhost:11434')
+                # Test connection
+                try:
+                    resp = requests.get(f"{ollama_url}/api/tags", timeout=5)
+                    if resp.status_code == 200:
+                        self._client = ollama_url
+                        self._provider = 'ollama'
+                        logger.info(f"Connected to Ollama at {ollama_url}")
+                        return True
+                    else:
+                        logger.warning(f"Ollama not responding. Install from: https://ollama.ai")
+                        return False
+                except requests.exceptions.ConnectionError:
+                    logger.warning(
+                        f"Could not connect to Ollama at {ollama_url}. "
+                        f"Install Ollama from https://ollama.ai and run: ollama run llama3.2:1b"
+                    )
+                    return False
+                    
+            elif provider == 'openai':
+                api_key = self.config.get('api_key') or os.environ.get('OPENAI_API_KEY')
+                if not api_key:
+                    logger.warning("No OpenAI API key. Set in Settings > API Keys")
+                    return False
+                import openai
+                self._client = openai.OpenAI(api_key=api_key)
+                
+            elif provider == 'anthropic':
+                api_key = self.config.get('api_key') or os.environ.get('ANTHROPIC_API_KEY')
+                if not api_key:
+                    logger.warning("No Anthropic API key. Set in Settings > API Keys")
+                    return False
+                import anthropic
+                self._client = anthropic.Anthropic(api_key=api_key)
+                
+            elif provider == 'google':
+                api_key = self.config.get('api_key') or os.environ.get('GOOGLE_API_KEY')
+                if not api_key:
+                    logger.warning("No Google API key. Get free key at: https://makersuite.google.com")
+                    return False
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                self._client = genai.GenerativeModel(self.config.get('model', 'gemini-pro'))
+            
+            self._provider = provider
+            logger.info(f"Loaded {provider} chat")
+            return True
+        except ImportError as e:
+            logger.warning(f"Missing library for {provider}: {e}")
+            return False
+        except Exception as e:
+            logger.warning(f"Could not load {provider} client: {e}")
+            return False
+
+    def chat(self, message: str, history: list = None) -> str:
+        """Send a chat message and get a response."""
+        if not self._client:
+            return "Chat API not initialized. Check connection/API key."
+        
+        model = self.config.get('model', 'llama3.2:1b')
+        max_tokens = self.config.get('max_tokens', 4096)
+        temperature = self.config.get('temperature', 0.7)
+        
+        try:
+            if self._provider == 'ollama':
+                import requests
+                response = requests.post(
+                    f"{self._client}/api/chat",
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": message}],
+                        "stream": False,
+                        "options": {"temperature": temperature}
+                    },
+                    timeout=120
+                )
+                if response.status_code == 200:
+                    return response.json().get("message", {}).get("content", "No response")
+                else:
+                    return f"Ollama error: {response.text}"
+                    
+            elif self._provider == 'openai':
+                messages = [{"role": "system", "content": "You are a helpful AI assistant."}]
+                if history:
+                    messages.extend(history)
+                messages.append({"role": "user", "content": message})
+                
+                response = self._client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature
+                )
+                return response.choices[0].message.content
+                
+            elif self._provider == 'anthropic':
+                messages = []
+                if history:
+                    messages.extend(history)
+                messages.append({"role": "user", "content": message})
+                
+                response = self._client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    messages=messages
+                )
+                return response.content[0].text
+                
+            elif self._provider == 'google':
+                response = self._client.generate_content(message)
+                return response.text
+                
+        except Exception as e:
+            logger.error(f"Cloud chat error: {e}")
+            return f"Error: {e}"
+
+    def generate(self, prompt: str, **kwargs) -> str:
+        """Generate text (alias for chat without history)."""
+        return self.chat(prompt)
+
+    def unload(self) -> bool:
+        self._client = None
+        self._provider = None
+        return True
+
+
 class GGUFLoaderModule(Module):
     """GGUF model loader module - load llama.cpp compatible models."""
 
@@ -1131,6 +1329,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'tokenizer': TokenizerModule,
     'training': TrainingModule,
     'inference': InferenceModule,
+    'chat_api': ChatAPIModule,
     'gguf_loader': GGUFLoaderModule,
 
     # Memory

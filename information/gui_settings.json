@@ -1,13 +1,12 @@
 {
-  "last_model": "microsoft",
-  "window_width": 2560,
-  "window_height": 1377,
-  "window_x": -1,
-  "window_y": -8,
+  "last_model": "sacrifice",
+  "window_width": 1000,
+  "window_height": 700,
+  "window_x": 460,
+  "window_y": 190,
   "auto_speak": false,
   "microphone_enabled": false,
   "last_tab": 0,
-  "window_mode": "windowed",
   "always_on_top": true,
   "monitor_index": 0
 }

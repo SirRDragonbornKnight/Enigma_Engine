@@ -861,16 +861,32 @@ class SetupWizard(QWizard):
             checked = self.size_group.checkedButton()
             size = checked.size_id if checked else "small"
             
-            config = MODEL_PRESETS.get(size, {})
+            # MODEL_PRESETS contains EnigmaConfig objects, not dicts
+            config = MODEL_PRESETS.get(size)
+            if config:
+                dim = getattr(config, 'dim', '?')
+                layers = getattr(config, 'n_layers', '?')
+            else:
+                dim = '?'
+                layers = '?'
+            
+            # Estimate VRAM based on model size
+            vram_estimates = {
+                'nano': 0.1, 'micro': 0.2, 'tiny': 0.5, 'mini': 0.7,
+                'small': 1, 'medium': 2, 'base': 3, 'large': 4,
+                'xl': 8, 'xxl': 16, 'huge': 24, 'giant': 48,
+                'colossal': 80, 'titan': 120, 'omega': 200
+            }
+            min_vram = vram_estimates.get(size, '?')
             
             self.confirm_label.setText(f"""
             <h3>Ready to Create Your AI</h3>
             <table>
                 <tr><td><b>Name:</b></td><td>{name}</td></tr>
                 <tr><td><b>Size:</b></td><td>{size}</td></tr>
-                <tr><td><b>Dimensions:</b></td><td>{config.get('dim', '?')}</td></tr>
-                <tr><td><b>Layers:</b></td><td>{config.get('depth', '?')}</td></tr>
-                <tr><td><b>Min VRAM:</b></td><td>{config.get('min_vram_gb', '?')} GB</td></tr>
+                <tr><td><b>Dimensions:</b></td><td>{dim}</td></tr>
+                <tr><td><b>Layers:</b></td><td>{layers}</td></tr>
+                <tr><td><b>Min VRAM:</b></td><td>{min_vram} GB</td></tr>
             </table>
             <br>
             <p>Click <b>Finish</b> to create your AI.</p>
