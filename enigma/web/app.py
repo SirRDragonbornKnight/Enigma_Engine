@@ -13,6 +13,8 @@ Usage:
 """
 
 import os
+import json
+import random
 from pathlib import Path
 from datetime import datetime
 
@@ -218,6 +220,9 @@ def api_generate():
 # =============================================================================
 
 # Global personality settings
+# NOTE: This is in-memory storage for demo purposes. For production use,
+# implement proper persistence layer (database or file-based) to maintain
+# state between restarts and support multiple users.
 _personality_settings = {
     'humor': 0.5,
     'formality': 0.5,
@@ -289,6 +294,7 @@ def api_reset_personality():
 # =============================================================================
 
 # Global voice settings
+# NOTE: In-memory storage. Consider file-based persistence for production.
 _voice_settings = {
     'profile': 'default',
     'pitch': 1.0,
@@ -539,7 +545,6 @@ def api_get_ai_mood():
         {'mood': 'creative', 'emoji': '🎨', 'text': "Feeling creative and inspired!"},
     ]
     
-    import random
     current = random.choice(moods)
     _ai_state['mood'] = current['mood']
     _ai_state['mood_emoji'] = current['emoji']

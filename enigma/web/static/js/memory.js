@@ -184,7 +184,7 @@ async function deleteMemory(memoryId) {
         const data = await response.json();
         
         if (data.success) {
-            memories = memories.filter(m => m.id != memoryId);
+            memories = memories.filter(m => m.id !== memoryId);
             updateUI();
         }
     } catch (error) {

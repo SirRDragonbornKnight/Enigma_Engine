@@ -166,6 +166,12 @@ trainBtn.addEventListener('click', async () => {
         return;
     }
     
+    // Validate epochs
+    if (isNaN(epochs) || epochs < 1 || epochs > 200) {
+        alert('Epochs must be a number between 1 and 200');
+        return;
+    }
+    
     try {
         // Start training via API
         const response = await fetch('/api/train/start', {
