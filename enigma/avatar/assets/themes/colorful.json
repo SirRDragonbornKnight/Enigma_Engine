@@ -1,0 +1,20 @@
+{
+  "name": "Colorful Theme",
+  "description": "Bright and playful avatar theme",
+  "colors": {
+    "primary": "#f59e0b",
+    "secondary": "#ec4899",
+    "accent": "#22d3ee"
+  },
+  "style": "anime",
+  "shape": "rounded",
+  "size": "medium",
+  "animations": {
+    "idle": "bounce",
+    "movement": "bounce"
+  },
+  "expressions": {
+    "default": "happy"
+  },
+  "accessories": ["hat"]
+}
