@@ -1,0 +1,19 @@
+{
+  "name": "Dark Theme",
+  "description": "Professional dark avatar theme",
+  "colors": {
+    "primary": "#1e293b",
+    "secondary": "#475569",
+    "accent": "#64748b"
+  },
+  "style": "minimal",
+  "shape": "angular",
+  "size": "medium",
+  "animations": {
+    "idle": "still",
+    "movement": "walk"
+  },
+  "expressions": {
+    "default": "neutral"
+  }
+}

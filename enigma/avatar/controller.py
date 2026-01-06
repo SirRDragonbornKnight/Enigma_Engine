@@ -96,6 +96,12 @@ class AvatarController:
         self._animator: Optional['AvatarAnimator'] = None
         self._interactor: Optional['ScreenInteractor'] = None
         
+        # New components
+        self._identity: Optional['AIAvatarIdentity'] = None
+        self._emotion_sync: Optional['EmotionExpressionSync'] = None
+        self._lip_sync: Optional['LipSync'] = None
+        self._customizer: Optional['AvatarCustomizer'] = None
+        
         # Event callbacks
         self._callbacks: Dict[str, List[Callable]] = {
             "state_change": [],
@@ -151,6 +157,10 @@ class AvatarController:
         if self._renderer:
             self._renderer.hide()
         
+        # Stop emotion sync
+        if self._emotion_sync:
+            self._emotion_sync.stop_sync()
+        
         self._set_state(AvatarState.OFF)
         self.config.enabled = False
         print("Avatar disabled")
@@ -178,7 +188,13 @@ class AvatarController:
     def _init_renderer(self) -> None:
         """Initialize the renderer component."""
         if self._renderer is None:
-            self._renderer = AvatarRenderer(self)
+            # Use SpriteRenderer by default (works everywhere)
+            from .renderers import SpriteRenderer
+            self._renderer = SpriteRenderer(self)
+            
+            # Set appearance if we have an identity
+            if self._identity and self._identity.appearance:
+                self._renderer.set_appearance(self._identity.appearance)
     
     def _animation_loop(self) -> None:
         """Background animation processing loop."""
@@ -466,6 +482,120 @@ class AvatarController:
         for ext in [".obj", ".gltf", ".glb", ".fbx", ".dae"]:
             models.extend([f.name for f in avatars_dir.glob(f"*{ext}")])
         return models
+    
+    # === AI Identity & Personality Integration ===
+    
+    def link_personality(self, personality: 'AIPersonality') -> None:
+        """
+        Link avatar to AI personality for auto-sync.
+        
+        Args:
+            personality: AIPersonality instance
+        """
+        from .avatar_identity import AIAvatarIdentity
+        from .emotion_sync import EmotionExpressionSync
+        
+        self._identity = AIAvatarIdentity(personality)
+        self._emotion_sync = EmotionExpressionSync(self, personality)
+        self._emotion_sync.start_sync()
+        
+        print(f"[Avatar] Linked to personality: {personality.model_name}")
+    
+    def auto_design(self) -> Optional['AvatarAppearance']:
+        """
+        Let AI design its own appearance based on personality.
+        
+        Returns:
+            AvatarAppearance designed by AI, or None if no personality linked
+        """
+        if self._identity:
+            appearance = self._identity.design_from_personality()
+            
+            # Apply to renderer if enabled
+            if self.is_enabled and self._renderer:
+                self._renderer.set_appearance(appearance)
+            
+            print(f"[Avatar] AI designed appearance: {self._identity.reasoning}")
+            return appearance
+        else:
+            print("[Avatar] No personality linked. Use link_personality() first.")
+            return None
+    
+    def describe_desired_appearance(self, description: str) -> Optional['AvatarAppearance']:
+        """
+        AI describes desired appearance in natural language.
+        
+        Args:
+            description: Natural language description
+            
+        Returns:
+            AvatarAppearance based on description
+        """
+        from .avatar_identity import AIAvatarIdentity
+        
+        if not self._identity:
+            self._identity = AIAvatarIdentity()
+        
+        appearance = self._identity.describe_desired_appearance(description)
+        
+        # Apply to renderer if enabled
+        if self.is_enabled and self._renderer:
+            self._renderer.set_appearance(appearance)
+        
+        print(f"[Avatar] Created appearance from: {description}")
+        return appearance
+    
+    def get_customizer(self) -> 'AvatarCustomizer':
+        """
+        Get customizer for user modifications.
+        
+        Returns:
+            AvatarCustomizer instance
+        """
+        if self._customizer is None:
+            from .customizer import AvatarCustomizer
+            self._customizer = AvatarCustomizer(self)
+        return self._customizer
+    
+    def get_identity(self) -> Optional['AIAvatarIdentity']:
+        """
+        Get AI avatar identity.
+        
+        Returns:
+            AIAvatarIdentity or None
+        """
+        return self._identity
+    
+    def set_appearance(self, appearance: 'AvatarAppearance') -> None:
+        """
+        Set avatar appearance directly.
+        
+        Args:
+            appearance: AvatarAppearance to apply
+        """
+        from .avatar_identity import AIAvatarIdentity
+        
+        if not self._identity:
+            self._identity = AIAvatarIdentity()
+        
+        self._identity.appearance = appearance
+        
+        # Apply to renderer if enabled
+        if self.is_enabled and self._renderer:
+            self._renderer.set_appearance(appearance)
+        
+        print("[Avatar] Appearance updated")
+    
+    def explain_appearance(self) -> str:
+        """
+        Get AI's explanation of its appearance choices.
+        
+        Returns:
+            Explanation string
+        """
+        if self._identity:
+            return self._identity.explain_appearance_choices()
+        return "No appearance identity set."
     
     # === Event Registration ===
     
