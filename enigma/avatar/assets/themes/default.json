@@ -1,0 +1,19 @@
+{
+  "name": "Default Theme",
+  "description": "Default avatar theme with balanced colors",
+  "colors": {
+    "primary": "#6366f1",
+    "secondary": "#8b5cf6",
+    "accent": "#10b981"
+  },
+  "style": "default",
+  "shape": "rounded",
+  "size": "medium",
+  "animations": {
+    "idle": "breathe",
+    "movement": "float"
+  },
+  "expressions": {
+    "default": "neutral"
+  }
+}
