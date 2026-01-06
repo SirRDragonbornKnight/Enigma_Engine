@@ -181,23 +181,30 @@ class TestConsolidation:
 class TestAsyncMemory:
     """Tests for async memory operations."""
     
-    @pytest.mark.asyncio
-    async def test_async_database(self):
-        """Test async database operations."""
+    def test_async_database(self):
+        """Test async database operations (sync wrapper)."""
         try:
+            import asyncio
             from enigma.memory.async_memory import AsyncMemoryDatabase
             
-            with tempfile.TemporaryDirectory() as tmpdir:
-                db = AsyncMemoryDatabase(Path(tmpdir) / "test.db")
-                
-                # Add memory
-                mem_id = await db.add_memory("Test content", source="test")
-                assert mem_id > 0
-                
-                # Retrieve
-                memories = await db.get_recent(n=10)
-                assert len(memories) == 1
-                assert memories[0]['text'] == "Test content"
+            async def run_test():
+                with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+                    db = AsyncMemoryDatabase(Path(tmpdir) / "test.db")
+                    
+                    # Add memory
+                    mem_id = await db.add_memory("Test content", source="test")
+                    assert mem_id > 0
+                    
+                    # Retrieve
+                    memories = await db.get_recent(n=10)
+                    assert len(memories) == 1
+                    assert memories[0]['text'] == "Test content"
+                    
+                    # Close connection
+                    if hasattr(db, 'close'):
+                        await db.close()
+            
+            asyncio.run(run_test())
         
         except ImportError:
             pytest.skip("aiosqlite not installed")
@@ -211,11 +218,15 @@ class TestMemorySearch:
         from enigma.memory.search import MemorySearch
         from enigma.memory.memory_db import MemoryDatabase
         
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
             search = MemorySearch(memory_db=db)
             
             assert search is not None
+            
+            # Close database to release file handles on Windows
+            if hasattr(db, 'close'):
+                db.close()
 
 
 class TestDeduplication:
@@ -235,18 +246,22 @@ class TestDeduplication:
         """Test finding duplicates."""
         from enigma.memory.deduplication import MemoryDeduplicator
         from enigma.memory.categorization import MemoryCategorization, MemoryType
+        import time
         
         memory_system = MemoryCategorization()
         
-        # Add duplicates
-        memory_system.add_memory("Duplicate content", MemoryType.SHORT_TERM)
-        memory_system.add_memory("Duplicate content", MemoryType.SHORT_TERM)
-        memory_system.add_memory("Unique content", MemoryType.SHORT_TERM)
+        # Add duplicates with explicit different IDs to ensure they're separate
+        memory_system.add_memory("Duplicate content", MemoryType.SHORT_TERM, id_="dup_1")
+        time.sleep(0.01)  # Small delay to ensure different timestamps
+        memory_system.add_memory("Duplicate content", MemoryType.SHORT_TERM, id_="dup_2")
+        memory_system.add_memory("Unique content", MemoryType.SHORT_TERM, id_="unique_1")
         
+        # Create deduplicator AFTER adding memories
         dedup = MemoryDeduplicator(memory_system)
         duplicates = dedup.find_duplicates()
         
-        assert len(duplicates) >= 1
+        # Should find the duplicate pair
+        assert len(duplicates) >= 1, f"Expected duplicates but found {len(duplicates)}: {duplicates}"
 
 
 class TestExportImport:
@@ -458,7 +473,7 @@ class TestBackwardCompatibility:
         # Temporarily override CONFIG for this test
         from enigma.config import CONFIG
         
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             # Save original path
             original_db_path = CONFIG.get("db_path")
             

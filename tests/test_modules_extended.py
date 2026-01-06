@@ -106,8 +106,8 @@ class TestModuleHealthChecks(unittest.TestCase):
         health = self.manager.health_check('memory')
         
         if health:
-            # Response time should be measured
-            self.assertGreater(health.response_time_ms, 0)
+            # Response time should be measured (>= 0, can be 0 on fast systems)
+            self.assertGreaterEqual(health.response_time_ms, 0)
             # Should be reasonable (less than 1 second)
             self.assertLess(health.response_time_ms, 1000)
 
@@ -333,7 +333,7 @@ class TestModuleDocGenerator(unittest.TestCase):
             self.doc_gen.export_to_file(output_path, 'markdown')
             
             self.assertTrue(output_path.exists())
-            content = output_path.read_text()
+            content = output_path.read_text(encoding='utf-8')
             self.assertIn('Enigma Engine', content)
             self.assertGreater(len(content), 100)
     

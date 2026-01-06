@@ -14,9 +14,16 @@ Features:
 import os
 import sys
 import time
-import resource
 import logging
 from pathlib import Path
+
+# resource module is Unix-only, handle Windows gracefully
+try:
+    import resource
+    HAS_RESOURCE = True
+except ImportError:
+    HAS_RESOURCE = False
+    resource = None  # type: ignore
 from typing import List, Callable, Any, Optional, Dict, Set
 from dataclasses import dataclass, field
 
@@ -141,6 +148,10 @@ class ModuleSandbox:
     
     def _set_resource_limits(self):
         """Set CPU and memory limits for the process."""
+        if not HAS_RESOURCE:
+            logger.debug("Resource limits not available on Windows")
+            return
+            
         try:
             # Set memory limit (soft and hard)
             max_memory_bytes = self.config.max_memory_mb * 1024 * 1024
@@ -160,7 +171,7 @@ class ModuleSandbox:
                 f"{self.config.max_cpu_seconds}s CPU"
             )
             
-        except (ValueError, resource.error) as e:
+        except (ValueError, Exception) as e:
             logger.warning(f"Could not set resource limits: {e}")
     
     def _install_import_hook(self):
