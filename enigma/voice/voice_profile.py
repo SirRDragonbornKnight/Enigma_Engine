@@ -336,7 +336,20 @@ class VoiceEngine:
         if not self.profile.effects:
             return text
         
-        # Robotic effect: Add pauses between sentences
+        # Try to use enhanced effects system
+        try:
+            from .voice_effects import VoiceEffects
+            effects_system = VoiceEffects()
+            
+            # Apply each effect
+            for effect in self.profile.effects:
+                text = effects_system.apply_effect(text, effect, level=1)
+            
+            return text
+        except ImportError:
+            pass
+        
+        # Fallback to basic robotic effect
         if "robotic" in self.profile.effects:
             text = text.replace(". ", "... ")
             text = text.replace("? ", "?... ")

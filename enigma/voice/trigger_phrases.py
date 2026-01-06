@@ -10,9 +10,12 @@ Features:
 - Phrase confidence threshold
 - Multiple phrase support
 - Callback system for wake events
+- AI-suggested personalized wake phrases
+- Custom wake word training
+- Multiple wake word "personalities" (formal vs casual)
 
 Usage:
-    from enigma.voice.trigger_phrases import TriggerPhraseDetector
+    from enigma.voice.trigger_phrases import TriggerPhraseDetector, SmartWakeWords
     
     detector = TriggerPhraseDetector()
     detector.add_phrase("hey enigma")
@@ -20,6 +23,10 @@ Usage:
     
     detector.on_trigger(my_callback)
     detector.start_listening()
+    
+    # Smart wake words
+    smart = SmartWakeWords()
+    suggestions = smart.suggest_wake_phrases("Enigma", personality)
     
     # Later...
     detector.stop_listening()
@@ -350,3 +357,266 @@ def is_wake_word_active() -> bool:
     """Check if wake word detection is active."""
     global _detector
     return _detector is not None and _detector.is_listening()
+
+
+# =============================================================================
+# SMART WAKE WORDS
+# =============================================================================
+
+try:
+    from ..core.personality import AIPersonality
+    PERSONALITY_AVAILABLE = True
+except ImportError:
+    PERSONALITY_AVAILABLE = False
+
+
+class SmartWakeWords:
+    """
+    Smart wake word system with AI-suggested phrases and custom training.
+    
+    Features:
+    - AI suggests wake phrases based on name and personality
+    - Multiple wake word "personalities" (formal vs casual)
+    - Custom wake phrase training
+    - Confidence scoring improvements
+    """
+    
+    def __init__(self):
+        """Initialize smart wake words system."""
+        self.custom_phrases: Dict[str, List[str]] = {}  # phrase -> audio samples
+        self.phrase_personalities: Dict[str, str] = {}  # phrase -> personality type
+    
+    def suggest_wake_phrases(
+        self,
+        ai_name: str,
+        personality: Optional['AIPersonality'] = None,
+        num_suggestions: int = 5
+    ) -> List[str]:
+        """
+        AI suggests personalized wake phrases.
+        
+        Generates wake phrases that fit the AI's name and personality.
+        
+        Args:
+            ai_name: Name of the AI
+            personality: Optional AIPersonality for personalization
+            num_suggestions: Number of suggestions to generate
+            
+        Returns:
+            List of suggested wake phrases
+        """
+        suggestions = []
+        name_lower = ai_name.lower()
+        
+        # Base suggestions
+        suggestions.append(f"hey {name_lower}")
+        suggestions.append(f"ok {name_lower}")
+        suggestions.append(name_lower)
+        
+        # Personality-based suggestions
+        if personality and PERSONALITY_AVAILABLE:
+            # Validate that personality has the required method
+            if not hasattr(personality, 'get_all_effective_traits'):
+                # Fallback to default suggestions
+                pass
+            else:
+                try:
+                    traits = personality.get_all_effective_traits()
+                    
+                    # Formal personality
+                    if traits.get("formality", 0.5) > 0.7:
+                        suggestions.append(f"excuse me {name_lower}")
+                        suggestions.append(f"greetings {name_lower}")
+                        suggestions.append(f"attention {name_lower}")
+                    
+                    # Casual/playful personality
+                    elif traits.get("playfulness", 0.5) > 0.6:
+                        suggestions.append(f"yo {name_lower}")
+                        suggestions.append(f"sup {name_lower}")
+                        suggestions.append(f"{name_lower} buddy")
+                    
+                    # Friendly personality
+                    if traits.get("empathy", 0.5) > 0.7:
+                        suggestions.append(f"hello {name_lower}")
+                        suggestions.append(f"{name_lower} friend")
+                    
+                    # Professional
+                    if traits.get("confidence", 0.5) > 0.7:
+                        suggestions.append(f"assistant {name_lower}")
+                        suggestions.append(f"{name_lower} activate")
+                except (AttributeError, TypeError):
+                    # If personality doesn't have expected structure, skip
+                    pass
+        else:
+            # Default suggestions without personality
+            suggestions.extend([
+                f"hello {name_lower}",
+                f"{name_lower} wake up",
+                f"activate {name_lower}"
+            ])
+        
+        # Return unique suggestions (limited to num_suggestions)
+        unique = []
+        for phrase in suggestions:
+            if phrase not in unique:
+                unique.append(phrase)
+            if len(unique) >= num_suggestions:
+                break
+        
+        return unique
+    
+    def categorize_wake_phrase(
+        self,
+        phrase: str,
+        personality_type: str = "neutral"
+    ):
+        """
+        Categorize a wake phrase by personality type.
+        
+        Args:
+            phrase: Wake phrase
+            personality_type: "formal", "casual", "friendly", "neutral"
+        """
+        self.phrase_personalities[phrase.lower()] = personality_type
+    
+    def get_phrases_by_personality(
+        self,
+        personality_type: str
+    ) -> List[str]:
+        """
+        Get wake phrases matching a personality type.
+        
+        Args:
+            personality_type: "formal", "casual", "friendly", "neutral"
+            
+        Returns:
+            List of matching phrases
+        """
+        return [
+            phrase for phrase, ptype in self.phrase_personalities.items()
+            if ptype == personality_type
+        ]
+    
+    def train_custom_phrase(
+        self,
+        phrase: str,
+        audio_samples: Optional[List[str]] = None
+    ):
+        """
+        Train a custom wake phrase with audio samples.
+        
+        Note: Actual wake word training requires specialized models
+        like Porcupine, Snowboy, or custom acoustic models. This
+        method stores the samples for future integration.
+        
+        Args:
+            phrase: Custom wake phrase
+            audio_samples: Optional list of audio file paths for training
+        """
+        phrase_lower = phrase.lower()
+        
+        if audio_samples:
+            self.custom_phrases[phrase_lower] = audio_samples
+            logger.info(f"Stored {len(audio_samples)} samples for wake phrase '{phrase}'")
+        else:
+            # Add phrase without samples (uses text matching)
+            self.custom_phrases[phrase_lower] = []
+            logger.info(f"Added wake phrase '{phrase}' (text matching only)")
+    
+    def get_custom_phrases(self) -> List[str]:
+        """Get list of custom-trained wake phrases."""
+        return list(self.custom_phrases.keys())
+    
+    def improve_confidence(
+        self,
+        phrase: str,
+        detected_text: str
+    ) -> float:
+        """
+        Improved confidence scoring for phrase detection.
+        
+        Uses more sophisticated matching than simple substring search.
+        
+        Args:
+            phrase: Target wake phrase
+            detected_text: Detected speech text
+            
+        Returns:
+            Confidence score (0.0 to 1.0)
+        """
+        phrase_lower = phrase.lower()
+        text_lower = detected_text.lower()
+        
+        # Exact match
+        if phrase_lower == text_lower:
+            return 1.0
+        
+        # Substring match
+        if phrase_lower in text_lower:
+            # Check position - prefer phrases at start
+            position = text_lower.find(phrase_lower)
+            if position == 0:
+                return 0.95
+            else:
+                return 0.85
+        
+        # Fuzzy word matching
+        phrase_words = set(phrase_lower.split())
+        text_words = set(text_lower.split())
+        
+        if not phrase_words:
+            return 0.0
+        
+        # Calculate overlap
+        overlap = len(phrase_words & text_words)
+        ratio = overlap / len(phrase_words)
+        
+        # Require at least 60% word overlap
+        if ratio >= 0.6:
+            return ratio * 0.8  # Max 0.8 for fuzzy matches
+        
+        # Levenshtein-like similarity for close matches
+        if len(phrase_lower) > 3 and len(text_lower) > 3:
+            # Simple similarity check
+            common_chars = sum(1 for c in phrase_lower if c in text_lower)
+            similarity = common_chars / len(phrase_lower)
+            
+            if similarity >= 0.7:
+                return similarity * 0.6  # Max 0.6 for character similarity
+        
+        return 0.0
+
+
+# Convenience functions for smart wake words
+def suggest_wake_phrases(
+    ai_name: str,
+    personality: Optional['AIPersonality'] = None
+) -> List[str]:
+    """
+    Get AI-suggested wake phrases.
+    
+    Args:
+        ai_name: Name of the AI
+        personality: Optional personality for personalization
+        
+    Returns:
+        List of suggested wake phrases
+    """
+    smart = SmartWakeWords()
+    return smart.suggest_wake_phrases(ai_name, personality)
+
+
+def train_custom_wake_phrase(
+    phrase: str,
+    audio_samples: Optional[List[str]] = None
+):
+    """
+    Train a custom wake phrase.
+    
+    Args:
+        phrase: Wake phrase
+        audio_samples: Optional audio samples for training
+    """
+    smart = SmartWakeWords()
+    smart.train_custom_phrase(phrase, audio_samples)
+
