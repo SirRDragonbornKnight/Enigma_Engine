@@ -499,6 +499,11 @@ class EnigmaSystemTray(QObject):
         action_gui.triggered.connect(self._show_main_window)
         self.menu.addAction(action_gui)
         
+        # Help button - direct access
+        action_help = QAction(f"Help ({hotkeys['help']})", self)
+        action_help.triggered.connect(self._show_help)
+        self.menu.addAction(action_help)
+        
         self.menu.addSeparator()
         
         # Quick actions submenu
@@ -529,28 +534,22 @@ class EnigmaSystemTray(QObject):
         
         self.menu.addSeparator()
         
-        # Files & Help submenu
-        files_menu = self.menu.addMenu("Files and Help")
+        # Files submenu (help moved out)
+        files_menu = self.menu.addMenu("Folders")
         
-        action_help = QAction(f"Quick Help ({hotkeys['help']})", self)
-        action_help.triggered.connect(self._show_help)
-        files_menu.addAction(action_help)
-        
-        action_docs = QAction("Open Documentation", self)
+        action_docs = QAction("Documentation", self)
         action_docs.triggered.connect(lambda: self._open_folder("docs"))
         files_menu.addAction(action_docs)
         
-        files_menu.addSeparator()
-        
-        action_outputs = QAction("Open Outputs Folder", self)
+        action_outputs = QAction("Outputs", self)
         action_outputs.triggered.connect(lambda: self._open_folder("outputs"))
         files_menu.addAction(action_outputs)
         
-        action_models = QAction("Open Models Folder", self)
+        action_models = QAction("Models", self)
         action_models.triggered.connect(lambda: self._open_folder("models"))
         files_menu.addAction(action_models)
         
-        action_data = QAction("Open Data Folder", self)
+        action_data = QAction("Data", self)
         action_data.triggered.connect(lambda: self._open_folder("data"))
         files_menu.addAction(action_data)
         
