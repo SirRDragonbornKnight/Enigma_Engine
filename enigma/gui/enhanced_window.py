@@ -28,9 +28,76 @@ from PyQt5.QtWidgets import (
     QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter, QWidget,
     QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap, QFont, QIcon
 import time
+
+
+# === AI Generation Worker Thread ===
+class AIGenerationWorker(QThread):
+    """Background worker for AI generation to keep GUI responsive."""
+    finished = pyqtSignal(str)  # Emits the response
+    error = pyqtSignal(str)     # Emits error message
+    
+    def __init__(self, engine, text, is_hf, history=None, system_prompt=None, custom_tokenizer=None):
+        super().__init__()
+        self.engine = engine
+        self.text = text
+        self.is_hf = is_hf
+        self.history = history
+        self.system_prompt = system_prompt
+        self.custom_tokenizer = custom_tokenizer
+        
+    def run(self):
+        try:
+            if self.is_hf:
+                # HuggingFace model
+                if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
+                    response = self.engine.model.chat(
+                        self.text,
+                        history=self.history if self.history else None,
+                        system_prompt=self.system_prompt,
+                        max_new_tokens=200,
+                        temperature=0.7
+                    )
+                else:
+                    response = self.engine.model.generate(
+                        self.text,
+                        max_new_tokens=150,
+                        temperature=0.8,
+                        top_p=0.92,
+                        top_k=50,
+                        repetition_penalty=1.2,
+                        do_sample=True,
+                        custom_tokenizer=self.custom_tokenizer
+                    )
+            else:
+                # Local Enigma model
+                formatted_prompt = f"Q: {self.text}\nA:"
+                response = self.engine.generate(formatted_prompt, max_gen=100)
+                
+                # Clean up response
+                if response.startswith(formatted_prompt):
+                    response = response[len(formatted_prompt):].strip()
+                elif response.startswith(self.text):
+                    response = response[len(self.text):].strip()
+                    
+                if "\nQ:" in response:
+                    response = response.split("\nQ:")[0].strip()
+                if "Q:" in response:
+                    response = response.split("Q:")[0].strip()
+                if response.startswith("A:"):
+                    response = response[2:].strip()
+                if response.startswith(":"):
+                    response = response[1:].strip()
+            
+            if not response:
+                response = "(No response generated - model may need more training)"
+                
+            self.finished.emit(response)
+        except Exception as e:
+            self.error.emit(str(e))
+
 
 # Import text formatting
 try:
@@ -3776,12 +3843,16 @@ class EnhancedMainWindow(QMainWindow):
             self.chat_input.clear()
             return
         
-        # Check if model is trained
-        if hasattr(self.engine, 'model'):
+        # Check if already generating (prevent double-sends)
+        if hasattr(self, '_ai_worker') and self._ai_worker and self._ai_worker.isRunning():
+            self.chat_display.append("<b style='color:#f9e2af;'>System:</b> Still generating... please wait.")
+            return
+        
+        # Check if model is trained (for Enigma models)
+        if hasattr(self.engine, 'model') and not getattr(self.engine, '_is_huggingface', False):
             try:
-                # Quick check - see if model has any trained weights
                 param_sum = sum(p.sum().item() for p in self.engine.model.parameters())
-                if abs(param_sum) < 0.001:  # Very small = likely untrained
+                if abs(param_sum) < 0.001:
                     self.chat_display.append("<b style='color:#f9e2af;'>Note:</b> "
                                               "Model appears untrained. Go to Train tab first!")
             except Exception:
@@ -3791,6 +3862,7 @@ class EnhancedMainWindow(QMainWindow):
         if not hasattr(self, 'chat_messages'):
             self.chat_messages = []
         
+        # Display user message
         self.chat_display.append(
             f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
             f'<b style="color: #89b4fa;">You:</b> {text}</div>'
@@ -3804,123 +3876,105 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
-        try:
-            # Check if this is a HuggingFace model
-            is_hf = getattr(self.engine, '_is_huggingface', False)
+        # Show "thinking" indicator
+        self.chat_display.append(
+            f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>🤔 {self.current_model_name} is thinking...</i></div>'
+        )
+        
+        # Disable send button while generating
+        if hasattr(self, 'send_btn'):
+            self.send_btn.setEnabled(False)
+            self.send_btn.setText("⏳")
+        
+        # Prepare generation parameters
+        is_hf = getattr(self.engine, '_is_huggingface', False)
+        history = []
+        custom_tok = None
+        system_prompt = None
+        
+        if is_hf:
+            # Build conversation history
+            if len(self.chat_messages) > 1:
+                recent = self.chat_messages[-6:-1]
+                for msg in recent:
+                    role = "user" if msg.get("role") == "user" else "assistant"
+                    history.append({"role": role, "content": msg.get("text", "")})
             
-            if is_hf:
-                # HuggingFace model - use its generate method directly
-                # Build conversation history for better context
-                history = []
-                if hasattr(self, 'chat_messages') and len(self.chat_messages) > 1:
-                    # Include recent conversation context (last 6 turns)
-                    recent = self.chat_messages[-6:-1]  # Exclude current message
-                    for msg in recent:
-                        role = "user" if msg.get("role") == "user" else "assistant"
-                        history.append({"role": role, "content": msg.get("text", "")})
-                
-                # Check if using custom tokenizer
-                custom_tok = None
-                if getattr(self.engine, '_using_custom_tokenizer', False):
-                    custom_tok = self.engine.tokenizer
-                
-                # System prompt that tells the AI about its capabilities in this GUI
-                system_prompt = (
-                    "You are an AI assistant running in the Enigma Engine GUI. "
-                    "You have access to powerful tools that the USER can invoke with commands:\n"
-                    "- /image <prompt> - Generate images using AI\n"
-                    "- /video <prompt> - Generate videos/GIFs\n"
-                    "- /code <description> - Generate code\n"
-                    "- /audio <text> - Text-to-speech\n"
-                    "- /3d <prompt> - Generate 3D models\n"
-                    "When the user asks you to create an image, video, code, audio, or 3D model, "
-                    "tell them to use the appropriate command (e.g., 'Use /image sunset over mountains'). "
-                    "Be helpful, concise, and friendly."
-                )
-                
-                # Always use chat method for HuggingFace models (applies proper templates)
-                # This is critical for instruct models like Mistral, Qwen, etc.
-                if hasattr(self.engine.model, 'chat') and not custom_tok:
-                    response = self.engine.model.chat(
-                        text, 
-                        history=history if history else None,  # Pass None if no history
-                        system_prompt=system_prompt,
-                        max_new_tokens=200,
-                        temperature=0.7
-                    )
-                else:
-                    # Fall back to generate with good parameters
-                    response = self.engine.model.generate(
-                        text, 
-                        max_new_tokens=150,
-                        temperature=0.8,
-                        top_p=0.92,
-                        top_k=50,
-                        repetition_penalty=1.2,
-                        do_sample=True,
-                        custom_tokenizer=custom_tok
-                    )
-            else:
-                # Local Enigma model - use Q:/A: training format
-                formatted_prompt = f"Q: {text}\nA:"
-                response = self.engine.generate(formatted_prompt, max_gen=100)
-                
-                # Strip the prompt from the response (model returns prompt + generated)
-                if response.startswith(formatted_prompt):
-                    response = response[len(formatted_prompt):].strip()
-                elif response.startswith(text):
-                    response = response[len(text):].strip()
-                
-                # Clean up any Q:/A: artifacts in the response
-                if "\nQ:" in response:
-                    response = response.split("\nQ:")[0].strip()
-                if "Q:" in response:
-                    response = response.split("Q:")[0].strip()
-                if response.startswith("A:"):
-                    response = response[2:].strip()
-                if response.startswith(":"):
-                    response = response[1:].strip()
+            if getattr(self.engine, '_using_custom_tokenizer', False):
+                custom_tok = self.engine.tokenizer
             
-            # If response is empty after stripping, the model might not have learned well
-            if not response:
-                response = "(No response generated - model may need more training)"
-            
-            # Format AI response with HTML markup if available
-            if HAVE_TEXT_FORMATTER:
-                formatted_response = TextFormatter.to_html(response)
-            else:
-                formatted_response = response
-            
-            self.chat_display.append(
-                f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}</div>'
+            system_prompt = (
+                "You are an AI assistant running in the Enigma Engine GUI. "
+                "You have access to powerful tools that the USER can invoke with commands:\n"
+                "- /image <prompt> - Generate images using AI\n"
+                "- /video <prompt> - Generate videos/GIFs\n"
+                "- /code <description> - Generate code\n"
+                "- /audio <text> - Text-to-speech\n"
+                "- /3d <prompt> - Generate 3D models\n"
+                "When the user asks you to create an image, video, code, audio, or 3D model, "
+                "tell them to use the appropriate command (e.g., 'Use /image sunset over mountains'). "
+                "Be helpful, concise, and friendly."
             )
-            self.last_response = response
-            
-            # Track AI response
-            self.chat_messages.append({
-                "role": "assistant",
-                "text": response,
-                "ts": time.time()
-            })
-            
-            # Learn from this interaction if enabled (only for Enigma models)
-            if not self._is_huggingface_model():
-                if getattr(self, 'learn_while_chatting', True) and hasattr(self, 'brain') and self.brain:
-                    self.brain.record_interaction(text, response)
-                    
-                    # Check if we should auto-train
+        
+        # Start background worker
+        self._ai_worker = AIGenerationWorker(
+            self.engine, text, is_hf, history, system_prompt, custom_tok
+        )
+        self._ai_worker.finished.connect(self._on_ai_response)
+        self._ai_worker.error.connect(self._on_ai_error)
+        self._ai_worker.start()
+    
+    def _on_ai_response(self, response: str):
+        """Handle AI response from background worker."""
+        # Re-enable send button
+        if hasattr(self, 'send_btn'):
+            self.send_btn.setEnabled(True)
+            self.send_btn.setText("Send")
+        
+        # Format response
+        if HAVE_TEXT_FORMATTER:
+            formatted_response = TextFormatter.to_html(response)
+        else:
+            formatted_response = response
+        
+        # Remove thinking indicator and add response
+        # (QTextEdit doesn't support removing by ID, so we just append)
+        self.chat_display.append(
+            f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+            f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}</div>'
+        )
+        self.last_response = response
+        
+        # Track AI response
+        self.chat_messages.append({
+            "role": "assistant",
+            "text": response,
+            "ts": time.time()
+        })
+        
+        # Learn from interaction (Enigma models only)
+        if not self._is_huggingface_model():
+            if getattr(self, 'learn_while_chatting', True) and hasattr(self, 'brain') and self.brain:
+                # Get last user message
+                user_msgs = [m for m in self.chat_messages if m.get("role") == "user"]
+                if user_msgs:
+                    self.brain.record_interaction(user_msgs[-1].get("text", ""), response)
                     if self.brain.should_auto_train():
                         self.statusBar().showMessage(
-                            f"[+] Learned {self.brain.interactions_since_train} new things! "
-                            "Training will improve responses.", 5000
+                            f"[+] Learned {self.brain.interactions_since_train} new things!", 5000
                         )
-            
-            # Auto-speak if enabled
-            if getattr(self, 'auto_speak', False):
-                self._speak_text(response)
-        except Exception as e:
-            self.chat_display.append(f"<i>Error: {e}</i>")
+        
+        # Auto-speak if enabled
+        if getattr(self, 'auto_speak', False):
+            self._speak_text(response)
+    
+    def _on_ai_error(self, error_msg: str):
+        """Handle AI generation error."""
+        if hasattr(self, 'send_btn'):
+            self.send_btn.setEnabled(True)
+            self.send_btn.setText("Send")
+        
+        self.chat_display.append(f"<i style='color: #f38ba8;'>Error: {error_msg}</i>")
     
     def _handle_chat_command(self, text: str):
         """Handle chat commands like /image, /video, /code, /audio, /help."""
