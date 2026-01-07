@@ -417,7 +417,7 @@ class ModulesTab(QWidget):
             'tokenizer': {'name': 'Tokenizer', 'category': 'core', 'description': 'Text tokenization'},
             'training': {'name': 'Training', 'category': 'core', 'description': 'Model training', 'needs_gpu': True},
             'inference': {'name': 'Inference (Local)', 'category': 'core', 'description': 'Local text generation'},
-            'chat_api': {'name': '☁️ Chat (Cloud)', 'category': 'core', 'description': 'GPT-4/Claude chat - No GPU needed!', 'needs_api_key': True},
+            'chat_api': {'name': 'Chat (Cloud)', 'category': 'core', 'description': 'GPT-4/Claude chat - No GPU needed!', 'needs_api_key': True},
             'image_gen_local': {'name': 'Image Gen (Local)', 'category': 'generation', 'description': 'Stable Diffusion', 'needs_gpu': True},
             'image_gen_api': {'name': 'Image Gen (Cloud)', 'category': 'generation', 'description': 'DALL-E / Replicate', 'needs_api_key': True},
             'code_gen_local': {'name': 'Code Gen (Local)', 'category': 'generation', 'description': 'Local code generation'},

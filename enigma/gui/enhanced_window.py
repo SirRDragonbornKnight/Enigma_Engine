@@ -62,7 +62,7 @@ class AIGenerationWorker(QThread):
             self._start_time = time.time()
             
             # Emit initial thinking status
-            self.thinking.emit("🔍 Analyzing your message...")
+            self.thinking.emit("Analyzing your message...")
             
             if self._stop_requested:
                 self.stopped.emit()
@@ -70,14 +70,14 @@ class AIGenerationWorker(QThread):
             
             if self.is_hf:
                 # HuggingFace model - show reasoning steps
-                self.thinking.emit("📝 Building conversation context...")
+                self.thinking.emit("Building conversation context...")
                 time.sleep(0.1)
                 
                 if self._stop_requested:
                     self.stopped.emit()
                     return
                 
-                self.thinking.emit("🧠 Processing with language model...")
+                self.thinking.emit("Processing with language model...")
                 
                 # HuggingFace model
                 if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
@@ -89,7 +89,7 @@ class AIGenerationWorker(QThread):
                         temperature=0.7
                     )
                 else:
-                    self.thinking.emit("⚙️ Tokenizing input...")
+                    self.thinking.emit("Tokenizing input...")
                     response = self.engine.model.generate(
                         self.text,
                         max_new_tokens=150,
@@ -102,21 +102,21 @@ class AIGenerationWorker(QThread):
                     )
             else:
                 # Local Enigma model - show detailed reasoning
-                self.thinking.emit("📝 Formatting prompt for Q&A...")
+                self.thinking.emit("Formatting prompt for Q&A...")
                 formatted_prompt = f"Q: {self.text}\nA:"
                 
                 if self._stop_requested:
                     self.stopped.emit()
                     return
                 
-                self.thinking.emit("🧠 Running inference on local model...")
+                self.thinking.emit("Running inference on local model...")
                 response = self.engine.generate(formatted_prompt, max_gen=100)
                 
                 if self._stop_requested:
                     self.stopped.emit()
                     return
                 
-                self.thinking.emit("✨ Cleaning up response...")
+                self.thinking.emit("Cleaning up response...")
                 
                 # Clean up response
                 if response.startswith(formatted_prompt):
@@ -141,7 +141,7 @@ class AIGenerationWorker(QThread):
                 response = "(No response generated - model may need more training)"
             
             elapsed = time.time() - self._start_time
-            self.thinking.emit(f"✅ Done in {elapsed:.1f}s")
+            self.thinking.emit(f"Done in {elapsed:.1f}s")
             self.finished.emit(response)
         except Exception as e:
             if self._stop_requested:
@@ -2140,6 +2140,9 @@ class EnhancedMainWindow(QMainWindow):
         self.setMinimumSize(600, 400)  # Reasonable minimum
         self.resize(1000, 700)
         
+        # Set window icon
+        self._set_window_icon()
+        
         # Initialize registry
         self.registry = ModelRegistry()
         self.current_model_name = None
@@ -2180,6 +2183,23 @@ class EnhancedMainWindow(QMainWindow):
         else:
             # Defer model loading to after GUI is shown
             self._show_model_selector_deferred()
+    
+    def _set_window_icon(self):
+        """Set the window icon from file or create a default."""
+        from pathlib import Path
+        try:
+            icon_paths = [
+                Path(__file__).parent / "icons" / "enigma.ico",
+                Path(__file__).parent / "icons" / "enigma_256.png",
+                Path(CONFIG.get("data_dir", "data")) / "icons" / "enigma.ico",
+            ]
+            
+            for icon_path in icon_paths:
+                if icon_path.exists():
+                    self.setWindowIcon(QIcon(str(icon_path)))
+                    return
+        except Exception as e:
+            print(f"Could not set window icon: {e}")
     
     def _is_huggingface_model(self) -> bool:
         """Check if the currently loaded model is a HuggingFace model."""
@@ -3959,22 +3979,22 @@ class EnhancedMainWindow(QMainWindow):
         
         # Show "thinking" indicator in chat
         self.chat_display.append(
-            f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>🤔 {self.current_model_name} is thinking...</i></div>'
+            f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>{self.current_model_name} is thinking...</i></div>'
         )
         
         # Show thinking panel and stop button
         if hasattr(self, 'thinking_frame'):
             self.thinking_frame.show()
-            self.thinking_label.setText("🔍 Analyzing your message...")
+            self.thinking_label.setText("Analyzing your message...")
         if hasattr(self, 'stop_btn'):
             self.stop_btn.show()
             self.stop_btn.setEnabled(True)
-            self.stop_btn.setText("⏹ Stop")
+            self.stop_btn.setText("Stop")
         
         # Disable send button while generating
         if hasattr(self, 'send_btn'):
             self.send_btn.setEnabled(False)
-            self.send_btn.setText("⏳")
+            self.send_btn.setText("...")
         
         # Prepare generation parameters
         is_hf = getattr(self.engine, '_is_huggingface', False)
@@ -4275,14 +4295,14 @@ class EnhancedMainWindow(QMainWindow):
             # Show image thumbnail in chat
             self.chat_display.append(
                 f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px;">'
-                f'<b style="color: #a6e3a1;">🖼️ Image Generated:</b><br>'
+                f'<b style="color: #a6e3a1;">Image Generated:</b><br>'
                 f'<img src="file:///{path}" width="300"><br>'
                 f'<span style="color: #6c7086; font-size: 10px;">{path}</span></div>'
             )
         elif path:
             self.chat_display.append(
                 f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px;">'
-                f'<b style="color: #a6e3a1;">✓ {gen_type.title()} Generated:</b> {path}</div>'
+                f'<b style="color: #a6e3a1;">{gen_type.title()} Generated:</b> {path}</div>'
             )
 
     def _on_ai_error(self, error_msg: str):

@@ -377,7 +377,7 @@ def _show_critique_dialog(parent, response_id, response_data):
     # Buttons
     btn_layout = QHBoxLayout()
     
-    save_btn = QPushButton("💾 Save Correction")
+    save_btn = QPushButton("Save Correction")
     save_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
     
     cancel_btn = QPushButton("Cancel")

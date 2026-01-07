@@ -510,6 +510,55 @@ def create_settings_tab(parent):
     parent.power_mode_details_label.setStyleSheet("color: #888; font-style: italic;")
     power_layout.addWidget(parent.power_mode_details_label)
     
+    # Custom resource settings
+    custom_frame = QGroupBox("Custom Resource Limits")
+    custom_layout = QVBoxLayout(custom_frame)
+    
+    # GPU usage spinbox
+    gpu_row = QHBoxLayout()
+    gpu_row.addWidget(QLabel("GPU Usage (%):"))
+    
+    parent.gpu_spinbox = QSpinBox()
+    parent.gpu_spinbox.setRange(10, 95)
+    parent.gpu_spinbox.setValue(85)  # Match current config default
+    parent.gpu_spinbox.setSuffix("%")
+    parent.gpu_spinbox.setMinimumWidth(80)
+    gpu_row.addWidget(parent.gpu_spinbox)
+    gpu_row.addStretch()
+    custom_layout.addLayout(gpu_row)
+    
+    # CPU threads spinbox
+    cpu_row = QHBoxLayout()
+    cpu_row.addWidget(QLabel("CPU Threads:"))
+    
+    import os as os_module
+    max_threads = os_module.cpu_count() or 8
+    parent.cpu_spinbox = QSpinBox()
+    parent.cpu_spinbox.setRange(1, max_threads)
+    parent.cpu_spinbox.setValue(max(1, max_threads // 2))  # Default to half
+    parent.cpu_spinbox.setMinimumWidth(80)
+    cpu_row.addWidget(parent.cpu_spinbox)
+    
+    cpu_info = QLabel(f"(max: {max_threads})")
+    cpu_info.setStyleSheet("color: #888;")
+    cpu_row.addWidget(cpu_info)
+    cpu_row.addStretch()
+    custom_layout.addLayout(cpu_row)
+    
+    # Apply button for custom settings
+    apply_row = QHBoxLayout()
+    apply_resource_btn = QPushButton("Apply Resource Limits")
+    apply_resource_btn.clicked.connect(lambda: _apply_custom_resources(parent))
+    apply_row.addWidget(apply_resource_btn)
+    apply_row.addStretch()
+    custom_layout.addLayout(apply_row)
+    
+    parent.resource_status_label = QLabel("")
+    parent.resource_status_label.setStyleSheet("color: #888; font-style: italic;")
+    custom_layout.addWidget(parent.resource_status_label)
+    
+    power_layout.addWidget(custom_frame)
+    
     layout.addWidget(power_group)
 
     # === THEME SELECTOR ===
@@ -577,7 +626,7 @@ def create_settings_tab(parent):
     layout.addWidget(zoom_group)
 
     # === CLOUD AI MODE ===
-    cloud_group = QGroupBox("☁️ Cloud/API AI Mode")
+    cloud_group = QGroupBox("Cloud/API AI Mode")
     cloud_layout = QVBoxLayout(cloud_group)
     
     cloud_desc = QLabel(
@@ -1319,6 +1368,76 @@ def _apply_resource_mode(parent):
         "max": "Maximum: Uses all available resources. May slow other apps."
     }
     parent.power_mode_details_label.setText(descriptions.get(mode, ""))
+    
+    # Update spinboxes to match mode presets
+    mode_presets = {
+        "minimal": (20, 1),
+        "gaming": (30, 2),
+        "balanced": (50, 4),
+        "performance": (70, 6),
+        "max": (90, 8)
+    }
+    if mode in mode_presets:
+        gpu, cpu = mode_presets[mode]
+        if hasattr(parent, 'gpu_spinbox'):
+            parent.gpu_spinbox.setValue(gpu)
+        if hasattr(parent, 'cpu_spinbox'):
+            parent.cpu_spinbox.setValue(min(cpu, parent.cpu_spinbox.maximum()))
+
+
+def _apply_custom_resources(parent):
+    """Apply custom GPU/CPU resource limits."""
+    try:
+        from ...config import CONFIG
+        
+        gpu_percent = parent.gpu_spinbox.value()
+        cpu_threads = parent.cpu_spinbox.value()
+        
+        # Update CONFIG
+        CONFIG.set("gpu_memory_fraction", gpu_percent / 100.0)
+        CONFIG.set("max_cpu_threads", cpu_threads)
+        
+        # Also update PyTorch settings if possible
+        try:
+            import torch
+            torch.set_num_threads(cpu_threads)
+        except:
+            pass
+        
+        # Save settings
+        try:
+            from pathlib import Path
+            import json
+            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            
+            settings = {}
+            if settings_path.exists():
+                settings = json.loads(settings_path.read_text())
+            
+            settings["gpu_memory_fraction"] = gpu_percent / 100.0
+            settings["max_cpu_threads"] = cpu_threads
+            
+            settings_path.write_text(json.dumps(settings, indent=2))
+        except Exception as e:
+            print(f"Could not save resource settings: {e}")
+        
+        parent.resource_status_label.setText(
+            f"Applied: GPU {gpu_percent}%, CPU {cpu_threads} threads"
+        )
+        parent.resource_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+        
+        QMessageBox.information(
+            parent, 
+            "Resource Limits Applied",
+            f"Custom resource limits set:\n\n"
+            f"GPU Memory: {gpu_percent}%\n"
+            f"CPU Threads: {cpu_threads}\n\n"
+            "Note: Some changes may require restart to fully apply."
+        )
+    except Exception as e:
+        parent.resource_status_label.setText(f"Error: {e}")
+        parent.resource_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+        QMessageBox.warning(parent, "Error", f"Failed to apply resource limits: {e}")
 
 
 def _update_gpu_label(parent, value):

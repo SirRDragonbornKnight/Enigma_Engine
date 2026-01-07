@@ -204,6 +204,73 @@ Response:"""
         return None
 
 
+class HelpWindow(QWidget):
+    """Separate window to display help content."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Enigma AI - Help")
+        self.setWindowFlags(Qt.Window)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Title
+        title = QLabel("Enigma AI Help")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #3498db; margin-bottom: 10px;")
+        layout.addWidget(title)
+        
+        # Content area
+        self.content = QTextEdit()
+        self.content.setReadOnly(True)
+        self.content.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                border: 1px solid #444;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 12px;
+                font-family: Consolas, monospace;
+                color: #ddd;
+            }
+        """)
+        layout.addWidget(self.content)
+        
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 20px;
+                font-size: 12px;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        close_btn.clicked.connect(self.close)
+        layout.addWidget(close_btn, alignment=Qt.AlignRight)
+        
+        self.setMinimumSize(500, 400)
+        self.resize(600, 500)
+        
+        # Dark theme
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #1e1e1e;
+                color: #ddd;
+            }
+        """)
+    
+    def set_content(self, text: str):
+        self.content.setPlainText(text)
+
+
 class QuickCommandOverlay(QWidget):
     """
     A floating overlay for quick commands.
@@ -253,7 +320,7 @@ class QuickCommandOverlay(QWidget):
         
         header_layout.addStretch()
         
-        status = QLabel("Listening...")
+        status = QLabel("Ready")
         status.setObjectName("statusLabel")
         status.setStyleSheet("color: #888; font-size: 11px;")
         header_layout.addWidget(status)
@@ -263,7 +330,7 @@ class QuickCommandOverlay(QWidget):
         
         # Command input
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("Ask me anything or give a command...")
+        self.command_input.setPlaceholderText("Type a command and press Enter...")
         self.command_input.setStyleSheet("""
             QLineEdit {
                 background-color: rgba(50, 50, 50, 0.9);
@@ -280,64 +347,18 @@ class QuickCommandOverlay(QWidget):
         self.command_input.returnPressed.connect(self._on_submit)
         frame_layout.addWidget(self.command_input)
         
-        # Response area (hidden initially)
-        self.response_area = QLabel("")
-        self.response_area.setWordWrap(True)
-        self.response_area.setStyleSheet("""
-            color: #ccc;
-            font-size: 12px;
-            padding: 5px;
-        """)
-        self.response_area.setVisible(False)
-        frame_layout.addWidget(self.response_area)
-        
-        # Quick action buttons
-        actions_layout = QHBoxLayout()
-        actions_layout.setSpacing(5)
-        
-        quick_actions = [
-            ("Snap", "Screenshot", "screenshot"),
-            ("Img", "Image", "generate image"),
-            ("Vid", "Video", "generate video"),
-            ("Mic", "Voice", "voice"),
-            ("?", "Help", "help"),
-            ("GUI", "Open Interface", "open gui"),
-        ]
-        
-        for label, tooltip, cmd in quick_actions:
-            btn = QPushButton(label)
-            btn.setToolTip(tooltip)
-            btn.setFixedSize(40, 28)
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: rgba(60, 60, 60, 0.8);
-                    border: 1px solid #444;
-                    border-radius: 6px;
-                    font-size: 10px;
-                    color: white;
-                }
-                QPushButton:hover {
-                    background-color: rgba(80, 80, 80, 0.9);
-                    border-color: #3498db;
-                }
-            """)
-            btn.clicked.connect(lambda checked, c=cmd: self._quick_action(c))
-            actions_layout.addWidget(btn)
-        
-        actions_layout.addStretch()
-        
-        # Close hint
-        hint = QLabel("Esc to close")
+        # Simple hint row
+        hint_layout = QHBoxLayout()
+        hint = QLabel("Enter to send | Esc to close | Up/Down for history")
         hint.setStyleSheet("color: #666; font-size: 10px;")
-        actions_layout.addWidget(hint)
-        
-        frame_layout.addLayout(actions_layout)
+        hint_layout.addWidget(hint)
+        hint_layout.addStretch()
+        frame_layout.addLayout(hint_layout)
         
         layout.addWidget(frame)
         
-        # Size and position
-        self.setFixedWidth(450)
-        self.adjustSize()
+        # Fixed size - no expansion
+        self.setFixedSize(450, 100)
     
     def _on_submit(self):
         command = self.command_input.text().strip()
@@ -346,28 +367,12 @@ class QuickCommandOverlay(QWidget):
             self.history_index = len(self.history)
             self.command_submitted.emit(command)
             self.command_input.clear()
-    
-    def _quick_action(self, command: str):
-        if command == "voice":
-            self.status_label.setText("Listening for voice...")
-            self.command_submitted.emit("voice on")
-        elif command == "help":
-            self.command_submitted.emit("help")
-        else:
-            self.command_submitted.emit(command)
+            self.hide()  # Close after sending
     
     def show_response(self, text: str):
-        """Show a response in the overlay."""
-        self.response_area.setText(text)
-        self.response_area.setVisible(True)
-        self.adjustSize()
-        
-        # Auto-hide after delay
-        QTimer.singleShot(3000, self._hide_response)
-    
-    def _hide_response(self):
-        self.response_area.setVisible(False)
-        self.adjustSize()
+        """Show a response as a system notification instead of expanding."""
+        # Use system notification instead of expanding the overlay
+        pass
     
     def set_status(self, text: str):
         self.status_label.setText(text)
@@ -454,23 +459,37 @@ class EnigmaSystemTray(QObject):
         self.tray_icon.show()
     
     def _create_icon(self) -> QIcon:
-        """Create a simple icon for the tray."""
+        """Load icon from file or create a simple one."""
+        # Try to load the custom icon
+        icon_paths = [
+            Path(__file__).parent / "icons" / "enigma.ico",
+            Path(__file__).parent / "icons" / "enigma_32.png",
+            Path(CONFIG.get("data_dir", "data")) / "icons" / "enigma.ico",
+        ]
+        
+        for icon_path in icon_paths:
+            if icon_path.exists():
+                return QIcon(str(icon_path))
+        
+        # Fallback: create a simple icon
         pixmap = QPixmap(32, 32)
         pixmap.fill(Qt.transparent)
         
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Draw a simple brain/AI icon
+        # Draw a simple circle with E
+        painter.setBrush(QColor("#1e3a5f"))
+        painter.setPen(QColor("#3498db"))
+        painter.drawEllipse(2, 2, 28, 28)
+        
+        # Draw E
         painter.setBrush(QColor("#3498db"))
         painter.setPen(Qt.NoPen)
-        painter.drawEllipse(4, 4, 24, 24)
-        
-        painter.setBrush(QColor("#2c3e50"))
-        painter.drawEllipse(10, 10, 12, 12)
-        
-        painter.setBrush(QColor("#3498db"))
-        painter.drawEllipse(13, 13, 6, 6)
+        painter.drawRect(8, 8, 4, 16)  # Vertical
+        painter.drawRect(8, 8, 14, 3)  # Top
+        painter.drawRect(8, 14, 10, 3)  # Middle
+        painter.drawRect(8, 21, 14, 3)  # Bottom
         
         painter.end()
         
@@ -1066,30 +1085,32 @@ class EnigmaSystemTray(QObject):
         return defaults
     
     def _show_help(self):
-        """Show the quick help file."""
+        """Show help in a separate window."""
         help_path = Path(CONFIG.get("info_dir", "information")) / "help.txt"
+        
+        # Create a separate help window
+        if not hasattr(self, 'help_window') or self.help_window is None:
+            self.help_window = HelpWindow()
+        
+        # Load help content
         if help_path.exists():
-            # Open help file in default text editor
-            if sys.platform == 'win32':
-                os.startfile(str(help_path))
-            elif sys.platform == 'darwin':
-                subprocess.run(['open', str(help_path)])
-            else:
-                subprocess.run(['xdg-open', str(help_path)])
-            
-            self.tray_icon.showMessage(
-                "Help",
-                "Quick help opened in text editor.",
-                QSystemTrayIcon.Information,
-                2000
-            )
+            try:
+                with open(help_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                self.help_window.set_content(content)
+            except Exception as e:
+                self.help_window.set_content(f"Error loading help: {e}")
         else:
-            self.tray_icon.showMessage(
-                "Help",
-                "Help file not found. Check docs/ folder for guides.",
-                QSystemTrayIcon.Warning,
-                3000
+            self.help_window.set_content(
+                "Help file not found.\n\n"
+                "Check the docs/ folder for detailed guides:\n"
+                "- GUI_GUIDE.md\n"
+                "- HOW_TO_TRAIN.md\n"
+                "- MODULE_GUIDE.md"
             )
+        
+        self.help_window.show()
+        self.help_window.activateWindow()
     
     def _open_folder(self, folder_name: str):
         """Open a project folder in the file explorer."""
