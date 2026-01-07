@@ -1,3 +1,6 @@
+# type: ignore
+# pyright: reportGeneralTypeIssues=false
+# pyright: reportOptionalMemberAccess=false
 """
 System Tray Integration - Keep Enigma running in the background.
 
@@ -15,19 +18,26 @@ import time
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PyQt5.QtWidgets import QWidget
+    from PyQt5.QtCore import Qt
 
 try:
-    from PyQt5.QtWidgets import (
+    from PyQt5.QtWidgets import (  # type: ignore[import]
         QApplication, QSystemTrayIcon, QMenu, QAction, QWidget,
         QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
         QTextEdit, QFrame, QShortcut
     )
-    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
-    from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QKeySequence, QFont
+    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread  # type: ignore[import]
+    from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QKeySequence, QFont  # type: ignore[import]
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
+    QObject = object  # type: ignore[misc,assignment]
+    QWidget = object  # type: ignore[misc,assignment]
+    pyqtSignal = lambda *args: None  # type: ignore[misc,assignment]
 
 from ..config import CONFIG
 

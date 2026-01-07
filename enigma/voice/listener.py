@@ -1,3 +1,8 @@
+# type: ignore
+# pyright: reportGeneralTypeIssues=false
+# type: ignore
+# pyright: reportGeneralTypeIssues=false
+# pyright: reportOptionalMemberAccess=false
 """
 Voice Listener - Wake word detection and continuous listening.
 

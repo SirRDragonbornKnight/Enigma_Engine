@@ -1,11 +1,14 @@
 """Train tab for Enigma Engine GUI."""
 
+import re
+import urllib.request
+import urllib.error
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSpinBox, QLineEdit, QProgressBar, QFileDialog,
     QPlainTextEdit, QMessageBox, QInputDialog, QGroupBox,
-    QFrame
+    QFrame, QDialog, QTextEdit, QDialogButtonBox, QCheckBox
 )
 from PyQt5.QtCore import Qt
 
@@ -63,6 +66,20 @@ def create_training_tab(parent):
     btn_new.setToolTip("Create a new training data file")
     btn_new.clicked.connect(lambda: _create_new_training_file(parent))
     btn_row.addWidget(btn_new)
+    
+    btn_url = QPushButton("Import from URL")
+    btn_url.setToolTip("Fetch content from a webpage and convert to training data")
+    btn_url.clicked.connect(lambda: _import_from_url(parent))
+    btn_url.setStyleSheet("""
+        QPushButton {
+            background-color: #89b4fa;
+            color: #1e1e2e;
+        }
+        QPushButton:hover {
+            background-color: #b4d0ff;
+        }
+    """)
+    btn_row.addWidget(btn_url)
     
     btn_row.addStretch()
     file_layout.addLayout(btn_row)
@@ -347,3 +364,199 @@ A: I'm your AI assistant.
         parent.training_editor.setPlainText(content)
     except Exception as e:
         parent.training_editor.setPlainText(f"Error loading file: {e}")
+
+
+def _import_from_url(parent):
+    """Import training data from a URL."""
+    # Create dialog for URL input
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Import Training Data from URL")
+    dialog.setMinimumWidth(500)
+    dialog.setMinimumHeight(400)
+    
+    layout = QVBoxLayout(dialog)
+    
+    # URL input
+    url_layout = QHBoxLayout()
+    url_label = QLabel("URL:")
+    url_layout.addWidget(url_label)
+    url_input = QLineEdit()
+    url_input.setPlaceholderText("https://example.com/article")
+    url_layout.addWidget(url_input)
+    layout.addLayout(url_layout)
+    
+    # Options
+    options_group = QGroupBox("Conversion Options")
+    options_layout = QVBoxLayout(options_group)
+    
+    format_qa = QCheckBox("Convert to Q&A format (extract paragraphs as answers)")
+    format_qa.setChecked(True)
+    format_qa.setToolTip("Converts paragraphs into Q: What is [topic]?\\nA: [paragraph]")
+    options_layout.addWidget(format_qa)
+    
+    keep_headers = QCheckBox("Include headers as topics")
+    keep_headers.setChecked(True)
+    keep_headers.setToolTip("Use H1/H2/H3 headers to create topic-based questions")
+    options_layout.addWidget(keep_headers)
+    
+    clean_text = QCheckBox("Clean up formatting (remove extra whitespace)")
+    clean_text.setChecked(True)
+    options_layout.addWidget(clean_text)
+    
+    layout.addWidget(options_group)
+    
+    # Preview area
+    preview_label = QLabel("Preview (click 'Fetch' to load content):")
+    layout.addWidget(preview_label)
+    
+    preview_text = QTextEdit()
+    preview_text.setPlaceholderText("Fetched content will appear here...")
+    preview_text.setReadOnly(True)
+    layout.addWidget(preview_text)
+    
+    # Buttons
+    btn_layout = QHBoxLayout()
+    
+    fetch_btn = QPushButton("Fetch")
+    fetch_btn.setStyleSheet("background-color: #89b4fa; color: #1e1e2e;")
+    
+    def on_fetch():
+        url = url_input.text().strip()
+        if not url:
+            QMessageBox.warning(dialog, "Error", "Please enter a URL")
+            return
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+            url_input.setText(url)
+        
+        preview_text.setPlainText("Fetching...")
+        try:
+            # Fetch the webpage
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; EnigmaBot/1.0)"}
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+            
+            # Extract text content
+            content = _extract_training_content(
+                html, 
+                as_qa=format_qa.isChecked(),
+                include_headers=keep_headers.isChecked(),
+                clean=clean_text.isChecked()
+            )
+            
+            preview_text.setPlainText(content)
+            
+        except urllib.error.HTTPError as e:
+            preview_text.setPlainText(f"HTTP Error {e.code}: {e.reason}")
+        except urllib.error.URLError as e:
+            preview_text.setPlainText(f"Network Error: {e}")
+        except Exception as e:
+            preview_text.setPlainText(f"Error: {e}")
+    
+    fetch_btn.clicked.connect(on_fetch)
+    btn_layout.addWidget(fetch_btn)
+    
+    btn_layout.addStretch()
+    
+    # Dialog buttons
+    button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    button_box.accepted.connect(dialog.accept)
+    button_box.rejected.connect(dialog.reject)
+    btn_layout.addWidget(button_box)
+    
+    layout.addLayout(btn_layout)
+    
+    # Show dialog
+    if dialog.exec_() == QDialog.Accepted:
+        content = preview_text.toPlainText()
+        if content and not content.startswith(("Fetching...", "HTTP Error", "Network Error", "Error:")):
+            # Append to current editor content
+            current = parent.training_editor.toPlainText()
+            if current.strip():
+                new_content = current + "\n\n# Imported from URL\n" + content
+            else:
+                new_content = "# Imported from URL\n" + content
+            parent.training_editor.setPlainText(new_content)
+            QMessageBox.information(parent, "Success", "Content imported! Don't forget to save.")
+
+
+def _extract_training_content(html: str, as_qa: bool = True, include_headers: bool = True, clean: bool = True) -> str:
+    """
+    Extract and convert webpage HTML to training data format.
+    
+    Args:
+        html: Raw HTML content
+        as_qa: Convert to Q&A format
+        include_headers: Use headers for topics
+        clean: Clean up whitespace
+        
+    Returns:
+        Formatted training data
+    """
+    # Remove script, style, nav, footer, etc.
+    html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<nav[^>]*>.*?</nav>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<footer[^>]*>.*?</footer>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<header[^>]*>.*?</header>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<aside[^>]*>.*?</aside>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
+    
+    # Extract title
+    title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+    title = title_match.group(1).strip() if title_match else "Unknown Topic"
+    
+    lines = []
+    current_topic = title
+    
+    if include_headers:
+        # Extract headers and following paragraphs
+        # Find all headers (h1-h4) and paragraphs
+        pattern = r'<(h[1-4])[^>]*>(.*?)</\1>|<p[^>]*>(.*?)</p>'
+        matches = re.finditer(pattern, html, re.IGNORECASE | re.DOTALL)
+        
+        for match in matches:
+            if match.group(1):  # It's a header
+                header_text = re.sub(r'<[^>]+>', '', match.group(2)).strip()
+                if header_text:
+                    current_topic = header_text
+            elif match.group(3):  # It's a paragraph
+                para_text = re.sub(r'<[^>]+>', '', match.group(3)).strip()
+                if para_text and len(para_text) > 30:  # Skip very short paragraphs
+                    if as_qa:
+                        # Create Q&A format
+                        question = f"What is {current_topic}?" if current_topic != title else f"Tell me about {title}"
+                        lines.append(f"Q: {question}")
+                        lines.append(f"A: {para_text}")
+                        lines.append("")
+                    else:
+                        lines.append(para_text)
+                        lines.append("")
+    else:
+        # Just extract all text
+        text = re.sub(r'<[^>]+>', ' ', html)
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        # Split into sentences/paragraphs
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        for i, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if len(sentence) > 30:
+                if as_qa and i % 2 == 0:
+                    lines.append(f"Q: {sentence}")
+                elif as_qa:
+                    lines.append(f"A: {sentence}")
+                    lines.append("")
+                else:
+                    lines.append(sentence)
+    
+    result = '\n'.join(lines)
+    
+    if clean:
+        # Clean up excessive whitespace
+        result = re.sub(r'\n{3,}', '\n\n', result)
+        result = re.sub(r' {2,}', ' ', result)
+    
+    return result.strip()

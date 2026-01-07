@@ -11,44 +11,45 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Union, Optional, Tuple, Any
 
 try:
-    from PyQt5.QtWidgets import QCheckBox, QHBoxLayout
+    from PyQt5.QtWidgets import QCheckBox, QHBoxLayout  # type: ignore[import]
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 
-def open_file_in_explorer(path: str):
+def open_file_in_explorer(path: Union[str, Path]) -> None:
     """Open file explorer with the file selected."""
-    path = Path(path)
-    if not path.exists():
+    file_path = Path(path)
+    if not file_path.exists():
         return
         
     if sys.platform == 'darwin':
-        subprocess.run(['open', '-R', str(path)])
+        subprocess.run(['open', '-R', str(file_path)])
     elif sys.platform == 'win32':
-        subprocess.run(['explorer', '/select,', str(path)])
+        subprocess.run(['explorer', '/select,', str(file_path)])
     else:
         # Linux - open containing folder
-        subprocess.run(['xdg-open', str(path.parent)])
+        subprocess.run(['xdg-open', str(file_path.parent)])
 
 
-def open_in_default_viewer(path: str):
+def open_in_default_viewer(path: Union[str, Path]) -> None:
     """Open file in the default application."""
-    path = Path(path)
-    if not path.exists():
+    file_path = Path(path)
+    if not file_path.exists():
         return
         
     if sys.platform == 'darwin':
-        subprocess.run(['open', str(path)])
+        subprocess.run(['open', str(file_path)])
     elif sys.platform == 'win32':
-        os.startfile(str(path))
+        os.startfile(str(file_path))  # type: ignore[attr-defined]
     else:
-        subprocess.run(['xdg-open', str(path)])
+        subprocess.run(['xdg-open', str(file_path)])
 
 
-def open_folder(folder_path):
+def open_folder(folder_path: Union[str, Path]) -> None:
     """Open a folder in the file manager."""
     folder = Path(folder_path)
     if not folder.exists():
@@ -62,7 +63,7 @@ def open_folder(folder_path):
         subprocess.run(['xdg-open', str(folder)])
 
 
-def create_auto_open_options(parent):
+def create_auto_open_options(parent: Any) -> Tuple[Any, Any, Any]:
     """
     Create auto-open checkboxes for generation tabs.
     
@@ -77,14 +78,14 @@ def create_auto_open_options(parent):
     if not HAS_PYQT:
         return None, None, None
     
-    auto_layout = QHBoxLayout()
+    auto_layout = QHBoxLayout()  # type: ignore[possibly-unbound]
     
-    file_cb = QCheckBox("Auto-open file in explorer")
+    file_cb = QCheckBox("Auto-open file in explorer")  # type: ignore[possibly-unbound]
     file_cb.setChecked(True)
     file_cb.setToolTip("Open the generated file in your file explorer when done")
     auto_layout.addWidget(file_cb)
     
-    viewer_cb = QCheckBox("Auto-open in default app")
+    viewer_cb = QCheckBox("Auto-open in default app")  # type: ignore[possibly-unbound]
     viewer_cb.setChecked(False)
     viewer_cb.setToolTip("Open the file in your default application")
     auto_layout.addWidget(viewer_cb)
@@ -94,8 +95,8 @@ def create_auto_open_options(parent):
     return auto_layout, file_cb, viewer_cb
 
 
-def handle_generation_complete(path: str, auto_open_file: bool = True, 
-                                auto_open_viewer: bool = False):
+def handle_generation_complete(path: Union[str, Path], auto_open_file: bool = True, 
+                                auto_open_viewer: bool = False) -> None:
     """
     Handle auto-open after generation completes.
     

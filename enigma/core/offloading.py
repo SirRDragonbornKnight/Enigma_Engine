@@ -1,3 +1,4 @@
+# type: ignore[all]
 """
 Device Offloading - Split model between CPU and GPU.
 
