@@ -1,0 +1,62 @@
+ENIGMA AI - QUICK HELP
+=======================
+
+GETTING STARTED
+---------------
+1. Run: python run.py --gui
+2. The AI runs in system tray when you close the window
+3. Use voice or keyboard to talk to it anytime
+
+KEYBOARD SHORTCUTS
+------------------
+Ctrl+Shift+E    Open quick command bar
+Ctrl+Shift+H    Open this help
+Ctrl+Shift+V    Toggle voice listening
+Escape          Close command bar
+
+(Change shortcuts in Settings tab or gui_settings.json)
+
+VOICE COMMANDS
+--------------
+Say "Hey Enigma" then speak your command:
+- "Take a screenshot"
+- "Generate an image of a sunset"
+- "What's on my screen?"
+- "Start recording"
+- "Open the interface"
+
+QUICK COMMANDS
+--------------
+Type these in the command bar:
+- screenshot         Capture screen
+- record            Start/stop recording  
+- image [prompt]    Generate image
+- video [prompt]    Generate video
+- help              Show help
+- open              Open full interface
+- exit              Close Enigma
+
+SYSTEM TRAY
+-----------
+- Click icon: Open command bar
+- Double-click: Open full interface
+- Right-click: Show menu
+
+FILES AND FOLDERS
+-----------------
+outputs/images/     Generated images
+outputs/videos/     Recordings and videos
+outputs/audio/      Generated audio
+outputs/code/       Generated code
+data/               Training data
+models/             AI models
+
+NEED MORE HELP?
+---------------
+- Full docs: docs/ folder
+- Instructions: data/instructions.txt
+- GUI Guide: docs/GUI_GUIDE.md
+- Training: docs/HOW_TO_TRAIN.md
+
+TIP: Most generation tabs have an "Auto-open" 
+checkbox to automatically show output files.
