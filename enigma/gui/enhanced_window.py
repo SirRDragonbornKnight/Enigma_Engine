@@ -2171,13 +2171,15 @@ class EnhancedMainWindow(QMainWindow):
         # Track if current model is HuggingFace (for feature restrictions)
         self._is_hf_model = False
         
-        # Check if first run (no models)
+        # Build UI first (before model load so user sees the window immediately)
+        self._build_ui()
+        
+        # Check if first run (no models) - this needs to be synchronous
         if not self.registry.registry.get("models"):
             self._run_setup_wizard()
         else:
-            self._show_model_selector()
-        
-        self._build_ui()
+            # Defer model loading to after GUI is shown
+            self._show_model_selector_deferred()
     
     def _is_huggingface_model(self) -> bool:
         """Check if the currently loaded model is a HuggingFace model."""
@@ -2282,8 +2284,36 @@ class EnhancedMainWindow(QMainWindow):
             # User cancelled - exit
             sys.exit(0)
     
+    def _show_model_selector_deferred(self):
+        """Defer model loading until after GUI is shown."""
+        from PyQt5.QtCore import QTimer
+        
+        # Select the model name now
+        models = list(self.registry.registry.get("models", {}).keys())
+        if models:
+            last_model = self._gui_settings.get("last_model")
+            if last_model and last_model in models:
+                self.current_model_name = last_model
+            else:
+                self.current_model_name = models[0]
+        
+        # Show "loading" status in chat immediately
+        if hasattr(self, 'chat_display'):
+            self.chat_display.append(
+                f"<p style='color: #f9e2af;'><i>⏳ Loading model: {self.current_model_name}...</i></p>"
+            )
+        
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText(f"Loading {self.current_model_name}...")
+        
+        # Update window title to show loading
+        self.setWindowTitle(f"Enigma Engine - Loading {self.current_model_name}...")
+        
+        # Load model after a brief delay (allows GUI to fully render)
+        QTimer.singleShot(100, self._load_current_model)
+    
     def _show_model_selector(self):
-        """Show model selection on startup."""
+        """Show model selection on startup (synchronous version)."""
         models = list(self.registry.registry.get("models", {}).keys())
         if models:
             # Try to use the last model from saved settings
