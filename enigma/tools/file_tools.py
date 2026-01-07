@@ -7,12 +7,34 @@ Tools:
   - list_directory: List files in a directory
   - move_file: Move or rename a file
   - delete_file: Delete a file
+  
+Security:
+  - Respects blocked_paths and blocked_patterns from config
+  - AI cannot access files in blocked locations
 """
 
 import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional
 from .tool_registry import Tool
+
+# Import security check
+try:
+    from ..utils.security import is_path_blocked
+    HAS_SECURITY = True
+except ImportError:
+    HAS_SECURITY = False
+    def is_path_blocked(path):
+        return False, None
+
+
+def _check_path_allowed(path: str) -> Dict[str, Any]:
+    """Check if path is allowed. Returns error dict if blocked."""
+    if HAS_SECURITY:
+        blocked, reason = is_path_blocked(path)
+        if blocked:
+            return {"success": False, "error": f"Access denied: {reason}"}
+    return None
 
 
 class ReadFileTool(Tool):
@@ -41,6 +63,11 @@ class ReadFileTool(Tool):
         try:
             if not path:
                 return {"success": False, "error": "Path cannot be empty"}
+            
+            # Security check
+            blocked = _check_path_allowed(path)
+            if blocked:
+                return blocked
             
             path = Path(path).expanduser().resolve()
             
@@ -106,6 +133,11 @@ class WriteFileTool(Tool):
         try:
             if not path:
                 return {"success": False, "error": "Path cannot be empty"}
+            
+            # Security check
+            blocked = _check_path_allowed(path)
+            if blocked:
+                return blocked
             
             if mode not in ("overwrite", "append"):
                 return {"success": False, "error": f"Invalid mode: {mode}. Use 'overwrite' or 'append'"}

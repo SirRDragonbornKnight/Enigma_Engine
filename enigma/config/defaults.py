@@ -87,6 +87,33 @@ CONFIG = {
     "memory_limit_mb": 0,         # 0 = no limit
     "gpu_memory_fraction": 0.85,  # Use 85% of GPU VRAM
     "low_priority": False,
+    
+    # === Device Offloading (CPU+GPU) ===
+    "enable_offloading": False,   # Enable CPU+GPU layer offloading
+    "offload_folder": None,       # Folder for offloaded weights (None = temp)
+    "offload_to_disk": False,     # Also offload to disk for very large models
+    "max_gpu_layers": None,       # Max layers on GPU (None = auto)
+    
+    # === Security - Blocked Files ===
+    # Files/folders the AI cannot read, write, or modify
+    # This setting CANNOT be changed by the AI
+    "blocked_paths": [
+        # Add paths here that the AI should never access
+        # Example: "C:/Windows/System32",
+        # Example: "/etc/passwd",
+    ],
+    "blocked_patterns": [
+        # Glob patterns for blocked files
+        "*.exe",
+        "*.dll",
+        "*.sys",
+        "*.pem",
+        "*.key",
+        "*password*",
+        "*secret*",
+        "*.env",
+        ".git/config",
+    ],
 
     # === Logging ===
     "log_level": "INFO",

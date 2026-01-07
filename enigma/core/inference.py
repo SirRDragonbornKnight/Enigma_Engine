@@ -91,6 +91,9 @@ class EnigmaEngine:
         self.enable_tools = enable_tools
         self.module_manager = module_manager
         
+        # Check if offloading is enabled
+        self.use_offloading = CONFIG.get("enable_offloading", False)
+        
         # Initialize tool executor if tools are enabled
         self._tool_executor = None
         if enable_tools:
@@ -103,10 +106,15 @@ class EnigmaEngine:
         # Load or create model
         self.model = self._load_model(model_path, model_size)
 
-        # Move to device and set precision
-        self.model.to(self.device)
-        if self.use_half:
-            self.model.half()
+        # Apply offloading or standard device placement
+        if self.use_offloading:
+            self._apply_offloading()
+        else:
+            # Standard: move to device and set precision
+            self.model.to(self.device)
+            if self.use_half:
+                self.model.half()
+        
         self.model.eval()
 
         # Log initialization
@@ -148,6 +156,42 @@ class EnigmaEngine:
             torch.set_num_threads(cpu_threads)
 
         return torch.device("cpu")
+
+    def _apply_offloading(self):
+        """Apply CPU+GPU offloading to the model."""
+        try:
+            from .offloading import apply_offloading, OffloadingConfig, get_memory_info
+            
+            # Log memory info
+            mem_info = get_memory_info()
+            logger.info(f"[Enigma:Offload] CPU RAM available: {mem_info['cpu_available_gb']:.1f}GB")
+            if mem_info["gpus"]:
+                for gpu in mem_info["gpus"]:
+                    logger.info(f"[Enigma:Offload] GPU {gpu['index']}: {gpu['free_gb']:.1f}GB free")
+            
+            # Get offloading config
+            config = OffloadingConfig.from_config()
+            
+            # Apply offloading
+            self.model = apply_offloading(
+                self.model,
+                device_map="auto",
+                offload_folder=config.offload_folder,
+                offload_to_disk=config.offload_to_disk
+            )
+            
+            logger.info("[Enigma:Offload] Model offloading applied successfully")
+            
+        except ImportError:
+            logger.warning("[Enigma:Offload] Could not import offloading module, using standard device")
+            self.model.to(self.device)
+            if self.use_half:
+                self.model.half()
+        except Exception as e:
+            logger.warning(f"[Enigma:Offload] Offloading failed: {e}, using standard device")
+            self.model.to(self.device)
+            if self.use_half:
+                self.model.half()
 
     def _load_tokenizer(
         self,
