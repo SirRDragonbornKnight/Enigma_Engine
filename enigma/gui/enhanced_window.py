@@ -38,6 +38,8 @@ class AIGenerationWorker(QThread):
     """Background worker for AI generation to keep GUI responsive."""
     finished = pyqtSignal(str)  # Emits the response
     error = pyqtSignal(str)     # Emits error message
+    thinking = pyqtSignal(str)  # Emits thinking/reasoning status
+    stopped = pyqtSignal()      # Emits when stopped by user
     
     def __init__(self, engine, text, is_hf, history=None, system_prompt=None, custom_tokenizer=None):
         super().__init__()
@@ -47,10 +49,36 @@ class AIGenerationWorker(QThread):
         self.history = history
         self.system_prompt = system_prompt
         self.custom_tokenizer = custom_tokenizer
+        self._stop_requested = False
+        self._start_time = None
+    
+    def stop(self):
+        """Request the worker to stop."""
+        self._stop_requested = True
         
     def run(self):
         try:
+            import time
+            self._start_time = time.time()
+            
+            # Emit initial thinking status
+            self.thinking.emit("🔍 Analyzing your message...")
+            
+            if self._stop_requested:
+                self.stopped.emit()
+                return
+            
             if self.is_hf:
+                # HuggingFace model - show reasoning steps
+                self.thinking.emit("📝 Building conversation context...")
+                time.sleep(0.1)
+                
+                if self._stop_requested:
+                    self.stopped.emit()
+                    return
+                
+                self.thinking.emit("🧠 Processing with language model...")
+                
                 # HuggingFace model
                 if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
                     response = self.engine.model.chat(
@@ -61,6 +89,7 @@ class AIGenerationWorker(QThread):
                         temperature=0.7
                     )
                 else:
+                    self.thinking.emit("⚙️ Tokenizing input...")
                     response = self.engine.model.generate(
                         self.text,
                         max_new_tokens=150,
@@ -72,9 +101,22 @@ class AIGenerationWorker(QThread):
                         custom_tokenizer=self.custom_tokenizer
                     )
             else:
-                # Local Enigma model
+                # Local Enigma model - show detailed reasoning
+                self.thinking.emit("📝 Formatting prompt for Q&A...")
                 formatted_prompt = f"Q: {self.text}\nA:"
+                
+                if self._stop_requested:
+                    self.stopped.emit()
+                    return
+                
+                self.thinking.emit("🧠 Running inference on local model...")
                 response = self.engine.generate(formatted_prompt, max_gen=100)
+                
+                if self._stop_requested:
+                    self.stopped.emit()
+                    return
+                
+                self.thinking.emit("✨ Cleaning up response...")
                 
                 # Clean up response
                 if response.startswith(formatted_prompt):
@@ -91,12 +133,21 @@ class AIGenerationWorker(QThread):
                 if response.startswith(":"):
                     response = response[1:].strip()
             
+            if self._stop_requested:
+                self.stopped.emit()
+                return
+            
             if not response:
                 response = "(No response generated - model may need more training)"
-                
+            
+            elapsed = time.time() - self._start_time
+            self.thinking.emit(f"✅ Done in {elapsed:.1f}s")
             self.finished.emit(response)
         except Exception as e:
-            self.error.emit(str(e))
+            if self._stop_requested:
+                self.stopped.emit()
+            else:
+                self.error.emit(str(e))
 
 
 # Import text formatting
@@ -3876,10 +3927,19 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
-        # Show "thinking" indicator
+        # Show "thinking" indicator in chat
         self.chat_display.append(
             f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>🤔 {self.current_model_name} is thinking...</i></div>'
         )
+        
+        # Show thinking panel and stop button
+        if hasattr(self, 'thinking_frame'):
+            self.thinking_frame.show()
+            self.thinking_label.setText("🔍 Analyzing your message...")
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.show()
+            self.stop_btn.setEnabled(True)
+            self.stop_btn.setText("⏹ Stop")
         
         # Disable send button while generating
         if hasattr(self, 'send_btn'):
@@ -3905,14 +3965,13 @@ class EnhancedMainWindow(QMainWindow):
             
             system_prompt = (
                 "You are an AI assistant running in the Enigma Engine GUI. "
-                "You have access to powerful tools that the USER can invoke with commands:\n"
-                "- /image <prompt> - Generate images using AI\n"
-                "- /video <prompt> - Generate videos/GIFs\n"
-                "- /code <description> - Generate code\n"
-                "- /audio <text> - Text-to-speech\n"
-                "- /3d <prompt> - Generate 3D models\n"
-                "When the user asks you to create an image, video, code, audio, or 3D model, "
-                "tell them to use the appropriate command (e.g., 'Use /image sunset over mountains'). "
+                "You can generate images, videos, code, audio, and 3D models directly. "
+                "When the user asks you to create something, output a tool call using this format:\n"
+                "<tool_call>{\"tool\": \"tool_name\", \"params\": {\"prompt\": \"description\"}}</tool_call>\n"
+                "Available tools: generate_image, generate_video, generate_code, generate_audio, generate_3d\n"
+                "For example, if asked to create an image of a sunset, respond with:\n"
+                "I'll create that image for you!\n"
+                "<tool_call>{\"tool\": \"generate_image\", \"params\": {\"prompt\": \"beautiful sunset over mountains\"}}</tool_call>\n"
                 "Be helpful, concise, and friendly."
             )
         
@@ -3922,28 +3981,235 @@ class EnhancedMainWindow(QMainWindow):
         )
         self._ai_worker.finished.connect(self._on_ai_response)
         self._ai_worker.error.connect(self._on_ai_error)
+        self._ai_worker.thinking.connect(self._on_thinking_update)
+        self._ai_worker.stopped.connect(self._on_ai_stopped)
         self._ai_worker.start()
     
-    def _on_ai_response(self, response: str):
-        """Handle AI response from background worker."""
+    def _on_thinking_update(self, status: str):
+        """Update the thinking indicator with current status."""
+        if hasattr(self, 'thinking_label'):
+            self.thinking_label.setText(status)
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText(status)
+    
+    def _on_ai_stopped(self):
+        """Handle when AI generation is stopped by user."""
+        # Hide thinking panel and stop button
+        if hasattr(self, 'thinking_frame'):
+            self.thinking_frame.hide()
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.hide()
+        
         # Re-enable send button
         if hasattr(self, 'send_btn'):
             self.send_btn.setEnabled(True)
             self.send_btn.setText("Send")
         
+        # Clear thinking status
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText("Generation stopped by user")
+        
+        # Add stopped message to chat
+        self.chat_display.append(
+            '<div style="color: #f9e2af; padding: 4px;"><i>⏹ Generation stopped</i></div>'
+        )
+    
+    def _detect_generation_intent(self, text: str):
+        """
+        Detect if the user wants to generate content (image, video, code, etc.)
+        Returns: (gen_type, prompt) or (None, None)
+        """
+        text_lower = text.lower()
+        
+        # Image generation patterns
+        image_keywords = ['generate image', 'create image', 'make image', 'draw', 'paint',
+                         'generate a picture', 'create a picture', 'make a picture',
+                         'generate an image', 'create an image', 'make an image',
+                         'show me', 'can you draw', 'can you create', 'can you make',
+                         'i want an image', 'i want a picture', 'picture of', 'image of']
+        
+        # Video generation patterns
+        video_keywords = ['generate video', 'create video', 'make video', 'make a video',
+                         'generate a gif', 'create a gif', 'make a gif', 'animate']
+        
+        # Code generation patterns  
+        code_keywords = ['write code', 'generate code', 'create code', 'write a function',
+                        'write a script', 'code for', 'program that', 'write a program']
+        
+        # Audio generation patterns
+        audio_keywords = ['generate audio', 'create audio', 'text to speech', 'say this',
+                         'speak this', 'read aloud', 'generate speech']
+        
+        # 3D generation patterns
+        threed_keywords = ['generate 3d', 'create 3d', 'make 3d', '3d model', 'generate a 3d']
+        
+        # Check each type
+        for keyword in video_keywords:
+            if keyword in text_lower:
+                prompt = text_lower.replace(keyword, '').strip(' .,!?')
+                return ('video', prompt if prompt else text)
+        
+        for keyword in code_keywords:
+            if keyword in text_lower:
+                prompt = text_lower.replace(keyword, '').strip(' .,!?')
+                return ('code', prompt if prompt else text)
+        
+        for keyword in audio_keywords:
+            if keyword in text_lower:
+                prompt = text_lower.replace(keyword, '').strip(' .,!?')
+                return ('audio', prompt if prompt else text)
+        
+        for keyword in threed_keywords:
+            if keyword in text_lower:
+                prompt = text_lower.replace(keyword, '').strip(' .,!?')
+                return ('3d', prompt if prompt else text)
+        
+        for keyword in image_keywords:
+            if keyword in text_lower:
+                prompt = text_lower.replace(keyword, '').strip(' .,!?')
+                return ('image', prompt if prompt else text)
+        
+        return (None, None)
+    
+    def _execute_tool_from_response(self, response: str):
+        """Parse and execute any tool calls in the AI response, return modified response."""
+        import re
+        import json
+        
+        tool_pattern = r'<tool_call>\s*(\{.*?\})\s*</tool_call>'
+        matches = re.findall(tool_pattern, response, re.DOTALL)
+        
+        if not matches:
+            return response, []
+        
+        results = []
+        for match in matches:
+            try:
+                tool_data = json.loads(match)
+                tool_name = tool_data.get('tool', '')
+                params = tool_data.get('params', {})
+                prompt = params.get('prompt', params.get('text', params.get('description', '')))
+                
+                result = self._execute_generation_tool(tool_name, prompt)
+                results.append(result)
+            except json.JSONDecodeError:
+                results.append({'success': False, 'error': 'Invalid tool call format'})
+        
+        return response, results
+    
+    def _execute_generation_tool(self, tool_name: str, prompt: str):
+        """Execute a generation tool and return the result."""
+        tool_map = {
+            'generate_image': ('image', 'image_prompt', '_generate_image_sync'),
+            'generate_video': ('video', 'video_prompt', '_generate_video_sync'),
+            'generate_code': ('code', 'code_prompt', '_generate_code_sync'),
+            'generate_audio': ('audio', 'audio_text', '_generate_audio_sync'),
+            'generate_3d': ('3d', 'threed_prompt', '_generate_3d_sync'),
+        }
+        
+        if tool_name not in tool_map:
+            return {'success': False, 'error': f'Unknown tool: {tool_name}'}
+        
+        gen_type, prompt_attr, sync_method = tool_map[tool_name]
+        
+        # Set the prompt
+        if hasattr(self, prompt_attr):
+            widget = getattr(self, prompt_attr)
+            if hasattr(widget, 'setPlainText'):
+                widget.setPlainText(prompt)
+            elif hasattr(widget, 'setText'):
+                widget.setText(prompt)
+        
+        # Try sync generation first, fall back to async
+        if hasattr(self, sync_method):
+            return getattr(self, sync_method)(prompt)
+        
+        # Fall back to running generation from chat
+        self._run_generation_from_chat(gen_type, prompt)
+        return {'success': True, 'message': f'{gen_type.title()} generation started'}
+    
+    def _on_ai_response(self, response: str):
+        """Handle AI response from background worker."""
+        # Hide thinking panel and stop button
+        if hasattr(self, 'thinking_frame'):
+            self.thinking_frame.hide()
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.hide()
+        
+        # Re-enable send button
+        if hasattr(self, 'send_btn'):
+            self.send_btn.setEnabled(True)
+            self.send_btn.setText("Send")
+        
+        # Clear thinking status
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText("")
+        
+        # Check for tool calls in response and execute them
+        clean_response, tool_results = self._execute_tool_from_response(response)
+        
+        # Also check if user's original message indicates generation intent
+        user_msgs = [m for m in self.chat_messages if m.get("role") == "user"]
+        if user_msgs and not tool_results:
+            gen_type, prompt = self._detect_generation_intent(user_msgs[-1].get("text", ""))
+            if gen_type:
+                # AI didn't use tool call but user wants generation - do it automatically
+                self._run_generation_from_chat(gen_type, prompt)
+                tool_results = [{'success': True, 'type': gen_type, 'auto_detected': True}]
+        
+        # Remove tool_call tags from display
+        import re
+        display_response = re.sub(r'<tool_call>.*?</tool_call>', '', clean_response, flags=re.DOTALL).strip()
+        
         # Format response
         if HAVE_TEXT_FORMATTER:
-            formatted_response = TextFormatter.to_html(response)
+            formatted_response = TextFormatter.to_html(display_response)
         else:
-            formatted_response = response
+            formatted_response = display_response
         
-        # Remove thinking indicator and add response
-        # (QTextEdit doesn't support removing by ID, so we just append)
+        # Generate unique ID for this response (for feedback)
+        response_id = int(time.time() * 1000)
+        
+        # Remove thinking indicator and add response with feedback buttons
         self.chat_display.append(
             f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-            f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}</div>'
+            f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}'
+            f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
+            f'<span style="color: #6c7086; font-size: 11px;">Rate this response: </span>'
+            f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">👍 Good</a>'
+            f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">👎 Bad</a>'
+            f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">✏️ Critique</a>'
+            f'</div></div>'
         )
         self.last_response = response
+        self._last_response_id = response_id
+        
+        # Store response for feedback
+        if not hasattr(self, '_response_history'):
+            self._response_history = {}
+        self._response_history[response_id] = {
+            'user_input': user_msgs[-1].get("text", "") if user_msgs else "",
+            'ai_response': response,
+            'timestamp': time.time()
+        }
+        
+        # Show tool execution results in chat
+        for result in tool_results:
+            if result.get('success'):
+                result_type = result.get('type', 'generation')
+                if result.get('path'):
+                    # Show image preview in chat if available
+                    self._show_generation_result_in_chat(result)
+                elif result.get('auto_detected'):
+                    self.chat_display.append(
+                        f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #f9e2af;">'
+                        f'<b style="color: #f9e2af;">🎨 Auto-generating {result_type}...</b> Check the {result_type.title()} tab for results.</div>'
+                    )
+            else:
+                self.chat_display.append(
+                    f'<div style="background-color: #1e1e2e; padding: 8px; border-left: 3px solid #f38ba8;">'
+                    f'<b style="color: #f38ba8;">Tool Error:</b> {result.get("error", "Unknown error")}</div>'
+                )
         
         # Track AI response
         self.chat_messages.append({
@@ -3956,23 +4222,54 @@ class EnhancedMainWindow(QMainWindow):
         if not self._is_huggingface_model():
             if getattr(self, 'learn_while_chatting', True) and hasattr(self, 'brain') and self.brain:
                 # Get last user message
-                user_msgs = [m for m in self.chat_messages if m.get("role") == "user"]
                 if user_msgs:
                     self.brain.record_interaction(user_msgs[-1].get("text", ""), response)
                     if self.brain.should_auto_train():
                         self.statusBar().showMessage(
                             f"[+] Learned {self.brain.interactions_since_train} new things!", 5000
                         )
+                        # Update learning indicator
+                        if hasattr(self, 'learning_indicator'):
+                            self.learning_indicator.setText(f"Learning: ON ({self.brain.interactions_since_train} pending)")
         
         # Auto-speak if enabled
         if getattr(self, 'auto_speak', False):
-            self._speak_text(response)
+            self._speak_text(display_response)
     
+    def _show_generation_result_in_chat(self, result):
+        """Show a generation result (like an image) directly in the chat."""
+        path = result.get('path', '')
+        gen_type = result.get('type', 'content')
+        
+        if gen_type == 'image' and path:
+            # Show image thumbnail in chat
+            self.chat_display.append(
+                f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px;">'
+                f'<b style="color: #a6e3a1;">🖼️ Image Generated:</b><br>'
+                f'<img src="file:///{path}" width="300"><br>'
+                f'<span style="color: #6c7086; font-size: 10px;">{path}</span></div>'
+            )
+        elif path:
+            self.chat_display.append(
+                f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px;">'
+                f'<b style="color: #a6e3a1;">✓ {gen_type.title()} Generated:</b> {path}</div>'
+            )
+
     def _on_ai_error(self, error_msg: str):
         """Handle AI generation error."""
+        # Hide thinking panel and stop button
+        if hasattr(self, 'thinking_frame'):
+            self.thinking_frame.hide()
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.hide()
+        
         if hasattr(self, 'send_btn'):
             self.send_btn.setEnabled(True)
             self.send_btn.setText("Send")
+        
+        # Clear thinking status
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText("")
         
         self.chat_display.append(f"<i style='color: #f38ba8;'>Error: {error_msg}</i>")
     
@@ -4019,16 +4316,25 @@ class EnhancedMainWindow(QMainWindow):
     def _show_command_help(self):
         """Show available chat commands."""
         help_text = """
-<b style='color:#89b4fa;'>Available Commands:</b><br>
+<b style='color:#89b4fa;'>💡 Natural Language Generation:</b><br>
+Just ask naturally! The AI understands requests like:<br>
+• "Generate an image of a sunset"<br>
+• "Create a picture of a cat"<br>
+• "Write code for a web scraper"<br>
+• "Make a 3D model of a chair"<br>
+<br>
+<b style='color:#89b4fa;'>Quick Commands (optional):</b><br>
 <b>/image &lt;prompt&gt;</b> - Generate an image<br>
 <b>/video &lt;prompt&gt;</b> - Generate a video/GIF<br>
 <b>/code &lt;description&gt;</b> - Generate code<br>
 <b>/audio &lt;text&gt;</b> - Generate speech audio<br>
 <b>/3d &lt;prompt&gt;</b> - Generate 3D model<br>
-<b>/embed &lt;text&gt;</b> - Generate embeddings<br>
 <b>/clear</b> - Clear chat history<br>
 <br>
-<i>Example: /image a sunset over mountains</i>
+<b style='color:#f9e2af;'>📚 Learning Mode:</b><br>
+When ON, the AI saves your conversations to improve over time.<br>
+Click the "Learning: ON/OFF" indicator to toggle.<br>
+<i>(Only works with local Enigma models, not HuggingFace models)</i>
 """
         self.chat_display.append(help_text)
     
