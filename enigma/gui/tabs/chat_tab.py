@@ -2,7 +2,7 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTextEdit, QLineEdit, QLabel, QFrame, QSplitter,
+    QTextEdit, QTextBrowser, QLineEdit, QLabel, QFrame, QSplitter,
     QGroupBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt
@@ -65,7 +65,7 @@ def create_chat_tab(parent):
     layout.addLayout(header_layout)
     
     # Chat display - selectable text with better styling
-    parent.chat_display = QTextEdit()
+    parent.chat_display = QTextBrowser()
     parent.chat_display.setReadOnly(True)
     parent.chat_display.setTextInteractionFlags(
         Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard | Qt.LinksAccessibleByMouse

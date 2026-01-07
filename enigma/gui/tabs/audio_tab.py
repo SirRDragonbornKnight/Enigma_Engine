@@ -16,7 +16,7 @@ try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
-        QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit
+        QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit, QCheckBox
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
@@ -25,6 +25,7 @@ except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
+from .output_helpers import open_file_in_explorer, open_in_default_viewer, open_folder
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "audio"
@@ -425,6 +426,17 @@ class AudioTab(QWidget):
         ref_layout.addWidget(clear_ref_btn)
         layout.addLayout(ref_layout)
         
+        # Auto-open options
+        auto_layout = QHBoxLayout()
+        self.auto_open_file_cb = QCheckBox("Auto-open file in explorer")
+        self.auto_open_file_cb.setChecked(True)
+        auto_layout.addWidget(self.auto_open_file_cb)
+        self.auto_open_viewer_cb = QCheckBox("Auto-play audio")
+        self.auto_open_viewer_cb.setChecked(False)
+        auto_layout.addWidget(self.auto_open_viewer_cb)
+        auto_layout.addStretch()
+        layout.addLayout(auto_layout)
+        
         # Buttons
         btn_layout = QHBoxLayout()
         
@@ -579,38 +591,22 @@ class AudioTab(QWidget):
             self.last_audio_path = path
             self.play_btn.setEnabled(True)
             self.status_label.setText(f"Saved in {duration:.1f}s - {path}")
+            
+            # Auto-open features
+            if self.auto_open_file_cb.isChecked():
+                open_file_in_explorer(path)
+            if self.auto_open_viewer_cb.isChecked():
+                open_in_default_viewer(path)
         else:
             error = result.get("error", "Unknown error")
             self.status_label.setText(f"Error: {error}")
     
     def _play_last(self):
         if self.last_audio_path and Path(self.last_audio_path).exists():
-            import subprocess
-            import sys
-            
-            if sys.platform == 'darwin':
-                subprocess.run(['afplay', self.last_audio_path])
-            elif sys.platform == 'win32':
-                os.startfile(self.last_audio_path)
-            else:
-                # Try common Linux players
-                for player in ['aplay', 'paplay', 'mpv', 'ffplay']:
-                    try:
-                        subprocess.run([player, self.last_audio_path])
-                        break
-                    except FileNotFoundError:
-                        continue
+            open_in_default_viewer(self.last_audio_path)
     
     def _open_output_folder(self):
-        import subprocess
-        import sys
-        
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(OUTPUT_DIR)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', str(OUTPUT_DIR)])
-        else:
-            subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+        open_folder(OUTPUT_DIR)
     
     def _browse_reference_audio(self):
         """Browse for a reference audio file for voice cloning."""

@@ -1,0 +1,1020 @@
+"""
+System Tray Integration - Keep Enigma running in the background.
+
+Features:
+  - System tray icon with menu
+  - Quick command overlay (hotkey activated)
+  - Voice activation support ("Hey Enigma")
+  - Background AI processing
+  - Natural language command execution
+"""
+
+import sys
+import os
+import time
+import subprocess
+import threading
+from pathlib import Path
+from typing import Optional, Callable, Dict, Any
+
+try:
+    from PyQt5.QtWidgets import (
+        QApplication, QSystemTrayIcon, QMenu, QAction, QWidget,
+        QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
+        QTextEdit, QFrame, QShortcut
+    )
+    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
+    from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QKeySequence, QFont
+    HAS_PYQT = True
+except ImportError:
+    HAS_PYQT = False
+
+from ..config import CONFIG
+
+
+def get_current_model_name() -> str:
+    """Get the name of the currently loaded AI model."""
+    try:
+        from ..config import CONFIG
+        model_name = CONFIG.get("default_model", "small_enigma")
+        return model_name
+    except:
+        return "Enigma AI"
+
+
+class CommandProcessor(QObject):
+    """Process natural language commands in background."""
+    
+    result_ready = pyqtSignal(dict)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.engine = None
+        self.tool_interface = None
+        self.model_name = "Loading..."
+        self._load_engine()
+    
+    def _load_engine(self):
+        """Load the inference engine."""
+        try:
+            from ..core.inference import EnigmaEngine
+            from ..core.tool_interface import ToolInterface
+            self.engine = EnigmaEngine()
+            self.tool_interface = ToolInterface()
+            self.model_name = get_current_model_name()
+        except Exception as e:
+            print(f"Note: AI engine not loaded yet: {e}")
+            self.model_name = "Not loaded"
+    
+    def process_command(self, command: str) -> Dict[str, Any]:
+        """
+        Process a natural language command and determine action.
+        
+        Returns dict with:
+          - action: The action type (chat, image, video, train, file, screen, gui, etc.)
+          - params: Parameters for the action
+          - response: Text response from AI
+        """
+        command_lower = command.lower().strip()
+        
+        # Quick command detection (before AI processing)
+        quick_actions = self._detect_quick_action(command_lower)
+        if quick_actions:
+            return quick_actions
+        
+        # Use AI for more complex interpretation
+        if self.engine:
+            try:
+                # Add system context for command interpretation
+                prompt = f"""User command: {command}
+
+Interpret this command and respond. If it's a request to:
+- Generate an image: describe what image to create
+- Generate video: describe the video
+- Train/learn: acknowledge and confirm
+- Edit/modify file: confirm the file operation
+- Take screenshot: confirm screen capture
+- Record screen: confirm recording
+- Open settings/GUI: confirm opening
+- Other: respond naturally
+
+Response:"""
+                response = self.engine.generate(prompt, max_tokens=150, temperature=0.7)
+                return {
+                    "action": "chat",
+                    "params": {"command": command},
+                    "response": response
+                }
+            except Exception as e:
+                return {
+                    "action": "error",
+                    "params": {},
+                    "response": f"Error processing: {e}"
+                }
+        
+        return {
+            "action": "chat",
+            "params": {},
+            "response": "I heard you, but my brain isn't loaded yet. Try again in a moment."
+        }
+    
+    def _detect_quick_action(self, command: str) -> Optional[Dict[str, Any]]:
+        """Detect quick actions from keywords."""
+        
+        # Open GUI
+        if any(kw in command for kw in ["open gui", "show gui", "open window", "show window", "open enigma"]):
+            return {"action": "open_gui", "params": {}, "response": "Opening the main window..."}
+        
+        # Screenshot
+        if any(kw in command for kw in ["screenshot", "screen shot", "capture screen", "take a picture of screen"]):
+            return {"action": "screenshot", "params": {}, "response": "Taking a screenshot..."}
+        
+        # Screen recording
+        if any(kw in command for kw in ["record screen", "start recording", "screen record"]):
+            return {"action": "record_screen", "params": {"start": True}, "response": "Starting screen recording..."}
+        if any(kw in command for kw in ["stop recording", "end recording"]):
+            return {"action": "record_screen", "params": {"start": False}, "response": "Stopping screen recording..."}
+        
+        # Image generation
+        if any(kw in command for kw in ["generate image", "create image", "make image", "draw", "paint"]):
+            # Extract the description after the keyword
+            for kw in ["generate image of", "create image of", "make image of", "draw ", "paint "]:
+                if kw in command:
+                    desc = command.split(kw, 1)[-1].strip()
+                    return {"action": "generate_image", "params": {"prompt": desc}, "response": f"Generating image: {desc}"}
+            return {"action": "generate_image", "params": {"prompt": command}, "response": "What would you like me to draw?"}
+        
+        # Video generation
+        if any(kw in command for kw in ["generate video", "create video", "make video"]):
+            for kw in ["generate video of", "create video of", "make video of"]:
+                if kw in command:
+                    desc = command.split(kw, 1)[-1].strip()
+                    return {"action": "generate_video", "params": {"prompt": desc}, "response": f"Generating video: {desc}"}
+            return {"action": "generate_video", "params": {}, "response": "What video would you like me to create?"}
+        
+        # Training
+        if any(kw in command for kw in ["train on", "learn from", "add to training", "train with"]):
+            for kw in ["train on ", "learn from ", "add to training ", "train with "]:
+                if kw in command:
+                    target = command.split(kw, 1)[-1].strip()
+                    return {"action": "train", "params": {"data": target}, "response": f"Adding to training data: {target}"}
+        
+        if any(kw in command for kw in ["start training", "train model", "begin training"]):
+            return {"action": "train", "params": {"start": True}, "response": "Starting model training..."}
+        
+        # File operations
+        if any(kw in command for kw in ["open file", "edit file", "read file"]):
+            for kw in ["open file ", "edit file ", "read file "]:
+                if kw in command:
+                    filepath = command.split(kw, 1)[-1].strip()
+                    return {"action": "file", "params": {"path": filepath, "operation": "open"}, "response": f"Opening file: {filepath}"}
+        
+        # Avatar
+        if any(kw in command for kw in ["show avatar", "connect avatar", "start avatar"]):
+            return {"action": "avatar", "params": {"show": True}, "response": "Connecting avatar..."}
+        if any(kw in command for kw in ["hide avatar", "disconnect avatar", "stop avatar"]):
+            return {"action": "avatar", "params": {"show": False}, "response": "Disconnecting avatar..."}
+        
+        # Look at screen / analyze
+        if any(kw in command for kw in ["look at screen", "what's on screen", "analyze screen", "see my screen"]):
+            return {"action": "vision", "params": {"capture": True}, "response": "Looking at your screen..."}
+        
+        # Settings
+        if any(kw in command for kw in ["open settings", "show settings"]):
+            return {"action": "settings", "params": {}, "response": "Opening settings..."}
+        
+        # Exit/quit
+        if any(kw in command for kw in ["exit", "quit", "goodbye", "shut down"]):
+            return {"action": "exit", "params": {}, "response": "Goodbye! Shutting down..."}
+        
+        return None
+
+
+class QuickCommandOverlay(QWidget):
+    """
+    A floating overlay for quick commands.
+    Appears when hotkey is pressed, disappears after command.
+    """
+    
+    command_submitted = pyqtSignal(str)
+    close_requested = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | 
+            Qt.WindowStaysOnTopHint | 
+            Qt.Tool
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setup_ui()
+        self.history = []
+        self.history_index = -1
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Main frame with styling
+        frame = QFrame()
+        frame.setObjectName("commandFrame")
+        frame.setStyleSheet("""
+            #commandFrame {
+                background-color: rgba(30, 30, 30, 0.95);
+                border: 2px solid #3498db;
+                border-radius: 12px;
+            }
+        """)
+        
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(15, 10, 15, 10)
+        frame_layout.setSpacing(8)
+        
+        # Header
+        header_layout = QHBoxLayout()
+        
+        title = QLabel("🤖 Enigma")
+        title.setStyleSheet("color: #3498db; font-size: 14px; font-weight: bold;")
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        status = QLabel("Listening...")
+        status.setObjectName("statusLabel")
+        status.setStyleSheet("color: #888; font-size: 11px;")
+        header_layout.addWidget(status)
+        self.status_label = status
+        
+        frame_layout.addLayout(header_layout)
+        
+        # Command input
+        self.command_input = QLineEdit()
+        self.command_input.setPlaceholderText("Ask me anything or give a command...")
+        self.command_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(50, 50, 50, 0.9);
+                border: 1px solid #555;
+                border-radius: 8px;
+                padding: 10px 15px;
+                font-size: 14px;
+                color: white;
+            }
+            QLineEdit:focus {
+                border-color: #3498db;
+            }
+        """)
+        self.command_input.returnPressed.connect(self._on_submit)
+        frame_layout.addWidget(self.command_input)
+        
+        # Response area (hidden initially)
+        self.response_area = QLabel("")
+        self.response_area.setWordWrap(True)
+        self.response_area.setStyleSheet("""
+            color: #ccc;
+            font-size: 12px;
+            padding: 5px;
+        """)
+        self.response_area.setVisible(False)
+        frame_layout.addWidget(self.response_area)
+        
+        # Quick action buttons
+        actions_layout = QHBoxLayout()
+        actions_layout.setSpacing(5)
+        
+        quick_actions = [
+            ("📷", "Screenshot", "screenshot"),
+            ("🎨", "Image", "generate image"),
+            ("🎬", "Video", "generate video"),
+            ("🎤", "Voice", "voice"),
+            ("⚙️", "Settings", "open settings"),
+            ("🖥️", "GUI", "open gui"),
+        ]
+        
+        for emoji, tooltip, cmd in quick_actions:
+            btn = QPushButton(emoji)
+            btn.setToolTip(tooltip)
+            btn.setFixedSize(32, 32)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(60, 60, 60, 0.8);
+                    border: 1px solid #444;
+                    border-radius: 6px;
+                    font-size: 14px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(80, 80, 80, 0.9);
+                    border-color: #3498db;
+                }
+            """)
+            btn.clicked.connect(lambda checked, c=cmd: self._quick_action(c))
+            actions_layout.addWidget(btn)
+        
+        actions_layout.addStretch()
+        
+        # Close hint
+        hint = QLabel("Esc to close")
+        hint.setStyleSheet("color: #666; font-size: 10px;")
+        actions_layout.addWidget(hint)
+        
+        frame_layout.addLayout(actions_layout)
+        
+        layout.addWidget(frame)
+        
+        # Size and position
+        self.setFixedWidth(450)
+        self.adjustSize()
+    
+    def _on_submit(self):
+        command = self.command_input.text().strip()
+        if command:
+            self.history.append(command)
+            self.history_index = len(self.history)
+            self.command_submitted.emit(command)
+            self.command_input.clear()
+    
+    def _quick_action(self, command: str):
+        if command == "voice":
+            self.status_label.setText("🎤 Listening for voice...")
+            # TODO: Activate voice input
+        else:
+            self.command_submitted.emit(command)
+    
+    def show_response(self, text: str):
+        """Show a response in the overlay."""
+        self.response_area.setText(text)
+        self.response_area.setVisible(True)
+        self.adjustSize()
+        
+        # Auto-hide after delay
+        QTimer.singleShot(3000, self._hide_response)
+    
+    def _hide_response(self):
+        self.response_area.setVisible(False)
+        self.adjustSize()
+    
+    def set_status(self, text: str):
+        self.status_label.setText(text)
+    
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.command_input.setFocus()
+        self._center_on_screen()
+    
+    def _center_on_screen(self):
+        """Center the overlay near the top of the screen."""
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.width()) // 2
+        y = screen.height() // 4  # Upper third of screen
+        self.move(x, y)
+    
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.close_requested.emit()
+            self.hide()
+        elif event.key() == Qt.Key_Up:
+            # Navigate history
+            if self.history and self.history_index > 0:
+                self.history_index -= 1
+                self.command_input.setText(self.history[self.history_index])
+        elif event.key() == Qt.Key_Down:
+            if self.history and self.history_index < len(self.history) - 1:
+                self.history_index += 1
+                self.command_input.setText(self.history[self.history_index])
+        else:
+            super().keyPressEvent(event)
+
+
+class EnigmaSystemTray(QObject):
+    """
+    System tray integration for Enigma.
+    
+    Keeps the AI running in background even when GUI is closed.
+    """
+    
+    show_gui_requested = pyqtSignal()
+    
+    def __init__(self, app: QApplication, main_window=None):
+        super().__init__()
+        self.app = app
+        self.main_window = main_window
+        self.is_recording = False
+        self.recording_process = None
+        self.recording_path = None
+        
+        # Model info
+        self.current_model = get_current_model_name()
+        
+        # Create system tray icon
+        self.tray_icon = QSystemTrayIcon(self.app)
+        self.tray_icon.setIcon(self._create_icon())
+        self.tray_icon.setToolTip(f"Enigma AI ({self.current_model}) - Running in background")
+        
+        # Create menu
+        self.menu = QMenu()
+        self._build_menu()
+        self.tray_icon.setContextMenu(self.menu)
+        
+        # Double-click to show overlay
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        
+        # Quick command overlay
+        self.overlay = QuickCommandOverlay()
+        self.overlay.command_submitted.connect(self._on_command)
+        self.overlay.close_requested.connect(self._on_overlay_closed)
+        
+        # Command processor
+        self.processor = CommandProcessor()
+        
+        # Global hotkey timer (check for hotkey)
+        self.hotkey_timer = QTimer()
+        self.hotkey_timer.timeout.connect(self._check_hotkey)
+        
+        # Voice commander
+        self.voice_commander = None
+        self.voice_enabled = False
+        
+        # Show tray icon
+        self.tray_icon.show()
+    
+    def _create_icon(self) -> QIcon:
+        """Create a simple icon for the tray."""
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.transparent)
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw a simple brain/AI icon
+        painter.setBrush(QColor("#3498db"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(4, 4, 24, 24)
+        
+        painter.setBrush(QColor("#2c3e50"))
+        painter.drawEllipse(10, 10, 12, 12)
+        
+        painter.setBrush(QColor("#3498db"))
+        painter.drawEllipse(13, 13, 6, 6)
+        
+        painter.end()
+        
+        return QIcon(pixmap)
+    
+    def _build_menu(self):
+        """Build the tray menu."""
+        # Model info at top
+        model_action = QAction(f"🤖 Model: {self.current_model}", self)
+        model_action.setEnabled(False)
+        self.menu.addAction(model_action)
+        self.model_action = model_action
+        
+        self.menu.addSeparator()
+        
+        # Quick command
+        action_command = QAction("⌨️ Quick Command (Ctrl+Space)", self)
+        action_command.triggered.connect(self.show_overlay)
+        self.menu.addAction(action_command)
+        
+        self.menu.addSeparator()
+        
+        # Open GUI
+        action_gui = QAction("🖥️ Open Full Interface", self)
+        action_gui.triggered.connect(self._show_main_window)
+        self.menu.addAction(action_gui)
+        
+        self.menu.addSeparator()
+        
+        # Quick actions submenu
+        quick_menu = self.menu.addMenu("⚡ Quick Actions")
+        
+        action_screenshot = QAction("📷 Screenshot", self)
+        action_screenshot.triggered.connect(lambda: self._execute_action("screenshot"))
+        quick_menu.addAction(action_screenshot)
+        
+        action_screen_look = QAction("👁️ Look at Screen", self)
+        action_screen_look.triggered.connect(lambda: self._execute_action("vision"))
+        quick_menu.addAction(action_screen_look)
+        
+        action_record = QAction("🔴 Start Recording", self)
+        action_record.triggered.connect(self._toggle_recording)
+        self.action_record = action_record
+        quick_menu.addAction(action_record)
+        
+        quick_menu.addSeparator()
+        
+        action_image = QAction("🎨 Generate Image...", self)
+        action_image.triggered.connect(lambda: self._prompt_action("generate image of"))
+        quick_menu.addAction(action_image)
+        
+        action_video = QAction("🎬 Generate Video...", self)
+        action_video.triggered.connect(lambda: self._prompt_action("generate video of"))
+        quick_menu.addAction(action_video)
+        
+        self.menu.addSeparator()
+        
+        # Voice toggle
+        self.action_voice = QAction("🎤 Enable Voice (Wake: 'Hey Enigma')", self)
+        self.action_voice.setCheckable(True)
+        self.action_voice.triggered.connect(self._toggle_voice)
+        self.menu.addAction(self.action_voice)
+        
+        self.menu.addSeparator()
+        
+        # Status
+        self.status_action = QAction("Status: Ready", self)
+        self.status_action.setEnabled(False)
+        self.menu.addAction(self.status_action)
+        
+        self.menu.addSeparator()
+        
+        # Exit
+        action_exit = QAction("❌ Exit Enigma", self)
+        action_exit.triggered.connect(self._exit_app)
+        self.menu.addAction(action_exit)
+    
+    def _on_tray_activated(self, reason):
+        """Handle tray icon activation."""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self._show_main_window()
+        elif reason == QSystemTrayIcon.Trigger:
+            self.show_overlay()
+    
+    def show_overlay(self):
+        """Show the quick command overlay."""
+        self.overlay.show()
+        self.overlay.activateWindow()
+        self.overlay.command_input.setFocus()
+    
+    def hide_overlay(self):
+        """Hide the overlay."""
+        self.overlay.hide()
+    
+    def _on_overlay_closed(self):
+        """Handle overlay close."""
+        pass
+    
+    def _on_command(self, command: str):
+        """Process a command from the overlay."""
+        self.overlay.set_status("Processing...")
+        
+        # Process in background
+        result = self.processor.process_command(command)
+        
+        # Show response
+        self.overlay.show_response(result.get("response", "Done"))
+        self.overlay.set_status("Ready")
+        
+        # Execute action
+        action = result.get("action", "")
+        params = result.get("params", {})
+        
+        self._execute_action(action, params)
+    
+    def _execute_action(self, action: str, params: Dict[str, Any] = None):
+        """Execute an action."""
+        params = params or {}
+        
+        if action == "open_gui":
+            self._show_main_window()
+            self.hide_overlay()
+        
+        elif action == "screenshot":
+            self._take_screenshot()
+        
+        elif action == "record_screen":
+            self._toggle_recording()
+        
+        elif action == "generate_image":
+            prompt = params.get("prompt", "")
+            self._generate_image(prompt)
+        
+        elif action == "generate_video":
+            prompt = params.get("prompt", "")
+            self._generate_video(prompt)
+        
+        elif action == "train":
+            self._handle_training(params)
+        
+        elif action == "file":
+            self._handle_file(params)
+        
+        elif action == "avatar":
+            self._handle_avatar(params)
+        
+        elif action == "vision":
+            self._analyze_screen()
+        
+        elif action == "settings":
+            self._show_main_window()
+            # TODO: Switch to settings tab
+        
+        elif action == "exit":
+            self._exit_app()
+    
+    def _show_main_window(self):
+        """Show the main GUI window."""
+        self.show_gui_requested.emit()
+        if self.main_window:
+            self.main_window.show()
+            self.main_window.activateWindow()
+    
+    def _take_screenshot(self):
+        """Take a screenshot."""
+        try:
+            from ..tools.vision import capture_screen
+            result = capture_screen()
+            if result.get("success"):
+                path = result.get("path", "")
+                self.tray_icon.showMessage(
+                    "Screenshot Captured",
+                    f"Saved to: {path}",
+                    QSystemTrayIcon.Information,
+                    3000
+                )
+                # Open in explorer
+                from .tabs.output_helpers import open_file_in_explorer
+                open_file_in_explorer(path)
+        except Exception as e:
+            self.tray_icon.showMessage("Error", str(e), QSystemTrayIcon.Warning, 3000)
+    
+    def _toggle_recording(self):
+        """Toggle screen recording."""
+        self.is_recording = not self.is_recording
+        if self.is_recording:
+            self.action_record.setText("⏹️ Stop Recording")
+            self.tray_icon.showMessage("Recording Started", "Screen recording in progress...", QSystemTrayIcon.Information, 2000)
+            # TODO: Start actual recording
+        else:
+            self.action_record.setText("🔴 Start Recording")
+            self.tray_icon.showMessage("Recording Stopped", "Screen recording saved.", QSystemTrayIcon.Information, 2000)
+            # TODO: Stop and save recording
+    
+    def _generate_image(self, prompt: str):
+        """Generate an image."""
+        if not prompt:
+            self.show_overlay()
+            self.overlay.command_input.setText("generate image of ")
+            self.overlay.command_input.setFocus()
+            return
+        
+        self.tray_icon.showMessage("Generating Image", f"Creating: {prompt[:50]}...", QSystemTrayIcon.Information, 2000)
+        
+        # Use placeholder generator for now
+        try:
+            from .tabs.image_tab import get_provider
+            provider = get_provider('placeholder')
+            if provider:
+                provider.load()
+                result = provider.generate(prompt)
+                if result.get("success"):
+                    path = result.get("path", "")
+                    self.tray_icon.showMessage("Image Generated", f"Saved to: {path}", QSystemTrayIcon.Information, 3000)
+                    from .tabs.output_helpers import open_file_in_explorer
+                    open_file_in_explorer(path)
+        except Exception as e:
+            self.tray_icon.showMessage("Error", str(e), QSystemTrayIcon.Warning, 3000)
+    
+    def _generate_video(self, prompt: str):
+        """Generate a video."""
+        if not prompt:
+            self.show_overlay()
+            self.overlay.command_input.setText("generate video of ")
+            self.overlay.command_input.setFocus()
+            return
+        
+        self.tray_icon.showMessage("Video Generation", "Video generation requires the full GUI.", QSystemTrayIcon.Information, 2000)
+        self._show_main_window()
+    
+    def _handle_training(self, params: Dict):
+        """Handle training requests."""
+        data = params.get("data", "")
+        if params.get("start"):
+            self.tray_icon.showMessage("Training", "Opening training interface...", QSystemTrayIcon.Information, 2000)
+            self._show_main_window()
+        elif data:
+            self.tray_icon.showMessage("Training Data", f"Adding to training: {data[:50]}...", QSystemTrayIcon.Information, 2000)
+            # TODO: Actually add to training data
+    
+    def _handle_file(self, params: Dict):
+        """Handle file operations."""
+        path = params.get("path", "")
+        operation = params.get("operation", "open")
+        
+        if path:
+            import subprocess
+            import sys
+            if sys.platform == 'win32':
+                subprocess.run(['notepad', path])
+            else:
+                subprocess.run(['xdg-open', path])
+    
+    def _handle_avatar(self, params: Dict):
+        """Handle avatar commands."""
+        show = params.get("show", True)
+        try:
+            # Try to actually control avatar
+            if self.main_window and hasattr(self.main_window, 'avatar_controller'):
+                if show:
+                    self.main_window.avatar_controller.show()
+                else:
+                    self.main_window.avatar_controller.hide()
+                self.tray_icon.showMessage(
+                    f"Avatar ({self.current_model})", 
+                    "Avatar connected!" if show else "Avatar disconnected.",
+                    QSystemTrayIcon.Information, 
+                    2000
+                )
+            else:
+                self.tray_icon.showMessage(
+                    f"Avatar ({self.current_model})", 
+                    "Open full GUI to use avatar.",
+                    QSystemTrayIcon.Information, 
+                    2000
+                )
+                if show:
+                    self._show_main_window()
+        except Exception as e:
+            self.tray_icon.showMessage("Avatar Error", str(e), QSystemTrayIcon.Warning, 3000)
+    
+    def _analyze_screen(self):
+        """Capture and analyze the screen with AI."""
+        self.tray_icon.showMessage(
+            f"Vision ({self.current_model})", 
+            "Capturing and analyzing screen...", 
+            QSystemTrayIcon.Information, 
+            2000
+        )
+        try:
+            from ..tools.vision import capture_screen, get_screen_vision
+            
+            # Capture screenshot
+            result = capture_screen()
+            if result.get("success"):
+                path = result.get("path", "")
+                
+                # Try to analyze with vision
+                try:
+                    vision = get_screen_vision()
+                    analysis = vision.see(describe=True, detect_text=True)
+                    
+                    text_found = analysis.get("text", "")[:200]
+                    if text_found:
+                        self.tray_icon.showMessage(
+                            f"Screen Analysis ({self.current_model})",
+                            f"Text detected:\n{text_found}...",
+                            QSystemTrayIcon.Information,
+                            5000
+                        )
+                    else:
+                        self.tray_icon.showMessage(
+                            f"Screen Captured ({self.current_model})",
+                            f"Saved to: {path}",
+                            QSystemTrayIcon.Information,
+                            3000
+                        )
+                except:
+                    self.tray_icon.showMessage(
+                        f"Screen Captured ({self.current_model})",
+                        f"Saved to: {path}",
+                        QSystemTrayIcon.Information,
+                        3000
+                    )
+                
+                # Open in explorer
+                from .tabs.output_helpers import open_file_in_explorer
+                open_file_in_explorer(path)
+        except Exception as e:
+            self.tray_icon.showMessage("Vision Error", str(e), QSystemTrayIcon.Warning, 3000)
+    
+    def _prompt_action(self, prefix: str):
+        """Show overlay with a pre-filled command."""
+        self.show_overlay()
+        self.overlay.command_input.setText(f"{prefix} ")
+        self.overlay.command_input.setFocus()
+        # Move cursor to end
+        self.overlay.command_input.setCursorPosition(len(self.overlay.command_input.text()))
+    
+    def _toggle_voice(self, enabled: bool):
+        """Toggle voice activation."""
+        self.voice_enabled = enabled
+        if enabled:
+            success = self._start_voice_listener()
+            if not success:
+                self.action_voice.setChecked(False)
+                self.voice_enabled = False
+        else:
+            self._stop_voice_listener()
+    
+    def _start_voice_listener(self) -> bool:
+        """Start the voice listener."""
+        try:
+            from ..voice.listener import VoiceCommander, check_voice_available
+            
+            # Check if voice is available
+            status = check_voice_available()
+            if not status["available"]:
+                error = status.get("error", "Voice not available")
+                self.tray_icon.showMessage(
+                    "Voice Error",
+                    f"{error}\n\nInstall with: pip install SpeechRecognition pyaudio",
+                    QSystemTrayIcon.Warning,
+                    5000
+                )
+                return False
+            
+            # Create voice commander
+            self.voice_commander = VoiceCommander(command_callback=self._on_voice_command)
+            self.voice_commander.current_model = self.current_model
+            self.voice_commander.set_notification_callback(
+                lambda t, m: self.tray_icon.showMessage(t, m, QSystemTrayIcon.Information, 3000)
+            )
+            self.voice_commander.set_status_callback(self.set_status)
+            
+            if self.voice_commander.start():
+                self.set_status(f"🎤 Listening ({self.current_model})")
+                return True
+            else:
+                return False
+                
+        except ImportError as e:
+            self.tray_icon.showMessage(
+                "Voice Not Available",
+                "Install with: pip install SpeechRecognition pyaudio",
+                QSystemTrayIcon.Warning,
+                5000
+            )
+            return False
+        except Exception as e:
+            self.tray_icon.showMessage("Voice Error", str(e), QSystemTrayIcon.Warning, 3000)
+            return False
+    
+    def _on_voice_command(self, text: str):
+        """Handle voice command."""
+        self.tray_icon.showMessage(
+            f"Voice Command ({self.current_model})",
+            f"Heard: {text}",
+            QSystemTrayIcon.Information,
+            2000
+        )
+        # Process like any other command
+        self._on_command(text)
+    
+    def _stop_voice_listener(self):
+        """Stop the voice listener."""
+        if self.voice_commander:
+            self.voice_commander.stop()
+            self.voice_commander = None
+        self.set_status("Ready")
+        self.tray_icon.showMessage(
+            "Voice Disabled",
+            "Voice activation stopped.",
+            QSystemTrayIcon.Information,
+            2000
+        )
+    
+    def _toggle_recording(self):
+        """Toggle screen recording."""
+        if not self.is_recording:
+            self._start_recording()
+        else:
+            self._stop_recording()
+    
+    def _start_recording(self):
+        """Start screen recording."""
+        try:
+            # Create output path
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs")) / "videos"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            self.recording_path = str(output_dir / f"recording_{timestamp}.mp4")
+            
+            # Try ffmpeg for recording
+            if sys.platform == 'win32':
+                # Windows: use ffmpeg with gdigrab
+                cmd = [
+                    'ffmpeg', '-y',
+                    '-f', 'gdigrab',
+                    '-framerate', '30',
+                    '-i', 'desktop',
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    self.recording_path
+                ]
+            elif sys.platform == 'darwin':
+                # macOS: use ffmpeg with avfoundation
+                cmd = [
+                    'ffmpeg', '-y',
+                    '-f', 'avfoundation',
+                    '-framerate', '30',
+                    '-i', '1:',
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    self.recording_path
+                ]
+            else:
+                # Linux: use ffmpeg with x11grab
+                cmd = [
+                    'ffmpeg', '-y',
+                    '-f', 'x11grab',
+                    '-framerate', '30',
+                    '-i', ':0.0',
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    self.recording_path
+                ]
+            
+            self.recording_process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            
+            self.is_recording = True
+            self.action_record.setText("⏹️ Stop Recording")
+            self.tray_icon.showMessage(
+                f"Recording Started ({self.current_model})",
+                "Screen recording in progress...\nClick Stop Recording when done.",
+                QSystemTrayIcon.Information,
+                3000
+            )
+            self.set_status("🔴 Recording...")
+            
+        except FileNotFoundError:
+            self.tray_icon.showMessage(
+                "Recording Error",
+                "ffmpeg not found. Install ffmpeg to record screen.\n"
+                "Windows: winget install ffmpeg\n"
+                "Mac: brew install ffmpeg\n"
+                "Linux: sudo apt install ffmpeg",
+                QSystemTrayIcon.Warning,
+                5000
+            )
+        except Exception as e:
+            self.tray_icon.showMessage("Recording Error", str(e), QSystemTrayIcon.Warning, 3000)
+    
+    def _stop_recording(self):
+        """Stop screen recording."""
+        if self.recording_process:
+            try:
+                # Send 'q' to ffmpeg to stop gracefully
+                self.recording_process.stdin.write(b'q')
+                self.recording_process.stdin.flush()
+                self.recording_process.wait(timeout=5)
+            except:
+                self.recording_process.terminate()
+            
+            self.recording_process = None
+        
+        self.is_recording = False
+        self.action_record.setText("🔴 Start Recording")
+        self.set_status("Ready")
+        
+        if self.recording_path and Path(self.recording_path).exists():
+            self.tray_icon.showMessage(
+                f"Recording Saved ({self.current_model})",
+                f"Saved to: {self.recording_path}",
+                QSystemTrayIcon.Information,
+                3000
+            )
+            # Open in explorer
+            from .tabs.output_helpers import open_file_in_explorer
+            open_file_in_explorer(self.recording_path)
+        else:
+            self.tray_icon.showMessage(
+                "Recording Stopped",
+                "Recording may not have saved properly.",
+                QSystemTrayIcon.Warning,
+                3000
+            )
+    
+    def _check_hotkey(self):
+        """Check for global hotkey (fallback if pyqtkeybind not available)."""
+        # This is a placeholder - actual global hotkey needs platform-specific code
+        pass
+    
+    def _exit_app(self):
+        """Exit the application completely."""
+        self.tray_icon.hide()
+        self.app.quit()
+    
+    def set_status(self, text: str):
+        """Update the status in the tray menu."""
+        self.status_action.setText(f"Status: {text}")
+    
+    def show_notification(self, title: str, message: str, icon_type=None):
+        """Show a system notification."""
+        if icon_type is None:
+            icon_type = QSystemTrayIcon.Information
+        self.tray_icon.showMessage(title, message, icon_type, 3000)
+
+
+def create_system_tray(app: QApplication, main_window=None) -> Optional[EnigmaSystemTray]:
+    """Create and return the system tray instance."""
+    if not HAS_PYQT:
+        return None
+    
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        print("System tray not available on this system")
+        return None
+    
+    return EnigmaSystemTray(app, main_window)

@@ -4866,15 +4866,70 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         return getattr(self, '_ai_control_locked', False)
 
 
-def run_app():
-    """Run the enhanced GUI application."""
+# Global system tray instance
+_system_tray = None
+
+
+def run_app(minimize_to_tray: bool = True):
+    """
+    Run the enhanced GUI application.
+    
+    Args:
+        minimize_to_tray: If True, closing the window minimizes to system tray
+                         instead of exiting the app.
+    """
+    global _system_tray
+    
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern look
+    app.setQuitOnLastWindowClosed(False)  # Keep running when window closes
     
     window = EnhancedMainWindow()
+    
+    # Create system tray
+    try:
+        from .system_tray import create_system_tray
+        _system_tray = create_system_tray(app, window)
+        
+        if _system_tray:
+            # Connect tray to window
+            _system_tray.show_gui_requested.connect(window.show)
+            
+            # Override close event to minimize to tray
+            if minimize_to_tray:
+                original_close = window.closeEvent
+                
+                def close_to_tray(event):
+                    if _system_tray and _system_tray.tray_icon.isVisible():
+                        event.ignore()
+                        window.hide()
+                        _system_tray.show_notification(
+                            "Enigma Running",
+                            "Enigma is still running in the background.\n"
+                            "Click the tray icon or press Ctrl+Space for quick commands.",
+                        )
+                    else:
+                        original_close(event)
+                
+                window.closeEvent = close_to_tray
+            
+            # Show startup notification
+            _system_tray.show_notification(
+                "Enigma Started",
+                "Press Ctrl+Space anytime for quick commands.\n"
+                "Click tray icon for more options."
+            )
+    except Exception as e:
+        print(f"System tray not available: {e}")
+    
     window.show()
     
     sys.exit(app.exec_())
+
+
+def get_system_tray():
+    """Get the global system tray instance."""
+    return _system_tray
 
 
 if __name__ == "__main__":

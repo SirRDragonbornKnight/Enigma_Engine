@@ -484,3 +484,48 @@ class FindOnScreenTool(Tool):
             "found": len(matches) > 0,
             "matches": matches
         }
+
+
+# =============================================================================
+# Convenience Functions
+# =============================================================================
+
+def capture_screen(save_path: str = None) -> Dict[str, Any]:
+    """
+    Quick function to capture the screen.
+    
+    Args:
+        save_path: Optional path to save the screenshot.
+                   If None, saves to outputs/images with timestamp.
+    
+    Returns:
+        Dict with success status and path.
+    """
+    import time
+    from ..config import CONFIG
+    
+    try:
+        vision = get_screen_vision()
+        
+        if save_path is None:
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs")) / "images"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            save_path = str(output_dir / f"screenshot_{timestamp}.png")
+        
+        if vision.capture.save(save_path):
+            return {
+                "success": True,
+                "path": save_path,
+                "message": f"Screenshot saved to {save_path}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to capture screen"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }

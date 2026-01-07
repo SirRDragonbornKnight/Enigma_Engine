@@ -29,6 +29,7 @@ Examples:
   python run.py --build                  Build new model from scratch
   python run.py --run                    Simple CLI chat
   python run.py --serve                  Start API server on localhost:5000
+  python run.py --background             Run in system tray only (background mode)
         """
     )
     parser.add_argument("--train", action="store_true", help="Train the model")
@@ -37,6 +38,7 @@ Examples:
     parser.add_argument("--run", action="store_true", help="Run CLI chat interface")
     parser.add_argument("--gui", action="store_true", help="Start the GUI (recommended)")
     parser.add_argument("--web", action="store_true", help="Start web dashboard")
+    parser.add_argument("--background", action="store_true", help="Run in system tray (background mode)")
     
     # Multi-instance options
     parser.add_argument("--instance", type=str, default=None, help="Instance ID (for multi-instance)")
@@ -54,13 +56,15 @@ Examples:
     args = parser.parse_args()
 
     # If no arguments, show help and suggest GUI
-    if not any([args.train, args.build, args.serve, args.run, args.gui, args.web]):
+    if not any([args.train, args.build, args.serve, args.run, args.gui, args.web, args.background]):
         print("\n" + "=" * 60)
         print("  ENIGMA ENGINE - Build Your Own AI")
         print("=" * 60)
         print("\nQuick Start Options:\n")
         print("  python run.py --gui")
         print("    -> Launch GUI (recommended for beginners)")
+        print("\n  python run.py --background")
+        print("    -> Run in system tray (always available, lightweight)")
         print("\n  python run.py --train")
         print("    -> Train a model with default settings")
         print("\n  python run.py --train --model medium")
@@ -208,6 +212,25 @@ Examples:
             print("      sudo apt install python3-pyqt5")
             sys.exit(1)
         run_app()
+    
+    if args.background:
+        try:
+            from enigma.background import main as run_background
+        except ImportError as e:
+            print(f"\n[ERROR] Background mode requires PyQt5")
+            print(f"   Error: {e}")
+            print("\nTo fix this:")
+            print("   Install PyQt5:")
+            print("      pip install PyQt5")
+            sys.exit(1)
+        
+        print("\n" + "=" * 60)
+        print("ENIGMA ENGINE - BACKGROUND MODE")
+        print("=" * 60)
+        print("\nRunning in system tray...")
+        print("Click tray icon or press Ctrl+Space for quick commands")
+        print("Press Ctrl+C to exit\n")
+        run_background()
     
     if args.web:
         try:

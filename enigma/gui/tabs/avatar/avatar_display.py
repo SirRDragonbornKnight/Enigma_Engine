@@ -150,13 +150,14 @@ def _refresh_avatar_configs(parent):
             parent.avatar_config_combo.addItem(config_file.stem, str(config_file))
     
     # Also check model-specific avatar configs
-    model_name = getattr(parent, 'current_model_name', CONFIG.get("default_model", "default"))
-    model_avatar_dir = Path(CONFIG["models_dir"]) / model_name / "avatar"
-    if model_avatar_dir.exists():
-        for config_file in sorted(model_avatar_dir.glob("*.json")):
-            parent.avatar_config_combo.addItem(
-                f"{config_file.stem} (model)", str(config_file)
-            )
+    model_name = getattr(parent, 'current_model_name', None) or CONFIG.get("default_model") or "default"
+    if model_name:
+        model_avatar_dir = Path(CONFIG["models_dir"]) / model_name / "avatar"
+        if model_avatar_dir.exists():
+            for config_file in sorted(model_avatar_dir.glob("*.json")):
+                parent.avatar_config_combo.addItem(
+                    f"{config_file.stem} (model)", str(config_file)
+                )
 
 
 def _on_avatar_config_changed(parent, index):

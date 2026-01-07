@@ -15,7 +15,7 @@ try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
-        QMessageBox, QFileDialog, QGroupBox, QPlainTextEdit
+        QMessageBox, QFileDialog, QGroupBox, QPlainTextEdit, QCheckBox
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont, QFontDatabase
@@ -24,6 +24,7 @@ except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
+from .output_helpers import open_file_in_explorer, open_folder
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "code"
@@ -294,6 +295,14 @@ class CodeTab(QWidget):
         prompt_group.setLayout(prompt_layout)
         layout.addWidget(prompt_group)
         
+        # Auto-open options
+        auto_layout = QHBoxLayout()
+        self.auto_open_file_cb = QCheckBox("Auto-open saved file in explorer")
+        self.auto_open_file_cb.setChecked(True)
+        auto_layout.addWidget(self.auto_open_file_cb)
+        auto_layout.addStretch()
+        layout.addLayout(auto_layout)
+        
         # Buttons
         btn_layout = QHBoxLayout()
         
@@ -309,6 +318,10 @@ class CodeTab(QWidget):
         self.save_btn = QPushButton("Save to File")
         self.save_btn.clicked.connect(self._save_code)
         btn_layout.addWidget(self.save_btn)
+        
+        self.open_folder_btn = QPushButton("Output Folder")
+        self.open_folder_btn.clicked.connect(lambda: open_folder(OUTPUT_DIR))
+        btn_layout.addWidget(self.open_folder_btn)
         
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
@@ -385,6 +398,10 @@ class CodeTab(QWidget):
         if path:
             Path(path).write_text(code)
             QMessageBox.information(self, "Saved", f"Code saved to:\n{path}")
+            
+            # Auto-open file in explorer
+            if self.auto_open_file_cb.isChecked():
+                open_file_in_explorer(path)
 
 
 def create_code_tab(parent) -> QWidget:

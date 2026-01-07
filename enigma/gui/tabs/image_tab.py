@@ -2,6 +2,7 @@
 Image Generation Tab - Generate images using local or cloud models.
 
 Providers:
+  - PLACEHOLDER: Simple test images (no dependencies)
   - LOCAL: Stable Diffusion (requires diffusers, torch)
   - OPENAI: DALL-E 3 (requires openai, API key)
   - REPLICATE: SDXL/Flux (requires replicate, API key)
@@ -11,6 +12,8 @@ import os
 import io
 import time
 import base64
+import subprocess
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -19,10 +22,10 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QComboBox, QTextEdit, QProgressBar,
         QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-        QDoubleSpinBox, QLineEdit
+        QDoubleSpinBox, QLineEdit, QCheckBox
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
-    from PyQt5.QtGui import QFont, QPixmap
+    from PyQt5.QtGui import QFont, QPixmap, QImage, QPainter, QColor
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -37,6 +40,110 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 # Image Generation Implementations
 # =============================================================================
+
+class PlaceholderImage:
+    """Placeholder image generator - creates simple test images with no dependencies."""
+    
+    def __init__(self):
+        self.is_loaded = False
+    
+    def load(self) -> bool:
+        self.is_loaded = True
+        return True
+    
+    def unload(self):
+        self.is_loaded = False
+    
+    def generate(self, prompt: str, width: int = 512, height: int = 512,
+                 **kwargs) -> Dict[str, Any]:
+        """Generate a simple placeholder image with the prompt text."""
+        try:
+            start = time.time()
+            
+            # Create a simple image with text using PIL if available, else Qt
+            timestamp = int(time.time())
+            filename = f"placeholder_{timestamp}.png"
+            filepath = OUTPUT_DIR / filename
+            
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                
+                # Create gradient background
+                img = Image.new('RGB', (width, height))
+                for y in range(height):
+                    r = int(40 + (y / height) * 60)
+                    g = int(60 + (y / height) * 40)  
+                    b = int(100 + (y / height) * 80)
+                    for x in range(width):
+                        img.putpixel((x, y), (r, g, b))
+                
+                draw = ImageDraw.Draw(img)
+                
+                # Add prompt text
+                try:
+                    font = ImageFont.truetype("arial.ttf", 20)
+                except:
+                    font = ImageFont.load_default()
+                
+                # Wrap text
+                words = prompt.split()
+                lines = []
+                current = ""
+                for word in words:
+                    test = current + " " + word if current else word
+                    if len(test) < 40:
+                        current = test
+                    else:
+                        lines.append(current)
+                        current = word
+                if current:
+                    lines.append(current)
+                
+                y_pos = height // 2 - len(lines) * 15
+                for line in lines[:5]:  # Max 5 lines
+                    bbox = draw.textbbox((0, 0), line, font=font)
+                    text_width = bbox[2] - bbox[0]
+                    x_pos = (width - text_width) // 2
+                    draw.text((x_pos, y_pos), line, fill=(255, 255, 255), font=font)
+                    y_pos += 30
+                
+                # Add "PLACEHOLDER" watermark
+                draw.text((10, height - 30), "PLACEHOLDER - Install diffusers for real images", 
+                          fill=(150, 150, 150), font=font)
+                
+                img.save(str(filepath))
+                
+            except ImportError:
+                # Fallback: create using Qt
+                img = QImage(width, height, QImage.Format_RGB32)
+                painter = QPainter(img)
+                
+                # Gradient background
+                for y in range(height):
+                    color = QColor(40 + int((y/height)*60), 
+                                   60 + int((y/height)*40),
+                                   100 + int((y/height)*80))
+                    painter.setPen(color)
+                    painter.drawLine(0, y, width, y)
+                
+                # Add text
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(img.rect(), Qt.AlignCenter | Qt.TextWordWrap, prompt[:200])
+                
+                painter.setPen(QColor(150, 150, 150))
+                painter.drawText(10, height - 10, "PLACEHOLDER - Install diffusers for real images")
+                
+                painter.end()
+                img.save(str(filepath))
+            
+            return {
+                "success": True,
+                "path": str(filepath),
+                "duration": time.time() - start,
+                "is_placeholder": True
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 class StableDiffusionLocal:
     """Local Stable Diffusion image generation."""
@@ -244,17 +351,23 @@ class ReplicateImage:
 
 # Global instances (lazy loaded)
 _providers = {
+    'placeholder': None,
     'local': None,
     'openai': None,
     'replicate': None,
 }
+
+# Track load errors for better messages
+_load_errors = {}
 
 
 def get_provider(name: str):
     """Get or create a provider instance."""
     global _providers
     
-    if name == 'local' and _providers['local'] is None:
+    if name == 'placeholder' and _providers['placeholder'] is None:
+        _providers['placeholder'] = PlaceholderImage()
+    elif name == 'local' and _providers['local'] is None:
         _providers['local'] = StableDiffusionLocal()
     elif name == 'openai' and _providers['openai'] is None:
         _providers['openai'] = OpenAIImage()
@@ -262,6 +375,11 @@ def get_provider(name: str):
         _providers['replicate'] = ReplicateImage()
     
     return _providers.get(name)
+
+
+def get_load_error(name: str) -> str:
+    """Get the last load error for a provider."""
+    return _load_errors.get(name, "")
 
 
 class ImageGenerationWorker(QThread):
@@ -281,19 +399,45 @@ class ImageGenerationWorker(QThread):
         self.provider_name = provider_name
     
     def run(self):
+        global _load_errors
         try:
             self.progress.emit(10)
             
             provider = get_provider(self.provider_name)
             if provider is None:
-                self.finished.emit({"success": False, "error": "Unknown provider"})
+                self.finished.emit({"success": False, "error": f"Unknown provider: {self.provider_name}"})
                 return
             
             # Load if needed
             if not provider.is_loaded:
                 self.progress.emit(20)
                 if not provider.load():
-                    self.finished.emit({"success": False, "error": "Failed to load provider"})
+                    # Build helpful error message
+                    if self.provider_name == 'local':
+                        error_msg = (
+                            "Failed to load Stable Diffusion.\n\n"
+                            "To fix, install: pip install diffusers transformers accelerate\n\n"
+                            "Or try 'Placeholder' provider to test without dependencies."
+                        )
+                    elif self.provider_name == 'openai':
+                        error_msg = (
+                            "Failed to load OpenAI DALL-E.\n\n"
+                            "Make sure you have:\n"
+                            "1. pip install openai\n"
+                            "2. Set OPENAI_API_KEY environment variable"
+                        )
+                    elif self.provider_name == 'replicate':
+                        error_msg = (
+                            "Failed to load Replicate.\n\n"
+                            "Make sure you have:\n"
+                            "1. pip install replicate\n"
+                            "2. Set REPLICATE_API_TOKEN environment variable"
+                        )
+                    else:
+                        error_msg = f"Failed to load provider: {self.provider_name}"
+                    
+                    _load_errors[self.provider_name] = error_msg
+                    self.finished.emit({"success": False, "error": error_msg})
                     return
             
             self.progress.emit(40)
@@ -354,6 +498,7 @@ class ImageTab(QWidget):
         
         self.provider_combo = QComboBox()
         self.provider_combo.addItems([
+            'Placeholder (Test - No Dependencies)',
             'Local (Stable Diffusion)',
             'OpenAI (DALL-E 3) - Cloud',
             'Replicate (SDXL) - Cloud'
@@ -438,6 +583,22 @@ class ImageTab(QWidget):
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
         
+        # Auto-open options
+        auto_layout = QHBoxLayout()
+        
+        self.auto_open_file_cb = QCheckBox("Auto-open file in explorer")
+        self.auto_open_file_cb.setChecked(True)
+        self.auto_open_file_cb.setToolTip("Open the generated file in your file explorer when done")
+        auto_layout.addWidget(self.auto_open_file_cb)
+        
+        self.auto_open_image_cb = QCheckBox("Auto-open image viewer")
+        self.auto_open_image_cb.setChecked(False)
+        self.auto_open_image_cb.setToolTip("Open the image in your default image viewer")
+        auto_layout.addWidget(self.auto_open_image_cb)
+        
+        auto_layout.addStretch()
+        layout.addLayout(auto_layout)
+        
         # Generate button
         btn_layout = QHBoxLayout()
         
@@ -460,13 +621,15 @@ class ImageTab(QWidget):
     def _get_provider_name(self) -> str:
         """Get provider name from combo box."""
         text = self.provider_combo.currentText()
-        if 'Local' in text:
+        if 'Placeholder' in text:
+            return 'placeholder'
+        elif 'Local' in text:
             return 'local'
         elif 'OpenAI' in text:
             return 'openai'
         elif 'Replicate' in text:
             return 'replicate'
-        return 'local'
+        return 'placeholder'
     
     def _load_provider(self):
         """Pre-load the selected provider."""
@@ -543,6 +706,7 @@ class ImageTab(QWidget):
         if result.get("success"):
             path = result.get("path", "")
             duration = result.get("duration", 0)
+            is_placeholder = result.get("is_placeholder", False)
             
             if path and Path(path).exists():
                 self.last_image_path = path
@@ -554,13 +718,46 @@ class ImageTab(QWidget):
                 )
                 self.result_label.setPixmap(scaled)
                 self.save_btn.setEnabled(True)
-                self.status_label.setText(f"Generated in {duration:.1f}s - Saved to: {path}")
+                
+                status = f"Generated in {duration:.1f}s - Saved to: {path}"
+                if is_placeholder:
+                    status += " (placeholder)"
+                self.status_label.setText(status)
+                
+                # Auto-open file in explorer (select the file)
+                if self.auto_open_file_cb.isChecked():
+                    self._open_file_in_explorer(path)
+                
+                # Auto-open in image viewer
+                if self.auto_open_image_cb.isChecked():
+                    self._open_in_default_viewer(path)
             else:
                 self.status_label.setText("Generation complete (no image path)")
         else:
             error = result.get("error", "Unknown error")
             self.status_label.setText(f"Error: {error}")
             self.result_label.setText(f"Generation failed:\n{error}")
+    
+    def _open_file_in_explorer(self, path: str):
+        """Open file explorer with the file selected."""
+        path = Path(path)
+        if sys.platform == 'darwin':
+            subprocess.run(['open', '-R', str(path)])
+        elif sys.platform == 'win32':
+            subprocess.run(['explorer', '/select,', str(path)])
+        else:
+            # Linux - open containing folder
+            subprocess.run(['xdg-open', str(path.parent)])
+    
+    def _open_in_default_viewer(self, path: str):
+        """Open file in the default application."""
+        path = Path(path)
+        if sys.platform == 'darwin':
+            subprocess.run(['open', str(path)])
+        elif sys.platform == 'win32':
+            os.startfile(str(path))
+        else:
+            subprocess.run(['xdg-open', str(path)])
     
     def _save_image(self):
         """Save the generated image to a custom location."""
@@ -580,9 +777,6 @@ class ImageTab(QWidget):
     
     def _open_output_folder(self):
         """Open the output folder in file manager."""
-        import subprocess
-        import sys
-        
         if sys.platform == 'darwin':
             subprocess.run(['open', str(OUTPUT_DIR)])
         elif sys.platform == 'win32':
