@@ -210,7 +210,7 @@ def _apply_current_settings():
 
     # GPU memory
     if HAVE_TORCH and torch.cuda.is_available():
-        set_gpu_memory_fraction(CONFIG.get("gpu_memory_fraction", 0.5))
+        set_gpu_memory_fraction(CONFIG.get("gpu_memory_fraction", 0.85))
 
     # Process priority
     if CONFIG.get("low_priority", False):

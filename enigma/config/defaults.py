@@ -82,10 +82,10 @@ CONFIG = {
     "max_concurrent_models": 4,
 
     # === Resource Limiting ===
-    "resource_mode": "balanced",  # "minimal", "balanced", "performance"
+    "resource_mode": "performance",  # "minimal", "balanced", "performance"
     "cpu_threads": 0,             # 0 = auto
     "memory_limit_mb": 0,         # 0 = no limit
-    "gpu_memory_fraction": 0.5,
+    "gpu_memory_fraction": 0.85,  # Use 85% of GPU VRAM
     "low_priority": False,
 
     # === Logging ===
