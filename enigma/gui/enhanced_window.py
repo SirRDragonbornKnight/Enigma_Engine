@@ -907,12 +907,15 @@ class SetupWizard(QWizard):
 class ModelLoadingDialog(QDialog):
     """Loading dialog with progress bar for model loading."""
     
+    cancelled = False  # Flag to track cancellation
+    
     def __init__(self, model_name: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Loading Model")
-        self.setFixedSize(350, 120)
+        self.setFixedSize(350, 150)
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        self.cancelled = False
         
         # Dark style
         self.setStyleSheet("""
@@ -934,6 +937,17 @@ class ModelLoadingDialog(QDialog):
             QProgressBar::chunk {
                 background-color: #89b4fa;
                 border-radius: 6px;
+            }
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #f38ba8;
             }
         """)
         
@@ -959,6 +973,22 @@ class ModelLoadingDialog(QDialog):
         self.progress.setValue(0)
         self.progress.setTextVisible(False)
         layout.addWidget(self.progress)
+        
+        # Cancel button
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self._on_cancel)
+        layout.addWidget(self.cancel_btn, alignment=Qt.AlignCenter)
+    
+    def _on_cancel(self):
+        """Handle cancel button click."""
+        self.cancelled = True
+        self.status_label.setText("Cancelling...")
+        QApplication.processEvents()
+    
+    def is_cancelled(self) -> bool:
+        """Check if loading was cancelled."""
+        QApplication.processEvents()  # Allow UI to update
+        return self.cancelled
     
     def set_status(self, text: str, progress: int):
         """Update status text and progress."""
@@ -1122,6 +1152,21 @@ class ModelManagerDialog(QDialog):
         hf_input_layout.addWidget(self.hf_add_btn)
         hf_layout.addLayout(hf_input_layout)
         
+        # Tokenizer option
+        tokenizer_layout = QHBoxLayout()
+        tokenizer_label = QLabel("Tokenizer:")
+        tokenizer_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        tokenizer_layout.addWidget(tokenizer_label)
+        
+        self.hf_tokenizer_combo = QComboBox()
+        self.hf_tokenizer_combo.addItem("Model's Own (Recommended)")
+        self.hf_tokenizer_combo.addItem("Custom Enigma Tokenizer")
+        self.hf_tokenizer_combo.setToolTip("Choose which tokenizer to use with HuggingFace models")
+        self.hf_tokenizer_combo.setStyleSheet("font-size: 11px;")
+        tokenizer_layout.addWidget(self.hf_tokenizer_combo)
+        tokenizer_layout.addStretch()
+        hf_layout.addLayout(tokenizer_layout)
+        
         # Info label
         hf_info = QLabel("Note: Large models need good GPU & HF token for gated models")
         hf_info.setStyleSheet("color: #6c7086; font-size: 10px;")
@@ -1168,11 +1213,18 @@ class ModelManagerDialog(QDialog):
         self.btn_clone.setEnabled(False)
         actions_layout.addWidget(self.btn_clone, 0, 1)
         
+        self.btn_test = QPushButton("Test")
+        self.btn_test.setStyleSheet("background-color: #94e2d5; color: #1e1e2e; font-weight: bold;")
+        self.btn_test.clicked.connect(self._on_test_model)
+        self.btn_test.setEnabled(False)
+        self.btn_test.setToolTip("Test model with sample prompts")
+        actions_layout.addWidget(self.btn_test, 0, 2)
+        
         self.btn_folder = QPushButton("Folder")
         self.btn_folder.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold;")
         self.btn_folder.clicked.connect(self._on_open_folder)
         self.btn_folder.setEnabled(False)
-        actions_layout.addWidget(self.btn_folder, 0, 2)
+        actions_layout.addWidget(self.btn_folder, 0, 3)
         
         # Row 2 - Scaling
         self.btn_grow = QPushButton("Grow")
@@ -1254,6 +1306,7 @@ class ModelManagerDialog(QDialog):
         has_selection = self.selected_model is not None
         self.btn_backup.setEnabled(has_selection)
         self.btn_clone.setEnabled(has_selection)
+        self.btn_test.setEnabled(has_selection)
         self.btn_folder.setEnabled(has_selection)
         self.btn_rename.setEnabled(has_selection)
         self.btn_delete.setEnabled(has_selection)
@@ -1388,6 +1441,9 @@ Checkpoints: {checkpoints}
             model_path = Path(self.registry.models_dir) / local_name
             model_path.mkdir(parents=True, exist_ok=True)
             
+            # Get tokenizer preference
+            use_custom_tokenizer = self.hf_tokenizer_combo.currentIndex() == 1
+            
             # Create registry entry
             self.registry.registry.setdefault("models", {})[local_name] = {
                 "path": str(model_path),
@@ -1396,6 +1452,7 @@ Checkpoints: {checkpoints}
                 "has_weights": False,  # Weights are in HF cache, not local
                 "source": "huggingface",
                 "huggingface_id": model_id,
+                "use_custom_tokenizer": use_custom_tokenizer,  # User preference
             }
             self.registry._save_registry()
             
@@ -1478,6 +1535,158 @@ Checkpoints: {checkpoints}
             )
         except Exception as e:
             QMessageBox.warning(self, "Backup Failed", str(e))
+    
+    def _on_test_model(self):
+        """Test the selected model with sample prompts to verify it works."""
+        if not self.selected_model:
+            return
+        
+        name = self.selected_model
+        
+        # Create test dialog
+        test_dialog = QDialog(self)
+        test_dialog.setWindowTitle(f"Testing: {name}")
+        test_dialog.setMinimumSize(500, 400)
+        test_dialog.setStyleSheet("""
+            QDialog { background-color: #1e1e2e; }
+            QLabel { color: #cdd6f4; }
+            QTextEdit { 
+                background-color: #313244; 
+                color: #cdd6f4; 
+                border: 1px solid #45475a;
+                border-radius: 6px;
+            }
+            QPushButton {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #b4befe; }
+        """)
+        
+        layout = QVBoxLayout(test_dialog)
+        
+        title = QLabel(f"Model Test: {name}")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
+        layout.addWidget(title)
+        
+        # Test results area
+        results = QTextEdit()
+        results.setReadOnly(True)
+        layout.addWidget(results)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(test_dialog.close)
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+        
+        test_dialog.show()
+        QApplication.processEvents()
+        
+        # Run the test
+        results.append("<b>Loading model...</b>")
+        QApplication.processEvents()
+        
+        try:
+            # Load the model
+            model, config = self.registry.load_model(name)
+            results.append(f"<span style='color: #a6e3a1;'>✓ Model loaded successfully</span>")
+            results.append(f"<span style='color: #6c7086;'>  Source: {config.get('source', 'local')}</span>")
+            QApplication.processEvents()
+            
+            # Get model info
+            is_huggingface = config.get("source") == "huggingface"
+            
+            if is_huggingface:
+                results.append(f"<span style='color: #6c7086;'>  HuggingFace ID: {config.get('huggingface_id', 'unknown')}</span>")
+            else:
+                results.append(f"<span style='color: #6c7086;'>  Size: {config.get('size', 'unknown')}</span>")
+            
+            # Test prompts
+            test_prompts = [
+                "Hello",
+                "What is 2 + 2?",
+                "How are you?",
+            ]
+            
+            results.append("\n<b>Running test prompts...</b>")
+            QApplication.processEvents()
+            
+            import torch
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            
+            passed = 0
+            failed = 0
+            
+            for prompt in test_prompts:
+                results.append(f"\n<b>Prompt:</b> {prompt}")
+                QApplication.processEvents()
+                
+                try:
+                    if is_huggingface:
+                        # HuggingFace model
+                        response = model.generate(prompt, max_length=50)
+                    else:
+                        # Local Enigma model
+                        model.to(device)
+                        model.eval()
+                        from ..core.tokenizer import load_tokenizer
+                        tokenizer = load_tokenizer()
+                        
+                        tokens = tokenizer.encode(prompt)
+                        input_ids = torch.tensor([tokens], device=device)
+                        
+                        with torch.no_grad():
+                            for _ in range(30):
+                                logits = model(input_ids)
+                                next_token = logits[0, -1, :].argmax().item()
+                                input_ids = torch.cat([
+                                    input_ids,
+                                    torch.tensor([[next_token]], device=device)
+                                ], dim=1)
+                                if next_token == tokenizer.eos_token_id:
+                                    break
+                        
+                        response = tokenizer.decode(input_ids[0].tolist())
+                    
+                    # Check response quality
+                    response_clean = response.replace(prompt, "").strip()[:100]
+                    
+                    if len(response_clean) < 2:
+                        results.append(f"<span style='color: #f9e2af;'>⚠ Response too short: '{response_clean}'</span>")
+                        failed += 1
+                    elif response_clean.count(response_clean[0]) == len(response_clean):
+                        results.append(f"<span style='color: #f38ba8;'>✗ Repetitive output: '{response_clean}'</span>")
+                        failed += 1
+                    else:
+                        results.append(f"<span style='color: #a6e3a1;'>✓ Response: {response_clean}</span>")
+                        passed += 1
+                        
+                except Exception as e:
+                    results.append(f"<span style='color: #f38ba8;'>✗ Error: {e}</span>")
+                    failed += 1
+                
+                QApplication.processEvents()
+            
+            # Summary
+            results.append("\n<b>Test Summary:</b>")
+            if failed == 0:
+                results.append(f"<span style='color: #a6e3a1;'>All {passed} tests passed! Model looks good.</span>")
+            elif passed > failed:
+                results.append(f"<span style='color: #f9e2af;'>{passed} passed, {failed} failed. Model may need training.</span>")
+            else:
+                results.append(f"<span style='color: #f38ba8;'>{passed} passed, {failed} failed. Model needs training or has issues.</span>")
+                results.append("<span style='color: #6c7086;'>Tip: Try training with more data or check if weights are corrupted.</span>")
+                
+        except Exception as e:
+            results.append(f"<span style='color: #f38ba8;'>✗ Failed to load model: {e}</span>")
+            results.append("<span style='color: #6c7086;'>Check that model files exist and are not corrupted.</span>")
     
     def _on_clone(self):
         """Clone the selected model."""
@@ -1841,6 +2050,9 @@ class EnhancedMainWindow(QMainWindow):
         self._is_training = False
         self._stop_training = False
         
+        # Track if current model is HuggingFace (for feature restrictions)
+        self._is_hf_model = False
+        
         # Check if first run (no models)
         if not self.registry.registry.get("models"):
             self._run_setup_wizard()
@@ -1848,6 +2060,36 @@ class EnhancedMainWindow(QMainWindow):
             self._show_model_selector()
         
         self._build_ui()
+    
+    def _is_huggingface_model(self) -> bool:
+        """Check if the currently loaded model is a HuggingFace model."""
+        return getattr(self, '_is_hf_model', False) or getattr(self.engine, '_is_huggingface', False) if self.engine else False
+    
+    def _require_enigma_model(self, feature_name: str) -> bool:
+        """
+        Check if current model is Enigma. If HuggingFace, show warning and return False.
+        Use this to guard Enigma-only features like training.
+        """
+        if self._is_huggingface_model():
+            # Get list of local Enigma models
+            enigma_models = []
+            for name, info in self.registry.registry.get("models", {}).items():
+                if info.get("source") != "huggingface":
+                    enigma_models.append(name)
+            
+            model_list = ", ".join(enigma_models) if enigma_models else "Create one in Model Manager"
+            
+            QMessageBox.warning(
+                self, 
+                f"{feature_name} - Enigma Model Required",
+                f"<b>{feature_name}</b> is only available for local Enigma models.<br><br>"
+                f"You're currently using a HuggingFace model: <b>{self.current_model_name}</b><br><br>"
+                f"HuggingFace models are pre-trained and cannot be modified through this interface.<br><br>"
+                f"<b>Available Enigma models:</b><br>{model_list}<br><br>"
+                f"Switch to an Enigma model in the <b>Model Manager</b> tab to use this feature."
+            )
+            return False
+        return True
     
     def _load_gui_settings(self):
         """Load GUI settings from file."""
@@ -1949,14 +2191,28 @@ class EnhancedMainWindow(QMainWindow):
         try:
             loading_dialog.set_status("Loading model configuration...", 10)
             
+            # Check for cancellation
+            if loading_dialog.is_cancelled():
+                loading_dialog.close()
+                return
+            
             # Create engine with selected model
             model, config = self.registry.load_model(self.current_model_name)
             loading_dialog.set_status("Model weights loaded", 40)
             
+            if loading_dialog.is_cancelled():
+                loading_dialog.close()
+                return
+            
             # Check if this is a HuggingFace model (wrapper class)
             is_huggingface = config.get("source") == "huggingface"
+            self._is_hf_model = is_huggingface  # Track at window level for feature restrictions
             
             loading_dialog.set_status("Initializing inference engine...", 50)
+            
+            if loading_dialog.is_cancelled():
+                loading_dialog.close()
+                return
             
             # Create engine instance without calling __init__
             from ..core.inference import EnigmaEngine
@@ -1973,10 +2229,25 @@ class EnhancedMainWindow(QMainWindow):
             
             loading_dialog.set_status("Moving model to device...", 60)
             
+            if loading_dialog.is_cancelled():
+                loading_dialog.close()
+                self.engine = None
+                return
+            
             if is_huggingface:
                 # HuggingFaceModel is already loaded and ready
                 self.engine.model = model  # This is a HuggingFaceModel wrapper
-                self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
+                
+                # Check if user wants custom tokenizer instead of model's own
+                use_custom_tokenizer = config.get("use_custom_tokenizer", False)
+                if use_custom_tokenizer:
+                    loading_dialog.set_status("Loading custom Enigma tokenizer...", 70)
+                    from ..core.tokenizer import load_tokenizer
+                    self.engine.tokenizer = load_tokenizer()
+                    self.engine._using_custom_tokenizer = True
+                else:
+                    self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
+                    self.engine._using_custom_tokenizer = False
             else:
                 # Local Enigma model
                 self.engine.model = model
@@ -1985,6 +2256,11 @@ class EnhancedMainWindow(QMainWindow):
                 loading_dialog.set_status("Loading tokenizer...", 75)
                 from ..core.tokenizer import load_tokenizer
                 self.engine.tokenizer = load_tokenizer()
+            
+            if loading_dialog.is_cancelled():
+                loading_dialog.close()
+                self.engine = None
+                return
             
             loading_dialog.set_status("Initializing AI brain...", 85)
             
@@ -1997,11 +2273,18 @@ class EnhancedMainWindow(QMainWindow):
             
             loading_dialog.set_status("Finalizing...", 95)
             
-            self.setWindowTitle(f"Enigma Engine - {self.current_model_name}")
+            # Update window title with model type indicator
+            model_type = "[HF]" if is_huggingface else "[Enigma]"
+            self.setWindowTitle(f"Enigma Engine - {self.current_model_name} {model_type}")
             
-            # Update training tab label
+            # Update training tab label with warning for HF models
             if hasattr(self, 'training_model_label'):
-                self.training_model_label.setText(f"Model: {self.current_model_name}")
+                if is_huggingface:
+                    self.training_model_label.setText(
+                        f"Model: {self.current_model_name} <span style='color: #f9e2af;'>(HuggingFace - Training disabled)</span>"
+                    )
+                else:
+                    self.training_model_label.setText(f"Model: {self.current_model_name}")
             
             # Update chat tab model label
             if hasattr(self, 'chat_model_label'):
@@ -2013,8 +2296,15 @@ class EnhancedMainWindow(QMainWindow):
             if hasattr(self, 'chat_display'):
                 device_type = self.engine.device.type if hasattr(self.engine.device, 'type') else str(self.engine.device)
                 device_info = "GPU" if device_type == "cuda" else "CPU"
+                
+                if is_huggingface:
+                    model_note = f"<p style='color: #f9e2af;'><i>This is a HuggingFace model. Training and some Enigma features are not available.</i></p>"
+                else:
+                    model_note = ""
+                
                 self.chat_display.append(
                     f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
+                    f"{model_note}"
                     f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
                     "<hr>"
                 )
@@ -2459,6 +2749,20 @@ class EnhancedMainWindow(QMainWindow):
     
     def _toggle_learning(self, checked):
         """Toggle learn-while-chatting mode."""
+        # Check if using HuggingFace model - learning not supported
+        if checked and self._is_huggingface_model():
+            QMessageBox.information(
+                self,
+                "Learning Not Available",
+                "Learning while chatting is only available for local Enigma models.\n\n"
+                f"Current model ({self.current_model_name}) is a HuggingFace model and cannot be trained.\n\n"
+                "Switch to an Enigma model to enable this feature."
+            )
+            # Reset the checkbox
+            if hasattr(self, 'learn_action'):
+                self.learn_action.setChecked(False)
+            return
+        
         self.learn_while_chatting = checked
         if hasattr(self, 'learn_action'):
             if checked:
@@ -3506,8 +3810,41 @@ class EnhancedMainWindow(QMainWindow):
             
             if is_hf:
                 # HuggingFace model - use its generate method directly
-                # Don't use Q:/A: format for pretrained HF models
-                response = self.engine.model.generate(text, max_new_tokens=100)
+                # Build conversation history for better context
+                history = []
+                if hasattr(self, 'chat_messages') and len(self.chat_messages) > 1:
+                    # Include recent conversation context (last 6 turns)
+                    recent = self.chat_messages[-6:-1]  # Exclude current message
+                    for msg in recent:
+                        role = "user" if msg.get("role") == "user" else "assistant"
+                        history.append({"role": role, "content": msg.get("text", "")})
+                
+                # Check if using custom tokenizer
+                custom_tok = None
+                if getattr(self.engine, '_using_custom_tokenizer', False):
+                    custom_tok = self.engine.tokenizer
+                
+                # Always use chat method for HuggingFace models (applies proper templates)
+                # This is critical for instruct models like Mistral, Qwen, etc.
+                if hasattr(self.engine.model, 'chat') and not custom_tok:
+                    response = self.engine.model.chat(
+                        text, 
+                        history=history if history else None,  # Pass None if no history
+                        max_new_tokens=200,
+                        temperature=0.7
+                    )
+                else:
+                    # Fall back to generate with good parameters
+                    response = self.engine.model.generate(
+                        text, 
+                        max_new_tokens=150,
+                        temperature=0.8,
+                        top_p=0.92,
+                        top_k=50,
+                        repetition_penalty=1.2,
+                        do_sample=True,
+                        custom_tokenizer=custom_tok
+                    )
             else:
                 # Local Enigma model - use Q:/A: training format
                 formatted_prompt = f"Q: {text}\nA:"
@@ -3552,16 +3889,17 @@ class EnhancedMainWindow(QMainWindow):
                 "ts": time.time()
             })
             
-            # Learn from this interaction if enabled
-            if getattr(self, 'learn_while_chatting', True) and hasattr(self, 'brain') and self.brain:
-                self.brain.record_interaction(text, response)
-                
-                # Check if we should auto-train
-                if self.brain.should_auto_train():
-                    self.statusBar().showMessage(
-                        f"[+] Learned {self.brain.interactions_since_train} new things! "
-                        "Training will improve responses.", 5000
-                    )
+            # Learn from this interaction if enabled (only for Enigma models)
+            if not self._is_huggingface_model():
+                if getattr(self, 'learn_while_chatting', True) and hasattr(self, 'brain') and self.brain:
+                    self.brain.record_interaction(text, response)
+                    
+                    # Check if we should auto-train
+                    if self.brain.should_auto_train():
+                        self.statusBar().showMessage(
+                            f"[+] Learned {self.brain.interactions_since_train} new things! "
+                            "Training will improve responses.", 5000
+                        )
             
             # Auto-speak if enabled
             if getattr(self, 'auto_speak', False):
@@ -3740,6 +4078,10 @@ class EnhancedMainWindow(QMainWindow):
     def _on_start_training(self):
         if not self.current_model_name:
             QMessageBox.warning(self, "No Model", "No model loaded")
+            return
+        
+        # Check if this is a HuggingFace model - training not supported
+        if not self._require_enigma_model("Training"):
             return
         
         # DON'T auto-save editor - it might overwrite good data with truncated content

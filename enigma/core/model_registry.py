@@ -483,9 +483,18 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
 
     def delete_model(self, name: str, confirm: bool = False):
         """Delete a model and all its files."""
-        name = name.lower().strip()
-        if name not in self.registry["models"]:
+        # Find the actual key in the registry (case-insensitive match)
+        name_lower = name.lower().strip()
+        actual_key = None
+        for key in self.registry["models"]:
+            if key.lower() == name_lower:
+                actual_key = key
+                break
+        
+        if actual_key is None:
             raise ValueError(f"Model '{name}' not found")
+        
+        name = actual_key  # Use the actual key from registry
 
         if not confirm:
             raise ValueError(f"Confirm deletion by passing confirm=True")
@@ -499,8 +508,18 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
 
     def get_model_info(self, name: str) -> Dict:
         """Get detailed info about a model."""
-        name = name.lower().strip()
-        reg_info = self.registry["models"][name]
+        # Find the actual key in the registry (case-insensitive match)
+        name_lower = name.lower().strip()
+        actual_key = None
+        for key in self.registry["models"]:
+            if key.lower() == name_lower:
+                actual_key = key
+                break
+        
+        if actual_key is None:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][actual_key]
         model_dir = Path(reg_info["path"])
 
         # Load config if exists, otherwise use defaults

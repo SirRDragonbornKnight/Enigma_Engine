@@ -2,36 +2,160 @@
   "assignments": {
     "chat": [
       {
-        "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {
+          "description": "Fast 1.6B chat - great balance"
+        }
+      },
+      {
+        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
         "model_type": "huggingface",
         "priority": 100,
         "config": {}
       },
       {
+        "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        "model_type": "huggingface",
+        "priority": 90,
+        "config": {
+          "description": "Quick 1.1B chat model"
+        }
+      },
+      {
         "model_id": "huggingface:microsoft/DialoGPT-medium",
         "model_type": "huggingface",
-        "priority": 100,
-        "config": {}
+        "priority": 80,
+        "config": {
+          "description": "Reddit-style casual chat"
+        }
       },
       {
         "model_id": "enigma:default",
         "model_type": "enigma",
         "priority": 10,
         "config": {}
+      }
+    ],
+    "reasoning": [
+      {
+        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {
+          "description": "Best reasoning - needs GPU",
+          "requires_gpu": true
+        }
+      },
+      {
+        "model_id": "huggingface:microsoft/phi-2",
+        "model_type": "huggingface",
+        "priority": 90,
+        "config": {
+          "description": "Smart 2.7B - good reasoning"
+        }
+      },
+      {
+        "model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct",
+        "model_type": "huggingface",
+        "priority": 80,
+        "config": {
+          "description": "Multilingual instruct model"
+        }
+      }
+    ],
+    "math": [
+      {
+        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {
+          "description": "Best for complex math - needs GPU",
+          "requires_gpu": true
+        }
+      },
+      {
+        "model_id": "huggingface:microsoft/phi-2",
+        "model_type": "huggingface",
+        "priority": 90,
+        "config": {
+          "description": "Good math ability for size"
+        }
+      },
+      {
+        "model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct",
+        "model_type": "huggingface",
+        "priority": 80,
+        "config": {
+          "description": "Decent at basic math"
+        }
+      }
+    ],
+    "code": [
+      {
+        "model_id": "huggingface:Salesforce/codegen-350M-mono",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {
+          "description": "Python code specialist"
+        }
+      },
+      {
+        "model_id": "huggingface:microsoft/phi-2",
+        "model_type": "huggingface",
+        "priority": 90,
+        "config": {
+          "description": "Good at code generation"
+        }
+      },
+      {
+        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
+        "model_type": "huggingface",
+        "priority": 80,
+        "config": {
+          "description": "Multi-language code - needs GPU",
+          "requires_gpu": true
+        }
+      },
+      {
+        "model_id": "enigma:default",
+        "model_type": "enigma",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "instruct": [
+      {
+        "model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {
+          "description": "Great at following instructions"
+        }
+      },
+      {
+        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
+        "model_type": "huggingface",
+        "priority": 90,
+        "config": {
+          "description": "Best quality - needs GPU",
+          "requires_gpu": true
+        }
+      },
+      {
+        "model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b",
+        "model_type": "huggingface",
+        "priority": 80,
+        "config": {
+          "description": "Good instruction follower"
+        }
       }
     ],
     "image": [
       {
         "model_id": "local:stable-diffusion",
         "model_type": "local",
-        "priority": 10,
-        "config": {}
-      }
-    ],
-    "code": [
-      {
-        "model_id": "enigma:default",
-        "model_type": "enigma",
         "priority": 10,
         "config": {}
       }
@@ -77,5 +201,5 @@
       }
     ]
   },
-  "updated": "2026-01-06T13:01:03.322758"
+  "updated": "2026-01-06T19:12:52.423768"
 }
