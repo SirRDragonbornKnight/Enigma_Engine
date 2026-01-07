@@ -234,6 +234,7 @@ class HuggingFaceModel:
         repetition_penalty: float = 1.1,
         do_sample: bool = True,
         stop_strings: Optional[List[str]] = None,
+        custom_tokenizer: Optional[Any] = None,
     ) -> str:
         """
         Generate text from a prompt.
@@ -247,7 +248,7 @@ class HuggingFaceModel:
             repetition_penalty: Penalty for repeated tokens
             do_sample: Use sampling (False = greedy)
             stop_strings: Strings that stop generation
-            
+            custom_tokenizer: Optional custom tokenizer to use instead of model's own
         Returns:
             Generated text (excluding prompt)
         """
@@ -258,12 +259,43 @@ class HuggingFaceModel:
         assert self.tokenizer is not None, "Tokenizer not loaded"
         assert self.model is not None, "Model not loaded"
         
-        # Encode input
-        inputs = self.tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs["input_ids"].to(self.model.device)
-        attention_mask = inputs.get("attention_mask")
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(self.model.device)
+        # Use custom tokenizer if provided, otherwise use model's tokenizer
+        tokenizer = custom_tokenizer if custom_tokenizer is not None else self.tokenizer
+        
+        # Special handling for DialoGPT models - they need EOS token appended
+        is_dialogpt = "dialogpt" in self.model_id.lower()
+        
+        # Handle custom tokenizer encoding
+        if custom_tokenizer is not None:
+            # Custom Enigma tokenizer uses .encode() method
+            if hasattr(custom_tokenizer, 'encode'):
+                tokens = custom_tokenizer.encode(prompt)
+                input_ids = torch.tensor([tokens]).to(self.model.device)
+                attention_mask = torch.ones_like(input_ids)
+            else:
+                # Fallback to standard tokenizer call
+                inputs = tokenizer(prompt, return_tensors="pt")
+                input_ids = inputs["input_ids"].to(self.model.device)
+                attention_mask = inputs.get("attention_mask")
+                if attention_mask is not None:
+                    attention_mask = attention_mask.to(self.model.device)
+        else:
+            # Standard HuggingFace tokenizer
+            if is_dialogpt:
+                # DialoGPT expects input to end with EOS token
+                prompt_with_eos = prompt + tokenizer.eos_token
+                inputs = tokenizer(prompt_with_eos, return_tensors="pt")
+            else:
+                inputs = tokenizer(prompt, return_tensors="pt")
+                
+            input_ids = inputs["input_ids"].to(self.model.device)
+            attention_mask = inputs.get("attention_mask")
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(self.model.device)
+        
+        # For custom tokenizer, we need to use model's special tokens for generation
+        pad_token_id = self.tokenizer.pad_token_id
+        eos_token_id = self.tokenizer.eos_token_id
         
         # Generate
         with torch.no_grad():
@@ -276,13 +308,18 @@ class HuggingFaceModel:
                 top_k=top_k if do_sample else 0,
                 repetition_penalty=repetition_penalty,
                 do_sample=do_sample,
-                pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
             )
         
         # Decode only the new tokens
         generated_ids = outputs[0][input_ids.shape[1]:]
-        generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+        
+        # Use appropriate tokenizer for decoding
+        if custom_tokenizer is not None and hasattr(custom_tokenizer, 'decode'):
+            generated_text = custom_tokenizer.decode(generated_ids.tolist())
+        else:
+            generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
         
         # Apply stop strings
         if stop_strings:
@@ -392,8 +429,12 @@ class HuggingFaceModel:
         # Build conversation
         messages = []
         
+        # Add system prompt for instruct models
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        elif "instruct" in self.model_id.lower() or "chat" in self.model_id.lower():
+            # Default system prompt for instruct/chat models
+            messages.append({"role": "system", "content": "You are a helpful AI assistant. Respond directly and concisely."})
         
         if history:
             messages.extend(history)
@@ -408,18 +449,23 @@ class HuggingFaceModel:
                     tokenize=False,
                     add_generation_prompt=True,
                 )
+                logger.debug(f"Using chat template, prompt: {prompt[:200]}...")
             else:
                 # Fallback: simple formatting
                 prompt = self._format_chat_simple(messages)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Chat template failed: {e}, using simple format")
             prompt = self._format_chat_simple(messages)
+        
+        # Model-specific stop strings
+        stop_strings = ["User:", "Human:", "\n\nUser", "\n\nHuman", "</s>", "[/INST]"]
         
         # Generate
         response = self.generate(
             prompt,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
-            stop_strings=["User:", "Human:", "\n\nUser", "\n\nHuman"],
+            stop_strings=stop_strings,
         )
         
         return response.strip()
