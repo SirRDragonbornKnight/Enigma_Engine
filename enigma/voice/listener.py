@@ -299,7 +299,7 @@ class VoiceCommander:
     
     def _on_wake(self):
         """Called when wake word detected."""
-        self._status("🎤 Listening...")
+        self._status("Listening...")
         self._notify("Enigma", "I'm listening...")
     
     def _on_command(self, text: str):
@@ -316,7 +316,7 @@ class VoiceCommander:
     def _on_listening(self, is_listening: bool):
         """Called when listening state changes."""
         if is_listening:
-            self._status("🎤 Listening...")
+            self._status("Listening...")
         else:
             self._status("Ready (say 'Hey Enigma')")
     
