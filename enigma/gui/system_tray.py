@@ -183,6 +183,20 @@ Response:"""
         if any(kw in command for kw in ["open settings", "show settings"]):
             return {"action": "settings", "params": {}, "response": "Opening settings..."}
         
+        # Help
+        if any(kw in command for kw in ["help", "how to", "show help", "open help"]):
+            return {"action": "help", "params": {}, "response": "Opening help..."}
+        
+        # Open folders
+        if "open outputs" in command or "show outputs" in command:
+            return {"action": "open_folder", "params": {"folder": "outputs"}, "response": "Opening outputs folder..."}
+        if "open models" in command or "show models" in command:
+            return {"action": "open_folder", "params": {"folder": "models"}, "response": "Opening models folder..."}
+        if "open data" in command or "show data" in command:
+            return {"action": "open_folder", "params": {"folder": "data"}, "response": "Opening data folder..."}
+        if "open docs" in command or "show docs" in command or "documentation" in command:
+            return {"action": "open_folder", "params": {"folder": "docs"}, "response": "Opening documentation..."}
+        
         # Exit/quit
         if any(kw in command for kw in ["exit", "quit", "goodbye", "shut down"]):
             return {"action": "exit", "params": {}, "response": "Goodbye! Shutting down..."}
@@ -233,7 +247,7 @@ class QuickCommandOverlay(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        title = QLabel("🤖 Enigma")
+        title = QLabel("Enigma AI")
         title.setStyleSheet("color: #3498db; font-size: 14px; font-weight: bold;")
         header_layout.addWidget(title)
         
@@ -282,24 +296,25 @@ class QuickCommandOverlay(QWidget):
         actions_layout.setSpacing(5)
         
         quick_actions = [
-            ("📷", "Screenshot", "screenshot"),
-            ("🎨", "Image", "generate image"),
-            ("🎬", "Video", "generate video"),
-            ("🎤", "Voice", "voice"),
-            ("⚙️", "Settings", "open settings"),
-            ("🖥️", "GUI", "open gui"),
+            ("Snap", "Screenshot", "screenshot"),
+            ("Img", "Image", "generate image"),
+            ("Vid", "Video", "generate video"),
+            ("Mic", "Voice", "voice"),
+            ("?", "Help", "help"),
+            ("GUI", "Open Interface", "open gui"),
         ]
         
-        for emoji, tooltip, cmd in quick_actions:
-            btn = QPushButton(emoji)
+        for label, tooltip, cmd in quick_actions:
+            btn = QPushButton(label)
             btn.setToolTip(tooltip)
-            btn.setFixedSize(32, 32)
+            btn.setFixedSize(40, 28)
             btn.setStyleSheet("""
                 QPushButton {
                     background-color: rgba(60, 60, 60, 0.8);
                     border: 1px solid #444;
                     border-radius: 6px;
-                    font-size: 14px;
+                    font-size: 10px;
+                    color: white;
                 }
                 QPushButton:hover {
                     background-color: rgba(80, 80, 80, 0.9);
@@ -334,8 +349,10 @@ class QuickCommandOverlay(QWidget):
     
     def _quick_action(self, command: str):
         if command == "voice":
-            self.status_label.setText("🎤 Listening for voice...")
-            # TODO: Activate voice input
+            self.status_label.setText("Listening for voice...")
+            self.command_submitted.emit("voice on")
+        elif command == "help":
+            self.command_submitted.emit("help")
         else:
             self.command_submitted.emit(command)
     
@@ -461,8 +478,11 @@ class EnigmaSystemTray(QObject):
     
     def _build_menu(self):
         """Build the tray menu."""
+        # Load hotkey settings
+        hotkeys = self._load_hotkey_settings()
+        
         # Model info at top
-        model_action = QAction(f"🤖 Model: {self.current_model}", self)
+        model_action = QAction(f"Model: {self.current_model}", self)
         model_action.setEnabled(False)
         self.menu.addAction(model_action)
         self.model_action = model_action
@@ -470,49 +490,74 @@ class EnigmaSystemTray(QObject):
         self.menu.addSeparator()
         
         # Quick command
-        action_command = QAction("⌨️ Quick Command (Ctrl+Space)", self)
+        action_command = QAction(f"Quick Command ({hotkeys['command']})", self)
         action_command.triggered.connect(self.show_overlay)
         self.menu.addAction(action_command)
         
-        self.menu.addSeparator()
-        
         # Open GUI
-        action_gui = QAction("🖥️ Open Full Interface", self)
+        action_gui = QAction("Open Full Interface", self)
         action_gui.triggered.connect(self._show_main_window)
         self.menu.addAction(action_gui)
         
         self.menu.addSeparator()
         
         # Quick actions submenu
-        quick_menu = self.menu.addMenu("⚡ Quick Actions")
+        quick_menu = self.menu.addMenu("Quick Actions")
         
-        action_screenshot = QAction("📷 Screenshot", self)
+        action_screenshot = QAction("Screenshot", self)
         action_screenshot.triggered.connect(lambda: self._execute_action("screenshot"))
         quick_menu.addAction(action_screenshot)
         
-        action_screen_look = QAction("👁️ Look at Screen", self)
+        action_screen_look = QAction("Analyze Screen", self)
         action_screen_look.triggered.connect(lambda: self._execute_action("vision"))
         quick_menu.addAction(action_screen_look)
         
-        action_record = QAction("🔴 Start Recording", self)
+        action_record = QAction("Start Recording", self)
         action_record.triggered.connect(self._toggle_recording)
         self.action_record = action_record
         quick_menu.addAction(action_record)
         
         quick_menu.addSeparator()
         
-        action_image = QAction("🎨 Generate Image...", self)
+        action_image = QAction("Generate Image...", self)
         action_image.triggered.connect(lambda: self._prompt_action("generate image of"))
         quick_menu.addAction(action_image)
         
-        action_video = QAction("🎬 Generate Video...", self)
+        action_video = QAction("Generate Video...", self)
         action_video.triggered.connect(lambda: self._prompt_action("generate video of"))
         quick_menu.addAction(action_video)
         
         self.menu.addSeparator()
         
+        # Files & Help submenu
+        files_menu = self.menu.addMenu("Files and Help")
+        
+        action_help = QAction(f"Quick Help ({hotkeys['help']})", self)
+        action_help.triggered.connect(self._show_help)
+        files_menu.addAction(action_help)
+        
+        action_docs = QAction("Open Documentation", self)
+        action_docs.triggered.connect(lambda: self._open_folder("docs"))
+        files_menu.addAction(action_docs)
+        
+        files_menu.addSeparator()
+        
+        action_outputs = QAction("Open Outputs Folder", self)
+        action_outputs.triggered.connect(lambda: self._open_folder("outputs"))
+        files_menu.addAction(action_outputs)
+        
+        action_models = QAction("Open Models Folder", self)
+        action_models.triggered.connect(lambda: self._open_folder("models"))
+        files_menu.addAction(action_models)
+        
+        action_data = QAction("Open Data Folder", self)
+        action_data.triggered.connect(lambda: self._open_folder("data"))
+        files_menu.addAction(action_data)
+        
+        self.menu.addSeparator()
+        
         # Voice toggle
-        self.action_voice = QAction("🎤 Enable Voice (Wake: 'Hey Enigma')", self)
+        self.action_voice = QAction(f"Enable Voice ({hotkeys['voice']})", self)
         self.action_voice.setCheckable(True)
         self.action_voice.triggered.connect(self._toggle_voice)
         self.menu.addAction(self.action_voice)
@@ -527,7 +572,7 @@ class EnigmaSystemTray(QObject):
         self.menu.addSeparator()
         
         # Exit
-        action_exit = QAction("❌ Exit Enigma", self)
+        action_exit = QAction("Exit Enigma", self)
         action_exit.triggered.connect(self._exit_app)
         self.menu.addAction(action_exit)
     
@@ -607,6 +652,13 @@ class EnigmaSystemTray(QObject):
             self._show_main_window()
             # TODO: Switch to settings tab
         
+        elif action == "help":
+            self._show_help()
+        
+        elif action == "open_folder":
+            folder = params.get("folder", "outputs")
+            self._open_folder(folder)
+        
         elif action == "exit":
             self._exit_app()
     
@@ -640,11 +692,11 @@ class EnigmaSystemTray(QObject):
         """Toggle screen recording."""
         self.is_recording = not self.is_recording
         if self.is_recording:
-            self.action_record.setText("⏹️ Stop Recording")
+            self.action_record.setText("[Recording] Stop")
             self.tray_icon.showMessage("Recording Started", "Screen recording in progress...", QSystemTrayIcon.Information, 2000)
             # TODO: Start actual recording
         else:
-            self.action_record.setText("🔴 Start Recording")
+            self.action_record.setText("Start Recording")
             self.tray_icon.showMessage("Recording Stopped", "Screen recording saved.", QSystemTrayIcon.Information, 2000)
             # TODO: Stop and save recording
     
@@ -830,7 +882,7 @@ class EnigmaSystemTray(QObject):
             self.voice_commander.set_status_callback(self.set_status)
             
             if self.voice_commander.start():
-                self.set_status(f"🎤 Listening ({self.current_model})")
+                self.set_status(f"Voice Listening ({self.current_model})")
                 return True
             else:
                 return False
@@ -930,14 +982,14 @@ class EnigmaSystemTray(QObject):
             )
             
             self.is_recording = True
-            self.action_record.setText("⏹️ Stop Recording")
+            self.action_record.setText("[Recording] Stop")
             self.tray_icon.showMessage(
                 f"Recording Started ({self.current_model})",
                 "Screen recording in progress...\nClick Stop Recording when done.",
                 QSystemTrayIcon.Information,
                 3000
             )
-            self.set_status("🔴 Recording...")
+            self.set_status("Recording...")
             
         except FileNotFoundError:
             self.tray_icon.showMessage(
@@ -966,7 +1018,7 @@ class EnigmaSystemTray(QObject):
             self.recording_process = None
         
         self.is_recording = False
-        self.action_record.setText("🔴 Start Recording")
+        self.action_record.setText("Start Recording")
         self.set_status("Ready")
         
         if self.recording_path and Path(self.recording_path).exists():
@@ -991,6 +1043,90 @@ class EnigmaSystemTray(QObject):
         """Check for global hotkey (fallback if pyqtkeybind not available)."""
         # This is a placeholder - actual global hotkey needs platform-specific code
         pass
+    
+    def _load_hotkey_settings(self) -> dict:
+        """Load keyboard shortcut settings."""
+        defaults = {
+            "command": "Ctrl+Shift+E",
+            "help": "Ctrl+Shift+H",
+            "voice": "Ctrl+Shift+V"
+        }
+        try:
+            import json
+            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            if settings_path.exists():
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+                    return {
+                        "command": settings.get("hotkey_command", defaults["command"]),
+                        "help": settings.get("hotkey_help", defaults["help"]),
+                        "voice": settings.get("hotkey_voice", defaults["voice"])
+                    }
+        except:
+            pass
+        return defaults
+    
+    def _show_help(self):
+        """Show the quick help file."""
+        help_path = Path(CONFIG.get("info_dir", "information")) / "help.txt"
+        if help_path.exists():
+            # Open help file in default text editor
+            if sys.platform == 'win32':
+                os.startfile(str(help_path))
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', str(help_path)])
+            else:
+                subprocess.run(['xdg-open', str(help_path)])
+            
+            self.tray_icon.showMessage(
+                "Help",
+                "Quick help opened in text editor.",
+                QSystemTrayIcon.Information,
+                2000
+            )
+        else:
+            self.tray_icon.showMessage(
+                "Help",
+                "Help file not found. Check docs/ folder for guides.",
+                QSystemTrayIcon.Warning,
+                3000
+            )
+    
+    def _open_folder(self, folder_name: str):
+        """Open a project folder in the file explorer."""
+        folder_map = {
+            "outputs": CONFIG.get("outputs_dir", "outputs"),
+            "models": CONFIG.get("models_dir", "models"),
+            "data": CONFIG.get("data_dir", "data"),
+            "docs": "docs"
+        }
+        
+        folder_path = Path(folder_map.get(folder_name, folder_name))
+        if not folder_path.is_absolute():
+            folder_path = Path(CONFIG.get("root_dir", ".")) / folder_path
+        
+        if folder_path.exists():
+            if sys.platform == 'win32':
+                os.startfile(str(folder_path))
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', str(folder_path)])
+            else:
+                subprocess.run(['xdg-open', str(folder_path)])
+            
+            self.tray_icon.showMessage(
+                "Folder Opened",
+                f"Opened: {folder_name}",
+                QSystemTrayIcon.Information,
+                2000
+            )
+        else:
+            folder_path.mkdir(parents=True, exist_ok=True)
+            if sys.platform == 'win32':
+                os.startfile(str(folder_path))
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', str(folder_path)])
+            else:
+                subprocess.run(['xdg-open', str(folder_path)])
     
     def _exit_app(self):
         """Exit the application completely."""

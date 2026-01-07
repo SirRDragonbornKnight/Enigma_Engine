@@ -8,5 +8,8 @@
   "microphone_enabled": false,
   "last_tab": 6,
   "always_on_top": true,
-  "monitor_index": 0
+  "monitor_index": 0,
+  "hotkey_command": "Ctrl+Shift+E",
+  "hotkey_help": "Ctrl+Shift+H",
+  "hotkey_voice": "Ctrl+Shift+V"
 }
