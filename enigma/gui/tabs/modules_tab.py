@@ -242,11 +242,13 @@ class ModulesTab(QWidget):
         scroll.setWidget(self.modules_container)
         left_layout.addWidget(scroll)
         
-        content_layout.addWidget(left_panel, stretch=2)
+        content_layout.addWidget(left_panel, stretch=3)
         
         # Right side - Status panel
         right_panel = QWidget()
-        right_panel.setFixedWidth(280)
+        right_panel.setMinimumWidth(250)
+        right_panel.setMaximumWidth(350)
+        right_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(10, 0, 0, 0)
         right_layout.setSpacing(15)
@@ -335,7 +337,7 @@ class ModulesTab(QWidget):
         
         right_layout.addStretch()
         
-        content_layout.addWidget(right_panel)
+        content_layout.addWidget(right_panel, stretch=1)
         
         layout.addLayout(content_layout)
         

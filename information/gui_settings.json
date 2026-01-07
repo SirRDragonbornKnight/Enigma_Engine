@@ -1,9 +1,9 @@
 {
-  "last_model": "sacrifice",
+  "last_model": "mistralai_mistral_7b_instruct_v0.2",
   "window_width": 1000,
   "window_height": 700,
-  "window_x": 460,
-  "window_y": 190,
+  "window_x": 1375,
+  "window_y": 386,
   "auto_speak": false,
   "microphone_enabled": false,
   "last_tab": 0,

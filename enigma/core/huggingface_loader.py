@@ -429,11 +429,11 @@ class HuggingFaceModel:
         # Build conversation
         messages = []
         
-        # Add system prompt for instruct models
+        # Add system prompt - use provided or default for instruct models
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         elif "instruct" in self.model_id.lower() or "chat" in self.model_id.lower():
-            # Default system prompt for instruct/chat models
+            # Default system prompt for instruct/chat models (only if none provided)
             messages.append({"role": "system", "content": "You are a helpful AI assistant. Respond directly and concisely."})
         
         if history:

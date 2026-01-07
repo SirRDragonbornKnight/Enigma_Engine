@@ -3824,12 +3824,27 @@ class EnhancedMainWindow(QMainWindow):
                 if getattr(self.engine, '_using_custom_tokenizer', False):
                     custom_tok = self.engine.tokenizer
                 
+                # System prompt that tells the AI about its capabilities in this GUI
+                system_prompt = (
+                    "You are an AI assistant running in the Enigma Engine GUI. "
+                    "You have access to powerful tools that the USER can invoke with commands:\n"
+                    "- /image <prompt> - Generate images using AI\n"
+                    "- /video <prompt> - Generate videos/GIFs\n"
+                    "- /code <description> - Generate code\n"
+                    "- /audio <text> - Text-to-speech\n"
+                    "- /3d <prompt> - Generate 3D models\n"
+                    "When the user asks you to create an image, video, code, audio, or 3D model, "
+                    "tell them to use the appropriate command (e.g., 'Use /image sunset over mountains'). "
+                    "Be helpful, concise, and friendly."
+                )
+                
                 # Always use chat method for HuggingFace models (applies proper templates)
                 # This is critical for instruct models like Mistral, Qwen, etc.
                 if hasattr(self.engine.model, 'chat') and not custom_tok:
                     response = self.engine.model.chat(
                         text, 
                         history=history if history else None,  # Pass None if no history
+                        system_prompt=system_prompt,
                         max_new_tokens=200,
                         temperature=0.7
                     )
