@@ -98,6 +98,16 @@ from .validation import ToolSchemaValidator
 from .plugins import ToolPluginLoader
 from .streaming import StreamingToolResult, StreamingToolExecutor, StreamState
 
+# New tool modules - available for direct import
+from . import automation_tools
+from . import knowledge_tools
+from . import communication_tools
+from . import media_tools
+from . import productivity_tools
+from . import iot_tools
+from . import data_tools
+from . import gaming_tools
+
 __all__ = [
     # Core
     "Tool",
@@ -146,4 +156,13 @@ __all__ = [
     "StreamingToolResult",
     "StreamingToolExecutor",
     "StreamState",
+    # New tool modules
+    "automation_tools",
+    "knowledge_tools",
+    "communication_tools",
+    "media_tools",
+    "productivity_tools",
+    "iot_tools",
+    "data_tools",
+    "gaming_tools",
 ]

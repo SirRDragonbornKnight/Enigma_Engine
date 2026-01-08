@@ -76,6 +76,37 @@ class ToolRegistry:
                                        ListTasksTool, CompleteTaskTool, SetReminderTool, 
                                        ListRemindersTool, CheckRemindersTool)
         
+        # New tool imports
+        from .automation_tools import (ScheduleTaskTool, ListSchedulesTool, RemoveScheduleTool,
+                                       ClipboardReadTool, ClipboardWriteTool, ClipboardHistoryTool,
+                                       RecordMacroTool, PlayMacroTool, ListMacrosTool,
+                                       WatchFolderTool, StopWatchTool, ListWatchesTool)
+        from .knowledge_tools import (WikipediaSearchTool, ArxivSearchTool, PDFExtractTool,
+                                      BookmarkSaveTool, BookmarkSearchTool, BookmarkListTool,
+                                      BookmarkDeleteTool, NoteSaveTool, NoteGetTool,
+                                      NoteSearchTool, NoteListTool, NoteDeleteTool)
+        from .communication_tools import (EmailDraftTool, ListEmailDraftsTool, TranslateTextTool,
+                                          DetectLanguageTool, SummarizeTextTool, OCRImageTool,
+                                          OCRScreenshotTool)
+        from .media_tools import (MusicGenerateTool, RemoveBackgroundTool, UpscaleImageTool,
+                                  StyleTransferTool, ConvertAudioTool, ExtractAudioTool,
+                                  AudioVisualizeTool)
+        from .productivity_tools import (SystemMonitorTool, ProcessListTool, ProcessKillTool,
+                                         SSHExecuteTool, SSHCopyTool, DockerListTool,
+                                         DockerControlTool, DockerImagesTool, GitStatusTool,
+                                         GitCommitTool, GitDiffTool, GitPushTool, GitPullTool)
+        from .iot_tools import (HomeAssistantSetupTool, HomeAssistantControlTool,
+                                HomeAssistantStatusTool, GPIOReadTool, GPIOWriteTool,
+                                GPIOPWMTool, MQTTPublishTool, MQTTSubscribeTool,
+                                CameraCaptureTool, CameraListTool, CameraStreamTool)
+        from .data_tools import (CSVAnalyzeTool, CSVQueryTool, PlotChartTool, JSONQueryTool,
+                                 JSONTransformTool, SQLQueryTool, SQLExecuteTool,
+                                 SQLTablesTool, DataConvertTool)
+        from .gaming_tools import (TriviaGameTool, WordGameTool, NumberGuessTool,
+                                   CharacterCreateTool, CharacterListTool, CharacterChatTool,
+                                   StoryGenerateTool, StoryContinueTool, DnDRollTool,
+                                   DnDCharacterTool, DnDEncounterTool)
+        
         builtin = [
             # Web
             WebSearchTool(),
@@ -110,6 +141,96 @@ class ToolRegistry:
             SetReminderTool(),
             ListRemindersTool(),
             CheckRemindersTool(),
+            # Automation
+            ScheduleTaskTool(),
+            ListSchedulesTool(),
+            RemoveScheduleTool(),
+            ClipboardReadTool(),
+            ClipboardWriteTool(),
+            ClipboardHistoryTool(),
+            RecordMacroTool(),
+            PlayMacroTool(),
+            ListMacrosTool(),
+            WatchFolderTool(),
+            StopWatchTool(),
+            ListWatchesTool(),
+            # Knowledge
+            WikipediaSearchTool(),
+            ArxivSearchTool(),
+            PDFExtractTool(),
+            BookmarkSaveTool(),
+            BookmarkSearchTool(),
+            BookmarkListTool(),
+            BookmarkDeleteTool(),
+            NoteSaveTool(),
+            NoteGetTool(),
+            NoteSearchTool(),
+            NoteListTool(),
+            NoteDeleteTool(),
+            # Communication
+            EmailDraftTool(),
+            ListEmailDraftsTool(),
+            TranslateTextTool(),
+            DetectLanguageTool(),
+            SummarizeTextTool(),
+            OCRImageTool(),
+            OCRScreenshotTool(),
+            # Media
+            MusicGenerateTool(),
+            RemoveBackgroundTool(),
+            UpscaleImageTool(),
+            StyleTransferTool(),
+            ConvertAudioTool(),
+            ExtractAudioTool(),
+            AudioVisualizeTool(),
+            # Productivity
+            SystemMonitorTool(),
+            ProcessListTool(),
+            ProcessKillTool(),
+            SSHExecuteTool(),
+            SSHCopyTool(),
+            DockerListTool(),
+            DockerControlTool(),
+            DockerImagesTool(),
+            GitStatusTool(),
+            GitCommitTool(),
+            GitDiffTool(),
+            GitPushTool(),
+            GitPullTool(),
+            # IoT
+            HomeAssistantSetupTool(),
+            HomeAssistantControlTool(),
+            HomeAssistantStatusTool(),
+            GPIOReadTool(),
+            GPIOWriteTool(),
+            GPIOPWMTool(),
+            MQTTPublishTool(),
+            MQTTSubscribeTool(),
+            CameraCaptureTool(),
+            CameraListTool(),
+            CameraStreamTool(),
+            # Data
+            CSVAnalyzeTool(),
+            CSVQueryTool(),
+            PlotChartTool(),
+            JSONQueryTool(),
+            JSONTransformTool(),
+            SQLQueryTool(),
+            SQLExecuteTool(),
+            SQLTablesTool(),
+            DataConvertTool(),
+            # Gaming
+            TriviaGameTool(),
+            WordGameTool(),
+            NumberGuessTool(),
+            CharacterCreateTool(),
+            CharacterListTool(),
+            CharacterChatTool(),
+            StoryGenerateTool(),
+            StoryContinueTool(),
+            DnDRollTool(),
+            DnDCharacterTool(),
+            DnDEncounterTool(),
         ]
         
         for tool in builtin:
