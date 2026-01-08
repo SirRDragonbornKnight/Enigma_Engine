@@ -2836,7 +2836,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs import (
             create_chat_tab, create_training_tab, 
             create_avatar_subtab, create_game_subtab, create_robot_subtab,
-            create_vision_tab, create_sessions_tab, create_instructions_tab,
+            create_vision_tab, create_camera_tab, create_sessions_tab, create_instructions_tab,
             create_terminal_tab, create_examples_tab,
             create_image_tab, create_code_tab, create_video_tab,
             create_audio_tab, create_embeddings_tab, create_threed_tab
@@ -2913,6 +2913,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Game", "game"),
             ("", "Robot", "robot"),
             ("", "Vision", "vision"),
+            ("", "Camera", "camera"),
             # Tools
             ("section", "TOOLS"),
             ("", "Terminal", "terminal"),
@@ -2983,6 +2984,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_game_subtab(self)))  # Game
         self.content_stack.addWidget(wrap_in_scroll(create_robot_subtab(self)))  # Robot
         self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision
+        self.content_stack.addWidget(wrap_in_scroll(create_camera_tab(self)))  # Camera
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples

@@ -10,6 +10,7 @@ from .avatar.avatar_display import create_avatar_subtab
 from .game.game_connection import create_game_subtab
 from .robot.robot_control import create_robot_subtab
 from .vision_tab import create_vision_tab
+from .camera_tab import CameraTab, create_camera_tab
 from .sessions_tab import create_sessions_tab
 from .instructions_tab import create_instructions_tab
 from .terminal_tab import create_terminal_tab, log_to_terminal
@@ -31,6 +32,8 @@ __all__ = [
     'create_game_subtab',
     'create_robot_subtab',
     'create_vision_tab',
+    'CameraTab',
+    'create_camera_tab',
     'create_sessions_tab',
     'create_instructions_tab',
     'create_terminal_tab',
