@@ -317,6 +317,25 @@ class ModelRouterTab(QWidget):
         desc.setStyleSheet("color: #888; margin-bottom: 10px;")
         layout.addWidget(desc)
         
+        # Quick assign section - Apply model to all tools
+        quick_group = QGroupBox("Quick Assign - Apply to All Tools")
+        quick_layout = QHBoxLayout(quick_group)
+        
+        quick_layout.addWidget(QLabel("Model:"))
+        self.quick_model_combo = QComboBox()
+        self.quick_model_combo.setMinimumWidth(250)
+        self._populate_quick_combo()
+        quick_layout.addWidget(self.quick_model_combo)
+        
+        apply_all_btn = QPushButton("⚡ Apply to ALL Tools")
+        apply_all_btn.setStyleSheet("background-color: #f9e2af; color: #1e1e2e; font-weight: bold;")
+        apply_all_btn.setToolTip("Assign this model to every tool at once")
+        apply_all_btn.clicked.connect(self._apply_to_all_tools)
+        quick_layout.addWidget(apply_all_btn)
+        
+        quick_layout.addStretch()
+        layout.addWidget(quick_group)
+        
         # Add HuggingFace model section
         hf_group = QGroupBox("Add HuggingFace Model")
         hf_layout = QHBoxLayout(hf_group)
@@ -396,6 +415,8 @@ class ModelRouterTab(QWidget):
         """Refresh model dropdowns in all tool widgets."""
         for tool_name, widget in self.tool_widgets.items():
             widget._populate_model_options()
+        # Also refresh the quick assign combo
+        self._populate_quick_combo()
         self.status_label.setText("Model list refreshed")
             
     def _save_config(self):
@@ -479,3 +500,71 @@ class ModelRouterTab(QWidget):
         """Handle assignment change in a tool widget."""
         self.status_label.setText(f"Modified {tool_name} - remember to save!")
         self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
+
+    def _populate_quick_combo(self):
+        """Populate the quick assign model dropdown."""
+        self.quick_model_combo.clear()
+        self.quick_model_combo.addItem("Select a model...")
+        
+        # Add Enigma models from registry
+        try:
+            from enigma.core.model_registry import ModelRegistry
+            registry = ModelRegistry()
+            for name, info in registry.registry.get("models", {}).items():
+                size = info.get("size", "?")
+                source = info.get("source", "enigma")
+                if source == "huggingface":
+                    hf_id = info.get("huggingface_id", name)
+                    self.quick_model_combo.addItem(f"huggingface:{hf_id} [{size}]", f"huggingface:{hf_id}")
+                else:
+                    self.quick_model_combo.addItem(f"{name} [{size}]", name)
+        except Exception as e:
+            print(f"Error loading models for quick combo: {e}")
+            
+    def _apply_to_all_tools(self):
+        """Apply selected model to all tools at once."""
+        if self.quick_model_combo.currentIndex() == 0:
+            QMessageBox.warning(self, "No Model", "Please select a model first")
+            return
+            
+        model_id = self.quick_model_combo.currentData()
+        if not model_id:
+            model_id = self.quick_model_combo.currentText().split(" [")[0]
+            
+        reply = QMessageBox.question(
+            self, "Apply to All?",
+            f"Assign '{model_id}' to ALL tools?\n\n"
+            "This will replace all existing assignments.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+            
+        try:
+            from enigma.core.tool_router import get_router
+            router = get_router()
+            
+            # Apply to all tools
+            count = 0
+            for tool_name, widget in self.tool_widgets.items():
+                # Clear existing and set new
+                router.assign_model(tool_name, model_id, priority=100)
+                count += 1
+                
+            # Reload UI
+            self._load_config()
+            
+            # Save configuration
+            router._save_config()
+            
+            self.status_label.setText(f"Applied '{model_id}' to {count} tools")
+            self.status_label.setStyleSheet("color: #2ecc71; font-style: italic;")
+            
+            QMessageBox.information(
+                self, "Applied", 
+                f"'{model_id}' has been assigned to all {count} tools and saved."
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to apply: {e}")

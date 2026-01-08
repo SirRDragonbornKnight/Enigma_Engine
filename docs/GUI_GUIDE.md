@@ -11,15 +11,17 @@
 3. [🎓 Train Tab](#-train-tab---teach-your-ai)
 4. [📏 Scale Tab](#-scale-tab---choose-model-size)
 5. [🎛️ Modules Tab](#%EF%B8%8F-modules-tab---control-ai-capabilities)
-6. [✨ Generation Tabs](#-generation-tabs---ai-generation-features)
-7. [🎭 Avatar Tab](#-avatar-tab---visual-representation)
-8. [👁️ Vision Tab](#%EF%B8%8F-vision-tab---see-your-screen)
-9. [💻 Terminal Tab](#-terminal-tab---command-line-access)
-10. [📜 History Tab](#-history-tab---past-conversations)
-11. [📁 Files Tab](#-files-tab---manage-training-data)
-12. [⚙️ Settings Tab](#%EF%B8%8F-settings-tab---configure-resources)
-13. [📋 Options Menu](#-options-menu)
-14. [🔧 Troubleshooting](#-troubleshooting)
+6. [🔀 Router Tab](#-router-tab---assign-models-to-tools)
+7. [✨ Generation Tabs](#-generation-tabs---ai-generation-features)
+8. [🎭 Avatar Tab](#-avatar-tab---visual-representation)
+9. [👁️ Vision Tab](#%EF%B8%8F-vision-tab---see-your-screen)
+10. [📷 Camera Tab](#-camera-tab---live-video-feed)
+11. [💻 Terminal Tab](#-terminal-tab---command-line-access)
+12. [📜 History Tab](#-history-tab---past-conversations)
+13. [📁 Files Tab](#-files-tab---manage-training-data)
+14. [⚙️ Settings Tab](#%EF%B8%8F-settings-tab---configure-resources)
+15. [📋 Options Menu](#-options-menu)
+16. [🔧 Troubleshooting](#-troubleshooting)
 
 ---
 
@@ -500,6 +502,75 @@ The AI will use the `load_module`, `unload_module`, `list_modules`, and `check_r
 
 ---
 
+## 🔀 Router Tab - Assign Models to Tools
+
+**What it does**: Control which AI model handles each capability (chat, image, code, etc.).
+
+### Why Use Router?
+
+Different models are good at different things:
+- **DialoGPT** → Great for casual conversation
+- **Qwen/Qwen2** → Better for following instructions
+- **Codegen** → Specialized for code
+- **Your trained Enigma model** → Custom personality
+
+The Router lets you assign the best model for each task!
+
+### Layout
+
+**Quick Assign** (top):
+- Select a model from dropdown
+- Click **⚡ Apply to ALL Tools** to use it everywhere
+- Great for quickly switching your entire AI
+
+**Tool Cards** (grid):
+- Each tool (Chat, Image, Code, etc.) has its own card
+- Shows currently assigned model(s)
+- Set priority for fallback order
+
+### How to Use
+
+**Assign One Model to All Tools**:
+1. In **Quick Assign** section, select a model
+2. Click **⚡ Apply to ALL Tools**
+3. Confirm when prompted
+4. All tools now use that model
+
+**Assign Different Models to Different Tools**:
+1. Find the tool card (e.g., CHAT, CODE)
+2. Select a model from its dropdown
+3. Click **+** to add it
+4. Click **Save Configuration**
+
+**Add HuggingFace Model**:
+1. In **Add HuggingFace Model** section
+2. Enter model ID (e.g., `microsoft/DialoGPT-medium`)
+3. Click **Add to List**
+4. Model appears in all dropdowns
+
+### Model Sources
+
+Models can come from:
+- **Local Enigma** - Your trained models (e.g., `pi_tiny`)
+- **HuggingFace** - Prefixed with `huggingface:` (e.g., `huggingface:Qwen/Qwen2-0.5B-Instruct`)
+- **API** - Cloud services like OpenAI
+
+### Priority & Fallback
+
+If you assign multiple models to one tool:
+- Higher priority number = tried first
+- If model fails/unavailable, next one is tried
+- Example: Priority 100 → Priority 50 → Priority 10
+
+### Tips
+
+- **Raspberry Pi**: Use `Qwen/Qwen2-0.5B-Instruct` (503M) - small but capable
+- **Desktop**: Try `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for better quality
+- **GPU Available**: Can use larger 7B+ models
+- Click **Reset to Defaults** if things go wrong
+
+---
+
 ## ✨ Generation Tabs - AI Generation Features
 
 **What it does**: Test and configure AI generation capabilities (images, code, video, audio, 3D, embeddings).
@@ -631,6 +702,77 @@ The AI will use the `load_module`, `unload_module`, `list_modules`, and `check_r
 - "Identify this object"
 - "What game am I playing?"
 - "Describe this picture"
+
+---
+
+## 📷 Camera Tab - Live Video Feed
+
+**What it does**: Live camera preview with photo/video capture and AI analysis.
+
+### Features
+
+**🎥 Live Preview**:
+- ~30 FPS real-time camera feed
+- Multiple camera support (0, 1, 2)
+- Resolution options (320x240 to 1280x720)
+
+**📸 Capture Photo**:
+- Save current frame as JPG
+- Saved to `information/images/` folder
+- Timestamped filenames
+
+**⏺ Record Video**:
+- Record to AVI file
+- Toggle on/off recording
+- Visual indicator when recording
+
+**🤖 AI Analysis**:
+- Have AI describe what it sees
+- Auto-analyze on interval
+- Works with vision tools
+
+### How to Use
+
+**Start Camera**:
+1. Select camera (0 = default, 1, 2 for additional)
+2. Choose resolution
+3. Click **▶ Start Camera**
+4. Live feed appears in preview
+
+**Capture Photo**:
+1. With camera running, click **📸 Capture Photo**
+2. Image saved with timestamp
+3. Status shows save location
+
+**Record Video**:
+1. With camera running, click **⏺ Record Video**
+2. Button changes to **⏹ Stop Recording**
+3. Click again to stop
+4. Video saved as AVI
+
+**AI Analysis**:
+1. Click **🤖 AI Analyze** for one-time analysis
+2. Or enable **Auto-analyze every X sec**
+3. Results appear in Analysis section
+
+### Camera vs Vision Tab
+
+| Feature | Vision Tab | Camera Tab |
+|---------|-----------|------------|
+| Screen capture | ✅ Yes | ❌ No |
+| Single camera shot | ✅ Yes | ✅ Yes |
+| Live preview | ❌ No | ✅ Yes |
+| Video recording | ❌ No | ✅ Yes |
+| Auto-watch | ✅ Screen | ✅ Camera |
+
+### Requirements
+
+- **OpenCV** must be installed:
+  ```bash
+  pip install opencv-python
+  ```
+- Camera connected and accessible
+- Raspberry Pi: Use official camera module or USB webcam
 
 ---
 
