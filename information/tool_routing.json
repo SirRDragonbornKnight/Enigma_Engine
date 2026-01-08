@@ -16,6 +16,12 @@
         "config": {}
       },
       {
+        "model_id": "huggingface:microsoft/DialoGPT-small",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {}
+      },
+      {
         "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         "model_type": "huggingface",
         "priority": 90,
@@ -201,5 +207,5 @@
       }
     ]
   },
-  "updated": "2026-01-06T19:12:52.423768"
+  "updated": "2026-01-08T15:09:46.965673"
 }
