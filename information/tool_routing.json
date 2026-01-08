@@ -207,5 +207,11 @@
       }
     ]
   },
-  "updated": "2026-01-08T15:09:46.965673"
+  "updated": "2026-01-08T15:09:46.965673",
+  "chat": [
+    {
+      "model": "huggingface:Qwen/Qwen2-0.5B-Instruct",
+      "priority": 100
+    }
+  ]
 }

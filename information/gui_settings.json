@@ -1,12 +1,6 @@
 {
-  "last_model": "dialogpt_small",
-  "window_width": 1000,
-  "window_height": 700,
-  "window_x": 100,
-  "window_y": 100,
-  "auto_speak": false,
-  "microphone_enabled": false,
+  "last_model": "qwen2_0_5b_instruct",
   "last_tab": 0,
-  "always_on_top": false,
-  "monitor_index": 0
+  "theme": "catppuccin_mocha",
+  "window_geometry": null
 }

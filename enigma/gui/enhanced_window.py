@@ -1271,6 +1271,13 @@ class ModelManagerDialog(QDialog):
         hf_input_layout.addWidget(self.hf_add_btn)
         hf_layout.addLayout(hf_input_layout)
         
+        # Delete HF model button
+        self.hf_delete_btn = QPushButton("🗑️ Delete Selected HF Model")
+        self.hf_delete_btn.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
+        self.hf_delete_btn.setToolTip("Delete a HuggingFace model from this system")
+        self.hf_delete_btn.clicked.connect(self._on_delete_hf_model)
+        hf_layout.addWidget(self.hf_delete_btn)
+        
         # Tokenizer option
         tokenizer_layout = QHBoxLayout()
         tokenizer_label = QLabel("Tokenizer:")
@@ -1619,6 +1626,141 @@ Checkpoints: {checkpoints}
             router.assign_model("chat", full_id, priority=100)
         except Exception as e:
             print(f"Could not assign to router: {e}")
+    
+    def _on_delete_hf_model(self):
+        """Delete a HuggingFace model from registry and optionally clear cache."""
+        # Get all HF models from registry
+        hf_models = []
+        for name, info in self.registry.registry.get("models", {}).items():
+            if info.get("source") == "huggingface":
+                hf_id = info.get("huggingface_id", name)
+                size = info.get("size", "unknown")
+                hf_models.append((name, hf_id, size))
+        
+        if not hf_models:
+            QMessageBox.information(self, "No HF Models", "No HuggingFace models found in registry.")
+            return
+        
+        # Create selection dialog
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QListWidget, QDialogButtonBox, QCheckBox
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Delete HuggingFace Model")
+        dialog.setMinimumWidth(400)
+        layout = QVBoxLayout(dialog)
+        
+        label = QLabel("Select HuggingFace model to delete:")
+        label.setStyleSheet("color: #cdd6f4; font-size: 12px;")
+        layout.addWidget(label)
+        
+        list_widget = QListWidget()
+        list_widget.setStyleSheet("""
+            QListWidget { 
+                background-color: #313244; 
+                color: #cdd6f4; 
+                border: 1px solid #45475a;
+            }
+            QListWidget::item:selected { background-color: #f38ba8; color: #1e1e2e; }
+        """)
+        for name, hf_id, size in hf_models:
+            list_widget.addItem(f"{name} ({hf_id}) [{size}]")
+        layout.addWidget(list_widget)
+        
+        # Option to clear HF cache
+        cache_checkbox = QCheckBox("Also clear HuggingFace cache for this model")
+        cache_checkbox.setToolTip("This will delete the downloaded model files from HuggingFace cache.\n"
+                                   "Re-downloading will be needed if you add this model again.")
+        cache_checkbox.setStyleSheet("color: #fab387;")
+        layout.addWidget(cache_checkbox)
+        
+        # Warning
+        warning = QLabel("⚠️ This cannot be undone!")
+        warning.setStyleSheet("color: #f38ba8; font-weight: bold;")
+        layout.addWidget(warning)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        
+        if dialog.exec_() != QDialog.Accepted:
+            return
+        
+        selected = list_widget.currentRow()
+        if selected < 0:
+            QMessageBox.warning(self, "No Selection", "Please select a model to delete.")
+            return
+        
+        model_name, hf_id, _ = hf_models[selected]
+        clear_cache = cache_checkbox.isChecked()
+        
+        # Confirm
+        reply = QMessageBox.warning(
+            self, "Confirm Delete",
+            f"Delete HuggingFace model?\n\n"
+            f"Registry name: {model_name}\n"
+            f"HuggingFace ID: {hf_id}\n"
+            f"Clear cache: {'Yes' if clear_cache else 'No'}\n\n"
+            "This action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        try:
+            # Remove from registry
+            if model_name in self.registry.registry.get("models", {}):
+                del self.registry.registry["models"][model_name]
+                self.registry._save_registry()
+            
+            # Delete local directory if exists
+            from pathlib import Path
+            model_path = Path(self.registry.models_dir) / model_name
+            if model_path.exists():
+                import shutil
+                shutil.rmtree(model_path)
+            
+            # Clear HuggingFace cache if requested
+            cache_msg = ""
+            if clear_cache:
+                try:
+                    from huggingface_hub import scan_cache_dir, HfFolder
+                    import os
+                    
+                    # Get HF cache directory
+                    cache_dir = os.environ.get("HF_HOME", 
+                                 os.environ.get("HUGGINGFACE_HUB_CACHE",
+                                 os.path.expanduser("~/.cache/huggingface/hub")))
+                    
+                    if os.path.exists(cache_dir):
+                        # Look for model in cache
+                        cache_info = scan_cache_dir(cache_dir)
+                        for repo in cache_info.repos:
+                            if repo.repo_id == hf_id:
+                                # Delete all revisions of this model
+                                delete_strategy = cache_info.delete_revisions(*[rev.commit_hash for rev in repo.revisions])
+                                delete_strategy.execute()
+                                cache_msg = "\n\nHuggingFace cache cleared."
+                                break
+                        else:
+                            cache_msg = "\n\nModel not found in HF cache (may not have been downloaded)."
+                except Exception as e:
+                    cache_msg = f"\n\nCould not clear HF cache: {e}"
+            
+            # Clean up tool routing
+            self._cleanup_tool_routing(model_name)
+            self._cleanup_tool_routing(f"huggingface:{hf_id}")
+            
+            self._refresh_list()
+            
+            QMessageBox.information(
+                self, "Deleted",
+                f"HuggingFace model '{model_name}' has been deleted from registry.{cache_msg}"
+            )
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to delete model: {e}")
     
     def _on_new_model(self):
         """Create a new model via wizard."""
