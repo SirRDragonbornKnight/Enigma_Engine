@@ -200,6 +200,27 @@ DON'T: Leave camera running when not needed
 
 
 ================================================================================
+                         11. AI TOOLS (26 Available)
+================================================================================
+
+DON'T: Expect tools to work without proper modules loaded
+  WHY: Tools depend on modules being enabled
+  DO: Check Modules tab, ensure required modules are loaded
+
+DON'T: Give the AI access to sensitive directories without reviewing
+  WHY: File tools can read/write/delete files
+  DO: Review tool permissions, use sandboxed directories
+
+DON'T: Use robot tools without hardware connected
+  WHY: Commands will fail, may cause confusion
+  DO: Only enable robot tools when robot hardware is available
+
+DON'T: Spam reminder/task creation
+  WHY: Database files grow, lookups slow down
+  DO: Clean up completed tasks/expired reminders periodically
+
+
+================================================================================
                            SUMMARY: GOLDEN RULES
 ================================================================================
 

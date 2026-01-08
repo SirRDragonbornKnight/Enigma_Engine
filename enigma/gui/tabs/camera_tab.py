@@ -385,22 +385,36 @@ class CameraTab(QWidget):
             
             # Check for vision capabilities
             try:
-                from ...tools.vision_tools import VisionTools
-                vision = VisionTools()
+                from ...tools.vision import get_screen_vision
+                vision = get_screen_vision()
                 
                 # Save temp image for analysis
                 temp_path = IMAGES_DIR / "temp_analyze.jpg"
                 pil_image.save(temp_path)
                 
-                # Describe image
-                description = vision.describe_image(str(temp_path))
-                self.analysis_text.appendPlainText(f"AI sees: {description}")
+                # Try to describe the frame using basic analysis
+                # Get image info
+                h, w = self.current_frame.shape[:2]
+                
+                # Analyze colors/brightness
+                try:
+                    import numpy as np
+                    arr = np.array(pil_image)
+                    brightness = arr.mean()
+                    is_dark = brightness < 128
+                    theme = "dark scene" if is_dark else "bright scene"
+                    self.analysis_text.appendPlainText(
+                        f"AI sees: {w}x{h} image, {theme}, "
+                        f"average brightness: {brightness:.0f}/255"
+                    )
+                except ImportError:
+                    self.analysis_text.appendPlainText(f"AI sees: {w}x{h} image")
                 
                 # Clean up temp
                 if temp_path.exists():
                     temp_path.unlink()
                     
-            except ImportError:
+            except (ImportError, AttributeError, Exception) as e:
                 # Fallback - just report basic info
                 h, w = self.current_frame.shape[:2]
                 self.analysis_text.appendPlainText(

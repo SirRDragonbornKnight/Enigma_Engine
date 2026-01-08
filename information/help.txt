@@ -53,6 +53,48 @@ TOOLS:
   Examples  - Usage examples
   Settings  - Configuration
 
+AVAILABLE AI TOOLS (26 Total)
+-----------------------------
+The AI can use these tools during conversation:
+
+FILE TOOLS:
+  read_file       - Read file contents
+  write_file      - Create/modify files
+  list_directory  - Browse folders
+  move_file       - Move/rename files
+  delete_file     - Remove files
+  read_document   - Parse PDFs, docs
+  extract_text    - Get text from files
+
+WEB TOOLS:
+  web_search      - Search the internet
+  fetch_webpage   - Get web page content
+
+SYSTEM TOOLS:
+  run_command     - Execute terminal commands
+  screenshot      - Capture screen
+  get_system_info - System resources
+
+VISION TOOLS:
+  see_screen      - Describe what's on screen
+  find_on_screen  - Locate text/elements
+
+ROBOT TOOLS:
+  robot_move      - Move robot joints
+  robot_gripper   - Control gripper
+  robot_status    - Get robot state
+  robot_home      - Return to home position
+
+INTERACTIVE TOOLS (Personal Assistant):
+  create_checklist - Create a new checklist
+  list_checklists  - View all checklists
+  add_task         - Add tasks to checklist
+  list_tasks       - View tasks
+  complete_task    - Mark task done
+  set_reminder     - Set a reminder
+  list_reminders   - View reminders
+  check_reminders  - Check due reminders
+
 MODEL ROUTER (NEW!)
 -------------------
 Go to Router tab to:

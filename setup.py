@@ -104,8 +104,21 @@ setup(
         "enigma": [
             "vocab_model/*",
             "data/*",
+            "py.typed",
+        ],
+        "": [
+            "*.txt",
+            "*.md",
+            "*.json",
         ],
     },
+    data_files=[
+        ("", ["README.md", "LICENSE", "requirements.txt"]),
+        ("information", [
+            "information/instructions.txt",
+            "information/help.txt",
+        ]),
+    ],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",

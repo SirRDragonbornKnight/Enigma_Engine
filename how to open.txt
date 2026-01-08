@@ -1,1 +1,30 @@
+# How to Open Enigma Engine
+# Last Updated: January 2026
+
+## Quick Start
 python run.py --gui
+
+## All Launch Options
+python run.py --gui        # Launch graphical interface (recommended)
+python run.py --run        # Command-line chat mode
+python run.py --train      # Train model from command line
+python run.py --serve      # Start API server
+
+## If Using Virtual Environment
+# Linux/Mac:
+source venv/bin/activate
+python run.py --gui
+
+# Windows:
+venv\Scripts\activate
+python run.py --gui
+
+## Install as Package
+pip install -e .              # Basic install
+pip install -e ".[full]"      # Full features
+pip install -e ".[camera]"    # Camera support (opencv)
+pip install -e ".[gui]"       # GUI only
+
+## After Installation
+enigma-gui      # Launch GUI
+enigma          # CLI mode

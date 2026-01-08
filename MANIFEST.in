@@ -1,0 +1,47 @@
+# Enigma Engine - Package Distribution Manifest
+# This ensures all necessary files are included when distributing
+
+# Include documentation
+include README.md
+include LICENSE
+include GETTING_STARTED.md
+include CONTRIBUTING.md
+include CREDITS.md
+include SECURITY.md
+
+# Include configuration files
+include requirements.txt
+include requirements-dev.txt
+include pyproject.toml
+include setup.py
+include pytest.ini
+
+# Include documentation folder
+recursive-include docs *.md *.txt
+
+# Include data files
+recursive-include data *.txt
+recursive-include information *.txt *.json *.md
+
+# Include examples
+recursive-include examples *.py
+
+# Include package data
+recursive-include enigma/vocab_model *
+recursive-include enigma/data *
+
+# Exclude build artifacts
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude *.so
+global-exclude .git*
+global-exclude .DS_Store
+
+# Exclude large files that shouldn't be distributed
+prune models/
+prune outputs/
+prune logs/
+prune venv/
+prune .venv/
+prune *.egg-info
