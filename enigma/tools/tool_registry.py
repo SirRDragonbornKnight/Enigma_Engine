@@ -58,14 +58,28 @@ class Tool(ABC):
 class ToolRegistry:
     """
     Registry of all available tools.
+    
+    Respects tool_manager settings - disabled tools won't be registered.
     """
     
-    def __init__(self):
+    def __init__(self, respect_manager: bool = True):
         self.tools: Dict[str, Tool] = {}
+        self._respect_manager = respect_manager
         self._register_builtin_tools()
     
+    def _is_tool_enabled(self, tool_name: str) -> bool:
+        """Check if a tool is enabled in tool_manager."""
+        if not self._respect_manager:
+            return True
+        try:
+            from .tool_manager import get_tool_manager
+            manager = get_tool_manager()
+            return manager.is_enabled(tool_name)
+        except Exception:
+            return True  # Default to enabled if manager fails
+    
     def _register_builtin_tools(self):
-        """Register all built-in tools."""
+        """Register all built-in tools (respects tool_manager settings)."""
         from .web_tools import WebSearchTool, FetchWebpageTool
         from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool, MoveFileTool, DeleteFileTool
         from .document_tools import ReadDocumentTool, ExtractTextTool
@@ -234,11 +248,14 @@ class ToolRegistry:
         ]
         
         for tool in builtin:
-            self.register(tool)
+            # Only register if enabled in tool_manager
+            if self._is_tool_enabled(tool.name):
+                self.register(tool)
     
-    def register(self, tool: Tool):
-        """Register a tool."""
-        self.tools[tool.name] = tool
+    def register(self, tool: Tool, force: bool = False):
+        """Register a tool. Set force=True to bypass tool_manager check."""
+        if force or self._is_tool_enabled(tool.name):
+            self.tools[tool.name] = tool
     
     def unregister(self, name: str):
         """Remove a tool."""

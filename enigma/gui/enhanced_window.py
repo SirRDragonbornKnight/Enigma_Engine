@@ -2876,6 +2876,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.modules_tab import ModulesTab
         from .tabs.scaling_tab import ScalingTab
         from .tabs.model_router_tab import ModelRouterTab
+        from .tabs.tool_manager_tab import ToolManagerTab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -2927,6 +2928,7 @@ class EnhancedMainWindow(QMainWindow):
             ("section", "MODEL"),
             ("", "Scale", "scale"),
             ("", "Modules", "modules"),
+            ("", "Tools", "tools"),  # Tool Manager
             ("", "Router", "router"),
             # Generate
             ("section", "GENERATE"),
@@ -2945,7 +2947,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Vision", "vision"),
             ("", "Camera", "camera"),
             # Tools
-            ("section", "TOOLS"),
+            ("section", "SYSTEM"),
             ("", "Terminal", "terminal"),
             ("", "Files", "files"),
             ("", "Examples", "examples"),
@@ -3001,6 +3003,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
         self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
+        self.content_stack.addWidget(wrap_in_scroll(ToolManagerTab(self)))  # Tools
         self.router_tab = ModelRouterTab(self)  # Store reference for syncing
         self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
