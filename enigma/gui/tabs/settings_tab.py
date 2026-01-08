@@ -605,7 +605,6 @@ def create_settings_tab(parent):
     zoom_row = QHBoxLayout()
     zoom_row.addWidget(QLabel("Zoom Level:"))
 
-    from PyQt5.QtWidgets import QSpinBox
     parent.zoom_spinbox = QSpinBox()
     parent.zoom_spinbox.setRange(80, 200)
     parent.zoom_spinbox.setValue(100)
@@ -728,6 +727,68 @@ def create_settings_tab(parent):
     display_layout.addWidget(parent.display_info_label)
     
     layout.addWidget(display_group)
+
+    # === AUDIO DEVICE SETTINGS ===
+    audio_group = QGroupBox("Audio Devices")
+    audio_layout = QVBoxLayout(audio_group)
+    
+    audio_desc = QLabel(
+        "Select input (microphone) and output (speaker) devices for voice features."
+    )
+    audio_desc.setWordWrap(True)
+    audio_layout.addWidget(audio_desc)
+    
+    # Input device (microphone)
+    input_row = QHBoxLayout()
+    input_row.addWidget(QLabel("Microphone:"))
+    parent.audio_input_combo = QComboBox()
+    parent.audio_input_combo.setMinimumWidth(250)
+    input_row.addWidget(parent.audio_input_combo)
+    
+    refresh_audio_btn = QPushButton("↻")
+    refresh_audio_btn.setMaximumWidth(30)
+    refresh_audio_btn.setToolTip("Refresh device list")
+    refresh_audio_btn.clicked.connect(lambda: _refresh_audio_devices(parent))
+    input_row.addWidget(refresh_audio_btn)
+    input_row.addStretch()
+    audio_layout.addLayout(input_row)
+    
+    # Output device (speaker)
+    output_row = QHBoxLayout()
+    output_row.addWidget(QLabel("Speaker:"))
+    parent.audio_output_combo = QComboBox()
+    parent.audio_output_combo.setMinimumWidth(250)
+    output_row.addWidget(parent.audio_output_combo)
+    output_row.addStretch()
+    audio_layout.addLayout(output_row)
+    
+    # Mic test section
+    mic_test_row = QHBoxLayout()
+    parent.mic_test_btn = QPushButton("🎤 Test Microphone")
+    parent.mic_test_btn.clicked.connect(lambda: _test_microphone(parent))
+    mic_test_row.addWidget(parent.mic_test_btn)
+    
+    parent.mic_level_bar = QSlider(Qt.Orientation.Horizontal)
+    parent.mic_level_bar.setRange(0, 100)
+    parent.mic_level_bar.setValue(0)
+    parent.mic_level_bar.setEnabled(False)
+    parent.mic_level_bar.setStyleSheet("""
+        QSlider::groove:horizontal { background: #333; height: 10px; border-radius: 5px; }
+        QSlider::handle:horizontal { width: 0px; }
+        QSlider::sub-page:horizontal { background: #22c55e; border-radius: 5px; }
+    """)
+    mic_test_row.addWidget(parent.mic_level_bar)
+    
+    parent.mic_status_label = QLabel("Not tested")
+    parent.mic_status_label.setStyleSheet("color: #888;")
+    mic_test_row.addWidget(parent.mic_status_label)
+    mic_test_row.addStretch()
+    audio_layout.addLayout(mic_test_row)
+    
+    # Populate audio devices
+    _refresh_audio_devices(parent)
+    
+    layout.addWidget(audio_group)
 
     # === AUTONOMOUS MODE ===
     autonomous_group = QGroupBox("Autonomous Mode")
@@ -1687,3 +1748,179 @@ def _toggle_personality_evolution(parent, state):
         personality.save()
     except Exception:
         pass  # Personality system may not be available
+
+
+# =============================================================================
+# Audio Device Functions
+# =============================================================================
+
+def _get_audio_devices():
+    """Get list of audio input and output devices."""
+    input_devices = [("Default", -1)]
+    output_devices = [("Default", -1)]
+    
+    try:
+        import pyaudio
+        p = pyaudio.PyAudio()
+        
+        for i in range(p.get_device_count()):
+            info = p.get_device_info_by_index(i)
+            name = info.get('name', f'Device {i}')
+            
+            # Truncate long names
+            if len(name) > 40:
+                name = name[:37] + "..."
+            
+            if info.get('maxInputChannels', 0) > 0:
+                input_devices.append((name, i))
+            if info.get('maxOutputChannels', 0) > 0:
+                output_devices.append((name, i))
+        
+        p.terminate()
+    except ImportError:
+        pass  # pyaudio not installed
+    except Exception as e:
+        print(f"Error getting audio devices: {e}")
+    
+    return input_devices, output_devices
+
+
+def _refresh_audio_devices(parent):
+    """Refresh the audio device dropdowns."""
+    input_devices, output_devices = _get_audio_devices()
+    
+    # Save current selections
+    current_input = parent.audio_input_combo.currentData() if parent.audio_input_combo.count() > 0 else -1
+    current_output = parent.audio_output_combo.currentData() if parent.audio_output_combo.count() > 0 else -1
+    
+    # Update input devices
+    parent.audio_input_combo.clear()
+    for name, idx in input_devices:
+        parent.audio_input_combo.addItem(name, idx)
+    
+    # Restore selection or default
+    for i in range(parent.audio_input_combo.count()):
+        if parent.audio_input_combo.itemData(i) == current_input:
+            parent.audio_input_combo.setCurrentIndex(i)
+            break
+    
+    # Update output devices
+    parent.audio_output_combo.clear()
+    for name, idx in output_devices:
+        parent.audio_output_combo.addItem(name, idx)
+    
+    # Restore selection or default
+    for i in range(parent.audio_output_combo.count()):
+        if parent.audio_output_combo.itemData(i) == current_output:
+            parent.audio_output_combo.setCurrentIndex(i)
+            break
+
+
+def _test_microphone(parent):
+    """Test the selected microphone and show audio levels."""
+    import threading
+    
+    device_index = parent.audio_input_combo.currentData()
+    if device_index is None:
+        device_index = -1
+    
+    parent.mic_test_btn.setEnabled(False)
+    parent.mic_test_btn.setText("🎤 Recording...")
+    parent.mic_status_label.setText("Listening...")
+    parent.mic_status_label.setStyleSheet("color: #f59e0b;")
+    
+    def run_test():
+        try:
+            import pyaudio
+            import struct
+            import math
+            
+            CHUNK = 1024
+            FORMAT = pyaudio.paInt16
+            CHANNELS = 1
+            RATE = 16000
+            DURATION = 3  # seconds
+            
+            p = pyaudio.PyAudio()
+            
+            # Open stream
+            stream_kwargs = {
+                'format': FORMAT,
+                'channels': CHANNELS,
+                'rate': RATE,
+                'input': True,
+                'frames_per_buffer': CHUNK,
+            }
+            if device_index >= 0:
+                stream_kwargs['input_device_index'] = device_index
+            
+            stream = p.open(**stream_kwargs)
+            
+            max_level = 0
+            frames_read = 0
+            total_frames = int(RATE / CHUNK * DURATION)
+            
+            while frames_read < total_frames:
+                try:
+                    data = stream.read(CHUNK, exception_on_overflow=False)
+                    # Calculate RMS level
+                    count = len(data) // 2
+                    shorts = struct.unpack(f'{count}h', data)
+                    sum_squares = sum(s * s for s in shorts)
+                    rms = math.sqrt(sum_squares / count) if count > 0 else 0
+                    
+                    # Convert to percentage (0-100)
+                    level = min(100, int(rms / 32768 * 500))
+                    max_level = max(max_level, level)
+                    
+                    # Update UI from main thread
+                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    QMetaObject.invokeMethod(
+                        parent.mic_level_bar, "setValue",
+                        Qt.ConnectionType.QueuedConnection,
+                        Q_ARG(int, level)
+                    )
+                    
+                    frames_read += 1
+                except Exception:
+                    break
+            
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+            
+            # Update final status
+            def update_ui():
+                parent.mic_test_btn.setEnabled(True)
+                parent.mic_test_btn.setText("🎤 Test Microphone")
+                if max_level > 10:
+                    parent.mic_status_label.setText(f"✓ Working (peak: {max_level}%)")
+                    parent.mic_status_label.setStyleSheet("color: #22c55e;")
+                else:
+                    parent.mic_status_label.setText("⚠ Low/no signal detected")
+                    parent.mic_status_label.setStyleSheet("color: #f59e0b;")
+            
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, update_ui)
+            
+        except ImportError:
+            def show_error():
+                parent.mic_test_btn.setEnabled(True)
+                parent.mic_test_btn.setText("🎤 Test Microphone")
+                parent.mic_status_label.setText("Install: pip install pyaudio")
+                parent.mic_status_label.setStyleSheet("color: #ef4444;")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, show_error)
+            
+        except Exception as e:
+            def show_error():
+                parent.mic_test_btn.setEnabled(True)
+                parent.mic_test_btn.setText("🎤 Test Microphone")
+                parent.mic_status_label.setText(f"Error: {str(e)[:30]}")
+                parent.mic_status_label.setStyleSheet("color: #ef4444;")
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, show_error)
+    
+    thread = threading.Thread(target=run_test, daemon=True)
+    thread.start()
+

@@ -69,5 +69,9 @@ def main():
     sys.exit(app.exec_())
 
 
+# Alias for imports
+BackgroundService = main
+
+
 if __name__ == "__main__":
     main()

@@ -22,6 +22,10 @@ Usage:
     
     # Chat interface
     response = model.chat("What is the capital of France?")
+    
+    # Get model info without loading
+    info = get_huggingface_model_info("microsoft/DialoGPT-small")
+    print(f"Size: {info['size_str']}, Params: {info['num_parameters']:,}")
 """
 
 import logging
@@ -59,6 +63,93 @@ except ImportError:
 
 # Check for threading (for streaming)
 from threading import Thread
+
+
+def format_param_count(num_params: int) -> str:
+    """Format parameter count as human readable string (e.g., '124M', '7B')."""
+    if num_params >= 1_000_000_000:
+        return f"{num_params / 1_000_000_000:.1f}B"
+    elif num_params >= 1_000_000:
+        return f"{num_params / 1_000_000:.0f}M"
+    elif num_params >= 1_000:
+        return f"{num_params / 1_000:.0f}K"
+    return str(num_params)
+
+
+def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> Dict[str, Any]:
+    """
+    Get model information from HuggingFace without downloading the full model.
+    
+    This fetches just the config file to estimate parameter count and architecture.
+    
+    Args:
+        model_id: HuggingFace model ID (e.g., "microsoft/DialoGPT-small")
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Dict with:
+            - num_parameters: Estimated parameter count
+            - size_str: Human readable size (e.g., "124M")
+            - hidden_size: Model dimension
+            - num_layers: Number of transformer layers
+            - vocab_size: Vocabulary size
+            - architecture: Model architecture type
+            - error: Error message if failed (None if success)
+    """
+    result = {
+        "num_parameters": 0,
+        "size_str": "?",
+        "hidden_size": 0,
+        "num_layers": 0,
+        "vocab_size": 0,
+        "architecture": "unknown",
+        "error": None
+    }
+    
+    if not HAVE_TRANSFORMERS:
+        result["error"] = "transformers not installed"
+        return result
+    
+    try:
+        from transformers import AutoConfig
+        
+        # Fetch just the config (small download)
+        config = AutoConfig.from_pretrained(model_id)
+        
+        # Extract architecture info - different models use different attribute names
+        hidden = getattr(config, 'hidden_size', None) or \
+                 getattr(config, 'n_embd', None) or \
+                 getattr(config, 'd_model', None) or 768
+        
+        layers = getattr(config, 'num_hidden_layers', None) or \
+                 getattr(config, 'n_layer', None) or \
+                 getattr(config, 'num_layers', None) or 12
+        
+        vocab = getattr(config, 'vocab_size', 50257)
+        
+        # Get architecture type
+        arch = getattr(config, 'model_type', 'unknown')
+        
+        # Estimate parameter count
+        # Formula: embed + output + layers * (attention + ffn)
+        # Attention: 4 * hidden^2 (Q, K, V, output projections)
+        # FFN: 8 * hidden^2 (typical 4x expansion)
+        embed_params = vocab * hidden * 2  # input + output embeddings
+        layer_params = layers * (4 * hidden * hidden + 8 * hidden * hidden)  # ~12 * hidden^2 per layer
+        total_params = embed_params + layer_params
+        
+        result["num_parameters"] = total_params
+        result["size_str"] = format_param_count(total_params)
+        result["hidden_size"] = hidden
+        result["num_layers"] = layers
+        result["vocab_size"] = vocab
+        result["architecture"] = arch
+        
+    except Exception as e:
+        result["error"] = str(e)
+        logger.warning(f"Failed to get HuggingFace model info for {model_id}: {e}")
+    
+    return result
 
 
 class HuggingFaceModel:
@@ -426,6 +517,43 @@ class HuggingFaceModel:
         assert self.tokenizer is not None, "Tokenizer not loaded"
         assert self.model is not None, "Model not loaded"
         
+        # Special handling for DialoGPT models
+        is_dialogpt = "dialogpt" in self.model_id.lower()
+        
+        if is_dialogpt:
+            # DialoGPT uses a specific format: previous turns separated by EOS token
+            # Format: "turn1<|endoftext|>turn2<|endoftext|>current_input<|endoftext|>"
+            conversation_parts = []
+            
+            if history:
+                for msg in history:
+                    conversation_parts.append(msg["content"])
+            
+            conversation_parts.append(message)
+            
+            # Join with EOS token and add final EOS for generation
+            prompt = self.tokenizer.eos_token.join(conversation_parts) + self.tokenizer.eos_token
+            
+            # Generate with DialoGPT-specific settings
+            response = self.generate(
+                prompt,
+                max_new_tokens=min(max_new_tokens, 50),  # DialoGPT works better with shorter responses
+                temperature=0.7,
+                top_p=0.9,
+                top_k=50,
+                repetition_penalty=1.2,  # Higher repetition penalty for DialoGPT
+                do_sample=True,
+            )
+            
+            # Clean up response
+            response = response.strip()
+            # Remove any trailing special tokens
+            if self.tokenizer.eos_token and response.endswith(self.tokenizer.eos_token):
+                response = response[:-len(self.tokenizer.eos_token)].strip()
+            
+            return response if response else "I'm not sure how to respond to that."
+        
+        # Standard chat flow for other models
         # Build conversation
         messages = []
         

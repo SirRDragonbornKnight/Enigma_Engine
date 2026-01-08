@@ -1243,19 +1243,20 @@ class ModelManagerDialog(QDialog):
         hf_layout = QVBoxLayout(hf_group)
         hf_layout.setSpacing(8)
         
-        # Preset dropdown
+        # Preset dropdown with model sizes and categories
         self.hf_preset_combo = QComboBox()
         self.hf_preset_combo.addItem("Select a preset model...")
-        self.hf_preset_combo.addItem("microsoft/DialoGPT-medium - Conversational")
-        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 - Quality Instruct")
-        self.hf_preset_combo.addItem("TinyLlama/TinyLlama-1.1B-Chat-v1.0 - Fast chat")
-        self.hf_preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct - Multilingual")
-        self.hf_preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b - Stable chat")
-        self.hf_preset_combo.addItem("google/gemma-2b-it - Google Gemma")
-        self.hf_preset_combo.addItem("HuggingFaceH4/zephyr-7b-beta - Quality chat")
-        self.hf_preset_combo.addItem("Salesforce/codegen-350M-mono - Code")
-        self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf - Llama 2")
-        self.hf_preset_combo.addItem("xai-org/grok-1 - Grok (Large)")
+        self.hf_preset_combo.addItem("microsoft/DialoGPT-small (162M) [Small] - Fast chat")
+        self.hf_preset_combo.addItem("microsoft/DialoGPT-medium (405M) [Medium] - Conversational")
+        self.hf_preset_combo.addItem("Salesforce/codegen-350M-mono (350M) [Small] - Code")
+        self.hf_preset_combo.addItem("TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B) [Medium] - Fast chat")
+        self.hf_preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct (1.5B) [Medium] - Multilingual")
+        self.hf_preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b (1.6B) [Medium] - Stable chat")
+        self.hf_preset_combo.addItem("google/gemma-2b-it (2B) [Medium] - Google Gemma")
+        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 (7B) [Large] ⚠️GPU")
+        self.hf_preset_combo.addItem("HuggingFaceH4/zephyr-7b-beta (7B) [Large] ⚠️GPU")
+        self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf (7B) [Large] ⚠️GPU")
+        self.hf_preset_combo.addItem("xai-org/grok-1 (314B) [Huge] ⚠️Datacenter")
         hf_layout.addWidget(self.hf_preset_combo)
         
         # Custom input
@@ -1562,15 +1563,28 @@ Checkpoints: {checkpoints}
             # Get tokenizer preference
             use_custom_tokenizer = self.hf_tokenizer_combo.currentIndex() == 1
             
+            # Fetch model info (size, params) from HuggingFace
+            size_str = "huggingface"
+            num_params = 0
+            try:
+                from ..core.huggingface_loader import get_huggingface_model_info
+                info = get_huggingface_model_info(model_id)
+                if not info.get("error"):
+                    size_str = f"HF-{info['size_str']}"  # e.g., "HF-124M"
+                    num_params = info.get("num_parameters", 0)
+            except Exception as e:
+                print(f"Could not fetch HF model info: {e}")
+            
             # Create registry entry
             self.registry.registry.setdefault("models", {})[local_name] = {
                 "path": str(model_path),
-                "size": "huggingface",
+                "size": size_str,
                 "created": datetime.now().isoformat(),
                 "has_weights": False,  # Weights are in HF cache, not local
                 "source": "huggingface",
                 "huggingface_id": model_id,
                 "use_custom_tokenizer": use_custom_tokenizer,  # User preference
+                "num_parameters": num_params,  # Store actual param count
             }
             self.registry._save_registry()
             
@@ -1584,7 +1598,8 @@ Checkpoints: {checkpoints}
             QMessageBox.information(
                 self, "Model Added",
                 f"Added HuggingFace model: {model_id}\n\n"
-                f"Local name: {local_name}\n\n"
+                f"Local name: {local_name}\n"
+                f"Estimated size: {size_str}\n\n"
                 "It has been set as the active chat AI.\n"
                 "The model will download when first used."
             )
@@ -1600,9 +1615,8 @@ Checkpoints: {checkpoints}
             # Format as huggingface:model_id
             full_id = f"huggingface:{model_id}"
             
-            # Assign with high priority
+            # Assign with high priority (assign_model already saves)
             router.assign_model("chat", full_id, priority=100)
-            router.save_config()
         except Exception as e:
             print(f"Could not assign to router: {e}")
     
@@ -2143,6 +2157,9 @@ class EnhancedMainWindow(QMainWindow):
         # Set window icon
         self._set_window_icon()
         
+        # Setup keyboard shortcuts for emergency close
+        self._setup_shortcuts()
+        
         # Initialize registry
         self.registry = ModelRegistry()
         self.current_model_name = None
@@ -2201,9 +2218,81 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             print(f"Could not set window icon: {e}")
     
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts including emergency close."""
+        from PyQt5.QtWidgets import QShortcut
+        from PyQt5.QtGui import QKeySequence
+        
+        # Alt+F4 - Force quit (works on most systems by default, but ensure it)
+        quit_shortcut = QShortcut(QKeySequence("Alt+F4"), self)
+        quit_shortcut.activated.connect(self._force_quit)
+        
+        # Ctrl+Shift+F4 - Emergency force quit (no confirmation)
+        emergency_quit = QShortcut(QKeySequence("Ctrl+Shift+F4"), self)
+        emergency_quit.activated.connect(self._emergency_quit)
+    
+    def _force_quit(self):
+        """Force quit the application with cleanup."""
+        try:
+            # Try to save any unsaved state
+            self._save_gui_settings()
+        except Exception:
+            pass
+        QApplication.quit()
+    
+    def _emergency_quit(self):
+        """Emergency quit - no questions asked, just exit."""
+        import sys
+        print("[EMERGENCY] Force quitting application...")
+        sys.exit(0)
+    
     def _is_huggingface_model(self) -> bool:
         """Check if the currently loaded model is a HuggingFace model."""
         return getattr(self, '_is_hf_model', False) or getattr(self.engine, '_is_huggingface', False) if self.engine else False
+    
+    def _update_hf_feature_restrictions(self, is_huggingface: bool):
+        """Enable/disable features based on whether current model is HuggingFace."""
+        # Training controls - completely disabled for HF models
+        if hasattr(self, 'btn_train'):
+            self.btn_train.setEnabled(not is_huggingface)
+            if is_huggingface:
+                self.btn_train.setToolTip("Training is not available for HuggingFace models")
+                self.btn_train.setStyleSheet("""
+                    QPushButton {
+                        padding: 12px 24px;
+                        font-size: 14px;
+                        font-weight: bold;
+                        background-color: #45475a;
+                        color: #6c7086;
+                    }
+                """)
+            else:
+                self.btn_train.setToolTip("Start training the model")
+                self.btn_train.setStyleSheet("""
+                    QPushButton {
+                        padding: 12px 24px;
+                        font-size: 14px;
+                        font-weight: bold;
+                        background-color: #a6e3a1;
+                        color: #1e1e2e;
+                    }
+                    QPushButton:hover {
+                        background-color: #b4f0b4;
+                    }
+                """)
+        
+        # Training file controls
+        training_file_controls = ['btn_save_training', 'epochs_spin', 'batch_spin', 'lr_spin']
+        for ctrl_name in training_file_controls:
+            if hasattr(self, ctrl_name):
+                ctrl = getattr(self, ctrl_name)
+                ctrl.setEnabled(not is_huggingface)
+        
+        # Model Manager - Grow/Shrink buttons (already handled elsewhere but ensure consistency)
+        if hasattr(self, 'btn_grow'):
+            self.btn_grow.setEnabled(not is_huggingface)
+        if hasattr(self, 'btn_shrink'):
+            self.btn_shrink.setEnabled(not is_huggingface)
     
     def _require_enigma_model(self, feature_name: str) -> bool:
         """
@@ -2453,6 +2542,9 @@ class EnhancedMainWindow(QMainWindow):
                     )
                 else:
                     self.training_model_label.setText(f"Model: {self.current_model_name}")
+            
+            # Disable training controls for HuggingFace models
+            self._update_hf_feature_restrictions(is_huggingface)
             
             # Update chat tab model label
             if hasattr(self, 'chat_model_label'):

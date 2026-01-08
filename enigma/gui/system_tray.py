@@ -425,7 +425,7 @@ class EnigmaSystemTray(QObject):
     
     show_gui_requested = pyqtSignal()
     
-    def __init__(self, app: QApplication, main_window=None):
+    def __init__(self, app, main_window=None):
         super().__init__()
         self.app = app
         self.main_window = main_window
@@ -468,7 +468,7 @@ class EnigmaSystemTray(QObject):
         # Show tray icon
         self.tray_icon.show()
     
-    def _create_icon(self) -> QIcon:
+    def _create_icon(self):
         """Load icon from file or create a simple one."""
         # Try to load the custom icon
         icon_paths = [
@@ -678,7 +678,13 @@ class EnigmaSystemTray(QObject):
         
         elif action == "settings":
             self._show_main_window()
-            # TODO: Switch to settings tab
+            # Switch to settings tab if main window exists
+            if self.main_window and hasattr(self.main_window, 'tab_widget'):
+                # Find settings tab index
+                for i in range(self.main_window.tab_widget.count()):
+                    if "settings" in self.main_window.tab_widget.tabText(i).lower():
+                        self.main_window.tab_widget.setCurrentIndex(i)
+                        break
         
         elif action == "help":
             self._show_help()
@@ -715,18 +721,6 @@ class EnigmaSystemTray(QObject):
                 open_file_in_explorer(path)
         except Exception as e:
             self.tray_icon.showMessage("Error", str(e), QSystemTrayIcon.Warning, 3000)
-    
-    def _toggle_recording(self):
-        """Toggle screen recording."""
-        self.is_recording = not self.is_recording
-        if self.is_recording:
-            self.action_record.setText("[Recording] Stop")
-            self.tray_icon.showMessage("Recording Started", "Screen recording in progress...", QSystemTrayIcon.Information, 2000)
-            # TODO: Start actual recording
-        else:
-            self.action_record.setText("Start Recording")
-            self.tray_icon.showMessage("Recording Stopped", "Screen recording saved.", QSystemTrayIcon.Information, 2000)
-            # TODO: Stop and save recording
     
     def _generate_image(self, prompt: str):
         """Generate an image."""
@@ -772,7 +766,16 @@ class EnigmaSystemTray(QObject):
             self._show_main_window()
         elif data:
             self.tray_icon.showMessage("Training Data", f"Adding to training: {data[:50]}...", QSystemTrayIcon.Information, 2000)
-            # TODO: Actually add to training data
+            # Add to training data file
+            try:
+                from pathlib import Path
+                data_dir = Path(CONFIG.get("data_dir", "data"))
+                training_file = data_dir / "user_training.txt"
+                with open(training_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n{data}\n")
+                self.tray_icon.showMessage("Training Data Added", f"Saved to {training_file.name}", QSystemTrayIcon.Information, 2000)
+            except Exception as e:
+                self.tray_icon.showMessage("Error", f"Failed to save: {e}", QSystemTrayIcon.Warning, 3000)
     
     def _handle_file(self, params: Dict):
         """Handle file operations."""
@@ -1174,7 +1177,7 @@ class EnigmaSystemTray(QObject):
         self.tray_icon.showMessage(title, message, icon_type, 3000)
 
 
-def create_system_tray(app: QApplication, main_window=None) -> Optional[EnigmaSystemTray]:
+def create_system_tray(app, main_window=None):
     """Create and return the system tray instance."""
     if not HAS_PYQT:
         return None

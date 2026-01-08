@@ -62,14 +62,13 @@ class VoiceListener:
     """
     
     def __init__(self, config: VoiceConfig = None):
-        if not HAS_SPEECH:
-            raise ImportError(
-                "SpeechRecognition required. Install with:\n"
-                "  pip install SpeechRecognition pyaudio"
-            )
-        
         self.config = config or VoiceConfig()
-        self.recognizer = sr.Recognizer()
+        self._speech_available = HAS_SPEECH
+        
+        if HAS_SPEECH:
+            self.recognizer = sr.Recognizer()
+        else:
+            self.recognizer = None
         self.microphone = None
         
         # Callbacks
@@ -84,12 +83,18 @@ class VoiceListener:
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         
-        # Configure recognizer
-        self.recognizer.energy_threshold = self.config.energy_threshold
-        self.recognizer.dynamic_energy_threshold = self.config.dynamic_energy
+        # Configure recognizer (only if available)
+        if self.recognizer is not None:
+            self.recognizer.energy_threshold = self.config.energy_threshold
+            self.recognizer.dynamic_energy_threshold = self.config.dynamic_energy
     
-    def _get_microphone(self) -> sr.Microphone:
+    def _get_microphone(self):
         """Get or create microphone instance."""
+        if not HAS_SPEECH:
+            raise ImportError(
+                "SpeechRecognition required. Install with:\n"
+                "  pip install SpeechRecognition pyaudio"
+            )
         if self.microphone is None:
             self.microphone = sr.Microphone()
             # Adjust for ambient noise

@@ -154,21 +154,26 @@ class ToolAssignmentWidget(QFrame):
             self.model_input.addItem("enigma:default")
             
         self.model_input.addItem("-- HuggingFace Models --")
-        # Get HuggingFace models from registry
+        # Get HuggingFace models from registry with size info
         try:
             from enigma.core.model_registry import ModelRegistry
             registry = ModelRegistry()
             for model_name, model_info in registry.registry.get("models", {}).items():
                 if model_info.get("source") == "huggingface":
                     hf_id = model_info.get("huggingface_id", model_name)
-                    self.model_input.addItem(f"huggingface:{hf_id}")
+                    size_str = model_info.get("size", "HF")
+                    # Show size if available: "huggingface:model/id (HF-124M)"
+                    if size_str and size_str != "huggingface":
+                        self.model_input.addItem(f"huggingface:{hf_id} ({size_str})")
+                    else:
+                        self.model_input.addItem(f"huggingface:{hf_id}")
         except Exception:
             pass
         
-        # Common HuggingFace presets (user can add more)
-        self.model_input.addItem("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-        self.model_input.addItem("huggingface:Qwen/Qwen2-1.5B-Instruct")
-        self.model_input.addItem("huggingface:Salesforce/codegen-350M-mono")
+        # Common HuggingFace presets with sizes
+        self.model_input.addItem("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B)")
+        self.model_input.addItem("huggingface:Qwen/Qwen2-1.5B-Instruct (1.5B)")
+        self.model_input.addItem("huggingface:Salesforce/codegen-350M-mono (350M)")
             
         self.model_input.addItem("-- API Providers --")
         api_providers = [
@@ -448,13 +453,27 @@ class ModelRouterTab(QWidget):
         # Format as huggingface:repo/model
         if not model_id.startswith("huggingface:"):
             model_id = f"huggingface:{model_id}"
+        
+        # Try to get model size info
+        size_suffix = ""
+        try:
+            from enigma.core.huggingface_loader import get_huggingface_model_info
+            # Extract just the model ID part (after "huggingface:")
+            hf_id = model_id.replace("huggingface:", "")
+            info = get_huggingface_model_info(hf_id)
+            if not info.get("error"):
+                size_suffix = f" ({info['size_str']})"
+        except Exception:
+            pass
+        
+        display_text = f"{model_id}{size_suffix}"
             
         # Add to all tool widgets
         for widget in self.tool_widgets.values():
-            widget.model_input.addItem(model_id)
+            widget.model_input.addItem(display_text)
             
         self.hf_input.clear()
-        self.status_label.setText(f"Added {model_id} to model list")
+        self.status_label.setText(f"Added {display_text} to model list")
         
     def _on_assignment_changed(self, tool_name: str):
         """Handle assignment change in a tool widget."""
