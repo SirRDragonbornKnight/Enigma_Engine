@@ -38,6 +38,23 @@ def create_chat_tab(parent):
     header_layout.addStretch()
     
     # Quick action buttons
+    parent.btn_new_chat = QPushButton("+ New Chat")
+    parent.btn_new_chat.setToolTip("Start a fresh conversation (saves current chat first)")
+    parent.btn_new_chat.setMaximumWidth(90)
+    parent.btn_new_chat.clicked.connect(lambda: _new_chat(parent))
+    parent.btn_new_chat.setStyleSheet("""
+        QPushButton {
+            background-color: #a6e3a1;
+            color: #1e1e2e;
+            font-weight: bold;
+            padding: 4px 8px;
+        }
+        QPushButton:hover {
+            background-color: #94e2d5;
+        }
+    """)
+    header_layout.addWidget(parent.btn_new_chat)
+    
     parent.btn_clear_chat = QPushButton("Clear")
     parent.btn_clear_chat.setToolTip("Clear chat history")
     parent.btn_clear_chat.setMaximumWidth(70)
@@ -253,6 +270,37 @@ def _clear_chat(parent):
     parent.chat_display.clear()
     parent.chat_messages = []
     parent.chat_status.setText("Chat cleared")
+
+
+def _new_chat(parent):
+    """Start a new chat - save current chat first, then clear."""
+    # Save current chat if there's content
+    if hasattr(parent, 'chat_messages') and parent.chat_messages:
+        if hasattr(parent, '_save_current_chat'):
+            parent._save_current_chat()
+            parent.chat_status.setText("Previous chat saved. Starting new conversation...")
+    
+    # Clear the chat
+    parent.chat_display.clear()
+    parent.chat_messages = []
+    
+    # Reset any HuggingFace conversation history
+    if hasattr(parent, 'engine') and parent.engine:
+        if hasattr(parent.engine, 'model') and hasattr(parent.engine.model, 'reset_conversation'):
+            try:
+                parent.engine.model.reset_conversation()
+            except:
+                pass
+    
+    # Show welcome message
+    model_name = parent.current_model_name if hasattr(parent, 'current_model_name') else "AI"
+    parent.chat_display.append(
+        f'<div style="color: #a6e3a1; padding: 8px;">'
+        f'<b>✨ New conversation started with {model_name}</b><br>'
+        f'<span style="color: #6c7086;">Previous chat has been saved. Type a message to begin.</span>'
+        f'</div><hr>'
+    )
+    parent.chat_status.setText("New chat started")
 
 
 def _save_chat(parent):
