@@ -28,7 +28,7 @@ try:
     from PyQt5.QtWidgets import (  # type: ignore[import]
         QApplication, QSystemTrayIcon, QMenu, QAction, QWidget,
         QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
-        QTextEdit, QFrame, QShortcut
+        QTextEdit, QFrame, QShortcut, QWidgetAction, QMessageBox
     )
     from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread  # type: ignore[import]
     from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QKeySequence, QFont  # type: ignore[import]
@@ -46,10 +46,87 @@ def get_current_model_name() -> str:
     """Get the name of the currently loaded AI model."""
     try:
         from ..config import CONFIG
+        # Try to get from gui_settings.json first (most accurate)
+        import json
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        if settings_path.exists():
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+                if settings.get("last_model"):
+                    return settings["last_model"]
+        # Fallback to config
         model_name = CONFIG.get("default_model", "small_enigma")
         return model_name
     except:
-        return "Enigma AI"
+        return "Unknown Model"
+
+
+def kill_other_enigma_instances() -> dict:
+    """Kill other Enigma Engine processes to free up resources.
+    
+    Returns dict with:
+      - killed: number of processes killed
+      - current_pid: this process's PID (not killed)
+      - error: error message if any
+    """
+    import os
+    import signal
+    
+    current_pid = os.getpid()
+    killed = 0
+    errors = []
+    
+    try:
+        import subprocess
+        import sys
+        
+        if sys.platform == 'win32':
+            # Windows: use tasklist and taskkill
+            result = subprocess.run(
+                ['tasklist', '/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV'],
+                capture_output=True, text=True
+            )
+            for line in result.stdout.split('\n'):
+                if 'enigma' in line.lower() or 'run.py' in line.lower():
+                    try:
+                        # Extract PID from CSV format
+                        parts = line.split(',')
+                        if len(parts) >= 2:
+                            pid = int(parts[1].strip('"'))
+                            if pid != current_pid:
+                                subprocess.run(['taskkill', '/PID', str(pid), '/F'], capture_output=True)
+                                killed += 1
+                    except:
+                        pass
+        else:
+            # Linux/Mac: use ps and kill
+            result = subprocess.run(
+                ['ps', 'aux'],
+                capture_output=True, text=True
+            )
+            for line in result.stdout.split('\n'):
+                if ('enigma' in line.lower() or 'run.py' in line.lower()) and 'python' in line.lower():
+                    try:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            pid = int(parts[1])
+                            if pid != current_pid:
+                                os.kill(pid, signal.SIGTERM)
+                                killed += 1
+                    except (ValueError, ProcessLookupError, PermissionError) as e:
+                        errors.append(str(e))
+        
+        return {
+            "killed": killed,
+            "current_pid": current_pid,
+            "error": "; ".join(errors) if errors else None
+        }
+    except Exception as e:
+        return {
+            "killed": killed,
+            "current_pid": current_pid,
+            "error": str(e)
+        }
 
 
 class CommandProcessor(QObject):
@@ -324,9 +401,9 @@ class QuickCommandOverlay(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        title = QLabel("Enigma AI")
-        title.setStyleSheet("color: #3498db; font-size: 14px; font-weight: bold;")
-        header_layout.addWidget(title)
+        self.title_label = QLabel(get_current_model_name())
+        self.title_label.setStyleSheet("color: #3498db; font-size: 14px; font-weight: bold;")
+        header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
         
@@ -387,7 +464,8 @@ class QuickCommandOverlay(QWidget):
     def set_status(self, text: str):
         self.status_label.setText(text)
     
-    def showEvent(self, event):
+    def set_model_name(self, name: str):
+        \"\"\"Update the displayed model name.\"\"\"\n        if hasattr(self, 'title_label'):\n            self.title_label.setText(name)\n    \n    def showEvent(self, event):
         super().showEvent(event)
         self.command_input.setFocus()
         self._center_on_screen()
@@ -433,13 +511,16 @@ class EnigmaSystemTray(QObject):
         self.recording_process = None
         self.recording_path = None
         
-        # Model info
-        self.current_model = get_current_model_name()
+        # Model info - get from main window if available
+        if main_window and hasattr(main_window, 'current_model_name') and main_window.current_model_name:
+            self.current_model = main_window.current_model_name
+        else:
+            self.current_model = get_current_model_name()
         
         # Create system tray icon
         self.tray_icon = QSystemTrayIcon(self.app)
         self.tray_icon.setIcon(self._create_icon())
-        self.tray_icon.setToolTip(f"Enigma AI ({self.current_model}) - Running in background")
+        self.tray_icon.setToolTip(f"{self.current_model} - Running in background")
         
         # Create menu
         self.menu = QMenu()
@@ -465,8 +546,18 @@ class EnigmaSystemTray(QObject):
         self.voice_commander = None
         self.voice_enabled = False
         
+        # Global ESC key detection (platform specific)
+        self._setup_global_hotkeys()
+        
         # Show tray icon
         self.tray_icon.show()
+    
+    def _setup_global_hotkeys(self):
+        """Setup global hotkeys for showing GUI."""
+        # Note: True global hotkeys require platform-specific libraries
+        # For now, use a polling approach or rely on platform features
+        # The overlay ESC key is handled in QuickCommandOverlay.keyPressEvent
+        pass
     
     def _create_icon(self):
         """Load icon from file or create a simple one."""
@@ -510,10 +601,48 @@ class EnigmaSystemTray(QObject):
         # Load hotkey settings
         hotkeys = self._load_hotkey_settings()
         
-        # Model info at top
+        # === Header with model info and X close button ===
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(8, 4, 4, 4)
+        
+        # Model label on left
+        model_label = QLabel(f"Model: {self.current_model}")
+        model_label.setStyleSheet("color: #888; font-size: 11px;")
+        header_layout.addWidget(model_label)
+        self.model_label = model_label
+        
+        header_layout.addStretch()
+        
+        # X close button on right
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(20, 20)
+        close_btn.setToolTip("Exit Enigma completely")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #888;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e74c3c;
+                color: white;
+                border-radius: 10px;
+            }
+        """)
+        close_btn.clicked.connect(self._exit_app)
+        header_layout.addWidget(close_btn)
+        
+        # Add header as widget action
+        header_action = QWidgetAction(self)
+        header_action.setDefaultWidget(header_widget)
+        self.menu.addAction(header_action)
+        
+        # Keep model_action reference for backward compatibility
         model_action = QAction(f"Model: {self.current_model}", self)
-        model_action.setEnabled(False)
-        self.menu.addAction(model_action)
+        model_action.setVisible(False)  # Hidden, using custom widget instead
         self.model_action = model_action
         
         self.menu.addSeparator()
@@ -599,16 +728,67 @@ class EnigmaSystemTray(QObject):
         
         self.menu.addSeparator()
         
+        # Kill other instances
+        action_kill = QAction("Kill Other Instances", self)
+        action_kill.setToolTip("Kill other Enigma processes to free memory")
+        action_kill.triggered.connect(self._kill_other_instances)
+        self.menu.addAction(action_kill)
+        
         # Exit
         action_exit = QAction("Exit Enigma", self)
         action_exit.triggered.connect(self._exit_app)
         self.menu.addAction(action_exit)
     
+    def _kill_other_instances(self):
+        """Kill other Enigma instances."""
+        result = kill_other_enigma_instances()
+        killed = result.get("killed", 0)
+        error = result.get("error")
+        
+        if error:
+            self.tray_icon.showMessage(
+                "Kill Instances",
+                f"Killed {killed} instance(s).\nErrors: {error}",
+                QSystemTrayIcon.Warning,
+                3000
+            )
+        elif killed > 0:
+            self.tray_icon.showMessage(
+                "Kill Instances",
+                f"Successfully killed {killed} other Enigma instance(s).",
+                QSystemTrayIcon.Information,
+                3000
+            )
+        else:
+            self.tray_icon.showMessage(
+                "Kill Instances",
+                "No other Enigma instances found.",
+                QSystemTrayIcon.Information,
+                2000
+            )
+    
+    def update_model_name(self, model_name: str):
+        """Update the displayed model name."""
+        self.current_model = model_name
+        self.tray_icon.setToolTip(f"{model_name} - Running in background")
+        # Update menu header label
+        if hasattr(self, 'model_label'):
+            self.model_label.setText(f\"Model: {model_name}\")\n        # Update overlay title\n        if hasattr(self, 'overlay') and hasattr(self.overlay, 'set_model_name'):\n            self.overlay.set_model_name(model_name)\n        # Update hidden action for compatibility\n        if hasattr(self, 'model_action'):\n            self.model_action.setText(f\"Model: {model_name}\")
+    
     def _on_tray_activated(self, reason):
-        """Handle tray icon activation."""
+        \"\"\"Handle tray icon activation.
+        
+        Single click: Show the main GUI window
+        Double click: Show the main GUI window
+        Middle click: Show quick command overlay
+        \"\"\"
         if reason == QSystemTrayIcon.DoubleClick:
             self._show_main_window()
         elif reason == QSystemTrayIcon.Trigger:
+            # Single click now shows GUI (more intuitive)
+            self._show_main_window()
+        elif reason == QSystemTrayIcon.MiddleClick:
+            # Middle click shows overlay
             self.show_overlay()
     
     def show_overlay(self):
@@ -629,18 +809,35 @@ class EnigmaSystemTray(QObject):
         """Process a command from the overlay."""
         self.overlay.set_status("Processing...")
         
-        # Process in background
-        result = self.processor.process_command(command)
+        # Check if this is a chat command - if so, route to GUI
+        command_lower = command.lower().strip()
+        quick_action = self.processor._detect_quick_action(command_lower)
         
-        # Show response
-        self.overlay.show_response(result.get("response", "Done"))
-        self.overlay.set_status("Ready")
-        
-        # Execute action
-        action = result.get("action", "")
-        params = result.get("params", {})
-        
-        self._execute_action(action, params)
+        if quick_action:
+            # It's a quick action (screenshot, open folder, etc.) - handle locally
+            result = quick_action
+            self.overlay.show_response(result.get("response", "Done"))
+            self.overlay.set_status("Ready")
+            self._execute_action(result.get("action", ""), result.get("params", {}))
+        else:
+            # It's a chat message - route to GUI chat if available
+            if self.main_window and hasattr(self.main_window, 'chat_input'):
+                # Show GUI and send message through the chat tab
+                self._show_main_window()
+                self.hide_overlay()
+                
+                # Set the text in chat input and trigger send
+                self.main_window.chat_input.setText(command)
+                if hasattr(self.main_window, '_on_send'):
+                    self.main_window._on_send()
+                
+                self.overlay.set_status("Sent to chat")
+            else:
+                # Fallback: process locally if GUI not available
+                result = self.processor.process_command(command)
+                self.overlay.show_response(result.get("response", "Done"))
+                self.overlay.set_status("Ready")
+                self._execute_action(result.get("action", ""), result.get("params", {}))
     
     def _execute_action(self, action: str, params: Dict[str, Any] = None):
         """Execute an action."""

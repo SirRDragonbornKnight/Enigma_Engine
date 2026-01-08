@@ -2372,12 +2372,27 @@ class EnhancedMainWindow(QMainWindow):
         # Ctrl+Shift+F4 - Emergency force quit (no confirmation)
         emergency_quit = QShortcut(QKeySequence("Ctrl+Shift+F4"), self)
         emergency_quit.activated.connect(self._emergency_quit)
+        
+        # Escape - Show GUI (when minimized to tray, global hotkey is set up separately)
+        # Note: ESC while window is visible does nothing special (normal behavior)
+        esc_shortcut = QShortcut(QKeySequence("Escape"), self)
+        esc_shortcut.activated.connect(self._on_escape_pressed)
+    
+    def _on_escape_pressed(self):
+        """Handle escape key - if any popup/dialog is open, close it. Otherwise do nothing."""
+        # This is mainly for consistency. The tray ESC functionality 
+        # is handled via the overlay's keyPressEvent
+        pass
     
     def _force_quit(self):
-        """Force quit the application with cleanup."""
+        """Force quit the application with cleanup (Alt+F4)."""
         try:
             # Try to save any unsaved state
             self._save_gui_settings()
+            # Hide tray icon if exists
+            tray = get_system_tray()
+            if tray and hasattr(tray, 'tray_icon'):
+                tray.tray_icon.hide()
         except Exception:
             pass
         QApplication.quit()
@@ -2386,6 +2401,13 @@ class EnhancedMainWindow(QMainWindow):
         """Emergency quit - no questions asked, just exit."""
         import sys
         print("[EMERGENCY] Force quitting application...")
+        # Also try to hide tray
+        try:
+            tray = get_system_tray()
+            if tray and hasattr(tray, 'tray_icon'):
+                tray.tray_icon.hide()
+        except:
+            pass
         sys.exit(0)
     
     def _is_huggingface_model(self) -> bool:
@@ -2714,6 +2736,14 @@ class EnhancedMainWindow(QMainWindow):
             # Update chat status
             if hasattr(self, 'chat_status'):
                 self.chat_status.setText(f"Model ready ({self.engine.device})")
+            
+            # Update system tray with model name
+            try:
+                tray = get_system_tray()
+                if tray and hasattr(tray, 'update_model_name'):
+                    tray.update_model_name(self.current_model_name)
+            except:
+                pass
             
             # Refresh notes files for new model
             if hasattr(self, 'notes_file_combo'):
@@ -5151,19 +5181,67 @@ def run_app(minimize_to_tray: bool = True):
             # Connect tray to window
             _system_tray.show_gui_requested.connect(window.show)
             
-            # Override close event to minimize to tray
+            # Override close event to show options dialog
             if minimize_to_tray:
                 original_close = window.closeEvent
                 
                 def close_to_tray(event):
                     if _system_tray and _system_tray.tray_icon.isVisible():
-                        event.ignore()
-                        window.hide()
-                        _system_tray.show_notification(
-                            "Enigma Running",
-                            "Enigma is still running in the background.\n"
-                            "Click the tray icon or press Ctrl+Space for quick commands.",
-                        )
+                        # Process pending events first to ensure UI responsiveness
+                        QApplication.processEvents()
+                        
+                        # Show dialog asking what to do
+                        from PyQt5.QtWidgets import QMessageBox
+                        
+                        msg = QMessageBox(window)
+                        msg.setWindowTitle("Close Enigma")
+                        msg.setText(f\"\"\"<b>Close {window.current_model_name or 'Enigma'}?</b><br><br>
+What would you like to do?\"\"\")\n                        msg.setIcon(QMessageBox.Question)
+                        
+                        # Make dialog stay on top and be responsive
+                        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+                        
+                        # Custom buttons
+                        minimize_btn = msg.addButton("Minimize to Tray", QMessageBox.AcceptRole)
+                        exit_btn = msg.addButton("Exit Completely", QMessageBox.DestructiveRole)
+                        kill_btn = msg.addButton("Kill All && Exit", QMessageBox.DestructiveRole)
+                        cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
+                        
+                        msg.setDefaultButton(minimize_btn)
+                        
+                        # Process events to ensure dialog is responsive
+                        QApplication.processEvents()
+                        
+                        msg.exec_()
+                        
+                        clicked = msg.clickedButton()
+                        
+                        if clicked == minimize_btn:
+                            # Minimize to tray
+                            event.ignore()
+                            window.hide()
+                            _system_tray.show_notification(
+                                f"{window.current_model_name or 'Enigma'} Running",
+                                "Still running in the background.\\n"
+                                "Click the tray icon to restore.",
+                            )
+                        elif clicked == exit_btn:
+                            # Exit completely
+                            event.accept()
+                            window._save_gui_settings()
+                            _system_tray.tray_icon.hide()
+                            QApplication.quit()
+                        elif clicked == kill_btn:
+                            # Kill all instances and exit
+                            from .system_tray import kill_other_enigma_instances
+                            kill_other_enigma_instances()
+                            event.accept()
+                            window._save_gui_settings()
+                            _system_tray.tray_icon.hide()
+                            QApplication.quit()
+                        else:
+                            # Cancel - do nothing
+                            event.ignore()
                     else:
                         original_close(event)
                 
