@@ -305,6 +305,10 @@ class CameraTab(QWidget):
         if self.current_frame is None:
             QMessageBox.warning(self, "No Frame", "No camera frame available")
             return
+        
+        if not HAVE_CV2:
+            QMessageBox.warning(self, "OpenCV Required", "OpenCV is required to save images")
+            return
             
         # Generate filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -319,6 +323,10 @@ class CameraTab(QWidget):
             
     def toggle_recording(self):
         """Start or stop video recording."""
+        if not HAVE_CV2:
+            QMessageBox.warning(self, "OpenCV Required", "OpenCV is required for video recording")
+            return
+            
         if self.is_recording:
             # Stop recording
             self.is_recording = False
@@ -355,6 +363,10 @@ class CameraTab(QWidget):
     def analyze_frame(self):
         """Have AI analyze the current frame."""
         if self.current_frame is None:
+            return
+        
+        if not HAVE_CV2:
+            self.analysis_text.appendPlainText("OpenCV not available for analysis")
             return
             
         try:

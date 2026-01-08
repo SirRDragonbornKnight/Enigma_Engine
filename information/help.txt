@@ -9,12 +9,8 @@ GETTING STARTED
 
 KEYBOARD SHORTCUTS
 ------------------
-Ctrl+Shift+E    Open quick command bar
-Ctrl+Shift+H    Open this help
-Ctrl+Shift+V    Toggle voice listening
-Escape          Close command bar
-
-(Change shortcuts in Settings tab or gui_settings.json)
+Alt+F4              Close the window
+Ctrl+Shift+F4       Emergency quit (force close)
 
 VOICE COMMANDS
 --------------
@@ -25,22 +21,57 @@ Say "Hey Enigma" then speak your command:
 - "Start recording"
 - "Open the interface"
 
-QUICK COMMANDS
---------------
-Type these in the command bar:
-- screenshot         Capture screen
-- record            Start/stop recording  
-- image [prompt]    Generate image
-- video [prompt]    Generate video
-- help              Show help
-- open              Open full interface
-- exit              Close Enigma
+SIDEBAR TABS
+------------
+MAIN:
+  Chat      - Talk to AI
+  Train     - Teach your AI
+  History   - Past conversations
+  Scale     - Choose model size
+  Modules   - Enable/disable features
+  Router    - Assign AI models to tools
 
-SYSTEM TRAY
------------
-- Click icon: Open command bar
-- Double-click: Open full interface
-- Right-click: Show menu
+GENERATE:
+  Image     - Generate images
+  Code      - Generate code
+  Video     - Generate videos
+  Audio     - Text-to-speech
+  3D        - Generate 3D models
+  GIF       - Create animations
+
+CONNECT:
+  Search    - Semantic search
+  Avatar    - Visual AI rep
+  Game      - Game connections
+  Robot     - Robot control
+  Vision    - Screen capture
+  Camera    - Live camera feed
+
+TOOLS:
+  Terminal  - Command line
+  Files     - Training data
+  Examples  - Usage examples
+  Settings  - Configuration
+
+MODEL ROUTER (NEW!)
+-------------------
+Go to Router tab to:
+- See all available tools (chat, image, code, etc.)
+- Assign any model to any tool
+- Click "Apply to ALL Tools" to use one model everywhere
+- Supports Enigma, HuggingFace, and API models
+
+Recommended for Raspberry Pi:
+- Qwen/Qwen2-0.5B-Instruct (503M params)
+- TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B params)
+
+CAMERA TAB (NEW!)
+-----------------
+- Live preview from webcam/camera
+- Capture photos to information/images/
+- Record video (AVI format)
+- AI can analyze what camera sees
+- Requires: pip install opencv-python
 
 FILES AND FOLDERS
 -----------------
@@ -50,13 +81,14 @@ outputs/audio/      Generated audio
 outputs/code/       Generated code
 data/               Training data
 models/             AI models
+information/images/ Camera captures
 
 NEED MORE HELP?
 ---------------
 - Full docs: docs/ folder
-- Instructions: data/instructions.txt
+- Instructions: information/instructions.txt
 - GUI Guide: docs/GUI_GUIDE.md
 - Training: docs/HOW_TO_TRAIN.md
 
-TIP: Most generation tabs have an "Auto-open" 
-checkbox to automatically show output files.
+TIP: Use the Router tab's "Apply to ALL" button
+to quickly set your preferred AI model everywhere!

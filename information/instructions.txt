@@ -94,6 +94,29 @@ Everything in Enigma is a toggleable module:
 
 Use the Modules tab to enable/disable capabilities.
 
+## Model Router (NEW!)
+The Router tab lets you assign AI models to different tools:
+- Chat, Image, Code, Video, Audio, 3D, Web, Memory
+- Each tool can have its own AI model
+- Use "Apply to ALL Tools" button to quickly set one model everywhere
+- Supports: Enigma models, HuggingFace models, Local tools, APIs
+
+Recommended models for Raspberry Pi:
+- Qwen/Qwen2-0.5B-Instruct (503M) - Best small chat model
+- TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B) - Better quality
+- microsoft/DialoGPT-small (162M) - Lightest option
+
+## Camera Tab (NEW!)
+Live camera preview with:
+- Real-time ~30 FPS feed
+- Photo capture (saves to information/images/)
+- Video recording (AVI format)
+- AI analysis of what camera sees
+- Multiple camera support (0, 1, 2)
+- Resolution options
+
+Requires: pip install opencv-python
+
 ## Tips
 - Back up your model before making big changes
 - Train in small batches - you can always train more

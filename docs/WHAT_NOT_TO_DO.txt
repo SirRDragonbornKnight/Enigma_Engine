@@ -166,6 +166,40 @@ DON'T: Push API keys or passwords to public repositories
 
 
 ================================================================================
+                         9. MODEL ROUTER / HUGGINGFACE
+================================================================================
+
+DON'T: Train HuggingFace models from the GUI
+  WHY: HF models are pre-trained, Enigma training only works on Enigma models
+  DO: Use HF models as-is, or fine-tune using HuggingFace tools
+
+DON'T: Load 7B+ models on Raspberry Pi
+  WHY: Not enough RAM, will crash or be extremely slow
+  DO: Use small models (Qwen2-0.5B, TinyLlama-1.1B, DialoGPT-small)
+
+DON'T: Delete HuggingFace models from ~/.cache/huggingface manually
+  WHY: Registry and cache can get out of sync
+  DO: Use the "Delete HF Model" button in Model Manager
+
+DON'T: Assign the same model to conflicting tools with different configs
+  WHY: Can cause unexpected behavior
+  DO: Use consistent settings for each model
+
+
+================================================================================
+                         10. CAMERA TAB
+================================================================================
+
+DON'T: Start camera without OpenCV installed
+  WHY: Will show error messages, no functionality
+  DO: Install first: pip install opencv-python
+
+DON'T: Leave camera running when not needed
+  WHY: Uses CPU resources, heats up the Pi
+  DO: Stop camera when done, it saves resources
+
+
+================================================================================
                            SUMMARY: GOLDEN RULES
 ================================================================================
 
@@ -177,5 +211,7 @@ DON'T: Push API keys or passwords to public repositories
 6. WAIT for operations to complete before starting new ones
 7. KEEP models and data organized in their proper folders
 8. TEST changes on a backup before applying to your main model
+9. USE Router tab to assign models to tools (Apply to All for quick setup)
+10. PREFER small HuggingFace models on Pi (Qwen2-0.5B is recommended)
 
 ================================================================================
