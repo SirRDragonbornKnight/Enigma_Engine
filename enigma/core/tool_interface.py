@@ -78,6 +78,10 @@ class ToolInterface:
         self.manager = module_manager
         self.available_tools: Dict[str, Callable] = {}
         self.tool_descriptions: Dict[str, str] = {}
+        
+        # Output memory for referencing previous results
+        from ..tools.history import get_output_memory
+        self.output_memory = get_output_memory()
         self._register_tools()
     
     def _register_tools(self):
@@ -134,6 +138,19 @@ class ToolInterface:
         self.tool_descriptions['list_directory'] = (
             "List files in a directory. "
             "Args: path (str)"
+        )
+        
+        # === Output reference tools ===
+        self.available_tools['get_last_output'] = self._get_last_output
+        self.tool_descriptions['get_last_output'] = (
+            "Get information about the last generated output (image, video, etc.). "
+            "Args: category (str, optional: 'image', 'video', 'audio', 'code', 'gif')"
+        )
+        
+        self.available_tools['edit_last'] = self._edit_last
+        self.tool_descriptions['edit_last'] = (
+            "Edit the last generated output. "
+            "Args: reference (str: 'last image', 'previous video'), edit_type (str), params (dict)"
         )
     
     def parse_tool_call(self, ai_output: str) -> Optional[ToolCall]:
@@ -335,10 +352,21 @@ class ToolInterface:
                 img_gen = self.manager.get_module('image_gen_local')
                 if img_gen and hasattr(img_gen, 'generate'):
                     result = img_gen.generate(prompt, width=width, height=height)
+                    
+                    # Record output for future reference
+                    output_path = result.get('path') or result.get('output_path')
+                    self.output_memory.record_output(
+                        'generate_image',
+                        output_path=output_path,
+                        params={'prompt': prompt, 'width': width, 'height': height},
+                        metadata={'dimensions': f'{width}x{height}'}
+                    )
+                    
                     return {
                         "success": True,
                         "result": f"Image generated: {prompt[:50]}...",
-                        "message": f"Generated image from prompt: {prompt}"
+                        "message": f"Generated image from prompt: {prompt}",
+                        "path": output_path
                     }
             except Exception as e:
                 logger.error(f"Error using image_gen_local: {e}")
@@ -495,6 +523,157 @@ class ToolInterface:
                 "success": False,
                 "error": str(e)
             }
+    
+    def _get_last_output(self, category: str = None, **kwargs) -> Dict[str, Any]:
+        """Get information about the last generated output."""
+        if category is None:
+            category = kwargs.get('arg0')
+        
+        output = self.output_memory.get_last(category)
+        
+        if output:
+            return {
+                "success": True,
+                "result": {
+                    "category": output.get('category'),
+                    "path": output.get('path'),
+                    "params": output.get('params'),
+                    "timestamp": output.get('timestamp'),
+                },
+                "message": f"Last {output.get('category', 'output')}: {output.get('path', 'in-memory')}"
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"No previous {category or 'output'} found in this session"
+            }
+    
+    def _edit_last(self, reference: str = None, edit_type: str = None, params: Dict = None, **kwargs) -> Dict[str, Any]:
+        """Edit a previous output by reference."""
+        if reference is None:
+            reference = kwargs.get('arg0', 'last')
+        if edit_type is None:
+            edit_type = kwargs.get('arg1', kwargs.get('edit_type'))
+        if params is None:
+            params = kwargs.get('arg2', kwargs.get('params', {}))
+        
+        # Get the output to edit
+        output = self.output_memory.get_by_reference(reference)
+        
+        if not output:
+            return {
+                "success": False,
+                "error": f"Could not find output matching '{reference}'"
+            }
+        
+        path = output.get('path')
+        if not path:
+            return {
+                "success": False,
+                "error": "Output has no file path to edit"
+            }
+        
+        category = output.get('category')
+        
+        # Route to appropriate edit function
+        if category == 'image':
+            return self._edit_image_file(path, edit_type, params)
+        elif category == 'video':
+            return self._edit_video_file(path, edit_type, params)
+        elif category == 'gif':
+            return self._edit_gif_file(path, edit_type, params)
+        elif category == 'audio':
+            return self._edit_audio_file(path, edit_type, params)
+        else:
+            return {
+                "success": False,
+                "error": f"Editing not supported for {category} outputs"
+            }
+    
+    def _edit_image_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+        """Edit an image file."""
+        try:
+            from ..tools.document_tools import edit_image
+            result = edit_image(path, edit_type, **params)
+            
+            if result.get('success'):
+                # Record the edited output
+                self.output_memory.record_output(
+                    'edit_image',
+                    output_path=result.get('output_path', path),
+                    params={'original': path, 'edit_type': edit_type, **params}
+                )
+            
+            return result
+        except ImportError:
+            return {"success": False, "error": "Image editing not available"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _edit_video_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+        """Edit a video file."""
+        try:
+            from ..tools.document_tools import edit_video
+            result = edit_video(path, edit_type, **params)
+            
+            if result.get('success'):
+                self.output_memory.record_output(
+                    'edit_video',
+                    output_path=result.get('output_path', path),
+                    params={'original': path, 'edit_type': edit_type, **params}
+                )
+            
+            return result
+        except ImportError:
+            return {"success": False, "error": "Video editing not available"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _edit_gif_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+        """Edit a GIF file."""
+        try:
+            from ..tools.document_tools import edit_gif
+            result = edit_gif(path, edit_type, **params)
+            
+            if result.get('success'):
+                self.output_memory.record_output(
+                    'edit_gif',
+                    output_path=result.get('output_path', path),
+                    params={'original': path, 'edit_type': edit_type, **params}
+                )
+            
+            return result
+        except ImportError:
+            return {"success": False, "error": "GIF editing not available"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _edit_audio_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+        """Edit an audio file."""
+        try:
+            from ..tools.document_tools import edit_audio
+            result = edit_audio(path, edit_type, **params)
+            
+            if result.get('success'):
+                self.output_memory.record_output(
+                    'edit_audio',
+                    output_path=result.get('output_path', path),
+                    params={'original': path, 'edit_type': edit_type, **params}
+                )
+            
+            return result
+        except ImportError:
+            return {"success": False, "error": "Audio editing not available"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def get_output_context(self) -> str:
+        """Get context about recent outputs for the AI."""
+        return self.output_memory.get_context_for_ai()
+    
+    def clear_output_memory(self):
+        """Clear the output memory (for new chat sessions)."""
+        self.output_memory.clear()
     
     def get_tools_list(self) -> List[Dict[str, str]]:
         """Get list of available tools with descriptions."""

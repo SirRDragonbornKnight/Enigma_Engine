@@ -2869,7 +2869,9 @@ class EnhancedMainWindow(QMainWindow):
             create_vision_tab, create_camera_tab, create_sessions_tab, create_instructions_tab,
             create_terminal_tab, create_examples_tab,
             create_image_tab, create_code_tab, create_video_tab,
-            create_audio_tab, create_embeddings_tab, create_threed_tab
+            create_audio_tab, create_embeddings_tab, create_threed_tab,
+            create_logs_tab, create_notes_tab, create_network_tab,
+            create_analytics_tab, create_scheduler_tab
         )
         from .tabs.gif_tab import create_gif_tab
         from .tabs.settings_tab import create_settings_tab
@@ -2950,6 +2952,11 @@ class EnhancedMainWindow(QMainWindow):
             ("section", "SYSTEM"),
             ("", "Terminal", "terminal"),
             ("", "Files", "files"),
+            ("", "Logs", "logs"),
+            ("", "Notes", "notes"),
+            ("", "Network", "network"),
+            ("", "Analytics", "analytics"),
+            ("", "Scheduler", "scheduler"),
             ("", "Examples", "examples"),
             ("", "Settings", "settings"),
         ]
@@ -3020,6 +3027,11 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_camera_tab(self)))  # Camera
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
+        self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
+        self.content_stack.addWidget(wrap_in_scroll(create_notes_tab(self)))  # Notes
+        self.content_stack.addWidget(wrap_in_scroll(create_network_tab(self)))  # Network
+        self.content_stack.addWidget(wrap_in_scroll(create_analytics_tab(self)))  # Analytics
+        self.content_stack.addWidget(wrap_in_scroll(create_scheduler_tab(self)))  # Scheduler
         self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples
         self.content_stack.addWidget(wrap_in_scroll(create_settings_tab(self)))  # Settings
         

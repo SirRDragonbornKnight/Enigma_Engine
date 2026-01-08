@@ -292,6 +292,13 @@ def _new_chat(parent):
             except:
                 pass
     
+    # Clear tool output memory for fresh session
+    try:
+        from ...tools.history import get_output_memory
+        get_output_memory().clear()
+    except:
+        pass
+    
     # Show welcome message
     model_name = parent.current_model_name if hasattr(parent, 'current_model_name') else "AI"
     parent.chat_display.append(

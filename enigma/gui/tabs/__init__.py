@@ -24,6 +24,11 @@ from .audio_tab import AudioTab, create_audio_tab
 from .embeddings_tab import EmbeddingsTab, create_embeddings_tab
 from .threed_tab import ThreeDTab, create_threed_tab
 from .tool_manager_tab import ToolManagerTab
+from .logs_tab import LogsTab, create_logs_tab
+from .notes_tab import NotesTab, create_notes_tab
+from .network_tab import NetworkTab, create_network_tab
+from .analytics_tab import AnalyticsTab, create_analytics_tab
+from .scheduler_tab import SchedulerTab, create_scheduler_tab
 
 __all__ = [
     'create_chat_tab',
@@ -57,4 +62,14 @@ __all__ = [
     'ThreeDTab',
     'create_threed_tab',
     'ToolManagerTab',
+    'LogsTab',
+    'create_logs_tab',
+    'NotesTab',
+    'create_notes_tab',
+    'NetworkTab',
+    'create_network_tab',
+    'AnalyticsTab',
+    'create_analytics_tab',
+    'SchedulerTab',
+    'create_scheduler_tab',
 ]
