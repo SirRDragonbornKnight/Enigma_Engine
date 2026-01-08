@@ -89,6 +89,12 @@ TOOL_DEFINITIONS = {
         keywords=["3d", "model", "mesh", "object", "sculpt"],
         parameters={"prompt": "3D model description"}
     ),
+    "gif": ToolDefinition(
+        name="gif",
+        description="Create animated GIFs",
+        keywords=["gif", "animated", "animation loop", "meme"],
+        parameters={"prompt": "GIF description", "frames": "Number of frames"}
+    ),
     "web": ToolDefinition(
         name="web",
         description="Search the web or fetch information",
@@ -100,6 +106,30 @@ TOOL_DEFINITIONS = {
         description="Remember or recall information",
         keywords=["remember", "recall", "forget", "memory", "save this"],
         parameters={"action": "save/recall/list", "content": "What to remember"}
+    ),
+    "embeddings": ToolDefinition(
+        name="embeddings",
+        description="Semantic search and similarity matching",
+        keywords=["search", "find similar", "semantic", "embedding", "vector search"],
+        parameters={"query": "Text to search for", "top_k": "Number of results"}
+    ),
+    "camera": ToolDefinition(
+        name="camera",
+        description="Capture from webcam or camera",
+        keywords=["camera", "webcam", "photo", "capture", "take picture", "snap"],
+        parameters={"action": "capture/record/analyze"}
+    ),
+    "vision": ToolDefinition(
+        name="vision",
+        description="Analyze images or screen captures",
+        keywords=["see", "look at", "analyze image", "what's on screen", "screenshot", "describe image"],
+        parameters={"image_path": "Path to image or 'screen' for screenshot"}
+    ),
+    "avatar": ToolDefinition(
+        name="avatar",
+        description="Control the AI avatar display",
+        keywords=["avatar", "face", "expression", "show me", "look"],
+        parameters={"expression": "Avatar expression to show"}
     ),
 }
 
@@ -154,8 +184,13 @@ class ToolRouter:
             "video": [ModelAssignment("local:animatediff", "local", priority=10)],
             "audio": [ModelAssignment("local:tts", "local", priority=10)],
             "3d": [ModelAssignment("local:shap-e", "local", priority=10)],
+            "gif": [ModelAssignment("local:gif-maker", "local", priority=10)],
             "web": [ModelAssignment("local:web-tools", "local", priority=10)],
             "memory": [ModelAssignment("local:memory", "local", priority=10)],
+            "embeddings": [ModelAssignment("local:embeddings", "local", priority=10)],
+            "camera": [ModelAssignment("local:camera", "local", priority=10)],
+            "vision": [ModelAssignment("local:vision", "local", priority=10)],
+            "avatar": [ModelAssignment("local:avatar", "local", priority=10)],
         }
         self._save_config()
             

@@ -205,13 +205,47 @@
         "priority": 10,
         "config": {}
       }
+    ],
+    "gif": [
+      {
+        "model_id": "local:gif",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "embeddings": [
+      {
+        "model_id": "local:embeddings",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "camera": [
+      {
+        "model_id": "local:camera",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "vision": [
+      {
+        "model_id": "local:vision",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "avatar": [
+      {
+        "model_id": "local:avatar",
+        "model_type": "local",
+        "priority": 10,
+        "config": {}
+      }
     ]
   },
-  "updated": "2026-01-08T15:09:46.965673",
-  "chat": [
-    {
-      "model": "huggingface:Qwen/Qwen2-0.5B-Instruct",
-      "priority": 100
-    }
-  ]
+  "updated": "2026-01-08T16:51:04.297072"
 }

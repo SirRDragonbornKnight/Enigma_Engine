@@ -21,14 +21,19 @@ from PyQt5.QtGui import QFont
 
 # Tool icons/colors
 TOOL_STYLES = {
-    "chat": {"color": "#3498db", "icon": "[C]"},
-    "image": {"color": "#e91e63", "icon": "[I]"},
-    "code": {"color": "#9b59b6", "icon": "[<>]"},
-    "video": {"color": "#e74c3c", "icon": "[V]"},
-    "audio": {"color": "#f39c12", "icon": "[A]"},
-    "3d": {"color": "#1abc9c", "icon": "[3D]"},
-    "web": {"color": "#2ecc71", "icon": "[W]"},
-    "memory": {"color": "#34495e", "icon": "[M]"},
+    "chat": {"color": "#3498db", "icon": "💬"},
+    "image": {"color": "#e91e63", "icon": "🖼️"},
+    "code": {"color": "#9b59b6", "icon": "💻"},
+    "video": {"color": "#e74c3c", "icon": "🎬"},
+    "audio": {"color": "#f39c12", "icon": "🔊"},
+    "3d": {"color": "#1abc9c", "icon": "🧊"},
+    "gif": {"color": "#ff6b6b", "icon": "🎞️"},
+    "web": {"color": "#2ecc71", "icon": "🌐"},
+    "memory": {"color": "#34495e", "icon": "🧠"},
+    "embeddings": {"color": "#9b59b6", "icon": "🔍"},
+    "camera": {"color": "#00bcd4", "icon": "📷"},
+    "vision": {"color": "#ff9800", "icon": "👁️"},
+    "avatar": {"color": "#e91e63", "icon": "🎭"},
 }
 
 

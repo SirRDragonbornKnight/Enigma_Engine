@@ -56,9 +56,9 @@ pyscreenshot>=3.0
 # For resource monitoring:
 psutil>=5.9.0
 
-# === CAMERA (Optional) ===
-# For webcam support:
-# opencv-python>=4.5.0
+# === CAMERA (Recommended) ===
+# For webcam support - install if using Camera tab:
+opencv-python>=4.5.0
 # For Raspberry Pi camera:
 # picamera2>=0.3.0
 
