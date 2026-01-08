@@ -108,12 +108,20 @@ from . import iot_tools
 from . import data_tools
 from . import gaming_tools
 
+# Tool Manager for enabling/disabling tools
+from .tool_manager import ToolManager, get_tool_manager, PRESETS, TOOL_CATEGORIES
+
 __all__ = [
     # Core
     "Tool",
     "ToolRegistry", 
     "get_registry",
     "execute_tool",
+    # Tool Manager
+    "ToolManager",
+    "get_tool_manager",
+    "PRESETS",
+    "TOOL_CATEGORIES",
     # Vision
     "ScreenCapture",
     "ScreenVision",
