@@ -657,6 +657,25 @@ class EnigmaSystemTray(QObject):
         action_gui.triggered.connect(self._show_main_window)
         self.menu.addAction(action_gui)
         
+        self.menu.addSeparator()
+        
+        # === Chat & Voice Quick Access ===
+        action_chat = QAction("💬 Open Chat", self)
+        action_chat.triggered.connect(self._open_chat_tab)
+        self.menu.addAction(action_chat)
+        
+        action_new_chat = QAction("✨ New Chat", self)
+        action_new_chat.setToolTip("Start a fresh conversation")
+        action_new_chat.triggered.connect(self._start_new_chat)
+        self.menu.addAction(action_new_chat)
+        
+        action_voice_input = QAction("🎤 Voice Input", self)
+        action_voice_input.setToolTip("Open voice input in chat")
+        action_voice_input.triggered.connect(self._open_voice_input)
+        self.menu.addAction(action_voice_input)
+        
+        self.menu.addSeparator()
+        
         # Help button - direct access
         action_help = QAction(f"Help ({hotkeys['help']})", self)
         action_help.triggered.connect(self._show_help)
@@ -900,6 +919,78 @@ class EnigmaSystemTray(QObject):
             self.main_window.show()
             self.main_window.activateWindow()
     
+    def _open_chat_tab(self):
+        """Open the GUI and switch to the chat tab."""
+        self._show_main_window()
+        if self.main_window:
+            # Try to switch to chat tab using the sidebar
+            if hasattr(self.main_window, '_switch_to_tab'):
+                self.main_window._switch_to_tab('chat')
+            elif hasattr(self.main_window, 'content_stack'):
+                # Find chat in the content stack (usually index 0)
+                self.main_window.content_stack.setCurrentIndex(0)
+            # Focus the chat input
+            if hasattr(self.main_window, 'chat_input'):
+                self.main_window.chat_input.setFocus()
+    
+    def _start_new_chat(self):
+        """Start a new chat conversation."""
+        self._show_main_window()
+        if self.main_window:
+            # Import the new chat function
+            try:
+                from .tabs.chat_tab import _new_chat
+                _new_chat(self.main_window)
+            except Exception as e:
+                # Fallback: just clear the chat
+                if hasattr(self.main_window, 'chat_display'):
+                    self.main_window.chat_display.clear()
+                if hasattr(self.main_window, 'chat_messages'):
+                    self.main_window.chat_messages = []
+            
+            # Switch to chat tab
+            self._open_chat_tab()
+            
+            self.tray_icon.showMessage(
+                "New Chat",
+                "Started a new conversation.",
+                QSystemTrayIcon.Information,
+                2000
+            )
+    
+    def _open_voice_input(self):
+        """Open voice input mode in the chat."""
+        self._show_main_window()
+        if self.main_window:
+            # Switch to chat tab first
+            self._open_chat_tab()
+            
+            # Try to activate microphone/voice input
+            if hasattr(self.main_window, 'btn_mic') and hasattr(self.main_window.btn_mic, 'click'):
+                # Simulate click on microphone button
+                self.main_window.btn_mic.click()
+                self.tray_icon.showMessage(
+                    "Voice Input",
+                    "Voice input activated. Speak now...",
+                    QSystemTrayIcon.Information,
+                    2000
+                )
+            elif hasattr(self.main_window, '_toggle_microphone'):
+                self.main_window._toggle_microphone()
+                self.tray_icon.showMessage(
+                    "Voice Input",
+                    "Voice input activated. Speak now...",
+                    QSystemTrayIcon.Information,
+                    2000
+                )
+            else:
+                self.tray_icon.showMessage(
+                    "Voice Input",
+                    "Voice input is ready. Use the microphone button in chat.",
+                    QSystemTrayIcon.Information,
+                    2000
+                )
+
     def _take_screenshot(self):
         """Take a screenshot."""
         try:
