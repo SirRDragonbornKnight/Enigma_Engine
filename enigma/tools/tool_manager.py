@@ -139,6 +139,13 @@ TOOL_CATEGORIES = {
         "story_generate", "story_continue",
         "dnd_roll", "dnd_character", "dnd_encounter",
     ],
+    
+    # Browser Media Control tools
+    "browser": [
+        "browser_media_pause", "browser_media_mute", "browser_media_skip",
+        "browser_media_stop", "browser_media_volume", "browser_media_info",
+        "browser_tab_list", "browser_focus",
+    ],
 }
 
 # Tool dependencies (Python packages required)

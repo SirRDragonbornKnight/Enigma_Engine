@@ -113,6 +113,10 @@ class ToolRegistry:
                                 HomeAssistantStatusTool, GPIOReadTool, GPIOWriteTool,
                                 GPIOPWMTool, MQTTPublishTool, MQTTSubscribeTool,
                                 CameraCaptureTool, CameraListTool, CameraStreamTool)
+        from .browser_tools import (BrowserMediaPauseTool, BrowserMediaMuteTool,
+                                    BrowserMediaSkipTool, BrowserMediaStopTool,
+                                    BrowserMediaVolumeTool, BrowserMediaInfoTool,
+                                    BrowserTabListTool, BrowserFocusTool)
         from .data_tools import (CSVAnalyzeTool, CSVQueryTool, PlotChartTool, JSONQueryTool,
                                  JSONTransformTool, SQLQueryTool, SQLExecuteTool,
                                  SQLTablesTool, DataConvertTool)
@@ -245,6 +249,15 @@ class ToolRegistry:
             DnDRollTool(),
             DnDCharacterTool(),
             DnDEncounterTool(),
+            # Browser Media Control
+            BrowserMediaPauseTool(),
+            BrowserMediaMuteTool(),
+            BrowserMediaSkipTool(),
+            BrowserMediaStopTool(),
+            BrowserMediaVolumeTool(),
+            BrowserMediaInfoTool(),
+            BrowserTabListTool(),
+            BrowserFocusTool(),
         ]
         
         for tool in builtin:

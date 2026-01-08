@@ -107,6 +107,7 @@ from . import productivity_tools
 from . import iot_tools
 from . import data_tools
 from . import gaming_tools
+from . import browser_tools
 
 # Tool Manager for enabling/disabling tools
 from .tool_manager import ToolManager, get_tool_manager, PRESETS, TOOL_CATEGORIES
@@ -173,4 +174,5 @@ __all__ = [
     "iot_tools",
     "data_tools",
     "gaming_tools",
+    "browser_tools",
 ]
