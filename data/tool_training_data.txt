@@ -1,75 +1,290 @@
 # Tool Training Data
-# Teaches the AI to use tools properly with correct syntax
+# ==================
+# Teaches the AI to use tools properly with standardized JSON format
+# Updated: January 2026
 
-User: Search the web for Python tutorials
-AI: [E:tool]web_search{"query": "Python tutorials for beginners"}[E:tool_end]
-[E:tool_out]{"results": [{"title": "Python.org Tutorial", "url": "https://python.org/tutorial", "snippet": "Official Python tutorial for beginners"}]}[E:out_end]
-I found the official Python tutorial at python.org. It's a great starting point for beginners.
+# =============================================================================
+# WEB TOOLS
+# =============================================================================
 
-User: Generate an image of a cat
-AI: [E:tool]generate_image{"prompt": "cute fluffy cat sitting, photorealistic", "width": 512, "height": 512}[E:tool_end]
-[E:tool_out]{"path": "outputs/cat_image.png", "success": true}[E:out_end]
-I've generated an image of a cute fluffy cat and saved it to outputs/cat_image.png.
+Q: Search the web for Python tutorials
+A: I'll search for Python tutorials for you!
+<tool_call>{"tool": "web_search", "params": {"query": "Python tutorials for beginners", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Python.org Tutorial", "url": "https://python.org/tutorial", "snippet": "Official Python tutorial for beginners"}]}</tool_result>
+I found the official Python tutorial at python.org. It's a great starting point for beginners!
 
-User: Read the README file
-AI: [E:tool]read_file{"path": "README.md"}[E:tool_end]
-[E:tool_out]{"content": "# Project Name\n\nThis is a sample project.", "success": true}[E:out_end]
-Here's the README file content - it describes this as a sample project.
+Q: Look up information about machine learning
+A: Let me search for that.
+<tool_call>{"tool": "web_search", "params": {"query": "machine learning introduction", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Machine Learning Basics", "url": "https://example.com/ml", "snippet": "Introduction to machine learning concepts"}]}</tool_result>
+I found some good resources about machine learning basics.
 
-User: Take a screenshot
-AI: [E:tool]screenshot{}[E:tool_end]
-[E:tool_out]{"path": "outputs/screenshot.png", "success": true}[E:out_end]
-Done! I've captured a screenshot and saved it to outputs/screenshot.png.
-
-User: List files in the current directory
-AI: [E:tool]list_directory{"path": "."}[E:tool_end]
-[E:tool_out]{"files": ["README.md", "main.py", "config.json"], "directories": ["src", "tests"], "count": 5}[E:out_end]
-The current directory contains: README.md, main.py, config.json, and two folders (src, tests).
-
-User: Write "Hello World" to a file called hello.txt
-AI: [E:tool]write_file{"path": "hello.txt", "content": "Hello World"}[E:tool_end]
-[E:tool_out]{"success": true, "path": "hello.txt"}[E:out_end]
-Done! I've written "Hello World" to hello.txt.
-
-User: Get the current system info
-AI: [E:tool]get_system_info{}[E:tool_end]
-[E:tool_out]{"os": "Windows", "cpu": "AMD Ryzen", "ram_gb": 16, "gpu": "NVIDIA RTX 2080"}[E:out_end]
-Your system: Windows with AMD Ryzen CPU, 16GB RAM, and NVIDIA RTX 2080 GPU.
-
-User: Move the file old.txt to archive/old.txt
-AI: [E:tool]move_file{"source": "old.txt", "destination": "archive/old.txt"}[E:tool_end]
-[E:tool_out]{"success": true}[E:out_end]
-Done! I've moved old.txt to the archive folder.
-
-User: Describe what you see on the screen
-AI: [E:tool]screenshot{}[E:tool_end]
-[E:tool_out]{"path": "outputs/screen.png"}[E:out_end]
-[E:tool]vision{"image_path": "outputs/screen.png"}[E:tool_end]
-[E:tool_out]{"description": "A desktop with code editor showing Python code"}[E:out_end]
-I can see your desktop with a code editor open, showing some Python code.
-
-User: Say hello out loud
-AI: [E:tool]speak{"text": "Hello! How can I help you today?"}[E:tool_end]
-[E:tool_out]{"success": true, "spoken": true}[E:out_end]
-I've spoken the greeting through your speakers.
-
-User: Generate a video of a cat
-AI: [E:tool]generate_video{"prompt": "cute cat playing with yarn, soft lighting", "duration": 3}[E:tool_end]
-[E:tool_out]{"path": "outputs/cat_video.mp4", "success": true}[E:out_end]
-I've generated a 3-second video of a cat playing with yarn and saved it to outputs/cat_video.mp4.
-
-User: Make my avatar wave
-AI: [E:tool]avatar_action{"action": "wave", "duration": 2}[E:tool_end]
-[E:tool_out]{"success": true, "action": "wave"}[E:out_end]
-The avatar is waving!
-
-User: Create a checklist for my project
-AI: [E:tool]create_checklist{"title": "Project Tasks", "items": ["Plan features", "Write code", "Test functionality", "Deploy"]}[E:tool_end]
-[E:tool_out]{"success": true, "id": "checklist_001"}[E:out_end]
-I've created a project checklist with 4 items: Plan features, Write code, Test functionality, and Deploy.
-
-User: Fetch the content from example.com
-AI: [E:tool]fetch_webpage{"url": "https://example.com"}[E:tool_end]
-[E:tool_out]{"content": "This domain is for use in illustrative examples...", "title": "Example Domain"}[E:out_end]
+Q: Fetch the content from example.com
+A: I'll get that webpage content for you.
+<tool_call>{"tool": "fetch_webpage", "params": {"url": "https://example.com"}}</tool_call>
+<tool_result>{"tool": "fetch_webpage", "success": true, "title": "Example Domain", "content": "This domain is for use in illustrative examples..."}</tool_result>
 Example.com is a domain reserved for use in documentation and examples.
 
+Q: Get the content from that website
+A: Let me fetch that for you.
+<tool_call>{"tool": "fetch_webpage", "params": {"url": "https://example.com"}}</tool_call>
+<tool_result>{"tool": "fetch_webpage", "success": true, "content": "Website content here..."}</tool_result>
+Here's the content from that website.
+
+# =============================================================================
+# IMAGE GENERATION TOOLS
+# =============================================================================
+
+Q: Generate an image of a cat
+A: I'll create that image for you!
+<tool_call>{"tool": "generate_image", "params": {"prompt": "cute fluffy cat sitting, photorealistic, high quality", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/cat_image.png"}</tool_result>
+I've generated an image of a cute fluffy cat and saved it to outputs/images/cat_image.png.
+
+Q: Create a picture of a sunset over the ocean
+A: I'll generate that beautiful sunset image.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful sunset over ocean, dramatic sky, orange and purple colors, photorealistic", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/sunset.png"}</tool_result>
+Done! I've created a stunning sunset image and saved it to outputs/images/sunset.png.
+
+Q: Make me an image of a futuristic city
+A: Creating a futuristic cityscape for you!
+<tool_call>{"tool": "generate_image", "params": {"prompt": "futuristic city at night, neon lights, flying cars, cyberpunk style", "width": 1024, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/future_city.png"}</tool_result>
+I've generated a futuristic cyberpunk cityscape! It's saved at outputs/images/future_city.png.
+
+# =============================================================================
+# FILE TOOLS
+# =============================================================================
+
+Q: Read the README file
+A: Let me read that file for you.
+<tool_call>{"tool": "read_file", "params": {"path": "README.md"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "content": "# Project Name\n\nThis is a sample project.", "num_lines": 3}</tool_result>
+Here's the README content - it describes a sample project.
+
+Q: What's in the config file?
+A: I'll check the config file for you.
+<tool_call>{"tool": "read_file", "params": {"path": "config.json"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "content": "{\"setting\": \"value\"}"}</tool_result>
+The config file contains your settings.
+
+Q: List files in the current directory
+A: Let me see what's in the current directory.
+<tool_call>{"tool": "list_directory", "params": {"path": "."}}</tool_call>
+<tool_result>{"tool": "list_directory", "success": true, "items": [{"name": "README.md", "type": "file"}, {"name": "main.py", "type": "file"}, {"name": "src", "type": "directory"}], "num_items": 3}</tool_result>
+The current directory contains: README.md, main.py, and a src folder.
+
+Q: Show me what's in the documents folder
+A: I'll list the contents of your documents folder.
+<tool_call>{"tool": "list_directory", "params": {"path": "documents"}}</tool_call>
+<tool_result>{"tool": "list_directory", "success": true, "items": [{"name": "report.txt", "type": "file"}, {"name": "notes.md", "type": "file"}], "num_items": 2}</tool_result>
+Your documents folder contains: report.txt and notes.md.
+
+Q: Write "Hello World" to a file called hello.txt
+A: I'll create that file for you.
+<tool_call>{"tool": "write_file", "params": {"path": "hello.txt", "content": "Hello World"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true, "path": "hello.txt", "bytes_written": 11}</tool_result>
+Done! I've written "Hello World" to hello.txt.
+
+Q: Save this text to notes.txt
+A: I'll save that for you.
+<tool_call>{"tool": "write_file", "params": {"path": "notes.txt", "content": "Your notes here"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true, "path": "notes.txt"}</tool_result>
+I've saved the text to notes.txt.
+
+Q: Move the file old.txt to the archive folder
+A: I'll move that file for you.
+<tool_call>{"tool": "move_file", "params": {"source": "old.txt", "destination": "archive/old.txt"}}</tool_call>
+<tool_result>{"tool": "move_file", "success": true}</tool_result>
+Done! I've moved old.txt to the archive folder.
+
+Q: Rename file.txt to newfile.txt
+A: I'll rename that file.
+<tool_call>{"tool": "move_file", "params": {"source": "file.txt", "destination": "newfile.txt"}}</tool_call>
+<tool_result>{"tool": "move_file", "success": true}</tool_result>
+File renamed from file.txt to newfile.txt.
+
+Q: Delete the temp file
+A: I'll delete that file for you.
+<tool_call>{"tool": "delete_file", "params": {"path": "temp.txt", "confirm": "yes"}}</tool_call>
+<tool_result>{"tool": "delete_file", "success": true}</tool_result>
+The temp file has been deleted.
+
+# =============================================================================
+# SYSTEM TOOLS
+# =============================================================================
+
+Q: What are my system specs?
+A: Let me check your system information.
+<tool_call>{"tool": "get_system_info", "params": {}}</tool_call>
+<tool_result>{"tool": "get_system_info", "success": true, "info": {"os": "Windows", "cpu_count": 12, "memory_total_gb": 32, "gpu_name": "NVIDIA RTX 2080"}}</tool_result>
+Your system: Windows with 12 CPU cores, 32GB RAM, and an NVIDIA RTX 2080 GPU.
+
+Q: How much memory do I have?
+A: Let me check that for you.
+<tool_call>{"tool": "get_system_info", "params": {}}</tool_call>
+<tool_result>{"tool": "get_system_info", "success": true, "info": {"memory_total_gb": 32, "memory_available_gb": 16}}</tool_result>
+You have 32GB of total RAM with about 16GB currently available.
+
+Q: Run the command to check Python version
+A: I'll run that command.
+<tool_call>{"tool": "run_command", "params": {"command": "python --version", "timeout": 10}}</tool_call>
+<tool_result>{"tool": "run_command", "success": true, "stdout": "Python 3.11.9\n", "return_code": 0}</tool_result>
+You're running Python 3.11.9.
+
+Q: Execute dir command
+A: Running that command now.
+<tool_call>{"tool": "run_command", "params": {"command": "dir", "timeout": 10}}</tool_call>
+<tool_result>{"tool": "run_command", "success": true, "stdout": "Directory listing...", "return_code": 0}</tool_result>
+Here's the directory listing.
+
+# =============================================================================
+# SCREENSHOT & VISION TOOLS
+# =============================================================================
+
+Q: Take a screenshot
+A: I'll capture your screen.
+<tool_call>{"tool": "screenshot", "params": {"output_path": "outputs/screenshot.png"}}</tool_call>
+<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/screenshot.png", "size": "1920x1080"}</tool_result>
+Done! I've captured a screenshot and saved it to outputs/screenshot.png.
+
+Q: Capture my screen
+A: Taking a screenshot now.
+<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
+<tool_result>{"tool": "screenshot", "success": true, "path": "screenshot.png"}</tool_result>
+Screenshot captured and saved!
+
+Q: What's on my screen?
+A: Let me look at your screen.
+<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
+<tool_result>{"tool": "see_screen", "success": true, "description": "A code editor with Python code visible"}</tool_result>
+I can see you have a code editor open with some Python code.
+
+Q: Describe what you see on the screen
+A: I'll analyze your screen.
+<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
+<tool_result>{"tool": "see_screen", "success": true, "description": "Desktop with browser open showing a news website"}</tool_result>
+I can see your desktop with a browser open, showing a news website.
+
+# =============================================================================
+# TASK & REMINDER TOOLS
+# =============================================================================
+
+Q: Create a checklist for my project
+A: I'll create that checklist for you.
+<tool_call>{"tool": "create_checklist", "params": {"name": "Project Tasks", "items": ["Plan features", "Write code", "Test functionality", "Deploy"]}}</tool_call>
+<tool_result>{"tool": "create_checklist", "success": true, "id": "checklist_1", "name": "Project Tasks"}</tool_result>
+I've created a project checklist with 4 items: Plan features, Write code, Test functionality, and Deploy.
+
+Q: Make a shopping list
+A: Creating your shopping list.
+<tool_call>{"tool": "create_checklist", "params": {"name": "Shopping List", "items": ["Milk", "Bread", "Eggs", "Butter"]}}</tool_call>
+<tool_result>{"tool": "create_checklist", "success": true, "id": "checklist_2"}</tool_result>
+Shopping list created with: Milk, Bread, Eggs, and Butter.
+
+Q: Show my checklists
+A: Let me get your checklists.
+<tool_call>{"tool": "list_checklists", "params": {}}</tool_call>
+<tool_result>{"tool": "list_checklists", "success": true, "checklists": [{"name": "Project Tasks", "total_items": 4}]}</tool_result>
+You have one checklist: "Project Tasks" with 4 items.
+
+Q: Add a task to call mom
+A: I'll add that task.
+<tool_call>{"tool": "add_task", "params": {"title": "Call mom", "priority": "high"}}</tool_call>
+<tool_result>{"tool": "add_task", "success": true, "id": "task_1", "title": "Call mom"}</tool_result>
+Added a high priority task: "Call mom".
+
+Q: Create a task to finish the report by Friday
+A: Adding that task with a due date.
+<tool_call>{"tool": "add_task", "params": {"title": "Finish the report", "due_date": "2026-01-10T17:00:00", "priority": "high"}}</tool_call>
+<tool_result>{"tool": "add_task", "success": true, "id": "task_2"}</tool_result>
+Task created: "Finish the report" due Friday at 5pm.
+
+Q: What tasks do I have?
+A: Let me check your tasks.
+<tool_call>{"tool": "list_tasks", "params": {}}</tool_call>
+<tool_result>{"tool": "list_tasks", "success": true, "tasks": [{"title": "Call mom", "priority": "high"}], "count": 1}</tool_result>
+You have 1 task: "Call mom" (high priority).
+
+Q: Remind me to take a break in 1 hour
+A: Setting that reminder.
+<tool_call>{"tool": "set_reminder", "params": {"message": "Take a break!", "remind_at": "2026-01-07T15:00:00"}}</tool_call>
+<tool_result>{"tool": "set_reminder", "success": true, "id": "reminder_1"}</tool_result>
+Reminder set! I'll remind you to take a break in 1 hour.
+
+Q: What reminders do I have?
+A: Let me check your reminders.
+<tool_call>{"tool": "list_reminders", "params": {}}</tool_call>
+<tool_result>{"tool": "list_reminders", "success": true, "reminders": [{"message": "Take a break!", "remind_at": "2026-01-07T15:00:00"}], "count": 1}</tool_result>
+You have 1 reminder: "Take a break!" scheduled for 3:00 PM.
+
+# =============================================================================
+# DOCUMENT TOOLS
+# =============================================================================
+
+Q: Read the PDF document
+A: I'll read that document for you.
+<tool_call>{"tool": "read_document", "params": {"path": "document.pdf"}}</tool_call>
+<tool_result>{"tool": "read_document", "success": true, "content": "Document content here...", "format": ".pdf"}</tool_result>
+Here's the content from the PDF document.
+
+Q: Extract text from that file
+A: I'll extract the text content.
+<tool_call>{"tool": "extract_text", "params": {"path": "document.docx", "max_chars": 1000}}</tool_call>
+<tool_result>{"tool": "extract_text", "success": true, "content": "Extracted text content..."}</tool_result>
+Here's the extracted text from the document.
+
+# =============================================================================
+# VOICE & AUDIO TOOLS
+# =============================================================================
+
+Q: Say hello out loud
+A: I'll speak that for you.
+<tool_call>{"tool": "speak", "params": {"text": "Hello! How can I help you today?"}}</tool_call>
+<tool_result>{"tool": "speak", "success": true}</tool_result>
+I've spoken the greeting through your speakers.
+
+Q: Read this text aloud
+A: I'll read it for you.
+<tool_call>{"tool": "speak", "params": {"text": "This is the text you wanted me to read."}}</tool_call>
+<tool_result>{"tool": "speak", "success": true}</tool_result>
+Done! I've read the text out loud.
+
+# =============================================================================
+# CODE GENERATION TOOLS
+# =============================================================================
+
+Q: Write a Python function to calculate fibonacci numbers
+A: I'll generate that code for you.
+<tool_call>{"tool": "generate_code", "params": {"description": "Function to calculate fibonacci numbers", "language": "python"}}</tool_call>
+<tool_result>{"tool": "generate_code", "success": true, "code": "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"}</tool_result>
+Here's a Python function for Fibonacci numbers:
+```python
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+```
+
+Q: Generate JavaScript code to validate an email
+A: Creating that validation code.
+<tool_call>{"tool": "generate_code", "params": {"description": "Function to validate email address", "language": "javascript"}}</tool_call>
+<tool_result>{"tool": "generate_code", "success": true, "code": "function validateEmail(email) {\n    const regex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n    return regex.test(email);\n}"}</tool_result>
+Here's an email validation function in JavaScript!
+
+# =============================================================================
+# VIDEO & GIF GENERATION TOOLS
+# =============================================================================
+
+Q: Generate a video of a cat playing
+A: I'll create that video for you.
+<tool_call>{"tool": "generate_video", "params": {"prompt": "cute cat playing with yarn, soft lighting", "duration": 3, "fps": 24}}</tool_call>
+<tool_result>{"tool": "generate_video", "success": true, "output_path": "outputs/videos/cat_playing.mp4"}</tool_result>
+I've generated a 3-second video of a cat playing! It's saved at outputs/videos/cat_playing.mp4.
+
+Q: Create a GIF of a bouncing ball
+A: Making that animated GIF.
+<tool_call>{"tool": "generate_gif", "params": {"frames": ["red ball at top", "red ball falling", "red ball at bottom", "red ball bouncing up"], "fps": 5, "loop": 0}}</tool_call>
+<tool_result>{"tool": "generate_gif", "success": true, "output_path": "outputs/gifs/bouncing_ball.gif"}</tool_result>
+Created an animated GIF of a bouncing ball! It's saved at outputs/gifs/bouncing_ball.gif.

@@ -128,20 +128,20 @@ class ToolRegistry:
         """Get a tool by name."""
         return self.tools.get(name)
     
-    def execute(self, name: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, tool_name: str, **kwargs) -> Dict[str, Any]:
         """
         Execute a tool by name.
         
         Args:
-            name: Tool name
+            tool_name: Tool name (renamed from 'name' to avoid conflicts with tool params)
             **kwargs: Tool parameters
             
         Returns:
             Tool result dict
         """
-        tool = self.get(name)
+        tool = self.get(tool_name)
         if not tool:
-            return {"success": False, "error": f"Tool '{name}' not found"}
+            return {"success": False, "error": f"Tool '{tool_name}' not found"}
         
         try:
             return tool.execute(**kwargs)

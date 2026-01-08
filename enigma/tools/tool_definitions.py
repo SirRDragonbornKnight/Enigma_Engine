@@ -333,6 +333,20 @@ READ_FILE = ToolDefinition(
             description="Path to the file to read",
             required=True,
         ),
+        ToolParameter(
+            name="max_lines",
+            type="int",
+            description="Maximum number of lines to read",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="encoding",
+            type="string",
+            description="File encoding (default: utf-8)",
+            required=False,
+            default="utf-8",
+        ),
     ],
     examples=[
         "Read the file README.md",
@@ -358,6 +372,14 @@ WRITE_FILE = ToolDefinition(
             description="Content to write to the file",
             required=True,
         ),
+        ToolParameter(
+            name="mode",
+            type="string",
+            description="Write mode: 'overwrite' or 'append'",
+            required=False,
+            default="overwrite",
+            enum=["overwrite", "append"],
+        ),
     ],
     examples=[
         "Save this text to notes.txt",
@@ -382,6 +404,385 @@ LIST_DIRECTORY = ToolDefinition(
     examples=[
         "List files in the current directory",
         "Show me what's in the Documents folder",
+    ],
+)
+
+MOVE_FILE = ToolDefinition(
+    name="move_file",
+    description="Move a file to a new location or rename it",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="source",
+            type="string",
+            description="Source file path",
+            required=True,
+        ),
+        ToolParameter(
+            name="destination",
+            type="string",
+            description="Destination file path",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Move file.txt to backup folder",
+        "Rename old.txt to new.txt",
+    ],
+)
+
+DELETE_FILE = ToolDefinition(
+    name="delete_file",
+    description="Delete a file (requires confirmation)",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="path",
+            type="string",
+            description="Path to the file to delete",
+            required=True,
+        ),
+        ToolParameter(
+            name="confirm",
+            type="string",
+            description="Set to 'yes' to confirm deletion",
+            required=False,
+            default="no",
+        ),
+    ],
+    examples=[
+        "Delete temp.txt",
+        "Remove the old backup file",
+    ],
+)
+
+# --- Document Tools ---
+
+READ_DOCUMENT = ToolDefinition(
+    name="read_document",
+    description="Read a document file (txt, pdf, epub, docx, html, md)",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="path",
+            type="string",
+            description="Path to the document file",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Read the PDF document",
+        "Open the Word document",
+    ],
+)
+
+EXTRACT_TEXT = ToolDefinition(
+    name="extract_text",
+    description="Extract plain text from a file, removing formatting",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="path",
+            type="string",
+            description="Path to the file",
+            required=True,
+        ),
+        ToolParameter(
+            name="max_chars",
+            type="int",
+            description="Maximum characters to extract",
+            required=False,
+            default=None,
+        ),
+    ],
+    examples=[
+        "Extract text from document.pdf",
+        "Get the text content from this file",
+    ],
+)
+
+# --- System Tools ---
+
+GET_SYSTEM_INFO = ToolDefinition(
+    name="get_system_info",
+    description="Get system information including OS, CPU, memory, disk, and GPU details",
+    category="system",
+    module=None,
+    parameters=[],
+    examples=[
+        "What are my system specs?",
+        "Check my computer info",
+        "How much RAM do I have?",
+    ],
+)
+
+RUN_COMMAND = ToolDefinition(
+    name="run_command",
+    description="Execute a shell command and return the output",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="command",
+            type="string",
+            description="Shell command to execute",
+            required=True,
+        ),
+        ToolParameter(
+            name="timeout",
+            type="int",
+            description="Maximum seconds to wait",
+            required=False,
+            default=30,
+        ),
+        ToolParameter(
+            name="cwd",
+            type="string",
+            description="Working directory",
+            required=False,
+            default=None,
+        ),
+    ],
+    examples=[
+        "Run 'python --version'",
+        "Execute 'dir' command",
+        "Run a shell command",
+    ],
+)
+
+SCREENSHOT = ToolDefinition(
+    name="screenshot",
+    description="Take a screenshot and save it to a file",
+    category="perception",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="output_path",
+            type="string",
+            description="Path to save the screenshot",
+            required=False,
+            default="screenshot.png",
+        ),
+        ToolParameter(
+            name="region",
+            type="string",
+            description="Region as 'x,y,width,height' (optional, default: full screen)",
+            required=False,
+            default=None,
+        ),
+    ],
+    examples=[
+        "Take a screenshot",
+        "Capture the screen",
+    ],
+)
+
+SEE_SCREEN = ToolDefinition(
+    name="see_screen",
+    description="Look at the screen and describe what's visible",
+    category="perception",
+    module=None,
+    parameters=[],
+    examples=[
+        "What's on my screen?",
+        "Look at my screen",
+        "What do you see?",
+    ],
+)
+
+# --- Interactive/Task Management Tools ---
+
+CREATE_CHECKLIST = ToolDefinition(
+    name="create_checklist",
+    description="Create a new checklist with items",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="name",
+            type="string",
+            description="Name of the checklist",
+            required=True,
+        ),
+        ToolParameter(
+            name="items",
+            type="list",
+            description="List of checklist items",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Create a shopping list",
+        "Make a todo checklist",
+    ],
+)
+
+LIST_CHECKLISTS = ToolDefinition(
+    name="list_checklists",
+    description="List all created checklists and their status",
+    category="system",
+    module=None,
+    parameters=[],
+    examples=[
+        "Show my checklists",
+        "What checklists do I have?",
+    ],
+)
+
+ADD_TASK = ToolDefinition(
+    name="add_task",
+    description="Add a task with optional due date and priority",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="title",
+            type="string",
+            description="Task title",
+            required=True,
+        ),
+        ToolParameter(
+            name="description",
+            type="string",
+            description="Task description",
+            required=False,
+            default="",
+        ),
+        ToolParameter(
+            name="due_date",
+            type="string",
+            description="Due date in ISO format",
+            required=False,
+            default=None,
+        ),
+        ToolParameter(
+            name="priority",
+            type="string",
+            description="Priority level",
+            required=False,
+            default="medium",
+            enum=["low", "medium", "high"],
+        ),
+    ],
+    examples=[
+        "Add a task to call mom",
+        "Create a high priority task",
+    ],
+)
+
+LIST_TASKS = ToolDefinition(
+    name="list_tasks",
+    description="List all tasks with optional filtering",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="show_completed",
+            type="bool",
+            description="Whether to show completed tasks",
+            required=False,
+            default=False,
+        ),
+        ToolParameter(
+            name="priority",
+            type="string",
+            description="Filter by priority",
+            required=False,
+            default=None,
+            enum=["low", "medium", "high"],
+        ),
+    ],
+    examples=[
+        "Show my tasks",
+        "List high priority tasks",
+    ],
+)
+
+COMPLETE_TASK = ToolDefinition(
+    name="complete_task",
+    description="Mark a task as complete",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="task_id",
+            type="string",
+            description="The ID of the task to complete",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Complete task_1",
+        "Mark task as done",
+    ],
+)
+
+SET_REMINDER = ToolDefinition(
+    name="set_reminder",
+    description="Set a reminder for a specific time",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="message",
+            type="string",
+            description="Reminder message",
+            required=True,
+        ),
+        ToolParameter(
+            name="remind_at",
+            type="string",
+            description="When to remind in ISO format",
+            required=True,
+        ),
+        ToolParameter(
+            name="repeat",
+            type="string",
+            description="Repeat frequency",
+            required=False,
+            default=None,
+            enum=["daily", "weekly", "monthly"],
+        ),
+    ],
+    examples=[
+        "Remind me at 3pm",
+        "Set a reminder for tomorrow",
+    ],
+)
+
+LIST_REMINDERS = ToolDefinition(
+    name="list_reminders",
+    description="List all active reminders",
+    category="system",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="active_only",
+            type="bool",
+            description="Show only active reminders",
+            required=False,
+            default=True,
+        ),
+    ],
+    examples=[
+        "Show my reminders",
+        "What reminders do I have?",
+    ],
+)
+
+CHECK_REMINDERS = ToolDefinition(
+    name="check_reminders",
+    description="Check for reminders that are due right now",
+    category="system",
+    module=None,
+    parameters=[],
+    examples=[
+        "Any reminders due?",
+        "Check my reminders",
     ],
 )
 
@@ -832,17 +1233,39 @@ ALL_TOOLS = [
     # Perception
     ANALYZE_IMAGE,
     FIND_ON_SCREEN,
+    SCREENSHOT,
+    SEE_SCREEN,
     
     # Control
     CONTROL_AVATAR,
     SPEAK,
     
-    # System
+    # System - File Operations
     READ_FILE,
     WRITE_FILE,
     LIST_DIRECTORY,
+    MOVE_FILE,
+    DELETE_FILE,
+    READ_DOCUMENT,
+    EXTRACT_TEXT,
+    
+    # System - Web
     WEB_SEARCH,
     FETCH_WEBPAGE,
+    
+    # System - Commands & Info
+    GET_SYSTEM_INFO,
+    RUN_COMMAND,
+    
+    # System - Task Management
+    CREATE_CHECKLIST,
+    LIST_CHECKLISTS,
+    ADD_TASK,
+    LIST_TASKS,
+    COMPLETE_TASK,
+    SET_REMINDER,
+    LIST_REMINDERS,
+    CHECK_REMINDERS,
     
     # Module Management
     LOAD_MODULE,

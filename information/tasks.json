@@ -1,0 +1,47 @@
+{
+  "task_1": {
+    "title": "Test task item 1",
+    "description": "",
+    "created": "2026-01-07T20:38:29.275554",
+    "due_date": null,
+    "priority": "high",
+    "completed": false,
+    "completed_at": null
+  },
+  "task_2": {
+    "title": "High priority task",
+    "description": "",
+    "created": "2026-01-07T20:40:16.225312",
+    "due_date": null,
+    "priority": "high",
+    "completed": false,
+    "completed_at": null
+  },
+  "task_3": {
+    "title": "Medium priority task",
+    "description": "This is a test task",
+    "created": "2026-01-07T20:40:16.226312",
+    "due_date": null,
+    "priority": "medium",
+    "completed": false,
+    "completed_at": null
+  },
+  "task_4": {
+    "title": "Low priority task",
+    "description": "",
+    "created": "2026-01-07T20:40:16.228311",
+    "due_date": null,
+    "priority": "low",
+    "completed": false,
+    "completed_at": null
+  },
+  "task_5": {
+    "title": "AI-created task",
+    "description": "This task was created by the AI",
+    "created": "2026-01-07T20:42:25.971054",
+    "due_date": null,
+    "priority": "medium",
+    "completed": false,
+    "completed_at": null
+  }
+}

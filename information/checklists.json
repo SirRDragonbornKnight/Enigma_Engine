@@ -558,5 +558,59 @@
         "completed": false
       }
     ]
+  },
+  "checklist_41": {
+    "name": "Test Checklist",
+    "created": "2026-01-07T20:38:29.272552",
+    "items": [
+      {
+        "text": "Item 1",
+        "completed": false
+      },
+      {
+        "text": "Item 2",
+        "completed": false
+      },
+      {
+        "text": "Item 3",
+        "completed": false
+      }
+    ]
+  },
+  "checklist_42": {
+    "name": "AI Test Checklist",
+    "created": "2026-01-07T20:40:16.219312",
+    "items": [
+      {
+        "text": "Task A",
+        "completed": false
+      },
+      {
+        "text": "Task B",
+        "completed": false
+      },
+      {
+        "text": "Task C",
+        "completed": false
+      }
+    ]
+  },
+  "checklist_43": {
+    "name": "AI Test Checklist",
+    "created": "2026-01-07T20:42:20.005307",
+    "items": [
+      {
+        "text": "Task A",
+        "completed": false
+      },
+      {
+        "text": "Task B",
+        "completed": false
+      },
+      {
+        "text": "Task C",
+        "completed": false
+      }
+    ]
   }
 }

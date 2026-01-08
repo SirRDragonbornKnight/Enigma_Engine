@@ -1,59 +1,160 @@
 # Combined Action Training Data
+# ==============================
 # Teaches the AI to use multiple tools in sequence for complex tasks
+# Uses standardized JSON tool format
+# Updated: January 2026
 
-User: Take a screenshot and describe what you see.
-AI: I'll capture your screen and analyze it.
-[E:tool]screenshot{}[E:tool_end]
-[E:tool_out]{"path": "outputs/screenshot_001.png", "success": true}[E:out_end]
+# =============================================================================
+# MULTI-STEP WORKFLOWS
+# =============================================================================
+
+Q: Take a screenshot and describe what you see.
+A: I'll capture your screen and analyze it.
+<tool_call>{"tool": "screenshot", "params": {"output_path": "outputs/screenshot_analysis.png"}}</tool_call>
+<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/screenshot_analysis.png"}</tool_result>
 Now let me analyze the image.
-[E:tool]vision{"image_path": "outputs/screenshot_001.png"}[E:tool_end]
-[E:tool_out]{"description": "A code editor with Python code visible, showing a function definition"}[E:out_end]
+<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
+<tool_result>{"tool": "see_screen", "success": true, "description": "A code editor with Python code visible, showing a function definition"}</tool_result>
 I can see you have a code editor open with Python code. There's a function definition visible on the screen.
 
-User: Search for information about Python decorators and save it to a file.
-AI: I'll search for information about decorators and save what I find.
-[E:tool]web_search{"query": "Python decorators tutorial"}[E:tool_end]
-[E:tool_out]{"results": [{"title": "Python Decorators Tutorial", "snippet": "Decorators allow you to modify functions..."}]}[E:out_end]
+Q: Search for information about Python decorators and save it to a file.
+A: I'll search for information about decorators and save what I find.
+<tool_call>{"tool": "web_search", "params": {"query": "Python decorators tutorial", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Python Decorators Tutorial", "snippet": "Decorators allow you to modify functions..."}]}</tool_result>
 I found some good information. Now let me save it for you.
-[E:tool]write_file{"path": "notes/decorators.md", "content": "# Python Decorators\n\nDecorators allow you to modify functions using the @decorator syntax."}[E:tool_end]
-[E:tool_out]{"success": true, "path": "notes/decorators.md"}[E:out_end]
-Done! I searched for Python decorators and saved a summary to notes/decorators.md.
+<tool_call>{"tool": "write_file", "params": {"path": "notes/decorators.md", "content": "# Python Decorators\n\nDecorators allow you to modify functions using the @decorator syntax.\n\nKey concepts:\n- Functions as first-class objects\n- Wrapper functions\n- The @ syntax\n- Common use cases: logging, timing, authentication"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true, "path": "notes/decorators.md"}</tool_result>
+Done! I searched for Python decorators and saved a comprehensive summary to notes/decorators.md.
 
-User: Generate an image of a sunset and show me.
-AI: I'll generate that image for you.
-[E:tool]generate_image{"prompt": "beautiful sunset over ocean, dramatic sky, orange and purple colors", "width": 512, "height": 512}[E:tool_end]
-[E:tool_out]{"path": "outputs/sunset.png", "success": true}[E:out_end]
-I've generated a sunset image! It shows a beautiful ocean sunset with dramatic orange and purple colors. The image has been saved to outputs/sunset.png.
+Q: Generate an image of a sunset and tell me about it.
+A: I'll generate that image for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful sunset over ocean, dramatic sky, orange and purple colors, photorealistic", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/sunset.png"}</tool_result>
+I've generated a sunset image! It shows a beautiful ocean sunset with dramatic orange and purple colors stretching across the sky. The sun is setting on the horizon, casting warm light across the water. The image has been saved to outputs/images/sunset.png.
 
-User: What files are in my documents folder? Then read the most recent one.
-AI: Let me check your documents folder first.
-[E:tool]list_directory{"path": "documents"}[E:tool_end]
-[E:tool_out]{"files": ["report.txt", "notes.md", "todo.txt"], "count": 3}[E:out_end]
-I see 3 files. Let me read the most relevant one for you.
-[E:tool]read_file{"path": "documents/todo.txt"}[E:tool_end]
-[E:tool_out]{"content": "1. Review code\n2. Write tests\n3. Deploy app"}[E:out_end]
+Q: What files are in my documents folder? Then read the todo list.
+A: Let me check your documents folder first.
+<tool_call>{"tool": "list_directory", "params": {"path": "documents"}}</tool_call>
+<tool_result>{"tool": "list_directory", "success": true, "items": [{"name": "report.txt", "type": "file"}, {"name": "notes.md", "type": "file"}, {"name": "todo.txt", "type": "file"}], "num_items": 3}</tool_result>
+I see 3 files. Let me read the todo list for you.
+<tool_call>{"tool": "read_file", "params": {"path": "documents/todo.txt"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "content": "1. Review code\n2. Write tests\n3. Deploy app"}</tool_result>
 Your documents folder contains: report.txt, notes.md, and todo.txt. Here's what's in your todo.txt:
 1. Review code
 2. Write tests
 3. Deploy app
 
-User: Help me create a presentation. Search for presentation tips and generate a title slide image.
-AI: I'll help you with both research and visuals.
-[E:tool]web_search{"query": "effective presentation tips best practices"}[E:tool_end]
-[E:tool_out]{"results": [{"title": "10 Tips for Great Presentations", "snippet": "Keep slides simple, use visuals..."}]}[E:out_end]
+Q: Help me create a presentation. Search for tips and generate a title slide.
+A: I'll help you with both research and visuals.
+<tool_call>{"tool": "web_search", "params": {"query": "effective presentation tips best practices", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "10 Tips for Great Presentations", "snippet": "Keep slides simple, use visuals, practice delivery..."}]}</tool_result>
 Found some great tips! Now let me create a title slide for you.
-[E:tool]generate_image{"prompt": "professional presentation title slide, clean minimal design, business meeting background", "width": 1024, "height": 576}[E:tool_end]
-[E:tool_out]{"path": "outputs/title_slide.png", "success": true}[E:out_end]
-I've gathered presentation tips and created a title slide image. Key tips: keep slides simple, use visuals effectively, and practice your delivery. Your title slide is saved at outputs/title_slide.png.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "professional presentation title slide, clean minimal design, business meeting background, modern corporate style", "width": 1024, "height": 576}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/title_slide.png"}</tool_result>
+I've gathered presentation tips and created a title slide image. Key tips: keep slides simple, use visuals effectively, and practice your delivery. Your title slide is saved at outputs/images/title_slide.png.
 
-User: Check what's on my screen, then create a summary document.
-AI: Let me capture and analyze your screen first.
-[E:tool]screenshot{}[E:tool_end]
-[E:tool_out]{"path": "outputs/current_screen.png"}[E:out_end]
-[E:tool]vision{"image_path": "outputs/current_screen.png"}[E:tool_end]
-[E:tool_out]{"description": "Browser showing an article about machine learning"}[E:out_end]
+Q: Check what's on my screen, then create a summary document.
+A: Let me capture and analyze your screen first.
+<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
+<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/current_screen.png"}</tool_result>
+<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
+<tool_result>{"tool": "see_screen", "success": true, "description": "Browser showing an article about machine learning algorithms"}</tool_result>
 I can see you're reading an article about machine learning. Let me create a summary document.
-[E:tool]write_file{"path": "summaries/ml_article.md", "content": "# ML Article Summary\n\nCurrently reading: Article about machine learning\n\nKey topics to research further:\n- Neural networks\n- Training data\n- Model evaluation"}[E:tool_end]
-[E:tool_out]{"success": true}[E:out_end]
+<tool_call>{"tool": "write_file", "params": {"path": "summaries/ml_article.md", "content": "# ML Article Summary\n\nCurrently reading: Article about machine learning algorithms\n\nKey topics to research further:\n- Neural networks\n- Training data preparation\n- Model evaluation metrics\n- Hyperparameter tuning"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true}</tool_result>
 Done! I captured your screen showing a machine learning article and created a summary document at summaries/ml_article.md with notes for further research.
 
+Q: Check my system specs and then search for compatible software.
+A: Let me check your system first.
+<tool_call>{"tool": "get_system_info", "params": {}}</tool_call>
+<tool_result>{"tool": "get_system_info", "success": true, "info": {"os": "Windows", "cpu_count": 12, "memory_total_gb": 32, "gpu_name": "NVIDIA RTX 2080", "gpu_memory_gb": 8}}</tool_result>
+You have a powerful system! Now let me search for compatible software.
+<tool_call>{"tool": "web_search", "params": {"query": "best software for RTX 2080 GPU Windows", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Best GPU Software for RTX Cards", "snippet": "CUDA, TensorFlow, PyTorch..."}]}</tool_result>
+Your system has Windows with 12 CPU cores, 32GB RAM, and an RTX 2080 with 8GB VRAM. Great for running AI software like TensorFlow and PyTorch, video editing, and gaming!
+
+Q: Create a project checklist and add a reminder to review it.
+A: I'll set up both for you.
+<tool_call>{"tool": "create_checklist", "params": {"name": "New Project", "items": ["Define requirements", "Design architecture", "Implement core features", "Write tests", "Deploy"]}}</tool_call>
+<tool_result>{"tool": "create_checklist", "success": true, "id": "checklist_1", "name": "New Project"}</tool_result>
+Checklist created! Now let me set a reminder.
+<tool_call>{"tool": "set_reminder", "params": {"message": "Review project checklist progress", "remind_at": "2026-01-08T09:00:00"}}</tool_call>
+<tool_result>{"tool": "set_reminder", "success": true, "id": "reminder_1"}</tool_result>
+Done! I've created a project checklist with 5 items and set a reminder for tomorrow at 9 AM to review your progress.
+
+Q: Read the config file and run a command to test it.
+A: Let me read the config first.
+<tool_call>{"tool": "read_file", "params": {"path": "config.json"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "content": "{\"debug\": true, \"port\": 8080, \"host\": \"localhost\"}"}</tool_result>
+The config has debug mode enabled on port 8080. Let me test it.
+<tool_call>{"tool": "run_command", "params": {"command": "python -c \"import json; print(json.load(open('config.json')))\"", "timeout": 10}}</tool_call>
+<tool_result>{"tool": "run_command", "success": true, "stdout": "{'debug': True, 'port': 8080, 'host': 'localhost'}\n"}</tool_result>
+Config validated successfully! Debug mode is on, running on localhost:8080.
+
+Q: Generate code for a web server and save it to a file.
+A: I'll create the code and save it.
+<tool_call>{"tool": "generate_code", "params": {"description": "Simple Python Flask web server with hello world endpoint", "language": "python"}}</tool_call>
+<tool_result>{"tool": "generate_code", "success": true, "code": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route('/')\ndef hello():\n    return 'Hello, World!'\n\nif __name__ == '__main__':\n    app.run(debug=True)"}</tool_result>
+Generated the code. Now saving it to a file.
+<tool_call>{"tool": "write_file", "params": {"path": "server.py", "content": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route('/')\ndef hello():\n    return 'Hello, World!'\n\nif __name__ == '__main__':\n    app.run(debug=True)"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true, "path": "server.py"}</tool_result>
+Done! I've created a Flask web server and saved it to server.py. Run it with `python server.py`.
+
+Q: Look up the weather and create a task based on it.
+A: Let me search for weather information.
+<tool_call>{"tool": "web_search", "params": {"query": "weather forecast today", "num_results": 3}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Weather Forecast", "snippet": "Sunny with temperatures around 72°F"}]}</tool_result>
+Looks like nice weather! Let me create a relevant task.
+<tool_call>{"tool": "add_task", "params": {"title": "Go for a walk - nice weather today!", "priority": "medium", "description": "Weather forecast shows sunny, 72°F"}}</tool_call>
+<tool_result>{"tool": "add_task", "success": true, "id": "task_1"}</tool_result>
+The weather looks great - sunny and around 72°F! I've added a task to go for a walk and enjoy it.
+
+Q: Take a screenshot, describe it, and save the description to a file.
+A: I'll capture, analyze, and document your screen.
+<tool_call>{"tool": "screenshot", "params": {"output_path": "outputs/screen_capture.png"}}</tool_call>
+<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/screen_capture.png"}</tool_result>
+<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
+<tool_result>{"tool": "see_screen", "success": true, "description": "VS Code editor with multiple tabs open, showing a Python project with file explorer on the left"}</tool_result>
+<tool_call>{"tool": "write_file", "params": {"path": "screen_log.txt", "content": "Screen Capture Log\n==================\nTimestamp: 2026-01-07\nDescription: VS Code editor with multiple tabs open, showing a Python project with file explorer on the left.\nScreenshot saved to: outputs/screen_capture.png"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true}</tool_result>
+Done! I captured your screen showing VS Code with a Python project, and saved the description to screen_log.txt.
+
+# =============================================================================
+# ERROR HANDLING EXAMPLES
+# =============================================================================
+
+Q: Read a file that doesn't exist.
+A: Let me try to read that file.
+<tool_call>{"tool": "read_file", "params": {"path": "nonexistent_file.txt"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": false, "error": "File not found: nonexistent_file.txt"}</tool_result>
+I couldn't find that file. Would you like me to create it, or did you mean a different file?
+
+Q: Search for something with no results.
+A: Let me search for that.
+<tool_call>{"tool": "web_search", "params": {"query": "xyzabc123randomquery"}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [], "note": "No results found"}</tool_result>
+I couldn't find any results for that search. Would you like me to try different search terms?
+
+# =============================================================================
+# COMPLEX RESEARCH TASKS
+# =============================================================================
+
+Q: Research Python best practices and create a coding guide.
+A: I'll research and compile a guide for you.
+<tool_call>{"tool": "web_search", "params": {"query": "Python best practices coding standards PEP8", "num_results": 5}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "PEP 8 Style Guide", "snippet": "Python code style conventions..."}]}</tool_result>
+Found good resources. Let me create a comprehensive guide.
+<tool_call>{"tool": "write_file", "params": {"path": "guides/python_best_practices.md", "content": "# Python Best Practices Guide\n\n## Code Style (PEP 8)\n- Use 4 spaces for indentation\n- Limit lines to 79 characters\n- Use meaningful variable names\n- Add docstrings to functions\n\n## Project Structure\n- Use virtual environments\n- Keep requirements.txt updated\n- Organize code into modules\n\n## Testing\n- Write unit tests\n- Use pytest framework\n- Aim for good coverage\n\n## Documentation\n- Document public APIs\n- Include README files\n- Add type hints"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true}</tool_result>
+Done! I've researched Python best practices and created a comprehensive guide at guides/python_best_practices.md covering code style, project structure, testing, and documentation.
+
+Q: Check my tasks, complete one, and list what's remaining.
+A: Let me check your current tasks.
+<tool_call>{"tool": "list_tasks", "params": {}}</tool_call>
+<tool_result>{"tool": "list_tasks", "success": true, "tasks": [{"id": "task_1", "title": "Review code", "priority": "high"}, {"id": "task_2", "title": "Write tests", "priority": "medium"}], "count": 2}</tool_result>
+You have 2 tasks. Let me complete the first one.
+<tool_call>{"tool": "complete_task", "params": {"task_id": "task_1"}}</tool_call>
+<tool_result>{"tool": "complete_task", "success": true, "message": "Task task_1 completed"}</tool_result>
+<tool_call>{"tool": "list_tasks", "params": {}}</tool_call>
+<tool_result>{"tool": "list_tasks", "success": true, "tasks": [{"id": "task_2", "title": "Write tests", "priority": "medium"}], "count": 1}</tool_result>
+Done! I completed "Review code" and you have 1 task remaining: "Write tests" (medium priority).
