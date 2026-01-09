@@ -100,19 +100,27 @@
     ],
     "code": [
       {
-        "model_id": "huggingface:Salesforce/codegen-350M-mono",
+        "model_id": "huggingface:Qwen/Qwen2.5-Coder-1.5B-Instruct",
         "model_type": "huggingface",
         "priority": 100,
         "config": {
-          "description": "Python code specialist"
+          "description": "Best small code model - multi-language"
+        }
+      },
+      {
+        "model_id": "huggingface:Salesforce/codegen-350M-mono",
+        "model_type": "huggingface",
+        "priority": 95,
+        "config": {
+          "description": "Python specialist - very fast"
         }
       },
       {
         "model_id": "huggingface:microsoft/phi-2",
         "model_type": "huggingface",
-        "priority": 90,
+        "priority": 85,
         "config": {
-          "description": "Good at code generation"
+          "description": "Good general code ability"
         }
       },
       {

@@ -361,45 +361,61 @@ class HelpWindow(QWidget):
 class QuickCommandOverlay(QWidget):
     """
     A floating overlay for quick commands.
-    Appears when hotkey is pressed, disappears after command.
+    Appears when hotkey is pressed.
+    
+    Features:
+    - Resizable window (drag edges/corners)
+    - Close button like a window
+    - ESC opens full GUI instead of just closing
+    - Alt+F4 closes the entire app
+    - Expand button to make it larger
     """
     
     command_submitted = pyqtSignal(str)
     close_requested = pyqtSignal()
+    open_gui_requested = pyqtSignal()  # New signal for ESC to open GUI
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Use Window flag for proper window controls including Alt+F4
         self.setWindowFlags(
-            Qt.FramelessWindowHint | 
-            Qt.WindowStaysOnTopHint | 
-            Qt.Tool
+            Qt.Window |  # Makes Alt+F4 work properly
+            Qt.WindowStaysOnTopHint |
+            Qt.FramelessWindowHint
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setup_ui()
         self.history = []
         self.history_index = -1
+        self._is_expanded = False
+        self._drag_pos = None
+        self._resize_edge = None
+        self._min_width = 450
+        self._min_height = 120
+        self._expanded_height = 350
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         
         # Main frame with styling
-        frame = QFrame()
-        frame.setObjectName("commandFrame")
-        frame.setStyleSheet("""
+        self.frame = QFrame()
+        self.frame.setObjectName("commandFrame")
+        self.frame.setStyleSheet("""
             #commandFrame {
-                background-color: rgba(30, 30, 30, 0.95);
+                background-color: rgba(30, 30, 30, 0.98);
                 border: 2px solid #3498db;
                 border-radius: 12px;
             }
         """)
         
-        frame_layout = QVBoxLayout(frame)
-        frame_layout.setContentsMargins(15, 10, 15, 10)
-        frame_layout.setSpacing(8)
+        frame_layout = QVBoxLayout(self.frame)
+        frame_layout.setContentsMargins(15, 8, 15, 10)
+        frame_layout.setSpacing(6)
         
-        # Header
+        # Header with title bar controls (like a window)
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(8)
         
         self.title_label = QLabel(get_current_model_name())
         self.title_label.setStyleSheet("color: #3498db; font-size: 14px; font-weight: bold;")
@@ -407,17 +423,78 @@ class QuickCommandOverlay(QWidget):
         
         header_layout.addStretch()
         
-        status = QLabel("Ready")
-        status.setObjectName("statusLabel")
-        status.setStyleSheet("color: #888; font-size: 11px;")
-        header_layout.addWidget(status)
-        self.status_label = status
+        # Status label
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: #888; font-size: 11px;")
+        header_layout.addWidget(self.status_label)
+        
+        # Expand/collapse button
+        self.expand_btn = QPushButton("⬇")
+        self.expand_btn.setFixedSize(24, 24)
+        self.expand_btn.setToolTip("Expand/Collapse (show response area)")
+        self.expand_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: #888;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #444;
+                color: #3498db;
+            }
+        """)
+        self.expand_btn.clicked.connect(self._toggle_expand)
+        header_layout.addWidget(self.expand_btn)
+        
+        # Minimize button (opens GUI)
+        min_btn = QPushButton("⎯")
+        min_btn.setFixedSize(24, 24)
+        min_btn.setToolTip("Open Full GUI")
+        min_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: #888;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #444;
+                color: #3498db;
+            }
+        """)
+        min_btn.clicked.connect(self._open_gui)
+        header_layout.addWidget(min_btn)
+        
+        # Close button (like window X)
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(24, 24)
+        close_btn.setToolTip("Close (to tray)")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: #888;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e74c3c;
+                border-color: #e74c3c;
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(self._close_overlay)
+        header_layout.addWidget(close_btn)
         
         frame_layout.addLayout(header_layout)
         
         # Command input
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("Type a command and press Enter...")
+        self.command_input.setPlaceholderText("Type a command and press Enter... (Esc = Open GUI)")
         self.command_input.setStyleSheet("""
             QLineEdit {
                 background-color: rgba(50, 50, 50, 0.9);
@@ -434,18 +511,62 @@ class QuickCommandOverlay(QWidget):
         self.command_input.returnPressed.connect(self._on_submit)
         frame_layout.addWidget(self.command_input)
         
-        # Simple hint row
+        # Response area (hidden by default, shown when expanded)
+        self.response_area = QTextEdit()
+        self.response_area.setReadOnly(True)
+        self.response_area.setPlaceholderText("AI responses will appear here...")
+        self.response_area.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(40, 40, 40, 0.9);
+                border: 1px solid #444;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 13px;
+                color: #ccc;
+            }
+        """)
+        self.response_area.hide()
+        frame_layout.addWidget(self.response_area)
+        
+        # Hint row
         hint_layout = QHBoxLayout()
-        hint = QLabel("Enter to send | Esc to close | Up/Down for history")
-        hint.setStyleSheet("color: #666; font-size: 10px;")
+        hint = QLabel("Enter=Send | Esc=Open GUI | ↑↓=History | Drag edges to resize")
+        hint.setStyleSheet("color: #555; font-size: 10px;")
         hint_layout.addWidget(hint)
         hint_layout.addStretch()
         frame_layout.addLayout(hint_layout)
         
-        layout.addWidget(frame)
+        layout.addWidget(self.frame)
         
-        # Fixed size - no expansion
-        self.setFixedSize(450, 100)
+        # Initial size (resizable)
+        self.setMinimumSize(self._min_width, self._min_height)
+        self.resize(500, 120)
+    
+    def _toggle_expand(self):
+        """Toggle expanded mode to show/hide response area."""
+        self._is_expanded = not self._is_expanded
+        if self._is_expanded:
+            self.expand_btn.setText("⬆")
+            self.expand_btn.setToolTip("Collapse")
+            self.response_area.show()
+            # Expand height
+            self.resize(self.width(), max(self.height(), self._expanded_height))
+        else:
+            self.expand_btn.setText("⬇")
+            self.expand_btn.setToolTip("Expand (show response area)")
+            self.response_area.hide()
+            # Shrink to compact height
+            self.resize(self.width(), self._min_height)
+    
+    def _open_gui(self):
+        """Open the full GUI."""
+        self.open_gui_requested.emit()
+        self.hide()
+    
+    def _close_overlay(self):
+        """Close the overlay (goes to tray)."""
+        self.close_requested.emit()
+        self.hide()
     
     def _on_submit(self):
         command = self.command_input.text().strip()
@@ -454,12 +575,19 @@ class QuickCommandOverlay(QWidget):
             self.history_index = len(self.history)
             self.command_submitted.emit(command)
             self.command_input.clear()
-            self.hide()  # Close after sending
+            # Don't hide if expanded - user wants to see responses
+            if not self._is_expanded:
+                self.hide()
     
     def show_response(self, text: str):
-        """Show a response as a system notification instead of expanding."""
-        # Use system notification instead of expanding the overlay
-        pass
+        """Show a response in the expanded area."""
+        if not self._is_expanded:
+            self._toggle_expand()
+        self.response_area.append(f"<div style='color: #3498db; margin-bottom: 8px;'>{text}</div>")
+        # Scroll to bottom
+        self.response_area.verticalScrollBar().setValue(
+            self.response_area.verticalScrollBar().maximum()
+        )
     
     def set_status(self, text: str):
         self.status_label.setText(text)
@@ -483,8 +611,8 @@ class QuickCommandOverlay(QWidget):
     
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
-            self.close_requested.emit()
-            self.hide()
+            # ESC now opens GUI instead of just closing
+            self._open_gui()
         elif event.key() == Qt.Key_Up:
             # Navigate history
             if self.history and self.history_index > 0:
@@ -496,6 +624,105 @@ class QuickCommandOverlay(QWidget):
                 self.command_input.setText(self.history[self.history_index])
         else:
             super().keyPressEvent(event)
+    
+    def closeEvent(self, event):
+        """Handle window close (Alt+F4)."""
+        # Alt+F4 will trigger this - exit the entire app
+        from PyQt5.QtWidgets import QApplication
+        QApplication.quit()
+    
+    # === Resizing support ===
+    def mousePressEvent(self, event):
+        """Handle mouse press for dragging/resizing."""
+        if event.button() == Qt.LeftButton:
+            # Check if near edges for resizing
+            edge = self._get_resize_edge(event.pos())
+            if edge:
+                self._resize_edge = edge
+            else:
+                # Drag window
+                self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+        event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for dragging/resizing."""
+        if event.buttons() & Qt.LeftButton:
+            if self._resize_edge:
+                self._do_resize(event.globalPos())
+            elif self._drag_pos:
+                self.move(event.globalPos() - self._drag_pos)
+        else:
+            # Update cursor based on position
+            edge = self._get_resize_edge(event.pos())
+            if edge in ('left', 'right'):
+                self.setCursor(Qt.SizeHorCursor)
+            elif edge in ('top', 'bottom'):
+                self.setCursor(Qt.SizeVerCursor)
+            elif edge in ('topleft', 'bottomright'):
+                self.setCursor(Qt.SizeFDiagCursor)
+            elif edge in ('topright', 'bottomleft'):
+                self.setCursor(Qt.SizeBDiagCursor)
+            else:
+                self.setCursor(Qt.ArrowCursor)
+        event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release."""
+        self._drag_pos = None
+        self._resize_edge = None
+        self.setCursor(Qt.ArrowCursor)
+        event.accept()
+    
+    def _get_resize_edge(self, pos):
+        """Determine which edge the cursor is near."""
+        margin = 8
+        rect = self.rect()
+        
+        left = pos.x() < margin
+        right = pos.x() > rect.width() - margin
+        top = pos.y() < margin
+        bottom = pos.y() > rect.height() - margin
+        
+        if top and left:
+            return 'topleft'
+        elif top and right:
+            return 'topright'
+        elif bottom and left:
+            return 'bottomleft'
+        elif bottom and right:
+            return 'bottomright'
+        elif left:
+            return 'left'
+        elif right:
+            return 'right'
+        elif top:
+            return 'top'
+        elif bottom:
+            return 'bottom'
+        return None
+    
+    def _do_resize(self, global_pos):
+        """Perform resize based on edge being dragged."""
+        geo = self.geometry()
+        
+        if 'left' in self._resize_edge:
+            new_width = geo.right() - global_pos.x()
+            if new_width >= self._min_width:
+                geo.setLeft(global_pos.x())
+        if 'right' in self._resize_edge:
+            new_width = global_pos.x() - geo.left()
+            if new_width >= self._min_width:
+                geo.setRight(global_pos.x())
+        if 'top' in self._resize_edge:
+            new_height = geo.bottom() - global_pos.y()
+            if new_height >= self._min_height:
+                geo.setTop(global_pos.y())
+        if 'bottom' in self._resize_edge:
+            new_height = global_pos.y() - geo.top()
+            if new_height >= self._min_height:
+                geo.setBottom(global_pos.y())
+        
+        self.setGeometry(geo)
 
 
 class EnigmaSystemTray(QObject):
@@ -538,6 +765,7 @@ class EnigmaSystemTray(QObject):
         self.overlay = QuickCommandOverlay()
         self.overlay.command_submitted.connect(self._on_command)
         self.overlay.close_requested.connect(self._on_overlay_closed)
+        self.overlay.open_gui_requested.connect(self._show_main_window)  # ESC opens GUI
         
         # Command processor
         self.processor = CommandProcessor()

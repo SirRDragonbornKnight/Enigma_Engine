@@ -1,0 +1,258 @@
+================================================================================
+                    TOOL TRAINING QUICK START
+                       Enigma Engine Guide
+================================================================================
+
+This is a quick-start guide. For detailed info, see:
+  - HOW_TO_TRAIN_TOOL_AI.txt (full tool training)
+  - HOW_TO_TRAIN_TOOL_ROUTER.txt (router configuration)
+
+
+================================================================================
+STEP 1: UNDERSTAND THE FORMAT (2 minutes)
+================================================================================
+
+All training examples use this format:
+
+    Q: User's question
+    A: AI acknowledgment
+    <tool_call>{"tool": "tool_name", "params": {"key": "value"}}</tool_call>
+    <tool_result>{"tool": "tool_name", "success": true, "result": "..."}</tool_result>
+    AI's response with the result
+
+
+================================================================================
+STEP 2: CREATE TRAINING EXAMPLES (10-30 minutes)
+================================================================================
+
+Open: data/tool_training_data.txt
+
+Add examples for each tool you want the AI to use.
+Minimum: 10 examples per tool (50+ recommended)
+
+
+TEMPLATE FOR EACH TOOL:
+-----------------------
+
+# [TOOL NAME]
+
+Q: [Request phrasing 1]
+A: [Short acknowledgment]
+<tool_call>{"tool": "[name]", "params": {[parameters]}}</tool_call>
+<tool_result>{"tool": "[name]", "success": true, "result": "[result]"}</tool_result>
+[Natural response]
+
+Q: [Request phrasing 2 - different words, same intent]
+A: [Different acknowledgment]
+<tool_call>{"tool": "[name]", "params": {[different params]}}</tool_call>
+<tool_result>{"tool": "[name]", "success": true, "result": "[result]"}</tool_result>
+[Different natural response]
+
+Q: [Request that fails]
+A: [Acknowledgment]
+<tool_call>{"tool": "[name]", "params": {[params]}}</tool_call>
+<tool_result>{"tool": "[name]", "success": false, "error": "[error]"}</tool_result>
+[Graceful error response]
+
+
+================================================================================
+STEP 3: COPY-PASTE EXAMPLES
+================================================================================
+
+Here are ready-to-use examples. Copy into data/tool_training_data.txt:
+
+
+# WEB SEARCH
+Q: Search for AI news
+A: Searching now!
+<tool_call>{"tool": "web_search", "params": {"query": "AI news 2026"}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Latest AI News", "url": "https://example.com"}]}</tool_result>
+Found some recent AI news articles for you!
+
+Q: Look up weather in Tokyo
+A: Let me find that.
+<tool_call>{"tool": "web_search", "params": {"query": "weather Tokyo today"}}</tool_call>
+<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Tokyo Weather", "snippet": "Sunny, 15°C"}]}</tool_result>
+Tokyo weather: Sunny and 15°C today.
+
+
+# IMAGE GENERATION
+Q: Make an image of a robot
+A: Creating that now!
+<tool_call>{"tool": "generate_image", "params": {"prompt": "friendly robot, futuristic, detailed", "width": 512, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/robot.png"}</tool_result>
+Done! Your robot image is saved to outputs/robot.png.
+
+Q: Generate a landscape picture
+A: I'll create a landscape for you.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful landscape, mountains, lake, sunset", "width": 1024, "height": 512}}</tool_call>
+<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/landscape.png"}</tool_result>
+Here's your landscape image! Saved to outputs/landscape.png.
+
+
+# FILE OPERATIONS
+Q: Read my notes file
+A: Let me open that.
+<tool_call>{"tool": "read_file", "params": {"path": "notes.txt"}}</tool_call>
+<tool_result>{"tool": "read_file", "success": true, "content": "My notes content here"}</tool_result>
+Here's what's in your notes file.
+
+Q: Save this text to a file
+A: I'll save that for you.
+<tool_call>{"tool": "write_file", "params": {"path": "saved.txt", "content": "Your text here"}}</tool_call>
+<tool_result>{"tool": "write_file", "success": true}</tool_result>
+Saved! Your text is now in saved.txt.
+
+Q: What files are in this folder?
+A: Let me check.
+<tool_call>{"tool": "list_directory", "params": {"path": "."}}</tool_call>
+<tool_result>{"tool": "list_directory", "success": true, "items": [{"name": "file1.txt"}, {"name": "folder1", "type": "directory"}]}</tool_result>
+This folder contains file1.txt and a folder called folder1.
+
+
+# SYSTEM
+Q: What are my computer specs?
+A: Checking your system.
+<tool_call>{"tool": "get_system_info", "params": {}}</tool_call>
+<tool_result>{"tool": "get_system_info", "success": true, "info": {"os": "Windows", "cpu": "Intel i7", "ram_gb": 16}}</tool_result>
+Your computer: Windows with Intel i7 and 16GB RAM.
+
+Q: Take a screenshot
+A: Capturing your screen.
+<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
+<tool_result>{"tool": "screenshot", "success": true, "path": "screenshot.png"}</tool_result>
+Screenshot saved to screenshot.png!
+
+
+# TASKS & REMINDERS
+Q: Remind me to call mom at 5pm
+A: Setting that reminder.
+<tool_call>{"tool": "set_reminder", "params": {"message": "Call mom", "time": "17:00"}}</tool_call>
+<tool_result>{"tool": "set_reminder", "success": true}</tool_result>
+I'll remind you to call mom at 5pm!
+
+Q: Add a task to finish the report
+A: Adding that task.
+<tool_call>{"tool": "add_task", "params": {"title": "Finish the report", "priority": "high"}}</tool_call>
+<tool_result>{"tool": "add_task", "success": true}</tool_result>
+Added "Finish the report" as a high priority task.
+
+
+================================================================================
+STEP 4: TRAIN THE MODEL (5-30 minutes)
+================================================================================
+
+Run training:
+
+    python run.py --train
+
+Training will:
+  1. Load all data from data/ folder
+  2. Train on tool examples
+  3. Save the model to models/
+
+
+================================================================================
+STEP 5: TEST (5 minutes)
+================================================================================
+
+Run the AI:
+
+    python run.py --run
+
+Test with tool requests:
+  > Search for Python tutorials
+  > Generate an image of a cat
+  > What files are in the current folder?
+  > Remind me to take a break in 30 minutes
+
+The AI should respond with proper tool calls!
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+AI doesn't call tools:
+  - Add more training examples (50+ per tool)
+  - Make sure format is exactly right
+  - Check for typos in tool names
+
+AI calls wrong tool:
+  - Add more variety in phrasings
+  - Make sure different tools have distinct trigger words
+
+Tool call has wrong format:
+  - Check JSON syntax in training data
+  - Ensure params match expected parameters
+
+Tools don't execute:
+  - Check if tool module is enabled
+  - Verify tool is registered in tool_registry.py
+
+
+================================================================================
+COMPLETE TOOL LIST
+================================================================================
+
+CATEGORY: WEB
+  - web_search (query, num_results)
+  - fetch_webpage (url)
+
+CATEGORY: FILES
+  - read_file (path)
+  - write_file (path, content)
+  - list_directory (path)
+  - move_file (source, destination)
+  - delete_file (path)
+
+CATEGORY: GENERATION
+  - generate_image (prompt, width, height)
+  - generate_code (description, language)
+  - generate_video (prompt, duration)
+  - generate_audio (prompt, duration)
+  - generate_gif (frames, fps)
+
+CATEGORY: MEDIA EDITING
+  - edit_image (image_path, edit_type, ...)
+  - edit_gif (gif_path, edit_type, ...)
+  - edit_video (video_path, edit_type, ...)
+
+CATEGORY: SYSTEM
+  - get_system_info ()
+  - run_command (command)
+  - screenshot (output_path)
+
+CATEGORY: VISION
+  - see_screen ()
+  - find_on_screen (element)
+
+CATEGORY: PRODUCTIVITY
+  - create_checklist (name, items)
+  - add_task (title, priority, due_date)
+  - set_reminder (message, time)
+  - list_tasks ()
+
+CATEGORY: KNOWLEDGE
+  - wikipedia_search (query)
+  - arxiv_search (query)
+
+CATEGORY: IOT
+  - camera_capture ()
+  - gpio_read (pin)
+  - gpio_write (pin, value)
+
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Add more examples (variety helps!)
+2. Configure the router (HOW_TO_TRAIN_TOOL_ROUTER.txt)
+3. Enable/disable tools in GUI Module Manager
+4. Create custom tools (see enigma/tools/ for examples)
+
+
+================================================================================
+END OF QUICK START
+================================================================================

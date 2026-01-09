@@ -3320,8 +3320,16 @@ class EnhancedMainWindow(QMainWindow):
         # Connect sidebar selection to content stack
         self.sidebar.currentItemChanged.connect(self._on_sidebar_changed)
         
-        # Select first real item (skip first section header)
-        self.sidebar.setCurrentRow(1)
+        # ALWAYS start on Chat tab (row 1 is Chat, row 0 is section header)
+        # Find the Chat item and select it
+        for i in range(self.sidebar.count()):
+            item = self.sidebar.item(i)
+            if item and item.data(Qt.UserRole) == 'chat':
+                self.sidebar.setCurrentRow(i)
+                break
+        else:
+            # Fallback: select row 1 (first item after header)
+            self.sidebar.setCurrentRow(1)
         
         # Store reference for compatibility (tabs -> content_stack)
         self.tabs = self.content_stack
@@ -3376,16 +3384,13 @@ class EnhancedMainWindow(QMainWindow):
             self.microphone_action.setChecked(True)
             self._toggle_microphone(True)
         
-        # Restore last tab (sidebar selection)
-        last_tab = settings.get("last_tab")
-        if last_tab is not None and last_tab >= 0:
-            # Find the sidebar item for this tab index
-            for i in range(self.sidebar.count()):
-                item = self.sidebar.item(i)
-                key = item.data(Qt.UserRole) if item else None
-                if key and self._nav_map.get(key) == last_tab:
-                    self.sidebar.setCurrentRow(i)
-                    break
+        # ALWAYS start on Chat tab - ignore saved last_tab setting
+        # This ensures predictable behavior when opening the GUI
+        for i in range(self.sidebar.count()):
+            item = self.sidebar.item(i)
+            if item and item.data(Qt.UserRole) == 'chat':
+                self.sidebar.setCurrentRow(i)
+                break
     
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""
@@ -5532,7 +5537,7 @@ What would you like to do?""")
                             window.hide()
                             _system_tray.show_notification(
                                 f"{window.current_model_name or 'Enigma'} Running",
-                                "Still running in the background.\\n"
+                                "Still running in the background.\n"
                                 "Click the tray icon to restore.",
                             )
                         elif clicked == exit_btn:

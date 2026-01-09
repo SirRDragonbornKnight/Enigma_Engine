@@ -1,0 +1,452 @@
+================================================================================
+               HOW TO TRAIN THE TOOL ROUTER SYSTEM
+                      Enigma Engine Guide
+================================================================================
+
+OVERVIEW
+--------
+The Tool Router automatically selects the best AI model for different types
+of tasks (chat, reasoning, math, code, etc.). This guide explains how to
+configure, train, and optimize the routing system.
+
+
+================================================================================
+SECTION 1: WHAT IS TOOL ROUTING?
+================================================================================
+
+Tool routing solves this problem:
+  - Different AI models are better at different tasks
+  - Mistral-7B is great at reasoning but slow
+  - TinyLlama is fast but less capable
+  - DialoGPT is good for casual chat
+
+The router automatically picks the best model based on:
+  1. Task type (chat, math, code, reasoning, etc.)
+  2. Hardware capabilities (GPU available?)
+  3. Priority settings (speed vs quality)
+  4. Model availability (what's downloaded?)
+
+
+================================================================================
+SECTION 2: ROUTER CONFIGURATION FILE
+================================================================================
+
+Location: information/tool_routing.json
+
+Structure:
+{
+  "assignments": {
+    "chat": [
+      {"model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b", "priority": 100},
+      {"model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0", "priority": 90},
+      {"model_id": "enigma:default", "priority": 10}
+    ],
+    "reasoning": [
+      {"model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2", "priority": 100},
+      {"model_id": "huggingface:microsoft/phi-2", "priority": 90}
+    ],
+    "math": [...],
+    "code": [...],
+    "creative": [...]
+  }
+}
+
+
+TASK CATEGORIES
+---------------
+chat        - General conversation, casual talk
+reasoning   - Logic, analysis, complex questions
+math        - Calculations, equations, statistics
+code        - Programming, debugging, code generation
+creative    - Stories, poetry, creative writing
+summarize   - Condensing text, extracting key points
+translate   - Language translation
+tool_use    - Deciding when/how to use tools
+
+
+================================================================================
+SECTION 3: ADDING MODELS TO THE ROUTER
+================================================================================
+
+To add a model for a task type, add an entry to the appropriate array:
+
+{
+  "model_id": "huggingface:organization/model-name",
+  "model_type": "huggingface",
+  "priority": 85,
+  "config": {
+    "description": "What this model is good at",
+    "requires_gpu": false,
+    "max_tokens": 2048
+  }
+}
+
+FIELDS:
+  - model_id: Unique identifier (format: "source:name")
+  - model_type: "huggingface", "enigma", "openai", "local"
+  - priority: 1-100 (higher = preferred when available)
+  - config: Optional settings and metadata
+
+
+PRIORITY GUIDELINES:
+  100 = Best quality, use when resources allow
+  90  = Great quality, slightly less demanding
+  80  = Good balance of speed/quality
+  70  = Faster but still capable
+  50  = Fallback option
+  10  = Last resort / always available
+
+
+================================================================================
+SECTION 4: TRAINING THE ROUTER TO CLASSIFY TASKS
+================================================================================
+
+The router needs to learn which task type a request belongs to.
+Train it with classification examples.
+
+FILE: data/router_training.txt (create this)
+
+FORMAT:
+    INPUT: [user message]
+    TASK: [task_type]
+
+EXAMPLES:
+
+# Chat examples
+INPUT: Hey, how are you doing today?
+TASK: chat
+
+INPUT: What's your favorite color?
+TASK: chat
+
+INPUT: Tell me about yourself
+TASK: chat
+
+# Reasoning examples
+INPUT: If all cats are mammals and all mammals are animals, are all cats animals?
+TASK: reasoning
+
+INPUT: Why does the economy affect stock prices?
+TASK: reasoning
+
+INPUT: Analyze the pros and cons of remote work
+TASK: reasoning
+
+# Math examples
+INPUT: What is 15% of 230?
+TASK: math
+
+INPUT: Solve for x: 2x + 5 = 15
+TASK: math
+
+INPUT: Calculate the area of a circle with radius 5
+TASK: math
+
+# Code examples
+INPUT: Write a Python function to sort a list
+TASK: code
+
+INPUT: How do I fix this JavaScript error?
+TASK: code
+
+INPUT: Create a SQL query to find all users older than 25
+TASK: code
+
+# Creative examples
+INPUT: Write a short story about a dragon
+TASK: creative
+
+INPUT: Create a poem about the ocean
+TASK: creative
+
+INPUT: Come up with a funny joke
+TASK: creative
+
+# Tool use examples
+INPUT: Search the web for Python tutorials
+TASK: tool_use
+
+INPUT: Generate an image of a sunset
+TASK: tool_use
+
+INPUT: What files are in my documents folder?
+TASK: tool_use
+
+
+================================================================================
+SECTION 5: KEYWORD-BASED ROUTING (SIMPLE METHOD)
+================================================================================
+
+For quick setup without training, use keyword detection.
+
+FILE: information/router_keywords.json (create this)
+
+{
+  "keywords": {
+    "chat": ["hello", "hi", "hey", "how are you", "what's up", "chat"],
+    "reasoning": ["why", "explain", "analyze", "compare", "logic", "because"],
+    "math": ["calculate", "solve", "equation", "sum", "percent", "area", "volume"],
+    "code": ["code", "function", "program", "debug", "error", "script", "class"],
+    "creative": ["story", "poem", "write", "creative", "imagine", "fiction"],
+    "tool_use": ["search", "generate", "create image", "file", "screenshot", "reminder"]
+  },
+  "default_task": "chat"
+}
+
+The router checks for these keywords and routes accordingly.
+
+
+================================================================================
+SECTION 6: HARDWARE-AWARE ROUTING
+================================================================================
+
+The router considers hardware when selecting models.
+
+In tool_routing.json, add hardware requirements:
+
+{
+  "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
+  "priority": 100,
+  "config": {
+    "requires_gpu": true,
+    "min_vram_gb": 8,
+    "min_ram_gb": 16
+  }
+}
+
+{
+  "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "priority": 80,
+  "config": {
+    "requires_gpu": false,
+    "min_ram_gb": 4
+  }
+}
+
+The router will:
+  1. Check what hardware is available
+  2. Filter out models that won't run
+  3. Select highest priority from remaining options
+
+
+================================================================================
+SECTION 7: CUSTOM ROUTING RULES
+================================================================================
+
+Add custom rules for special cases:
+
+{
+  "rules": [
+    {
+      "pattern": "translate.*to.*",
+      "task": "translate",
+      "priority_boost": 20
+    },
+    {
+      "pattern": "summarize|tldr|short version",
+      "task": "summarize",
+      "priority_boost": 10
+    },
+    {
+      "pattern": "code|function|class|debug",
+      "task": "code",
+      "model_override": "huggingface:codellama/CodeLlama-7b-hf"
+    }
+  ]
+}
+
+
+================================================================================
+SECTION 8: TESTING THE ROUTER
+================================================================================
+
+Test routing decisions with these commands:
+
+1. Check which model would be selected:
+   python -c "
+   from enigma.tools.tool_manager import get_tool_manager
+   manager = get_tool_manager()
+   print(manager.route_task('What is 2 + 2?'))
+   print(manager.route_task('Write me a poem'))
+   print(manager.route_task('Hello, how are you?'))
+   "
+
+2. Test with different hardware profiles:
+   python -c "
+   from enigma.tools.tool_manager import get_tool_manager
+   manager = get_tool_manager()
+   # Simulate no GPU
+   manager.hardware_profile = {'gpu': False, 'ram_gb': 8}
+   print(manager.route_task('Explain quantum physics'))
+   "
+
+3. Check all registered models:
+   python -c "
+   from enigma.tools.tool_manager import get_tool_manager
+   manager = get_tool_manager()
+   manager.list_models_by_task()
+   "
+
+
+================================================================================
+SECTION 9: RECOMMENDED MODEL ASSIGNMENTS
+================================================================================
+
+CHAT (Casual conversation):
+  1. StableLM-2-Zephyr-1.6B (fast, good quality)
+  2. TinyLlama-1.1B-Chat (very fast)
+  3. DialoGPT-medium (Reddit-style casual)
+  4. Enigma default (always available)
+
+REASONING (Complex analysis):
+  1. Mistral-7B-Instruct (best quality, needs GPU)
+  2. Phi-2 (great for size, 2.7B)
+  3. Qwen2-1.5B-Instruct (good multilingual)
+
+MATH (Calculations):
+  1. Mistral-7B-Instruct (complex math)
+  2. Phi-2 (good math ability)
+  3. Qwen2-1.5B-Instruct (basic math)
+
+CODE (Programming):
+  1. CodeLlama-7B (specialized for code)
+  2. Mistral-7B-Instruct (good at code)
+  3. Phi-2 (decent code generation)
+  4. StarCoder (code completion)
+
+CREATIVE (Stories/poetry):
+  1. Mistral-7B-Instruct (most creative)
+  2. StableLM-2-Zephyr-1.6B (good stories)
+  3. TinyLlama (quick creative tasks)
+
+TOOL_USE (Calling tools):
+  1. Mistral-7B-Instruct (best tool formatting)
+  2. Enigma (trained specifically on your tools)
+  3. Phi-2 (can learn tool format)
+
+
+================================================================================
+SECTION 10: FALLBACK CHAINS
+================================================================================
+
+Set up fallback chains for reliability:
+
+{
+  "assignments": {
+    "code": [
+      {"model_id": "huggingface:codellama/CodeLlama-7b-hf", "priority": 100},
+      {"model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2", "priority": 90},
+      {"model_id": "huggingface:microsoft/phi-2", "priority": 70},
+      {"model_id": "enigma:default", "priority": 10}
+    ]
+  },
+  "fallback_strategy": "next_priority"
+}
+
+If the top model fails to load, it automatically tries the next one.
+
+
+================================================================================
+SECTION 11: PERFORMANCE OPTIMIZATION
+================================================================================
+
+1. CACHE ROUTING DECISIONS
+   Enable caching for repeated query types:
+   {
+     "cache_routing": true,
+     "cache_ttl_seconds": 300
+   }
+
+2. PRELOAD COMMON MODELS
+   Keep frequently used models in memory:
+   {
+     "preload_models": [
+       "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+       "enigma:default"
+     ]
+   }
+
+3. LAZY LOADING
+   Only load heavy models when needed:
+   {
+     "lazy_load": true,
+     "unload_after_seconds": 600
+   }
+
+
+================================================================================
+SECTION 12: MONITORING & LOGGING
+================================================================================
+
+Enable routing logs to see decisions:
+
+{
+  "logging": {
+    "log_routing_decisions": true,
+    "log_file": "logs/routing.log",
+    "log_level": "INFO"
+  }
+}
+
+Log output example:
+  [2026-01-09 10:30:15] ROUTE: "What is 2+2?" -> TASK: math -> MODEL: phi-2 (priority 90)
+  [2026-01-09 10:30:45] ROUTE: "Hello!" -> TASK: chat -> MODEL: TinyLlama (priority 80)
+
+
+================================================================================
+QUICK SETUP CHECKLIST
+================================================================================
+
+[ ] Create or edit information/tool_routing.json
+[ ] Add models for each task type (chat, reasoning, math, code, creative)
+[ ] Set appropriate priorities (100 = best, 10 = fallback)
+[ ] Mark GPU requirements for large models
+[ ] Create data/router_training.txt with classification examples
+[ ] Test routing with different queries
+[ ] Enable logging to monitor decisions
+[ ] Set up fallback chains for reliability
+
+
+================================================================================
+EXAMPLE COMPLETE CONFIG
+================================================================================
+
+FILE: information/tool_routing.json
+
+{
+  "assignments": {
+    "chat": [
+      {"model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b", "model_type": "huggingface", "priority": 100, "config": {"description": "Fast chat"}},
+      {"model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0", "model_type": "huggingface", "priority": 90},
+      {"model_id": "enigma:default", "model_type": "enigma", "priority": 10}
+    ],
+    "reasoning": [
+      {"model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2", "model_type": "huggingface", "priority": 100, "config": {"requires_gpu": true}},
+      {"model_id": "huggingface:microsoft/phi-2", "model_type": "huggingface", "priority": 90}
+    ],
+    "math": [
+      {"model_id": "huggingface:microsoft/phi-2", "model_type": "huggingface", "priority": 100},
+      {"model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct", "model_type": "huggingface", "priority": 80}
+    ],
+    "code": [
+      {"model_id": "huggingface:codellama/CodeLlama-7b-hf", "model_type": "huggingface", "priority": 100, "config": {"requires_gpu": true}},
+      {"model_id": "huggingface:microsoft/phi-2", "model_type": "huggingface", "priority": 80}
+    ],
+    "creative": [
+      {"model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2", "model_type": "huggingface", "priority": 100},
+      {"model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b", "model_type": "huggingface", "priority": 90}
+    ],
+    "tool_use": [
+      {"model_id": "enigma:default", "model_type": "enigma", "priority": 100, "config": {"description": "Trained on tool examples"}},
+      {"model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2", "model_type": "huggingface", "priority": 90}
+    ]
+  },
+  "fallback_strategy": "next_priority",
+  "cache_routing": true,
+  "logging": {"log_routing_decisions": true}
+}
+
+
+================================================================================
+END OF GUIDE
+================================================================================

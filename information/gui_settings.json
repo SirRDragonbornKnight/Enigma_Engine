@@ -2,11 +2,11 @@
   "last_model": "mistralai_mistral_7b_instruct_v0.2",
   "window_width": 1000,
   "window_height": 700,
-  "window_x": 1088,
-  "window_y": 359,
+  "window_x": 470,
+  "window_y": 277,
   "auto_speak": false,
   "microphone_enabled": false,
-  "last_tab": 7,
+  "last_tab": 6,
   "always_on_top": false,
   "monitor_index": 0
 }

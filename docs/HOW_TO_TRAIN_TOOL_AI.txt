@@ -1,0 +1,263 @@
+================================================================================
+                  HOW TO TRAIN AN AI TO USE TOOLS
+                       Enigma Engine Guide
+================================================================================
+
+OVERVIEW
+--------
+This guide explains how to train an AI model to recognize when tools are 
+needed, format tool calls correctly, and respond naturally with results.
+
+Tool-using AI models learn through examples in training data. The AI learns:
+  1. WHEN to use a tool (recognizing user intent)
+  2. WHICH tool to use (selecting the right capability)
+  3. HOW to call it (correct JSON format and parameters)
+  4. WHAT to say after (natural response with results)
+
+
+================================================================================
+SECTION 1: TRAINING DATA FORMAT
+================================================================================
+
+All training examples follow this structure:
+
+    Q: [User's question or request]
+    A: [AI's response, tool call, result, and final message]
+
+IMPORTANT: Always use Q: and A: format, NOT "User:" or "Human:" or "Assistant:"
+
+
+TOOL CALL SYNTAX
+----------------
+Tool calls use XML-style tags with JSON inside:
+
+    <tool_call>{"tool": "tool_name", "params": {"param1": "value1"}}</tool_call>
+    <tool_result>{"tool": "tool_name", "success": true, "result": "..."}</tool_result>
+
+The JSON structure:
+  - "tool": The exact tool name (string)
+  - "params": An object containing all parameters
+  - "success": true/false for the result
+  - "result": Description of what happened
+  - "error": Only if success=false, explains what went wrong
+
+
+================================================================================
+SECTION 2: CREATING TRAINING EXAMPLES
+================================================================================
+
+A complete training example has 4 parts:
+
+    Q: Generate an image of a sunset
+    A: I'll create that for you!                          <-- 1. Acknowledge
+    <tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful sunset", "width": 512, "height": 512}}</tool_call>    <-- 2. Tool Call
+    <tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/sunset.png"}</tool_result>               <-- 3. Result
+    Here's your sunset image! I saved it to outputs/sunset.png.   <-- 4. Response
+
+
+EXAMPLE BY TOOL CATEGORY
+------------------------
+
+WEB SEARCH:
+    Q: Search for Python tutorials
+    A: I'll search for that!
+    <tool_call>{"tool": "web_search", "params": {"query": "Python tutorials beginners", "num_results": 5}}</tool_call>
+    <tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Python.org Tutorial", "url": "https://python.org/tutorial"}]}</tool_result>
+    I found the official Python tutorial at python.org - great for beginners!
+
+FILE OPERATIONS:
+    Q: Read the config file
+    A: Let me check that file.
+    <tool_call>{"tool": "read_file", "params": {"path": "config.json"}}</tool_call>
+    <tool_result>{"tool": "read_file", "success": true, "content": "{\"setting\": \"value\"}"}</tool_result>
+    Here's your config file with the current settings.
+
+IMAGE GENERATION:
+    Q: Create a picture of a mountain landscape
+    A: Creating that image for you!
+    <tool_call>{"tool": "generate_image", "params": {"prompt": "majestic mountain landscape, snow peaks, blue sky", "width": 1024, "height": 512}}</tool_call>
+    <tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/mountains.png"}</tool_result>
+    Done! I've generated a beautiful mountain landscape and saved it to outputs/mountains.png.
+
+SYSTEM INFO:
+    Q: What are my computer specs?
+    A: Let me check your system.
+    <tool_call>{"tool": "get_system_info", "params": {}}</tool_call>
+    <tool_result>{"tool": "get_system_info", "success": true, "info": {"os": "Windows", "cpu_count": 8, "memory_total_gb": 16}}</tool_result>
+    Your system has Windows, 8 CPU cores, and 16GB of RAM.
+
+
+================================================================================
+SECTION 3: ERROR HANDLING EXAMPLES
+================================================================================
+
+Train the AI to handle failures gracefully:
+
+    Q: Read the file missing.txt
+    A: I'll try to read that.
+    <tool_call>{"tool": "read_file", "params": {"path": "missing.txt"}}</tool_call>
+    <tool_result>{"tool": "read_file", "success": false, "error": "File not found: missing.txt"}</tool_result>
+    I couldn't find that file. Could you check the filename?
+
+    Q: Search for something on a blocked website
+    A: Let me search that.
+    <tool_call>{"tool": "web_search", "params": {"query": "search term"}}</tool_call>
+    <tool_result>{"tool": "web_search", "success": false, "error": "Network error"}</tool_result>
+    I'm having trouble connecting. Let me try again in a moment.
+
+
+================================================================================
+SECTION 4: MULTI-TOOL SEQUENCES
+================================================================================
+
+For complex requests, chain multiple tools:
+
+    Q: Find information about Tesla and summarize it to a file
+    A: I'll search for Tesla info and save a summary for you.
+    <tool_call>{"tool": "web_search", "params": {"query": "Tesla company overview"}}</tool_call>
+    <tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Tesla Inc", "snippet": "Electric vehicle company..."}]}</tool_result>
+    Found some info. Now I'll save it.
+    <tool_call>{"tool": "write_file", "params": {"path": "tesla_summary.txt", "content": "Tesla Inc: Electric vehicle company founded by Elon Musk..."}}</tool_call>
+    <tool_result>{"tool": "write_file", "success": true}</tool_result>
+    Done! I searched for Tesla information and saved a summary to tesla_summary.txt.
+
+
+================================================================================
+SECTION 5: TRAINING TIPS
+================================================================================
+
+1. VARIETY IS KEY
+   - Include many different phrasings for the same request
+   - "Generate an image" / "Create a picture" / "Make me an image"
+   - "Search the web" / "Look up" / "Find information about"
+
+2. REALISTIC RESULTS
+   - Make tool_result values realistic
+   - Include actual-looking paths, content snippets, etc.
+
+3. NATURAL RESPONSES
+   - AI should sound conversational, not robotic
+   - Acknowledge the request before calling tools
+   - Explain results clearly after
+
+4. PARAMETER COVERAGE
+   - Include examples with different parameter combinations
+   - Show optional vs required parameters
+   - Demonstrate default values
+
+5. MINIMUM DATA REQUIREMENTS
+   - At least 50-100 examples per tool
+   - 500+ total examples recommended
+   - More variety = better generalization
+
+
+================================================================================
+SECTION 6: WHERE TO PUT TRAINING DATA
+================================================================================
+
+Training files location: data/
+
+Key files:
+  - data/tool_training_data.txt      - Main tool training examples
+  - data/combined_action_training.txt - Multi-tool complex actions
+  - data/training.txt                 - General conversation + tools
+
+Format each file with:
+  - Comments starting with # for organization
+  - Blank lines between examples
+  - Clear section headers
+
+
+================================================================================
+SECTION 7: RUNNING TRAINING
+================================================================================
+
+After creating training data:
+
+1. Activate environment:
+   python -m venv venv
+   venv\Scripts\activate  (Windows)
+   source venv/bin/activate  (Linux/Mac)
+
+2. Train the model:
+   python run.py --train
+
+3. Test tool usage:
+   python run.py --run
+   > Generate an image of a cat
+   (Should produce proper tool call)
+
+4. Check logs for training progress in logs/ folder
+
+
+================================================================================
+AVAILABLE TOOLS REFERENCE
+================================================================================
+
+WEB TOOLS:
+  - web_search: Search the internet
+  - fetch_webpage: Get webpage content
+
+FILE TOOLS:
+  - read_file: Read file contents
+  - write_file: Write/create files
+  - list_directory: List folder contents
+  - move_file: Move or rename files
+  - delete_file: Delete files
+
+GENERATION TOOLS:
+  - generate_image: Create images from text
+  - generate_code: Generate code snippets
+  - generate_video: Create videos
+  - generate_audio: Generate audio/music
+  - generate_gif: Create animated GIFs
+
+SYSTEM TOOLS:
+  - get_system_info: Get computer specs
+  - run_command: Execute shell commands
+  - screenshot: Capture screen
+
+VISION TOOLS:
+  - see_screen: Describe what's on screen
+  - find_on_screen: Find elements on screen
+
+TASK TOOLS:
+  - create_checklist: Make a checklist
+  - add_task: Add a task
+  - set_reminder: Set reminders
+
+And many more! See enigma/tools/ for full list.
+
+
+================================================================================
+QUICK START TEMPLATE
+================================================================================
+
+Copy this template for new tool training examples:
+
+# =============================================================================
+# [TOOL CATEGORY NAME]
+# =============================================================================
+
+Q: [Simple request phrasing 1]
+A: [Acknowledgment]
+<tool_call>{"tool": "[tool_name]", "params": {"[param]": "[value]"}}</tool_call>
+<tool_result>{"tool": "[tool_name]", "success": true, "result": "[result]"}</tool_result>
+[Natural response with result]
+
+Q: [Alternative request phrasing 2]
+A: [Different acknowledgment]
+<tool_call>{"tool": "[tool_name]", "params": {"[param]": "[different_value]"}}</tool_call>
+<tool_result>{"tool": "[tool_name]", "success": true, "result": "[result]"}</tool_result>
+[Different natural response]
+
+Q: [Request that will fail]
+A: [Acknowledgment]
+<tool_call>{"tool": "[tool_name]", "params": {"[param]": "[bad_value]"}}</tool_call>
+<tool_result>{"tool": "[tool_name]", "success": false, "error": "[error message]"}</tool_result>
+[Graceful error handling response]
+
+
+================================================================================
+END OF GUIDE
+================================================================================
