@@ -225,6 +225,12 @@ class CodeTab(QWidget):
         self.main_window = parent
         self.worker = None
         self.setup_ui()
+        
+        # Register references on parent window for chat integration
+        if parent:
+            parent.code_prompt = self.prompt_input
+            parent.code_tab = self
+            parent._generate_code = self._generate_code
     
     def setup_ui(self):
         layout = QVBoxLayout(self)

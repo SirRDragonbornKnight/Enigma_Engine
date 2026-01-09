@@ -99,8 +99,8 @@ TOOL_CATEGORIES = {
     
     # Communication tools
     "communication": [
-        "email_draft", "list_email_drafts", "translate_text",
-        "detect_language", "summarize_text", "ocr_image", "ocr_screenshot",
+        "translate_text",  # External API more accurate than AI
+        "ocr_image", "ocr_screenshot",  # Needs OCR library
     ],
     
     # Media tools
@@ -132,12 +132,10 @@ TOOL_CATEGORIES = {
         "sql_query", "sql_execute", "sql_tables", "data_convert",
     ],
     
-    # Gaming tools
+    # Gaming tools - Only dice (needs true randomness)
+    # Other gaming tools removed - AI can roleplay, tell stories, play games natively
     "gaming": [
-        "trivia_game", "word_game", "number_guess",
-        "character_create", "character_list", "character_chat",
-        "story_generate", "story_continue",
-        "dnd_roll", "dnd_character", "dnd_encounter",
+        "dnd_roll",  # True random dice - AI can't do real randomness
     ],
     
     # Browser Media Control tools

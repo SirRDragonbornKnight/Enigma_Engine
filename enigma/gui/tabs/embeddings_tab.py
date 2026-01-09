@@ -320,6 +320,12 @@ class EmbeddingsTab(QWidget):
         self.worker = None
         self.stored_embeddings = {}  # name -> embedding vector
         self.setup_ui()
+        
+        # Register references on parent window for chat integration
+        if parent:
+            parent.embed_text = self.text_input
+            parent.embed_tab = self
+            parent._generate_embeddings = self._generate_embedding
     
     def setup_ui(self):
         layout = QVBoxLayout(self)

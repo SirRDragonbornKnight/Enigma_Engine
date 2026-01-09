@@ -334,6 +334,12 @@ class AudioTab(QWidget):
         self.worker = None
         self.last_audio_path = None
         self.setup_ui()
+        
+        # Register references on parent window for chat integration
+        if parent:
+            parent.audio_text = self.text_input
+            parent.audio_tab = self
+            parent._generate_audio = self._speak_text
     
     def setup_ui(self):
         layout = QVBoxLayout(self)

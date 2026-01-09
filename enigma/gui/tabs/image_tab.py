@@ -468,6 +468,12 @@ class ImageTab(QWidget):
         self.worker = None
         self.last_image_path = None
         self.setup_ui()
+        
+        # Register references on parent window for chat integration
+        if parent:
+            parent.image_prompt = self.prompt_input
+            parent.image_tab = self
+            parent._generate_image = self._generate_image
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -731,12 +737,34 @@ class ImageTab(QWidget):
                 # Auto-open in image viewer
                 if self.auto_open_image_cb.isChecked():
                     self._open_in_default_viewer(path)
+                
+                # Show popup preview (from main window if available)
+                self._show_popup_preview(path)
             else:
                 self.status_label.setText("Generation complete (no image path)")
         else:
             error = result.get("error", "Unknown error")
             self.status_label.setText(f"Error: {error}")
             self.result_label.setText(f"Generation failed:\n{error}")
+    
+    def _show_popup_preview(self, path: str):
+        """Show a popup preview of the generated image."""
+        try:
+            # Try to get the main window's popup function
+            main_window = self.window()
+            if hasattr(main_window, '_show_generation_popup'):
+                main_window._show_generation_popup(path, 'image')
+            else:
+                # Fallback: create popup directly
+                from ..enhanced_window import GenerationPreviewPopup
+                popup = GenerationPreviewPopup(
+                    parent=self,
+                    result_path=path,
+                    result_type='image'
+                )
+                popup.show()
+        except Exception as e:
+            print(f"Could not show preview popup: {e}")
     
     def _open_file_in_explorer(self, path: str):
         """Open file explorer with the file selected."""

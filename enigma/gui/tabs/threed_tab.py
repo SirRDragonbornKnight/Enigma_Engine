@@ -267,6 +267,12 @@ class ThreeDTab(QWidget):
         self.worker = None
         self.last_3d_path = None
         self.setup_ui()
+        
+        # Register references on parent window for chat integration
+        if parent:
+            parent.threed_prompt = self.prompt_input
+            parent.threed_tab = self
+            parent._generate_3d = self._generate_3d
     
     def setup_ui(self):
         layout = QVBoxLayout(self)

@@ -95,7 +95,7 @@ class ToolRegistry:
                                        ClipboardReadTool, ClipboardWriteTool, ClipboardHistoryTool,
                                        RecordMacroTool, PlayMacroTool)
         from .knowledge_tools import WikipediaSearchTool, ArxivSearchTool, PDFExtractTool
-        from .communication_tools import (TranslateTextTool, DetectLanguageTool, OCRImageTool)
+        from .communication_tools import TranslateTextTool, OCRImageTool
         from .media_tools import (MusicGenerateTool, RemoveBackgroundTool, UpscaleImageTool,
                                   StyleTransferTool, ConvertAudioTool, ExtractAudioTool,
                                   AudioVisualizeTool)
@@ -112,10 +112,9 @@ class ToolRegistry:
                                     BrowserTabListTool, BrowserFocusTool)
         from .data_tools import (CSVAnalyzeTool, CSVQueryTool, PlotChartTool, JSONQueryTool,
                                  SQLQueryTool, SQLExecuteTool, DataConvertTool)
-        from .gaming_tools import (TriviaGameTool, WordGameTool, NumberGuessTool,
-                                   CharacterCreateTool, CharacterListTool, CharacterChatTool,
-                                   StoryGenerateTool, StoryContinueTool, DnDRollTool,
-                                   DnDCharacterTool, DnDEncounterTool)
+        # Gaming tools removed - AI can roleplay, tell stories, and play games natively
+        # Keep only DnD dice roller since it needs true randomness
+        from .gaming_tools import DnDRollTool
         
         builtin = [
             # Web
@@ -166,7 +165,7 @@ class ToolRegistry:
             PDFExtractTool(),
             # Communication
             TranslateTextTool(),
-            DetectLanguageTool(),
+            # DetectLanguageTool removed - AI detects language natively
             OCRImageTool(),
             # Media
             MusicGenerateTool(),
@@ -207,18 +206,9 @@ class ToolRegistry:
             SQLQueryTool(),
             SQLExecuteTool(),
             DataConvertTool(),
-            # Gaming
-            TriviaGameTool(),
-            WordGameTool(),
-            NumberGuessTool(),
-            CharacterCreateTool(),
-            CharacterListTool(),
-            CharacterChatTool(),
-            StoryGenerateTool(),
-            StoryContinueTool(),
+            # Gaming - Only dice roller kept (needs true randomness)
+            # Other gaming tools removed - AI can roleplay, tell stories, play trivia natively
             DnDRollTool(),
-            DnDCharacterTool(),
-            DnDEncounterTool(),
             # Browser Media Control
             BrowserMediaPauseTool(),
             BrowserMediaMuteTool(),

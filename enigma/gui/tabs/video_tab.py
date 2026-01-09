@@ -262,6 +262,12 @@ class VideoTab(QWidget):
         self.worker = None
         self.last_video_path = None
         self.setup_ui()
+        
+        # Register references on parent window for chat integration
+        if parent:
+            parent.video_prompt = self.prompt_input
+            parent.video_tab = self
+            parent._generate_video = self._generate_video
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
