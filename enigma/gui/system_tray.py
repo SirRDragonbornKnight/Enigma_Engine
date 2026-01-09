@@ -30,7 +30,7 @@ try:
         QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
         QTextEdit, QFrame, QShortcut, QWidgetAction, QMessageBox
     )
-    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread  # type: ignore[import]
+    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot, QObject, QThread  # type: ignore[import]
     from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QKeySequence, QFont  # type: ignore[import]
     HAS_PYQT = True
 except ImportError:
@@ -38,6 +38,7 @@ except ImportError:
     QObject = object  # type: ignore[misc,assignment]
     QWidget = object  # type: ignore[misc,assignment]
     pyqtSignal = lambda *args: None  # type: ignore[misc,assignment]
+    pyqtSlot = lambda *args: lambda f: f  # type: ignore[misc,assignment]
 
 from ..config import CONFIG
 
@@ -495,9 +496,13 @@ class QuickCommandOverlay(QWidget):
         
         frame_layout.addLayout(header_layout)
         
+        # Input row with chat button and voice button
+        input_layout = QHBoxLayout()
+        input_layout.setSpacing(8)
+        
         # Command input
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("Type a command and press Enter... (Esc = Open GUI)")
+        self.command_input.setPlaceholderText("Chat here... (Esc = Open GUI)")
         self.command_input.setStyleSheet("""
             QLineEdit {
                 background-color: rgba(50, 50, 50, 0.9);
@@ -511,8 +516,58 @@ class QuickCommandOverlay(QWidget):
                 border-color: #3498db;
             }
         """)
-        self.command_input.returnPressed.connect(self._on_submit)
-        frame_layout.addWidget(self.command_input)
+        self.command_input.returnPressed.connect(self._on_chat)
+        input_layout.addWidget(self.command_input)
+        
+        # Chat/Send button
+        self.chat_btn = QPushButton("💬")
+        self.chat_btn.setFixedSize(40, 40)
+        self.chat_btn.setToolTip("Send message")
+        self.chat_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1c5980;
+            }
+        """)
+        self.chat_btn.clicked.connect(self._on_chat)
+        input_layout.addWidget(self.chat_btn)
+        
+        # Voice button
+        self.voice_btn = QPushButton("🎤")
+        self.voice_btn.setFixedSize(40, 40)
+        self.voice_btn.setToolTip("Voice input (hold to speak)")
+        self.voice_btn.setCheckable(True)
+        self.voice_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }
+            QPushButton:checked {
+                background-color: #e74c3c;
+            }
+            QPushButton:checked:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.voice_btn.clicked.connect(self._toggle_voice)
+        input_layout.addWidget(self.voice_btn)
+        
+        frame_layout.addLayout(input_layout)
         
         # Response area (hidden by default, shown when expanded)
         self.response_area = QTextEdit()
@@ -571,17 +626,104 @@ class QuickCommandOverlay(QWidget):
         self.close_requested.emit()
         self.hide()
     
-    def _on_submit(self):
+    def _on_chat(self):
+        """Handle chat message - process in mini chat, don't go to main GUI."""
         command = self.command_input.text().strip()
         if command:
             self.history.append(command)
             self.history_index = len(self.history)
-            self.command_submitted.emit(command)
-            self.command_input.clear()
-            # Don't hide if expanded - user wants to see responses
+            
+            # Show expanded view to see response
             if not self._is_expanded:
-                self.hide()
+                self._toggle_expand()
+            
+            # Show user message
+            self.response_area.append(
+                f"<div style='color: #9b59b6; margin: 4px 0;'><b>You:</b> {command}</div>"
+            )
+            self.command_input.clear()
+            self.set_status("Thinking...")
+            
+            # Emit signal for processing
+            self.command_submitted.emit(command)
     
+    def _on_submit(self):
+        """Legacy submit handler - redirects to chat."""
+        self._on_chat()
+    
+    def _toggle_voice(self):
+        """Toggle voice input."""
+        is_listening = self.voice_btn.isChecked()
+        
+        if is_listening:
+            self.voice_btn.setToolTip("Listening... (click to stop)")
+            self.set_status("🎤 Listening...")
+            
+            # Try to start voice recognition
+            try:
+                # Signal to start voice input
+                if hasattr(self, '_voice_thread') and self._voice_thread:
+                    return
+                
+                import threading
+                self._voice_thread = threading.Thread(target=self._do_voice_input, daemon=True)
+                self._voice_thread.start()
+            except Exception as e:
+                self.voice_btn.setChecked(False)
+                self.set_status(f"Voice error: {e}")
+        else:
+            self.voice_btn.setToolTip("Voice input (click to speak)")
+            self.set_status("Ready")
+            self._voice_thread = None
+    
+    def _do_voice_input(self):
+        """Background voice recognition."""
+        try:
+            import speech_recognition as sr
+            recognizer = sr.Recognizer()
+            
+            with sr.Microphone() as source:
+                recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+            
+            text = recognizer.recognize_google(audio)
+            
+            # Update UI from main thread
+            from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+            QMetaObject.invokeMethod(
+                self.command_input, "setText",
+                Qt.QueuedConnection, Q_ARG(str, text)
+            )
+            QMetaObject.invokeMethod(
+                self, "_voice_done",
+                Qt.QueuedConnection
+            )
+            
+        except Exception as e:
+            from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+            QMetaObject.invokeMethod(
+                self, "_voice_error",
+                Qt.QueuedConnection, Q_ARG(str, str(e))
+            )
+    
+    @pyqtSlot()
+    def _voice_done(self):
+        """Called when voice input completes."""
+        self.voice_btn.setChecked(False)
+        self.set_status("Ready")
+        self._voice_thread = None
+        # Auto-send the voice input
+        if self.command_input.text().strip():
+            self._on_chat()
+    
+    @pyqtSlot(str)
+    def _voice_error(self, error: str):
+        """Called when voice input fails."""
+        self.voice_btn.setChecked(False)
+        self.set_status(f"Voice: {error[:30]}")
+        self._voice_thread = None
+    
+    @pyqtSlot(str)
     def show_response(self, text: str):
         """Show a response in the expanded area."""
         if not self._is_expanded:
@@ -592,6 +734,7 @@ class QuickCommandOverlay(QWidget):
             self.response_area.verticalScrollBar().maximum()
         )
     
+    @pyqtSlot(str)
     def set_status(self, text: str):
         self.status_label.setText(text)
     
@@ -1076,10 +1219,10 @@ class EnigmaSystemTray(QObject):
         pass
     
     def _on_command(self, command: str):
-        """Process a command from the overlay."""
-        self.overlay.set_status("Processing...")
+        """Process a command from the overlay - chat directly in mini chat."""
+        self.overlay.set_status("Thinking...")
         
-        # Check if this is a chat command - if so, route to GUI
+        # Check if this is a quick action command
         command_lower = command.lower().strip()
         quick_action = self.processor._detect_quick_action(command_lower)
         
@@ -1090,24 +1233,63 @@ class EnigmaSystemTray(QObject):
             self.overlay.set_status("Ready")
             self._execute_action(result.get("action", ""), result.get("params", {}))
         else:
-            # It's a chat message - route to GUI chat if available
-            if self.main_window and hasattr(self.main_window, 'chat_input'):
-                # Show GUI and send message through the chat tab
-                self._show_main_window()
-                self.hide_overlay()
+            # It's a chat message - process directly in mini chat
+            self._process_chat_in_mini(command)
+    
+    def _process_chat_in_mini(self, message: str):
+        """Process a chat message directly in the mini chat."""
+        import threading
+        
+        def generate_response():
+            try:
+                response = None
                 
-                # Set the text in chat input and trigger send
-                self.main_window.chat_input.setText(command)
-                if hasattr(self.main_window, '_on_send'):
-                    self.main_window._on_send()
+                # Try to use the main window's engine if available
+                if self.main_window and hasattr(self.main_window, 'engine') and self.main_window.engine:
+                    engine = self.main_window.engine
+                    response = engine.generate(
+                        message,
+                        max_gen=200,
+                        temperature=0.8
+                    )
+                else:
+                    # Try to create/get engine directly
+                    try:
+                        from enigma.core.inference import EnigmaEngine
+                        engine = EnigmaEngine()
+                        response = engine.generate(
+                            message,
+                            max_gen=200,
+                            temperature=0.8
+                        )
+                    except Exception as e:
+                        response = f"[No AI loaded - open full GUI to load a model]\n\nYour message: {message}"
                 
-                self.overlay.set_status("Sent to chat")
-            else:
-                # Fallback: process locally if GUI not available
-                result = self.processor.process_command(command)
-                self.overlay.show_response(result.get("response", "Done"))
-                self.overlay.set_status("Ready")
-                self._execute_action(result.get("action", ""), result.get("params", {}))
+                # Update UI from main thread
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self.overlay, "show_response",
+                    Qt.QueuedConnection, Q_ARG(str, f"<b>AI:</b> {response}")
+                )
+                QMetaObject.invokeMethod(
+                    self.overlay, "set_status",
+                    Qt.QueuedConnection, Q_ARG(str, "Ready")
+                )
+                
+            except Exception as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self.overlay, "show_response",
+                    Qt.QueuedConnection, Q_ARG(str, f"<span style='color: #e74c3c;'>Error: {e}</span>")
+                )
+                QMetaObject.invokeMethod(
+                    self.overlay, "set_status",
+                    Qt.QueuedConnection, Q_ARG(str, "Error")
+                )
+        
+        # Run in background thread
+        thread = threading.Thread(target=generate_response, daemon=True)
+        thread.start()
     
     def _execute_action(self, action: str, params: Dict[str, Any] = None):
         """Execute an action."""
