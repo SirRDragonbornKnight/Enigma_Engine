@@ -93,22 +93,15 @@ class ToolRegistry:
         # New tool imports
         from .automation_tools import (ScheduleTaskTool, ListSchedulesTool, RemoveScheduleTool,
                                        ClipboardReadTool, ClipboardWriteTool, ClipboardHistoryTool,
-                                       RecordMacroTool, PlayMacroTool, ListMacrosTool,
-                                       WatchFolderTool, StopWatchTool, ListWatchesTool)
-        from .knowledge_tools import (WikipediaSearchTool, ArxivSearchTool, PDFExtractTool,
-                                      BookmarkSaveTool, BookmarkSearchTool, BookmarkListTool,
-                                      BookmarkDeleteTool, NoteSaveTool, NoteGetTool,
-                                      NoteSearchTool, NoteListTool, NoteDeleteTool)
-        from .communication_tools import (EmailDraftTool, ListEmailDraftsTool, TranslateTextTool,
-                                          DetectLanguageTool, SummarizeTextTool, OCRImageTool,
-                                          OCRScreenshotTool)
+                                       RecordMacroTool, PlayMacroTool)
+        from .knowledge_tools import WikipediaSearchTool, ArxivSearchTool, PDFExtractTool
+        from .communication_tools import (TranslateTextTool, DetectLanguageTool, OCRImageTool)
         from .media_tools import (MusicGenerateTool, RemoveBackgroundTool, UpscaleImageTool,
                                   StyleTransferTool, ConvertAudioTool, ExtractAudioTool,
                                   AudioVisualizeTool)
         from .productivity_tools import (SystemMonitorTool, ProcessListTool, ProcessKillTool,
-                                         SSHExecuteTool, SSHCopyTool, DockerListTool,
-                                         DockerControlTool, DockerImagesTool, GitStatusTool,
-                                         GitCommitTool, GitDiffTool, GitPushTool, GitPullTool)
+                                         SSHExecuteTool, DockerListTool, DockerControlTool,
+                                         GitStatusTool, GitCommitTool, GitPushTool, GitPullTool)
         from .iot_tools import (HomeAssistantSetupTool, HomeAssistantControlTool,
                                 HomeAssistantStatusTool, GPIOReadTool, GPIOWriteTool,
                                 GPIOPWMTool, MQTTPublishTool, MQTTSubscribeTool,
@@ -118,8 +111,7 @@ class ToolRegistry:
                                     BrowserMediaVolumeTool, BrowserMediaInfoTool,
                                     BrowserTabListTool, BrowserFocusTool)
         from .data_tools import (CSVAnalyzeTool, CSVQueryTool, PlotChartTool, JSONQueryTool,
-                                 JSONTransformTool, SQLQueryTool, SQLExecuteTool,
-                                 SQLTablesTool, DataConvertTool)
+                                 SQLQueryTool, SQLExecuteTool, DataConvertTool)
         from .gaming_tools import (TriviaGameTool, WordGameTool, NumberGuessTool,
                                    CharacterCreateTool, CharacterListTool, CharacterChatTool,
                                    StoryGenerateTool, StoryContinueTool, DnDRollTool,
@@ -168,31 +160,14 @@ class ToolRegistry:
             ClipboardHistoryTool(),
             RecordMacroTool(),
             PlayMacroTool(),
-            ListMacrosTool(),
-            WatchFolderTool(),
-            StopWatchTool(),
-            ListWatchesTool(),
             # Knowledge
             WikipediaSearchTool(),
             ArxivSearchTool(),
             PDFExtractTool(),
-            BookmarkSaveTool(),
-            BookmarkSearchTool(),
-            BookmarkListTool(),
-            BookmarkDeleteTool(),
-            NoteSaveTool(),
-            NoteGetTool(),
-            NoteSearchTool(),
-            NoteListTool(),
-            NoteDeleteTool(),
             # Communication
-            EmailDraftTool(),
-            ListEmailDraftsTool(),
             TranslateTextTool(),
             DetectLanguageTool(),
-            SummarizeTextTool(),
             OCRImageTool(),
-            OCRScreenshotTool(),
             # Media
             MusicGenerateTool(),
             RemoveBackgroundTool(),
@@ -206,13 +181,10 @@ class ToolRegistry:
             ProcessListTool(),
             ProcessKillTool(),
             SSHExecuteTool(),
-            SSHCopyTool(),
             DockerListTool(),
             DockerControlTool(),
-            DockerImagesTool(),
             GitStatusTool(),
             GitCommitTool(),
-            GitDiffTool(),
             GitPushTool(),
             GitPullTool(),
             # IoT
@@ -232,10 +204,8 @@ class ToolRegistry:
             CSVQueryTool(),
             PlotChartTool(),
             JSONQueryTool(),
-            JSONTransformTool(),
             SQLQueryTool(),
             SQLExecuteTool(),
-            SQLTablesTool(),
             DataConvertTool(),
             # Gaming
             TriviaGameTool(),

@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QColor
 
-from ..tools.tool_manager import (
+from enigma.tools.tool_manager import (
     ToolManager, get_tool_manager, TOOL_CATEGORIES, 
     TOOL_DEPENDENCIES, PRESETS
 )
