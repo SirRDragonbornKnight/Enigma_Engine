@@ -465,7 +465,11 @@ class QuickCommandOverlay(QWidget):
         self.status_label.setText(text)
     
     def set_model_name(self, name: str):
-        \"\"\"Update the displayed model name.\"\"\"\n        if hasattr(self, 'title_label'):\n            self.title_label.setText(name)\n    \n    def showEvent(self, event):
+        """Update the displayed model name."""
+        if hasattr(self, 'title_label'):
+            self.title_label.setText(name)
+    
+    def showEvent(self, event):
         super().showEvent(event)
         self.command_input.setFocus()
         self._center_on_screen()
@@ -792,15 +796,21 @@ class EnigmaSystemTray(QObject):
         self.tray_icon.setToolTip(f"{model_name} - Running in background")
         # Update menu header label
         if hasattr(self, 'model_label'):
-            self.model_label.setText(f\"Model: {model_name}\")\n        # Update overlay title\n        if hasattr(self, 'overlay') and hasattr(self.overlay, 'set_model_name'):\n            self.overlay.set_model_name(model_name)\n        # Update hidden action for compatibility\n        if hasattr(self, 'model_action'):\n            self.model_action.setText(f\"Model: {model_name}\")
+            self.model_label.setText(f"Model: {model_name}")
+        # Update overlay title
+        if hasattr(self, 'overlay') and hasattr(self.overlay, 'set_model_name'):
+            self.overlay.set_model_name(model_name)
+        # Update hidden action for compatibility
+        if hasattr(self, 'model_action'):
+            self.model_action.setText(f"Model: {model_name}")
     
     def _on_tray_activated(self, reason):
-        \"\"\"Handle tray icon activation.
+        """Handle tray icon activation.
         
         Single click: Show the main GUI window
         Double click: Show the main GUI window
         Middle click: Show quick command overlay
-        \"\"\"
+        """
         if reason == QSystemTrayIcon.DoubleClick:
             self._show_main_window()
         elif reason == QSystemTrayIcon.Trigger:

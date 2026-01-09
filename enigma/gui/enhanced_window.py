@@ -2457,6 +2457,39 @@ class EnhancedMainWindow(QMainWindow):
             self.btn_grow.setEnabled(not is_huggingface)
         if hasattr(self, 'btn_shrink'):
             self.btn_shrink.setEnabled(not is_huggingface)
+        
+        # Learning indicator - hide for HF models (can't fine-tune them)
+        if hasattr(self, 'learning_indicator'):
+            if is_huggingface:
+                self.learning_indicator.setText("📚 Learning: N/A")
+                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+                self.learning_indicator.setToolTip(
+                    "Learning is not available for HuggingFace models.\n\n"
+                    "HuggingFace models are pre-trained and cannot be fine-tuned locally.\n"
+                    "To use learning features, switch to a local Enigma model."
+                )
+                self.learning_indicator.setCursor(Qt.ArrowCursor)  # Remove clickable cursor
+                self.learning_indicator.mousePressEvent = lambda e: None  # Disable click
+            else:
+                # Re-enable for Enigma models
+                self.learning_indicator.setCursor(Qt.PointingHandCursor)
+                from .tabs.chat_tab import _toggle_learning
+                self.learning_indicator.mousePressEvent = lambda e: _toggle_learning(self)
+                # Restore current state
+                if getattr(self, 'learn_while_chatting', True):
+                    self.learning_indicator.setText("📚 Learning: ON")
+                    self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+                else:
+                    self.learning_indicator.setText("📚 Learning: OFF")
+                    self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+                self.learning_indicator.setToolTip(
+                    "When Learning is ON, the AI records your conversations and uses them to improve.\n\n"
+                    "How it works:\n"
+                    "• Each Q&A pair is saved to the model's training data\n"
+                    "• After enough interactions, the model can be retrained\n"
+                    "• This helps the AI learn your preferences and style\n\n"
+                    "Click to toggle learning on/off."
+                )
     
     def _require_enigma_model(self, feature_name: str) -> bool:
         """
@@ -4501,17 +4534,29 @@ class EnhancedMainWindow(QMainWindow):
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
         
-        # Remove thinking indicator and add response with feedback buttons
-        self.chat_display.append(
-            f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-            f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}'
-            f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
-            f'<span style="color: #6c7086; font-size: 11px;">Rate this response: </span>'
-            f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">👍 Good</a>'
-            f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">👎 Bad</a>'
-            f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">✏️ Critique</a>'
-            f'</div></div>'
-        )
+        # Check if we should show rating buttons (only for local Enigma models)
+        is_hf = getattr(self, '_is_hf_model', False)
+        
+        # Remove thinking indicator and add response
+        if is_hf:
+            # HuggingFace model - no rating buttons (can't learn from feedback)
+            self.chat_display.append(
+                f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}'
+                f'</div>'
+            )
+        else:
+            # Local Enigma model - show rating buttons for learning
+            self.chat_display.append(
+                f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}'
+                f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
+                f'<span style="color: #6c7086; font-size: 11px;">Rate this response: </span>'
+                f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">👍 Good</a>'
+                f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">👎 Bad</a>'
+                f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">✏️ Critique</a>'
+                f'</div></div>'
+            )
         self.last_response = response
         self._last_response_id = response_id
         
@@ -5210,8 +5255,9 @@ def run_app(minimize_to_tray: bool = True):
                         
                         msg = QMessageBox(window)
                         msg.setWindowTitle("Close Enigma")
-                        msg.setText(f\"\"\"<b>Close {window.current_model_name or 'Enigma'}?</b><br><br>
-What would you like to do?\"\"\")\n                        msg.setIcon(QMessageBox.Question)
+                        msg.setText(f"""<b>Close {window.current_model_name or 'Enigma'}?</b><br><br>
+What would you like to do?""")
+                        msg.setIcon(QMessageBox.Question)
                         
                         # Make dialog stay on top and be responsive
                         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
