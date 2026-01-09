@@ -627,16 +627,17 @@ class StoryContinueTool(Tool):
 # ============================================================================
 
 class DnDRollTool(Tool):
-    """Roll dice for D&D."""
+    """Roll dice for D&D with optional animation."""
     
     name = "dnd_roll"
-    description = "Roll dice using D&D notation (e.g., '2d6+3', '1d20', '4d6 drop lowest')."
+    description = "Roll dice using D&D notation (e.g., '2d6+3', '1d20', '4d6 drop lowest'). Can generate animated GIF!"
     parameters = {
         "dice": "Dice notation (e.g., '2d6', '1d20+5', '4d6kh3' for keep highest 3)",
         "reason": "Optional reason for the roll",
+        "animate": "Generate animated dice roll GIF (default: True)",
     }
     
-    def execute(self, dice: str, reason: str = "", **kwargs) -> Dict[str, Any]:
+    def execute(self, dice: str, reason: str = "", animate: bool = True, **kwargs) -> Dict[str, Any]:
         try:
             import re
             
@@ -702,10 +703,168 @@ class DnDRollTool(Tool):
             if crit:
                 result["critical"] = crit
             
+            # Generate animated dice roll GIF
+            if animate:
+                try:
+                    gif_path = self._generate_dice_animation(die_size, rolls, total, crit)
+                    if gif_path:
+                        result["animation_path"] = gif_path
+                        result["type"] = "animation"
+                except Exception as e:
+                    result["animation_error"] = str(e)
+            
             return result
             
         except Exception as e:
             return {"success": False, "error": str(e)}
+    
+    def _generate_dice_animation(self, die_size: int, final_rolls: list, total: int, crit: str = None) -> str:
+        """Generate an animated GIF of dice rolling."""
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            from pathlib import Path
+            import time
+            
+            # Output directory
+            output_dir = Path("outputs")
+            output_dir.mkdir(exist_ok=True)
+            
+            frames = []
+            frame_count = 12  # Number of animation frames
+            size = 200  # Frame size
+            
+            # Colors
+            bg_color = (30, 30, 46)  # Dark purple-ish
+            dice_color = (205, 214, 244)  # Light text
+            crit_success_color = (166, 227, 161)  # Green
+            crit_fail_color = (243, 139, 168)  # Red
+            accent_color = (137, 180, 250)  # Blue
+            
+            # Die face patterns for d6
+            d6_patterns = {
+                1: [(0.5, 0.5)],
+                2: [(0.25, 0.25), (0.75, 0.75)],
+                3: [(0.25, 0.25), (0.5, 0.5), (0.75, 0.75)],
+                4: [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)],
+                5: [(0.25, 0.25), (0.75, 0.25), (0.5, 0.5), (0.25, 0.75), (0.75, 0.75)],
+                6: [(0.25, 0.25), (0.75, 0.25), (0.25, 0.5), (0.75, 0.5), (0.25, 0.75), (0.75, 0.75)],
+            }
+            
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+                font_large = ImageFont.truetype("arial.ttf", 48)
+                font_small = ImageFont.truetype("arial.ttf", 14)
+            except:
+                font = ImageFont.load_default()
+                font_large = font
+                font_small = font
+            
+            # Generate rolling frames
+            for frame_idx in range(frame_count):
+                img = Image.new('RGB', (size, size), bg_color)
+                draw = ImageDraw.Draw(img)
+                
+                # Draw title
+                title = f"d{die_size}"
+                draw.text((size//2, 15), title, fill=accent_color, font=font_small, anchor="mt")
+                
+                if frame_idx < frame_count - 3:
+                    # Rolling animation - show random numbers
+                    random_val = random.randint(1, die_size)
+                    
+                    if die_size == 6:
+                        # Draw d6 with dots
+                        dice_x, dice_y = size//2 - 40, size//2 - 40
+                        dice_size = 80
+                        
+                        # Slight rotation effect via position offset
+                        offset_x = random.randint(-5, 5)
+                        offset_y = random.randint(-5, 5)
+                        
+                        # Draw die background
+                        draw.rounded_rectangle(
+                            [dice_x + offset_x, dice_y + offset_y, 
+                             dice_x + dice_size + offset_x, dice_y + dice_size + offset_y],
+                            radius=8, fill=(69, 71, 90), outline=dice_color, width=2
+                        )
+                        
+                        # Draw dots
+                        for px, py in d6_patterns.get(random_val, [(0.5, 0.5)]):
+                            dot_x = dice_x + offset_x + int(px * dice_size)
+                            dot_y = dice_y + offset_y + int(py * dice_size)
+                            draw.ellipse([dot_x-6, dot_y-6, dot_x+6, dot_y+6], fill=dice_color)
+                    else:
+                        # Draw number for other dice
+                        text = str(random_val)
+                        draw.text((size//2, size//2), text, fill=dice_color, font=font_large, anchor="mm")
+                    
+                    # "Rolling..." text
+                    dots = "." * ((frame_idx % 3) + 1)
+                    draw.text((size//2, size - 25), f"Rolling{dots}", fill=(108, 112, 134), font=font_small, anchor="mt")
+                    
+                else:
+                    # Final result frames
+                    final_val = final_rolls[0] if len(final_rolls) == 1 else total
+                    
+                    # Choose color based on critical
+                    text_color = dice_color
+                    if crit and "SUCCESS" in crit:
+                        text_color = crit_success_color
+                    elif crit and "FAILURE" in crit:
+                        text_color = crit_fail_color
+                    
+                    if die_size == 6 and len(final_rolls) == 1:
+                        # Draw final d6
+                        dice_x, dice_y = size//2 - 40, size//2 - 40
+                        dice_size_px = 80
+                        
+                        outline = crit_success_color if crit and "SUCCESS" in crit else (crit_fail_color if crit and "FAILURE" in crit else dice_color)
+                        
+                        draw.rounded_rectangle(
+                            [dice_x, dice_y, dice_x + dice_size_px, dice_y + dice_size_px],
+                            radius=8, fill=(69, 71, 90), outline=outline, width=3
+                        )
+                        
+                        for px, py in d6_patterns.get(final_val, [(0.5, 0.5)]):
+                            dot_x = dice_x + int(px * dice_size_px)
+                            dot_y = dice_y + int(py * dice_size_px)
+                            draw.ellipse([dot_x-6, dot_y-6, dot_x+6, dot_y+6], fill=text_color)
+                    else:
+                        # Draw final number
+                        draw.text((size//2, size//2), str(final_val), fill=text_color, font=font_large, anchor="mm")
+                    
+                    # Result text
+                    if crit:
+                        result_text = "NAT 20!" if "SUCCESS" in crit else "NAT 1!"
+                        draw.text((size//2, size - 25), result_text, fill=text_color, font=font_small, anchor="mt")
+                    else:
+                        draw.text((size//2, size - 25), f"Total: {total}", fill=accent_color, font=font_small, anchor="mt")
+                
+                frames.append(img)
+            
+            # Add extra final frames to pause on result
+            for _ in range(6):
+                frames.append(frames[-1].copy())
+            
+            # Save as GIF
+            timestamp = int(time.time())
+            gif_path = output_dir / f"dice_roll_{timestamp}.gif"
+            
+            frames[0].save(
+                str(gif_path),
+                save_all=True,
+                append_images=frames[1:],
+                duration=100,  # ms per frame
+                loop=0
+            )
+            
+            return str(gif_path)
+            
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"Animation generation error: {e}")
+            return None
 
 
 class DnDCharacterTool(Tool):

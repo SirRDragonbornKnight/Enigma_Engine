@@ -240,6 +240,24 @@ class GenerationPreviewPopup(QDialog):
                 preview_label.setText("Could not load image")
             
             container_layout.addWidget(preview_label)
+        
+        elif self.result_type == "animation" and self.result_path:
+            # Animated GIF preview (dice rolls, etc.)
+            from PyQt5.QtGui import QMovie
+            preview_label = QLabel()
+            preview_label.setAlignment(Qt.AlignCenter)
+            preview_label.setMinimumSize(220, 220)
+            preview_label.setStyleSheet("border: 1px solid #45475a; border-radius: 8px;")
+            
+            # Load and play GIF
+            self._movie = QMovie(self.result_path)
+            if self._movie.isValid():
+                preview_label.setMovie(self._movie)
+                self._movie.start()
+            else:
+                preview_label.setText("🎲 Animation Generated")
+            
+            container_layout.addWidget(preview_label)
             
         elif self.result_type == "video" and self.result_path:
             # Video preview (thumbnail + play button)
@@ -4842,8 +4860,8 @@ class EnhancedMainWindow(QMainWindow):
             self._speak_text(display_response)
     
     def _show_generation_result_in_chat(self, result):
-        """Show a generation result popup (image, video, etc.)."""
-        path = result.get('path', '')
+        """Show a generation result popup (image, video, animation, etc.)."""
+        path = result.get('path', result.get('animation_path', ''))
         gen_type = result.get('type', 'content')
         
         if path:
