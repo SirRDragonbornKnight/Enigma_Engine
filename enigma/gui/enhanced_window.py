@@ -5705,16 +5705,24 @@ What would you like to do?""")
                 
                 window.closeEvent = close_to_tray
             
-            # Show startup notification
+            # Start with mini chat instead of main window
             _system_tray.show_notification(
                 "Enigma Started",
-                "Press Ctrl+Space anytime for quick commands.\n"
-                "Click tray icon for more options."
+                "Mini Chat is ready!\n"
+                "Press ESC to open full GUI."
             )
+            # Show mini chat on startup instead of main window
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(500, _system_tray.show_quick_command)
     except Exception as e:
         print(f"System tray not available: {e}")
+        # If no tray, show main window
+        window.show()
+        sys.exit(app.exec_())
+        return
     
-    window.show()
+    # Don't show main window - start with mini chat
+    # window.show()  # Commented out - mini chat opens instead
     
     sys.exit(app.exec_())
 
