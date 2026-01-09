@@ -5663,14 +5663,13 @@ What would you like to do?""")
                         # Make dialog stay on top and be responsive
                         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
                         
-                        # Custom buttons
-                        minimize_btn = msg.addButton("Minimize to Tray", QMessageBox.AcceptRole)
-                        minichat_btn = msg.addButton("🗨️ Mini Chat", QMessageBox.ActionRole)
+                        # Custom buttons - Mini Chat is now the default/primary option
+                        minichat_btn = msg.addButton("🗨️ Mini Chat", QMessageBox.AcceptRole)
                         exit_btn = msg.addButton("Exit Completely", QMessageBox.DestructiveRole)
                         kill_btn = msg.addButton("Kill All && Exit", QMessageBox.DestructiveRole)
                         cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
                         
-                        msg.setDefaultButton(minimize_btn)
+                        msg.setDefaultButton(minichat_btn)
                         
                         # Process events to ensure dialog is responsive
                         QApplication.processEvents()
@@ -5679,16 +5678,7 @@ What would you like to do?""")
                         
                         clicked = msg.clickedButton()
                         
-                        if clicked == minimize_btn:
-                            # Minimize to tray
-                            event.ignore()
-                            window.hide()
-                            _system_tray.show_notification(
-                                f"{window.current_model_name or 'Enigma'} Running",
-                                "Still running in the background.\n"
-                                "Click the tray icon to restore.",
-                            )
-                        elif clicked == minichat_btn:
+                        if clicked == minichat_btn:
                             # Open mini chat (Quick Command Overlay)
                             event.ignore()
                             window.hide()
