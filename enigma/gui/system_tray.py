@@ -380,19 +380,24 @@ class QuickCommandOverlay(QWidget):
         # Initialize size attributes BEFORE calling parent __init__
         # (in case any signals trigger setup_ui early)
         self._min_width = 450
-        self._min_height = 120
+        self._min_height = 300  # Taller to show chat history
         self._expanded_height = 350
-        self._is_expanded = False
+        self._is_expanded = True  # Always expanded now
         self._drag_pos = None
         self._resize_edge = None
+        self._is_responding = False  # Track if AI is responding
         
         super().__init__(parent)
+        
+        # Load settings for always-on-top
+        always_on_top = self._load_mini_chat_settings().get("mini_chat_always_on_top", True)
+        
         # Use Window flag for proper window controls including Alt+F4
-        self.setWindowFlags(
-            Qt.Window |  # Makes Alt+F4 work properly
-            Qt.WindowStaysOnTopHint |
-            Qt.FramelessWindowHint
-        )
+        flags = Qt.Window | Qt.FramelessWindowHint
+        if always_on_top:
+            flags |= Qt.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
+        
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setup_ui()
         self.history = []
@@ -432,28 +437,14 @@ class QuickCommandOverlay(QWidget):
         self.status_label.setStyleSheet("color: #888; font-size: 11px;")
         header_layout.addWidget(self.status_label)
         
-        # Expand/collapse button
-        self.expand_btn = QPushButton("⬇")
-        self.expand_btn.setFixedSize(24, 24)
-        self.expand_btn.setToolTip("Expand/Collapse (show response area)")
-        self.expand_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 1px solid #555;
-                border-radius: 4px;
-                color: #888;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #444;
-                color: #3498db;
-            }
-        """)
-        self.expand_btn.clicked.connect(self._toggle_expand)
-        header_layout.addWidget(self.expand_btn)
+        # Responding indicator (animated dots)
+        self.responding_label = QLabel("")
+        self.responding_label.setStyleSheet("color: #3498db; font-size: 11px; font-weight: bold;")
+        self.responding_label.hide()
+        header_layout.addWidget(self.responding_label)
         
         # Minimize button (opens GUI)
-        min_btn = QPushButton("⎯")
+        min_btn = QPushButton("_")
         min_btn.setFixedSize(24, 24)
         min_btn.setToolTip("Open Full GUI")
         min_btn.setStyleSheet("""
@@ -496,6 +487,23 @@ class QuickCommandOverlay(QWidget):
         
         frame_layout.addLayout(header_layout)
         
+        # Chat history area (always visible, above input like main chat)
+        self.response_area = QTextEdit()
+        self.response_area.setReadOnly(True)
+        self.response_area.setPlaceholderText("Chat history will appear here...")
+        self.response_area.setMinimumHeight(150)
+        self.response_area.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(40, 40, 40, 0.9);
+                border: 1px solid #444;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 13px;
+                color: #ccc;
+            }
+        """)
+        frame_layout.addWidget(self.response_area)
+        
         # Input row with chat button and voice button
         input_layout = QHBoxLayout()
         input_layout.setSpacing(8)
@@ -520,8 +528,8 @@ class QuickCommandOverlay(QWidget):
         input_layout.addWidget(self.command_input)
         
         # Chat/Send button
-        self.chat_btn = QPushButton("💬")
-        self.chat_btn.setFixedSize(40, 40)
+        self.chat_btn = QPushButton("Send")
+        self.chat_btn.setFixedSize(50, 40)
         self.chat_btn.setToolTip("Send message")
         self.chat_btn.setStyleSheet("""
             QPushButton {
@@ -529,7 +537,8 @@ class QuickCommandOverlay(QWidget):
                 border: none;
                 border-radius: 8px;
                 color: white;
-                font-size: 18px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -542,8 +551,8 @@ class QuickCommandOverlay(QWidget):
         input_layout.addWidget(self.chat_btn)
         
         # Voice button
-        self.voice_btn = QPushButton("🎤")
-        self.voice_btn.setFixedSize(40, 40)
+        self.voice_btn = QPushButton("Voice")
+        self.voice_btn.setFixedSize(50, 40)
         self.voice_btn.setToolTip("Voice input (hold to speak)")
         self.voice_btn.setCheckable(True)
         self.voice_btn.setStyleSheet("""
@@ -552,7 +561,8 @@ class QuickCommandOverlay(QWidget):
                 border: none;
                 border-radius: 8px;
                 color: white;
-                font-size: 18px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
                 background-color: #666;
@@ -569,26 +579,9 @@ class QuickCommandOverlay(QWidget):
         
         frame_layout.addLayout(input_layout)
         
-        # Response area (hidden by default, shown when expanded)
-        self.response_area = QTextEdit()
-        self.response_area.setReadOnly(True)
-        self.response_area.setPlaceholderText("AI responses will appear here...")
-        self.response_area.setStyleSheet("""
-            QTextEdit {
-                background-color: rgba(40, 40, 40, 0.9);
-                border: 1px solid #444;
-                border-radius: 8px;
-                padding: 8px;
-                font-size: 13px;
-                color: #ccc;
-            }
-        """)
-        self.response_area.hide()
-        frame_layout.addWidget(self.response_area)
-        
         # Hint row
         hint_layout = QHBoxLayout()
-        hint = QLabel("Enter=Send | Esc=Open GUI | ↑↓=History | Drag edges to resize")
+        hint = QLabel("Enter=Send | Esc=Open GUI | Up/Down=History")
         hint.setStyleSheet("color: #555; font-size: 10px;")
         hint_layout.addWidget(hint)
         hint_layout.addStretch()
@@ -596,25 +589,63 @@ class QuickCommandOverlay(QWidget):
         
         layout.addWidget(self.frame)
         
-        # Initial size (resizable)
+        # Initial size (larger to show chat history)
         self.setMinimumSize(self._min_width, self._min_height)
-        self.resize(500, 120)
+        self.resize(500, 350)
+        
+        # Setup responding indicator animation timer
+        self._responding_dots = 0
+        self._responding_timer = QTimer(self)
+        self._responding_timer.timeout.connect(self._update_responding_indicator)
     
-    def _toggle_expand(self):
-        """Toggle expanded mode to show/hide response area."""
-        self._is_expanded = not self._is_expanded
-        if self._is_expanded:
-            self.expand_btn.setText("⬆")
-            self.expand_btn.setToolTip("Collapse")
-            self.response_area.show()
-            # Expand height
-            self.resize(self.width(), max(self.height(), self._expanded_height))
+    def _load_mini_chat_settings(self):
+        """Load mini chat settings from gui_settings.json."""
+        try:
+            import json
+            from pathlib import Path
+            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            if settings_path.exists():
+                with open(settings_path, 'r') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+    
+    def set_always_on_top(self, on_top: bool):
+        """Update the always-on-top setting at runtime."""
+        current_flags = self.windowFlags()
+        if on_top:
+            self.setWindowFlags(current_flags | Qt.WindowStaysOnTopHint)
         else:
-            self.expand_btn.setText("⬇")
-            self.expand_btn.setToolTip("Expand (show response area)")
-            self.response_area.hide()
-            # Shrink to compact height
-            self.resize(self.width(), self._min_height)
+            self.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
+        # Re-show after changing flags (required by Qt)
+        if self.isVisible():
+            self.show()
+    
+    def _update_responding_indicator(self):
+        """Animate the responding indicator."""
+        self._responding_dots = (self._responding_dots + 1) % 4
+        dots = "." * self._responding_dots
+        self.responding_label.setText(f"Responding{dots}")
+    
+    def start_responding(self):
+        """Show the responding indicator."""
+        self._is_responding = True
+        self._responding_dots = 0
+        self.responding_label.setText("Responding")
+        self.responding_label.show()
+        self._responding_timer.start(400)  # Update every 400ms
+        self.chat_btn.setEnabled(False)
+        self.chat_btn.setText("...")
+    
+    def stop_responding(self):
+        """Hide the responding indicator."""
+        self._is_responding = False
+        self._responding_timer.stop()
+        self.responding_label.hide()
+        self.chat_btn.setEnabled(True)
+        self.chat_btn.setText("Send")
+        self.set_status("Ready")
     
     def _open_gui(self):
         """Open the full GUI (keeps mini chat open)."""
@@ -630,20 +661,23 @@ class QuickCommandOverlay(QWidget):
     def _on_chat(self):
         """Handle chat message - process in mini chat, don't go to main GUI."""
         command = self.command_input.text().strip()
-        if command:
+        if command and not self._is_responding:
             self.history.append(command)
             self.history_index = len(self.history)
-            
-            # Show expanded view to see response
-            if not self._is_expanded:
-                self._toggle_expand()
             
             # Show user message
             self.response_area.append(
                 f"<div style='color: #9b59b6; margin: 4px 0;'><b>You:</b> {command}</div>"
             )
             self.command_input.clear()
-            self.set_status("Thinking...")
+            
+            # Start responding indicator
+            self.start_responding()
+            
+            # Scroll to bottom
+            self.response_area.verticalScrollBar().setValue(
+                self.response_area.verticalScrollBar().maximum()
+            )
             
             # Emit signal for processing
             self.command_submitted.emit(command)
@@ -658,7 +692,7 @@ class QuickCommandOverlay(QWidget):
         
         if is_listening:
             self.voice_btn.setToolTip("Listening... (click to stop)")
-            self.set_status("🎤 Listening...")
+            self.set_status("Listening...")
             
             # Try to start voice recognition
             try:
@@ -726,10 +760,11 @@ class QuickCommandOverlay(QWidget):
     
     @pyqtSlot(str)
     def show_response(self, text: str):
-        """Show a response in the expanded area."""
-        if not self._is_expanded:
-            self._toggle_expand()
-        self.response_area.append(f"<div style='color: #3498db; margin-bottom: 8px;'>{text}</div>")
+        """Show a response in the chat area."""
+        # Stop the responding indicator
+        self.stop_responding()
+        
+        self.response_area.append(f"<div style='color: #3498db; margin-bottom: 8px;'><b>AI:</b> {text}</div>")
         # Scroll to bottom
         self.response_area.verticalScrollBar().setValue(
             self.response_area.verticalScrollBar().maximum()
@@ -1039,16 +1074,16 @@ class EnigmaSystemTray(QObject):
         self.menu.addSeparator()
         
         # === Chat & Voice Quick Access ===
-        action_chat = QAction("💬 Open Chat", self)
+        action_chat = QAction("Open Chat", self)
         action_chat.triggered.connect(self._open_chat_tab)
         self.menu.addAction(action_chat)
         
-        action_new_chat = QAction("✨ New Chat", self)
+        action_new_chat = QAction("New Chat", self)
         action_new_chat.setToolTip("Start a fresh conversation")
         action_new_chat.triggered.connect(self._start_new_chat)
         self.menu.addAction(action_new_chat)
         
-        action_voice_input = QAction("🎤 Voice Input", self)
+        action_voice_input = QAction("Voice Input", self)
         action_voice_input.setToolTip("Open voice input in chat")
         action_voice_input.triggered.connect(self._open_voice_input)
         self.menu.addAction(action_voice_input)

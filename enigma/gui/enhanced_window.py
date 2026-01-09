@@ -26,7 +26,8 @@ from PyQt5.QtWidgets import (
     QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
     QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
     QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter, QWidget,
-    QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar
+    QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar,
+    QTextEdit
 )
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap, QFont, QIcon

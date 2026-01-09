@@ -580,6 +580,33 @@ def _toggle_always_on_top(parent, state):
     main_window.show()
 
 
+def _toggle_mini_chat_on_top(parent, state):
+    """Toggle mini chat always on top and save setting."""
+    import json
+    from pathlib import Path
+    from ...config import CONFIG
+    
+    on_top = state == Checked
+    
+    # Save to gui_settings.json
+    try:
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings = {}
+        if settings_path.exists():
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+        settings["mini_chat_always_on_top"] = on_top
+        with open(settings_path, 'w') as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        print(f"Could not save mini chat setting: {e}")
+    
+    # Update the mini chat overlay if it exists
+    main_window = parent.window()
+    if hasattr(main_window, 'mini_chat') and main_window.mini_chat:
+        main_window.mini_chat.set_always_on_top(on_top)
+
+
 def _update_display_info(parent):
     """Update the display info label."""
     from PyQt5.QtGui import QGuiApplication
@@ -898,12 +925,21 @@ def create_settings_tab(parent):
     display_layout.addWidget(display_desc)
     
     # Always on top checkbox
-    parent.always_on_top_check = QCheckBox("Always on Top")
-    parent.always_on_top_check.setToolTip("Keep the window above other windows")
+    parent.always_on_top_check = QCheckBox("Always on Top (Main Window)")
+    parent.always_on_top_check.setToolTip("Keep the main window above other windows")
     parent.always_on_top_check.stateChanged.connect(
         lambda state: _toggle_always_on_top(parent, state)
     )
     display_layout.addWidget(parent.always_on_top_check)
+    
+    # Mini chat always on top checkbox
+    parent.mini_chat_on_top_check = QCheckBox("Mini Chat Always on Top")
+    parent.mini_chat_on_top_check.setToolTip("Keep the mini chat window above other windows (default: on)")
+    parent.mini_chat_on_top_check.setChecked(True)  # Default to checked
+    parent.mini_chat_on_top_check.stateChanged.connect(
+        lambda state: _toggle_mini_chat_on_top(parent, state)
+    )
+    display_layout.addWidget(parent.mini_chat_on_top_check)
     
     # Monitor selection row
     monitor_row = QHBoxLayout()
@@ -1429,7 +1465,25 @@ def create_settings_tab(parent):
     _refresh_cache_info(parent)
     _refresh_connections(parent)
     
+    # Load saved mini chat on top setting
+    _load_mini_chat_on_top_setting(parent)
+    
     return tab
+
+
+def _load_mini_chat_on_top_setting(parent):
+    """Load the saved mini chat on top setting."""
+    try:
+        import json
+        from pathlib import Path
+        from ...config import CONFIG
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+            on_top = settings.get("mini_chat_always_on_top", True)  # Default to True
+            parent.mini_chat_on_top_check.setChecked(on_top)
+    except Exception:
+        pass  # Keep default (checked)
 
 
 def _create_status_indicator(name: str, status: str) -> QLabel:
