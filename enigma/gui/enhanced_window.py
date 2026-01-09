@@ -4761,6 +4761,9 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'chat_status'):
             self.chat_status.setText("")
         
+        # AUTO-CONTROL: Automatically control avatar/robot/game based on response
+        self._auto_control_from_response(response)
+        
         # Check for tool calls in response and execute them
         clean_response, tool_results = self._execute_tool_from_response(response)
         
@@ -4903,6 +4906,150 @@ class EnhancedMainWindow(QMainWindow):
         
         self.chat_display.append(f"<i style='color: #f38ba8;'>Error: {error_msg}</i>")
     
+    def _auto_control_from_response(self, response: str):
+        """
+        Automatically control avatar/robot/game based on AI response.
+        
+        Detects:
+        - Emotions/expressions for avatar
+        - Movement commands for robot/game
+        - Actions/gestures
+        
+        This happens WITHOUT the AI needing to use explicit tool_call tags.
+        Can be enabled/disabled per system in Settings.
+        """
+        import re
+        response_lower = response.lower()
+        
+        # === AVATAR AUTO-CONTROL ===
+        # Check if auto-avatar is enabled AND avatar module is loaded
+        avatar_auto_enabled = getattr(self, 'auto_avatar_enabled', True)
+        avatar_module_loaded = False
+        if self.module_manager:
+            avatar_module_loaded = self.module_manager.is_loaded('avatar')
+        
+        if avatar_auto_enabled and avatar_module_loaded:
+            # Detect emotion from response content
+            emotion = self._detect_emotion_from_text(response_lower)
+            if emotion:
+                try:
+                    from enigma.avatar import get_avatar
+                    avatar = get_avatar()
+                    if avatar and avatar.is_enabled:
+                        avatar.set_expression(emotion)
+                except Exception:
+                    pass
+            
+            # Auto-speak through avatar if auto_speak is on
+            if getattr(self, 'auto_speak', False):
+                try:
+                    from enigma.avatar import get_avatar
+                    avatar = get_avatar()
+                    if avatar and avatar.is_enabled:
+                        # Strip HTML and tool calls for clean speech
+                        clean_text = re.sub(r'<[^>]+>', '', response)
+                        clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
+                        avatar.speak(clean_text.strip()[:500])  # Limit length
+                except Exception:
+                    pass
+        
+        # === ROBOT AUTO-CONTROL ===
+        # Check if auto-robot is enabled AND robot module is loaded
+        robot_auto_enabled = getattr(self, 'auto_robot_enabled', False)
+        robot_module_loaded = False
+        if self.module_manager:
+            robot_module_loaded = self.module_manager.is_loaded('robot')
+        
+        if robot_auto_enabled and robot_module_loaded:
+            # Detect movement/action commands in natural language
+            robot_command = self._detect_robot_command(response_lower)
+            if robot_command:
+                try:
+                    from enigma.tools.robot_tools import get_robot
+                    robot = get_robot()
+                    action, params = robot_command
+                    if action == 'move':
+                        robot.move_joint(params.get('joint', 'arm'), params.get('angle', 0))
+                    elif action == 'gripper':
+                        robot.gripper(params.get('state', 'close'))
+                    elif action == 'home':
+                        robot.home()
+                except Exception:
+                    pass
+        
+        # === GAME AUTO-CONTROL ===
+        # Check if auto-game is enabled AND there's an active game connection
+        game_auto_enabled = getattr(self, 'auto_game_enabled', False)
+        has_game_connection = hasattr(self, 'game_connection') and self.game_connection
+        
+        if game_auto_enabled and has_game_connection:
+            game_command = self._detect_game_command(response_lower)
+            if game_command:
+                try:
+                    self.game_connection.send(game_command)
+                except Exception:
+                    pass
+    
+    def _detect_emotion_from_text(self, text: str) -> str:
+        """Detect emotion/expression from text content."""
+        # Emotion keywords mapped to expressions
+        emotion_patterns = {
+            'happy': ['happy', 'glad', 'joy', 'excited', 'great', 'wonderful', 'yay', '😊', '😄', 'haha', 'lol', ':)', 'awesome', 'fantastic', 'love it'],
+            'sad': ['sad', 'sorry', 'unfortunately', 'regret', 'miss', 'disappointed', '😢', '😔', ':(', 'apolog'],
+            'thinking': ['hmm', 'let me think', 'considering', 'perhaps', 'maybe', 'not sure', 'wondering', '🤔', 'interesting question'],
+            'surprised': ['wow', 'amazing', 'incredible', 'unbelievable', 'really?', 'no way', '😮', '😲', 'whoa', 'oh!'],
+            'angry': ['angry', 'frustrated', 'annoyed', 'upset', '😠', '😤', 'unacceptable'],
+            'confused': ['confused', "don't understand", 'unclear', 'what do you mean', '🤨', 'huh?', 'sorry?'],
+            'neutral': ['okay', 'alright', 'sure', 'understood', 'i see', 'got it'],
+        }
+        
+        for emotion, keywords in emotion_patterns.items():
+            for keyword in keywords:
+                if keyword in text:
+                    return emotion
+        
+        return ''  # No strong emotion detected
+    
+    def _detect_robot_command(self, text: str) -> tuple:
+        """Detect robot commands from natural language."""
+        # Movement patterns
+        if any(w in text for w in ['move arm', 'raise arm', 'lower arm', 'lift']):
+            angle = 45 if 'raise' in text or 'lift' in text else -45 if 'lower' in text else 0
+            return ('move', {'joint': 'arm', 'angle': angle})
+        
+        if any(w in text for w in ['open gripper', 'release', 'let go', 'drop']):
+            return ('gripper', {'state': 'open'})
+        
+        if any(w in text for w in ['close gripper', 'grab', 'grip', 'hold', 'pick up']):
+            return ('gripper', {'state': 'close'})
+        
+        if any(w in text for w in ['go home', 'return home', 'home position', 'reset position']):
+            return ('home', {})
+        
+        return None
+    
+    def _detect_game_command(self, text: str) -> str:
+        """Detect game commands from natural language."""
+        # Common game actions
+        if any(w in text for w in ['move forward', 'go forward', 'walk forward', 'advance']):
+            return 'MOVE forward'
+        if any(w in text for w in ['move back', 'go back', 'retreat', 'step back']):
+            return 'MOVE backward'
+        if any(w in text for w in ['turn left', 'go left']):
+            return 'MOVE left'
+        if any(w in text for w in ['turn right', 'go right']):
+            return 'MOVE right'
+        if any(w in text for w in ['jump', 'leap']):
+            return 'ACTION jump'
+        if any(w in text for w in ['attack', 'strike', 'hit']):
+            return 'ACTION attack'
+        if any(w in text for w in ['defend', 'block', 'shield']):
+            return 'ACTION defend'
+        if any(w in text for w in ['interact', 'use', 'activate']):
+            return 'ACTION interact'
+        
+        return None
+
     def _handle_chat_command(self, text: str):
         """Handle chat commands like /image, /video, /code, /audio, /help."""
         self.chat_input.clear()

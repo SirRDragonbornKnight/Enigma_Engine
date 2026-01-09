@@ -101,6 +101,210 @@ def _toggle_key_visibility(parent):
             inp.setEchoMode(QLineEdit.Password)
 
 
+# ===== AVATAR AUTONOMOUS CONTROL =====
+def _toggle_avatar_autonomous(parent, state):
+    """Toggle avatar autonomous mode."""
+    enabled = state == 2  # Qt.Checked
+    
+    try:
+        from enigma.avatar import get_avatar
+        from enigma.avatar.autonomous import get_autonomous_avatar
+        
+        avatar = get_avatar()
+        autonomous = get_autonomous_avatar(avatar)
+        
+        if enabled:
+            avatar.enable()
+            autonomous.start()
+            parent.avatar_status_label.setText("Avatar: Autonomous (watching screen)")
+            parent.avatar_status_label.setStyleSheet("color: #22c55e;")
+        else:
+            autonomous.stop()
+            parent.avatar_status_label.setText("Avatar: Manual mode")
+            parent.avatar_status_label.setStyleSheet("color: #888;")
+    except Exception as e:
+        parent.avatar_status_label.setText(f"Avatar: Error - {e}")
+        parent.avatar_status_label.setStyleSheet("color: #ef4444;")
+
+
+# ===== ROBOT MODE CONTROL =====
+def _change_robot_mode(parent):
+    """Change robot control mode."""
+    mode = parent.robot_mode_combo.currentData()
+    
+    try:
+        from enigma.tools.robot_modes import get_mode_controller, RobotMode
+        
+        controller = get_mode_controller()
+        
+        mode_map = {
+            "disabled": RobotMode.DISABLED,
+            "manual": RobotMode.MANUAL,
+            "auto": RobotMode.AUTO,
+            "safe": RobotMode.SAFE,
+        }
+        
+        robot_mode = mode_map.get(mode, RobotMode.DISABLED)
+        success = controller.set_mode(robot_mode)
+        
+        if success:
+            status_map = {
+                "disabled": ("Robot: Disabled", "#888"),
+                "manual": ("Robot: MANUAL - User control", "#22c55e"),
+                "auto": ("Robot: AUTO - AI control enabled", "#3b82f6"),
+                "safe": ("Robot: SAFE - Limited AI control", "#f59e0b"),
+            }
+            text, color = status_map.get(mode, ("Robot: Unknown", "#888"))
+            parent.robot_status_label.setText(text)
+            parent.robot_status_label.setStyleSheet(f"color: {color};")
+        else:
+            parent.robot_status_label.setText(f"Robot: Failed to change mode")
+            parent.robot_status_label.setStyleSheet("color: #ef4444;")
+    except ImportError:
+        parent.robot_status_label.setText("Robot: Not configured")
+        parent.robot_status_label.setStyleSheet("color: #888;")
+    except Exception as e:
+        parent.robot_status_label.setText(f"Robot: Error - {e}")
+        parent.robot_status_label.setStyleSheet("color: #ef4444;")
+
+
+def _robot_estop(parent):
+    """Emergency stop the robot."""
+    try:
+        from enigma.tools.robot_modes import get_mode_controller
+        
+        controller = get_mode_controller()
+        controller.emergency_stop("User pressed E-STOP button")
+        
+        parent.robot_status_label.setText("Robot: ⚠️ E-STOP ACTIVE ⚠️")
+        parent.robot_status_label.setStyleSheet("color: #ef4444; font-weight: bold;")
+        parent.robot_mode_combo.setCurrentIndex(0)  # Set to disabled
+        
+        QMessageBox.critical(
+            parent, "Emergency Stop",
+            "Robot has been emergency stopped!\n\n"
+            "To resume, set robot to DISABLED mode first, then re-enable."
+        )
+    except Exception as e:
+        QMessageBox.warning(parent, "E-STOP Error", f"Could not E-STOP: {e}")
+
+
+def _toggle_robot_camera(parent, state):
+    """Toggle robot camera feed."""
+    enabled = state == 2
+    
+    try:
+        from enigma.tools.robot_modes import get_mode_controller, CameraConfig
+        
+        controller = get_mode_controller()
+        
+        if enabled:
+            controller.setup_camera(CameraConfig(enabled=True, device_id=0))
+            controller.start_camera()
+            parent.robot_status_label.setText(
+                parent.robot_status_label.text() + " (Camera ON)"
+            )
+        else:
+            controller.stop_camera()
+    except ImportError:
+        parent.robot_camera_check.setChecked(False)
+        QMessageBox.information(
+            parent, "OpenCV Required",
+            "Camera requires OpenCV. Install with:\npip install opencv-python"
+        )
+    except Exception as e:
+        parent.robot_camera_check.setChecked(False)
+        QMessageBox.warning(parent, "Camera Error", f"Could not enable camera: {e}")
+
+
+# ===== GAME AI ROUTING =====
+def _toggle_game_detection(parent, state):
+    """Toggle automatic game detection."""
+    enabled = state == 2
+    
+    try:
+        from enigma.tools.game_router import get_game_router
+        
+        router = get_game_router()
+        
+        if enabled:
+            router.start_detection(interval=5.0)
+            router.on_game_detected(lambda game: _on_game_detected(parent, game))
+            parent.game_combo.setEnabled(False)
+            parent.game_status_label.setText("Watching for games...")
+            parent.game_status_label.setStyleSheet("color: #3b82f6;")
+        else:
+            router.stop_detection()
+            parent.game_combo.setEnabled(True)
+            parent.game_status_label.setText("Auto-detection disabled")
+            parent.game_status_label.setStyleSheet("color: #888;")
+    except ImportError:
+        parent.auto_game_check.setChecked(False)
+        QMessageBox.information(
+            parent, "psutil Required",
+            "Game detection requires psutil. Install with:\npip install psutil"
+        )
+    except Exception as e:
+        parent.auto_game_check.setChecked(False)
+        parent.game_status_label.setText(f"Detection error: {e}")
+        parent.game_status_label.setStyleSheet("color: #ef4444;")
+
+
+def _on_game_detected(parent, game_id: str):
+    """Called when a game is auto-detected."""
+    try:
+        from enigma.tools.game_router import get_game_router
+        router = get_game_router()
+        config = router.get_game(game_id)
+        
+        if config:
+            parent.game_status_label.setText(f"🎮 Detected: {config.name}")
+            parent.game_status_label.setStyleSheet("color: #22c55e; font-weight: bold;")
+            
+            # Update combo without triggering change
+            parent.game_combo.blockSignals(True)
+            for i in range(parent.game_combo.count()):
+                if parent.game_combo.itemData(i) == game_id:
+                    parent.game_combo.setCurrentIndex(i)
+                    break
+            parent.game_combo.blockSignals(False)
+    except Exception:
+        pass
+
+
+def _change_active_game(parent):
+    """Manually change active game."""
+    game_id = parent.game_combo.currentData()
+    
+    if game_id == "custom":
+        # TODO: Show custom game dialog
+        QMessageBox.information(
+            parent, "Custom Game",
+            "Custom game configuration coming soon!\n"
+            "For now, add games in enigma/tools/game_router.py"
+        )
+        parent.game_combo.setCurrentIndex(0)
+        return
+    
+    try:
+        from enigma.tools.game_router import get_game_router
+        router = get_game_router()
+        
+        if game_id == "none":
+            router.set_active_game(None)
+            parent.game_status_label.setText("No game active - using default AI")
+            parent.game_status_label.setStyleSheet("color: #888;")
+        else:
+            router.set_active_game(game_id)
+            config = router.get_game(game_id)
+            if config:
+                parent.game_status_label.setText(f"🎮 Active: {config.name}")
+                parent.game_status_label.setStyleSheet("color: #22c55e;")
+    except Exception as e:
+        parent.game_status_label.setText(f"Error: {e}")
+        parent.game_status_label.setStyleSheet("color: #ef4444;")
+
+
 def _toggle_ai_lock(parent, state):
     """Toggle AI control lock - prevents user from changing settings."""
     is_locked = state == Checked
@@ -789,6 +993,155 @@ def create_settings_tab(parent):
     _refresh_audio_devices(parent)
     
     layout.addWidget(audio_group)
+
+    # === AVATAR CONTROL ===
+    avatar_group = QGroupBox("Avatar Control")
+    avatar_layout = QVBoxLayout(avatar_group)
+    
+    avatar_desc = QLabel(
+        "Avatar can react to screen content and behave autonomously."
+    )
+    avatar_desc.setWordWrap(True)
+    avatar_layout.addWidget(avatar_desc)
+    
+    # Avatar auto expressions
+    parent.auto_avatar_check = QCheckBox("Auto Expressions (from AI text)")
+    parent.auto_avatar_check.setChecked(True)
+    parent.auto_avatar_check.stateChanged.connect(
+        lambda state: setattr(parent, 'auto_avatar_enabled', state == 2)
+    )
+    parent.auto_avatar_enabled = True
+    avatar_layout.addWidget(parent.auto_avatar_check)
+    
+    # Avatar autonomous mode
+    parent.avatar_autonomous_check = QCheckBox("Autonomous Mode (react to screen)")
+    parent.avatar_autonomous_check.setChecked(False)
+    parent.avatar_autonomous_check.stateChanged.connect(
+        lambda state: _toggle_avatar_autonomous(parent, state)
+    )
+    avatar_layout.addWidget(parent.avatar_autonomous_check)
+    
+    # Avatar behavior settings
+    avatar_behavior_row = QHBoxLayout()
+    avatar_behavior_row.addWidget(QLabel("Activity:"))
+    parent.avatar_activity_slider = QSlider(Qt.Orientation.Horizontal)
+    parent.avatar_activity_slider.setRange(1, 10)
+    parent.avatar_activity_slider.setValue(5)
+    parent.avatar_activity_slider.setMaximumWidth(100)
+    parent.avatar_activity_slider.setToolTip("How active the avatar is (1=calm, 10=energetic)")
+    avatar_behavior_row.addWidget(parent.avatar_activity_slider)
+    avatar_behavior_row.addWidget(QLabel("🐢"))
+    avatar_behavior_row.addStretch()
+    avatar_behavior_row.addWidget(QLabel("🐰"))
+    avatar_layout.addLayout(avatar_behavior_row)
+    
+    parent.avatar_status_label = QLabel("Avatar: Idle")
+    parent.avatar_status_label.setStyleSheet("color: #888; font-style: italic;")
+    avatar_layout.addWidget(parent.avatar_status_label)
+    
+    layout.addWidget(avatar_group)
+    
+    # === ROBOT CONTROL ===
+    robot_group = QGroupBox("Robot Control")
+    robot_layout = QVBoxLayout(robot_group)
+    
+    robot_desc = QLabel(
+        "Control robot with safety modes. AUTO = AI controls, MANUAL = you control."
+    )
+    robot_desc.setWordWrap(True)
+    robot_layout.addWidget(robot_desc)
+    
+    # Robot mode selector
+    robot_mode_row = QHBoxLayout()
+    robot_mode_row.addWidget(QLabel("Mode:"))
+    parent.robot_mode_combo = QComboBox()
+    parent.robot_mode_combo.addItem("🔴 DISABLED", "disabled")
+    parent.robot_mode_combo.addItem("🟢 MANUAL (User)", "manual")
+    parent.robot_mode_combo.addItem("🔵 AUTO (AI)", "auto")
+    parent.robot_mode_combo.addItem("🟡 SAFE (Limited)", "safe")
+    parent.robot_mode_combo.currentIndexChanged.connect(
+        lambda: _change_robot_mode(parent)
+    )
+    robot_mode_row.addWidget(parent.robot_mode_combo)
+    robot_mode_row.addStretch()
+    robot_layout.addLayout(robot_mode_row)
+    
+    # E-STOP button
+    parent.estop_btn = QPushButton("🛑 EMERGENCY STOP")
+    parent.estop_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #dc2626;
+            color: white;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        QPushButton:hover {
+            background-color: #b91c1c;
+        }
+    """)
+    parent.estop_btn.clicked.connect(lambda: _robot_estop(parent))
+    robot_layout.addWidget(parent.estop_btn)
+    
+    # Camera toggle
+    parent.robot_camera_check = QCheckBox("Enable Camera Feed")
+    parent.robot_camera_check.stateChanged.connect(
+        lambda state: _toggle_robot_camera(parent, state)
+    )
+    robot_layout.addWidget(parent.robot_camera_check)
+    
+    # Robot status
+    parent.robot_status_label = QLabel("Robot: Disabled")
+    parent.robot_status_label.setStyleSheet("color: #888; font-style: italic;")
+    robot_layout.addWidget(parent.robot_status_label)
+    
+    layout.addWidget(robot_group)
+    
+    # === GAME AI ROUTING ===
+    game_group = QGroupBox("Game AI Routing")
+    game_layout = QVBoxLayout(game_group)
+    
+    game_desc = QLabel(
+        "Different games use different AI behaviors. Auto-detect or select manually."
+    )
+    game_desc.setWordWrap(True)
+    game_layout.addWidget(game_desc)
+    
+    # Game detection toggle
+    parent.auto_game_check = QCheckBox("Auto-Detect Running Game")
+    parent.auto_game_check.setChecked(False)
+    parent.auto_game_check.stateChanged.connect(
+        lambda state: _toggle_game_detection(parent, state)
+    )
+    parent.auto_game_enabled = False
+    game_layout.addWidget(parent.auto_game_check)
+    
+    # Manual game selector
+    game_select_row = QHBoxLayout()
+    game_select_row.addWidget(QLabel("Active Game:"))
+    parent.game_combo = QComboBox()
+    parent.game_combo.addItem("(None)", "none")
+    parent.game_combo.addItem("Minecraft", "minecraft")
+    parent.game_combo.addItem("Terraria", "terraria")
+    parent.game_combo.addItem("Valorant", "valorant")
+    parent.game_combo.addItem("League of Legends", "league")
+    parent.game_combo.addItem("Dark Souls", "darksouls")
+    parent.game_combo.addItem("Stardew Valley", "stardew")
+    parent.game_combo.addItem("Factorio", "factorio")
+    parent.game_combo.addItem("Custom...", "custom")
+    parent.game_combo.currentIndexChanged.connect(
+        lambda: _change_active_game(parent)
+    )
+    game_select_row.addWidget(parent.game_combo)
+    game_select_row.addStretch()
+    game_layout.addLayout(game_select_row)
+    
+    # Game status
+    parent.game_status_label = QLabel("No game active - using default AI")
+    parent.game_status_label.setStyleSheet("color: #888; font-style: italic;")
+    game_layout.addWidget(parent.game_status_label)
+    
+    layout.addWidget(game_group)
 
     # === AUTONOMOUS MODE ===
     autonomous_group = QGroupBox("Autonomous Mode")

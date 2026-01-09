@@ -376,6 +376,15 @@ class QuickCommandOverlay(QWidget):
     open_gui_requested = pyqtSignal()  # New signal for ESC to open GUI
     
     def __init__(self, parent=None):
+        # Initialize size attributes BEFORE calling parent __init__
+        # (in case any signals trigger setup_ui early)
+        self._min_width = 450
+        self._min_height = 120
+        self._expanded_height = 350
+        self._is_expanded = False
+        self._drag_pos = None
+        self._resize_edge = None
+        
         super().__init__(parent)
         # Use Window flag for proper window controls including Alt+F4
         self.setWindowFlags(
@@ -387,12 +396,6 @@ class QuickCommandOverlay(QWidget):
         self.setup_ui()
         self.history = []
         self.history_index = -1
-        self._is_expanded = False
-        self._drag_pos = None
-        self._resize_edge = None
-        self._min_width = 450
-        self._min_height = 120
-        self._expanded_height = 350
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
