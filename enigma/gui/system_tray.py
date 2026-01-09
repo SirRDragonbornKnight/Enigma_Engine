@@ -1052,10 +1052,20 @@ class EnigmaSystemTray(QObject):
             self.show_overlay()
     
     def show_overlay(self):
-        """Show the quick command overlay."""
+        """Show the quick command overlay (mini chat)."""
         self.overlay.show()
         self.overlay.activateWindow()
         self.overlay.command_input.setFocus()
+    
+    # Alias for easier access
+    def show_quick_command(self):
+        """Alias for show_overlay - opens the mini chat window."""
+        self.show_overlay()
+    
+    # Another alias 
+    def show_mini_chat(self):
+        """Alias for show_overlay - opens the mini chat window."""
+        self.show_overlay()
     
     def hide_overlay(self):
         """Hide the overlay."""

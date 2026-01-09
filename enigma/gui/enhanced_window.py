@@ -5665,6 +5665,7 @@ What would you like to do?""")
                         
                         # Custom buttons
                         minimize_btn = msg.addButton("Minimize to Tray", QMessageBox.AcceptRole)
+                        minichat_btn = msg.addButton("🗨️ Mini Chat", QMessageBox.ActionRole)
                         exit_btn = msg.addButton("Exit Completely", QMessageBox.DestructiveRole)
                         kill_btn = msg.addButton("Kill All && Exit", QMessageBox.DestructiveRole)
                         cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
@@ -5687,6 +5688,11 @@ What would you like to do?""")
                                 "Still running in the background.\n"
                                 "Click the tray icon to restore.",
                             )
+                        elif clicked == minichat_btn:
+                            # Open mini chat (Quick Command Overlay)
+                            event.ignore()
+                            window.hide()
+                            _system_tray.show_quick_command()
                         elif clicked == exit_btn:
                             # Exit completely
                             event.accept()
