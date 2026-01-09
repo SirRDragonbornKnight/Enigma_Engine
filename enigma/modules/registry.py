@@ -8,7 +8,8 @@ Auto-discovers and registers built-in modules.
 
 from functools import lru_cache
 import logging
-from typing import Dict, List, Optional, Type
+import os
+from typing import Dict, List, Optional, Type, Any
 
 from .manager import Module, ModuleInfo, ModuleCategory, ModuleManager
 
@@ -265,8 +266,8 @@ class ChatAPIModule(Module):
         },
     )
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, manager: 'ModuleManager' = None, config: Dict[str, Any] = None):
+        super().__init__(manager, config)
         self._client = None
         self._provider = None
 

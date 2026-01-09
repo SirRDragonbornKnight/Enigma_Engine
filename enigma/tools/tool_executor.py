@@ -337,7 +337,7 @@ class ToolExecutor:
                 "tool": tool_name,
             }
         
-        # Execute based on tool type
+        # Execute based on tool type - specific handlers first
         if tool_name == "generate_image":
             return self._execute_generate_image(module, params)
         elif tool_name == "generate_gif":
@@ -355,9 +355,50 @@ class ToolExecutor:
         elif tool_name == "generate_audio":
             return self._execute_generate_audio(module, params)
         else:
+            # Generic module tool execution - try to find matching method
+            return self._execute_generic_module_tool(module, tool_name, params)
+    
+    def _execute_generic_module_tool(self, module, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a tool generically on a module by finding a matching method."""
+        try:
+            # Try to find a method that matches the tool name
+            # e.g., "find_on_screen" -> module.find_on_screen() or module.find()
+            method_names = [
+                tool_name,  # exact match
+                tool_name.replace("_", ""),  # no underscores
+                tool_name.split("_")[0],  # first part only (e.g., "find")
+                f"execute_{tool_name}",  # execute_* prefix
+                "execute",  # generic execute method
+            ]
+            
+            method = None
+            for name in method_names:
+                if hasattr(module, name) and callable(getattr(module, name)):
+                    method = getattr(module, name)
+                    break
+                # Also check _instance
+                if hasattr(module, '_instance') and module._instance:
+                    if hasattr(module._instance, name) and callable(getattr(module._instance, name)):
+                        method = getattr(module._instance, name)
+                        break
+            
+            if method:
+                result = method(**params) if params else method()
+                return {
+                    "success": True,
+                    "result": str(result) if result else "Tool executed successfully",
+                    "tool": tool_name,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"No matching method found for tool '{tool_name}' on module",
+                    "tool": tool_name,
+                }
+        except Exception as e:
             return {
                 "success": False,
-                "error": f"Tool execution not implemented for {tool_name}",
+                "error": str(e),
                 "tool": tool_name,
             }
     

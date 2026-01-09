@@ -109,6 +109,10 @@ from . import data_tools
 from . import gaming_tools
 from . import browser_tools
 
+# Robot and Game control systems
+from .robot_modes import RobotModeController, RobotMode, get_mode_controller
+from .game_router import GameAIRouter, GameConfig, get_game_router
+
 # Tool Manager for enabling/disabling tools
 from .tool_manager import ToolManager, get_tool_manager, PRESETS, TOOL_CATEGORIES
 
@@ -165,6 +169,13 @@ __all__ = [
     "StreamingToolResult",
     "StreamingToolExecutor",
     "StreamState",
+    # Robot and Game control
+    "RobotModeController",
+    "RobotMode",
+    "get_mode_controller",
+    "GameAIRouter",
+    "GameConfig",
+    "get_game_router",
     # New tool modules
     "automation_tools",
     "knowledge_tools",

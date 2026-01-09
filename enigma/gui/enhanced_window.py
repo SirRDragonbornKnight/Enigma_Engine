@@ -1270,17 +1270,21 @@ class SetupWizard(QWizard):
 
 
 class ModelLoadingDialog(QDialog):
-    """Loading dialog with progress bar for model loading."""
+    """Loading dialog with animated progress bar and terminal output for model loading."""
     
     cancelled = False  # Flag to track cancellation
     
-    def __init__(self, model_name: str, parent=None):
+    def __init__(self, model_name: str, parent=None, show_terminal: bool = False):
         super().__init__(parent)
         self.setWindowTitle("Loading Model")
-        self.setFixedSize(350, 150)
+        self.setFixedSize(450, 240)
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
         self.cancelled = False
+        self.show_terminal = show_terminal
+        self._log_lines = []
+        self._current_progress = 0
+        self._target_progress = 0
         
         # Dark style
         self.setStyleSheet("""
@@ -1295,13 +1299,17 @@ class ModelLoadingDialog(QDialog):
             QProgressBar {
                 background-color: #313244;
                 border: none;
-                border-radius: 6px;
-                height: 12px;
+                border-radius: 8px;
+                height: 18px;
                 text-align: center;
+                color: white;
+                font-size: 11px;
+                font-weight: bold;
             }
             QProgressBar::chunk {
-                background-color: #89b4fa;
-                border-radius: 6px;
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #89b4fa, stop:0.5 #74c7ec, stop:1 #89b4fa);
+                border-radius: 8px;
             }
             QPushButton {
                 background-color: #45475a;
@@ -1314,40 +1322,121 @@ class ModelLoadingDialog(QDialog):
             QPushButton:hover {
                 background-color: #f38ba8;
             }
+            QPushButton#terminal_btn {
+                background-color: #313244;
+            }
+            QPushButton#terminal_btn:hover {
+                background-color: #45475a;
+            }
+            QTextEdit {
+                background-color: #11111b;
+                color: #a6e3a1;
+                border: 1px solid #45475a;
+                border-radius: 6px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: 10px;
+                padding: 4px;
+            }
         """)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 15, 20, 15)
+        layout.setSpacing(10)
         
-        # Title
-        title = QLabel(f"Loading: {model_name}")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #89b4fa;")
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
+        # Title with animated emoji
+        self.title_label = QLabel(f"⏳ Loading: {model_name}")
+        self.title_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #89b4fa;")
+        self.title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.title_label)
         
-        # Status label
+        # Status label with activity dots
         self.status_label = QLabel("Initializing...")
-        self.status_label.setStyleSheet("font-size: 11px; color: #a6adc8;")
+        self.status_label.setStyleSheet("font-size: 12px; color: #a6adc8;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
-        # Progress bar
+        # Progress bar with percentage text
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
-        self.progress.setTextVisible(False)
+        self.progress.setTextVisible(True)
+        self.progress.setFormat("%p%")
         layout.addWidget(self.progress)
+        
+        # Activity indicator (animated dots)
+        self.activity_label = QLabel("●○○")
+        self.activity_label.setStyleSheet("font-size: 14px; color: #74c7ec;")
+        self.activity_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.activity_label)
+        
+        # Terminal output area (optional)
+        self.terminal = QTextEdit()
+        self.terminal.setReadOnly(True)
+        self.terminal.setMaximumHeight(100)
+        self.terminal.setVisible(show_terminal)
+        layout.addWidget(self.terminal)
+        
+        # Buttons row
+        btn_layout = QHBoxLayout()
+        
+        # Toggle terminal button
+        self.terminal_btn = QPushButton("📺 Show Log")
+        self.terminal_btn.setObjectName("terminal_btn")
+        self.terminal_btn.clicked.connect(self._toggle_terminal)
+        btn_layout.addWidget(self.terminal_btn)
+        
+        btn_layout.addStretch()
         
         # Cancel button
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self._on_cancel)
-        layout.addWidget(self.cancel_btn, alignment=Qt.AlignCenter)
+        btn_layout.addWidget(self.cancel_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        # Animation timer for activity dots
+        self._dot_state = 0
+        from PyQt5.QtCore import QTimer
+        self._activity_timer = QTimer(self)
+        self._activity_timer.timeout.connect(self._animate_dots)
+        self._activity_timer.start(300)  # Update every 300ms
+        
+        # Smooth progress animation timer
+        self._progress_timer = QTimer(self)
+        self._progress_timer.timeout.connect(self._animate_progress)
+        self._progress_timer.start(30)  # Smooth 30ms updates
+    
+    def _animate_dots(self):
+        """Animate the activity indicator dots."""
+        dots = ["●○○", "○●○", "○○●", "○●○"]
+        self._dot_state = (self._dot_state + 1) % len(dots)
+        self.activity_label.setText(dots[self._dot_state])
+    
+    def _animate_progress(self):
+        """Smoothly animate progress bar to target value."""
+        if self._current_progress < self._target_progress:
+            # Ease towards target
+            diff = self._target_progress - self._current_progress
+            step = max(1, diff // 5)
+            self._current_progress = min(self._current_progress + step, self._target_progress)
+            self.progress.setValue(self._current_progress)
+    
+    def _toggle_terminal(self):
+        """Toggle terminal visibility."""
+        self.show_terminal = not self.show_terminal
+        self.terminal.setVisible(self.show_terminal)
+        if self.show_terminal:
+            self.terminal_btn.setText("📺 Hide Log")
+            self.setFixedSize(450, 340)
+        else:
+            self.terminal_btn.setText("📺 Show Log")
+            self.setFixedSize(450, 240)
     
     def _on_cancel(self):
         """Handle cancel button click."""
         self.cancelled = True
         self.status_label.setText("Cancelling...")
+        self.log("Cancelled by user")
         QApplication.processEvents()
     
     def is_cancelled(self) -> bool:
@@ -1355,11 +1444,33 @@ class ModelLoadingDialog(QDialog):
         QApplication.processEvents()  # Allow UI to update
         return self.cancelled
     
+    def log(self, text: str):
+        """Add a log line to terminal output."""
+        import time
+        timestamp = time.strftime("%H:%M:%S")
+        line = f"[{timestamp}] {text}"
+        self._log_lines.append(line)
+        self.terminal.append(f"<span style='color: #a6e3a1;'>{line}</span>")
+        # Scroll to bottom
+        self.terminal.verticalScrollBar().setValue(
+            self.terminal.verticalScrollBar().maximum()
+        )
+        QApplication.processEvents()
+    
     def set_status(self, text: str, progress: int):
-        """Update status text and progress."""
+        """Update status text and progress with smooth animation."""
         self.status_label.setText(text)
-        self.progress.setValue(progress)
+        self._target_progress = progress  # Animate towards this
+        self.log(text)
         QApplication.processEvents()  # Force UI update
+    
+    def close(self):
+        """Clean up timers before closing."""
+        if hasattr(self, '_activity_timer'):
+            self._activity_timer.stop()
+        if hasattr(self, '_progress_timer'):
+            self._progress_timer.stop()
+        super().close()
 
 
 class ModelManagerDialog(QDialog):
@@ -2887,10 +2998,16 @@ class EnhancedMainWindow(QMainWindow):
         # Create and show loading dialog
         loading_dialog = ModelLoadingDialog(self.current_model_name, self)
         loading_dialog.show()
+        
+        # Force dialog to fully render before starting loading
         QApplication.processEvents()
+        QApplication.processEvents()  # Double process to ensure rendering
         
         try:
-            loading_dialog.set_status("Loading model configuration...", 10)
+            loading_dialog.set_status("Initializing...", 5)
+            QApplication.processEvents()
+            
+            loading_dialog.set_status("Reading model registry...", 10)
             
             # Check for cancellation
             if loading_dialog.is_cancelled():
@@ -2898,8 +3015,19 @@ class EnhancedMainWindow(QMainWindow):
                 return
             
             # Create engine with selected model
-            model, config = self.registry.load_model(self.current_model_name)
-            loading_dialog.set_status("Model weights loaded", 40)
+            loading_dialog.set_status("Loading model weights from disk...", 15)
+            
+            # Progress callback for detailed model loading updates
+            def on_load_progress(msg, pct):
+                # Map registry progress (5-38%) to dialog progress (15-40%)
+                mapped_pct = 15 + int((pct / 40) * 25)
+                loading_dialog.set_status(msg, mapped_pct)
+            
+            model, config = self.registry.load_model(
+                self.current_model_name,
+                progress_callback=on_load_progress
+            )
+            loading_dialog.set_status("✓ Model weights loaded", 40)
             
             if loading_dialog.is_cancelled():
                 loading_dialog.close()
@@ -2909,7 +3037,7 @@ class EnhancedMainWindow(QMainWindow):
             is_huggingface = config.get("source") == "huggingface"
             self._is_hf_model = is_huggingface  # Track at window level for feature restrictions
             
-            loading_dialog.set_status("Initializing inference engine...", 50)
+            loading_dialog.set_status("Creating inference engine...", 45)
             
             if loading_dialog.is_cancelled():
                 loading_dialog.close()
@@ -2918,9 +3046,12 @@ class EnhancedMainWindow(QMainWindow):
             # Create engine instance without calling __init__
             from ..core.inference import EnigmaEngine
             self.engine = EnigmaEngine.__new__(EnigmaEngine)
+            loading_dialog.set_status("✓ Engine created", 50)
             
             # Set required attributes that __init__ would normally set
             import torch
+            device_name = "CUDA (GPU)" if torch.cuda.is_available() else "CPU"
+            loading_dialog.set_status(f"Detecting device: {device_name}...", 55)
             self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.engine.use_half = False
             self.engine.enable_tools = False
@@ -2928,7 +3059,7 @@ class EnhancedMainWindow(QMainWindow):
             self.engine._tool_executor = None
             self.engine._is_huggingface = is_huggingface
             
-            loading_dialog.set_status("Moving model to device...", 60)
+            loading_dialog.set_status(f"Moving model to {device_name}...", 60)
             
             if loading_dialog.is_cancelled():
                 loading_dialog.close()
@@ -2938,6 +3069,7 @@ class EnhancedMainWindow(QMainWindow):
             if is_huggingface:
                 # HuggingFaceModel is already loaded and ready
                 self.engine.model = model  # This is a HuggingFaceModel wrapper
+                loading_dialog.set_status("✓ HuggingFace model ready", 65)
                 
                 # Check if user wants custom tokenizer instead of model's own
                 use_custom_tokenizer = config.get("use_custom_tokenizer", False)
@@ -2946,24 +3078,29 @@ class EnhancedMainWindow(QMainWindow):
                     from ..core.tokenizer import load_tokenizer
                     self.engine.tokenizer = load_tokenizer()
                     self.engine._using_custom_tokenizer = True
+                    loading_dialog.set_status("✓ Custom tokenizer loaded", 75)
                 else:
                     self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
                     self.engine._using_custom_tokenizer = False
+                    loading_dialog.set_status("✓ Using model's tokenizer", 75)
             else:
                 # Local Enigma model
                 self.engine.model = model
+                loading_dialog.set_status("Moving model to GPU/CPU...", 68)
                 self.engine.model.to(self.engine.device)
                 self.engine.model.eval()
+                loading_dialog.set_status("✓ Model ready on device", 72)
                 loading_dialog.set_status("Loading tokenizer...", 75)
                 from ..core.tokenizer import load_tokenizer
                 self.engine.tokenizer = load_tokenizer()
+                loading_dialog.set_status("✓ Tokenizer loaded", 80)
             
             if loading_dialog.is_cancelled():
                 loading_dialog.close()
                 self.engine = None
                 return
             
-            loading_dialog.set_status("Initializing AI brain...", 85)
+            loading_dialog.set_status("Initializing AI brain & memory...", 85)
             
             # Initialize the AI's brain for learning
             from ..core.ai_brain import get_brain
@@ -2971,8 +3108,9 @@ class EnhancedMainWindow(QMainWindow):
                 self.current_model_name, 
                 auto_learn=getattr(self, 'learn_while_chatting', True)
             )
+            loading_dialog.set_status("✓ Brain initialized", 90)
             
-            loading_dialog.set_status("Finalizing...", 95)
+            loading_dialog.set_status("Finalizing setup...", 95)
             
             # Update window title with model type indicator
             model_type = "[HF]" if is_huggingface else "[Enigma]"
@@ -3401,15 +3539,28 @@ class EnhancedMainWindow(QMainWindow):
     
     def _switch_to_tab(self, tab_name: str):
         """Switch to a specific tab by name (for chat commands)."""
-        # Find the tab key that matches
+        # Find the tab key that matches - all available tabs
         key_map = {
-            'image': 'image', 'video': 'video', 'code': 'code',
-            'audio': 'audio', '3d': '3d', 'search': 'search',
-            'chat': 'chat', 'train': 'train', 'settings': 'settings',
-            'router': 'router', 'modules': 'modules', 'scale': 'scale',
-            'history': 'history', 'avatar': 'avatar', 'game': 'game',
-            'robot': 'robot', 'vision': 'vision',
-            'terminal': 'terminal', 'files': 'files', 'examples': 'examples',
+            # Core tabs
+            'chat': 'chat', 'train': 'train', 'history': 'history',
+            'scale': 'scale', 'modules': 'modules', 'tools': 'tools',
+            'router': 'router',
+            # Generation tabs
+            'image': 'image', 'code': 'code', 'video': 'video',
+            'audio': 'audio', '3d': '3d', 'gif': 'gif',
+            'search': 'search', 'embed': 'search', 'embeddings': 'search',
+            # Control tabs
+            'avatar': 'avatar', 'game': 'game', 'robot': 'robot',
+            # Vision/Camera tabs
+            'vision': 'vision', 'camera': 'camera',
+            # System tabs
+            'terminal': 'terminal', 'files': 'files', 'instructions': 'files',
+            'logs': 'logs', 'notes': 'notes',
+            # Network/Analytics
+            'network': 'network', 'analytics': 'analytics',
+            'scheduler': 'scheduler',
+            # Other
+            'examples': 'examples', 'settings': 'settings',
         }
         key = key_map.get(tab_name.lower())
         if key and key in self._nav_map:
@@ -5065,13 +5216,29 @@ class EnhancedMainWindow(QMainWindow):
         # Command mapping to tab indices and handlers
         commands = {
             '/help': self._show_command_help,
+            # Generation commands
             '/image': lambda p: self._run_generation_from_chat('image', p),
             '/video': lambda p: self._run_generation_from_chat('video', p),
             '/code': lambda p: self._run_generation_from_chat('code', p),
             '/audio': lambda p: self._run_generation_from_chat('audio', p),
             '/3d': lambda p: self._run_generation_from_chat('3d', p),
+            '/gif': lambda p: self._run_generation_from_chat('gif', p),
             '/embed': lambda p: self._run_generation_from_chat('embed', p),
+            # Tab navigation commands
+            '/chat': lambda p: self._switch_to_tab('chat'),
+            '/train': lambda p: self._switch_to_tab('train'),
+            '/settings': lambda p: self._switch_to_tab('settings'),
+            '/modules': lambda p: self._switch_to_tab('modules'),
+            '/tools': lambda p: self._switch_to_tab('tools'),
+            '/avatar': lambda p: self._switch_to_tab('avatar'),
+            '/robot': lambda p: self._switch_to_tab('robot'),
+            '/game': lambda p: self._switch_to_tab('game'),
+            '/vision': lambda p: self._switch_to_tab('vision'),
+            '/camera': lambda p: self._switch_to_tab('camera'),
+            '/terminal': lambda p: self._switch_to_tab('terminal'),
+            # Utility commands
             '/clear': lambda p: self._clear_chat_from_command(),
+            '/new': lambda p: self._new_chat_from_command(),
         }
         
         if command in commands:
@@ -5100,13 +5267,32 @@ Just ask naturally! The AI understands requests like:<br>
 • "Write code for a web scraper"<br>
 • "Make a 3D model of a chair"<br>
 <br>
-<b style='color:#89b4fa;'>Quick Commands (optional):</b><br>
+<b style='color:#89b4fa;'>🎨 Generation Commands:</b><br>
 <b>/image &lt;prompt&gt;</b> - Generate an image<br>
-<b>/video &lt;prompt&gt;</b> - Generate a video/GIF<br>
+<b>/video &lt;prompt&gt;</b> - Generate a video<br>
+<b>/gif &lt;prompt&gt;</b> - Generate an animated GIF<br>
 <b>/code &lt;description&gt;</b> - Generate code<br>
 <b>/audio &lt;text&gt;</b> - Generate speech audio<br>
 <b>/3d &lt;prompt&gt;</b> - Generate 3D model<br>
+<b>/embed &lt;text&gt;</b> - Generate embeddings<br>
+<br>
+<b style='color:#89b4fa;'>📂 Navigation Commands:</b><br>
+<b>/chat</b> - Go to Chat tab<br>
+<b>/train</b> - Go to Training tab<br>
+<b>/settings</b> - Go to Settings<br>
+<b>/modules</b> - Go to Modules<br>
+<b>/tools</b> - Go to Tools<br>
+<b>/avatar</b> - Go to Avatar<br>
+<b>/robot</b> - Go to Robot<br>
+<b>/game</b> - Go to Game<br>
+<b>/vision</b> - Go to Vision<br>
+<b>/camera</b> - Go to Camera<br>
+<b>/terminal</b> - Go to Terminal<br>
+<br>
+<b style='color:#89b4fa;'>🔧 Utility Commands:</b><br>
 <b>/clear</b> - Clear chat history<br>
+<b>/new</b> - Start a new conversation<br>
+<b>/help</b> - Show this help<br>
 <br>
 <b style='color:#f9e2af;'>📚 Learning Mode:</b><br>
 When ON, the AI saves your conversations to improve over time.<br>
@@ -5121,54 +5307,78 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         self.chat_messages = []
         self.chat_display.append("<b style='color:#a6e3a1;'>Chat cleared.</b>")
     
+    def _new_chat_from_command(self):
+        """Start a new chat conversation via command."""
+        try:
+            from .tabs.chat_tab import _new_chat
+            _new_chat(self)
+            self.chat_display.append("<b style='color:#a6e3a1;'>New conversation started.</b>")
+        except Exception as e:
+            # Fallback: just clear the chat
+            self.chat_display.clear()
+            self.chat_messages = []
+            self.chat_display.append("<b style='color:#a6e3a1;'>New conversation started.</b>")
+    
     def _run_generation_from_chat(self, gen_type: str, prompt: str):
         """Run a generation task from chat and show results."""
-        # Map generation types to tab names
+        # Map generation types to tab index and generate method names
+        # Tab indices match the order in _setup_content_stack:
+        # 0:Chat, 1:Train, 2:History, 3:Scale, 4:Modules, 5:Tools, 6:Router,
+        # 7:Image, 8:Code, 9:Video, 10:Audio, 11:3D, 12:GIF, 13:Embeddings,
+        # 14:Avatar, 15:Game, 16:Robot, 17:Vision, 18:Camera, 19:Terminal...
         tab_map = {
-            'image': ('Image', 'image_prompt', '_generate_image'),
-            'video': ('Video', 'video_prompt', '_generate_video'),
-            'code': ('Code', 'code_prompt', '_generate_code'),
-            'audio': ('Audio', 'audio_text', '_generate_audio'),
-            '3d': ('3D', 'threed_prompt', '_generate_3d'),
-            'embed': ('Embeddings', 'embed_text', '_generate_embeddings'),
+            'image': (7, 'Image', 'prompt_input', '_generate_image'),
+            'code': (8, 'Code', 'prompt_input', '_generate_code'),
+            'video': (9, 'Video', 'prompt_input', '_generate_video'),
+            'audio': (10, 'Audio', 'text_input', '_generate_audio'),
+            '3d': (11, '3D', 'prompt_input', '_generate_3d'),
+            'gif': (12, 'GIF', 'prompt_input', '_generate_gif'),
+            'embed': (13, 'Embeddings', 'text_input', '_generate_embedding'),
         }
         
         if gen_type not in tab_map:
             self.chat_display.append(f"<i>Unknown generation type: {gen_type}</i>")
             return
         
-        tab_name, prompt_attr, gen_method = tab_map[gen_type]
+        tab_index, tab_name, prompt_attr, gen_method = tab_map[gen_type]
         
         self.chat_display.append(
             f"<b style='color:#89b4fa;'>Generating {gen_type}:</b> {prompt}"
         )
         
-        # Set the prompt in the appropriate tab if the input widget exists
-        if hasattr(self, prompt_attr):
-            widget = getattr(self, prompt_attr)
-            if hasattr(widget, 'setPlainText'):
-                widget.setPlainText(prompt)
-            elif hasattr(widget, 'setText'):
-                widget.setText(prompt)
-        
-        # Try to run the generation method
-        if hasattr(self, gen_method):
-            try:
-                getattr(self, gen_method)()
-                self.chat_display.append(
-                    f"<b style='color:#a6e3a1;'>[OK]</b> {gen_type.title()} generation started! "
-                    f"A preview will popup when complete."
-                )
-            except Exception as e:
-                self.chat_display.append(
-                    f"<b style='color:#f38ba8;'>Error:</b> {e}"
-                )
-        else:
-            # Switch to the tab instead
+        # Get the actual tab widget from the content stack
+        try:
+            scroll_area = self.content_stack.widget(tab_index)
+            if scroll_area:
+                # The scroll area contains the actual tab widget
+                tab_widget = scroll_area.widget() if hasattr(scroll_area, 'widget') else scroll_area
+                
+                # Set the prompt in the tab's input widget
+                if hasattr(tab_widget, prompt_attr):
+                    widget = getattr(tab_widget, prompt_attr)
+                    if hasattr(widget, 'setPlainText'):
+                        widget.setPlainText(prompt)
+                    elif hasattr(widget, 'setText'):
+                        widget.setText(prompt)
+                
+                # Call the tab's generation method
+                if hasattr(tab_widget, gen_method):
+                    getattr(tab_widget, gen_method)()
+                    self.chat_display.append(
+                        f"<b style='color:#a6e3a1;'>[OK]</b> {gen_type.title()} generation started! "
+                        f"A preview will popup when complete."
+                    )
+                    return
+        except Exception as e:
             self.chat_display.append(
-                f"<i>Switching to {tab_name} tab. Enter your prompt there.</i>"
+                f"<b style='color:#f38ba8;'>Error accessing {tab_name} tab:</b> {e}"
             )
-            self._switch_to_tab(tab_name)
+        
+        # Fallback: Switch to the tab
+        self.chat_display.append(
+            f"<i>Switching to {tab_name} tab. Enter your prompt there.</i>"
+        )
+        self._switch_to_tab(tab_name)
     
     def _speak_text(self, text):
         """Speak text using TTS."""
@@ -5639,8 +5849,13 @@ def run_app(minimize_to_tray: bool = True):
         _system_tray = create_system_tray(app, window)
         
         if _system_tray:
-            # Connect tray to window
-            _system_tray.show_gui_requested.connect(window.show)
+            # Connect tray to window - show main window AND keep mini chat visible
+            def show_both():
+                window.show()
+                if hasattr(_system_tray, 'overlay') and _system_tray.overlay:
+                    _system_tray.overlay.show()
+            
+            _system_tray.show_gui_requested.connect(show_both)
             
             # Override close event to show options dialog
             if minimize_to_tray:

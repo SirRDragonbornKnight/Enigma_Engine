@@ -29,6 +29,9 @@ from .notes_tab import NotesTab, create_notes_tab
 from .network_tab import NetworkTab, create_network_tab
 from .analytics_tab import AnalyticsTab, create_analytics_tab
 from .scheduler_tab import SchedulerTab, create_scheduler_tab
+from .gif_tab import GIFTab, create_gif_tab
+from .settings_tab import create_settings_tab
+from .model_router_tab import ModelRouterTab
 
 __all__ = [
     'create_chat_tab',
@@ -72,4 +75,8 @@ __all__ = [
     'create_analytics_tab',
     'SchedulerTab',
     'create_scheduler_tab',
+    'GIFTab',
+    'create_gif_tab',
+    'create_settings_tab',
+    'ModelRouterTab',
 ]

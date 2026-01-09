@@ -617,9 +617,10 @@ class QuickCommandOverlay(QWidget):
             self.resize(self.width(), self._min_height)
     
     def _open_gui(self):
-        """Open the full GUI."""
+        """Open the full GUI (keeps mini chat open)."""
         self.open_gui_requested.emit()
-        self.hide()
+        # Don't hide mini chat - keep it open
+        # self.hide()
     
     def _close_overlay(self):
         """Close the overlay (goes to tray)."""
@@ -1346,11 +1347,14 @@ class EnigmaSystemTray(QObject):
             self._exit_app()
     
     def _show_main_window(self):
-        """Show the main GUI window."""
+        """Show the main GUI window (keeps mini chat open)."""
         self.show_gui_requested.emit()
         if self.main_window:
             self.main_window.show()
             self.main_window.activateWindow()
+            # Keep mini chat open too - always visible unless explicitly closed
+            if hasattr(self, 'overlay') and self.overlay:
+                self.overlay.show()
     
     def _open_chat_tab(self):
         """Open the GUI and switch to the chat tab."""

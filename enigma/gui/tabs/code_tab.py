@@ -38,15 +38,33 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class EnigmaCode:
     """Use Enigma's own model for code generation."""
     
-    def __init__(self, model_name: str = "sacrifice"):
+    def __init__(self, model_name: str = "small_enigma"):
         self.model_name = model_name
         self.engine = None
         self.is_loaded = False
     
     def load(self) -> bool:
         try:
-            from ...core.inference import InferenceEngine
-            self.engine = InferenceEngine(model_name=self.model_name)
+            from ...core.model_registry import ModelRegistry
+            registry = ModelRegistry()
+            model, config = registry.load_model(self.model_name)
+            
+            from ...core.inference import EnigmaEngine
+            # Create engine with loaded model
+            self.engine = EnigmaEngine.__new__(EnigmaEngine)
+            import torch
+            self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.engine.model = model
+            self.engine.model.to(self.engine.device)
+            self.engine.model.eval()
+            
+            from ...core.tokenizer import load_tokenizer
+            self.engine.tokenizer = load_tokenizer()
+            self.engine.use_half = False
+            self.engine.enable_tools = False
+            self.engine.module_manager = None
+            self.engine._tool_executor = None
+            
             self.is_loaded = True
             return True
         except Exception as e:

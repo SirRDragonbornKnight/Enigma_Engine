@@ -57,9 +57,10 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 
 ### Core AI Components
 - **enigma/core/model.py**: `EnigmaModel` class - Main transformer model implementation
-- **enigma/core/tokenizer.py**: `EnigmaTokenizer` class - Text tokenization and vocabulary
+- **enigma/core/tokenizer.py**: `SimpleTokenizer`, `TiktokenWrapper` classes - Text tokenization and vocabulary
 - **enigma/core/training.py**: `Trainer` class - Model training loop and optimization
 - **enigma/core/inference.py**: `EnigmaEngine` class - Model inference and generation
+- **enigma/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models
 
 ### AI Generation Tabs (in enigma/gui/tabs/)
 Each tab contains both the implementation (provider classes) and the GUI:
@@ -69,6 +70,7 @@ Each tab contains both the implementation (provider classes) and the GUI:
 - **audio_tab.py**: `LocalTTS`, `ElevenLabsTTS`, `ReplicateAudio` + `AudioTab`
 - **embeddings_tab.py**: `LocalEmbedding`, `OpenAIEmbedding` + `EmbeddingsTab`
 - **threed_tab.py**: `Local3DGen`, `Cloud3DGen` + `ThreeDTab`
+- **gif_tab.py**: `GIFTab` class - Animated GIF generation
 
 ### Memory System
 - **enigma/memory/manager.py**: `ConversationManager` class - Stores chat history
@@ -76,11 +78,32 @@ Each tab contains both the implementation (provider classes) and the GUI:
 
 ### Communication & Networking
 - **enigma/comms/api_server.py**: `create_api_server()` function - REST API for remote access
-- **enigma/comms/network.py**: Multi-device networking and synchronization
+- **enigma/comms/network.py**: `EnigmaNode`, `Message`, `ModelExporter` classes - Multi-device networking
+
+### Voice System
+- **enigma/voice/voice_generator.py**: `AIVoiceGenerator`, `VoiceEvolution` classes - Voice synthesis
+- **enigma/voice/listener.py**: `VoiceListener` class - Speech-to-text input
 
 ### User Interface
 - **enigma/gui/enhanced_window.py**: `EnhancedMainWindow` class - PyQt5 main application window
-- **enigma/gui/tabs/modules_tab.py**: UI for toggling modules on/off
+- **enigma/gui/tabs/modules_tab.py**: `ModulesTab` class - UI for toggling modules on/off
+- **enigma/gui/system_tray.py**: `QuickCommandOverlay` class - Mini chat window
+
+### Web Interface
+- **enigma/web/app.py**: `run_web()` function - Flask web dashboard, `app` Flask instance
+
+### Autonomous Systems (Avatar/Robot/Game Control)
+- **enigma/avatar/autonomous.py**: `AutonomousAvatar`, `AutonomousConfig`, `ScreenRegion` - Avatar auto-behavior
+- **enigma/tools/robot_modes.py**: `RobotModeController`, `get_mode_controller()` - Robot hardware control
+- **enigma/tools/game_router.py**: `GameAIRouter`, `GameConfig`, `get_game_router()` - Game-specific AI routing
+
+### Tools System
+- **enigma/tools/tool_executor.py**: `ToolExecutor` class - Executes AI tool calls
+- **enigma/tools/tool_definitions.py**: `ToolDefinition`, `ToolParameter` classes, `get_all_tools()` function
+- **enigma/tools/tool_registry.py**: `ToolRegistry` class - Manages available tools
+
+### Security
+- **enigma/utils/security.py**: `is_path_blocked()`, `get_blocked_paths()` functions - Path blocking for AI safety
 
 ### Configuration
 - **enigma/config.py**: `CONFIG` object - Global configuration (paths, model sizes, hyperparameters)

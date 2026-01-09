@@ -338,7 +338,8 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         self,
         name: str,
         device: Optional[str] = None,
-        checkpoint: Optional[str] = None
+        checkpoint: Optional[str] = None,
+        progress_callback: Optional[callable] = None
     ) -> Tuple[Enigma, Dict]:
         """
         Load a model by name.
@@ -347,10 +348,15 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             name: Model name
             device: Device to load to ("cuda", "cpu", or None for auto)
             checkpoint: Specific checkpoint to load (e.g., "epoch_100") or None for latest
+            progress_callback: Optional callback(message, percent) for progress updates
 
         Returns:
             (model, config_dict)
         """
+        def report(msg, pct):
+            if progress_callback:
+                progress_callback(msg, pct)
+        
         name = name.lower().strip()
         if name not in self.registry["models"]:
             available = list(self.registry['models'].keys())
@@ -359,21 +365,27 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         reg_info = self.registry["models"][name]
         model_dir = Path(reg_info["path"])
         
+        report("Checking model type...", 5)
+        
         # Check if this is a HuggingFace model
         if reg_info.get("source") == "huggingface":
             hf_model_id = reg_info.get("huggingface_id")
             if not hf_model_id:
                 raise ValueError(f"HuggingFace model '{name}' missing huggingface_id in registry")
             
+            report(f"Loading HuggingFace model: {hf_model_id}...", 10)
             # Use HuggingFace model class
             from .huggingface_loader import HuggingFaceModel
             hf_model = HuggingFaceModel(hf_model_id, device=device)
+            report("Downloading/loading model files...", 20)
             hf_model.load()
+            report("HuggingFace model loaded", 35)
             config = {"source": "huggingface", "model_id": hf_model_id}
             # Return the HuggingFaceModel wrapper (has .generate(), .chat(), etc.)
             return hf_model, config
 
         # Load config for local Enigma models
+        report("Reading model configuration...", 10)
         config_path = model_dir / "config.json"
         if not config_path.exists():
             raise FileNotFoundError(
@@ -388,12 +400,16 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         # Determine device
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        report(f"Creating model architecture ({device})...", 15)
 
         # Create EnigmaConfig from saved config (handles legacy parameter names)
         model_config = EnigmaConfig.from_dict(config)
 
         # Create model - MUST use config= keyword argument!
         model = Enigma(config=model_config)
+        
+        report("Model architecture created", 20)
 
         # Load weights
         if checkpoint:
@@ -402,12 +418,16 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             weights_path = model_dir / "weights.pth"
 
         if weights_path.exists():
+            report("Loading model weights from disk...", 25)
             state_dict = safe_load_weights(weights_path, map_location=device)
+            report("Applying weights to model...", 30)
             model.load_state_dict(state_dict)
+            report("Weights loaded successfully", 35)
             # Silent load - no print to avoid confusion with AI output
         else:
             print(f"[SYSTEM] [!] No weights found - model is untrained")
 
+        report(f"Moving model to {device}...", 38)
         model.to(device)
 
         return model, config

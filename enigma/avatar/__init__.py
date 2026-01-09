@@ -57,6 +57,15 @@ from .emotion_sync import EmotionExpressionSync
 from .lip_sync import LipSync
 from .customizer import AvatarCustomizer
 
+# Autonomous avatar system
+from .autonomous import (
+    AutonomousAvatar,
+    AvatarMood,
+    AutonomousConfig,
+    ScreenRegion,
+    get_autonomous_avatar,
+)
+
 __all__ = [
     # Controller
     "AvatarController",
@@ -79,4 +88,11 @@ __all__ = [
     
     # Customization
     "AvatarCustomizer",
+    
+    # Autonomous
+    "AutonomousAvatar",
+    "AvatarMood",
+    "AutonomousConfig",
+    "ScreenRegion",
+    "get_autonomous_avatar",
 ]
