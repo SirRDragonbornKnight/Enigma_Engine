@@ -137,7 +137,7 @@ TOOL_DEFINITIONS = {
 class ToolRouter:
     """Routes requests to appropriate tools and models."""
     
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Optional[Path] = None, use_specialized: bool = False):
         from ..config import CONFIG
         
         self.config_path = config_path or Path(CONFIG.get("data_dir", "data")) / "tool_routing.json"
@@ -155,7 +155,16 @@ class ToolRouter:
         # Tool handlers
         self._handlers: Dict[str, Callable] = {}
         
+        # Specialized models configuration
+        self.use_specialized = use_specialized
+        self._specialized_models: Dict[str, Any] = {}
+        self._shared_tokenizer = None
+        
         self._load_config()
+        
+        # Load specialized models config if enabled
+        if use_specialized:
+            self._load_specialized_config()
         
     def _load_config(self):
         """Load routing configuration."""
@@ -193,6 +202,269 @@ class ToolRouter:
             "avatar": [ModelAssignment("local:avatar", "local", priority=10)],
         }
         self._save_config()
+    
+    def _load_specialized_config(self):
+        """Load specialized models configuration."""
+        try:
+            config_path = Path(__file__).parent.parent.parent / "information" / "specialized_models.json"
+            if not config_path.exists():
+                logger.warning(f"Specialized models config not found: {config_path}")
+                return
+            
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            
+            if not config.get("enabled", False):
+                logger.info("Specialized models disabled in config")
+                return
+            
+            self._specialized_config = config
+            logger.info(f"Loaded specialized models config: {list(config.get('models', {}).keys())}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to load specialized models config: {e}")
+            self._specialized_config = {}
+    
+    def _get_shared_tokenizer(self):
+        """Get or load the shared tokenizer for specialized models."""
+        if self._shared_tokenizer is not None:
+            return self._shared_tokenizer
+        
+        try:
+            from .tokenizer import get_tokenizer
+            
+            # Try to load from configured path
+            if hasattr(self, '_specialized_config'):
+                tokenizer_path = self._specialized_config.get("shared_tokenizer")
+                if tokenizer_path:
+                    vocab_path = Path(__file__).parent.parent.parent / tokenizer_path
+                    if vocab_path.exists():
+                        self._shared_tokenizer = get_tokenizer("bpe", vocab_file=str(vocab_path))
+                        logger.info(f"Loaded shared tokenizer from: {vocab_path}")
+                        return self._shared_tokenizer
+            
+            # Fallback to default tokenizer
+            self._shared_tokenizer = get_tokenizer()
+            logger.info("Using default tokenizer for specialized models")
+            return self._shared_tokenizer
+            
+        except Exception as e:
+            logger.error(f"Failed to load shared tokenizer: {e}")
+            return None
+    
+    def _load_specialized_model(self, model_type: str):
+        """
+        Load a specialized model (router, vision, code, etc.).
+        
+        Args:
+            model_type: Type of model to load (router, vision, code)
+        
+        Returns:
+            Loaded model or None if failed
+        """
+        if not hasattr(self, '_specialized_config') or not self._specialized_config:
+            return None
+        
+        model_config = self._specialized_config.get('models', {}).get(model_type)
+        if not model_config:
+            logger.warning(f"No config for specialized model: {model_type}")
+            return None
+        
+        model_path = Path(__file__).parent.parent.parent / model_config['path']
+        
+        if not model_path.exists():
+            logger.warning(f"Specialized model not found: {model_path}")
+            logger.info(f"Train it with: python scripts/train_specialized_model.py --type {model_type}")
+            return None
+        
+        try:
+            import torch
+            from .model import Enigma
+            
+            # Load model checkpoint
+            checkpoint = torch.load(model_path, map_location='cpu')
+            
+            # Get tokenizer
+            tokenizer = self._get_shared_tokenizer()
+            if tokenizer is None:
+                logger.error("Cannot load specialized model without tokenizer")
+                return None
+            
+            # Create model from config
+            model = Enigma.from_config(checkpoint['config'])
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model.eval()
+            
+            logger.info(f"Loaded specialized {model_type} model from: {model_path}")
+            
+            return {
+                'model': model,
+                'tokenizer': tokenizer,
+                'config': checkpoint.get('config', {}),
+                'model_type': model_type,
+                'type': 'specialized'
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to load specialized {model_type} model: {e}")
+            return None
+    
+    def classify_intent(self, text: str) -> str:
+        """
+        Classify user intent using specialized router model.
+        
+        Args:
+            text: User input text
+        
+        Returns:
+            Intent class (chat, vision, image, code, etc.)
+        """
+        # Try specialized router model first
+        if self.use_specialized:
+            router_model = self._specialized_models.get('router')
+            if router_model is None and 'router' not in self._specialized_models:
+                # Try to load it (only once)
+                router_model = self._load_specialized_model('router')
+                self._specialized_models['router'] = router_model
+            
+            if router_model:
+                try:
+                    import torch
+                    
+                    model = router_model['model']
+                    tokenizer = router_model['tokenizer']
+                    
+                    # Prepare input
+                    prompt = f"Q: {text}\nA: [E:tool]"
+                    input_ids = tokenizer.encode(prompt)
+                    input_tensor = torch.tensor([input_ids])
+                    
+                    # Generate
+                    with torch.no_grad():
+                        output = model.generate(
+                            input_tensor,
+                            max_new_tokens=10,
+                            temperature=0.1,  # Low temperature for classification
+                        )
+                    
+                    # Decode and extract intent
+                    result = tokenizer.decode(output[0].tolist())
+                    
+                    # Extract intent from output
+                    # Expected format: "Q: ... A: [E:tool]intent"
+                    if '[E:tool]' in result:
+                        intent = result.split('[E:tool]')[-1].strip().split()[0].lower()
+                        if intent in self.tools:
+                            logger.info(f"Router classified intent: {intent}")
+                            return intent
+                    
+                except Exception as e:
+                    logger.warning(f"Specialized router failed: {e}")
+        
+        # Fallback to keyword-based detection
+        return self.detect_tool(text)
+    
+    def describe_image(self, features: str) -> str:
+        """
+        Generate image description using specialized vision model.
+        
+        Args:
+            features: Comma-separated vision features/labels
+        
+        Returns:
+            Natural language description
+        """
+        if self.use_specialized:
+            vision_model = self._specialized_models.get('vision')
+            if vision_model is None and 'vision' not in self._specialized_models:
+                vision_model = self._load_specialized_model('vision')
+                self._specialized_models['vision'] = vision_model
+            
+            if vision_model:
+                try:
+                    import torch
+                    
+                    model = vision_model['model']
+                    tokenizer = vision_model['tokenizer']
+                    
+                    # Prepare input
+                    prompt = f"Q: [E:vision] {features}\nA: "
+                    input_ids = tokenizer.encode(prompt)
+                    input_tensor = torch.tensor([input_ids])
+                    
+                    # Generate
+                    with torch.no_grad():
+                        output = model.generate(
+                            input_tensor,
+                            max_new_tokens=64,
+                            temperature=0.7,
+                        )
+                    
+                    # Decode
+                    result = tokenizer.decode(output[0].tolist())
+                    
+                    # Extract description after "A: "
+                    if "A: " in result:
+                        description = result.split("A: ", 1)[1].strip()
+                        logger.info(f"Vision model generated description")
+                        return description
+                    
+                except Exception as e:
+                    logger.warning(f"Specialized vision model failed: {e}")
+        
+        # Fallback to simple description
+        return f"I see: {features}"
+    
+    def generate_code(self, prompt: str) -> str:
+        """
+        Generate code using specialized code model.
+        
+        Args:
+            prompt: Code generation prompt
+        
+        Returns:
+            Generated code
+        """
+        if self.use_specialized:
+            code_model = self._specialized_models.get('code')
+            if code_model is None and 'code' not in self._specialized_models:
+                code_model = self._load_specialized_model('code')
+                self._specialized_models['code'] = code_model
+            
+            if code_model:
+                try:
+                    import torch
+                    
+                    model = code_model['model']
+                    tokenizer = code_model['tokenizer']
+                    
+                    # Prepare input
+                    input_text = f"Q: {prompt}\nA: "
+                    input_ids = tokenizer.encode(input_text)
+                    input_tensor = torch.tensor([input_ids])
+                    
+                    # Generate
+                    with torch.no_grad():
+                        output = model.generate(
+                            input_tensor,
+                            max_new_tokens=256,
+                            temperature=0.7,
+                        )
+                    
+                    # Decode
+                    result = tokenizer.decode(output[0].tolist())
+                    
+                    # Extract code after "A: "
+                    if "A: " in result:
+                        code = result.split("A: ", 1)[1].strip()
+                        logger.info(f"Code model generated response")
+                        return code
+                    
+                except Exception as e:
+                    logger.warning(f"Specialized code model failed: {e}")
+        
+        # Fallback - return prompt
+        return f"# {prompt}\n# (No specialized code model available)"
             
     def _save_config(self):
         """Save routing configuration."""
@@ -623,12 +895,17 @@ class ToolRouter:
         """
         Automatically route a user request to the appropriate tool.
         
-        1. Detect which tool should handle this
+        1. Detect which tool should handle this (using specialized router if available)
         2. Execute the tool
         3. Return result
         """
-        # Detect tool
-        tool_name = self.detect_tool(user_input) or "chat"
+        # Detect tool using specialized model or keyword matching
+        tool_name = self.classify_intent(user_input) if self.use_specialized else self.detect_tool(user_input)
+        
+        if not tool_name:
+            tool_name = "chat"
+        
+        logger.info(f"Routing to tool: {tool_name}")
         
         # Build params
         params = {"prompt": user_input}
@@ -643,9 +920,17 @@ class ToolRouter:
 _router_instance: Optional[ToolRouter] = None
 
 
-def get_router() -> ToolRouter:
-    """Get the global ToolRouter instance."""
+def get_router(use_specialized: bool = False) -> ToolRouter:
+    """
+    Get the global ToolRouter instance.
+    
+    Args:
+        use_specialized: Enable specialized models for routing
+    
+    Returns:
+        ToolRouter instance
+    """
     global _router_instance
     if _router_instance is None:
-        _router_instance = ToolRouter()
+        _router_instance = ToolRouter(use_specialized=use_specialized)
     return _router_instance

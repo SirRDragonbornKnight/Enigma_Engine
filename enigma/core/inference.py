@@ -69,7 +69,8 @@ class EnigmaEngine:
         use_half: bool = False,
         model_size: str = "auto",
         enable_tools: bool = False,
-        module_manager: Optional[Any] = None
+        module_manager: Optional[Any] = None,
+        use_routing: bool = False
     ):
         """
         Initialize the inference engine.
@@ -82,6 +83,7 @@ class EnigmaEngine:
             model_size: Model size hint if not loading from file
             enable_tools: Enable AI tool use system
             module_manager: ModuleManager instance for tool execution
+            use_routing: Enable specialized model routing (default: False)
         """
         # Device selection
         self.device = self._select_device(device)
@@ -90,6 +92,7 @@ class EnigmaEngine:
         # Store configuration
         self.enable_tools = enable_tools
         self.module_manager = module_manager
+        self.use_routing = use_routing
         
         # Check if offloading is enabled
         self.use_offloading = CONFIG.get("enable_offloading", False)
@@ -99,6 +102,13 @@ class EnigmaEngine:
         if enable_tools:
             from ..tools.tool_executor import ToolExecutor
             self._tool_executor = ToolExecutor(module_manager=module_manager)
+        
+        # Initialize tool router if routing is enabled
+        self._tool_router = None
+        if use_routing:
+            from .tool_router import get_router
+            self._tool_router = get_router(use_specialized=True)
+            logger.info("Specialized model routing enabled")
 
         # Load tokenizer
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)
@@ -427,6 +437,21 @@ class EnigmaEngine:
         # Determine if tools should be executed
         if execute_tools is None:
             execute_tools = self.enable_tools
+        
+        # Check if routing is enabled and should handle this request
+        if self.use_routing and self._tool_router:
+            intent = self._tool_router.classify_intent(prompt)
+            logger.info(f"Classified intent: {intent}")
+            
+            # If routed to code or vision, use specialized model
+            if intent == "code" and hasattr(self._tool_router, 'generate_code'):
+                logger.info("Using specialized code generation model")
+                return self._tool_router.generate_code(prompt)
+            elif intent == "vision" and hasattr(self._tool_router, 'describe_image'):
+                # For vision, we'd need features - this is a placeholder
+                # In practice, vision features would come from image analysis
+                logger.info("Vision routing detected, but no features provided")
+                # Fall through to standard generation
         
         # Standard generation
         text = self._generate_text(
