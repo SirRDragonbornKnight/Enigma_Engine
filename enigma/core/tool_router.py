@@ -350,13 +350,27 @@ class ToolRouter:
                     # Decode and extract intent
                     result = tokenizer.decode(output[0].tolist())
                     
-                    # Extract intent from output
+                    # Extract intent from output using regex for robustness
                     # Expected format: "Q: ... A: [E:tool]intent"
-                    if '[E:tool]' in result:
-                        intent = result.split('[E:tool]')[-1].strip().split()[0].lower()
+                    import re
+                    match = re.search(r'\[E:tool\](\w+)', result)
+                    if match:
+                        intent = match.group(1).lower()
                         if intent in self.tools:
                             logger.info(f"Router classified intent: {intent}")
                             return intent
+                    
+                    # Fallback: try simple split if regex fails
+                    if '[E:tool]' in result:
+                        parts = result.split('[E:tool]')
+                        if len(parts) > 1:
+                            # Get first word after [E:tool]
+                            intent_text = parts[-1].strip()
+                            # Extract first word (handle whitespace, newlines, etc.)
+                            intent = intent_text.split()[0].lower() if intent_text else None
+                            if intent and intent in self.tools:
+                                logger.info(f"Router classified intent (fallback): {intent}")
+                                return intent
                     
                 except Exception as e:
                     logger.warning(f"Specialized router failed: {e}")

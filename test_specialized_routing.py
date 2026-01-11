@@ -13,8 +13,10 @@ import sys
 import json
 from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add parent directory to path - test file is in project root
+# So we just need to add current directory
+script_dir = Path(__file__).parent
+sys.path.insert(0, str(script_dir))
 
 def test_training_data_files():
     """Test that training data files exist and are valid."""

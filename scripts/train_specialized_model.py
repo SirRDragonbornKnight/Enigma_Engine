@@ -25,11 +25,16 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import torch
-from enigma.core.model import create_model, MODEL_PRESETS
-from enigma.core.tokenizer import get_tokenizer, train_tokenizer
-from enigma.core.training import Trainer, TrainingConfig, train_model
-from enigma.config import CONFIG
+try:
+    import torch
+    from enigma.core.model import create_model, MODEL_PRESETS
+    from enigma.core.tokenizer import get_tokenizer, train_tokenizer
+    from enigma.core.training import Trainer, TrainingConfig, train_model
+    from enigma.config import CONFIG
+except ImportError as e:
+    print(f"Error: Required dependencies not installed: {e}")
+    print("Please install requirements: pip install -r requirements.txt")
+    sys.exit(1)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,10 +95,22 @@ def validate_model_type(model_type: str) -> dict:
 
 def get_shared_tokenizer():
     """Get or create the shared tokenizer."""
-    vocab_dir = Path(__file__).parent.parent / "enigma" / "vocab_model"
-    vocab_file = vocab_dir / "bpe_vocab.json"
+    # Load config to get shared tokenizer path
+    try:
+        config_path = Path(__file__).parent.parent / "information" / "specialized_models.json"
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                tokenizer_path = config.get("shared_tokenizer", "enigma/vocab_model/bpe_vocab.json")
+        else:
+            tokenizer_path = "enigma/vocab_model/bpe_vocab.json"
+    except Exception:
+        tokenizer_path = "enigma/vocab_model/bpe_vocab.json"
+    
+    vocab_file = Path(__file__).parent.parent / tokenizer_path
     
     logger.info("Loading shared tokenizer...")
+    logger.info(f"Looking for tokenizer at: {vocab_file}")
     
     # Try to load existing tokenizer
     try:
@@ -144,12 +161,13 @@ def train_specialized_model(
     
     # Count lines for validation
     lines = [l.strip() for l in training_text.split('\n') if l.strip()]
-    qa_pairs = len([l for l in lines if l.startswith('Q:') or l.startswith('A:')])
-    logger.info(f"Loaded {qa_pairs} lines of training data")
+    question_lines = len([l for l in lines if l.startswith('Q:')])
+    answer_lines = len([l for l in lines if l.startswith('A:')])
+    logger.info(f"Loaded {question_lines} questions and {answer_lines} answers")
     
-    if qa_pairs < 20:
-        logger.warning(f"Very small dataset ({qa_pairs} lines). Results may be poor.")
-        logger.warning("Recommended: at least 100+ Q&A pairs for good results")
+    if question_lines < 10:
+        logger.warning(f"Very small dataset ({question_lines} Q/A pairs). Results may be poor.")
+        logger.warning("Recommended: at least 50+ Q/A pairs for good results")
     
     # Get shared tokenizer
     tokenizer = get_shared_tokenizer()
@@ -208,7 +226,7 @@ def train_specialized_model(
             'model_type': model_type,
             'model_size': model_size,
             'vocab_size': tokenizer.vocab_size,
-            'training_lines': qa_pairs,
+            'training_questions': question_lines,
             'epochs': epochs,
         }, output_path)
         
@@ -220,7 +238,7 @@ def train_specialized_model(
                 'model_size': model_size,
                 'vocab_size': tokenizer.vocab_size,
                 'config': model.get_config(),
-                'training_lines': qa_pairs,
+                'training_questions': question_lines,
                 'epochs': epochs,
             }, f, indent=2)
         
