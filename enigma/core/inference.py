@@ -443,19 +443,15 @@ class EnigmaEngine:
             intent = self._tool_router.classify_intent(prompt)
             logger.info(f"Classified intent: {intent}")
             
-            # Direct routing for specific intents (bypasses main AI for speed)
-            if intent == "image":
-                # Direct image generation - skip main AI entirely
-                logger.info("Direct routing to image generation")
-                return self._direct_image_generation(prompt)
-            elif intent == "code" and hasattr(self._tool_router, 'generate_code'):
-                logger.info("Using specialized code generation model")
-                return self._tool_router.generate_code(prompt)
-            elif intent == "vision" and hasattr(self._tool_router, 'describe_image'):
-                # For vision, we'd need features - this is a placeholder
-                # In practice, vision features would come from image analysis
-                logger.info("Vision routing detected, but no features provided")
+            # Check if this needs AI creativity (ambiguous/creative requests)
+            if self._needs_ai_creativity(prompt):
+                logger.info("Prompt requires AI creativity, using main AI")
                 # Fall through to standard generation
+            else:
+                # Direct routing for specific intents (bypasses main AI for speed)
+                direct_result = self._try_direct_routing(intent, prompt)
+                if direct_result is not None:
+                    return direct_result
         
         # Standard generation
         text = self._generate_text(
@@ -475,25 +471,110 @@ class EnigmaEngine:
         
         return text
     
-    def _direct_image_generation(self, prompt: str) -> str:
+    def _needs_ai_creativity(self, prompt: str) -> bool:
         """
-        Direct image generation - bypasses main AI for instant routing.
+        Check if the prompt requires AI creativity/context rather than direct execution.
         
-        Extracts the image description from the prompt and calls the 
-        image generator directly, returning a formatted response.
+        Returns True for ambiguous or creative requests that need AI interpretation.
+        """
+        prompt_lower = prompt.lower()
+        
+        # Phrases that indicate need for AI creativity
+        creativity_indicators = [
+            "what do you think",
+            "surprise me",
+            "something cool",
+            "something interesting",
+            "be creative",
+            "your choice",
+            "you decide",
+            "like before",
+            "like last time",
+            "similar to",
+            "in the style of",
+            "mood",
+            "feeling",
+            "vibe",
+            "not sure",
+            "maybe",
+            "suggest",
+            "recommend",
+            "what would",
+            "how about",
+            "can you think of",
+        ]
+        
+        for indicator in creativity_indicators:
+            if indicator in prompt_lower:
+                return True
+        
+        # Very short prompts might be ambiguous
+        words = prompt.split()
+        if len(words) <= 2:
+            # Single word commands are usually direct ("draw cat")
+            # But single words alone are ambiguous
+            if len(words) == 1 and words[0].lower() not in ['draw', 'paint', 'generate', 'create', 'make', 'speak', 'say']:
+                return True
+        
+        return False
+    
+    def _try_direct_routing(self, intent: str, prompt: str) -> Optional[str]:
+        """
+        Try to handle the request directly without main AI.
+        
+        Returns the response string if handled, None if should fall through to AI.
+        """
+        if intent == "image":
+            logger.info("Direct routing to image generation")
+            return self._direct_generation(prompt, "image", "generate_image")
+        
+        elif intent == "video":
+            logger.info("Direct routing to video generation")
+            return self._direct_generation(prompt, "video", "generate_video")
+        
+        elif intent == "audio":
+            logger.info("Direct routing to audio/speech generation")
+            return self._direct_generation(prompt, "audio", "speak_text")
+        
+        elif intent == "3d":
+            logger.info("Direct routing to 3D generation")
+            return self._direct_generation(prompt, "3D model", "generate_3d")
+        
+        elif intent == "gif":
+            logger.info("Direct routing to GIF generation")
+            return self._direct_generation(prompt, "GIF", "generate_gif")
+        
+        elif intent == "code" and hasattr(self._tool_router, 'generate_code'):
+            logger.info("Using specialized code generation model")
+            return self._tool_router.generate_code(prompt)
+        
+        elif intent == "vision" and hasattr(self._tool_router, 'describe_image'):
+            logger.info("Vision routing detected, but no features provided")
+            # Fall through - vision needs actual image input
+            return None
+        
+        elif intent == "web":
+            logger.info("Direct routing to web search")
+            return self._direct_web_search(prompt)
+        
+        # Unknown intent or no direct handler - let AI handle it
+        return None
+    
+    def _direct_generation(self, prompt: str, content_type: str, tool_name: str) -> str:
+        """
+        Generic direct generation handler for image/video/audio/3D/gif.
+        
+        Extracts description and calls the appropriate tool directly.
         """
         import re
         
-        # Extract the actual image description from common phrasings
-        # "draw me a cat" -> "a cat"
-        # "generate an image of a sunset" -> "a sunset"
-        # "create a picture of mountains" -> "mountains"
+        # Common patterns for extracting the actual content description
         description = prompt
         
         patterns = [
-            r'(?:draw|paint|create|generate|make)\s+(?:me\s+)?(?:a\s+)?(?:picture|image|photo|illustration|artwork)?\s*(?:of\s+)?(.+)',
-            r'(?:draw|paint|create|generate|make)\s+(?:me\s+)?(.+)',
-            r'(?:picture|image|photo)\s+of\s+(.+)',
+            r'(?:draw|paint|create|generate|make|produce)\s+(?:me\s+)?(?:a\s+)?(?:picture|image|photo|illustration|artwork|video|clip|animation|sound|audio|speech|model|mesh|gif)?\s*(?:of\s+)?(.+)',
+            r'(?:draw|paint|create|generate|make|produce|speak|say|read)\s+(?:me\s+)?(.+)',
+            r'(?:picture|image|photo|video|audio|model)\s+of\s+(.+)',
         ]
         
         for pattern in patterns:
@@ -502,30 +583,59 @@ class EnigmaEngine:
                 description = match.group(1).strip()
                 break
         
-        # Clean up the description
+        # Clean up
         description = description.strip('.,!? ')
         if not description:
-            description = prompt  # Fallback to full prompt
+            description = prompt
         
-        logger.info(f"Direct image generation with description: {description}")
+        logger.info(f"Direct {content_type} generation: {description}")
         
-        # Try to use tool executor's image generation
-        if self._tool_executor:
-            result = self._tool_executor.execute_tool(
-                "generate_image",
-                {"prompt": description}
-            )
-            
-            if result.get("success"):
-                path = result.get("path", result.get("result", {}).get("path", ""))
-                duration = result.get("duration", 0)
-                return f"I've generated an image of '{description}' for you.\n\nImage saved to: {path}\nGeneration time: {duration:.1f}s"
-            else:
-                error = result.get("error", "Unknown error")
-                return f"I tried to generate an image but encountered an error: {error}\n\nYou can try using the Image tab directly, or check that an image provider is loaded."
+        if not self._tool_executor:
+            return f"To generate {content_type}, please use the {content_type.title()} tab. Direct generation not available."
         
-        # Fallback: return instruction to use Image tab
-        return f"To generate an image of '{description}', please use the Image tab. I detected this as an image request but don't have direct access to the image generator."
+        # Execute the tool
+        result = self._tool_executor.execute_tool(tool_name, {"prompt": description})
+        
+        if result.get("success"):
+            path = result.get("path", result.get("result", {}).get("path", ""))
+            duration = result.get("duration", 0)
+            return f"I've generated {content_type} of '{description}' for you.\n\nSaved to: {path}\nGeneration time: {duration:.1f}s"
+        else:
+            error = result.get("error", "Unknown error")
+            tab_name = content_type.title().replace("3d", "3D")
+            return f"I tried to generate {content_type} but encountered an error: {error}\n\nYou can try using the {tab_name} tab directly."
+    
+    def _direct_web_search(self, prompt: str) -> str:
+        """Direct web search without AI intermediary."""
+        import re
+        
+        # Extract search query
+        query = prompt
+        patterns = [
+            r'(?:search|google|look up|find|browse)\s+(?:for\s+)?(.+)',
+            r'what is\s+(.+)',
+            r'who is\s+(.+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, prompt, re.IGNORECASE)
+            if match:
+                query = match.group(1).strip()
+                break
+        
+        query = query.strip('?,!. ')
+        
+        if not self._tool_executor:
+            return f"To search for '{query}', please use the web tools. Direct search not available."
+        
+        result = self._tool_executor.execute_tool("web_search", {"query": query})
+        
+        if result.get("success"):
+            search_results = result.get("result", result.get("results", "No results found"))
+            return f"Search results for '{query}':\n\n{search_results}"
+        else:
+            error = result.get("error", "Unknown error")
+            return f"Web search failed: {error}"
     
     def _generate_text(
         self,

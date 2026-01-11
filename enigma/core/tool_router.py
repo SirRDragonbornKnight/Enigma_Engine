@@ -137,6 +137,10 @@ TOOL_DEFINITIONS = {
 class ToolRouter:
     """Routes requests to appropriate tools and models."""
     
+    # Maximum number of models to keep in cache (LRU eviction)
+    MAX_CACHE_SIZE = 5
+    MAX_SPECIALIZED_CACHE_SIZE = 3
+    
     def __init__(self, config_path: Optional[Path] = None, use_specialized: bool = False):
         from ..config import CONFIG
         
@@ -149,8 +153,9 @@ class ToolRouter:
         # Tool definitions
         self.tools = TOOL_DEFINITIONS.copy()
         
-        # Loaded model instances (cached)
+        # Loaded model instances (cached with LRU tracking)
         self._model_cache: Dict[str, Any] = {}
+        self._model_cache_order: List[str] = []  # Track access order for LRU
         
         # Tool handlers
         self._handlers: Dict[str, Callable] = {}
@@ -158,6 +163,7 @@ class ToolRouter:
         # Specialized models configuration
         self.use_specialized = use_specialized
         self._specialized_models: Dict[str, Any] = {}
+        self._specialized_cache_order: List[str] = []
         self._shared_tokenizer = None
         
         self._load_config()
@@ -165,6 +171,59 @@ class ToolRouter:
         # Load specialized models config if enabled
         if use_specialized:
             self._load_specialized_config()
+    
+    def _cache_model(self, key: str, model: Any, is_specialized: bool = False):
+        """Add model to cache with LRU eviction."""
+        if is_specialized:
+            cache = self._specialized_models
+            order = self._specialized_cache_order
+            max_size = self.MAX_SPECIALIZED_CACHE_SIZE
+        else:
+            cache = self._model_cache
+            order = self._model_cache_order
+            max_size = self.MAX_CACHE_SIZE
+        
+        # Update access order
+        if key in order:
+            order.remove(key)
+        order.append(key)
+        
+        cache[key] = model
+        
+        # Evict oldest if over limit
+        while len(order) > max_size:
+            oldest = order.pop(0)
+            if oldest in cache:
+                old_model = cache.pop(oldest)
+                self._cleanup_model(old_model)
+                logger.info(f"Evicted model from cache: {oldest}")
+    
+    def _cleanup_model(self, model: Any):
+        """Clean up a model (free GPU memory)."""
+        try:
+            if model is None:
+                return
+            
+            # Handle specialized model dict format
+            if isinstance(model, dict) and 'model' in model:
+                actual_model = model['model']
+                del model['model']
+                model.clear()
+                model = actual_model
+            
+            if hasattr(model, 'cpu'):
+                model.cpu()
+            del model
+            
+            # Free GPU memory
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
+        except Exception as e:
+            logger.warning(f"Error cleaning up model: {e}")
         
     def _load_config(self):
         """Load routing configuration."""

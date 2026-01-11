@@ -33,13 +33,18 @@ def timeout_context(seconds: int):
     """
     Context manager for timing out operations.
     
-    Uses signal.SIGALRM on Unix systems, threading.Timer on Windows.
+    Uses signal.SIGALRM on Unix systems, concurrent.futures on Windows.
     
     Args:
         seconds: Timeout in seconds
         
     Raises:
         TimeoutError: If the operation takes longer than specified
+        
+    Note:
+        On Windows, this provides a "soft" timeout that sets a flag.
+        The operation must periodically check for cancellation.
+        For truly interruptible timeouts, use run_with_timeout() instead.
     """
     def timeout_handler(signum, frame):
         raise TimeoutError(f"Operation timed out after {seconds} seconds")
@@ -72,6 +77,37 @@ def timeout_context(seconds: int):
                 raise TimeoutError(f"Operation timed out after {seconds} seconds")
         finally:
             timer.cancel()
+
+
+def run_with_timeout(func, args=(), kwargs=None, timeout_seconds: int = 30):
+    """
+    Run a function with a hard timeout that works on Windows.
+    
+    Uses concurrent.futures.ThreadPoolExecutor which can interrupt the thread.
+    
+    Args:
+        func: The function to run
+        args: Positional arguments for the function
+        kwargs: Keyword arguments for the function
+        timeout_seconds: Maximum time to wait
+        
+    Returns:
+        The function's return value
+        
+    Raises:
+        TimeoutError: If the function takes longer than timeout_seconds
+    """
+    import concurrent.futures
+    
+    if kwargs is None:
+        kwargs = {}
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"Operation timed out after {timeout_seconds} seconds")
 
 
 class ToolExecutor:

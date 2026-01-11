@@ -57,42 +57,52 @@ def is_path_blocked(path: str) -> Tuple[bool, Optional[str]]:
         return False, None
     
     try:
-        # Normalize path
-        check_path = Path(path).expanduser().resolve()
-        path_str = str(check_path)
-        path_lower = path_str.lower()
-        name_lower = check_path.name.lower()
+        # Check BOTH resolved and unresolved paths to prevent symlink bypass
+        raw_path = Path(path).expanduser()
+        resolved_path = raw_path.resolve()
         
-        # Check explicit blocked paths
-        for blocked in _BLOCKED_PATHS:
-            if not blocked:
-                continue
-            blocked_path = Path(blocked).expanduser().resolve()
-            blocked_str = str(blocked_path).lower()
-            
-            # Check if path is the blocked path or inside it
-            if path_lower == blocked_str or path_lower.startswith(blocked_str + ("/" if "/" in path_lower else "\\")):
-                return True, f"Path is in blocked location: {blocked}"
+        # Check both the raw path and resolved path
+        paths_to_check = [
+            (str(raw_path), raw_path.name),
+            (str(resolved_path), resolved_path.name),
+        ]
         
-        # Check patterns against filename and full path
-        for pattern in _BLOCKED_PATTERNS:
-            if not pattern:
-                continue
-            pattern_lower = pattern.lower()
+        for path_str, name in paths_to_check:
+            path_lower = path_str.lower()
+            name_lower = name.lower()
             
-            # Check filename
-            if fnmatch.fnmatch(name_lower, pattern_lower):
-                return True, f"Filename matches blocked pattern: {pattern}"
+            # Check explicit blocked paths
+            for blocked in _BLOCKED_PATHS:
+                if not blocked:
+                    continue
+                blocked_path = Path(blocked).expanduser().resolve()
+                blocked_str = str(blocked_path).lower()
+                
+                # Check if path is the blocked path or inside it
+                sep = "/" if "/" in path_lower else "\\"
+                if path_lower == blocked_str or path_lower.startswith(blocked_str + sep):
+                    return True, f"Path is in blocked location: {blocked}"
             
-            # Check full path
-            if fnmatch.fnmatch(path_lower, pattern_lower):
-                return True, f"Path matches blocked pattern: {pattern}"
+            # Check patterns against filename and full path
+            for pattern in _BLOCKED_PATTERNS:
+                if not pattern:
+                    continue
+                pattern_lower = pattern.lower()
+                
+                # Check filename
+                if fnmatch.fnmatch(name_lower, pattern_lower):
+                    return True, f"Filename matches blocked pattern: {pattern}"
+                
+                # Check full path
+                if fnmatch.fnmatch(path_lower, pattern_lower):
+                    return True, f"Path matches blocked pattern: {pattern}"
         
         return False, None
         
     except Exception as e:
         logger.warning(f"Error checking path security: {e}")
-        return False, None
+        # On error, default to blocking for safety
+        return True, f"Security check failed: {e}"
 
 
 def get_blocked_paths() -> List[str]:
