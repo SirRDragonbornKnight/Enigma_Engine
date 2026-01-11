@@ -135,7 +135,34 @@ python run.py --serve   # Start API server
 - **Avatar** - Visual representation of your AI
 - **Voice** - Text-to-speech responses
 - **Multi-AI** - Run multiple AI models
+- **Specialized Models** - Train task-specific models (routing, vision, code)
 - **Themes** - Dark, Light, Shadow, Midnight
+
+### Specialized Model System 🎯
+
+Enigma Engine supports training **specialized smaller models** for specific tasks:
+
+- **Intent Router** (~1M params) - Classify user requests (nano model, instant)
+- **Vision Captioning** (~5M params) - Describe images from features (tiny model)
+- **Code Generation** (~27M params) - Generate and explain code (small model)
+
+All models share the same tokenizer for seamless interoperability.
+
+**Quick Example:**
+```bash
+# Train a nano router to classify intents
+python scripts/train_specialized_model.py \
+    --type router \
+    --data data/specialized/router_training.txt \
+    --model-size nano
+
+# Use in code
+from enigma.core.inference import EnigmaEngine
+engine = EnigmaEngine(use_routing=True)
+response = engine.generate("write a sort function")  # Routes to code model
+```
+
+See `docs/SPECIALIZED_MODELS.md` for complete guide.
 
 ### Upgraded Components (Optional)
 - **🎤 Whisper STT** - High-accuracy speech recognition (vs basic STT)

@@ -1,0 +1,24 @@
+{
+  "enabled": true,
+  "shared_tokenizer": "enigma/vocab_model/bpe_vocab.json",
+  "models": {
+    "router": {
+      "path": "models/specialized/intent_router_nano.pth",
+      "size": "nano",
+      "description": "Classifies user intent (chat, vision, image, code, etc.)",
+      "max_seq_len": 256
+    },
+    "vision": {
+      "path": "models/specialized/vision_caption_tiny.pth",
+      "size": "tiny",
+      "description": "Generates descriptions from vision features",
+      "max_seq_len": 512
+    },
+    "code": {
+      "path": "models/specialized/code_gen_small.pth",
+      "size": "small",
+      "description": "Generates and explains code",
+      "max_seq_len": 1024
+    }
+  }
+}

@@ -1,0 +1,89 @@
+Q: [E:vision] person, outdoors, smiling, grass, sunny day
+A: I see a person outdoors who is smiling, standing in grass on a sunny day.
+
+Q: [E:vision] cat, sleeping, couch, living room, comfortable
+A: There's a cat sleeping on a couch in what appears to be a living room, looking very comfortable.
+
+Q: [E:vision] sunset, ocean, orange sky, clouds, horizon
+A: The image shows a beautiful sunset over the ocean with an orange sky and clouds near the horizon.
+
+Q: [E:vision] computer, desk, keyboard, mouse, monitor, office
+A: I can see a computer setup on a desk with a keyboard, mouse, and monitor in what looks like an office.
+
+Q: [E:vision] dog, park, playing, ball, excited
+A: A dog is playing with a ball in a park, looking excited and energetic.
+
+Q: [E:vision] city, buildings, street, cars, urban
+A: This shows a city scene with buildings, a street, and cars in an urban environment.
+
+Q: [E:vision] food, plate, restaurant, meal, delicious
+A: The image shows food on a plate that appears to be from a restaurant meal and looks delicious.
+
+Q: [E:vision] mountains, snow, peaks, landscape, majestic
+A: I can see majestic mountains with snow-covered peaks in a beautiful landscape.
+
+Q: [E:vision] beach, sand, water, waves, tropical
+A: The image depicts a tropical beach with sand, water, and waves.
+
+Q: [E:vision] flowers, garden, colorful, blooming, spring
+A: There are colorful flowers blooming in a garden, suggesting it's spring time.
+
+Q: [E:vision] coffee, cup, table, morning, steam
+A: I see a cup of coffee on a table with steam rising, looks like a morning scene.
+
+Q: [E:vision] book, reading, hands, pages, focused
+A: The image shows hands holding a book, with pages visible, someone appears to be reading and focused.
+
+Q: [E:vision] car, road, driving, highway, speed
+A: A car is driving on a highway road at speed.
+
+Q: [E:vision] tree, forest, green, nature, tall
+A: I can see a tall tree in a green forest, surrounded by nature.
+
+Q: [E:vision] phone, screen, hand, messaging, technology
+A: The image shows a hand holding a phone with the screen visible, appears to be messaging on technology.
+
+Q: [E:vision] building, architecture, modern, glass, city
+A: There's a modern building with glass architecture in a city setting.
+
+Q: [E:vision] pizza, slice, cheese, food, tasty
+A: I see a slice of pizza with cheese that looks tasty.
+
+Q: [E:vision] laptop, workspace, coffee, desk, productive
+A: The image shows a productive workspace with a laptop, coffee on a desk.
+
+Q: [E:vision] children, playground, playing, happy, outdoor
+A: Children are playing happily at an outdoor playground.
+
+Q: [E:vision] night, stars, sky, dark, beautiful
+A: A beautiful night sky with stars visible in the dark.
+
+Q: [E:vision] window, view, curtain, light, indoor
+A: I can see a window with a view, curtain, and light coming through indoors.
+
+Q: [E:vision] bridge, river, water, structure, crossing
+A: There's a bridge structure crossing over a river with water flowing beneath.
+
+Q: [E:vision] bicycle, path, rider, outdoor, exercise
+A: A bicycle rider on a path outdoors, getting exercise.
+
+Q: [E:vision] painting, art, canvas, colorful, creative
+A: The image shows a colorful creative painting on canvas as art.
+
+Q: [E:vision] clock, time, wall, numbers, round
+A: I see a round clock on a wall with numbers showing the time.
+
+Q: [E:vision] rain, umbrella, person, wet, weather
+A: A person with an umbrella in the rain during wet weather.
+
+Q: [E:vision] fire, flames, orange, heat, burning
+A: There are orange flames from a fire burning with heat.
+
+Q: [E:vision] ice cream, cone, dessert, sweet, cold
+A: I can see a cold, sweet ice cream cone dessert.
+
+Q: [E:vision] glasses, table, reading, vision, eyewear
+A: Reading glasses as eyewear sitting on a table for vision.
+
+Q: [E:vision] train, station, platform, tracks, transportation
+A: A train at a station platform with tracks for transportation.
