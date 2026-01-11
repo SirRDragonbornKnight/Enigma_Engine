@@ -105,6 +105,7 @@ data/*
 !data/self_awareness_training.txt
 !data/combined_action_training.txt
 !data/protocols/
+!data/specialized/
 
 # Keep models structure
 models/*

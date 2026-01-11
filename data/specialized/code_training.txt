@@ -1,0 +1,142 @@
+Q: write a Python function to sort a list
+A: Here's a function to sort a list:
+```python
+def sort_list(items):
+    return sorted(items)
+```
+
+Q: create a function to reverse a string
+A: Here's how to reverse a string:
+```python
+def reverse_string(text):
+    return text[::-1]
+```
+
+Q: write code to read a file
+A: Here's code to read a file:
+```python
+def read_file(filename):
+    with open(filename, 'r') as f:
+        return f.read()
+```
+
+Q: implement a function to find max in a list
+A: Here's a function to find the maximum value:
+```python
+def find_max(numbers):
+    return max(numbers)
+```
+
+Q: create a fibonacci function
+A: Here's a fibonacci sequence generator:
+```python
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+```
+
+Q: write a function to check if a number is prime
+A: Here's a prime number checker:
+```python
+def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+```
+
+Q: implement a binary search function
+A: Here's a binary search implementation:
+```python
+def binary_search(arr, target):
+    left, right = 0, len(arr) - 1
+    while left <= right:
+        mid = (left + right) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            left = mid + 1
+        else:
+            right = mid - 1
+    return -1
+```
+
+Q: create a class for a stack
+A: Here's a Stack class:
+```python
+class Stack:
+    def __init__(self):
+        self.items = []
+    
+    def push(self, item):
+        self.items.append(item)
+    
+    def pop(self):
+        return self.items.pop() if self.items else None
+    
+    def peek(self):
+        return self.items[-1] if self.items else None
+```
+
+Q: write code to merge two dictionaries
+A: Here's how to merge dictionaries:
+```python
+def merge_dicts(dict1, dict2):
+    return {**dict1, **dict2}
+```
+
+Q: implement a function to remove duplicates from a list
+A: Here's a duplicate removal function:
+```python
+def remove_duplicates(items):
+    return list(set(items))
+```
+
+Q: create a function to count words in a string
+A: Here's a word counter:
+```python
+def count_words(text):
+    return len(text.split())
+```
+
+Q: write a function to calculate factorial
+A: Here's a factorial calculator:
+```python
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n-1)
+```
+
+Q: implement a linked list node
+A: Here's a linked list node:
+```python
+class Node:
+    def __init__(self, data):
+        self.data = data
+        self.next = None
+```
+
+Q: create a function to check palindrome
+A: Here's a palindrome checker:
+```python
+def is_palindrome(text):
+    text = text.lower().replace(" ", "")
+    return text == text[::-1]
+```
+
+Q: write code to flatten a nested list
+A: Here's a list flattener:
+```python
+def flatten(nested_list):
+    result = []
+    for item in nested_list:
+        if isinstance(item, list):
+            result.extend(flatten(item))
+        else:
+            result.append(item)
+    return result
+```

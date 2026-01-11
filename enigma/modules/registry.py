@@ -694,6 +694,64 @@ class FileToolsModule(Module):
             return True
 
 
+class ToolRouterModule(Module):
+    """Tool router module - specialized model routing."""
+
+    INFO = ModuleInfo(
+        id="tool_router",
+        name="Tool Router",
+        description="Route requests to specialized models (intent classification, vision, code)",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=["tokenizer"],
+        optional=["model"],
+        provides=["intent_classification", "specialized_routing", "model_routing"],
+        config_schema={
+            "use_specialized": {
+                "type": "bool",
+                "default": True,
+                "description": "Use specialized models for routing"
+            },
+            "enable_router": {
+                "type": "bool",
+                "default": True,
+                "description": "Enable intent router model"
+            },
+            "enable_vision": {
+                "type": "bool",
+                "default": True,
+                "description": "Enable vision captioning model"
+            },
+            "enable_code": {
+                "type": "bool",
+                "default": True,
+                "description": "Enable code generation model"
+            },
+        },
+    )
+
+    def load(self) -> bool:
+        try:
+            from enigma.core.tool_router import get_router
+            use_specialized = self.config.get('use_specialized', True)
+            self._instance = get_router(use_specialized=use_specialized)
+            logger.info(f"Tool router loaded (specialized: {use_specialized})")
+            return True
+        except Exception as e:
+            logger.warning(f"Could not load tool router: {e}")
+            return False
+
+    def unload(self) -> bool:
+        if self._instance is not None:
+            # Clear any cached models
+            if hasattr(self._instance, '_specialized_models'):
+                self._instance._specialized_models.clear()
+            if hasattr(self._instance, '_model_cache'):
+                self._instance._model_cache.clear()
+            self._instance = None
+        return True
+
+
 class APIServerModule(Module):
     """API server module - REST API interface."""
 
@@ -1362,6 +1420,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     # Tools
     'web_tools': WebToolsModule,
     'file_tools': FileToolsModule,
+    'tool_router': ToolRouterModule,
 
     # Network
     'api_server': APIServerModule,

@@ -1,0 +1,221 @@
+Q: draw me a picture of a dog
+A: [E:tool]image
+
+Q: what do you see in this image
+A: [E:tool]vision
+
+Q: describe this photo
+A: [E:tool]vision
+
+Q: create an illustration
+A: [E:tool]image
+
+Q: how are you today
+A: [E:tool]chat
+
+Q: write a Python function
+A: [E:tool]code
+
+Q: explain quantum physics
+A: [E:tool]chat
+
+Q: generate a landscape image
+A: [E:tool]image
+
+Q: analyze this screenshot
+A: [E:tool]vision
+
+Q: help me debug this code
+A: [E:tool]code
+
+Q: paint a sunset
+A: [E:tool]image
+
+Q: tell me a joke
+A: [E:tool]chat
+
+Q: what's in this picture
+A: [E:tool]vision
+
+Q: code a sorting algorithm
+A: [E:tool]code
+
+Q: make me an artwork
+A: [E:tool]image
+
+Q: can you see what's on my screen
+A: [E:tool]vision
+
+Q: write a function in JavaScript
+A: [E:tool]code
+
+Q: what's the meaning of life
+A: [E:tool]chat
+
+Q: generate an image of mountains
+A: [E:tool]image
+
+Q: look at this image and tell me what you see
+A: [E:tool]vision
+
+Q: create a Python class
+A: [E:tool]code
+
+Q: how does gravity work
+A: [E:tool]chat
+
+Q: sketch a dragon
+A: [E:tool]image
+
+Q: what objects are in this photo
+A: [E:tool]vision
+
+Q: implement a linked list
+A: [E:tool]code
+
+Q: tell me about yourself
+A: [E:tool]chat
+
+Q: draw a cat sitting on a mat
+A: [E:tool]image
+
+Q: describe what's on screen
+A: [E:tool]vision
+
+Q: write code to reverse a string
+A: [E:tool]code
+
+Q: what's your favorite color
+A: [E:tool]chat
+
+Q: create a portrait
+A: [E:tool]image
+
+Q: analyze this document
+A: [E:tool]vision
+
+Q: show me a quicksort implementation
+A: [E:tool]code
+
+Q: why is the sky blue
+A: [E:tool]chat
+
+Q: generate art of a forest
+A: [E:tool]image
+
+Q: what text is in this image
+A: [E:tool]vision
+
+Q: write a binary search function
+A: [E:tool]code
+
+Q: how's the weather
+A: [E:tool]chat
+
+Q: make an image of space
+A: [E:tool]image
+
+Q: can you read this screenshot
+A: [E:tool]vision
+
+Q: code a fibonacci function
+A: [E:tool]code
+
+Q: what time is it
+A: [E:tool]chat
+
+Q: illustrate a cityscape
+A: [E:tool]image
+
+Q: identify objects in this picture
+A: [E:tool]vision
+
+Q: create a recursive function
+A: [E:tool]code
+
+Q: tell me a story
+A: [E:tool]chat
+
+Q: paint a beach scene
+A: [E:tool]image
+
+Q: what colors are in this image
+A: [E:tool]vision
+
+Q: write a class for a stack
+A: [E:tool]code
+
+Q: do you like music
+A: [E:tool]chat
+
+Q: generate a fantasy landscape
+A: [E:tool]image
+
+Q: describe the contents of this screenshot
+A: [E:tool]vision
+
+Q: implement a queue in Python
+A: [E:tool]code
+
+Q: what are your capabilities
+A: [E:tool]chat
+
+Q: draw a robot
+A: [E:tool]image
+
+Q: what's the main subject in this photo
+A: [E:tool]vision
+
+Q: write unit tests for this code
+A: [E:tool]code
+
+Q: hello there
+A: [E:tool]chat
+
+Q: create an abstract art piece
+A: [E:tool]image
+
+Q: analyze the layout of this webpage
+A: [E:tool]vision
+
+Q: refactor this code
+A: [E:tool]code
+
+Q: good morning
+A: [E:tool]chat
+
+Q: make a picture of stars
+A: [E:tool]image
+
+Q: what's visible in this frame
+A: [E:tool]vision
+
+Q: debug this function
+A: [E:tool]code
+
+Q: can you help me
+A: [E:tool]chat
+
+Q: illustrate a spaceship
+A: [E:tool]image
+
+Q: extract text from this image
+A: [E:tool]vision
+
+Q: optimize this algorithm
+A: [E:tool]code
+
+Q: what's 2 plus 2
+A: [E:tool]chat
+
+Q: render a 3D scene
+A: [E:tool]image
+
+Q: what's the emotion in this face
+A: [E:tool]vision
+
+Q: write a REST API endpoint
+A: [E:tool]code
+
+Q: goodbye
+A: [E:tool]chat
