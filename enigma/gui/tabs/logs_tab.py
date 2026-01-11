@@ -179,15 +179,20 @@ class LogsTab(QWidget):
     
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
         
-        # Header
-        header = QLabel("📋 System Logs")
-        header.setFont(QFont("Arial", 16, QFont.Bold))
-        layout.addWidget(header)
+        # Compact header row with description
+        header_row = QHBoxLayout()
+        header = QLabel("📋 Logs")
+        header.setFont(QFont("Arial", 11, QFont.Bold))
+        header_row.addWidget(header)
         
-        desc = QLabel("View training, system, and error logs in real-time.")
-        desc.setWordWrap(True)
-        layout.addWidget(desc)
+        desc = QLabel("View training, system, and error logs")
+        desc.setStyleSheet("color: #888; font-size: 10px;")
+        header_row.addWidget(desc)
+        header_row.addStretch()
+        layout.addLayout(header_row)
         
         # Main splitter
         splitter = QSplitter(Qt.Horizontal)

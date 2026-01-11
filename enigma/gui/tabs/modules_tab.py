@@ -47,7 +47,8 @@ class ModuleListItem(QFrame):
         self._setup_ui()
         
     def _setup_ui(self):
-        self.setFixedHeight(50)
+        self.setMinimumHeight(40)
+        self.setMaximumHeight(50)
         self.setFrameStyle(QFrame.NoFrame)
         
         category = self.module_info.get('category', 'extension').lower()
@@ -57,7 +58,7 @@ class ModuleListItem(QFrame):
             ModuleListItem {{
                 background: transparent;
                 border-left: 3px solid {color};
-                padding-left: 8px;
+                padding-left: 6px;
             }}
             ModuleListItem:hover {{
                 background: rgba(255,255,255,0.05);
@@ -65,44 +66,48 @@ class ModuleListItem(QFrame):
         """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(15)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(8)
         
         # Toggle checkbox
         self.toggle = QCheckBox()
-        self.toggle.setFixedWidth(20)
+        self.toggle.setFixedWidth(18)
         layout.addWidget(self.toggle)
         
         # Name and description
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(2)
+        info_layout.setSpacing(1)
+        info_layout.setContentsMargins(0, 0, 0, 0)
         
         name = self.module_info.get('name', self.module_id)
         self.name_label = QLabel(name)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 11px;")
         info_layout.addWidget(self.name_label)
         
         desc = self.module_info.get('description', '')
+        # Truncate long descriptions
+        if len(desc) > 50:
+            desc = desc[:50] + "..."
         self.desc_label = QLabel(desc)
-        self.desc_label.setStyleSheet("color: #888; font-size: 10px;")
+        self.desc_label.setStyleSheet("color: #888; font-size: 9px;")
         info_layout.addWidget(self.desc_label)
         
         layout.addLayout(info_layout, stretch=1)
         
         # Status indicator
         self.status_label = QLabel("OFF")
-        self.status_label.setFixedWidth(40)
+        self.status_label.setFixedWidth(30)
         self.status_label.setAlignment(AlignCenter)
         self.status_label.setStyleSheet("""
             QLabel {
                 color: #666;
-                font-size: 10px;
+                font-size: 9px;
                 font-weight: bold;
             }
         """)
         layout.addWidget(self.status_label)
         
-        # Requirements indicator
+        # Requirements indicator (compact)
         needs = []
         if self.module_info.get('needs_gpu'):
             needs.append("GPU")
@@ -110,9 +115,9 @@ class ModuleListItem(QFrame):
             needs.append("API")
         
         if needs:
-            req_label = QLabel(" | ".join(needs))
-            req_label.setStyleSheet("color: #f39c12; font-size: 9px;")
-            req_label.setFixedWidth(50)
+            req_label = QLabel("|".join(needs))
+            req_label.setStyleSheet("color: #f39c12; font-size: 8px;")
+            req_label.setFixedWidth(35)
             layout.addWidget(req_label)
     
     def set_loaded(self, loaded: bool):
@@ -204,19 +209,20 @@ class ModulesTab(QWidget):
         for cat_id, cat_info in CATEGORIES.items():
             self.category_combo.addItem(cat_info['name'], cat_id)
         self.category_combo.currentIndexChanged.connect(self._filter_modules)
-        self.category_combo.setFixedWidth(180)
+        self.category_combo.setMinimumWidth(100)
+        self.category_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         filter_layout.addWidget(self.category_combo)
         
         filter_layout.addStretch()
         
         # Quick actions
         self.enable_all_btn = QPushButton("Enable All")
-        self.enable_all_btn.setMinimumWidth(90)
+        self.enable_all_btn.setMinimumWidth(70)
         self.enable_all_btn.clicked.connect(self._enable_all_visible)
         filter_layout.addWidget(self.enable_all_btn)
         
         self.disable_all_btn = QPushButton("Disable All")
-        self.disable_all_btn.setMinimumWidth(90)
+        self.disable_all_btn.setMinimumWidth(70)
         self.disable_all_btn.clicked.connect(self._disable_all_visible)
         filter_layout.addWidget(self.disable_all_btn)
         
@@ -244,14 +250,14 @@ class ModulesTab(QWidget):
         
         content_layout.addWidget(left_panel, stretch=3)
         
-        # Right side - Status panel
+        # Right side - Status panel (collapsible on small screens)
         right_panel = QWidget()
-        right_panel.setMinimumWidth(250)
-        right_panel.setMaximumWidth(350)
-        right_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        right_panel.setMinimumWidth(180)
+        right_panel.setMaximumWidth(300)
+        right_panel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(10, 0, 0, 0)
-        right_layout.setSpacing(15)
+        right_layout.setContentsMargins(8, 0, 0, 0)
+        right_layout.setSpacing(10)
         
         # Stats box
         stats_box = QGroupBox("Status")

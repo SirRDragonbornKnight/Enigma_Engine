@@ -86,6 +86,12 @@ class Local3DGen:
         try:
             start = time.time()
             
+            # Ensure prompt is a string (CLIP tokenizer requires str type)
+            if prompt is not None:
+                prompt = str(prompt).strip()
+            if not prompt:
+                return {"success": False, "error": "Prompt cannot be empty"}
+            
             output = self.pipe(
                 prompt,
                 guidance_scale=guidance_scale,

@@ -607,6 +607,56 @@ def _toggle_mini_chat_on_top(parent, state):
         main_window.mini_chat.set_always_on_top(on_top)
 
 
+def _save_chat_names(parent):
+    """Save chat display names to settings."""
+    import json
+    from pathlib import Path
+    from ...config import CONFIG
+    
+    try:
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings = {}
+        if settings_path.exists():
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+        
+        user_name = parent.user_display_name_input.text().strip()
+        settings["user_display_name"] = user_name if user_name else "You"
+        
+        with open(settings_path, 'w') as f:
+            json.dump(settings, f, indent=2)
+        
+        # Update main window's user_display_name
+        main_window = parent.window()
+        if main_window:
+            main_window.user_display_name = settings["user_display_name"]
+    except Exception as e:
+        print(f"Could not save chat names: {e}")
+
+
+def _load_chat_names(parent):
+    """Load chat display names from settings."""
+    import json
+    from pathlib import Path
+    from ...config import CONFIG
+    
+    try:
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        if settings_path.exists():
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+            
+            user_name = settings.get("user_display_name", "You")
+            parent.user_display_name_input.setText(user_name if user_name != "You" else "")
+            
+            # Set on main window
+            main_window = parent.window()
+            if main_window:
+                main_window.user_display_name = user_name
+    except Exception as e:
+        print(f"Could not load chat names: {e}")
+
+
 def _update_display_info(parent):
     """Update the display info label."""
     from PyQt5.QtGui import QGuiApplication
@@ -790,6 +840,23 @@ def create_settings_tab(parent):
     
     power_layout.addWidget(custom_frame)
     
+    # Recommended settings info
+    rec_frame = QGroupBox("💡 Recommended Settings")
+    rec_layout = QVBoxLayout(rec_frame)
+    
+    rec_info = QLabel(
+        "<b>Small models (< 1B params):</b> GPU 50-70%, 2-4 CPU threads<br>"
+        "<b>Medium models (1-7B):</b> GPU 70-85%, 4-8 CPU threads<br>"
+        "<b>Large models (7B+):</b> GPU 85-95%, 8+ CPU threads<br><br>"
+        "<b>Gaming while using AI:</b> Use 'Gaming' mode (GPU 40%, 2 threads)<br>"
+        "<b>Best AI performance:</b> Use 'Maximum' mode (GPU 95%, all threads)"
+    )
+    rec_info.setStyleSheet("color: #bac2de; font-size: 11px; padding: 4px;")
+    rec_info.setWordWrap(True)
+    rec_layout.addWidget(rec_info)
+    
+    power_layout.addWidget(rec_frame)
+    
     layout.addWidget(power_group)
 
     # === THEME SELECTOR ===
@@ -809,6 +876,7 @@ def create_settings_tab(parent):
     parent.theme_combo = QComboBox()
     parent.theme_combo.addItem("Dark (Default)", "dark")
     parent.theme_combo.addItem("Light", "light")
+    parent.theme_combo.addItem("Cerulean", "cerulean")
     parent.theme_combo.addItem("High Contrast", "high_contrast")
     parent.theme_combo.addItem("Midnight", "midnight")
     parent.theme_combo.addItem("Forest", "forest")
@@ -913,6 +981,38 @@ def create_settings_tab(parent):
     cloud_layout.addWidget(parent.cloud_status_label)
     
     layout.addWidget(cloud_group)
+
+    # === CHAT NAMES ===
+    names_group = QGroupBox("Chat Names")
+    names_layout = QVBoxLayout(names_group)
+    names_layout.setSpacing(6)
+    
+    names_desc = QLabel("Customize how you and the AI appear in chat.")
+    names_desc.setWordWrap(True)
+    names_layout.addWidget(names_desc)
+    
+    # User display name
+    user_name_row = QHBoxLayout()
+    user_name_row.addWidget(QLabel("Your Name:"))
+    parent.user_display_name_input = QLineEdit()
+    parent.user_display_name_input.setPlaceholderText("You")
+    parent.user_display_name_input.setMaximumWidth(200)
+    parent.user_display_name_input.textChanged.connect(
+        lambda text: _save_chat_names(parent)
+    )
+    user_name_row.addWidget(parent.user_display_name_input)
+    user_name_row.addStretch()
+    names_layout.addLayout(user_name_row)
+    
+    # Load saved name
+    _load_chat_names(parent)
+    
+    names_note = QLabel("The AI's display name is automatically set to the loaded model name.")
+    names_note.setStyleSheet("color: #888; font-style: italic; font-size: 11px;")
+    names_note.setWordWrap(True)
+    names_layout.addWidget(names_note)
+    
+    layout.addWidget(names_group)
 
     # === DISPLAY SETTINGS ===
     display_group = QGroupBox("Display Settings")
@@ -1133,51 +1233,7 @@ def create_settings_tab(parent):
     
     layout.addWidget(robot_group)
     
-    # === GAME AI ROUTING ===
-    game_group = QGroupBox("Game AI Routing")
-    game_layout = QVBoxLayout(game_group)
-    
-    game_desc = QLabel(
-        "Different games use different AI behaviors. Auto-detect or select manually."
-    )
-    game_desc.setWordWrap(True)
-    game_layout.addWidget(game_desc)
-    
-    # Game detection toggle
-    parent.auto_game_check = QCheckBox("Auto-Detect Running Game")
-    parent.auto_game_check.setChecked(False)
-    parent.auto_game_check.stateChanged.connect(
-        lambda state: _toggle_game_detection(parent, state)
-    )
-    parent.auto_game_enabled = False
-    game_layout.addWidget(parent.auto_game_check)
-    
-    # Manual game selector
-    game_select_row = QHBoxLayout()
-    game_select_row.addWidget(QLabel("Active Game:"))
-    parent.game_combo = QComboBox()
-    parent.game_combo.addItem("(None)", "none")
-    parent.game_combo.addItem("Minecraft", "minecraft")
-    parent.game_combo.addItem("Terraria", "terraria")
-    parent.game_combo.addItem("Valorant", "valorant")
-    parent.game_combo.addItem("League of Legends", "league")
-    parent.game_combo.addItem("Dark Souls", "darksouls")
-    parent.game_combo.addItem("Stardew Valley", "stardew")
-    parent.game_combo.addItem("Factorio", "factorio")
-    parent.game_combo.addItem("Custom...", "custom")
-    parent.game_combo.currentIndexChanged.connect(
-        lambda: _change_active_game(parent)
-    )
-    game_select_row.addWidget(parent.game_combo)
-    game_select_row.addStretch()
-    game_layout.addLayout(game_select_row)
-    
-    # Game status
-    parent.game_status_label = QLabel("No game active - using default AI")
-    parent.game_status_label.setStyleSheet("color: #888; font-style: italic;")
-    game_layout.addWidget(parent.game_status_label)
-    
-    layout.addWidget(game_group)
+    # NOTE: Game AI Routing moved to Game tab for better organization
 
     # === AUTONOMOUS MODE ===
     autonomous_group = QGroupBox("Autonomous Mode")
@@ -1968,9 +2024,30 @@ def _toggle_autonomous(parent, state):
         
         # Get current model name
         model_name = getattr(parent, 'current_model_name', 'enigma')
+        
+        # Check if using HuggingFace model
+        main_window = parent.window()
+        is_hf = False
+        if main_window and hasattr(main_window, 'engine'):
+            is_hf = getattr(main_window.engine, '_is_huggingface', False)
+        
         autonomous = AutonomousManager.get(model_name)
         
         if state == Checked:
+            # Warn about HF model limitations
+            if is_hf:
+                QMessageBox.warning(parent, "Limited Functionality",
+                    "Autonomous mode has limited functionality with HuggingFace models.\n\n"
+                    "What works:\n"
+                    "• Web browsing and learning\n"
+                    "• Personality evolution\n"
+                    "• Curiosity exploration\n\n"
+                    "What doesn't work:\n"
+                    "• Model self-improvement (HF models are read-only)\n"
+                    "• Response practice (requires training)\n\n"
+                    "For full autonomous features, use a local Enigma model."
+                )
+            
             # Set activity level
             max_actions = parent.autonomous_activity_spin.value()
             autonomous.max_actions_per_hour = max_actions
@@ -2227,13 +2304,21 @@ def _test_microphone(parent):
     """Test the selected microphone and show audio levels."""
     import threading
     
+    # If already testing, stop the test
+    if hasattr(parent, '_mic_test_running') and parent._mic_test_running:
+        parent._mic_test_stop_requested = True
+        parent.mic_test_btn.setText("🎤 Stopping...")
+        return
+    
     device_index = parent.audio_input_combo.currentData()
     if device_index is None:
         device_index = -1
     
-    parent.mic_test_btn.setEnabled(False)
-    parent.mic_test_btn.setText("🎤 Recording...")
-    parent.mic_status_label.setText("Listening...")
+    parent._mic_test_running = True
+    parent._mic_test_stop_requested = False
+    parent.mic_test_btn.setEnabled(True)
+    parent.mic_test_btn.setText("🛑 Stop Test")
+    parent.mic_status_label.setText("Listening... (click Stop to end)")
     parent.mic_status_label.setStyleSheet("color: #f59e0b;")
     
     def run_test():
@@ -2267,7 +2352,7 @@ def _test_microphone(parent):
             frames_read = 0
             total_frames = int(RATE / CHUNK * DURATION)
             
-            while frames_read < total_frames:
+            while frames_read < total_frames and not getattr(parent, '_mic_test_stop_requested', False):
                 try:
                     data = stream.read(CHUNK, exception_on_overflow=False)
                     # Calculate RMS level
@@ -2298,9 +2383,14 @@ def _test_microphone(parent):
             
             # Update final status
             def update_ui():
+                parent._mic_test_running = False
+                parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
                 parent.mic_test_btn.setText("🎤 Test Microphone")
-                if max_level > 10:
+                if getattr(parent, '_mic_test_stop_requested', False):
+                    parent.mic_status_label.setText("Test stopped")
+                    parent.mic_status_label.setStyleSheet("color: #888;")
+                elif max_level > 10:
                     parent.mic_status_label.setText(f"✓ Working (peak: {max_level}%)")
                     parent.mic_status_label.setStyleSheet("color: #22c55e;")
                 else:
@@ -2312,6 +2402,8 @@ def _test_microphone(parent):
             
         except ImportError:
             def show_error():
+                parent._mic_test_running = False
+                parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
                 parent.mic_test_btn.setText("🎤 Test Microphone")
                 parent.mic_status_label.setText("Install: pip install pyaudio")
@@ -2321,6 +2413,8 @@ def _test_microphone(parent):
             
         except Exception as e:
             def show_error():
+                parent._mic_test_running = False
+                parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
                 parent.mic_test_btn.setText("🎤 Test Microphone")
                 parent.mic_status_label.setText(f"Error: {str(e)[:30]}")

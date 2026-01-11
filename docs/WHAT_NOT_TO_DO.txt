@@ -200,7 +200,28 @@ DON'T: Leave camera running when not needed
 
 
 ================================================================================
-                         11. AI TOOLS (26 Available)
+                         11. IMAGE GENERATION
+================================================================================
+
+DON'T: Expect real AI images with "Placeholder" provider
+  WHY: Placeholder just shows your prompt text on a blue background
+  DO: Use Local (Stable Diffusion), OpenAI, or Replicate for real AI images
+
+DON'T: Use Local (Stable Diffusion) without 8GB+ VRAM GPU
+  WHY: Will run out of memory and crash
+  DO: Use cloud providers (OpenAI/Replicate) if you don't have a good GPU
+
+DON'T: Forget to click "Load Model" before generating with Local SD
+  WHY: Model must be loaded into GPU memory first
+  DO: Select "Local (Stable Diffusion)", click "Load Model", wait for it to load
+
+DON'T: Use 1024x1024 on 8GB VRAM cards with Stable Diffusion
+  WHY: May run out of memory
+  DO: Use 512x512 or 768x768 for 8GB cards
+
+
+================================================================================
+                         12. AI TOOLS (26 Available)
 ================================================================================
 
 DON'T: Expect tools to work without proper modules loaded
@@ -234,5 +255,7 @@ DON'T: Spam reminder/task creation
 8. TEST changes on a backup before applying to your main model
 9. USE Router tab to assign models to tools (Apply to All for quick setup)
 10. PREFER small HuggingFace models on Pi (Qwen2-0.5B is recommended)
+11. LOAD Stable Diffusion model before generating images
+12. USE 512x512 resolution on 8GB VRAM cards for best results
 
 ================================================================================

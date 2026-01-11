@@ -557,7 +557,19 @@ class EnigmaEngine:
 
     def _decode_output(self, output_ids: torch.Tensor) -> str:
         """Decode output tensor to text."""
-        ids = output_ids[0].cpu().tolist()
+        # Handle case where output is already a string
+        if isinstance(output_ids, str):
+            return output_ids
+        
+        # Handle tensor output
+        try:
+            ids = output_ids[0].cpu().tolist()
+        except AttributeError:
+            # If output_ids[0] doesn't have .cpu(), try direct conversion
+            if hasattr(output_ids, '__iter__'):
+                ids = list(output_ids[0]) if hasattr(output_ids[0], '__iter__') else [output_ids[0]]
+            else:
+                return str(output_ids)
 
         if hasattr(self.tokenizer, 'decode'):
             return self.tokenizer.decode(ids, skip_special_tokens=True)
@@ -835,7 +847,14 @@ class EnigmaEngine:
         # Decode all outputs
         results = []
         for i in range(batch_size):
-            ids = generated[i].cpu().tolist()
+            # Handle case where generated[i] might not be a tensor
+            try:
+                ids = generated[i].cpu().tolist()
+            except AttributeError:
+                if isinstance(generated[i], str):
+                    results.append(generated[i])
+                    continue
+                ids = list(generated[i]) if hasattr(generated[i], '__iter__') else [generated[i]]
             
             if hasattr(self.tokenizer, 'decode'):
                 text = self.tokenizer.decode(ids, skip_special_tokens=True)

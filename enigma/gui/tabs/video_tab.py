@@ -94,6 +94,12 @@ class LocalVideo:
         try:
             start = time.time()
             
+            # Ensure prompt is a string (CLIP tokenizer requires str type)
+            if prompt is not None:
+                prompt = str(prompt).strip()
+            if not prompt:
+                return {"success": False, "error": "Prompt cannot be empty"}
+            
             num_frames = int(duration * fps)
             
             output = self.pipe(

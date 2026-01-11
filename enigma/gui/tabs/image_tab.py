@@ -196,9 +196,21 @@ class StableDiffusionLocal:
         try:
             start = time.time()
             
+            # Ensure prompt is a string (CLIP tokenizer requires str type)
+            if prompt is None:
+                return {"success": False, "error": "Prompt cannot be None"}
+            prompt = str(prompt).strip()
+            if not prompt:
+                return {"success": False, "error": "Prompt cannot be empty"}
+            
+            # Handle negative prompt - must be str or None
+            neg_prompt = str(negative_prompt).strip() if negative_prompt else None
+            if neg_prompt == "":
+                neg_prompt = None
+            
             result = self.pipe(
                 prompt,
-                negative_prompt=negative_prompt or None,
+                negative_prompt=neg_prompt,
                 width=width,
                 height=height,
                 num_inference_steps=steps,
@@ -442,14 +454,21 @@ class ImageGenerationWorker(QThread):
             
             self.progress.emit(40)
             
-            # Generate
+            # Generate - ensure prompt is definitely a string
+            prompt_str = str(self.prompt).strip() if self.prompt else ""
+            if not prompt_str:
+                self.finished.emit({"success": False, "error": "Prompt cannot be empty"})
+                return
+            
+            neg_prompt_str = str(self.negative_prompt).strip() if self.negative_prompt else ""
+            
             result = provider.generate(
-                self.prompt,
-                width=self.width,
-                height=self.height,
-                steps=self.steps,
-                guidance=self.guidance,
-                negative_prompt=self.negative_prompt,
+                prompt_str,
+                width=int(self.width),
+                height=int(self.height),
+                steps=int(self.steps),
+                guidance=float(self.guidance),
+                negative_prompt=neg_prompt_str,
             )
             
             self.progress.emit(100)
@@ -593,7 +612,7 @@ class ImageTab(QWidget):
         auto_layout = QHBoxLayout()
         
         self.auto_open_file_cb = QCheckBox("Auto-open file in explorer")
-        self.auto_open_file_cb.setChecked(True)
+        self.auto_open_file_cb.setChecked(False)  # Don't auto-open folder by default
         self.auto_open_file_cb.setToolTip("Open the generated file in your file explorer when done")
         auto_layout.addWidget(self.auto_open_file_cb)
         

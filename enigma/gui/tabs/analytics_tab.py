@@ -39,29 +39,29 @@ class StatCard(QFrame):
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
         self.setStyleSheet(f"""
             QFrame {{
-                background-color: white;
-                border: 1px solid #ddd;
+                background-color: #313244;
+                border: 1px solid #45475a;
                 border-radius: 8px;
                 border-left: 4px solid {color};
             }}
         """)
         self.setMinimumWidth(150)
-        self.setMinimumHeight(80)
+        self.setMinimumHeight(90)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setContentsMargins(12, 10, 12, 10)
         
         title_label = QLabel(title)
-        title_label.setStyleSheet("color: #666; font-size: 11px;")
+        title_label.setStyleSheet("color: #bac2de; font-size: 11px;")
         layout.addWidget(title_label)
         
         self.value_label = QLabel(value)
-        self.value_label.setStyleSheet(f"color: {color}; font-size: 24px; font-weight: bold;")
+        self.value_label.setStyleSheet(f"color: {color}; font-size: 22px; font-weight: bold;")
         layout.addWidget(self.value_label)
         
         if subtitle:
             self.subtitle_label = QLabel(subtitle)
-            self.subtitle_label.setStyleSheet("color: #999; font-size: 10px;")
+            self.subtitle_label.setStyleSheet("color: #6c7086; font-size: 10px;")
             layout.addWidget(self.subtitle_label)
         else:
             self.subtitle_label = None

@@ -451,6 +451,28 @@ class ThemeManager:
             ),
             description='Warm sunset colors'
         ),
+        
+        'cerulean': Theme(
+            name='Cerulean',
+            colors=ThemeColors(
+                bg_primary='#0a1628',
+                bg_secondary='#122640',
+                bg_tertiary='#1a3550',
+                text_primary='#e0f0ff',
+                text_secondary='#b8d4e8',
+                text_disabled='#5a7a8a',
+                accent_primary='#00bcd4',
+                accent_secondary='#4dd0e1',
+                accent_hover='#00acc1',
+                success='#26a69a',
+                warning='#ffb74d',
+                error='#ef5350',
+                info='#29b6f6',
+                border_primary='#1a3550',
+                border_secondary='#122640'
+            ),
+            description='Cool cerulean blue ocean theme'
+        ),
     }
     
     def __init__(self, themes_dir: Optional[Path] = None):

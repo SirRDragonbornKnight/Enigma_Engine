@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTreeWidget, QTreeWidgetItem, QComboBox, QGroupBox,
     QMessageBox, QInputDialog, QSplitter, QTextEdit,
-    QCheckBox, QProgressBar, QFrame
+    QCheckBox, QProgressBar, QFrame, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QColor
@@ -35,63 +35,76 @@ class ToolManagerTab(QWidget):
     def _setup_ui(self):
         """Set up the user interface."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
         
         # Header
         header = QLabel("🔧 Tool Manager")
-        header.setFont(QFont("Arial", 16, QFont.Bold))
+        header.setFont(QFont("Arial", 14, QFont.Bold))
         layout.addWidget(header)
         
-        desc = QLabel("Enable/disable tools to customize your Enigma installation.\n"
-                     "Disable unused tools to save memory on embedded devices.")
+        desc = QLabel("Enable/disable tools to customize your Enigma installation. "
+                     "Disable unused tools to save memory.")
         desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 10px; color: #888;")
         layout.addWidget(desc)
         
         # Stats bar
         self.stats_label = QLabel()
-        self.stats_label.setStyleSheet("color: #888; font-style: italic;")
+        self.stats_label.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
         layout.addWidget(self.stats_label)
         
-        # Preset selector
+        # Preset selector - more compact
         preset_group = QGroupBox("Quick Presets")
         preset_layout = QHBoxLayout(preset_group)
+        preset_layout.setContentsMargins(6, 6, 6, 6)
         
         self.preset_combo = QComboBox()
+        self.preset_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name, info in PRESETS.items():
-            self.preset_combo.addItem(f"{name} - {info['description']}", name)
+            self.preset_combo.addItem(f"{name} - {info['description'][:30]}", name)
         preset_layout.addWidget(self.preset_combo)
         
-        apply_preset_btn = QPushButton("Apply Preset")
+        apply_preset_btn = QPushButton("Apply")
+        apply_preset_btn.setFixedWidth(60)
         apply_preset_btn.clicked.connect(self._apply_preset)
         preset_layout.addWidget(apply_preset_btn)
         
         layout.addWidget(preset_group)
         
-        # Main splitter
+        # Main splitter - allows user to resize panels
         splitter = QSplitter(Qt.Horizontal)
         
         # Left: Tool tree
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(4)
         
         tree_label = QLabel("Tools by Category:")
+        tree_label.setStyleSheet("font-size: 11px; font-weight: bold;")
         left_layout.addWidget(tree_label)
         
         self.tool_tree = QTreeWidget()
         self.tool_tree.setHeaderLabels(["Tool", "Status"])
-        self.tool_tree.setColumnWidth(0, 250)
+        self.tool_tree.setColumnWidth(0, 180)
+        self.tool_tree.header().setStretchLastSection(True)
+        self.tool_tree.setMinimumWidth(200)
         self.tool_tree.itemChanged.connect(self._on_item_changed)
         self.tool_tree.currentItemChanged.connect(self._on_selection_changed)
         left_layout.addWidget(self.tool_tree)
         
         # Bulk actions
         bulk_layout = QHBoxLayout()
+        bulk_layout.setSpacing(4)
         
         enable_all_btn = QPushButton("Enable All")
+        enable_all_btn.setFixedHeight(26)
         enable_all_btn.clicked.connect(self._enable_all)
         bulk_layout.addWidget(enable_all_btn)
         
         disable_all_btn = QPushButton("Disable All")
+        disable_all_btn.setFixedHeight(26)
         disable_all_btn.clicked.connect(self._disable_all)
         bulk_layout.addWidget(disable_all_btn)
         
@@ -99,54 +112,60 @@ class ToolManagerTab(QWidget):
         
         splitter.addWidget(left_widget)
         
-        # Right: Tool info
+        # Right: Tool info - collapsible
         right_widget = QWidget()
+        right_widget.setMinimumWidth(150)
         right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setContentsMargins(4, 0, 0, 0)
+        right_layout.setSpacing(4)
         
         info_label = QLabel("Tool Information:")
+        info_label.setStyleSheet("font-size: 11px; font-weight: bold;")
         right_layout.addWidget(info_label)
         
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
-        self.info_text.setMaximumHeight(200)
+        self.info_text.setMaximumHeight(150)
+        self.info_text.setStyleSheet("font-size: 10px;")
         right_layout.addWidget(self.info_text)
         
         # Dependencies section
-        deps_label = QLabel("Required Packages (for enabled tools):")
+        deps_label = QLabel("Required Packages:")
+        deps_label.setStyleSheet("font-size: 11px; font-weight: bold;")
         right_layout.addWidget(deps_label)
         
         self.deps_text = QTextEdit()
         self.deps_text.setReadOnly(True)
+        self.deps_text.setStyleSheet("font-size: 10px;")
         self.deps_text.setMaximumHeight(150)
         right_layout.addWidget(self.deps_text)
         
-        # Profile management
-        profile_group = QGroupBox("Custom Profiles")
-        profile_layout = QVBoxLayout(profile_group)
+        # Profile management - compact
+        profile_group = QGroupBox("Profiles")
+        profile_group.setMaximumHeight(70)
+        profile_layout = QHBoxLayout(profile_group)
+        profile_layout.setContentsMargins(6, 6, 6, 6)
         
-        profile_btns = QHBoxLayout()
-        
-        save_profile_btn = QPushButton("💾 Save Profile")
+        save_profile_btn = QPushButton("💾 Save")
         save_profile_btn.clicked.connect(self._save_profile)
-        profile_btns.addWidget(save_profile_btn)
+        profile_layout.addWidget(save_profile_btn)
         
-        load_profile_btn = QPushButton("📂 Load Profile")
+        load_profile_btn = QPushButton("📂 Load")
         load_profile_btn.clicked.connect(self._load_profile)
-        profile_btns.addWidget(load_profile_btn)
+        profile_layout.addWidget(load_profile_btn)
         
-        profile_layout.addLayout(profile_btns)
         right_layout.addWidget(profile_group)
         
         right_layout.addStretch()
         
         splitter.addWidget(right_widget)
-        splitter.setSizes([400, 300])
+        splitter.setSizes([300, 200])
         
         layout.addWidget(splitter)
         
-        # Bottom buttons
+        # Bottom buttons - compact
         bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(6)
         
         refresh_btn = QPushButton("🔄 Refresh")
         refresh_btn.clicked.connect(self._load_tools)

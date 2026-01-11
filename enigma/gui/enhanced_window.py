@@ -101,6 +101,34 @@ class AIGenerationWorker(QThread):
                         do_sample=True,
                         custom_tokenizer=self.custom_tokenizer
                     )
+                
+                # Check if response is a tensor (model didn't decode output)
+                if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
+                    self.thinking.emit("Decoding model output...")
+                    # Try to decode the tensor
+                    try:
+                        import torch
+                        if isinstance(response, torch.Tensor):
+                            # Try to decode using the model's tokenizer
+                            if hasattr(self.engine.model, 'tokenizer'):
+                                response = self.engine.model.tokenizer.decode(
+                                    response[0] if len(response.shape) > 1 else response,
+                                    skip_special_tokens=True
+                                )
+                            elif self.custom_tokenizer:
+                                response = self.custom_tokenizer.decode(
+                                    response[0] if len(response.shape) > 1 else response,
+                                    skip_special_tokens=True
+                                )
+                            else:
+                                response = (
+                                    "⚠️ Model returned raw tensor data. This usually means:\n"
+                                    "• The model is not properly configured for text generation\n"
+                                    "• Try a different model or check if it needs fine-tuning\n"
+                                    "• Local Enigma models need training first"
+                                )
+                    except Exception as decode_err:
+                        response = f"⚠️ Could not decode model output: {decode_err}"
             else:
                 # Local Enigma model - show detailed reasoning
                 self.thinking.emit("Formatting prompt for Q&A...")
@@ -119,20 +147,27 @@ class AIGenerationWorker(QThread):
                 
                 self.thinking.emit("Cleaning up response...")
                 
-                # Clean up response
-                if response.startswith(formatted_prompt):
-                    response = response[len(formatted_prompt):].strip()
-                elif response.startswith(self.text):
-                    response = response[len(self.text):].strip()
-                    
-                if "\nQ:" in response:
-                    response = response.split("\nQ:")[0].strip()
-                if "Q:" in response:
-                    response = response.split("Q:")[0].strip()
-                if response.startswith("A:"):
-                    response = response[2:].strip()
-                if response.startswith(":"):
-                    response = response[1:].strip()
+                # Check if response is a tensor
+                if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
+                    response = (
+                        "⚠️ Model returned raw data instead of text.\n"
+                        "This model may need more training. Go to the Train tab."
+                    )
+                else:
+                    # Clean up response
+                    if response.startswith(formatted_prompt):
+                        response = response[len(formatted_prompt):].strip()
+                    elif response.startswith(self.text):
+                        response = response[len(self.text):].strip()
+                        
+                    if "\nQ:" in response:
+                        response = response.split("\nQ:")[0].strip()
+                    if "Q:" in response:
+                        response = response.split("Q:")[0].strip()
+                    if response.startswith("A:"):
+                        response = response[2:].strip()
+                    if response.startswith(":"):
+                        response = response[1:].strip()
             
             if self._stop_requested:
                 self.stopped.emit()
@@ -413,12 +448,19 @@ QMainWindow, QWidget {
     background-color: #1e1e2e;
     color: #cdd6f4;
 }
+QLabel {
+    /* Enable text selection on labels */
+    selection-background-color: #89b4fa;
+    selection-color: #1e1e2e;
+}
 QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {
     background-color: #313244;
     color: #cdd6f4;
     border: 1px solid #45475a;
     border-radius: 4px;
     padding: 4px;
+    selection-background-color: #89b4fa;
+    selection-color: #1e1e2e;
 }
 QPushButton {
     background-color: #89b4fa;
@@ -1279,13 +1321,16 @@ class ModelLoadingDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Loading Model")
         self.setFixedSize(450, 240)
-        self.setModal(True)
-        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        self.setModal(False)  # Non-modal so user can move the main window
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)  # Stay on top but movable
         self.cancelled = False
         self.show_terminal = show_terminal
         self._log_lines = []
         self._current_progress = 0
         self._target_progress = 0
+        
+        # For dragging the dialog
+        self._drag_pos = None
         
         # Dark style
         self.setStyleSheet("""
@@ -1472,6 +1517,22 @@ class ModelLoadingDialog(QDialog):
         if hasattr(self, '_progress_timer'):
             self._progress_timer.stop()
         super().close()
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press for dragging."""
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for dragging."""
+        if event.buttons() == Qt.LeftButton and self._drag_pos:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release after dragging."""
+        self._drag_pos = None
 
 
 class ModelManagerDialog(QDialog):
@@ -2685,6 +2746,9 @@ class EnhancedMainWindow(QMainWindow):
         # Initialize chat state
         self.chat_messages = []
         
+        # Initialize display names
+        self.user_display_name = self._gui_settings.get("user_display_name", "You")
+        
         # Training lock to prevent concurrent training
         self._is_training = False
         self._stop_training = False
@@ -3475,8 +3539,21 @@ class EnhancedMainWindow(QMainWindow):
         
         self.setCentralWidget(main_widget)
         
+        # Enable text selection on all QLabels in the GUI
+        self._enable_text_selection()
+        
         # Restore saved settings after UI is built
         self._restore_gui_settings()
+    
+    def _enable_text_selection(self):
+        """Enable text selection on all QLabel widgets in the GUI."""
+        from PyQt5.QtCore import Qt
+        for label in self.findChildren(QLabel):
+            # Enable text selection (but not links, which need different flags)
+            current_flags = label.textInteractionFlags()
+            # Add text selection flag if not already set
+            if not (current_flags & Qt.TextSelectableByMouse):
+                label.setTextInteractionFlags(current_flags | Qt.TextSelectableByMouse)
     
     def _restore_gui_settings(self):
         """Restore GUI settings from saved file."""
@@ -4287,12 +4364,13 @@ class EnhancedMainWindow(QMainWindow):
             try:
                 data = json.loads(session_file.read_text())
                 ai_label = data.get("ai_name", "Unknown AI")
+                user_label = data.get("user_name", getattr(self, 'user_display_name', 'You'))
                 html = f"<h3>{session_name}</h3><p><i>AI: {ai_label}</i></p><hr>"
                 for msg in data.get("messages", []):
                     role = msg.get("role", "user")
                     text = msg.get("text", "")
                     if role == "user":
-                        html += f"<p><b>You:</b> {text}</p>"
+                        html += f"<p><b>{user_label}:</b> {text}</p>"
                     else:
                         html += f"<p><b>{ai_label}:</b> {text}</p>"
                 self.session_viewer.setHtml(html)
@@ -4388,13 +4466,14 @@ class EnhancedMainWindow(QMainWindow):
                 self.chat_display.clear()
                 self.chat_messages = data.get("messages", [])
                 ai_name = data.get("ai_name", self.current_model_name or "AI")
+                user_name = data.get("user_name", getattr(self, 'user_display_name', 'You'))
                 for msg in self.chat_messages:
                     role = msg.get("role", "user")
                     text = msg.get("text", "")
                     if role == "user":
                         self.chat_display.append(
                             f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
-                            f'<b style="color: #89b4fa;">You:</b> {text}</div>'
+                            f'<b style="color: #89b4fa;">{user_name}:</b> {text}</div>'
                         )
                     else:
                         self.chat_display.append(
@@ -4423,6 +4502,7 @@ class EnhancedMainWindow(QMainWindow):
         session_file.write_text(json.dumps({
             "name": name,
             "ai_name": self.current_model_name or "unknown",
+            "user_name": getattr(self, 'user_display_name', 'You'),
             "saved_at": time.time(),
             "messages": self.chat_messages
         }))
@@ -4682,9 +4762,10 @@ class EnhancedMainWindow(QMainWindow):
             self.chat_messages = []
         
         # Display user message
+        user_name = getattr(self, 'user_display_name', 'You')
         self.chat_display.append(
             f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
-            f'<b style="color: #89b4fa;">You:</b> {text}</div>'
+            f'<b style="color: #89b4fa;">{user_name}:</b> {text}</div>'
         )
         self.chat_input.clear()
         
@@ -4751,6 +4832,10 @@ class EnhancedMainWindow(QMainWindow):
         self._ai_worker.error.connect(self._on_ai_error)
         self._ai_worker.thinking.connect(self._on_thinking_update)
         self._ai_worker.stopped.connect(self._on_ai_stopped)
+        
+        # Track when generation started for timing display
+        self._generation_start_time = time.time()
+        
         self._ai_worker.start()
     
     def _on_thinking_update(self, status: str):
@@ -4938,6 +5023,12 @@ class EnhancedMainWindow(QMainWindow):
         else:
             formatted_response = display_response
         
+        # Calculate thinking time
+        thinking_time = ""
+        if hasattr(self, '_generation_start_time'):
+            elapsed = time.time() - self._generation_start_time
+            thinking_time = f'<span style="color: #6c7086; font-size: 10px; float: right;">⏱️ {elapsed:.1f}s</span>'
+        
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
         
@@ -4949,14 +5040,14 @@ class EnhancedMainWindow(QMainWindow):
             # HuggingFace model - no rating buttons (can't learn from feedback)
             self.chat_display.append(
                 f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}'
+                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
                 f'</div>'
             )
         else:
             # Local Enigma model - show rating buttons for learning
             self.chat_display.append(
                 f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {formatted_response}'
+                f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
                 f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
                 f'<span style="color: #6c7086; font-size: 11px;">Rate this response: </span>'
                 f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">👍 Good</a>'
@@ -5209,9 +5300,10 @@ class EnhancedMainWindow(QMainWindow):
         command = parts[0].lower()
         prompt = parts[1] if len(parts) > 1 else ""
         
+        user_name = getattr(self, 'user_display_name', 'You')
         self.chat_display.append(
             f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
-            f'<b style="color: #89b4fa;">You:</b> {text}</div>'
+            f'<b style="color: #89b4fa;">{user_name}:</b> {text}</div>'
         )
         
         # Command mapping to tab indices and handlers

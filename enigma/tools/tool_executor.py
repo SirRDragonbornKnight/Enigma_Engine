@@ -463,6 +463,21 @@ class ToolExecutor:
         """Execute image generation."""
         try:
             prompt = params.get("prompt", "")
+            # Ensure prompt is a string (CLIP tokenizer requires str type)
+            if prompt is None:
+                return {
+                    "success": False,
+                    "error": "Prompt cannot be None",
+                    "tool": "generate_image",
+                }
+            prompt = str(prompt).strip()
+            if not prompt:
+                return {
+                    "success": False,
+                    "error": "Prompt cannot be empty",
+                    "tool": "generate_image",
+                }
+            
             width = params.get("width", 512)
             height = params.get("height", 512)
             steps = params.get("steps", 20)

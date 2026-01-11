@@ -888,6 +888,11 @@ class GenerationModule(Module):
         """Generate content using the wrapped addon."""
         if not self._addon or not self._addon.is_loaded:
             raise RuntimeError(f"Module not loaded")
+        # Ensure prompt is a string (CLIP tokenizer requires str type)
+        if prompt is not None:
+            prompt = str(prompt).strip()
+        if not prompt:
+            return {"success": False, "error": "Prompt cannot be empty"}
         return self._addon.generate(prompt, **kwargs)
 
     def get_interface(self):

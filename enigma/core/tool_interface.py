@@ -342,6 +342,10 @@ class ToolInterface:
         if prompt is None:
             prompt = kwargs.get('arg0', kwargs.get('text', ''))
         
+        # Ensure prompt is a string (CLIP tokenizer requires str type)
+        if prompt is not None:
+            prompt = str(prompt).strip()
+        
         if not prompt:
             return {"success": False, "error": "No prompt provided"}
         

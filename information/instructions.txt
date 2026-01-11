@@ -118,6 +118,25 @@ Live camera preview with:
 
 Requires: pip install opencv-python
 
+## Chat Names (NEW!)
+Customize how you and the AI appear in chat:
+- Go to Settings -> Chat Names
+- Set "Your Name" to change how you appear (default: "You")
+- The AI automatically shows its model name (e.g., "mistralai_mistral_7b")
+- Names are saved to gui_settings.json
+
+## Image Generation
+To generate real AI images (not placeholders):
+
+1. LOCAL (GPU): Requires RTX 2080+ or equivalent with 8GB+ VRAM
+   - Install: pip install diffusers transformers accelerate torch
+   - In Image tab, select "Local (Stable Diffusion)"
+   - Click "Load Model" (downloads ~4GB first time)
+
+2. CLOUD (API): Requires API key in Settings
+   - OpenAI DALL-E: Set OPENAI_API_KEY
+   - Replicate SDXL: Set REPLICATE_API_TOKEN
+
 ## Tips
 - Back up your model before making big changes
 - Train in small batches - you can always train more

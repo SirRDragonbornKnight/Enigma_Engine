@@ -115,6 +115,35 @@ CAMERA TAB (NEW!)
 - AI can analyze what camera sees
 - Requires: pip install opencv-python
 
+CHAT NAMES (NEW!)
+-----------------
+- Go to Settings -> Chat Names
+- Set your display name (instead of "You")
+- AI displays its actual model name (e.g., "mistralai_mistral_7b")
+- Names are saved and remembered across sessions
+
+IMAGE GENERATION
+----------------
+Generating images requires one of these providers:
+
+1. LOCAL (Stable Diffusion) - Best quality, runs on your GPU
+   - Requires: GPU with 8GB+ VRAM
+   - Requires: pip install diffusers transformers accelerate torch
+   - Select "Local (Stable Diffusion)" in Image tab
+   - Click "Load Model" (downloads ~4GB first time)
+
+2. OPENAI (DALL-E 3) - Cloud service
+   - Requires: OpenAI API key in Settings -> API Keys
+   - Costs money per image
+
+3. REPLICATE (SDXL/Flux) - Cloud service
+   - Requires: Replicate API key in Settings -> API Keys
+   - Costs money per image
+
+4. PLACEHOLDER - For testing (no real AI)
+   - Creates blue image with your prompt text
+   - No requirements, works immediately
+
 FILES AND FOLDERS
 -----------------
 outputs/images/     Generated images

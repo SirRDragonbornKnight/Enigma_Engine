@@ -33,6 +33,54 @@ def create_game_subtab(parent):
     layout.setSpacing(8)
     layout.setContentsMargins(10, 10, 10, 10)
     
+    # === GAME AI ROUTING ===
+    routing_group = QGroupBox("Game AI Routing")
+    routing_layout = QVBoxLayout(routing_group)
+    
+    routing_desc = QLabel(
+        "Different games use different AI behaviors. Auto-detect or select manually."
+    )
+    routing_desc.setWordWrap(True)
+    routing_layout.addWidget(routing_desc)
+    
+    # Game detection toggle
+    from PyQt5.QtWidgets import QCheckBox
+    parent.auto_game_check = QCheckBox("Auto-Detect Running Game")
+    parent.auto_game_check.setChecked(False)
+    parent.auto_game_check.stateChanged.connect(
+        lambda state: _toggle_game_detection(parent, state)
+    )
+    parent.auto_game_enabled = False
+    routing_layout.addWidget(parent.auto_game_check)
+    
+    # Manual game selector
+    game_select_row = QHBoxLayout()
+    game_select_row.addWidget(QLabel("Active Game:"))
+    parent.game_routing_combo = QComboBox()
+    parent.game_routing_combo.addItem("(None)", "none")
+    parent.game_routing_combo.addItem("Minecraft", "minecraft")
+    parent.game_routing_combo.addItem("Terraria", "terraria")
+    parent.game_routing_combo.addItem("Valorant", "valorant")
+    parent.game_routing_combo.addItem("League of Legends", "league")
+    parent.game_routing_combo.addItem("Dark Souls", "darksouls")
+    parent.game_routing_combo.addItem("Stardew Valley", "stardew")
+    parent.game_routing_combo.addItem("Factorio", "factorio")
+    parent.game_routing_combo.addItem("Custom...", "custom")
+    # Use activated signal - only fires on explicit user selection, not when scrolling
+    parent.game_routing_combo.activated.connect(
+        lambda: _change_active_game(parent)
+    )
+    game_select_row.addWidget(parent.game_routing_combo)
+    game_select_row.addStretch()
+    routing_layout.addLayout(game_select_row)
+    
+    # Game routing status
+    parent.game_routing_status = QLabel("No game active - using default AI")
+    parent.game_routing_status.setStyleSheet("color: #888; font-style: italic;")
+    routing_layout.addWidget(parent.game_routing_status)
+    
+    layout.addWidget(routing_group)
+    
     # === OUTPUT AT TOP ===
     # Log (main output area)
     parent.game_log = QTextEdit()
@@ -311,3 +359,96 @@ def _disconnect_from_game(parent):
     parent.btn_game_connect.setEnabled(True)
     parent.btn_game_disconnect.setEnabled(False)
     parent.game_log.append("[x] Disconnected")
+
+
+# === GAME AI ROUTING FUNCTIONS ===
+
+def _toggle_game_detection(parent, state):
+    """Toggle automatic game detection."""
+    from PyQt5.QtWidgets import QMessageBox
+    enabled = state == 2
+    
+    try:
+        from enigma.tools.game_router import get_game_router
+        
+        router = get_game_router()
+        
+        if enabled:
+            router.start_detection(interval=5.0)
+            router.on_game_detected(lambda game: _on_game_detected(parent, game))
+            parent.game_routing_combo.setEnabled(False)
+            parent.game_routing_status.setText("Watching for games...")
+            parent.game_routing_status.setStyleSheet("color: #3b82f6;")
+        else:
+            router.stop_detection()
+            parent.game_routing_combo.setEnabled(True)
+            parent.game_routing_status.setText("Auto-detection disabled")
+            parent.game_routing_status.setStyleSheet("color: #888;")
+    except ImportError:
+        parent.auto_game_check.setChecked(False)
+        QMessageBox.information(
+            parent, "psutil Required",
+            "Game detection requires psutil. Install with:\npip install psutil"
+        )
+    except Exception as e:
+        parent.auto_game_check.setChecked(False)
+        parent.game_routing_status.setText(f"Detection error: {e}")
+        parent.game_routing_status.setStyleSheet("color: #ef4444;")
+
+
+def _on_game_detected(parent, game_id: str):
+    """Called when a game is auto-detected."""
+    try:
+        from enigma.tools.game_router import get_game_router
+        router = get_game_router()
+        config = router.get_game(game_id)
+        
+        if config:
+            parent.game_routing_status.setText(f"🎮 Detected: {config.name}")
+            parent.game_routing_status.setStyleSheet("color: #22c55e; font-weight: bold;")
+            
+            # Update combo without triggering change
+            parent.game_routing_combo.blockSignals(True)
+            for i in range(parent.game_routing_combo.count()):
+                if parent.game_routing_combo.itemData(i) == game_id:
+                    parent.game_routing_combo.setCurrentIndex(i)
+                    break
+            parent.game_routing_combo.blockSignals(False)
+    except Exception:
+        pass
+
+
+def _change_active_game(parent):
+    """Manually change active game."""
+    from PyQt5.QtWidgets import QMessageBox
+    game_id = parent.game_routing_combo.currentData()
+    
+    if game_id == "custom":
+        QMessageBox.information(
+            parent, "Custom Game",
+            "Custom game configuration coming soon!\n"
+            "For now, add games in enigma/tools/game_router.py"
+        )
+        parent.game_routing_combo.setCurrentIndex(0)
+        return
+    
+    try:
+        from enigma.tools.game_router import get_game_router
+        router = get_game_router()
+        
+        if game_id == "none":
+            router.set_active_game(None)
+            parent.game_routing_status.setText("No game active - using default AI")
+            parent.game_routing_status.setStyleSheet("color: #888; font-style: italic;")
+        else:
+            router.set_active_game(game_id)
+            config = router.get_game(game_id)
+            if config:
+                parent.game_routing_status.setText(f"🎮 Active: {config.name}")
+                parent.game_routing_status.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+    except ImportError:
+        parent.game_routing_status.setText("Game router not available")
+        parent.game_routing_status.setStyleSheet("color: #f59e0b;")
+    except Exception as e:
+        parent.game_routing_status.setText(f"Error: {str(e)[:30]}")
+        parent.game_routing_status.setStyleSheet("color: #ef4444;")

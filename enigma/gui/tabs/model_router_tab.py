@@ -58,43 +58,49 @@ class ToolAssignmentWidget(QFrame):
                 border: 2px solid {style['color']};
                 border-radius: 8px;
                 background: rgba(0,0,0,0.2);
-                margin: 5px;
+                margin: 2px;
             }}
         """)
+        # Allow widget to shrink
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setMinimumWidth(200)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
         
         # Header
         header = QHBoxLayout()
+        header.setSpacing(4)
         
         icon_label = QLabel(style['icon'])
-        icon_label.setStyleSheet("font-size: 20px;")
+        icon_label.setStyleSheet("font-size: 16px;")
         header.addWidget(icon_label)
         
         name_label = QLabel(self.tool_name.upper())
-        name_label.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {style['color']};")
+        name_label.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {style['color']};")
         header.addWidget(name_label)
         
         header.addStretch()
         
         # Status indicator
         self.status_label = QLabel("No model")
-        self.status_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.status_label.setStyleSheet("color: #888; font-size: 10px;")
         header.addWidget(self.status_label)
         
         layout.addLayout(header)
         
-        # Description
-        desc_label = QLabel(self.tool_def.description)
-        desc_label.setStyleSheet("color: #aaa; font-size: 10px;")
+        # Description (hidden when small to save space)
+        desc_label = QLabel(self.tool_def.description[:60] + "..." if len(self.tool_def.description) > 60 else self.tool_def.description)
+        desc_label.setStyleSheet("color: #aaa; font-size: 9px;")
         desc_label.setWordWrap(True)
+        desc_label.setMaximumHeight(30)
         layout.addWidget(desc_label)
         
         # Assigned models list
         self.model_list = QListWidget()
-        self.model_list.setMaximumHeight(80)
+        self.model_list.setMaximumHeight(60)
+        self.model_list.setMinimumHeight(40)
         self.model_list.setStyleSheet("""
             QListWidget {
                 background: rgba(0,0,0,0.3);
@@ -110,32 +116,34 @@ class ToolAssignmentWidget(QFrame):
         """)
         layout.addWidget(self.model_list)
         
-        # Add model controls
+        # Add model controls - more compact layout
         add_layout = QHBoxLayout()
+        add_layout.setSpacing(4)
         
         self.model_input = QComboBox()
         self.model_input.setEditable(True)
-        self.model_input.setPlaceholderText("Select or enter model...")
-        self.model_input.setMinimumWidth(200)
+        self.model_input.setPlaceholderText("Select model...")
+        self.model_input.setMinimumWidth(120)
+        self.model_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._populate_model_options()
         add_layout.addWidget(self.model_input)
         
         self.priority_spin = QSpinBox()
         self.priority_spin.setRange(1, 100)
         self.priority_spin.setValue(10)
-        self.priority_spin.setPrefix("Priority: ")
-        self.priority_spin.setMinimumWidth(100)
+        self.priority_spin.setPrefix("P:")
+        self.priority_spin.setFixedWidth(60)
         add_layout.addWidget(self.priority_spin)
         
-        add_btn = QPushButton("Add")
-        add_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        add_btn.setToolTip("Add selected model to this tool")
+        add_btn = QPushButton("+")
+        add_btn.setFixedWidth(28)
+        add_btn.setToolTip("Add model")
         add_btn.clicked.connect(self._add_model)
         add_layout.addWidget(add_btn)
         
-        remove_btn = QPushButton("Remove")
-        remove_btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        remove_btn.setToolTip("Remove selected model from this tool")
+        remove_btn = QPushButton("-")
+        remove_btn.setFixedWidth(28)
+        remove_btn.setToolTip("Remove model")
         remove_btn.clicked.connect(self._remove_model)
         add_layout.addWidget(remove_btn)
         
@@ -359,6 +367,7 @@ class ModelRouterTab(QWidget):
         # Scroll area for tools
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("""
             QScrollArea {
                 border: none;
@@ -367,29 +376,24 @@ class ModelRouterTab(QWidget):
         """)
         
         tools_container = QWidget()
-        tools_layout = QGridLayout(tools_container)
-        tools_layout.setSpacing(10)
+        tools_layout = QVBoxLayout(tools_container)
+        tools_layout.setSpacing(6)
+        tools_layout.setContentsMargins(4, 4, 4, 4)
         
-        # Create tool widgets
+        # Create tool widgets in a single column (responsive)
         try:
             from enigma.core.tool_router import TOOL_DEFINITIONS
             tools = TOOL_DEFINITIONS
         except ImportError:
             tools = {}
             
-        row, col = 0, 0
         for tool_name, tool_def in tools.items():
             widget = ToolAssignmentWidget(tool_name, tool_def)
             widget.assignment_changed.connect(self._on_assignment_changed)
             self.tool_widgets[tool_name] = widget
-            tools_layout.addWidget(widget, row, col)
-            
-            col += 1
-            if col >= 2:  # 2 columns
-                col = 0
-                row += 1
+            tools_layout.addWidget(widget)
                 
-        tools_layout.setRowStretch(row + 1, 1)
+        tools_layout.addStretch()
         
         scroll.setWidget(tools_container)
         layout.addWidget(scroll)

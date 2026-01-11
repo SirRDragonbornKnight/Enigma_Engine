@@ -25,6 +25,11 @@ pip install -e ".[full]"      # Full features
 pip install -e ".[camera]"    # Camera support (opencv)
 pip install -e ".[gui]"       # GUI only
 
+## For Image Generation (Local Stable Diffusion)
+pip install diffusers transformers accelerate torch
+# Then in GUI: Image tab -> Select "Local (Stable Diffusion)" -> Click "Load Model"
+# Requires GPU with 8GB+ VRAM (RTX 2080 or better)
+
 ## After Installation
 enigma-gui      # Launch GUI
 enigma          # CLI mode

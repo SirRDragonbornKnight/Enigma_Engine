@@ -17,25 +17,26 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 │  - model     │  - image_gen │  - memory    │  - voice_input/output     │
 │  - tokenizer │  - code_gen  │  - embedding │  - vision                 │
 │  - training  │  - video_gen │              │  - avatar                 │
-│  - inference │  - audio_gen │              │                           │
-│              │  - threed    │              │                           │
+│  - inference │  - audio_gen │              │  - camera                 │
+│  - gguf      │  - threed    │              │                           │
 ├──────────────┴──────────────┴──────────────┴───────────────────────────┤
 │    TOOLS              │    NETWORK              │    INTERFACE          │
 │  - web_tools          │  - api_server           │  - gui (with tabs)    │
 │  - file_tools         │  - network (multi-dev)  │                       │
+│  - tool_router        │                         │                       │
 └───────────────────────┴─────────────────────────┴───────────────────────┘
 ```
 
 ### Core Packages
-- **enigma.core**: Enigma transformer model with RoPE, RMSNorm, SwiGLU, KV-cache
+- **enigma.core**: Enigma transformer model with RoPE, RMSNorm, SwiGLU, KV-cache, tool routing
 - **enigma.modules**: Module system - manager, registry, state handling
-- **enigma.gui.tabs**: Generation capabilities in standalone tabs (image, code, video, audio, 3D, embeddings)
+- **enigma.gui.tabs**: Generation capabilities in standalone tabs (image, code, video, audio, 3D, embeddings, camera)
 - **enigma.memory**: Conversation storage (JSON/SQLite), vector search
 - **enigma.comms**: API server, remote client, multi-device networking
 - **enigma.gui**: PyQt5 interface with Module Manager tab
 - **enigma.voice**: TTS/STT wrappers
-- **enigma.avatar**: Avatar control
-- **enigma.tools**: Vision, web, file, document tools
+- **enigma.avatar**: Avatar control and rendering
+- **enigma.tools**: Vision, web, file, document, robot, game tools
 
 ### Model Sizes (15 presets)
 | Size | Params | Use Case |
@@ -51,16 +52,19 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 ## Key Files & Classes Reference
 
 ### Module Management
-- **enigma/modules/manager.py**: `ModuleManager` class - Central controller for loading/unloading modules
-- **enigma/modules/registry.py**: `MODULE_REGISTRY` dict - Lists all available modules with metadata
-- **enigma/modules/base.py**: `BaseModule` class - Base class all modules inherit from
+- **enigma/modules/manager.py**: `ModuleManager`, `Module`, `ModuleInfo`, `ModuleState` classes - Central module system
+- **enigma/modules/registry.py**: Module classes (`ModelModule`, `TokenizerModule`, `ToolRouterModule`, etc.)
+- **enigma/modules/sandbox.py**: Sandboxed module execution
 
 ### Core AI Components
-- **enigma/core/model.py**: `EnigmaModel` class - Main transformer model implementation
-- **enigma/core/tokenizer.py**: `SimpleTokenizer`, `TiktokenWrapper` classes - Text tokenization and vocabulary
-- **enigma/core/training.py**: `Trainer` class - Model training loop and optimization
-- **enigma/core/inference.py**: `EnigmaEngine` class - Model inference and generation
+- **enigma/core/model.py**: `Enigma`, `create_model()` - Main transformer model implementation
+- **enigma/core/tokenizer.py**: `get_tokenizer()`, `SimpleTokenizer`, `TiktokenWrapper` - Text tokenization
+- **enigma/core/training.py**: `Trainer`, `TrainingConfig`, `train_model()` - Model training
+- **enigma/core/inference.py**: `EnigmaEngine` class - Model inference with optional `use_routing` for specialized models
 - **enigma/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models
+- **enigma/core/tool_router.py**: `ToolRouter`, `get_router()`, `classify_intent()`, `describe_image()`, `generate_code()` - Specialized model routing
+- **enigma/core/huggingface_loader.py**: `load_huggingface_model()` - Load HuggingFace models
+- **enigma/core/gguf_loader.py**: GGUF format model loading
 
 ### AI Generation Tabs (in enigma/gui/tabs/)
 Each tab contains both the implementation (provider classes) and the GUI:
@@ -71,6 +75,9 @@ Each tab contains both the implementation (provider classes) and the GUI:
 - **embeddings_tab.py**: `LocalEmbedding`, `OpenAIEmbedding` + `EmbeddingsTab`
 - **threed_tab.py**: `Local3DGen`, `Cloud3DGen` + `ThreeDTab`
 - **gif_tab.py**: `GIFTab` class - Animated GIF generation
+- **camera_tab.py**: `CameraTab` class - Webcam capture and analysis
+- **vision_tab.py**: `VisionTab` class - Image/screen analysis
+- **model_router_tab.py**: `ModelRouterTab` class - Tool-to-model assignment UI
 
 ### Memory System
 - **enigma/memory/manager.py**: `ConversationManager` class - Stores chat history
@@ -154,6 +161,7 @@ The module manager automatically prevents:
 ## Developer Workflows
 - **Setup**: `python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt`
 - **Train Model**: `python run.py --train`
+- **Train Specialized**: `python scripts/train_specialized_model.py --type router --data data/specialized/router_training.txt`
 - **Run Inference**: `python run.py --run` (CLI) or `python run.py --serve` (API)
 - **GUI**: `python run.py --gui` - Module Manager tab to toggle capabilities
 
@@ -180,7 +188,5 @@ The module manager automatically prevents:
 ❌ **DON'T run multiple instances on same model** - Can corrupt files
 
 ❌ **DON'T block the UI thread** - Use QThread for long operations
-
-❌ **DON'T mix model sizes carelessly** - Requires proper conversion
 
 ❌ **DON'T mix model sizes carelessly** - Requires proper conversion

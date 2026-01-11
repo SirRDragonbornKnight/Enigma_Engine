@@ -437,11 +437,26 @@ class QuickCommandOverlay(QWidget):
         self.status_label.setStyleSheet("color: #888; font-size: 11px;")
         header_layout.addWidget(self.status_label)
         
-        # Responding indicator (animated dots)
-        self.responding_label = QLabel("")
-        self.responding_label.setStyleSheet("color: #3498db; font-size: 11px; font-weight: bold;")
-        self.responding_label.hide()
-        header_layout.addWidget(self.responding_label)
+        # New Chat button
+        new_chat_btn = QPushButton("+")
+        new_chat_btn.setFixedSize(24, 24)
+        new_chat_btn.setToolTip("New Chat")
+        new_chat_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #555;
+                border-radius: 4px;
+                color: #888;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #444;
+                color: #2ecc71;
+            }
+        """)
+        new_chat_btn.clicked.connect(self._new_chat)
+        header_layout.addWidget(new_chat_btn)
         
         # Minimize button (opens GUI)
         min_btn = QPushButton("_")
@@ -490,6 +505,9 @@ class QuickCommandOverlay(QWidget):
         # Chat history area (always visible, above input like main chat)
         self.response_area = QTextEdit()
         self.response_area.setReadOnly(True)
+        self.response_area.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
         self.response_area.setPlaceholderText("Chat history will appear here...")
         self.response_area.setMinimumHeight(150)
         self.response_area.setStyleSheet("""
@@ -606,9 +624,13 @@ class QuickCommandOverlay(QWidget):
             settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
             if settings_path.exists():
                 with open(settings_path, 'r') as f:
-                    return json.load(f)
+                    settings = json.load(f)
+                    # Load user display name
+                    self.user_display_name = settings.get("user_display_name", "You")
+                    return settings
         except Exception:
             pass
+        self.user_display_name = "You"
         return {}
     
     def set_always_on_top(self, on_top: bool):
@@ -623,29 +645,44 @@ class QuickCommandOverlay(QWidget):
             self.show()
     
     def _update_responding_indicator(self):
-        """Animate the responding indicator."""
+        """Update status text only - no chat spam."""
         self._responding_dots = (self._responding_dots + 1) % 4
         dots = "." * self._responding_dots
-        self.responding_label.setText(f"Responding{dots}")
+        self.set_status(f"Thinking{dots}")
     
     def start_responding(self):
-        """Show the responding indicator."""
+        """Show the responding indicator (single line in chat, animated status)."""
         self._is_responding = True
         self._responding_dots = 0
-        self.responding_label.setText("Responding")
-        self.responding_label.show()
-        self._responding_timer.start(400)  # Update every 400ms
+        # Add single thinking indicator inline
+        ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
+        self.response_area.append(
+            f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>{ai_name} is thinking...</i></div>'
+        )
+        self.response_area.verticalScrollBar().setValue(
+            self.response_area.verticalScrollBar().maximum()
+        )
+        self._responding_timer.start(400)  # Animate status bar only
         self.chat_btn.setEnabled(False)
-        self.chat_btn.setText("...")
+        self.chat_btn.setText("Wait")
+        self.set_status("Thinking...")
     
     def stop_responding(self):
-        """Hide the responding indicator."""
+        """Remove the thinking indicator from chat."""
         self._is_responding = False
         self._responding_timer.stop()
-        self.responding_label.hide()
+        self._remove_thinking_indicator()
         self.chat_btn.setEnabled(True)
         self.chat_btn.setText("Send")
         self.set_status("Ready")
+    
+    def _remove_thinking_indicator(self):
+        """Remove the thinking indicator from chat."""
+        html = self.response_area.toHtml()
+        # Remove the thinking div
+        import re
+        html = re.sub(r'<div id="thinking"[^>]*>.*?</div>', '', html, flags=re.IGNORECASE | re.DOTALL)
+        self.response_area.setHtml(html)
     
     def _open_gui(self):
         """Open the full GUI (keeps mini chat open)."""
@@ -658,6 +695,17 @@ class QuickCommandOverlay(QWidget):
         self.close_requested.emit()
         self.hide()
     
+    def _new_chat(self):
+        """Clear the chat and start fresh."""
+        if self._is_responding:
+            return
+        self.response_area.clear()
+        self.response_area.setPlaceholderText("Chat history will appear here...")
+        self.command_input.clear()
+        self.history = []
+        self.history_index = -1
+        self.set_status("New chat")
+    
     def _on_chat(self):
         """Handle chat message - process in mini chat, don't go to main GUI."""
         command = self.command_input.text().strip()
@@ -665,9 +713,10 @@ class QuickCommandOverlay(QWidget):
             self.history.append(command)
             self.history_index = len(self.history)
             
-            # Show user message
+            # Show user message with customized name
+            user_name = getattr(self, 'user_display_name', 'You')
             self.response_area.append(
-                f"<div style='color: #9b59b6; margin: 4px 0;'><b>You:</b> {command}</div>"
+                f"<div style='color: #9b59b6; margin: 4px 0;'><b>{user_name}:</b> {command}</div>"
             )
             self.command_input.clear()
             
@@ -764,7 +813,9 @@ class QuickCommandOverlay(QWidget):
         # Stop the responding indicator
         self.stop_responding()
         
-        self.response_area.append(f"<div style='color: #3498db; margin-bottom: 8px;'><b>AI:</b> {text}</div>")
+        # Use the AI's actual name instead of generic "AI"
+        ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
+        self.response_area.append(f"<div style='color: #3498db; margin-bottom: 8px;'><b>{ai_name}:</b> {text}</div>")
         # Scroll to bottom
         self.response_area.verticalScrollBar().setValue(
             self.response_area.verticalScrollBar().maximum()
@@ -776,6 +827,7 @@ class QuickCommandOverlay(QWidget):
     
     def set_model_name(self, name: str):
         """Update the displayed model name."""
+        self.ai_display_name = name  # Store for chat display
         if hasattr(self, 'title_label'):
             self.title_label.setText(name)
     
@@ -1273,8 +1325,9 @@ class EnigmaSystemTray(QObject):
             self._process_chat_in_mini(command)
     
     def _process_chat_in_mini(self, message: str):
-        """Process a chat message directly in the mini chat."""
+        """Process a chat message directly in the mini chat and sync to main chat."""
         import threading
+        import time
         
         def generate_response():
             try:
@@ -1301,11 +1354,15 @@ class EnigmaSystemTray(QObject):
                     except Exception as e:
                         response = f"[No AI loaded - open full GUI to load a model]\n\nYour message: {message}"
                 
+                # Sync to main window's chat history
+                if self.main_window:
+                    self._sync_to_main_chat(message, response)
+                
                 # Update UI from main thread
                 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                 QMetaObject.invokeMethod(
                     self.overlay, "show_response",
-                    Qt.QueuedConnection, Q_ARG(str, f"<b>AI:</b> {response}")
+                    Qt.QueuedConnection, Q_ARG(str, response)
                 )
                 QMetaObject.invokeMethod(
                     self.overlay, "set_status",
@@ -1326,6 +1383,54 @@ class EnigmaSystemTray(QObject):
         # Run in background thread
         thread = threading.Thread(target=generate_response, daemon=True)
         thread.start()
+    
+    def _sync_to_main_chat(self, user_message: str, ai_response: str):
+        """Sync mini chat messages to main window's chat history."""
+        import time
+        try:
+            # Add to chat_messages list
+            if hasattr(self.main_window, 'chat_messages'):
+                self.main_window.chat_messages.append({
+                    "role": "user",
+                    "text": user_message,
+                    "ts": time.time(),
+                    "source": "mini_chat"
+                })
+                self.main_window.chat_messages.append({
+                    "role": "assistant", 
+                    "text": ai_response,
+                    "ts": time.time(),
+                    "source": "mini_chat"
+                })
+            
+            # Update chat display in main window
+            if hasattr(self.main_window, 'chat_display'):
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                model_name = getattr(self.main_window, 'current_model_name', 'AI')
+                
+                # Add user message
+                user_html = (
+                    f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; '
+                    f'border-radius: 8px; border-left: 3px solid #9b59b6;">'
+                    f'<b style="color: #9b59b6;">You (mini):</b> {user_message}</div>'
+                )
+                QMetaObject.invokeMethod(
+                    self.main_window.chat_display, "append",
+                    Qt.QueuedConnection, Q_ARG(str, user_html)
+                )
+                
+                # Add AI response
+                ai_html = (
+                    f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; '
+                    f'border-radius: 8px; border-left: 3px solid #a6e3a1;">'
+                    f'<b style="color: #a6e3a1;">{model_name}:</b> {ai_response}</div>'
+                )
+                QMetaObject.invokeMethod(
+                    self.main_window.chat_display, "append",
+                    Qt.QueuedConnection, Q_ARG(str, ai_html)
+                )
+        except Exception as e:
+            print(f"Could not sync to main chat: {e}")
     
     def _execute_action(self, action: str, params: Dict[str, Any] = None):
         """Execute an action."""

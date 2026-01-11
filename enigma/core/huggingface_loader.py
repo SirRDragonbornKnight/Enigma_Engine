@@ -346,6 +346,13 @@ class HuggingFaceModel:
         if not self.is_loaded:
             self.load()
         
+        # Ensure prompt is a string (tokenizers require str type)
+        if prompt is None:
+            prompt = ""
+        prompt = str(prompt)
+        if not prompt.strip():
+            return "(Empty prompt provided)"
+        
         # Type assertions for loaded state
         assert self.tokenizer is not None, "Tokenizer not loaded"
         assert self.model is not None, "Model not loaded"
@@ -513,6 +520,13 @@ class HuggingFaceModel:
         if not self.is_loaded:
             self.load()
         
+        # Ensure message is a string (tokenizers require str type)
+        if message is None:
+            message = ""
+        message = str(message)
+        if not message.strip():
+            return "(Empty message provided)"
+        
         # Type assertions for loaded state
         assert self.tokenizer is not None, "Tokenizer not loaded"
         assert self.model is not None, "Model not loaded"
@@ -577,6 +591,9 @@ class HuggingFaceModel:
                     tokenize=False,
                     add_generation_prompt=True,
                 )
+                # Ensure prompt is a string (some templates return lists)
+                if not isinstance(prompt, str):
+                    prompt = str(prompt)
                 logger.debug(f"Using chat template, prompt: {prompt[:200]}...")
             else:
                 # Fallback: simple formatting
@@ -584,6 +601,9 @@ class HuggingFaceModel:
         except Exception as e:
             logger.warning(f"Chat template failed: {e}, using simple format")
             prompt = self._format_chat_simple(messages)
+        
+        # Final string validation
+        prompt = str(prompt) if prompt else ""
         
         # Model-specific stop strings
         stop_strings = ["User:", "Human:", "\n\nUser", "\n\nHuman", "</s>", "[/INST]"]
