@@ -443,8 +443,12 @@ class EnigmaEngine:
             intent = self._tool_router.classify_intent(prompt)
             logger.info(f"Classified intent: {intent}")
             
-            # If routed to code or vision, use specialized model
-            if intent == "code" and hasattr(self._tool_router, 'generate_code'):
+            # Direct routing for specific intents (bypasses main AI for speed)
+            if intent == "image":
+                # Direct image generation - skip main AI entirely
+                logger.info("Direct routing to image generation")
+                return self._direct_image_generation(prompt)
+            elif intent == "code" and hasattr(self._tool_router, 'generate_code'):
                 logger.info("Using specialized code generation model")
                 return self._tool_router.generate_code(prompt)
             elif intent == "vision" and hasattr(self._tool_router, 'describe_image'):
@@ -470,6 +474,58 @@ class EnigmaEngine:
             )
         
         return text
+    
+    def _direct_image_generation(self, prompt: str) -> str:
+        """
+        Direct image generation - bypasses main AI for instant routing.
+        
+        Extracts the image description from the prompt and calls the 
+        image generator directly, returning a formatted response.
+        """
+        import re
+        
+        # Extract the actual image description from common phrasings
+        # "draw me a cat" -> "a cat"
+        # "generate an image of a sunset" -> "a sunset"
+        # "create a picture of mountains" -> "mountains"
+        description = prompt
+        
+        patterns = [
+            r'(?:draw|paint|create|generate|make)\s+(?:me\s+)?(?:a\s+)?(?:picture|image|photo|illustration|artwork)?\s*(?:of\s+)?(.+)',
+            r'(?:draw|paint|create|generate|make)\s+(?:me\s+)?(.+)',
+            r'(?:picture|image|photo)\s+of\s+(.+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, prompt, re.IGNORECASE)
+            if match:
+                description = match.group(1).strip()
+                break
+        
+        # Clean up the description
+        description = description.strip('.,!? ')
+        if not description:
+            description = prompt  # Fallback to full prompt
+        
+        logger.info(f"Direct image generation with description: {description}")
+        
+        # Try to use tool executor's image generation
+        if self._tool_executor:
+            result = self._tool_executor.execute_tool(
+                "generate_image",
+                {"prompt": description}
+            )
+            
+            if result.get("success"):
+                path = result.get("path", result.get("result", {}).get("path", ""))
+                duration = result.get("duration", 0)
+                return f"I've generated an image of '{description}' for you.\n\nImage saved to: {path}\nGeneration time: {duration:.1f}s"
+            else:
+                error = result.get("error", "Unknown error")
+                return f"I tried to generate an image but encountered an error: {error}\n\nYou can try using the Image tab directly, or check that an image provider is loaded."
+        
+        # Fallback: return instruction to use Image tab
+        return f"To generate an image of '{description}', please use the Image tab. I detected this as an image request but don't have direct access to the image generator."
     
     def _generate_text(
         self,

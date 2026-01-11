@@ -3121,8 +3121,26 @@ class EnhancedMainWindow(QMainWindow):
             self.engine.use_half = False
             self.engine.enable_tools = False
             self.engine.module_manager = getattr(self, 'module_manager', None)
-            self.engine._tool_executor = None
             self.engine._is_huggingface = is_huggingface
+            
+            # Set up tool executor for direct tool dispatch
+            self.engine._tool_executor = None
+            try:
+                from ..tools.tool_executor import ToolExecutor
+                self.engine._tool_executor = ToolExecutor(module_manager=self.engine.module_manager)
+            except Exception as e:
+                logger.warning(f"Could not create tool executor: {e}")
+            
+            # Enable direct routing for faster tool dispatch (image, code, etc.)
+            self.engine.use_routing = True
+            self.engine._tool_router = None
+            try:
+                from ..core.tool_router import get_router
+                self.engine._tool_router = get_router(use_specialized=False)  # Keyword-based for speed
+                loading_dialog.set_status("✓ Fast routing enabled", 57)
+            except Exception as e:
+                logger.warning(f"Could not enable routing: {e}")
+                self.engine.use_routing = False
             
             loading_dialog.set_status(f"Moving model to {device_name}...", 60)
             
