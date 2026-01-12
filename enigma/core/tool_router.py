@@ -873,14 +873,29 @@ class ToolRouter:
             
         model_type = assignment.model_type
         
-        if model_type in ("enigma", "huggingface"):
-            # Text generation
+        # Route HuggingFace models based on tool type
+        if model_type == "huggingface":
+            if tool_name == "image":
+                return self._execute_hf_image(assignment, params)
+            elif tool_name == "audio":
+                return self._execute_hf_audio(assignment, params)
+            elif tool_name == "video":
+                return self._execute_hf_video(assignment, params)
+            elif tool_name == "3d":
+                return self._execute_hf_3d(assignment, params)
+            elif tool_name == "vision":
+                return self._execute_hf_vision(assignment, params)
+            elif tool_name == "embeddings":
+                return self._execute_hf_embeddings(assignment, params)
+            elif tool_name in ("chat", "code"):
+                return self._execute_text_generation(assignment, params)
+            else:
+                return self._execute_text_generation(assignment, params)
+        elif model_type == "enigma":
             return self._execute_text_generation(assignment, params)
         elif model_type == "local":
-            # Local module
             return self._execute_local_module(assignment, params)
         elif model_type == "api":
-            # API call
             return self._execute_api_call(assignment, params)
             
         return {"success": False, "error": f"Unknown model type: {model_type}"}
@@ -1098,6 +1113,295 @@ class ToolRouter:
             
         except ImportError as e:
             return {"success": False, "error": f"3D generation not available: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    # =========================================================================
+    # HuggingFace Model Execution Methods
+    # =========================================================================
+    
+    def _execute_hf_image(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute image generation with HuggingFace diffusion model."""
+        try:
+            from diffusers import StableDiffusionPipeline, DiffusionPipeline
+            import torch
+            from pathlib import Path
+            import time
+            
+            model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+            
+            # Check cache
+            if model_id not in self._model_cache:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                dtype = torch.float16 if device == "cuda" else torch.float32
+                
+                # Clear GPU cache
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                print(f"Loading HF image model: {model_id}")
+                pipe = DiffusionPipeline.from_pretrained(
+                    model_id,
+                    torch_dtype=dtype,
+                    safety_checker=None,
+                )
+                pipe = pipe.to(device)
+                
+                if device == "cuda":
+                    try:
+                        pipe.enable_attention_slicing()
+                    except Exception:
+                        pass
+                
+                self._cache_model(model_id, {"pipe": pipe, "type": "hf_image", "device": device})
+            
+            model_data = self._model_cache[model_id]
+            pipe = model_data["pipe"]
+            
+            prompt = params.get("prompt", "")
+            width = int(params.get("width", 512))
+            height = int(params.get("height", 512))
+            steps = int(params.get("steps", 20))
+            
+            output = pipe(prompt, width=width, height=height, num_inference_steps=steps)
+            image = output.images[0]
+            
+            # Save
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs")) / "images"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            filepath = output_dir / f"hf_image_{timestamp}.png"
+            image.save(str(filepath))
+            
+            return {"success": True, "path": str(filepath), "model": model_id}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_hf_audio(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute audio/TTS with HuggingFace model."""
+        try:
+            import torch
+            from pathlib import Path
+            import time
+            import scipy.io.wavfile as wavfile
+            
+            model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+            text = params.get("text", params.get("prompt", ""))
+            
+            # Different handling for different TTS models
+            if "bark" in model_id.lower():
+                from transformers import AutoProcessor, BarkModel
+                
+                if model_id not in self._model_cache:
+                    processor = AutoProcessor.from_pretrained(model_id)
+                    model = BarkModel.from_pretrained(model_id)
+                    if torch.cuda.is_available():
+                        model = model.to("cuda")
+                    self._cache_model(model_id, {"processor": processor, "model": model, "type": "bark"})
+                
+                data = self._model_cache[model_id]
+                inputs = data["processor"](text, return_tensors="pt")
+                if torch.cuda.is_available():
+                    inputs = {k: v.to("cuda") for k, v in inputs.items()}
+                audio = data["model"].generate(**inputs)
+                audio_np = audio.cpu().numpy().squeeze()
+                sample_rate = 24000
+                
+            elif "kokoro" in model_id.lower() or "melo" in model_id.lower():
+                from transformers import pipeline
+                
+                if model_id not in self._model_cache:
+                    pipe = pipeline("text-to-speech", model=model_id)
+                    self._cache_model(model_id, {"pipe": pipe, "type": "tts_pipe"})
+                
+                data = self._model_cache[model_id]
+                output = data["pipe"](text)
+                audio_np = output["audio"]
+                sample_rate = output.get("sampling_rate", 22050)
+            else:
+                # Generic TTS pipeline
+                from transformers import pipeline
+                
+                if model_id not in self._model_cache:
+                    pipe = pipeline("text-to-speech", model=model_id)
+                    self._cache_model(model_id, {"pipe": pipe, "type": "tts_pipe"})
+                
+                data = self._model_cache[model_id]
+                output = data["pipe"](text)
+                audio_np = output["audio"]
+                sample_rate = output.get("sampling_rate", 22050)
+            
+            # Save audio
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs")) / "audio"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            filepath = output_dir / f"hf_audio_{timestamp}.wav"
+            
+            import numpy as np
+            if audio_np.dtype != np.int16:
+                audio_np = (audio_np * 32767).astype(np.int16)
+            wavfile.write(str(filepath), sample_rate, audio_np)
+            
+            return {"success": True, "path": str(filepath), "model": model_id}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_hf_video(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute video generation with HuggingFace model."""
+        try:
+            from diffusers import DiffusionPipeline
+            import torch
+            from pathlib import Path
+            import time
+            
+            model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+            
+            if model_id not in self._model_cache:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                dtype = torch.float16 if device == "cuda" else torch.float32
+                
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                print(f"Loading HF video model: {model_id}")
+                pipe = DiffusionPipeline.from_pretrained(model_id, torch_dtype=dtype)
+                pipe = pipe.to(device)
+                self._cache_model(model_id, {"pipe": pipe, "type": "hf_video", "device": device})
+            
+            model_data = self._model_cache[model_id]
+            pipe = model_data["pipe"]
+            
+            prompt = params.get("prompt", "")
+            num_frames = int(params.get("duration", 2.0) * params.get("fps", 8))
+            
+            output = pipe(prompt, num_frames=num_frames)
+            frames = output.frames[0]
+            
+            # Save as GIF
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs")) / "videos"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            filepath = output_dir / f"hf_video_{timestamp}.gif"
+            
+            frames[0].save(str(filepath), format='GIF', save_all=True,
+                          append_images=frames[1:], duration=125, loop=0)
+            
+            return {"success": True, "path": str(filepath), "model": model_id}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_hf_3d(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute 3D generation with HuggingFace Shap-E."""
+        try:
+            from diffusers import ShapEPipeline
+            import torch
+            from pathlib import Path
+            import time
+            
+            model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+            
+            if model_id not in self._model_cache:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                dtype = torch.float16 if device == "cuda" else torch.float32
+                
+                print(f"Loading HF 3D model: {model_id}")
+                pipe = ShapEPipeline.from_pretrained(model_id, torch_dtype=dtype)
+                pipe = pipe.to(device)
+                self._cache_model(model_id, {"pipe": pipe, "type": "hf_3d", "device": device})
+            
+            model_data = self._model_cache[model_id]
+            pipe = model_data["pipe"]
+            
+            prompt = params.get("prompt", "")
+            guidance = float(params.get("guidance_scale", 15.0))
+            
+            output = pipe(prompt, guidance_scale=guidance)
+            
+            # Save
+            from ..config import CONFIG
+            output_dir = Path(CONFIG.get("outputs_dir", "outputs")) / "3d"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            filepath = output_dir / f"hf_3d_{timestamp}.ply"
+            
+            mesh = output.images[0]
+            try:
+                import trimesh
+                if hasattr(mesh, 'export'):
+                    mesh.export(str(filepath))
+                else:
+                    tmesh = trimesh.Trimesh(vertices=mesh.verts.cpu().numpy())
+                    tmesh.export(str(filepath))
+            except ImportError:
+                import pickle
+                filepath = output_dir / f"hf_3d_{timestamp}.pkl"
+                with open(filepath, 'wb') as f:
+                    pickle.dump(mesh, f)
+            
+            return {"success": True, "path": str(filepath), "model": model_id}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_hf_vision(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute vision/image understanding with HuggingFace model."""
+        try:
+            from transformers import pipeline
+            from PIL import Image
+            
+            model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+            
+            if model_id not in self._model_cache:
+                print(f"Loading HF vision model: {model_id}")
+                pipe = pipeline("image-to-text", model=model_id)
+                self._cache_model(model_id, {"pipe": pipe, "type": "hf_vision"})
+            
+            data = self._model_cache[model_id]
+            
+            image_path = params.get("image_path", params.get("image", ""))
+            question = params.get("prompt", params.get("question", "Describe this image."))
+            
+            if image_path:
+                image = Image.open(image_path)
+            else:
+                return {"success": False, "error": "No image provided"}
+            
+            result = data["pipe"](image, question)
+            text = result[0]["generated_text"] if isinstance(result, list) else str(result)
+            
+            return {"success": True, "result": text, "model": model_id}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_hf_embeddings(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute embeddings with HuggingFace sentence-transformers."""
+        try:
+            from sentence_transformers import SentenceTransformer
+            
+            model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+            
+            if model_id not in self._model_cache:
+                print(f"Loading HF embeddings model: {model_id}")
+                model = SentenceTransformer(model_id)
+                self._cache_model(model_id, {"model": model, "type": "hf_embed"})
+            
+            data = self._model_cache[model_id]
+            
+            text = params.get("text", params.get("query", params.get("prompt", "")))
+            if isinstance(text, str):
+                text = [text]
+            
+            embeddings = data["model"].encode(text)
+            
+            return {"success": True, "embeddings": embeddings.tolist(), "model": model_id}
+            
         except Exception as e:
             return {"success": False, "error": str(e)}
     

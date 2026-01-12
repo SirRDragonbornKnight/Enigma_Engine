@@ -156,19 +156,56 @@ class ToolAssignmentWidget(QFrame):
         # Add local modules first - these are the direct implementations
         self.model_input.addItem("-- Local Modules --")
         local_modules = [
-            ("local:stable-diffusion", "Image generation (SD)"),
-            ("local:code", "Code generation (Enigma)"),
-            ("local:tts", "Text-to-speech (pyttsx3)"),
-            ("local:video", "Video generation (AnimateDiff)"),
-            ("local:3d", "3D generation (Shap-E)"),
+            "local:stable-diffusion",
+            "local:code",
+            "local:tts",
+            "local:video",
+            "local:3d",
         ]
-        for module_id, desc in local_modules:
-            self.model_input.addItem(f"{module_id}")
+        for module_id in local_modules:
+            self.model_input.addItem(module_id)
         
-        # Add categories
+        # Recommended HuggingFace models by task
+        self.model_input.addItem("-- HF: Chat/LLM --")
+        self.model_input.addItem("huggingface:Qwen/Qwen2.5-3B-Instruct")
+        self.model_input.addItem("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+        self.model_input.addItem("huggingface:microsoft/phi-2")
+        
+        self.model_input.addItem("-- HF: Code --")
+        self.model_input.addItem("huggingface:Salesforce/codegen-350M-mono")
+        self.model_input.addItem("huggingface:bigcode/starcoder2-3b")
+        self.model_input.addItem("huggingface:Qwen/Qwen2.5-Coder-1.5B-Instruct")
+        
+        self.model_input.addItem("-- HF: Image --")
+        self.model_input.addItem("huggingface:stabilityai/sd-turbo")
+        self.model_input.addItem("huggingface:nota-ai/bk-sdm-small")
+        self.model_input.addItem("huggingface:stabilityai/stable-diffusion-xl-base-1.0")
+        
+        self.model_input.addItem("-- HF: Audio/TTS --")
+        self.model_input.addItem("huggingface:hexgrad/Kokoro-82M")
+        self.model_input.addItem("huggingface:myshell-ai/MeloTTS-English")
+        self.model_input.addItem("huggingface:suno/bark-small")
+        
+        self.model_input.addItem("-- HF: Video --")
+        self.model_input.addItem("huggingface:ali-vilab/text-to-video-ms-1.7b")
+        self.model_input.addItem("huggingface:damo-vilab/text-to-video-ms-1.7b")
+        
+        self.model_input.addItem("-- HF: 3D --")
+        self.model_input.addItem("huggingface:openai/shap-e")
+        self.model_input.addItem("huggingface:openai/point-e")
+        
+        self.model_input.addItem("-- HF: Vision --")
+        self.model_input.addItem("huggingface:Salesforce/blip2-opt-2.7b")
+        self.model_input.addItem("huggingface:llava-hf/llava-1.5-7b-hf")
+        self.model_input.addItem("huggingface:microsoft/Florence-2-base")
+        
+        self.model_input.addItem("-- HF: Embeddings --")
+        self.model_input.addItem("huggingface:sentence-transformers/all-MiniLM-L6-v2")
+        self.model_input.addItem("huggingface:BAAI/bge-small-en-v1.5")
+        self.model_input.addItem("huggingface:thenlper/gte-small")
+        
+        # Add Enigma models
         self.model_input.addItem("-- Enigma Models --")
-        
-        # Get Enigma models
         try:
             from enigma.core.model_registry import ModelRegistry
             registry = ModelRegistry()
@@ -177,28 +214,6 @@ class ToolAssignmentWidget(QFrame):
                 self.model_input.addItem(f"enigma:{model_name}")
         except Exception:
             self.model_input.addItem("enigma:default")
-            
-        self.model_input.addItem("-- HuggingFace Models --")
-        # Get HuggingFace models from registry with size info
-        try:
-            from enigma.core.model_registry import ModelRegistry
-            registry = ModelRegistry()
-            for model_name, model_info in registry.registry.get("models", {}).items():
-                if model_info.get("source") == "huggingface":
-                    hf_id = model_info.get("huggingface_id", model_name)
-                    size_str = model_info.get("size", "HF")
-                    # Show size if available: "huggingface:model/id (HF-124M)"
-                    if size_str and size_str != "huggingface":
-                        self.model_input.addItem(f"huggingface:{hf_id} ({size_str})")
-                    else:
-                        self.model_input.addItem(f"huggingface:{hf_id}")
-        except Exception:
-            pass
-        
-        # Common HuggingFace presets with sizes
-        self.model_input.addItem("huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0 (1.1B)")
-        self.model_input.addItem("huggingface:Qwen/Qwen2-1.5B-Instruct (1.5B)")
-        self.model_input.addItem("huggingface:Salesforce/codegen-350M-mono (350M)")
             
         self.model_input.addItem("-- API Providers --")
         api_providers = [
