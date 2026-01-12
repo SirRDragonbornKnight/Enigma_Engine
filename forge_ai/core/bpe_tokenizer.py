@@ -298,7 +298,12 @@ class BPETokenizer:
                     i += 1
             tokens = new_tokens
 
-        # Cache result
+        # Cache result (with size limit to prevent memory growth)
+        if len(self.cache) > 10000:
+            # Clear oldest half of cache
+            keys_to_remove = list(self.cache.keys())[:5000]
+            for k in keys_to_remove:
+                del self.cache[k]
         self.cache[word] = tokens
         return tokens
 

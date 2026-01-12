@@ -460,8 +460,13 @@ class ForgeTokenizer:
 
         result = ' '.join(word)
         
-        # Cache only when dropout is disabled
+        # Cache only when dropout is disabled (with size limit)
         if dropout == 0.0:
+            if len(self.cache) > 10000:
+                # Clear oldest half of cache to prevent memory growth
+                keys_to_remove = list(self.cache.keys())[:5000]
+                for k in keys_to_remove:
+                    del self.cache[k]
             self.cache[token] = result
         
         return result

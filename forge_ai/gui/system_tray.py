@@ -1480,53 +1480,11 @@ class ForgeSystemTray(QObject):
         # ChatSync handles everything: shows response in both UIs, syncs history
         chat_sync.generate_response(message, source="quick")
     
-    def _sync_to_main_chat(self, user_message: str, ai_response: str):
-        """Sync mini chat messages to main window's chat history."""
-        import time
-        try:
-            # Add to chat_messages list
-            if hasattr(self.main_window, 'chat_messages'):
-                self.main_window.chat_messages.append({
-                    "role": "user",
-                    "text": user_message,
-                    "ts": time.time(),
-                    "source": "mini_chat"
-                })
-                self.main_window.chat_messages.append({
-                    "role": "assistant", 
-                    "text": ai_response,
-                    "ts": time.time(),
-                    "source": "mini_chat"
-                })
-            
-            # Update chat display in main window
-            if hasattr(self.main_window, 'chat_display'):
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
-                model_name = getattr(self.main_window, 'current_model_name', 'AI')
-                
-                # Add user message
-                user_html = (
-                    f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; '
-                    f'border-radius: 8px; border-left: 3px solid #9b59b6;">'
-                    f'<b style="color: #9b59b6;">You (mini):</b> {user_message}</div>'
-                )
-                QMetaObject.invokeMethod(
-                    self.main_window.chat_display, "append",
-                    Qt.QueuedConnection, Q_ARG(str, user_html)
-                )
-                
-                # Add AI response
-                ai_html = (
-                    f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; '
-                    f'border-radius: 8px; border-left: 3px solid #a6e3a1;">'
-                    f'<b style="color: #a6e3a1;">{model_name}:</b> {ai_response}</div>'
-                )
-                QMetaObject.invokeMethod(
-                    self.main_window.chat_display, "append",
-                    Qt.QueuedConnection, Q_ARG(str, ai_html)
-                )
-        except Exception as e:
-            print(f"Could not sync to main chat: {e}")
+    def _stop_generation(self):
+        """Stop current AI generation via ChatSync."""
+        from .chat_sync import ChatSync
+        chat_sync = ChatSync.instance()
+        chat_sync.stop_generation()
     
     def _execute_action(self, action: str, params: Dict[str, Any] = None):
         """Execute an action."""

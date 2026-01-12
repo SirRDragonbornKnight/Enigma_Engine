@@ -21,8 +21,15 @@ except ImportError:
 from ..config import CONFIG
 
 
+# Maximum messages to keep in memory (prevents unbounded growth)
+MAX_MESSAGES = 200
+MAX_RESPONSE_HISTORY = 50
+
+
 class ChatMessage:
     """A single chat message."""
+    
+    __slots__ = ('role', 'text', 'source', 'timestamp')  # Memory optimization
     
     def __init__(self, role: str, text: str, source: str = "main", timestamp: float = None):
         self.role = role  # "user" or "assistant"
@@ -153,6 +160,10 @@ class ChatSync(QObject if HAS_PYQT else object):
         """Add a user message from either chat interface."""
         msg = ChatMessage(role="user", text=text, source=source)
         self._messages.append(msg)
+        
+        # Trim old messages to prevent memory growth
+        if len(self._messages) > MAX_MESSAGES:
+            self._messages = self._messages[-MAX_MESSAGES:]
         
         msg_dict = msg.to_dict()
         msg_dict["user_name"] = self._user_display_name
@@ -317,6 +328,12 @@ class ChatSync(QObject if HAS_PYQT else object):
             'ai_response': msg.text,
             'timestamp': time.time()
         }
+        
+        # Trim old response history to prevent memory growth
+        if len(self._response_history) > MAX_RESPONSE_HISTORY:
+            oldest_keys = sorted(self._response_history.keys())[:-MAX_RESPONSE_HISTORY]
+            for key in oldest_keys:
+                del self._response_history[key]
         
         main_html = (
             f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; '
