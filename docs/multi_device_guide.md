@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI Tester can run across multiple devices in two modes:
+ForgeAI can run across multiple devices in two modes:
 
 ### 1. NETWORKED MODE (Devices Connected)
 Devices on the same network can communicate in real-time.
@@ -89,7 +89,7 @@ python examples/multi_device_example.py --import-model /media/usb/my_model_packa
 
 ### Server Node
 ```python
-from ai_tester.comms import EnigmaNode, DeviceDiscovery
+from forge_ai.comms import EnigmaNode, DeviceDiscovery
 
 # Enable auto-discovery
 discovery = DeviceDiscovery("my_server", port=5000)
@@ -104,7 +104,7 @@ node.start_server(blocking=True)  # Blocking
 
 ### Client Node
 ```python
-from ai_tester.comms import EnigmaNode
+from forge_ai.comms import EnigmaNode
 
 node = EnigmaNode(name="my_client")
 node.connect_to("192.168.1.100:5000")
@@ -119,7 +119,7 @@ conversation = node.start_ai_conversation("my_server", num_turns=5)
 
 ### Discovery
 ```python
-from ai_tester.comms import discover_enigma_nodes
+from forge_ai.comms import discover_enigma_nodes
 
 # Quick discovery
 nodes = discover_enigma_nodes()
@@ -129,7 +129,7 @@ for name, info in nodes.items():
 
 ### Memory Sync
 ```python
-from ai_tester.comms import MemorySync, OfflineSync
+from forge_ai.comms import MemorySync, OfflineSync
 
 # Network sync
 sync = MemorySync()
@@ -142,7 +142,7 @@ OfflineSync.import_from_file("/media/usb/memories.json")
 
 ### Model Export/Import
 ```python
-from ai_tester.comms import ModelExporter
+from forge_ai.comms import ModelExporter
 
 # Export
 ModelExporter.export_model("my_model", "/media/usb/")

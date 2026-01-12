@@ -3,12 +3,12 @@ Tests for context awareness and bias detection systems.
 """
 import pytest
 
-from ai_tester.core.context_awareness import (
+from forge_ai.core.context_awareness import (
     ContextTracker,
     ContextAwareConversation,
     ConversationTurn
 )
-from ai_tester.tools.bias_detection import (
+from forge_ai.tools.bias_detection import (
     BiasDetector,
     OffensiveContentFilter,
     SafeReinforcementLogic

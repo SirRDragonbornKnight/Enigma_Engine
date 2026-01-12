@@ -1,4 +1,4 @@
-# AI Tester Engine - Architecture
+# ForgeAI Engine - Architecture
 
 *Last Updated: January 2026*
 

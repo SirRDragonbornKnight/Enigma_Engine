@@ -8,8 +8,8 @@ This PR successfully implements all requirements from the problem statement for 
 
 ### AI Voice Discovery
 ```python
-from ai_tester.voice import discover_voice
-from ai_tester.core.personality import load_personality
+from forge_ai.voice import discover_voice
+from forge_ai.core.personality import load_personality
 
 personality = load_personality("my_model")
 voice = discover_voice(personality)
@@ -17,21 +17,21 @@ voice = discover_voice(personality)
 
 ### Natural Language Voice Descriptions
 ```python
-from ai_tester.voice import describe_voice
+from forge_ai.voice import describe_voice
 
 voice = describe_voice("I want a warm, calm voice that speaks slowly")
 ```
 
 ### Dynamic Voice Adaptation
 ```python
-from ai_tester.voice import adapt_voice_for_emotion
+from forge_ai.voice import adapt_voice_for_emotion
 
 happy_voice = adapt_voice_for_emotion("happy", base_voice)
 ```
 
 ### Smart Wake Words
 ```python
-from ai_tester.voice import suggest_wake_phrases
+from forge_ai.voice import suggest_wake_phrases
 
 suggestions = suggest_wake_phrases("Enigma", personality)
 ```

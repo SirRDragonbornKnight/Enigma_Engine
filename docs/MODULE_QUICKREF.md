@@ -1,12 +1,12 @@
 # Module System Quick Reference
 
-**One-page reference for the AI Tester Module System**
+**One-page reference for the ForgeAI Module System**
 
 ## Basic Usage
 
 ```python
-from ai_tester.modules import ModuleManager
-from ai_tester.modules.registry import register_all
+from forge_ai.modules import ModuleManager
+from forge_ai.modules.registry import register_all
 
 # Create manager
 manager = ModuleManager()
@@ -134,7 +134,7 @@ print(f"Loaded: {status['loaded']} modules")
 ## Module Categories
 
 ```python
-from ai_tester.modules import ModuleCategory
+from forge_ai.modules import ModuleCategory
 
 # Get all generation modules
 gen_modules = manager.list_modules(ModuleCategory.GENERATION)
@@ -199,7 +199,7 @@ DISABLED  - Administratively disabled
 
 ### Minimal Module
 ```python
-from ai_tester.modules import Module, ModuleInfo, ModuleCategory
+from forge_ai.modules import Module, ModuleInfo, ModuleCategory
 
 class MyModule(Module):
     INFO = ModuleInfo(
@@ -237,7 +237,7 @@ interface = manager.get_interface('my_module')
 ### "Module not registered"
 ```python
 # Fix: Register first
-from ai_tester.modules.registry import register_all
+from forge_ai.modules.registry import register_all
 register_all(manager)
 ```
 

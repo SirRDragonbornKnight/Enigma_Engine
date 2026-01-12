@@ -1,4 +1,4 @@
-# AI Tester Development Requirements
+# ForgeAI Development Requirements
 # Install with: pip install -r requirements-dev.txt
 
 # Include base requirements

@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import json
 
-from ai_tester.avatar import (
+from forge_ai.avatar import (
     AvatarController,
     AIAvatarIdentity,
     AvatarAppearance,
@@ -14,7 +14,7 @@ from ai_tester.avatar import (
     LipSync,
     AvatarCustomizer,
 )
-from ai_tester.core.personality import AIPersonality
+from forge_ai.core.personality import AIPersonality
 
 
 class TestAvatarAppearance:

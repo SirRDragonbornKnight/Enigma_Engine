@@ -11,7 +11,7 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 
 **Features:**
 - Added `__version__ = "0.1.0"` to package for version tracking
-- Parameter validation in `AITesterConfig` with descriptive error messages
+- Parameter validation in `ForgeConfig` with descriptive error messages
 - Enhanced error handling in model loading with actionable guidance
 - Added `py.typed` marker for PEP 561 type checker support
 - Bug fix: corrected 'base' model preset n_kv_heads (4→2)

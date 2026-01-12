@@ -2,8 +2,8 @@
 Tests for Enigma Tokenizer
 ==========================
 
-Tests for the AITesterTokenizer (AdvancedBPETokenizer alias) with:
-  - Special tokens in AI Tester's [E:token] format
+Tests for the ForgeTokenizer (AdvancedBPETokenizer alias) with:
+  - Special tokens in ForgeAI's [E:token] format
   - Streaming encode support
   - Improved unicode handling
 """
@@ -13,10 +13,10 @@ import tempfile
 from pathlib import Path
 import json
 
-from ai_tester.core.advanced_tokenizer import AITesterTokenizer
+from forge_ai.core.advanced_tokenizer import ForgeTokenizer
 
 # Alias for backwards compatibility tests
-AdvancedBPETokenizer = AITesterTokenizer
+AdvancedBPETokenizer = ForgeTokenizer
 
 
 class TestTokenizerSpecialTokens:
@@ -24,9 +24,9 @@ class TestTokenizerSpecialTokens:
     
     def test_tool_tokens_present(self):
         """Test that all tool-related special tokens are defined."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
-        # Tool invocation tokens (AI Tester's [E:token] format)
+        # Tool invocation tokens (ForgeAI's [E:token] format)
         assert '[E:tool]' in tokenizer.special_tokens
         assert '[E:tool_out]' in tokenizer.special_tokens
         assert '[E:tool_end]' in tokenizer.special_tokens
@@ -45,16 +45,16 @@ class TestTokenizerSpecialTokens:
     
     def test_conversation_tokens(self):
         """Test conversation role tokens."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
-        # AI Tester uses [E:token] format
+        # ForgeAI uses [E:token] format
         assert '[E:system]' in tokenizer.special_tokens
         assert '[E:user]' in tokenizer.special_tokens
         assert '[E:assistant]' in tokenizer.special_tokens
     
     def test_encode_decode_special_tokens(self):
         """Test encoding and decoding text with special tokens."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         text = '[E:tool]generate_image("test")[E:tool_end]'
         ids = tokenizer.encode(text, add_special_tokens=False)
@@ -68,14 +68,14 @@ class TestTokenizerSpecialTokens:
     
     def test_special_token_ids_unique(self):
         """Test that all special tokens have unique IDs."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         ids = list(tokenizer.special_tokens.values())
         assert len(ids) == len(set(ids)), "Special token IDs must be unique"
     
     def test_special_token_ids_low(self):
         """Test that special tokens use low IDs (< 100)."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         for token, idx in tokenizer.special_tokens.items():
             assert idx < 100, f"Special token {token} has ID {idx} >= 100"
@@ -86,7 +86,7 @@ class TestStreamingEncode:
     
     def test_encode_stream_simple(self):
         """Test basic streaming encode."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         # Encode in chunks
         tokenizer.reset_stream()
@@ -104,7 +104,7 @@ class TestStreamingEncode:
     
     def test_encode_stream_reset(self):
         """Test stream reset clears buffer."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         tokenizer.encode_stream("partial", finalize=False)
         tokenizer.reset_stream()
@@ -120,7 +120,7 @@ class TestTokenizerSaveLoad:
     
     def test_save_and_load(self):
         """Test saving and loading tokenizer."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         # Train on simple data
         tokenizer.train(
@@ -137,14 +137,14 @@ class TestTokenizerSaveLoad:
             assert vocab_path.exists()
             
             # Load into new tokenizer
-            tokenizer2 = AITesterTokenizer(vocab_file=vocab_path)
+            tokenizer2 = ForgeTokenizer(vocab_file=vocab_path)
             
             # Should have same vocab size
             assert tokenizer2.vocab_size == tokenizer.vocab_size
     
     def test_save_creates_directory(self):
         """Test that save creates parent directories."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         with tempfile.TemporaryDirectory() as tmpdir:
             vocab_path = Path(tmpdir) / "subdir" / "tokenizer.json"
@@ -157,7 +157,7 @@ class TestImprovedRegex:
     
     def test_number_handling(self):
         """Test that numbers are handled well."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         text = "I have 42 apples and 3.14 oranges"
         ids = tokenizer.encode(text, add_special_tokens=False)
@@ -169,7 +169,7 @@ class TestImprovedRegex:
     
     def test_code_handling(self):
         """Test handling of code-like text."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         code = "def hello(): print('world')"
         ids = tokenizer.encode(code, add_special_tokens=False)
@@ -181,7 +181,7 @@ class TestImprovedRegex:
     
     def test_punctuation_handling(self):
         """Test handling of punctuation."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         text = "Hello! How are you? I'm fine."
         ids = tokenizer.encode(text, add_special_tokens=False)
@@ -196,7 +196,7 @@ class TestUnicodeEmoji:
     
     def test_emoji_encode_decode(self):
         """Test encoding and decoding emoji."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         text = "Hello 😊 World 🌍"
         ids = tokenizer.encode(text, add_special_tokens=False)
@@ -208,7 +208,7 @@ class TestUnicodeEmoji:
     
     def test_unicode_characters(self):
         """Test various unicode characters."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         text = "Héllo wörld ñiño"
         ids = tokenizer.encode(text, add_special_tokens=False)
@@ -218,7 +218,7 @@ class TestUnicodeEmoji:
     
     def test_mixed_scripts(self):
         """Test mixed language scripts."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         text = "Hello 世界 مرحبا"
         ids = tokenizer.encode(text, add_special_tokens=False)
@@ -233,7 +233,7 @@ class TestTokenizerCompleteness:
     
     def test_encode_decode_roundtrip(self):
         """Test that encode->decode preserves meaning."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         texts = [
             "Hello world",
@@ -253,14 +253,14 @@ class TestTokenizerCompleteness:
     
     def test_vocab_size(self):
         """Test that vocab size is reasonable."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         
         # Base vocab should be > 256 (bytes) + special tokens (~40)
         assert tokenizer.vocab_size > 290
     
     def test_cache_functionality(self):
         """Test that caching improves performance."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         tokenizer.train(["test text"], vocab_size=500, verbose=False)
         
         text = "test"
@@ -285,17 +285,17 @@ class TestBackwardsCompatibility:
     def test_advanced_bpe_alias(self):
         """Test that AdvancedBPETokenizer alias works."""
         tokenizer = AdvancedBPETokenizer()
-        assert isinstance(tokenizer, AITesterTokenizer)
+        assert isinstance(tokenizer, ForgeTokenizer)
     
     def test_special_tokens_property(self):
         """Test special_tokens property exists."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         assert hasattr(tokenizer, 'special_tokens')
         assert isinstance(tokenizer.special_tokens, dict)
     
     def test_pad_token_id(self):
         """Test pad_token_id property."""
-        tokenizer = AITesterTokenizer()
+        tokenizer = ForgeTokenizer()
         assert hasattr(tokenizer, 'pad_token_id')
         assert tokenizer.pad_token_id == 0
 

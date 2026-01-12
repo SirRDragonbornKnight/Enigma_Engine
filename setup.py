@@ -1,5 +1,5 @@
 """
-AI Tester Setup Script
+ForgeAI Setup Script
 
 Install with: pip install -e .
 Or for full install: pip install -e .[full]
@@ -25,14 +25,14 @@ def read_requirements():
     return reqs
 
 setup(
-    name="ai-tester",
+    name="forge-ai",
     version="1.1.0",
     description="Personal AI Framework - Train and deploy your own AI with GUI, voice, vision, and more",
     long_description=open("README.md").read() if __import__("os").path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     author="SirRDragonbornKnight",
     author_email="sirknighth3@gmail.com",
-    url="https://github.com/SirRDragonbornKnight/AI_Tester",
+    url="https://github.com/SirRDragonbornKnight/Forge_AI",
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
@@ -93,15 +93,15 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "ai-tester=run:main",
-            "ai-tester-train=run:train",
-            "ai-tester-serve=run:serve",
-            "ai-tester-gui=run:gui",
+            "forge-ai=run:main",
+            "forge-ai-train=run:train",
+            "forge-ai-serve=run:serve",
+            "forge-ai-gui=run:gui",
         ],
     },
     include_package_data=True,
     package_data={
-        "ai_tester": [
+        "forge_ai": [
             "vocab_model/*",
             "data/*",
             "py.typed",

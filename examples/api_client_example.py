@@ -2,13 +2,13 @@
 """
 API Client Example
 
-Shows how to use the AI Tester REST API from Python.
+Shows how to use the ForgeAI REST API from Python.
 """
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ai_tester.comms.remote_client import RemoteClient
+from forge_ai.comms.remote_client import RemoteClient
 
 
 def main():

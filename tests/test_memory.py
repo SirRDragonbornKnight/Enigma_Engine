@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the AI Tester memory system.
+Tests for the ForgeAI memory system.
 
 Run with: pytest tests/test_memory.py -v
 """
@@ -18,13 +18,13 @@ class TestConversationManager:
     
     def test_manager_init(self):
         """Test conversation manager initialization."""
-        from ai_tester.memory.manager import ConversationManager
+        from forge_ai.memory.manager import ConversationManager
         manager = ConversationManager()
         assert manager is not None
     
     def test_save_conversation(self):
         """Test saving conversation."""
-        from ai_tester.memory.manager import ConversationManager
+        from forge_ai.memory.manager import ConversationManager
         manager = ConversationManager()
         
         messages = [
@@ -37,7 +37,7 @@ class TestConversationManager:
     
     def test_load_conversation(self):
         """Test loading conversation."""
-        from ai_tester.memory.manager import ConversationManager
+        from forge_ai.memory.manager import ConversationManager
         manager = ConversationManager()
         
         messages = [
@@ -52,7 +52,7 @@ class TestConversationManager:
     
     def test_list_conversations(self):
         """Test listing conversations."""
-        from ai_tester.memory.manager import ConversationManager
+        from forge_ai.memory.manager import ConversationManager
         manager = ConversationManager()
         
         # Save a conversation
@@ -67,14 +67,14 @@ class TestSimpleVectorDB:
     
     def test_db_init(self):
         """Test vector DB initialization."""
-        from ai_tester.memory.vector_utils import SimpleVectorDB
+        from forge_ai.memory.vector_utils import SimpleVectorDB
         db = SimpleVectorDB(dim=64)
         assert db is not None
         assert db.dim == 64
     
     def test_add_and_search(self):
         """Test adding and searching vectors."""
-        from ai_tester.memory.vector_utils import SimpleVectorDB
+        from forge_ai.memory.vector_utils import SimpleVectorDB
         db = SimpleVectorDB(dim=3)
         
         # Add some vectors

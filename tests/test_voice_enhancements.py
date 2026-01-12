@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 # Test voice identity
-from ai_tester.voice.voice_identity import (
+from forge_ai.voice.voice_identity import (
     AIVoiceIdentity,
     discover_voice,
     describe_voice,
@@ -14,7 +14,7 @@ from ai_tester.voice.voice_identity import (
 )
 
 # Test voice effects
-from ai_tester.voice.voice_effects import (
+from forge_ai.voice.voice_effects import (
     VoiceEffects,
     apply_effect,
     apply_effects,
@@ -23,29 +23,29 @@ from ai_tester.voice.voice_effects import (
 )
 
 # Test dynamic adapter
-from ai_tester.voice.dynamic_adapter import (
+from forge_ai.voice.dynamic_adapter import (
     DynamicVoiceAdapter,
     adapt_voice_for_emotion,
     adapt_voice_for_context
 )
 
 # Test voice customizer
-from ai_tester.voice.voice_customizer import (
+from forge_ai.voice.voice_customizer import (
     VoiceCustomizer,
     import_voice_profile,
     export_voice_profile
 )
 
 # Test audio analyzer
-from ai_tester.voice.audio_analyzer import AudioAnalyzer
+from forge_ai.voice.audio_analyzer import AudioAnalyzer
 
 # Test smart wake words
-from ai_tester.voice.trigger_phrases import (
+from forge_ai.voice.trigger_phrases import (
     SmartWakeWords,
     suggest_wake_phrases
 )
 
-from ai_tester.voice import VoiceProfile
+from forge_ai.voice import VoiceProfile
 
 
 class TestVoiceIdentity:
@@ -327,10 +327,10 @@ class TestSmartWakeWords:
         """Test basic wake phrase suggestions."""
         smart = SmartWakeWords()
         
-        suggestions = smart.suggest_wake_phrases("AI Tester", num_suggestions=5)
+        suggestions = smart.suggest_wake_phrases("ForgeAI", num_suggestions=5)
         
         assert len(suggestions) > 0
-        assert any("ai_tester" in s.lower() for s in suggestions)
+        assert any("forge_ai" in s.lower() for s in suggestions)
     
     def test_categorize_wake_phrase(self):
         """Test wake phrase categorization."""
@@ -392,7 +392,7 @@ class TestVoiceIntegration:
         """Test personality and voice integration."""
         # Import at the end to avoid torch import issues in other tests
         try:
-            from ai_tester.core.personality import AIPersonality
+            from forge_ai.core.personality import AIPersonality
             
             personality = AIPersonality("test_model")
             personality.voice_preferences = {

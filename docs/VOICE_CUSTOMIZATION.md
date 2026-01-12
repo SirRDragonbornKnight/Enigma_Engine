@@ -12,14 +12,14 @@ Enigma supports voice customization through:
 ### Generate Voice from Personality
 
 ```python
-from ai_tester.core.personality import load_personality
-from ai_tester.voice.voice_generator import generate_voice_for_personality
+from forge_ai.core.personality import load_personality
+from forge_ai.voice.voice_generator import generate_voice_for_personality
 
 personality = load_personality("my_model")
 voice = generate_voice_for_personality(personality)
 
 # Use the voice
-from ai_tester.voice.voice_profile import VoiceEngine
+from forge_ai.voice.voice_profile import VoiceEngine
 engine = VoiceEngine()
 engine.set_profile(voice)
 engine.speak("Hello! This is my personality-matched voice!")
@@ -28,7 +28,7 @@ engine.speak("Hello! This is my personality-matched voice!")
 ### Create Voice from Samples
 
 ```python
-from ai_tester.voice.voice_generator import create_voice_from_samples
+from forge_ai.voice.voice_generator import create_voice_from_samples
 
 # Provide audio samples (.wav, .mp3)
 voice = create_voice_from_samples(
@@ -63,7 +63,7 @@ Available presets:
 - **wise**: Slow, thoughtful
 
 ```python
-from ai_tester.voice.voice_profile import speak, set_voice
+from forge_ai.voice.voice_profile import speak, set_voice
 
 set_voice("glados")
 speak("Hello, test subject.")
@@ -74,7 +74,7 @@ speak("Hello, test subject.")
 Voices can evolve with personality:
 
 ```python
-from ai_tester.voice.voice_generator import AIVoiceGenerator
+from forge_ai.voice.voice_generator import AIVoiceGenerator
 
 generator = AIVoiceGenerator()
 updated_voice = generator.evolve_voice(
@@ -94,4 +94,4 @@ Voice data is stored in:
 ## See Also
 
 - [PERSONALITY.md](PERSONALITY.md) - AI personality system
-- [Voice Profile API](../ai_tester/voice/voice_profile.py)
+- [Voice Profile API](../forge_ai/voice/voice_profile.py)

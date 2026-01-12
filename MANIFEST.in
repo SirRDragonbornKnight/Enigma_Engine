@@ -1,4 +1,4 @@
-# AI Tester - Package Distribution Manifest
+# ForgeAI - Package Distribution Manifest
 # This ensures all necessary files are included when distributing
 
 # Include documentation
@@ -27,8 +27,8 @@ recursive-include information *.txt *.json *.md
 recursive-include examples *.py
 
 # Include package data
-recursive-include ai_tester/vocab_model *
-recursive-include ai_tester/data *
+recursive-include forge_ai/vocab_model *
+recursive-include forge_ai/data *
 
 # Exclude build artifacts
 global-exclude *.pyc

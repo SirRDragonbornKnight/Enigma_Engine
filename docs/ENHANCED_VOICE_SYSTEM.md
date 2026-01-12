@@ -24,8 +24,8 @@ The AI can experiment with voice settings and discover what "feels right" based 
 ### Basic Usage
 
 ```python
-from ai_tester.voice import discover_voice
-from ai_tester.core.personality import load_personality
+from forge_ai.voice import discover_voice
+from forge_ai.core.personality import load_personality
 
 # Load AI personality
 personality = load_personality("my_model")
@@ -34,7 +34,7 @@ personality = load_personality("my_model")
 voice_profile = discover_voice(personality, num_experiments=5)
 
 # Use the discovered voice
-from ai_tester.voice import set_voice, speak
+from forge_ai.voice import set_voice, speak
 set_voice(voice_profile)
 speak("Hello! This is my discovered voice.")
 ```
@@ -42,7 +42,7 @@ speak("Hello! This is my discovered voice.")
 ### Advanced Discovery
 
 ```python
-from ai_tester.voice.voice_identity import AIVoiceIdentity
+from forge_ai.voice.voice_identity import AIVoiceIdentity
 
 identity = AIVoiceIdentity()
 
@@ -77,7 +77,7 @@ The AI can describe what voice it wants in natural language, which is parsed int
 ### Examples
 
 ```python
-from ai_tester.voice import describe_voice, speak
+from forge_ai.voice import describe_voice, speak
 
 # Warm and calm
 voice = describe_voice("I want a warm, calm voice that speaks slowly")
@@ -145,7 +145,7 @@ The system supports multiple voice effects that can be combined and applied dyna
 ### Basic Usage
 
 ```python
-from ai_tester.voice import apply_effect, apply_effects
+from forge_ai.voice import apply_effect, apply_effects
 
 text = "Hello, how are you today?"
 
@@ -162,7 +162,7 @@ text_with_effects = apply_effects(text, ["warm", "calm"])
 The `robotic` effect supports intensity levels:
 
 ```python
-from ai_tester.voice.voice_effects import VoiceEffects
+from forge_ai.voice.voice_effects import VoiceEffects
 
 effects = VoiceEffects()
 
@@ -204,7 +204,7 @@ Voice changes automatically based on emotion, context, or personality mood.
 ### Emotional Adaptation
 
 ```python
-from ai_tester.voice import adapt_voice_for_emotion, VoiceProfile
+from forge_ai.voice import adapt_voice_for_emotion, VoiceProfile
 
 base_voice = VoiceProfile(pitch=1.0, speed=1.0)
 
@@ -233,7 +233,7 @@ sad_voice = adapt_voice_for_emotion("sad", base_voice)
 ### Contextual Adaptation
 
 ```python
-from ai_tester.voice import adapt_voice_for_context
+from forge_ai.voice import adapt_voice_for_context
 
 # Storytelling mode
 story_voice = adapt_voice_for_context("storytelling", base_voice)
@@ -261,7 +261,7 @@ formal_voice = adapt_voice_for_context("formal", base_voice)
 ### Combined Adaptation
 
 ```python
-from ai_tester.voice.dynamic_adapter import DynamicVoiceAdapter
+from forge_ai.voice.dynamic_adapter import DynamicVoiceAdapter
 
 adapter = DynamicVoiceAdapter()
 
@@ -276,8 +276,8 @@ voice = adapter.adapt_combined(
 ### Personality-Based Adaptation
 
 ```python
-from ai_tester.voice import adapt_voice_for_personality
-from ai_tester.core.personality import load_personality
+from forge_ai.voice import adapt_voice_for_personality
+from forge_ai.core.personality import load_personality
 
 personality = load_personality("my_model")
 
@@ -294,8 +294,8 @@ The system can suggest personalized wake phrases and train custom wake words.
 ### AI-Suggested Wake Phrases
 
 ```python
-from ai_tester.voice import suggest_wake_phrases
-from ai_tester.core.personality import load_personality
+from forge_ai.voice import suggest_wake_phrases
+from forge_ai.core.personality import load_personality
 
 personality = load_personality("my_model")
 
@@ -309,7 +309,7 @@ suggestions = suggest_wake_phrases("Enigma", personality)
 Suggestions adapt to AI personality:
 
 ```python
-from ai_tester.voice.trigger_phrases import SmartWakeWords
+from forge_ai.voice.trigger_phrases import SmartWakeWords
 
 smart = SmartWakeWords()
 
@@ -325,7 +325,7 @@ suggestions = smart.suggest_wake_phrases("Enigma", casual_personality)
 ### Custom Wake Word Training
 
 ```python
-from ai_tester.voice import train_custom_wake_phrase
+from forge_ai.voice import train_custom_wake_phrase
 
 # Train with audio samples (for future integration with Porcupine/Snowboy)
 train_custom_wake_phrase(
@@ -368,7 +368,7 @@ Create custom voices from audio samples with analysis and Coqui XTTS integration
 ### Basic Voice Cloning
 
 ```python
-from ai_tester.voice import create_voice_from_samples
+from forge_ai.voice import create_voice_from_samples
 
 # Provide audio samples
 audio_files = ["sample1.wav", "sample2.wav", "sample3.wav"]
@@ -381,7 +381,7 @@ voice = create_voice_from_samples(
 )
 
 # Use the cloned voice
-from ai_tester.voice import set_voice, speak
+from forge_ai.voice import set_voice, speak
 set_voice(voice)
 speak("This is my cloned voice!")
 ```
@@ -389,7 +389,7 @@ speak("This is my cloned voice!")
 ### Audio Analysis
 
 ```python
-from ai_tester.voice import analyze_audio
+from forge_ai.voice import analyze_audio
 
 # Analyze a single audio file
 features = analyze_audio("sample.wav")
@@ -403,7 +403,7 @@ print(f"Duration: {features.duration}s")
 ### Voice Comparison
 
 ```python
-from ai_tester.voice import compare_voice_audio
+from forge_ai.voice import compare_voice_audio
 
 # Compare two voice samples
 similarity = compare_voice_audio("voice1.wav", "voice2.wav")
@@ -416,7 +416,7 @@ if similarity > 0.7:
 ### Audio Quality Validation
 
 ```python
-from ai_tester.voice.audio_analyzer import AudioAnalyzer
+from forge_ai.voice.audio_analyzer import AudioAnalyzer
 
 analyzer = AudioAnalyzer()
 
@@ -434,7 +434,7 @@ if not is_valid:
 The system includes hooks for Coqui XTTS (when available):
 
 ```python
-from ai_tester.voice.audio_analyzer import AudioAnalyzer
+from forge_ai.voice.audio_analyzer import AudioAnalyzer
 
 analyzer = AudioAnalyzer()
 
@@ -457,7 +457,7 @@ Tools for users to interactively create and tune voice profiles.
 ### Interactive CLI Tuning
 
 ```python
-from ai_tester.voice import interactive_tuning
+from forge_ai.voice import interactive_tuning
 
 # Start interactive tuning session
 voice = interactive_tuning(
@@ -478,7 +478,7 @@ voice = interactive_tuning(
 ### Import/Export Profiles
 
 ```python
-from ai_tester.voice import import_voice_profile, export_voice_profile, VoiceProfile
+from forge_ai.voice import import_voice_profile, export_voice_profile, VoiceProfile
 
 # Create a voice
 voice = VoiceProfile(
@@ -500,8 +500,8 @@ loaded_voice = import_voice_profile("my_voice.json")
 ### Voice Comparison
 
 ```python
-from ai_tester.voice import compare_voices
-from ai_tester.voice import PRESET_PROFILES
+from forge_ai.voice import compare_voices
+from forge_ai.voice import PRESET_PROFILES
 
 # Compare multiple voices side-by-side
 voices = [
@@ -517,7 +517,7 @@ compare_voices(voices, "Hello, this is a comparison test.")
 ### Preset Customization
 
 ```python
-from ai_tester.voice.voice_customizer import VoiceCustomizer
+from forge_ai.voice.voice_customizer import VoiceCustomizer
 
 customizer = VoiceCustomizer()
 
@@ -556,7 +556,7 @@ Voice preferences are stored with personality and evolve over time.
 ### Voice Preferences
 
 ```python
-from ai_tester.core.personality import load_personality
+from forge_ai.core.personality import load_personality
 
 personality = load_personality("my_model")
 
@@ -582,7 +582,7 @@ personality.save()
 ### Voice Evolution
 
 ```python
-from ai_tester.voice.voice_generator import AIVoiceGenerator
+from forge_ai.voice.voice_generator import AIVoiceGenerator
 
 generator = AIVoiceGenerator()
 
@@ -598,7 +598,7 @@ updated_voice = generator.evolve_voice(
 ### Sync Voice with Personality
 
 ```python
-from ai_tester.voice import adapt_voice_for_personality
+from forge_ai.voice import adapt_voice_for_personality
 
 # Voice automatically adapts to personality state
 voice = adapt_voice_for_personality(personality)
@@ -618,7 +618,7 @@ thoughtful_voice = adapt_voice_for_personality(personality)
 ### Learning from Feedback
 
 ```python
-from ai_tester.voice import adjust_voice_from_feedback
+from forge_ai.voice import adjust_voice_from_feedback
 
 voice = VoiceProfile(pitch=1.2, speed=1.3, volume=0.7)
 
@@ -636,7 +636,7 @@ voice = adjust_voice_from_feedback("Voice is too high", voice)
 ### Emotion + Context Mapping
 
 ```python
-from ai_tester.voice import effect_for_emotion, effect_for_context
+from forge_ai.voice import effect_for_emotion, effect_for_context
 
 # Get appropriate effect for emotion
 effect = effect_for_emotion("happy")
@@ -650,8 +650,8 @@ effect = effect_for_context("teaching")
 ### Full Workflow Example
 
 ```python
-from ai_tester.voice import *
-from ai_tester.core.personality import load_personality
+from forge_ai.voice import *
+from forge_ai.core.personality import load_personality
 
 # 1. Load personality
 personality = load_personality("my_model")

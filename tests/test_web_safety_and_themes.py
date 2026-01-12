@@ -6,8 +6,8 @@ from pathlib import Path
 import tempfile
 import json
 
-from ai_tester.tools.url_safety import URLSafety, ContentFilter
-from ai_tester.gui.theme_system import (
+from forge_ai.tools.url_safety import URLSafety, ContentFilter
+from forge_ai.gui.theme_system import (
     Theme,
     ThemeColors,
     ThemeManager

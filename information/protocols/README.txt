@@ -1,7 +1,7 @@
 PROTOCOL CONFIGURATION
 ======================
 
-This folder contains configuration files for connecting AI Tester to external systems.
+This folder contains configuration files for connecting ForgeAI to external systems.
 
 HOW TO ADD A NEW CONNECTION
 ---------------------------

@@ -100,7 +100,7 @@ avatar/
 
 **Integration**:
 ```
-AI Tester <--HTTP/WebSocket--> Godot Game
+ForgeAI <--HTTP/WebSocket--> Godot Game
      AI                           Avatar + World
 ```
 
@@ -130,7 +130,7 @@ AI Tester <--HTTP/WebSocket--> Godot Game
 ```lua
 -- GMod Lua addon
 local socket = require("socket")
--- Connect to AI Tester API
+-- Connect to ForgeAI API
 -- Receive movement commands
 -- Control playermodel/NPC
 ```
@@ -150,7 +150,7 @@ local socket = require("socket")
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                 AI Tester                    │
+│                 ForgeAI                    │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────┐ │
 │  │   AI Core   │  │   Vision    │  │  Voice  │ │
 │  │  (Brain)    │  │ (Eyes)      │  │ (Ears/  │ │

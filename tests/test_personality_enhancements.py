@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from ai_tester.core.personality import (
+from forge_ai.core.personality import (
     AIPersonality,
     PersonalityTraits
 )

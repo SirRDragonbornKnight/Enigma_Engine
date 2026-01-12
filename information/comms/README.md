@@ -1,4 +1,4 @@
-# AI Tester Comms - Multi-Device Communication
+# ForgeAI Comms - Multi-Device Communication
 
 The `comms` package provides everything needed for multi-device AI communication, from simple API servers to full peer-to-peer AI networks.
 
@@ -26,7 +26,7 @@ The `comms` package provides everything needed for multi-device AI communication
 Run an AI server that responds to HTTP requests:
 
 ```python
-from ai_tester.comms import create_api_server
+from forge_ai.comms import create_api_server
 
 # Start server on port 5000
 server = create_api_server()
@@ -39,7 +39,7 @@ server = create_api_server()
 Full web interface with WebSocket support:
 
 ```python
-from ai_tester.comms import create_web_server
+from forge_ai.comms import create_web_server
 
 server = create_web_server(port=5000)
 server.run()
@@ -49,10 +49,10 @@ server.run()
 
 ### 3. Multi-Device Network
 
-Connect multiple AI Tester instances:
+Connect multiple ForgeAI instances:
 
 ```python
-from ai_tester.comms import EnigmaNode
+from forge_ai.comms import EnigmaNode
 
 # On Device 1 (Server)
 node1 = EnigmaNode(name="desktop", port=5000)
@@ -69,12 +69,12 @@ response = node2.ask_peer("desktop", "What is 2+2?")
 
 ### 4. Device Discovery
 
-Automatically find other AI Tester nodes:
+Automatically find other ForgeAI nodes:
 
 ```python
-from ai_tester.comms import discover_enigma_nodes
+from forge_ai.comms import discover_enigma_nodes
 
-# Find all AI Tester nodes on the network
+# Find all ForgeAI nodes on the network
 nodes = discover_enigma_nodes()
 for name, info in nodes.items():
     print(f"Found: {name} at {info['ip']}:{info['port']}")
@@ -85,7 +85,7 @@ for name, info in nodes.items():
 Let multiple AIs talk to each other:
 
 ```python
-from ai_tester.comms import AIConversation
+from forge_ai.comms import AIConversation
 
 conv = AIConversation()
 conv.add_participant("Alice", personality="friendly and helpful")
@@ -97,7 +97,7 @@ for exchange in conv.converse("Let's discuss AI.", num_turns=5):
 
 ## Components
 
-### AI TesterNode
+### ForgeAINode
 The core multi-device communication class. Each node can:
 - Run as a server (accept connections)
 - Connect to other nodes (as client)
@@ -106,7 +106,7 @@ The core multi-device communication class. Each node can:
 - Start AI-to-AI conversations
 
 ### DeviceDiscovery
-Automatically discover other AI Tester nodes on your network using:
+Automatically discover other ForgeAI nodes on your network using:
 - UDP broadcast (fast, works on most networks)
 - IP scanning (slower but more reliable)
 - Manual connection (always works)
@@ -137,10 +137,10 @@ Manage connection protocols for games, robots, and external APIs:
 - Support for WebSocket, HTTP, TCP, UDP, Serial, ROS, MQTT, OSC
 
 ### RemoteClient
-Simple client for connecting to any AI Tester API server:
+Simple client for connecting to any ForgeAI API server:
 
 ```python
-from ai_tester.comms import RemoteClient
+from forge_ai.comms import RemoteClient
 
 client = RemoteClient("http://192.168.1.100:5000")
 if client.is_available():
@@ -173,7 +173,7 @@ Response:
 ```json
 {
   "text": "I'm doing well, thank you for asking!",
-  "from": "ai_tester"
+  "from": "forge_ai"
 }
 ```
 
@@ -182,7 +182,7 @@ Response:
 Share models between devices:
 
 ```python
-from ai_tester.comms import ModelExporter
+from forge_ai.comms import ModelExporter
 
 # Export a model as portable package
 ModelExporter.export_model("my_model", "/path/to/output")
@@ -197,18 +197,18 @@ ModelExporter.import_model("/path/to/my_model_package.zip")
 Keep multiple devices in sync:
 
 ```python
-from ai_tester.comms import MemorySync
+from forge_ai.comms import MemorySync
 
 # On Device 1
 sync = MemorySync()
 sync.sync_with_peer("http://192.168.1.101:5000", "laptop")
 
 # For offline devices (USB transfer)
-from ai_tester.comms import OfflineSync
+from forge_ai.comms import OfflineSync
 
-OfflineSync.export_to_file("/usb/ai_tester_memories.json")
+OfflineSync.export_to_file("/usb/forge_ai_memories.json")
 # Copy USB to other device, then:
-OfflineSync.import_from_file("/usb/ai_tester_memories.json")
+OfflineSync.import_from_file("/usb/forge_ai_memories.json")
 ```
 
 ## Protocol Configurations

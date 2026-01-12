@@ -1,4 +1,4 @@
-# 🚀 Getting Started with AI Tester
+# 🚀 Getting Started with ForgeAI
 
 ## Quick Start (5 Minutes)
 

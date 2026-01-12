@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI Tester Engine now includes a powerful **Tool Use System** that allows the AI to execute external capabilities (image generation, vision, avatar control, file operations, etc.) naturally during conversations.
+The ForgeAI Engine now includes a powerful **Tool Use System** that allows the AI to execute external capabilities (image generation, vision, avatar control, file operations, etc.) naturally during conversations.
 
 When trained on tool use examples, the AI learns to:
 1. **Recognize** when a tool is needed
@@ -14,7 +14,7 @@ When trained on tool use examples, the AI learns to:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     AI Tester Model                         │
+│                     ForgeAI Model                         │
 │              (Trained on tool use examples)                 │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -33,7 +33,7 @@ When trained on tool use examples, the AI learns to:
                          │ as <tool_result> tags
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   AI Tester Model                           │
+│                   ForgeAI Model                           │
 │          (Continues generation with results)                │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -246,8 +246,8 @@ Get content from a webpage.
 Train the AI on tool use examples:
 
 ```python
-from ai_tester.core.tokenizer import train_tokenizer
-from ai_tester.core.trainer import train_model
+from forge_ai.core.tokenizer import train_tokenizer
+from forge_ai.core.trainer import train_model
 
 # Train tokenizer on tool use data
 tokenizer = train_tokenizer(
@@ -269,8 +269,8 @@ train_model(
 Initialize the inference engine with tool support:
 
 ```python
-from ai_tester.core.inference import AITesterEngine
-from ai_tester.modules import ModuleManager
+from forge_ai.core.inference import ForgeEngine
+from forge_ai.modules import ModuleManager
 
 # Initialize module manager
 manager = ModuleManager()
@@ -283,7 +283,7 @@ manager.load('vision')            # For image analysis
 manager.load('avatar')            # For avatar control
 
 # Create inference engine with tools enabled
-engine = AITesterEngine(
+engine = ForgeEngine(
     model_path="models/enigma.pth",
     enable_tools=True,
     module_manager=manager
@@ -315,7 +315,7 @@ print(response)
 You can also execute tools directly:
 
 ```python
-from ai_tester.tools import ToolExecutor
+from forge_ai.tools import ToolExecutor
 
 executor = ToolExecutor(module_manager=manager)
 
@@ -473,7 +473,7 @@ manager.configure('image_gen_local', {
 
 1. **Check training**: Ensure model was trained on tool use examples
 2. **Verify modules**: Confirm required modules are loaded
-3. **Enable tools**: Set `enable_tools=True` in AITesterEngine
+3. **Enable tools**: Set `enable_tools=True` in ForgeEngine
 4. **Check prompt**: Include clear requests that require tools
 
 ### Tool Execution Errors
@@ -516,10 +516,10 @@ class ToolExecutor:
     def format_tool_result(self, result: Dict) -> str
 ```
 
-### AITesterEngine (Tool Support)
+### ForgeEngine (Tool Support)
 
 ```python
-class AITesterEngine:
+class ForgeEngine:
     def __init__(
         self,
         ...,

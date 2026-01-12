@@ -1,6 +1,6 @@
-# 📖 AI Tester - Complete GUI Guide
+# 📖 ForgeAI - Complete GUI Guide
 
-**Everything you need to know to use the AI Tester GUI, organized for easy reading and skimming.**
+**Everything you need to know to use the ForgeAI GUI, organized for easy reading and skimming.**
 
 ---
 

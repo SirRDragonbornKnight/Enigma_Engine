@@ -7,7 +7,7 @@ Parameters:
   force=True  - Retrain even if model already has weights
   num_epochs  - How many times to go through training data (more = better learning)
 """
-from ai_tester.core.training import train_model
+from forge_ai.core.training import train_model
 
 if __name__ == "__main__":
     # Increase num_epochs for better training (takes longer)

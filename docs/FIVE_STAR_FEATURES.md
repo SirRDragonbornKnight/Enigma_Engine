@@ -1,6 +1,6 @@
 # Five-Star Features Guide
 
-This guide covers all the new advanced features added to AI Tester to achieve a five-star rating.
+This guide covers all the new advanced features added to ForgeAI to achieve a five-star rating.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ Generate 3D models from text descriptions using state-of-the-art AI models.
 ### Local Generation (Shap-E/Point-E)
 
 ```python
-from ai_tester.modules import ModuleManager
+from forge_ai.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('threed_gen_local', config={
@@ -79,7 +79,7 @@ Control resource usage with five optimized power modes.
 ### Usage
 
 ```python
-from ai_tester.core.resources import apply_resource_mode, get_resource_info
+from forge_ai.core.resources import apply_resource_mode, get_resource_info
 
 # Switch to gaming mode
 apply_resource_mode("gaming")
@@ -111,7 +111,7 @@ Real-time motion tracking for gesture control and avatar mimicry.
 ### Setup
 
 ```python
-from ai_tester.modules import ModuleManager
+from forge_ai.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('motion_tracking', config={
@@ -160,7 +160,7 @@ Load and run quantized GGUF models (llama.cpp compatible).
 ### Loading GGUF Models
 
 ```python
-from ai_tester.core.gguf_loader import GGUFModel
+from forge_ai.core.gguf_loader import GGUFModel
 
 model = GGUFModel(
     model_path="models/llama-7b-q4.gguf",
@@ -210,7 +210,7 @@ response = model.chat(messages, max_tokens=150)
 ### GPU Layer Recommendations
 
 ```python
-from ai_tester.core.gguf_loader import recommend_gpu_layers
+from forge_ai.core.gguf_loader import recommend_gpu_layers
 
 # Recommend layers based on model size and VRAM
 layers = recommend_gpu_layers(
@@ -236,7 +236,7 @@ Efficient fine-tuning with Low-Rank Adaptation (LoRA).
 ### Quick Start
 
 ```python
-from ai_tester.core.lora_utils import LoRATrainer, LoRAConfig
+from forge_ai.core.lora_utils import LoRATrainer, LoRAConfig
 
 # Configure LoRA
 config = LoRAConfig(
@@ -263,7 +263,7 @@ trainer.merge_and_save("merged_model.pth")
 ### Preparing Data
 
 ```python
-from ai_tester.core.lora_utils import prepare_lora_dataset
+from forge_ai.core.lora_utils import prepare_lora_dataset
 
 dataset = prepare_lora_dataset(
     data_path="data/training.txt",
@@ -294,7 +294,7 @@ Automatic typo correction and smart suggestions.
 ### Typo Correction
 
 ```python
-from ai_tester.utils.text_enhancement import correct_typos
+from forge_ai.utils.text_enhancement import correct_typos
 
 text = "Teh modle is leraning form teh data"
 corrected = correct_typos(text)
@@ -304,7 +304,7 @@ corrected = correct_typos(text)
 ### Command Suggestions
 
 ```python
-from ai_tester.utils.text_enhancement import suggest_command
+from forge_ai.utils.text_enhancement import suggest_command
 
 commands = ["train", "inference", "generate", "evaluate"]
 suggestion = suggest_command("trian", commands)
@@ -314,7 +314,7 @@ suggestion = suggest_command("trian", commands)
 ### Parameter Validation
 
 ```python
-from ai_tester.utils.text_enhancement import validate_parameter
+from forge_ai.utils.text_enhancement import validate_parameter
 
 is_valid, error = validate_parameter(
     value="150",
@@ -329,7 +329,7 @@ is_valid, error = validate_parameter(
 ### "Did You Mean" Suggestions
 
 ```python
-from ai_tester.utils.text_enhancement import (
+from forge_ai.utils.text_enhancement import (
     find_closest_match, 
     format_did_you_mean
 )
@@ -348,7 +348,7 @@ Real-time resource usage dashboard.
 ### GUI Widget
 
 ```python
-from ai_tester.gui.resource_monitor import ResourceMonitor
+from forge_ai.gui.resource_monitor import ResourceMonitor
 
 # Create monitor widget
 monitor = ResourceMonitor()
@@ -473,4 +473,4 @@ To add more features, follow the module system pattern:
 
 ---
 
-**AI Tester** - The complete local AI framework
+**ForgeAI** - The complete local AI framework

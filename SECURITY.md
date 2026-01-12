@@ -29,7 +29,7 @@ Please include the following information in your report:
 
 ## Security Best Practices
 
-When using AI Tester:
+When using ForgeAI:
 
 1. **File Paths**: Always validate and sanitize user-provided file paths
 2. **API Keys**: Never commit API keys or secrets to the repository
@@ -40,7 +40,7 @@ When using AI Tester:
 
 ## Security Features
 
-AI Tester includes several security features:
+ForgeAI includes several security features:
 
 - Input validation on all public APIs
 - Path sanitization for file operations

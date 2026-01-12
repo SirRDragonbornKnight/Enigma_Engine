@@ -1,4 +1,4 @@
-# AI Tester Pre-commit Configuration
+# ForgeAI Pre-commit Configuration
 # Install: pip install pre-commit && pre-commit install
 # Run manually: pre-commit run --all-files
 

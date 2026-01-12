@@ -1,6 +1,6 @@
-# How to Train Your AI Tester
+# How to Train Your ForgeAI
 
-Complete guide to training and fine-tuning your AI Tester model.
+Complete guide to training and fine-tuning your ForgeAI model.
 
 ## Table of Contents
 
@@ -68,7 +68,7 @@ Assistant: Neural networks are computing systems inspired by biological neural n
 #### Plain Text Format
 For general text, just provide clean paragraphs:
 ```
-The AI Tester is a flexible AI framework. It can be trained on various types of data.
+The ForgeAI is a flexible AI framework. It can be trained on various types of data.
 Each model size offers different capabilities and resource requirements.
 ```
 
@@ -235,7 +235,7 @@ Q: What is your favorite color?
 A: As an AI, I don't perceive colors, but I appreciate the concept of blue for its association with calm and clarity.
 
 Q: Tell me about yourself
-A: I'm an AI trained on the AI Tester framework. I'm designed to be helpful, honest, and continuously learning.
+A: I'm an AI trained on the ForgeAI framework. I'm designed to be helpful, honest, and continuously learning.
 ```
 
 ---
@@ -391,7 +391,7 @@ python run.py --train --data data/tool_training_data.txt --epochs 20
 
 Test your model quality:
 ```python
-from ai_tester.core.model_registry import ModelRegistry
+from forge_ai.core.model_registry import ModelRegistry
 
 registry = ModelRegistry()
 model, _ = registry.load_model("your_model")

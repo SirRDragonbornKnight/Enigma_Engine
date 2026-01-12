@@ -53,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def run_server(name: str, port: int, model_name: str = None):
     """Run as a server node."""
-    from ai_tester.comms import AITesterNode, DeviceDiscovery
+    from forge_ai.comms import ForgeNode, DeviceDiscovery
     
     print(f"\n{'='*60}")
     print(f"Starting Enigma Server: {name}")
@@ -67,20 +67,20 @@ def run_server(name: str, port: int, model_name: str = None):
     print("Discovery listener active - other nodes can find me")
     
     # Start server
-    node = AITesterNode(name=name, port=port, model_name=model_name)
+    node = ForgeNode(name=name, port=port, model_name=model_name)
     node.start_server(blocking=True)
 
 
 def run_client(name: str, server_url: str):
     """Run as a client, connect to server."""
-    from ai_tester.comms import AITesterNode
+    from forge_ai.comms import ForgeNode
     
     print(f"\n{'='*60}")
     print(f"Starting Enigma Client: {name}")
     print(f"Connecting to: {server_url}")
     print(f"{'='*60}\n")
     
-    node = AITesterNode(name=name)
+    node = ForgeNode(name=name)
     
     if node.connect_to(server_url):
         print("\nConnected! Type messages to send to the server.")
@@ -107,7 +107,7 @@ def run_client(name: str, server_url: str):
 
 def run_conversation(name: str, server_url: str, turns: int = 5):
     """Start an AI-to-AI conversation."""
-    from ai_tester.comms import AITesterNode
+    from forge_ai.comms import ForgeNode
     
     print(f"\n{'='*60}")
     print(f"AI-to-AI Conversation")
@@ -116,7 +116,7 @@ def run_conversation(name: str, server_url: str, turns: int = 5):
     print(f"Turns: {turns}")
     print(f"{'='*60}\n")
     
-    node = AITesterNode(name=name)
+    node = ForgeNode(name=name)
     
     if node.connect_to(server_url):
         peer_name = list(node.peers.keys())[0]
@@ -147,7 +147,7 @@ def run_conversation(name: str, server_url: str, turns: int = 5):
 
 def discover_nodes():
     """Discover Enigma nodes on the network."""
-    from ai_tester.comms import DeviceDiscovery
+    from forge_ai.comms import DeviceDiscovery
     
     print("\n" + "="*60)
     print("Discovering Enigma Nodes on Network")
@@ -179,7 +179,7 @@ def discover_nodes():
 
 def export_model(model_name: str, output_dir: str):
     """Export a model for transfer."""
-    from ai_tester.comms import ModelExporter
+    from forge_ai.comms import ModelExporter
     
     print(f"\nExporting model '{model_name}' to {output_dir}...")
     
@@ -193,7 +193,7 @@ def export_model(model_name: str, output_dir: str):
 
 def import_model(package_path: str):
     """Import a model from package."""
-    from ai_tester.comms import ModelExporter
+    from forge_ai.comms import ModelExporter
     
     print(f"\nImporting model from {package_path}...")
     
@@ -206,7 +206,7 @@ def import_model(package_path: str):
 
 def export_memories(output_path: str):
     """Export memories for offline sync."""
-    from ai_tester.comms import OfflineSync
+    from forge_ai.comms import OfflineSync
     
     print(f"\nExporting memories to {output_path}...")
     path = OfflineSync.export_to_file(output_path)
@@ -215,7 +215,7 @@ def export_memories(output_path: str):
 
 def import_memories(input_path: str):
     """Import memories from file."""
-    from ai_tester.comms import OfflineSync
+    from forge_ai.comms import OfflineSync
     
     print(f"\nImporting memories from {input_path}...")
     count = OfflineSync.import_from_file(input_path)
@@ -241,7 +241,7 @@ def main():
     mode.add_argument("--import-memories", metavar="PATH", help="Import memories from file")
     
     # Options
-    parser.add_argument("--name", "-n", default="ai_tester_node", help="Node name")
+    parser.add_argument("--name", "-n", default="forge_ai_node", help="Node name")
     parser.add_argument("--port", "-p", type=int, default=5000, help="Server port")
     parser.add_argument("--connect", "-c", help="Server URL to connect to")
     parser.add_argument("--model", "-m", help="Model name from registry")

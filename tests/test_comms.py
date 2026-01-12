@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the AI Tester communications module.
+Tests for the ForgeAI communications module.
 
 Run with: pytest tests/test_comms.py -v
 """
@@ -16,7 +16,7 @@ class TestAPIServer:
     
     def test_create_app(self):
         """Test app creation."""
-        from ai_tester.comms.api_server import create_app
+        from forge_ai.comms.api_server import create_app
         app = create_app()
         assert app is not None
 
@@ -26,7 +26,7 @@ class TestRemoteClient:
     
     def test_client_init(self):
         """Test client initialization."""
-        from ai_tester.comms.remote_client import RemoteClient
+        from forge_ai.comms.remote_client import RemoteClient
         client = RemoteClient("http://localhost:5000")
         assert client is not None
         assert client.base == "http://localhost:5000"
@@ -35,10 +35,10 @@ class TestRemoteClient:
 class TestNetwork:
     """Tests for network utilities."""
     
-    def test_ai_tester_node_init(self):
-        """Test AITesterNode initialization."""
-        from ai_tester.comms.network import AITesterNode
-        node = AITesterNode(port=0)  # Port 0 = auto-assign
+    def test_forge_ai_node_init(self):
+        """Test ForgeNode initialization."""
+        from forge_ai.comms.network import ForgeNode
+        node = ForgeNode(port=0)  # Port 0 = auto-assign
         assert node is not None
 
 
@@ -47,7 +47,7 @@ class TestDiscovery:
     
     def test_discovery_init(self):
         """Test discovery module initialization."""
-        from ai_tester.comms.discovery import DeviceDiscovery
+        from forge_ai.comms.discovery import DeviceDiscovery
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         assert service is not None
         assert service.node_name == "test_node"
@@ -59,7 +59,7 @@ class TestMobileAPI:
     def test_mobile_api_init(self):
         """Test MobileAPI initialization."""
         try:
-            from ai_tester.comms.mobile_api import MobileAPI
+            from forge_ai.comms.mobile_api import MobileAPI
             api = MobileAPI(port=5001)  # Use non-default port
             assert api is not None
             assert api.port == 5001

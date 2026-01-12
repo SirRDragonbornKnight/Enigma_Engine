@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI Tester Avatar System provides a visual representation of the AI that can:
+The ForgeAI Avatar System provides a visual representation of the AI that can:
 - Display on screen (image-based or overlay)
 - Express emotions through different expression images
 - Move around the desktop (when overlay enabled)
@@ -12,11 +12,11 @@ The AI Tester Avatar System provides a visual representation of the AI that can:
 ## Architecture
 
 ```
-ai_tester/avatar/
+forge_ai/avatar/
 ├── __init__.py          # Package exports
 └── controller.py        # AvatarController - main backend logic
 
-ai_tester/gui/tabs/
+forge_ai/gui/tabs/
 ├── avatar_tab.py        # Container with sub-tabs
 └── avatar/
     ├── __init__.py
@@ -45,7 +45,7 @@ The GUI component that shows:
 
 ### Basic Usage
 ```python
-from ai_tester.avatar import get_avatar, enable_avatar, disable_avatar
+from forge_ai.avatar import get_avatar, enable_avatar, disable_avatar
 
 # Get the global avatar instance
 avatar = get_avatar()
@@ -60,7 +60,7 @@ avatar.move_to(500, 300)
 avatar.set_expression("happy")
 
 # Speak (animates mouth)
-avatar.speak("Hello, I'm AI Tester!")
+avatar.speak("Hello, I'm ForgeAI!")
 
 # Disable (turn off)
 avatar.disable()
@@ -69,7 +69,7 @@ avatar.disable()
 ### In AI Responses
 The AI can control the avatar during responses:
 ```python
-from ai_tester.gui.tabs.avatar import set_avatar_expression
+from forge_ai.gui.tabs.avatar import set_avatar_expression
 
 # When AI generates a happy response
 set_avatar_expression(main_window, "happy")

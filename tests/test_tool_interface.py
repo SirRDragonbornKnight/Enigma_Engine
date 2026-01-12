@@ -6,7 +6,7 @@ Tests for the tool interface that allows AI to invoke tools.
 """
 
 import pytest
-from ai_tester.core.tool_interface import (
+from forge_ai.core.tool_interface import (
     ToolInterface, ToolCall, ToolResult,
     create_tool_interface, parse_and_execute_tool
 )

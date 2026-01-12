@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature or enhancement for AI Tester
+about: Suggest a new feature or enhancement for ForgeAI
 title: "[FEATURE] "
 labels: enhancement
 assignees: ''
@@ -26,7 +26,7 @@ Provide specific examples of how this feature would be used:
 2. **Example 2:**
 
 ## Module Affected
-Which part of AI Tester would this affect?
+Which part of ForgeAI would this affect?
 - [ ] Core (model, tokenizer, training, inference)
 - [ ] Modules (module manager, registry)
 - [ ] Addons (image_gen, code_gen, etc.)

@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ai_tester.core.inference import AITesterEngine
+from forge_ai.core.inference import ForgeEngine
 
 
 def main():
     # Create inference engine (auto-loads model)
-    print("Loading AI Tester...")
-    engine = AITesterEngine()
+    print("Loading ForgeAI...")
+    engine = ForgeEngine()
     
     # Simple generation
     prompt = "Once upon a time"

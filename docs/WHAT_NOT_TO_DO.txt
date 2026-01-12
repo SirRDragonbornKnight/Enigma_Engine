@@ -2,7 +2,7 @@
                     ENIGMA ENGINE - WHAT NOT TO DO
 ================================================================================
 
-This guide lists common mistakes and things to avoid when using AI Tester.
+This guide lists common mistakes and things to avoid when using ForgeAI.
 
 ================================================================================
                            1. MODEL MANAGEMENT

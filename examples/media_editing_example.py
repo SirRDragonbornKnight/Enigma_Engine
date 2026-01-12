@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ai_tester.tools.tool_executor import ToolExecutor
+from forge_ai.tools.tool_executor import ToolExecutor
 
 
 def create_test_image():

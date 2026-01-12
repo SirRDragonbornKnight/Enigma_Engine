@@ -1,6 +1,6 @@
 ================================================================================
                     TOOL TRAINING QUICK START
-                       AI Tester Guide
+                       ForgeAI Guide
 ================================================================================
 
 This is a quick-start guide. For detailed info, see:

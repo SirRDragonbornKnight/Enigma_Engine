@@ -7,18 +7,18 @@ from pathlib import Path
 import tempfile
 import time
 
-from ai_tester.memory.vector_db import (
+from forge_ai.memory.vector_db import (
     SimpleVectorDB,
     FAISSVectorDB,
     create_vector_db
 )
-from ai_tester.memory.categorization import (
+from forge_ai.memory.categorization import (
     Memory,
     MemoryType,
     MemoryCategory,
     MemoryCategorization
 )
-from ai_tester.memory.export_import import (
+from forge_ai.memory.export_import import (
     MemoryExporter,
     MemoryImporter
 )

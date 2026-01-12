@@ -1,5 +1,5 @@
 """
-AI Tester - Main Entry Point
+ForgeAI - Main Entry Point
 
 Run your AI with one of these commands:
     python run.py --gui     # GUI interface (recommended)
@@ -20,14 +20,14 @@ from pathlib import Path
 def _print_startup_banner():
     """Print a clean startup message."""
     print("=" * 50)
-    print("  AI Tester - Starting...")
+    print("  ForgeAI - Starting...")
     print("  (Audio warnings below are normal on headless Pi)")
     print("=" * 50)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AI Tester - Build and run your own AI",
+        description="ForgeAI - Build and run your own AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -94,8 +94,8 @@ Examples:
         print("AI TESTER - FULL BUILD")
         print("=" * 60)
         
-        from ai_tester.core.training import train_model
-        from ai_tester.config import CONFIG
+        from forge_ai.core.training import train_model
+        from forge_ai.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_enigma.pth"
@@ -118,8 +118,8 @@ Examples:
         print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.train:
-        from ai_tester.core.training import train_model
-        from ai_tester.config import CONFIG
+        from forge_ai.core.training import train_model
+        from forge_ai.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output
@@ -143,22 +143,22 @@ Examples:
             print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.serve:
-        from ai_tester.comms.api_server import create_app
+        from forge_ai.comms.api_server import create_app
         app = create_app()
         print("\nStarting API server at http://127.0.0.1:5000")
         print("Press Ctrl+C to stop\n")
         app.run(host="127.0.0.1", port=5000, debug=True)
 
     if args.run:
-        from ai_tester.core.inference import AITesterEngine
+        from forge_ai.core.inference import ForgeEngine
         print("\n" + "=" * 50)
-        print("AI Tester CLI Chat")
+        print("ForgeAI CLI Chat")
         print("=" * 50)
         print("Type your message and press Enter.")
         print("Type 'quit' or 'exit' to stop.\n")
 
         try:
-            engine = AITesterEngine()
+            engine = ForgeEngine()
         except FileNotFoundError as e:
             print(f"\n[ERROR] Model not found")
             print(f"   {e}")
@@ -211,7 +211,7 @@ Examples:
     if args.gui:
         _print_startup_banner()
         try:
-            from ai_tester.gui.enhanced_window import run_app
+            from forge_ai.gui.enhanced_window import run_app
         except ImportError as e:
             print(f"\n[ERROR] GUI requires PyQt5")
             print(f"   Error: {e}")
@@ -225,7 +225,7 @@ Examples:
     
     if args.background:
         try:
-            from ai_tester.background import main as run_background
+            from forge_ai.background import main as run_background
         except ImportError as e:
             print(f"\n[ERROR] Background mode requires PyQt5")
             print(f"   Error: {e}")
@@ -244,7 +244,7 @@ Examples:
     
     if args.web:
         try:
-            from ai_tester.web.app import run_web
+            from forge_ai.web.app import run_web
         except ImportError as e:
             print(f"\n[ERROR] Web dashboard requires flask-socketio")
             print(f"   Error: {e}")
@@ -260,7 +260,7 @@ Examples:
         
         # Setup instance manager if needed
         if args.instance or args.new_instance:
-            from ai_tester.core.instance_manager import InstanceManager
+            from forge_ai.core.instance_manager import InstanceManager
             instance_manager = InstanceManager(instance_id=args.instance)
             print(f"Instance ID: {instance_manager.instance_id}")
         

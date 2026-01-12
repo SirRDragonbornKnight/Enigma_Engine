@@ -2,7 +2,7 @@
 """
 Example: Using the Tool Use System
 
-This example demonstrates how the AI Tester AI can use tools naturally in conversation.
+This example demonstrates how the ForgeAI AI can use tools naturally in conversation.
 
 Steps:
 1. Initialize inference engine with tool support
@@ -10,9 +10,9 @@ Steps:
 3. Have a conversation where AI uses tools
 """
 
-from ai_tester.core.inference import AITesterEngine
-from ai_tester.modules import ModuleManager
-from ai_tester.tools import get_available_tools_for_prompt
+from forge_ai.core.inference import ForgeEngine
+from forge_ai.modules import ModuleManager
+from forge_ai.tools import get_available_tools_for_prompt
 
 
 def main():
@@ -38,7 +38,7 @@ def main():
     # Initialize inference engine with tools enabled
     print("3. Initializing inference engine with tool support...")
     try:
-        engine = AITesterEngine(
+        engine = ForgeEngine(
             model_size="small",
             enable_tools=True,
             module_manager=manager
@@ -54,7 +54,7 @@ def main():
     print("=" * 80)
     
     # Show available tools
-    from ai_tester.tools import get_all_tools
+    from forge_ai.tools import get_all_tools
     tools = get_all_tools()
     
     print(f"\nThe AI has access to {len(tools)} tools:")

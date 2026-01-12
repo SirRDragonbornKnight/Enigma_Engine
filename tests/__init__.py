@@ -1,5 +1,5 @@
 """
-AI Tester - Test Suite
+ForgeAI - Test Suite
 
 This package contains comprehensive tests for all Enigma components.
 """

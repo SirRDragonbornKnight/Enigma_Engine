@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented a comprehensive specialized model routing system for AI Tester, enabling training and deployment of task-specific smaller AI models while maintaining a shared tokenizer architecture.
+Successfully implemented a comprehensive specialized model routing system for ForgeAI, enabling training and deployment of task-specific smaller AI models while maintaining a shared tokenizer architecture.
 
 ## What Was Built
 
@@ -46,9 +46,9 @@ python scripts/train_specialized_model.py \
 
 **Example usage:**
 ```python
-from ai_tester.core.inference import AITesterEngine
+from forge_ai.core.inference import ForgeEngine
 
-engine = AITesterEngine(use_routing=True)
+engine = ForgeEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
 
@@ -208,7 +208,7 @@ All specialized models use the same tokenizer, enabling:
 5. Saves model + config to `models/specialized/`
 
 ### Inference Flow
-1. User creates `AITesterEngine(use_routing=True)`
+1. User creates `ForgeEngine(use_routing=True)`
 2. Engine initializes ToolRouter with specialized models
 3. User calls `engine.generate(prompt)`
 4. Router classifies intent using nano model (or keywords)
@@ -303,7 +303,7 @@ For users wanting to use this system:
 3. ✅ Review training data: Check `data/specialized/*.txt`
 4. ✅ Train router: `python scripts/train_specialized_model.py --type router ...`
 5. ✅ (Optional) Train vision/code models
-6. ✅ Enable in code: `AITesterEngine(use_routing=True)`
+6. ✅ Enable in code: `ForgeEngine(use_routing=True)`
 7. ✅ Or enable in GUI: Module Manager → Tool Router → Load
 
 ## Documentation Links
@@ -333,7 +333,7 @@ The specialized model routing system is **production-ready** and provides:
 - Full test coverage
 - Backwards compatibility
 
-Users can now train task-specific models and benefit from faster, more accurate routing while maintaining the flexibility of the unified AI Tester architecture.
+Users can now train task-specific models and benefit from faster, more accurate routing while maintaining the flexibility of the unified ForgeAI architecture.
 
 **Total Development**: ~4 hours
 **Lines of Code**: ~400 production, ~200 test

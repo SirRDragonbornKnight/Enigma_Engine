@@ -1,5 +1,5 @@
 """
-AI Tester - Example Scripts
+ForgeAI - Example Scripts
 
 This directory contains example scripts demonstrating various Enigma features:
 

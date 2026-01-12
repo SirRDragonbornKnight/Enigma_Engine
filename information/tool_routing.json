@@ -26,8 +26,8 @@
         }
       },
       {
-        "model_id": "ai_tester:default",
-        "model_type": "ai_tester",
+        "model_id": "forge_ai:default",
+        "model_type": "forge_ai",
         "priority": 10,
         "config": {}
       }
@@ -50,8 +50,8 @@
         }
       },
       {
-        "model_id": "ai_tester:default",
-        "model_type": "ai_tester",
+        "model_id": "forge_ai:default",
+        "model_type": "forge_ai",
         "priority": 10,
         "config": {}
       }

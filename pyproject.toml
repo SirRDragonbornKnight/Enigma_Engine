@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai-tester"
+name = "forge-ai"
 version = "1.1.0"
 description = "Personal AI Framework - Train and deploy your own AI with GUI, voice, vision, camera, and 26+ tools"
 readme = "README.md"
@@ -58,7 +58,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["ai_tester"]
+source = ["forge_ai"]
 omit = [
     "*/tests/*",
     "*/examples/*",

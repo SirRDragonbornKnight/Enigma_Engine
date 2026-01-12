@@ -1,6 +1,6 @@
-# Security Best Practices for AI Tester
+# Security Best Practices for ForgeAI
 
-This document outlines security considerations and best practices when using and developing AI Tester.
+This document outlines security considerations and best practices when using and developing ForgeAI.
 
 ## Configuration Security
 
@@ -134,7 +134,7 @@ The network discovery system broadcasts on the local network. In untrusted envir
 
 ### Local-First by Default
 
-AI Tester is designed to run locally by default:
+ForgeAI is designed to run locally by default:
 - ✅ No data sent to external services without explicit opt-in
 - ✅ All processing happens on your machine
 - ✅ API keys only needed for cloud providers

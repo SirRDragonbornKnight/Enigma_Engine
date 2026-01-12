@@ -60,7 +60,7 @@ Scripts: `enigma/web/static/js/app.js`
 ### Quick Start
 
 ```python
-from ai_tester.mobile.api import run_mobile_api
+from forge_ai.mobile.api import run_mobile_api
 
 run_mobile_api(host='0.0.0.0', port=5001)
 ```
@@ -213,7 +213,7 @@ def check_api_key():
 python run.py --web
 
 # Terminal 2: Mobile API
-python -c "from ai_tester.mobile.api import run_mobile_api; run_mobile_api()"
+python -c "from forge_ai.mobile.api import run_mobile_api; run_mobile_api()"
 ```
 
 Access:

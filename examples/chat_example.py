@@ -8,12 +8,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ai_tester.core.inference import AITesterEngine
+from forge_ai.core.inference import ForgeEngine
 
 
 def main():
-    print("Loading AI Tester...")
-    engine = AITesterEngine()
+    print("Loading ForgeAI...")
+    engine = ForgeEngine()
     
     print("\n=== Enigma Chat ===")
     print("Type 'quit' to exit, 'clear' to reset history")

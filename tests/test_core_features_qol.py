@@ -18,7 +18,7 @@ class TestInteractiveTools(unittest.TestCase):
     
     def test_checklist_creation(self):
         """Test creating a checklist."""
-        from ai_tester.tools.interactive_tools import ChecklistManager
+        from forge_ai.tools.interactive_tools import ChecklistManager
         
         manager = ChecklistManager(self.storage_path / "checklists.json")
         result = manager.create_checklist("Test List", ["Item 1", "Item 2", "Item 3"])
@@ -29,7 +29,7 @@ class TestInteractiveTools(unittest.TestCase):
     
     def test_task_addition(self):
         """Test adding a task."""
-        from ai_tester.tools.interactive_tools import TaskScheduler
+        from forge_ai.tools.interactive_tools import TaskScheduler
         
         scheduler = TaskScheduler(self.storage_path / "tasks.json")
         result = scheduler.add_task(
@@ -44,7 +44,7 @@ class TestInteractiveTools(unittest.TestCase):
     
     def test_reminder_setting(self):
         """Test setting a reminder."""
-        from ai_tester.tools.interactive_tools import ReminderSystem
+        from forge_ai.tools.interactive_tools import ReminderSystem
         
         system = ReminderSystem(self.storage_path / "reminders.json")
         result = system.set_reminder(
@@ -61,7 +61,7 @@ class TestErrorHandler(unittest.TestCase):
     
     def test_file_not_found_error(self):
         """Test handling of FileNotFoundError."""
-        from ai_tester.utils.error_handler import ErrorHandler
+        from forge_ai.utils.error_handler import ErrorHandler
         
         try:
             raise FileNotFoundError("test.txt not found")
@@ -74,7 +74,7 @@ class TestErrorHandler(unittest.TestCase):
     
     def test_graceful_file_read(self):
         """Test graceful file reading."""
-        from ai_tester.utils.error_handler import GracefulFileHandler
+        from forge_ai.utils.error_handler import GracefulFileHandler
         
         result = GracefulFileHandler.read_file("/nonexistent/file.txt")
         
@@ -87,7 +87,7 @@ class TestPersonas(unittest.TestCase):
     
     def test_persona_loading(self):
         """Test loading predefined personas."""
-        from ai_tester.utils.personas import PersonaManager
+        from forge_ai.utils.personas import PersonaManager
         
         manager = PersonaManager()
         personas = manager.list_personas()
@@ -98,7 +98,7 @@ class TestPersonas(unittest.TestCase):
     
     def test_get_persona(self):
         """Test getting a specific persona."""
-        from ai_tester.utils.personas import PersonaManager
+        from forge_ai.utils.personas import PersonaManager
         
         manager = PersonaManager()
         teacher = manager.get_persona('teacher')
@@ -113,7 +113,7 @@ class TestShortcutsBasic(unittest.TestCase):
     
     def test_undo_redo_manager(self):
         """Test undo/redo functionality."""
-        from ai_tester.utils.shortcuts import UndoRedoManager
+        from forge_ai.utils.shortcuts import UndoRedoManager
         
         manager = UndoRedoManager()
         
@@ -147,7 +147,7 @@ class TestFeedback(unittest.TestCase):
     
     def test_add_rating(self):
         """Test adding a rating."""
-        from ai_tester.utils.feedback import FeedbackCollector
+        from forge_ai.utils.feedback import FeedbackCollector
         
         collector = FeedbackCollector(self.storage_path)
         result = collector.add_rating(
@@ -161,7 +161,7 @@ class TestFeedback(unittest.TestCase):
     
     def test_feedback_statistics(self):
         """Test statistics calculation."""
-        from ai_tester.utils.feedback import FeedbackCollector
+        from forge_ai.utils.feedback import FeedbackCollector
         
         collector = FeedbackCollector(self.storage_path)
         
@@ -186,7 +186,7 @@ class TestDiscoveryMode(unittest.TestCase):
     
     def test_discovery_topic_generation(self):
         """Test topic generation."""
-        from ai_tester.utils.discovery_mode import DiscoveryMode
+        from forge_ai.utils.discovery_mode import DiscoveryMode
         
         discovery = DiscoveryMode(self.storage_path / "discoveries.json")
         topic = discovery.get_discovery_topic()
@@ -196,7 +196,7 @@ class TestDiscoveryMode(unittest.TestCase):
     
     def test_auto_save_conversation(self):
         """Test auto-saving conversations."""
-        from ai_tester.utils.discovery_mode import AutoSaveManager
+        from forge_ai.utils.discovery_mode import AutoSaveManager
         
         autosave = AutoSaveManager(self.storage_path / "autosave")
         messages = [
@@ -217,7 +217,7 @@ class TestTrainingValidator(unittest.TestCase):
     
     def test_validate_good_data(self):
         """Test validation of good training data."""
-        from ai_tester.utils.training_validator import TrainingDataValidator
+        from forge_ai.utils.training_validator import TrainingDataValidator
         
         validator = TrainingDataValidator()
         
@@ -258,7 +258,7 @@ A: Lists store multiple items.
     
     def test_validate_bad_data(self):
         """Test validation of bad training data."""
-        from ai_tester.utils.training_validator import TrainingDataValidator
+        from forge_ai.utils.training_validator import TrainingDataValidator
         
         validator = TrainingDataValidator()
         
@@ -274,7 +274,7 @@ class TestResourceAllocator(unittest.TestCase):
     
     def test_mode_setting(self):
         """Test setting resource mode."""
-        from ai_tester.utils.resource_allocator import ResourceAllocator
+        from forge_ai.utils.resource_allocator import ResourceAllocator
         import tempfile
         
         with tempfile.TemporaryDirectory() as tmp:
@@ -286,7 +286,7 @@ class TestResourceAllocator(unittest.TestCase):
     
     def test_system_info(self):
         """Test getting system information."""
-        from ai_tester.utils.resource_allocator import ResourceAllocator
+        from forge_ai.utils.resource_allocator import ResourceAllocator
         import tempfile
         
         with tempfile.TemporaryDirectory() as tmp:
@@ -298,7 +298,7 @@ class TestResourceAllocator(unittest.TestCase):
     
     def test_generation_params(self):
         """Test generation parameter selection."""
-        from ai_tester.utils.resource_allocator import ResourceAllocator
+        from forge_ai.utils.resource_allocator import ResourceAllocator
         import tempfile
         
         with tempfile.TemporaryDirectory() as tmp:
@@ -320,7 +320,7 @@ class TestToolIntegration(unittest.TestCase):
     
     def test_interactive_tools_registered(self):
         """Test that interactive tools are in registry."""
-        from ai_tester.tools.tool_registry import ToolRegistry
+        from forge_ai.tools.tool_registry import ToolRegistry
         
         registry = ToolRegistry()
         tools = registry.list_tools()
@@ -332,7 +332,7 @@ class TestToolIntegration(unittest.TestCase):
     
     def test_checklist_tool_execution(self):
         """Test executing checklist tool."""
-        from ai_tester.tools.interactive_tools import CreateChecklistTool
+        from forge_ai.tools.interactive_tools import CreateChecklistTool
         
         # Test directly
         tool = CreateChecklistTool()

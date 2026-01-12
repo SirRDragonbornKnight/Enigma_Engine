@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the AI Tester inference engine.
+Tests for the ForgeAI inference engine.
 
 Run with: pytest tests/test_inference.py -v
 """
@@ -12,14 +12,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-class TestAITesterEngine:
-    """Tests for the AITesterEngine class."""
+class TestForgeEngine:
+    """Tests for the ForgeEngine class."""
     
     @pytest.fixture
     def engine(self):
         """Create a test engine."""
-        from ai_tester.core.inference import AITesterEngine
-        return AITesterEngine()
+        from forge_ai.core.inference import ForgeEngine
+        return ForgeEngine()
     
     def test_creation(self, engine):
         """Test engine can be created."""
@@ -29,10 +29,10 @@ class TestAITesterEngine:
     
     def test_device_selection(self):
         """Test device selection."""
-        from ai_tester.core.inference import AITesterEngine
+        from forge_ai.core.inference import ForgeEngine
         
         # Force CPU
-        engine = AITesterEngine(device="cpu")
+        engine = ForgeEngine(device="cpu")
         assert engine.device.type == "cpu"
     
     def test_generate_basic(self, engine):
@@ -96,13 +96,13 @@ class TestTokenizer:
     
     def test_load_tokenizer(self):
         """Test tokenizer loading."""
-        from ai_tester.core.tokenizer import load_tokenizer
+        from forge_ai.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         assert tok is not None
     
     def test_encode_decode(self):
         """Test encoding and decoding."""
-        from ai_tester.core.tokenizer import load_tokenizer
+        from forge_ai.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         
         text = "Hello world"
@@ -122,13 +122,13 @@ class TestTokenizer:
     
     def test_vocab_size(self):
         """Test vocab size property."""
-        from ai_tester.core.tokenizer import load_tokenizer
+        from forge_ai.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         assert hasattr(tok, "vocab_size") or hasattr(tok, "n_vocab")
     
     def test_special_tokens(self):
         """Test special tokens handling."""
-        from ai_tester.core.tokenizer import load_tokenizer
+        from forge_ai.core.tokenizer import load_tokenizer
         tok = load_tokenizer()
         
         # Should handle empty string
@@ -141,9 +141,9 @@ class TestInferenceHelpers:
     
     def test_sample_token(self):
         """Test token sampling."""
-        from ai_tester.core.inference import AITesterEngine
+        from forge_ai.core.inference import ForgeEngine
         
-        engine = AITesterEngine()
+        engine = ForgeEngine()
         logits = torch.randn(1, 1000)
         generated = torch.tensor([[1, 2, 3]])
         
@@ -159,9 +159,9 @@ class TestInferenceHelpers:
     
     def test_repetition_penalty(self):
         """Test repetition penalty reduces repeat probability."""
-        from ai_tester.core.inference import AITesterEngine
+        from forge_ai.core.inference import ForgeEngine
         
-        engine = AITesterEngine()
+        engine = ForgeEngine()
         
         # Create logits where token 5 has highest probability
         logits = torch.zeros(1, 1000)
@@ -182,7 +182,7 @@ class TestTraining:
     
     def test_train_step(self):
         """Test a single training step."""
-        from ai_tester.core.model import Enigma
+        from forge_ai.core.model import Enigma
         import torch.optim as optim
         
         model = Enigma(vocab_size=1000, dim=32, depth=1, heads=2)
