@@ -238,6 +238,27 @@ class ThreeDGenerationWorker(QThread):
         try:
             self.progress.emit(10)
             
+            # Check if router has 3d assignments - use router if configured
+            try:
+                from ...core.tool_router import get_router
+                router = get_router()
+                assignments = router.get_assignments("3d")
+                
+                if assignments:
+                    self.progress.emit(30)
+                    params = {
+                        "prompt": str(self.prompt).strip() if self.prompt else "",
+                        "guidance_scale": float(self.guidance_scale),
+                        "num_inference_steps": int(self.steps)
+                    }
+                    result = router.execute_tool("3d", params)
+                    self.progress.emit(100)
+                    self.finished.emit(result)
+                    return
+            except Exception as router_error:
+                print(f"Router fallback: {router_error}")
+            
+            # Direct provider fallback
             provider = get_provider(self.provider_name)
             if provider is None:
                 self.finished.emit({"success": False, "error": "Unknown provider"})

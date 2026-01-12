@@ -2988,8 +2988,24 @@ class EnhancedMainWindow(QMainWindow):
             print(f"Could not save GUI settings: {e}")
     
     def closeEvent(self, event):
-        """Handle window close - save settings."""
+        """Handle window close - save settings and clean up threads/timers."""
+        # Save settings first
         self._save_gui_settings()
+        
+        # Stop any running AI worker
+        if hasattr(self, '_ai_worker') and self._ai_worker:
+            if self._ai_worker.isRunning():
+                self._ai_worker.stop()
+                self._ai_worker.wait(2000)  # Wait up to 2 seconds
+        
+        # Stop module manager health monitor if running
+        if hasattr(self, 'module_manager') and self.module_manager:
+            try:
+                if hasattr(self.module_manager, 'stop_health_monitor'):
+                    self.module_manager.stop_health_monitor()
+            except Exception as e:
+                print(f"Error stopping health monitor: {e}")
+        
         event.accept()
     
     def _run_setup_wizard(self):

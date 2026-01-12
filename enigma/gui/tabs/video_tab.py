@@ -233,6 +233,27 @@ class VideoGenerationWorker(QThread):
         try:
             self.progress.emit(10)
             
+            # Check if router has video assignments - use router if configured
+            try:
+                from ...core.tool_router import get_router
+                router = get_router()
+                assignments = router.get_assignments("video")
+                
+                if assignments:
+                    self.progress.emit(30)
+                    params = {
+                        "prompt": str(self.prompt).strip() if self.prompt else "",
+                        "duration": float(self.duration),
+                        "fps": int(self.fps)
+                    }
+                    result = router.execute_tool("video", params)
+                    self.progress.emit(100)
+                    self.finished.emit(result)
+                    return
+            except Exception as router_error:
+                print(f"Router fallback: {router_error}")
+            
+            # Direct provider fallback
             provider = get_provider(self.provider_name)
             if provider is None:
                 self.finished.emit({"success": False, "error": "Unknown provider"})

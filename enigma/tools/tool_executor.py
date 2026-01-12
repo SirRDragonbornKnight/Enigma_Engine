@@ -458,6 +458,10 @@ class ToolExecutor:
         elif tool_name == "edit_video":
             return self._execute_edit_video(params)
         
+        # Handle direct generation tools (bypass module system)
+        elif tool_name == "generate_image":
+            return self._execute_generate_image(None, params)
+        
         # For other builtin tools, use registry
         registry = self._get_tool_registry()
         
@@ -496,7 +500,7 @@ class ToolExecutor:
     # Tool-specific execution methods
     
     def _execute_generate_image(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute image generation."""
+        """Execute image generation - uses local Stable Diffusion directly."""
         try:
             prompt = params.get("prompt", "")
             # Ensure prompt is a string (CLIP tokenizer requires str type)
@@ -518,26 +522,90 @@ class ToolExecutor:
             height = params.get("height", 512)
             steps = params.get("steps", 20)
             
-            # Call module's generate method
-            if hasattr(module, "generate"):
-                result = module.generate(prompt=prompt, width=width, height=height, steps=steps)
-            elif hasattr(module, "_instance") and hasattr(module._instance, "generate"):
-                result = module._instance.generate(prompt=prompt, width=width, height=height, steps=steps)
-            else:
+            # Try to use the image tab provider directly (bypasses module system)
+            try:
+                from ..gui.tabs.image_tab import get_provider
+                
+                # Get local SD provider
+                provider = get_provider('local')
+                
+                if provider is None:
+                    return {
+                        "success": False,
+                        "error": "Image provider not available",
+                        "tool": "generate_image",
+                    }
+                
+                # Auto-load if not loaded
+                if not provider.is_loaded:
+                    logger.info("Auto-loading Stable Diffusion model...")
+                    success = provider.load()
+                    if not success:
+                        return {
+                            "success": False,
+                            "error": "Failed to load Stable Diffusion. Install: pip install diffusers transformers accelerate",
+                            "tool": "generate_image",
+                        }
+                
+                # Generate the image
+                import time
+                start_time = time.time()
+                result = provider.generate(
+                    prompt=prompt, 
+                    width=width, 
+                    height=height, 
+                    steps=steps
+                )
+                duration = time.time() - start_time
+                
+                if result.get("success"):
+                    return {
+                        "success": True,
+                        "result": result,
+                        "path": result.get("path", ""),
+                        "duration": duration,
+                        "tool": "generate_image",
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": result.get("error", "Unknown error"),
+                        "tool": "generate_image",
+                    }
+                    
+            except ImportError as e:
+                logger.warning(f"Could not import image_tab: {e}")
+                # Fall back to module-based generation
+                pass
+            
+            # Fallback: try module's generate method
+            if module:
+                if hasattr(module, "generate"):
+                    result = module.generate(prompt=prompt, width=width, height=height, steps=steps)
+                elif hasattr(module, "_instance") and hasattr(module._instance, "generate"):
+                    result = module._instance.generate(prompt=prompt, width=width, height=height, steps=steps)
+                else:
+                    return {
+                        "success": False,
+                        "error": "Image generation module does not have generate() method",
+                        "tool": "generate_image",
+                    }
+                
                 return {
-                    "success": False,
-                    "error": "Image generation module does not have generate() method",
+                    "success": True,
+                    "result": f"Image generated successfully: {result}",
                     "tool": "generate_image",
+                    "output_path": str(result) if result else None,
                 }
             
             return {
-                "success": True,
-                "result": f"Image generated successfully: {result}",
+                "success": False,
+                "error": "No image generation method available",
                 "tool": "generate_image",
-                "output_path": str(result) if result else None,
             }
         
         except Exception as e:
+            logger.error(f"Image generation error: {e}")
             return {
                 "success": False,
                 "error": str(e),

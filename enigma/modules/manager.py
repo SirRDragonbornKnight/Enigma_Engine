@@ -221,6 +221,7 @@ class ModuleManager:
         self._health_monitor_thread: Optional[threading.Thread] = None
         self._health_monitor_running: bool = False
         self._health_monitor_interval: int = 60
+        self._health_monitor_stop_event: threading.Event = threading.Event()
         self._module_error_counts: Dict[str, int] = {}
 
         # Detect hardware
@@ -873,11 +874,10 @@ class ModuleManager:
             except Exception as e:
                 logger.error(f"Error in health monitor loop: {e}")
             
-            # Sleep in small intervals to allow quick shutdown
-            for _ in range(self._health_monitor_interval):
-                if not self._health_monitor_running:
-                    break
-                time.sleep(1)
+            # Interruptible sleep using Event.wait()
+            # Returns True if event is set (stop requested), False on timeout
+            if self._health_monitor_stop_event.wait(timeout=self._health_monitor_interval):
+                break  # Stop was requested
         
         logger.info("Health monitor stopped")
     
@@ -894,6 +894,7 @@ class ModuleManager:
         
         self._health_monitor_interval = interval_seconds
         self._health_monitor_running = True
+        self._health_monitor_stop_event.clear()  # Reset the stop event
         
         self._health_monitor_thread = threading.Thread(
             target=self._health_monitor_loop,
@@ -912,6 +913,7 @@ class ModuleManager:
         
         logger.info("Stopping health monitor...")
         self._health_monitor_running = False
+        self._health_monitor_stop_event.set()  # Signal the thread to wake up and stop
         
         if self._health_monitor_thread:
             self._health_monitor_thread.join(timeout=5.0)

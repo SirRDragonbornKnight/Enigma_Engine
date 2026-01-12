@@ -146,7 +146,7 @@ GENERATE_IMAGE = ToolDefinition(
     name="generate_image",
     description="Generate an image from a text description using AI image generation",
     category="generation",
-    module="image_gen_local",  # or image_gen_api
+    module=None,  # Direct tool - auto-loads Stable Diffusion without module system
     parameters=[
         ToolParameter(
             name="prompt",

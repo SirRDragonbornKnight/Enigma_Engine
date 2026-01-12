@@ -148,7 +148,9 @@ class PlaceholderImage:
 class StableDiffusionLocal:
     """Local Stable Diffusion image generation."""
     
-    def __init__(self, model_id: str = "stabilityai/stable-diffusion-2-1"):
+    def __init__(self, model_id: str = "nota-ai/bk-sdm-small"):
+        # nota-ai/bk-sdm-small is a small (~500MB), fast SD model
+        # Works well on limited GPU memory
         self.model_id = model_id
         self.pipe = None
         self.is_loaded = False
@@ -158,21 +160,80 @@ class StableDiffusionLocal:
             from diffusers import StableDiffusionPipeline
             import torch
             
+            # Clear GPU cache first
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                import gc
+                gc.collect()
+            
+            # Check available GPU memory
             device = "cuda" if torch.cuda.is_available() else "cpu"
             dtype = torch.float16 if device == "cuda" else torch.float32
             
+            if device == "cuda":
+                try:
+                    free_mem = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)
+                    free_gb = free_mem / (1024**3)
+                    print(f"GPU free memory: {free_gb:.1f} GB")
+                    # Need at least 2GB for SD small, fall back to CPU
+                    if free_gb < 2.0:
+                        print("Not enough GPU memory, using CPU instead")
+                        device = "cpu"
+                        dtype = torch.float32
+                except Exception:
+                    pass
+            
+            print(f"Loading Stable Diffusion from {self.model_id}...")
+            print(f"Device: {device}, dtype: {dtype}")
+            
             self.pipe = StableDiffusionPipeline.from_pretrained(
                 self.model_id,
-                torch_dtype=dtype
-            ).to(device)
+                torch_dtype=dtype,
+                safety_checker=None,  # Disable safety checker for speed
+                requires_safety_checker=False,
+            )
+            
+            self.pipe = self.pipe.to(device)
+            
+            # Enable memory optimizations
+            if device == "cuda":
+                try:
+                    self.pipe.enable_attention_slicing()
+                except Exception:
+                    pass
             
             self.is_loaded = True
+            print("Stable Diffusion loaded successfully!")
             return True
-        except ImportError:
-            print("Install: pip install diffusers transformers accelerate torch")
+        except ImportError as e:
+            print(f"Install required: pip install diffusers transformers accelerate")
+            print(f"Import error: {e}")
             return False
         except Exception as e:
+            error_str = str(e).lower()
             print(f"Failed to load Stable Diffusion: {e}")
+            
+            # If CUDA OOM, try CPU
+            if "cuda" in error_str and ("memory" in error_str or "oom" in error_str):
+                print("GPU out of memory, trying CPU...")
+                try:
+                    from diffusers import StableDiffusionPipeline
+                    import torch
+                    torch.cuda.empty_cache()
+                    
+                    self.pipe = StableDiffusionPipeline.from_pretrained(
+                        self.model_id,
+                        torch_dtype=torch.float32,
+                        safety_checker=None,
+                        requires_safety_checker=False,
+                    ).to("cpu")
+                    
+                    self.is_loaded = True
+                    print("Stable Diffusion loaded on CPU!")
+                    return True
+                except Exception as cpu_e:
+                    print(f"CPU fallback also failed: {cpu_e}")
+            
             return False
     
     def unload(self):
@@ -389,6 +450,44 @@ def get_provider(name: str):
     return _providers.get(name)
 
 
+def preload_local_provider(callback=None):
+    """
+    Preload the local Stable Diffusion provider in a background thread.
+    
+    Args:
+        callback: Optional function to call with (success: bool, message: str) when done
+    
+    Returns:
+        The thread that's doing the loading (can be joined if needed)
+    """
+    import threading
+    
+    def _load():
+        try:
+            provider = get_provider('local')
+            if provider and not provider.is_loaded:
+                success = provider.load()
+                if callback:
+                    msg = "Stable Diffusion loaded successfully" if success else "Failed to load Stable Diffusion"
+                    callback(success, msg)
+            elif provider and provider.is_loaded:
+                if callback:
+                    callback(True, "Stable Diffusion already loaded")
+        except Exception as e:
+            if callback:
+                callback(False, f"Error loading Stable Diffusion: {e}")
+    
+    thread = threading.Thread(target=_load, daemon=True, name="SDPreloader")
+    thread.start()
+    return thread
+
+
+def is_local_provider_loaded() -> bool:
+    """Check if the local Stable Diffusion provider is loaded."""
+    provider = _providers.get('local')
+    return provider is not None and provider.is_loaded
+
+
 def get_load_error(name: str) -> str:
     """Get the last load error for a provider."""
     return _load_errors.get(name, "")
@@ -415,6 +514,32 @@ class ImageGenerationWorker(QThread):
         try:
             self.progress.emit(10)
             
+            # Check if router has image assignments - use router if configured
+            try:
+                from ...core.tool_router import get_router
+                router = get_router()
+                assignments = router.get_assignments("image")
+                
+                if assignments:
+                    # Use router to execute with assigned model
+                    self.progress.emit(30)
+                    params = {
+                        "prompt": str(self.prompt).strip() if self.prompt else "",
+                        "width": int(self.width),
+                        "height": int(self.height),
+                        "steps": int(self.steps),
+                        "guidance": float(self.guidance),
+                        "negative_prompt": str(self.negative_prompt).strip() if self.negative_prompt else ""
+                    }
+                    result = router.execute_tool("image", params)
+                    self.progress.emit(100)
+                    self.finished.emit(result)
+                    return
+            except Exception as router_error:
+                # Router not available or failed, fall back to direct provider
+                print(f"Router fallback: {router_error}")
+            
+            # Direct provider fallback
             provider = get_provider(self.provider_name)
             if provider is None:
                 self.finished.emit({"success": False, "error": f"Unknown provider: {self.provider_name}"})
@@ -493,14 +618,41 @@ class ImageTab(QWidget):
             parent.image_prompt = self.prompt_input
             parent.image_tab = self
             parent._generate_image = self._generate_image
+        
+        # Check ready status on init and periodically
+        self._check_ready_status()
+    
+    def _check_ready_status(self):
+        """Check if image generation is ready and update indicator."""
+        try:
+            provider = get_provider('local')
+            if provider and provider.is_loaded:
+                self.ready_indicator.setText("● Ready")
+                self.ready_indicator.setStyleSheet("color: #2ecc71; font-size: 11px;")
+            else:
+                self.ready_indicator.setText("● Not Loaded")
+                self.ready_indicator.setStyleSheet("color: #f39c12; font-size: 11px;")
+        except Exception:
+            self.ready_indicator.setText("● Not Ready")
+            self.ready_indicator.setStyleSheet("color: #e74c3c; font-size: 11px;")
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # Header
+        # Header with status
+        header_layout = QHBoxLayout()
         header = QLabel("Image Generation")
         header.setObjectName("header")
-        layout.addWidget(header)
+        header_layout.addWidget(header)
+        
+        header_layout.addStretch()
+        
+        # Ready indicator
+        self.ready_indicator = QLabel("● Not Ready")
+        self.ready_indicator.setStyleSheet("color: #e74c3c; font-size: 11px;")
+        header_layout.addWidget(self.ready_indicator)
+        
+        layout.addLayout(header_layout)
         
         # Result area at TOP
         self.result_label = QLabel("Generated image will appear here")
@@ -516,27 +668,6 @@ class ImageTab(QWidget):
         
         self.status_label = QLabel("")
         layout.addWidget(self.status_label)
-        
-        # Provider selection
-        provider_group = QGroupBox("Provider")
-        provider_layout = QHBoxLayout()
-        
-        self.provider_combo = QComboBox()
-        self.provider_combo.addItems([
-            'Placeholder (Test - No Dependencies)',
-            'Local (Stable Diffusion)',
-            'OpenAI (DALL-E 3) - Cloud',
-            'Replicate (SDXL) - Cloud'
-        ])
-        provider_layout.addWidget(self.provider_combo)
-        
-        self.load_btn = QPushButton("Load Model")
-        self.load_btn.clicked.connect(self._load_provider)
-        provider_layout.addWidget(self.load_btn)
-        
-        provider_layout.addStretch()
-        provider_group.setLayout(provider_layout)
-        layout.addWidget(provider_group)
         
         # Prompt input
         prompt_group = QGroupBox("Prompt")
@@ -643,41 +774,61 @@ class ImageTab(QWidget):
         
         layout.addLayout(btn_layout)
     
-    def _get_provider_name(self) -> str:
-        """Get provider name from combo box."""
-        text = self.provider_combo.currentText()
-        if 'Placeholder' in text:
-            return 'placeholder'
-        elif 'Local' in text:
-            return 'local'
-        elif 'OpenAI' in text:
-            return 'openai'
-        elif 'Replicate' in text:
-            return 'replicate'
-        return 'placeholder'
-    
-    def _load_provider(self):
-        """Pre-load the selected provider."""
-        provider_name = self._get_provider_name()
-        provider = get_provider(provider_name)
+    def _load_model(self):
+        """Load the image generation model."""
+        self.status_label.setText("Loading Stable Diffusion...")
+        self.generate_btn.setEnabled(False)
         
-        if provider and not provider.is_loaded:
-            self.status_label.setText(f"Loading {provider_name}...")
-            self.load_btn.setEnabled(False)
-            
-            # Load in thread to not block UI
-            from PyQt5.QtCore import QTimer
-            def do_load():
-                success = provider.load()
-                if success:
-                    self.status_label.setText(f"{provider_name} loaded successfully!")
-                else:
-                    self.status_label.setText(f"Failed to load {provider_name}")
-                self.load_btn.setEnabled(True)
-            
-            QTimer.singleShot(100, do_load)
-        else:
-            self.status_label.setText(f"{provider_name} already loaded")
+        import threading
+        
+        def do_load():
+            try:
+                provider = get_provider('local')
+                if provider:
+                    success = provider.load()
+                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    if success:
+                        QMetaObject.invokeMethod(
+                            self.status_label, "setText",
+                            Qt.QueuedConnection, 
+                            Q_ARG(str, "✓ Model loaded and ready!")
+                        )
+                        QMetaObject.invokeMethod(
+                            self.ready_indicator, "setText",
+                            Qt.QueuedConnection,
+                            Q_ARG(str, "● Ready")
+                        )
+                        QMetaObject.invokeMethod(
+                            self.ready_indicator, "setStyleSheet",
+                            Qt.QueuedConnection,
+                            Q_ARG(str, "color: #2ecc71; font-size: 11px;")
+                        )
+                    else:
+                        QMetaObject.invokeMethod(
+                            self.status_label, "setText",
+                            Qt.QueuedConnection,
+                            Q_ARG(str, "✗ Failed to load model")
+                        )
+                    QMetaObject.invokeMethod(
+                        self.generate_btn, "setEnabled",
+                        Qt.QueuedConnection,
+                        Q_ARG(bool, True)
+                    )
+            except Exception as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self.status_label, "setText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"✗ Error: {e}")
+                )
+                QMetaObject.invokeMethod(
+                    self.generate_btn, "setEnabled",
+                    Qt.QueuedConnection,
+                    Q_ARG(bool, True)
+                )
+        
+        thread = threading.Thread(target=do_load, daemon=True)
+        thread.start()
     
     def _browse_reference_image(self):
         """Browse for a reference image."""
@@ -697,13 +848,14 @@ class ImageTab(QWidget):
         self.status_label.setText("Reference image cleared")
     
     def _generate_image(self):
-        """Generate an image."""
+        """Generate an image using the router/local provider."""
         prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
             return
         
-        provider_name = self._get_provider_name()
+        # Always use 'local' provider (router handles auto-loading)
+        provider_name = 'local'
         
         self.generate_btn.setEnabled(False)
         self.progress.setVisible(True)
@@ -759,12 +911,16 @@ class ImageTab(QWidget):
                 
                 # Show popup preview (from main window if available)
                 self._show_popup_preview(path)
+                
+                # Update ready status
+                self._check_ready_status()
             else:
                 self.status_label.setText("Generation complete (no image path)")
         else:
             error = result.get("error", "Unknown error")
             self.status_label.setText(f"Error: {error}")
-            self.result_label.setText(f"Generation failed:\n{error}")
+            self.result_label.setText(f"Generation failed:\n{error}\n\nTo fix, install: pip install diffusers transformers accelerate")
+            self._check_ready_status()
     
     def _show_popup_preview(self, path: str):
         """Show a popup preview of the generated image."""

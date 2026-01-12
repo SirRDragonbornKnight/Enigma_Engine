@@ -375,6 +375,7 @@ class QuickCommandOverlay(QWidget):
     command_submitted = pyqtSignal(str)
     close_requested = pyqtSignal()
     open_gui_requested = pyqtSignal()  # New signal for ESC to open GUI
+    stop_requested = pyqtSignal()  # Signal to stop generation
     
     def __init__(self, parent=None):
         # Initialize size attributes BEFORE calling parent __init__
@@ -386,6 +387,7 @@ class QuickCommandOverlay(QWidget):
         self._drag_pos = None
         self._resize_edge = None
         self._is_responding = False  # Track if AI is responding
+        self._stop_requested = False  # Track if stop was requested
         
         super().__init__(parent)
         
@@ -568,6 +570,30 @@ class QuickCommandOverlay(QWidget):
         self.chat_btn.clicked.connect(self._on_chat)
         input_layout.addWidget(self.chat_btn)
         
+        # Stop button (hidden by default, shown during generation)
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setFixedSize(50, 40)
+        self.stop_btn.setToolTip("Stop generation")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+            QPushButton:pressed {
+                background-color: #922b21;
+            }
+        """)
+        self.stop_btn.clicked.connect(self._stop_generation)
+        self.stop_btn.hide()  # Hidden by default
+        input_layout.addWidget(self.stop_btn)
+        
         # Voice button
         self.voice_btn = QPushButton("Voice")
         self.voice_btn.setFixedSize(50, 40)
@@ -653,6 +679,7 @@ class QuickCommandOverlay(QWidget):
     def start_responding(self):
         """Show the responding indicator (single line in chat, animated status)."""
         self._is_responding = True
+        self._stop_requested = False
         self._responding_dots = 0
         # Add single thinking indicator inline
         ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
@@ -663,8 +690,8 @@ class QuickCommandOverlay(QWidget):
             self.response_area.verticalScrollBar().maximum()
         )
         self._responding_timer.start(400)  # Animate status bar only
-        self.chat_btn.setEnabled(False)
-        self.chat_btn.setText("Wait")
+        self.chat_btn.hide()  # Hide send button
+        self.stop_btn.show()  # Show stop button
         self.set_status("Thinking...")
     
     def stop_responding(self):
@@ -672,9 +699,20 @@ class QuickCommandOverlay(QWidget):
         self._is_responding = False
         self._responding_timer.stop()
         self._remove_thinking_indicator()
-        self.chat_btn.setEnabled(True)
-        self.chat_btn.setText("Send")
+        self.stop_btn.hide()  # Hide stop button
+        self.chat_btn.show()  # Show send button
         self.set_status("Ready")
+    
+    def _stop_generation(self):
+        """Stop the current AI generation."""
+        self._stop_requested = True
+        self.stop_requested.emit()
+        self.stop_responding()
+        # Add stopped message
+        self.response_area.append(
+            "<div style='color: #e74c3c; padding: 4px;'><i>Generation stopped by user</i></div>"
+        )
+        self.set_status("Stopped")
     
     def _remove_thinking_indicator(self):
         """Remove the thinking indicator from chat."""
@@ -1329,9 +1367,16 @@ class EnigmaSystemTray(QObject):
         import threading
         import time
         
+        # Store reference to check for stop
+        self._current_generation_thread = None
+        
         def generate_response():
             try:
                 response = None
+                
+                # Check if stop was requested before starting
+                if self.overlay._stop_requested:
+                    return
                 
                 # Try to use the main window's engine if available
                 if self.main_window and hasattr(self.main_window, 'engine') and self.main_window.engine:
@@ -1354,6 +1399,10 @@ class EnigmaSystemTray(QObject):
                     except Exception as e:
                         response = f"[No AI loaded - open full GUI to load a model]\n\nYour message: {message}"
                 
+                # Check if stop was requested during generation
+                if self.overlay._stop_requested:
+                    return
+                
                 # Sync to main window's chat history
                 if self.main_window:
                     self._sync_to_main_chat(message, response)
@@ -1370,6 +1419,9 @@ class EnigmaSystemTray(QObject):
                 )
                 
             except Exception as e:
+                # Don't show error if stop was requested
+                if self.overlay._stop_requested:
+                    return
                 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                 QMetaObject.invokeMethod(
                     self.overlay, "show_response",

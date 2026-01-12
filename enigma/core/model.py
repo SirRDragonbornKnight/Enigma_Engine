@@ -311,6 +311,9 @@ def apply_rotary_embedding(
 
 class Attention(nn.Module):
     """Multi-Head Attention with Grouped Query Attention (GQA)."""
+    
+    # Maximum KV-cache size (sliding window for memory efficiency)
+    MAX_CACHE_SEQ_LEN = 4096
 
     def __init__(self, config: EnigmaConfig):
         super().__init__()
@@ -318,6 +321,12 @@ class Attention(nn.Module):
         self.n_kv_heads = config.n_kv_heads
         self.head_dim = config.dim // config.n_heads
         self.n_rep = self.n_heads // self.n_kv_heads
+        
+        # Cache size limit from config or default
+        self.max_cache_len = min(
+            config.max_seq_len if hasattr(config, 'max_seq_len') else self.MAX_CACHE_SEQ_LEN,
+            self.MAX_CACHE_SEQ_LEN
+        )
 
         self.wq = nn.Linear(config.dim, config.n_heads * self.head_dim, bias=config.use_bias)
         self.wk = nn.Linear(config.dim, self.n_kv_heads * self.head_dim, bias=config.use_bias)
@@ -350,6 +359,14 @@ class Attention(nn.Module):
             else:
                 self.cache_k = torch.cat([self.cache_k, k], dim=1)
                 self.cache_v = torch.cat([self.cache_v, v], dim=1)
+                
+                # Enforce cache size limit (sliding window)
+                if self.cache_k.shape[1] > self.max_cache_len:
+                    # Keep most recent tokens
+                    trim_amount = self.cache_k.shape[1] - self.max_cache_len
+                    self.cache_k = self.cache_k[:, trim_amount:, :, :]
+                    self.cache_v = self.cache_v[:, trim_amount:, :, :]
+                    
             k, v = self.cache_k, self.cache_v
 
         if self.n_rep > 1:

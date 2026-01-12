@@ -153,6 +153,18 @@ class ToolAssignmentWidget(QFrame):
         """Populate model dropdown with available options."""
         self.model_input.clear()
         
+        # Add local modules first - these are the direct implementations
+        self.model_input.addItem("-- Local Modules --")
+        local_modules = [
+            ("local:stable-diffusion", "Image generation (SD)"),
+            ("local:code", "Code generation (Enigma)"),
+            ("local:tts", "Text-to-speech (pyttsx3)"),
+            ("local:video", "Video generation (AnimateDiff)"),
+            ("local:3d", "3D generation (Shap-E)"),
+        ]
+        for module_id, desc in local_modules:
+            self.model_input.addItem(f"{module_id}")
+        
         # Add categories
         self.model_input.addItem("-- Enigma Models --")
         
@@ -270,11 +282,73 @@ class ToolAssignmentWidget(QFrame):
             
         # Update status
         if self.assignments:
-            self.status_label.setText(f"{len(self.assignments)} model(s)")
-            self.status_label.setStyleSheet("color: #2ecc71; font-size: 11px;")
+            # Check actual readiness
+            ready = self._check_tool_ready()
+            if ready:
+                self.status_label.setText(f"● Ready ({len(self.assignments)})")
+                self.status_label.setStyleSheet("color: #2ecc71; font-size: 11px; font-weight: bold;")
+            else:
+                self.status_label.setText(f"● Not Loaded ({len(self.assignments)})")
+                self.status_label.setStyleSheet("color: #f39c12; font-size: 11px;")
         else:
-            self.status_label.setText("No model")
+            self.status_label.setText("● No model")
             self.status_label.setStyleSheet("color: #e74c3c; font-size: 11px;")
+    
+    def _check_tool_ready(self) -> bool:
+        """Check if this tool's model is loaded and ready."""
+        if not self.assignments:
+            return False
+        
+        # Check based on tool type
+        if self.tool_name == "image":
+            try:
+                from ..tabs.image_tab import get_provider
+                provider = get_provider('local')
+                return provider is not None and provider.is_loaded
+            except Exception:
+                return False
+        
+        elif self.tool_name == "code":
+            try:
+                from ..tabs.code_tab import get_provider
+                provider = get_provider('local')
+                return provider is not None and provider.is_loaded
+            except Exception:
+                return False
+        
+        elif self.tool_name == "audio":
+            try:
+                from ..tabs.audio_tab import get_provider
+                provider = get_provider('local')
+                return provider is not None and provider.is_loaded
+            except Exception:
+                return False
+        
+        elif self.tool_name == "video":
+            try:
+                from ..tabs.video_tab import get_provider
+                provider = get_provider('local')
+                return provider is not None and provider.is_loaded
+            except Exception:
+                return False
+        
+        elif self.tool_name == "3d":
+            try:
+                from ..tabs.threed_tab import get_provider
+                provider = get_provider('local')
+                return provider is not None and provider.is_loaded
+            except Exception:
+                return False
+        
+        elif self.tool_name == "chat":
+            # Chat is ready if main engine is loaded
+            try:
+                return True  # Assume ready if model assigned
+            except Exception:
+                return False
+        
+        # For other tools, assume ready if model assigned
+        return len(self.assignments) > 0
             
     def set_assignments(self, assignments: List[Dict]):
         """Set assignments from loaded config."""

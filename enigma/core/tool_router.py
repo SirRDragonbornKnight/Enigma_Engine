@@ -937,19 +937,167 @@ class ToolRouter:
     
     def _execute_local_module(self, assignment: ModelAssignment,
                              params: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a local module (stable-diffusion, etc.)."""
+        """Execute a local module (stable-diffusion, code, audio, video, 3d, etc.)."""
         module_name = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
         
-        # Map module names to actual handlers
-        # This integrates with the existing module system
         try:
-            # Try to get the module from module manager
-            # The actual execution happens in the GUI tabs
+            # Route to appropriate handler based on module name
+            if module_name in ("stable-diffusion", "sd", "image"):
+                return self._execute_image_generation(params)
+            elif module_name in ("code", "enigma-code"):
+                return self._execute_code_generation(params)
+            elif module_name in ("tts", "audio", "speech"):
+                return self._execute_audio_generation(params)
+            elif module_name in ("video", "animatediff"):
+                return self._execute_video_generation(params)
+            elif module_name in ("3d", "shap-e", "threed"):
+                return self._execute_3d_generation(params)
+            
+            # For unknown modules, return marker for GUI to handle
             return {
                 "success": True, 
                 "result": {"action": "execute_module", "module": module_name, "params": params},
                 "model": assignment.model_id
             }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_image_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute image generation using the local SD provider."""
+        try:
+            from ..gui.tabs.image_tab import get_provider
+            
+            provider = get_provider('local')
+            if provider is None:
+                return {"success": False, "error": "Image provider not available"}
+            
+            # Load if needed
+            if not provider.is_loaded:
+                if not provider.load():
+                    return {"success": False, "error": "Failed to load Stable Diffusion model"}
+            
+            # Generate
+            prompt = params.get("prompt", "")
+            width = int(params.get("width", 512))
+            height = int(params.get("height", 512))
+            steps = int(params.get("steps", 30))
+            guidance = float(params.get("guidance", 7.5))
+            negative_prompt = params.get("negative_prompt", "")
+            
+            result = provider.generate(
+                prompt,
+                width=width,
+                height=height,
+                steps=steps,
+                guidance=guidance,
+                negative_prompt=negative_prompt
+            )
+            
+            return result
+            
+        except ImportError as e:
+            return {"success": False, "error": f"Image generation not available: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_code_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute code generation using local Enigma model."""
+        try:
+            from ..gui.tabs.code_tab import get_provider
+            
+            provider = get_provider('local')
+            if provider is None:
+                return {"success": False, "error": "Code provider not available"}
+            
+            if not provider.is_loaded:
+                if not provider.load():
+                    return {"success": False, "error": "Failed to load code model"}
+            
+            prompt = params.get("prompt", "")
+            language = params.get("language", "python")
+            
+            result = provider.generate(prompt, language=language)
+            return result
+            
+        except ImportError as e:
+            return {"success": False, "error": f"Code generation not available: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_audio_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute audio/TTS generation using local provider."""
+        try:
+            from ..gui.tabs.audio_tab import get_provider
+            
+            provider = get_provider('local')
+            if provider is None:
+                return {"success": False, "error": "Audio provider not available"}
+            
+            if not provider.is_loaded:
+                if not provider.load():
+                    return {"success": False, "error": "Failed to load TTS engine"}
+            
+            text = params.get("text", params.get("prompt", ""))
+            
+            result = provider.generate(text)
+            return result
+            
+        except ImportError as e:
+            return {"success": False, "error": f"Audio generation not available: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_video_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute video generation using local AnimateDiff."""
+        try:
+            from ..gui.tabs.video_tab import get_provider
+            
+            provider = get_provider('local')
+            if provider is None:
+                return {"success": False, "error": "Video provider not available"}
+            
+            if not provider.is_loaded:
+                if not provider.load():
+                    return {"success": False, "error": "Failed to load video model"}
+            
+            prompt = params.get("prompt", "")
+            duration = float(params.get("duration", 2.0))
+            fps = int(params.get("fps", 8))
+            
+            result = provider.generate(prompt, duration=duration, fps=fps)
+            return result
+            
+        except ImportError as e:
+            return {"success": False, "error": f"Video generation not available: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _execute_3d_generation(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute 3D model generation using local Shap-E."""
+        try:
+            from ..gui.tabs.threed_tab import get_provider
+            
+            provider = get_provider('local')
+            if provider is None:
+                return {"success": False, "error": "3D provider not available"}
+            
+            if not provider.is_loaded:
+                if not provider.load():
+                    return {"success": False, "error": "Failed to load 3D model"}
+            
+            prompt = params.get("prompt", "")
+            guidance_scale = float(params.get("guidance_scale", 15.0))
+            num_inference_steps = int(params.get("num_inference_steps", 64))
+            
+            result = provider.generate(
+                prompt,
+                guidance_scale=guidance_scale,
+                num_inference_steps=num_inference_steps
+            )
+            return result
+            
+        except ImportError as e:
+            return {"success": False, "error": f"3D generation not available: {e}"}
         except Exception as e:
             return {"success": False, "error": str(e)}
     

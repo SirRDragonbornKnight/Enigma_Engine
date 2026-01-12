@@ -31,6 +31,7 @@ import torch.nn.functional as F
 from typing import Optional, List, Union, Generator, Dict, Any
 from pathlib import Path
 import logging
+import threading
 
 from .model import Enigma, create_model, MODEL_PRESETS
 from .tokenizer import get_tokenizer
@@ -85,6 +86,9 @@ class EnigmaEngine:
             module_manager: ModuleManager instance for tool execution
             use_routing: Enable specialized model routing (default: False)
         """
+        # Thread safety lock for KV-cache operations
+        self._generation_lock = threading.Lock()
+        
         # Device selection
         self.device = self._select_device(device)
         self.use_half = use_half and self.device.type == "cuda"
@@ -453,21 +457,31 @@ class EnigmaEngine:
                 if direct_result is not None:
                     return direct_result
         
-        # Standard generation
-        text = self._generate_text(
-            prompt, max_gen, temperature, top_k, top_p, 
-            repetition_penalty, stop_strings, use_cache
-        )
+        # Thread-safe generation (protects KV-cache state)
+        # Use lock if available (may not exist for HuggingFace models)
+        lock = getattr(self, '_generation_lock', None)
+        if lock:
+            lock.acquire()
         
-        # Tool execution loop
-        if execute_tools and self._tool_executor:
-            text = self._execute_tools_in_text(
-                text, max_iterations=max_tool_iterations,
-                max_gen=max_gen, temperature=temperature,
-                top_k=top_k, top_p=top_p, 
-                repetition_penalty=repetition_penalty,
-                stop_strings=stop_strings, use_cache=use_cache
+        try:
+            # Standard generation
+            text = self._generate_text(
+                prompt, max_gen, temperature, top_k, top_p, 
+                repetition_penalty, stop_strings, use_cache
             )
+            
+            # Tool execution loop
+            if execute_tools and self._tool_executor:
+                text = self._execute_tools_in_text(
+                    text, max_iterations=max_tool_iterations,
+                    max_gen=max_gen, temperature=temperature,
+                    top_k=top_k, top_p=top_p, 
+                    repetition_penalty=repetition_penalty,
+                    stop_strings=stop_strings, use_cache=use_cache
+                )
+        finally:
+            if lock:
+                lock.release()
         
         return text
     
@@ -593,7 +607,7 @@ class EnigmaEngine:
         if not self._tool_executor:
             return f"To generate {content_type}, please use the {content_type.title()} tab. Direct generation not available."
         
-        # Execute the tool
+        # Execute the tool (tool executor handles auto-loading)
         result = self._tool_executor.execute_tool(tool_name, {"prompt": description})
         
         if result.get("success"):
