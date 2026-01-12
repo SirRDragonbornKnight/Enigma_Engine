@@ -1,5 +1,5 @@
 """
-Enigma Module Registry
+AI Tester Module Registry
 ======================
 
 Central registry of all available modules.

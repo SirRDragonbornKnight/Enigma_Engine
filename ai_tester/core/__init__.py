@@ -3,7 +3,7 @@
 Enigma Core Module
 ==================
 
-Contains the core components of the Enigma AI framework:
+Contains the core components of the AI Tester AI framework:
 - Model architecture (Transformer with RoPE, RMSNorm, SwiGLU, GQA)
 - Training system (AMP, gradient accumulation, cosine warmup)
 - Inference engine (KV-cache, streaming, chat)

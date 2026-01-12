@@ -210,7 +210,7 @@ def demo_sprite_generation():
 def main():
     """Run all demos."""
     print("\n" + "="*60)
-    print("ENIGMA ENGINE - ENHANCED AVATAR SYSTEM DEMO")
+    print("AI TESTER - ENHANCED AVATAR SYSTEM DEMO")
     print("="*60)
     
     try:

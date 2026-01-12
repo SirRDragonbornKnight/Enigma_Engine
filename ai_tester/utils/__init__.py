@@ -152,7 +152,7 @@ __all__ = [
     'format_number',
     'format_bytes',
     'print_section',
-    # Enigma Messages
+    # AI Tester Messages
     'MessagePrefix',
     'system_msg',
     'error_msg',

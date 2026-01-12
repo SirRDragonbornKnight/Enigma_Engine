@@ -265,7 +265,7 @@ class VoiceCommander:
         self.command_callback = command_callback
         self._notification_callback: Optional[Callable[[str, str], None]] = None
         self._status_callback: Optional[Callable[[str], None]] = None
-        self.current_model = "Enigma AI"
+        self.current_model = "AI Tester"
         
     def set_notification_callback(self, callback: Callable[[str, str], None]):
         """Set callback for notifications (title, message)."""

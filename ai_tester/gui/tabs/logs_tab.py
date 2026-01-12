@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt, QTimer, QFileSystemWatcher
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 # Log directories
-LOGS_DIR = Path.home() / ".enigma" / "logs"
+LOGS_DIR = Path.home() / ".ai_tester" / "logs"
 PROJECT_LOGS = Path(__file__).parent.parent.parent.parent / "logs"
 
 LOGS_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,5 +1,5 @@
 """
-Tool Executor for Enigma AI
+Tool Executor for AI Tester
 ============================
 
 Executes tool calls from the AI by:

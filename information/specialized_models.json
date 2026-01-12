@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "shared_tokenizer": "enigma/vocab_model/bpe_vocab.json",
+  "shared_tokenizer": "ai_tester/vocab_model/bpe_vocab.json",
   "models": {
     "router": {
       "path": "models/specialized/intent_router_nano.pth",

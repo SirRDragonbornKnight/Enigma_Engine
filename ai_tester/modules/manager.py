@@ -1,5 +1,5 @@
 """
-Enigma Module Manager
+AI Tester Module Manager
 =====================
 
 Central system for managing all Enigma modules.

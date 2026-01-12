@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the Enigma core model.
+Tests for the AI Tester core model.
 
 Run with: pytest tests/test_model.py -v
 """

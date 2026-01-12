@@ -38,7 +38,7 @@ from ..config import CONFIG  # noqa: F401 - imported for side effects
 
 
 # Lock directory in user's home
-LOCK_DIR = Path.home() / ".enigma" / "locks"
+LOCK_DIR = Path.home() / ".ai_tester" / "locks"
 LOCK_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -125,7 +125,7 @@ def example_smart_wake_words():
     """Example: Smart wake word suggestions."""
     print("\n=== Smart Wake Word Suggestions ===")
     
-    ai_names = ["Enigma", "Atlas", "Nova"]
+    ai_names = ["AI Tester", "Atlas", "Nova"]
     
     for name in ai_names:
         suggestions = suggest_wake_phrases(name)

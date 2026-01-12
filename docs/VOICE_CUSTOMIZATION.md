@@ -94,4 +94,4 @@ Voice data is stored in:
 ## See Also
 
 - [PERSONALITY.md](PERSONALITY.md) - AI personality system
-- [Voice Profile API](../enigma/voice/voice_profile.py)
+- [Voice Profile API](../ai_tester/voice/voice_profile.py)

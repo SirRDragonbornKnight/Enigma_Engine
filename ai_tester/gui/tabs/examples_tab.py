@@ -45,7 +45,7 @@ EXAMPLES = {
     },
     "api_client_example.py": {
         "title": "API Client",
-        "description": "Connect to Enigma's REST API from Python. Requires server running.",
+        "description": "Connect to AI Tester's REST API from Python. Requires server running.",
         "category": "Networking"
     },
     "multi_device_example.py": {

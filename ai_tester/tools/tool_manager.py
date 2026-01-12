@@ -46,7 +46,7 @@ from typing import Dict, List, Any, Optional, Set
 from datetime import datetime
 
 # Config path
-CONFIG_DIR = Path.home() / ".enigma"
+CONFIG_DIR = Path.home() / ".ai_tester"
 TOOL_CONFIG_FILE = CONFIG_DIR / "tool_config.json"
 PROFILES_DIR = CONFIG_DIR / "tool_profiles"
 

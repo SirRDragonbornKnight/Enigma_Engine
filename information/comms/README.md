@@ -1,12 +1,12 @@
-# Enigma Comms - Multi-Device Communication
+# AI Tester Comms - Multi-Device Communication
 
-The `enigma.comms` package provides everything needed for multi-device AI communication, from simple API servers to full peer-to-peer AI networks.
+The `comms` package provides everything needed for multi-device AI communication, from simple API servers to full peer-to-peer AI networks.
 
 ## Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    enigma.comms                             │
+│                    comms                             │
 ├──────────────┬──────────────┬──────────────┬───────────────┤
 │   Network    │   Discovery  │   Sync       │   Servers     │
 │ - EnigmaNode │ - UDP Scan   │ - MemorySync │ - WebServer   │
@@ -49,7 +49,7 @@ server.run()
 
 ### 3. Multi-Device Network
 
-Connect multiple Enigma instances:
+Connect multiple AI Tester instances:
 
 ```python
 from ai_tester.comms import EnigmaNode
@@ -69,12 +69,12 @@ response = node2.ask_peer("desktop", "What is 2+2?")
 
 ### 4. Device Discovery
 
-Automatically find other Enigma nodes:
+Automatically find other AI Tester nodes:
 
 ```python
 from ai_tester.comms import discover_enigma_nodes
 
-# Find all Enigma nodes on the network
+# Find all AI Tester nodes on the network
 nodes = discover_enigma_nodes()
 for name, info in nodes.items():
     print(f"Found: {name} at {info['ip']}:{info['port']}")
@@ -97,7 +97,7 @@ for exchange in conv.converse("Let's discuss AI.", num_turns=5):
 
 ## Components
 
-### EnigmaNode
+### AI TesterNode
 The core multi-device communication class. Each node can:
 - Run as a server (accept connections)
 - Connect to other nodes (as client)
@@ -106,7 +106,7 @@ The core multi-device communication class. Each node can:
 - Start AI-to-AI conversations
 
 ### DeviceDiscovery
-Automatically discover other Enigma nodes on your network using:
+Automatically discover other AI Tester nodes on your network using:
 - UDP broadcast (fast, works on most networks)
 - IP scanning (slower but more reliable)
 - Manual connection (always works)
@@ -137,7 +137,7 @@ Manage connection protocols for games, robots, and external APIs:
 - Support for WebSocket, HTTP, TCP, UDP, Serial, ROS, MQTT, OSC
 
 ### RemoteClient
-Simple client for connecting to any Enigma API server:
+Simple client for connecting to any AI Tester API server:
 
 ```python
 from ai_tester.comms import RemoteClient
@@ -173,7 +173,7 @@ Response:
 ```json
 {
   "text": "I'm doing well, thank you for asking!",
-  "from": "enigma"
+  "from": "ai_tester"
 }
 ```
 
@@ -206,9 +206,9 @@ sync.sync_with_peer("http://192.168.1.101:5000", "laptop")
 # For offline devices (USB transfer)
 from ai_tester.comms import OfflineSync
 
-OfflineSync.export_to_file("/usb/enigma_memories.json")
+OfflineSync.export_to_file("/usb/ai_tester_memories.json")
 # Copy USB to other device, then:
-OfflineSync.import_from_file("/usb/enigma_memories.json")
+OfflineSync.import_from_file("/usb/ai_tester_memories.json")
 ```
 
 ## Protocol Configurations

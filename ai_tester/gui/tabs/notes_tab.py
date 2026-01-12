@@ -22,8 +22,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
 
 # Storage paths
-NOTES_DIR = Path.home() / ".enigma" / "notes"
-BOOKMARKS_FILE = Path.home() / ".enigma" / "bookmarks.json"
+NOTES_DIR = Path.home() / ".ai_tester" / "notes"
+BOOKMARKS_FILE = Path.home() / ".ai_tester" / "bookmarks.json"
 
 NOTES_DIR.mkdir(parents=True, exist_ok=True)
 

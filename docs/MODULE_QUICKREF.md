@@ -1,6 +1,6 @@
 # Module System Quick Reference
 
-**One-page reference for the Enigma Module System**
+**One-page reference for the AI Tester Module System**
 
 ## Basic Usage
 

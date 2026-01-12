@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the Enigma communications module.
+Tests for the AI Tester communications module.
 
 Run with: pytest tests/test_comms.py -v
 """

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Enigma Avatar System provides a visual representation of the AI that can:
+The AI Tester Avatar System provides a visual representation of the AI that can:
 - Display on screen (image-based or overlay)
 - Express emotions through different expression images
 - Move around the desktop (when overlay enabled)
@@ -12,11 +12,11 @@ The Enigma Avatar System provides a visual representation of the AI that can:
 ## Architecture
 
 ```
-enigma/avatar/
+ai_tester/avatar/
 ├── __init__.py          # Package exports
 └── controller.py        # AvatarController - main backend logic
 
-enigma/gui/tabs/
+ai_tester/gui/tabs/
 ├── avatar_tab.py        # Container with sub-tabs
 └── avatar/
     ├── __init__.py
@@ -25,7 +25,7 @@ enigma/gui/tabs/
 
 ## Components
 
-### AvatarController (enigma.avatar.controller)
+### AvatarController (avatar.controller)
 The main backend controller for avatar functionality:
 - **Enable/Disable**: Turn avatar on/off (default: OFF)
 - **Movement**: Move around screen, follow mouse
@@ -60,7 +60,7 @@ avatar.move_to(500, 300)
 avatar.set_expression("happy")
 
 # Speak (animates mouth)
-avatar.speak("Hello, I'm Enigma!")
+avatar.speak("Hello, I'm AI Tester!")
 
 # Disable (turn off)
 avatar.disable()

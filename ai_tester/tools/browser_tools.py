@@ -20,7 +20,7 @@ from typing import Dict, Any, List, Optional
 from .tool_registry import Tool
 
 # Storage for browser control settings
-BROWSER_CONFIG = Path.home() / ".enigma" / "browser_config.json"
+BROWSER_CONFIG = Path.home() / ".ai_tester" / "browser_config.json"
 BROWSER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
 
 

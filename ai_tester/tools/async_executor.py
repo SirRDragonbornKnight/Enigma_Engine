@@ -1,5 +1,5 @@
 """
-Async Tool Executor for Enigma AI
+Async Tool Executor for AI Tester
 ==================================
 
 Provides asynchronous execution of tools using ThreadPoolExecutor.

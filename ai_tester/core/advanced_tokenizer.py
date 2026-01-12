@@ -5,7 +5,7 @@ Enigma Tokenizer - Custom BPE Implementation
 The AI Tester's native tokenizer, built from scratch with unique features.
 
 Differentiators from GPT-style tokenizers:
-  - [E:token] format - Enigma's unique special token syntax
+  - [E:token] format - AI Tester's unique special token syntax
   - Multi-modal native support (images, audio, video, avatar)
   - Tool invocation tokens built-in
   - Thinking/reasoning tokens for chain-of-thought
@@ -75,13 +75,13 @@ class AITesterTokenizer:
     AI Tester's Native Tokenizer.
 
     Custom BPE implementation with unique features:
-    - [E:token] format for special tokens (Enigma's signature)
+    - [E:token] format for special tokens (AI Tester's signature)
     - Multi-modal support built-in
     - Tool invocation and reasoning tokens
     - Optimized for both code and natural language
     """
 
-    # Enigma's custom regex pattern for pre-tokenization
+    # AI Tester's custom regex pattern for pre-tokenization
     # Optimized for code, natural language, and special characters
     PAT = re.compile(
         r"""'(?:[sdmt]|ll|ve|re)|"""  # Contractions
@@ -105,7 +105,7 @@ class AITesterTokenizer:
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
 
         # Special tokens with reserved IDs (0-19 reserved)
-        # Enigma's unique [E:token] format - distinguishes from GPT's <|token|>
+        # AI Tester's unique [E:token] format - distinguishes from GPT's <|token|>
         self.special_tokens = {
             # Core tokens
             "[E:pad]": 0,
@@ -154,7 +154,7 @@ class AITesterTokenizer:
             "[E:code]": 31,
             "[E:/code]": 32,
             
-            # Meta tokens - Enigma's reasoning system
+            # Meta tokens - AI Tester's reasoning system
             "[E:think]": 33,
             "[E:/think]": 34,
             "[E:err]": 35,
@@ -162,7 +162,7 @@ class AITesterTokenizer:
             "[E:ok]": 37,
             "[E:info]": 38,
             
-            # Enigma-specific tokens
+            # AI Tester-specific tokens
             "[E:memory]": 39,      # Memory recall
             "[E:learn]": 40,       # Learning marker
             "[E:emotion]": 41,     # Emotional context
@@ -801,7 +801,7 @@ class AITesterTokenizer:
     @staticmethod
     def get_info() -> Dict[str, Any]:
         """
-        Get information about the Enigma Tokenizer.
+        Get information about the AI Tester Tokenizer.
         
         Returns:
             Dictionary with tokenizer identity and capabilities

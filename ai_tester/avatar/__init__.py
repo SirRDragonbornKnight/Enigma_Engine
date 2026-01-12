@@ -1,6 +1,6 @@
 # avatar package
 """
-Enigma Avatar System
+AI Tester Avatar System
 
 Provides a controllable avatar that can:
   - Display on screen (on/off toggle, default OFF)

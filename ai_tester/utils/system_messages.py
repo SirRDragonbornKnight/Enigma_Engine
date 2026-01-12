@@ -2,8 +2,8 @@
 Enigma System Message Utilities
 ================================
 
-Clearly labeled system vs Enigma AI messages.
-Uses Enigma's unique message format.
+Clearly labeled system vs AI Tester messages.
+Uses AI Tester's unique message format.
 """
 
 
@@ -46,12 +46,12 @@ def debug_msg(text: str) -> str:
 
 
 def ai_msg(text: str) -> str:
-    """Format an Enigma AI message."""
+    """Format an AI Tester message."""
     return f"{MessagePrefix.AI} {text}"
 
 
 def enigma_msg(text: str) -> str:
-    """Format an Enigma AI message (preferred name)."""
+    """Format an AI Tester message (preferred name)."""
     return f"{MessagePrefix.AI} {text}"
 
 

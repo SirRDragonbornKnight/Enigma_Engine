@@ -22,10 +22,10 @@ from typing import Dict, Any, List, Optional
 from .tool_registry import Tool
 
 # Configuration
-IOT_CONFIG_DIR = Path.home() / ".enigma" / "iot"
+IOT_CONFIG_DIR = Path.home() / ".ai_tester" / "iot"
 IOT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-CAMERA_OUTPUT_DIR = Path.home() / ".enigma" / "outputs" / "camera"
+CAMERA_OUTPUT_DIR = Path.home() / ".ai_tester" / "outputs" / "camera"
 CAMERA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

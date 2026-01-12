@@ -2,7 +2,7 @@
 Additional Neural Network Layers and Components for Enigma
 
 This module provides building blocks that can be used to extend or customize
-the Enigma model architecture. These are standalone components that can be
+the AI Tester model architecture. These are standalone components that can be
 mixed and matched.
 
 NOTE: These components are also available in the enigma.core.nn subpackage

@@ -2,7 +2,7 @@
 Code Generation Tab - Generate code using local or cloud models.
 
 Providers:
-  - LOCAL: Uses Enigma's own model
+  - LOCAL: Uses AI Tester's own model
   - OPENAI: GPT-4 (requires openai, API key)
 """
 
@@ -36,7 +36,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class AITesterCode:
-    """Use Enigma's own model for code generation."""
+    """Use AI Tester's own model for code generation."""
     
     def __init__(self, model_name: str = "small_ai_tester"):
         self.model_name = model_name

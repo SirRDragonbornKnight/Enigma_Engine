@@ -91,7 +91,7 @@ Examples:
     if args.build:
         # Full build: train tokenizer + model from scratch
         print("\n" + "=" * 60)
-        print("ENIGMA ENGINE - FULL BUILD")
+        print("AI TESTER - FULL BUILD")
         print("=" * 60)
         
         from ai_tester.core.training import train_model
@@ -152,7 +152,7 @@ Examples:
     if args.run:
         from ai_tester.core.inference import AITesterEngine
         print("\n" + "=" * 50)
-        print("Enigma CLI Chat")
+        print("AI Tester CLI Chat")
         print("=" * 50)
         print("Type your message and press Enter.")
         print("Type 'quit' or 'exit' to stop.\n")
@@ -235,7 +235,7 @@ Examples:
             sys.exit(1)
         
         print("\n" + "=" * 60)
-        print("ENIGMA ENGINE - BACKGROUND MODE")
+        print("AI TESTER - BACKGROUND MODE")
         print("=" * 60)
         print("\nRunning in system tray...")
         print("Click tray icon or press Ctrl+Space for quick commands")
@@ -254,7 +254,7 @@ Examples:
             sys.exit(1)
         
         print("\n" + "=" * 60)
-        print("ENIGMA ENGINE - WEB DASHBOARD")
+        print("AI TESTER - WEB DASHBOARD")
         print("=" * 60)
         print(f"\nStarting web server...")
         

@@ -125,7 +125,7 @@ def _load_user_config() -> None:
     """Load user configuration file if it exists."""
     config_paths = [
         Path.cwd() / "enigma_config.json",
-        Path.home() / ".enigma" / "config.json",
+        Path.home() / ".ai_tester" / "config.json",
         BASE_DIR / "enigma_config.json",
     ]
 

@@ -1,5 +1,5 @@
 """
-Tool Result Caching for Enigma AI
+Tool Result Caching for AI Tester
 ==================================
 
 Provides memory and disk-based caching for expensive tool operations.

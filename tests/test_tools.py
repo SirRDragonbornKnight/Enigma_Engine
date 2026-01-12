@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the Enigma tool system.
+Tests for the AI Tester tool system.
 
 Run with: pytest tests/test_tools.py -v
 """

@@ -1,5 +1,5 @@
 """
-Enigma Module Updater
+AI Tester Module Updater
 ====================
 
 Module version checking and update management.

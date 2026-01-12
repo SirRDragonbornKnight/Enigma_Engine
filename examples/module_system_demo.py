@@ -3,7 +3,7 @@
 Module System Demo
 ==================
 
-Demonstrates the Enigma Module System in action.
+Demonstrates the AI Tester Module System in action.
 Shows loading, conflict detection, and module usage.
 """
 

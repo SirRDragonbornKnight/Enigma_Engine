@@ -22,9 +22,9 @@ from typing import Dict, Any, List, Optional, Callable
 from .tool_registry import Tool
 
 # Storage paths
-SCHEDULE_FILE = Path.home() / ".enigma" / "schedules.json"
-MACRO_DIR = Path.home() / ".enigma" / "macros"
-CLIPBOARD_HISTORY_FILE = Path.home() / ".enigma" / "clipboard_history.json"
+SCHEDULE_FILE = Path.home() / ".ai_tester" / "schedules.json"
+MACRO_DIR = Path.home() / ".ai_tester" / "macros"
+CLIPBOARD_HISTORY_FILE = Path.home() / ".ai_tester" / "clipboard_history.json"
 
 SCHEDULE_FILE.parent.mkdir(parents=True, exist_ok=True)
 MACRO_DIR.mkdir(parents=True, exist_ok=True)

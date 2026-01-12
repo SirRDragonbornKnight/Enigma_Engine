@@ -24,9 +24,9 @@ from typing import Dict, Any, List, Optional
 from .tool_registry import Tool
 
 # Storage paths
-GAMES_DIR = Path.home() / ".enigma" / "games"
-CHARACTERS_DIR = Path.home() / ".enigma" / "characters"
-STORIES_DIR = Path.home() / ".enigma" / "stories"
+GAMES_DIR = Path.home() / ".ai_tester" / "games"
+CHARACTERS_DIR = Path.home() / ".ai_tester" / "characters"
+STORIES_DIR = Path.home() / ".ai_tester" / "stories"
 
 GAMES_DIR.mkdir(parents=True, exist_ok=True)
 CHARACTERS_DIR.mkdir(parents=True, exist_ok=True)

@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Any
 from .tool_registry import Tool
 
-OUTPUT_DIR = Path.home() / ".enigma" / "outputs" / "data"
+OUTPUT_DIR = Path.home() / ".ai_tester" / "outputs" / "data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

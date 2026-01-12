@@ -1,5 +1,5 @@
 """
-Enigma GUI Package
+AI Tester GUI Package
 ==================
 
 PyQt5-based graphical user interface for AI Tester.
@@ -89,7 +89,7 @@ except ImportError:
 
 def launch_gui():
     """
-    Launch the Enigma GUI application.
+    Launch the AI Tester GUI application.
     
     Returns:
         int: Exit code from the application

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the Enigma memory system.
+Tests for the AI Tester memory system.
 
 Run with: pytest tests/test_memory.py -v
 """

@@ -1,4 +1,4 @@
-# Enigma Engine - Architecture
+# AI Tester Engine - Architecture
 
 *Last Updated: January 2026*
 

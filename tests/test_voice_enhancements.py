@@ -327,7 +327,7 @@ class TestSmartWakeWords:
         """Test basic wake phrase suggestions."""
         smart = SmartWakeWords()
         
-        suggestions = smart.suggest_wake_phrases("Enigma", num_suggestions=5)
+        suggestions = smart.suggest_wake_phrases("AI Tester", num_suggestions=5)
         
         assert len(suggestions) > 0
         assert any("ai_tester" in s.lower() for s in suggestions)

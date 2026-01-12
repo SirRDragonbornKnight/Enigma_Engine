@@ -2,7 +2,7 @@
 """
 Example: Using the Tool Use System
 
-This example demonstrates how the Enigma AI can use tools naturally in conversation.
+This example demonstrates how the AI Tester AI can use tools naturally in conversation.
 
 Steps:
 1. Initialize inference engine with tool support
@@ -17,7 +17,7 @@ from enigma.tools import get_available_tools_for_prompt
 
 def main():
     print("=" * 80)
-    print("ENIGMA AI - TOOL USE EXAMPLE")
+    print("AI TESTER - TOOL USE EXAMPLE")
     print("=" * 80)
     print()
     

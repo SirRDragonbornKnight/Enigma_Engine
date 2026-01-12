@@ -345,7 +345,7 @@ class HelpWindow(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Enigma AI - Help")
+        self.setWindowTitle("AI Tester - Help")
         self.setWindowFlags(Qt.Window)
         self.setup_ui()
     
@@ -354,7 +354,7 @@ class HelpWindow(QWidget):
         layout.setContentsMargins(15, 15, 15, 15)
         
         # Title
-        title = QLabel("Enigma AI Help")
+        title = QLabel("AI Tester Help")
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #3498db; margin-bottom: 10px;")
         layout.addWidget(title)
         

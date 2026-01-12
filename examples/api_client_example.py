@@ -2,7 +2,7 @@
 """
 API Client Example
 
-Shows how to use the Enigma REST API from Python.
+Shows how to use the AI Tester REST API from Python.
 """
 import sys
 from pathlib import Path

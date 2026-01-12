@@ -483,8 +483,8 @@ class TestBackwardCompatibility:
                 
                 # Force reload of memory_db module to pick up new path
                 import sys
-                if 'enigma.memory.memory_db' in sys.modules:
-                    del sys.modules['enigma.memory.memory_db']
+                if 'ai_tester.memory.memory_db' in sys.modules:
+                    del sys.modules['ai_tester.memory.memory_db']
                 
                 from enigma.memory.memory_db import add_memory, recent
                 

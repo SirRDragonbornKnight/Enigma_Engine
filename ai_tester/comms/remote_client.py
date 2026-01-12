@@ -14,7 +14,7 @@ class RemoteClient:
     def __init__(self, base_url: str = "http://127.0.0.1:5000"):
         """
         Args:
-            base_url: Base URL of the Enigma API server
+            base_url: Base URL of the AI Tester API server
         """
         self.base = base_url.rstrip("/")
 

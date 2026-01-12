@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: 💬 Discussions
-    url: https://github.com/SirRDragonbornKnight/Enigma_AI_Engine/discussions
+    url: https://github.com/SirRDragonbornKnight/AI_Tester/discussions
     about: Ask questions and discuss ideas with the community
   - name: 📖 Documentation
-    url: https://github.com/SirRDragonbornKnight/Enigma_AI_Engine/blob/main/README.md
+    url: https://github.com/SirRDragonbornKnight/AI_Tester/blob/main/README.md
     about: Read the documentation and guides
   - name: 🔒 Security Issues
-    url: https://github.com/SirRDragonbornKnight/Enigma_AI_Engine/security/advisories/new
+    url: https://github.com/SirRDragonbornKnight/AI_Tester/security/advisories/new
     about: Report security vulnerabilities privately

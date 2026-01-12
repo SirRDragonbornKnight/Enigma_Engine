@@ -1,5 +1,5 @@
 """
-Enigma Modules System
+AI Tester Modules System
 =====================
 
 EVERYTHING in Enigma is a toggleable module. This prevents conflicts

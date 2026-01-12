@@ -1,5 +1,5 @@
 """
-Enigma Module Sandbox
+AI Tester Module Sandbox
 =====================
 
 Provides sandboxing/isolation for running untrusted modules with restricted permissions.

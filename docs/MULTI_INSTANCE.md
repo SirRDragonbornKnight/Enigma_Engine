@@ -84,7 +84,7 @@ for msg in messages:
 
 ## Lock Storage
 
-Instance locks are stored in `~/.enigma/locks/`:
+Instance locks are stored in `~/.ai_tester/locks/`:
 - `instance_{id}.lock` - Instance registration
 - `model_{name}.lock` - Model locks
 - `messages/` - Inter-instance messages
@@ -178,5 +178,5 @@ with InstanceManager("trainer") as manager:
 
 ## See Also
 
-- [Instance Manager API](../enigma/core/instance_manager.py)
+- [Instance Manager API](../ai_tester/core/instance_manager.py)
 - [Web Dashboard](WEB_MOBILE.md)

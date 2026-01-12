@@ -1,6 +1,6 @@
-# How to Train Your Enigma AI
+# How to Train Your AI Tester
 
-Complete guide to training and fine-tuning your Enigma AI model.
+Complete guide to training and fine-tuning your AI Tester model.
 
 ## Table of Contents
 

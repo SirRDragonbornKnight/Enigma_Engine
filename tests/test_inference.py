@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the Enigma inference engine.
+Tests for the AI Tester inference engine.
 
 Run with: pytest tests/test_inference.py -v
 """

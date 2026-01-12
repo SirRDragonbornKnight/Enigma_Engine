@@ -1,5 +1,5 @@
 """
-Enigma Module Documentation Generator
+AI Tester Module Documentation Generator
 ====================================
 
 Automatically generate documentation from module metadata.

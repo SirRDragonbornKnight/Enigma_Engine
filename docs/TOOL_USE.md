@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Enigma AI Engine now includes a powerful **Tool Use System** that allows the AI to execute external capabilities (image generation, vision, avatar control, file operations, etc.) naturally during conversations.
+The AI Tester Engine now includes a powerful **Tool Use System** that allows the AI to execute external capabilities (image generation, vision, avatar control, file operations, etc.) naturally during conversations.
 
 When trained on tool use examples, the AI learns to:
 1. **Recognize** when a tool is needed
@@ -14,7 +14,7 @@ When trained on tool use examples, the AI learns to:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Enigma AI Model                         │
+│                     AI Tester Model                         │
 │              (Trained on tool use examples)                 │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -33,7 +33,7 @@ When trained on tool use examples, the AI learns to:
                          │ as <tool_result> tags
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   Enigma AI Model                           │
+│                   AI Tester Model                           │
 │          (Continues generation with results)                │
 └─────────────────────────────────────────────────────────────┘
 ```

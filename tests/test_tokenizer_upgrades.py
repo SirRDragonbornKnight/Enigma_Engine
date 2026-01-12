@@ -3,7 +3,7 @@ Tests for Enigma Tokenizer
 ==========================
 
 Tests for the AITesterTokenizer (AdvancedBPETokenizer alias) with:
-  - Special tokens in Enigma's [E:token] format
+  - Special tokens in AI Tester's [E:token] format
   - Streaming encode support
   - Improved unicode handling
 """
@@ -26,7 +26,7 @@ class TestTokenizerSpecialTokens:
         """Test that all tool-related special tokens are defined."""
         tokenizer = AITesterTokenizer()
         
-        # Tool invocation tokens (Enigma's [E:token] format)
+        # Tool invocation tokens (AI Tester's [E:token] format)
         assert '[E:tool]' in tokenizer.special_tokens
         assert '[E:tool_out]' in tokenizer.special_tokens
         assert '[E:tool_end]' in tokenizer.special_tokens
@@ -47,7 +47,7 @@ class TestTokenizerSpecialTokens:
         """Test conversation role tokens."""
         tokenizer = AITesterTokenizer()
         
-        # Enigma uses [E:token] format
+        # AI Tester uses [E:token] format
         assert '[E:system]' in tokenizer.special_tokens
         assert '[E:user]' in tokenizer.special_tokens
         assert '[E:assistant]' in tokenizer.special_tokens

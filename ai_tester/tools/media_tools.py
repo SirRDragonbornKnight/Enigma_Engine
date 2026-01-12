@@ -18,9 +18,9 @@ from typing import Dict, Any, Optional
 from .tool_registry import Tool
 
 # Output directories
-MUSIC_OUTPUT_DIR = Path.home() / ".enigma" / "outputs" / "music"
-IMAGE_OUTPUT_DIR = Path.home() / ".enigma" / "outputs" / "images"
-AUDIO_OUTPUT_DIR = Path.home() / ".enigma" / "outputs" / "audio"
+MUSIC_OUTPUT_DIR = Path.home() / ".ai_tester" / "outputs" / "music"
+IMAGE_OUTPUT_DIR = Path.home() / ".ai_tester" / "outputs" / "images"
+AUDIO_OUTPUT_DIR = Path.home() / ".ai_tester" / "outputs" / "audio"
 
 MUSIC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

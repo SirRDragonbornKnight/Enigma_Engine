@@ -3,7 +3,7 @@ Enigma Tool System Prompts
 ==========================
 
 System prompts that teach Enigma how to use tools.
-Uses Enigma's unique [E:token] format.
+Uses AI Tester's unique [E:token] format.
 
 These prompts are used during:
   - Training: Include in training data to teach tool use
@@ -179,7 +179,7 @@ def format_conversation_with_tools(
     Format a conversation with tool support using Enigma format.
     
     Args:
-        messages: List of {"role": "user/enigma/system", "content": "..."}
+        messages: List of {"role": "user/ai_tester/system", "content": "..."}
         include_system_prompt: Whether to prepend tool system prompt
         
     Returns:

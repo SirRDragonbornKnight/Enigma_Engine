@@ -42,7 +42,7 @@ class ToolPluginLoader:
         # Default plugin directories
         if plugin_dirs is None:
             plugin_dirs = [
-                Path.home() / ".enigma" / "tool_plugins",
+                Path.home() / ".ai_tester" / "tool_plugins",
                 Path("./tool_plugins"),
             ]
         

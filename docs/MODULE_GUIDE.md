@@ -1,4 +1,4 @@
-# Enigma Module System Guide
+# AI Tester Module System Guide
 
 **Version:** 2.0  
 **Last Updated:** January 2026
@@ -20,7 +20,7 @@
 
 ## Overview
 
-The Enigma Module System is a **unified architecture where EVERYTHING is a toggleable module**. This design:
+The AI Tester Module System is a **unified architecture where EVERYTHING is a toggleable module**. This design:
 
 - ✅ **Prevents conflicts** - Only one image generator, one code generator, etc. at a time
 - ✅ **Manages dependencies** - Automatically loads required modules
@@ -197,7 +197,7 @@ manager.load('image_gen_local')   # Stable Diffusion (local)
 manager.load('image_gen_api')     # DALL-E (cloud)
 
 # Code
-manager.load('code_gen_local')    # Enigma model
+manager.load('code_gen_local')    # AI Tester model
 manager.load('code_gen_api')      # GPT-4
 
 # Video
@@ -768,7 +768,7 @@ def setup_for_task(task: str):
 
 ## Conclusion
 
-The Enigma Module System provides:
+The AI Tester Module System provides:
 
 ✅ **Flexibility** - Load only what you need  
 ✅ **Safety** - Automatic conflict prevention  

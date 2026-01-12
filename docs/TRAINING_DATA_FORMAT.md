@@ -2,7 +2,7 @@
 
 ## Overview
 
-All training data files in the Enigma AI Engine follow standardized formats to ensure consistency and proper model training. This guide documents the official formats.
+All training data files in the AI Tester AI Engine follow standardized formats to ensure consistency and proper model training. This guide documents the official formats.
 
 ## File Structure
 
@@ -253,6 +253,6 @@ Done!
 
 **Last Updated**: January 2026
 
-**Maintained By**: Enigma AI Engine Development Team
+**Maintained By**: AI Tester Engine Development Team
 
 **Questions?** See `docs/TOOL_USE.md` for usage documentation

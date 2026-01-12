@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QTime, QDate, QTimer
 from PyQt5.QtGui import QFont, QColor
 
 # Config
-SCHEDULER_FILE = Path.home() / ".enigma" / "scheduled_tasks.json"
+SCHEDULER_FILE = Path.home() / ".ai_tester" / "scheduled_tasks.json"
 SCHEDULER_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -484,7 +484,7 @@ class SchedulerTab(QWidget):
             
             elif task_type == "Clear Cache":
                 import shutil
-                cache_dir = Path.home() / ".enigma" / "cache"
+                cache_dir = Path.home() / ".ai_tester" / "cache"
                 if cache_dir.exists():
                     shutil.rmtree(cache_dir)
                     cache_dir.mkdir()

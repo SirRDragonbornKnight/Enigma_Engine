@@ -1,5 +1,5 @@
 """
-Advanced Theme System for Enigma GUI
+Advanced Theme System for AI Tester GUI
 Provides multiple theme presets and custom theme support.
 """
 import json

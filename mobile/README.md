@@ -1,6 +1,6 @@
 # 📱 Enigma Mobile Apps
 
-This directory contains starter templates and guides for building mobile apps that connect to your Enigma AI Engine.
+This directory contains starter templates and guides for building mobile apps that connect to your AI Tester Engine.
 
 ## Quick Start
 

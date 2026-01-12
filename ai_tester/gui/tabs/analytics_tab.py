@@ -24,7 +24,7 @@ from PyQt5.QtCore import Qt, QDate, QTimer
 from PyQt5.QtGui import QFont, QPainter, QColor, QPen
 
 # Config paths
-ANALYTICS_DIR = Path.home() / ".enigma" / "analytics"
+ANALYTICS_DIR = Path.home() / ".ai_tester" / "analytics"
 ANALYTICS_DIR.mkdir(parents=True, exist_ok=True)
 
 TOOL_USAGE_FILE = ANALYTICS_DIR / "tool_usage.json"

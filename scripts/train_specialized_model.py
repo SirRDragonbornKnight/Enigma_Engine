@@ -101,11 +101,11 @@ def get_shared_tokenizer():
         if config_path.exists():
             with open(config_path, 'r') as f:
                 config = json.load(f)
-                tokenizer_path = config.get("shared_tokenizer", "enigma/vocab_model/bpe_vocab.json")
+                tokenizer_path = config.get("shared_tokenizer", "ai_tester/vocab_model/bpe_vocab.json")
         else:
-            tokenizer_path = "enigma/vocab_model/bpe_vocab.json"
+            tokenizer_path = "ai_tester/vocab_model/bpe_vocab.json"
     except Exception:
-        tokenizer_path = "enigma/vocab_model/bpe_vocab.json"
+        tokenizer_path = "ai_tester/vocab_model/bpe_vocab.json"
     
     vocab_file = Path(__file__).parent.parent / tokenizer_path
     

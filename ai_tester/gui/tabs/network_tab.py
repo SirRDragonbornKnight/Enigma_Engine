@@ -25,7 +25,7 @@ from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QColor
 
 # Config
-NETWORK_CONFIG = Path.home() / ".enigma" / "network_config.json"
+NETWORK_CONFIG = Path.home() / ".ai_tester" / "network_config.json"
 NETWORK_CONFIG.parent.mkdir(parents=True, exist_ok=True)
 
 

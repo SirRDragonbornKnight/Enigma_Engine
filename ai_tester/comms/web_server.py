@@ -37,7 +37,7 @@ WEB_INTERFACE_HTML = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enigma AI</title>
+    <title>AI Tester</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -195,7 +195,7 @@ WEB_INTERFACE_HTML = '''
 <body>
     <div class="container">
         <header>
-            <h1>[*] Enigma AI</h1>
+            <h1>[*] AI Tester</h1>
             <div class="status">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Connecting...</span>
@@ -203,7 +203,7 @@ WEB_INTERFACE_HTML = '''
         </header>
         
         <div class="chat-container" id="chatContainer">
-            <div class="message system">Welcome to Enigma AI. Type a message to begin.</div>
+            <div class="message system">Welcome to AI Tester. Type a message to begin.</div>
         </div>
         
         <div class="typing-indicator" id="typingIndicator">
@@ -403,7 +403,7 @@ class WebServer:
         @self.app.route('/api/info')
         def api_info():
             return jsonify({
-                'name': 'Enigma AI',
+                'name': 'AI Tester',
                 'version': CONFIG.get('version', '1.0.0'),
                 'capabilities': ['chat', 'websocket', 'api'],
             })
@@ -430,7 +430,7 @@ class WebServer:
                 return f'''
                 <!DOCTYPE html>
                 <html>
-                <head><title>Connect to Enigma AI</title></head>
+                <head><title>Connect to AI Tester</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 40px; background: #1a1a2e; color: white;">
                     <h1>[!] Connect Your Phone</h1>
                     <p>Scan this QR code with your phone camera:</p>
@@ -443,7 +443,7 @@ class WebServer:
                 return f'''
                 <!DOCTYPE html>
                 <html>
-                <head><title>Connect to Enigma AI</title></head>
+                <head><title>Connect to AI Tester</title></head>
                 <body style="font-family: sans-serif; text-align: center; padding: 40px; background: #1a1a2e; color: white;">
                     <h1>[!] Connect Your Phone</h1>
                     <p>Install qrcode for QR support: pip install qrcode[pil]</p>
@@ -510,7 +510,7 @@ class WebServer:
         """Start the server."""
         ip = self._get_local_ip()
         print(f"\n{'='*50}")
-        print(f"[*] Enigma AI Web Server")
+        print(f"[*] AI Tester Web Server")
         print(f"{'='*50}")
         print(f"Local:    http://localhost:{self.port}")
         print(f"Network:  http://{ip}:{self.port}")
@@ -543,7 +543,7 @@ def create_web_server(host: str = '0.0.0.0', port: int = 5000) -> WebServer:
 # CLI entry point
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Enigma AI Web Server')
+    parser = argparse.ArgumentParser(description='AI Tester Web Server')
     parser.add_argument('--host', default='0.0.0.0', help='Host address')
     parser.add_argument('--port', type=int, default=5000, help='Port number')
     parser.add_argument('--debug', action='store_true', help='Debug mode')

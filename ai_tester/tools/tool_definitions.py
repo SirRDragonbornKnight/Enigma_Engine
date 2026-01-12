@@ -1,5 +1,5 @@
 """
-Tool Definitions for Enigma AI
+Tool Definitions for AI Tester
 ===============================
 
 Defines all available tools that the AI can use, including their schemas,

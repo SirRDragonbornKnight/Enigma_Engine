@@ -325,7 +325,7 @@ A: def sort_list(items): return sorted(items)
 
 ## Integration with Module System
 
-Specialized models integrate with Enigma's module system. To enable via module manager:
+Specialized models integrate with AI Tester's module system. To enable via module manager:
 
 ```python
 from ai_tester.modules.manager import ModuleManager

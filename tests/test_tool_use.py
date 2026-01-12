@@ -20,7 +20,7 @@ class TestTokenizerEnhancements:
         
         tokenizer = AdvancedBPETokenizer()
         
-        # Check for tool tokens (Enigma's [E:token] format)
+        # Check for tool tokens (AI Tester's [E:token] format)
         assert "[E:tool]" in tokenizer.special_tokens
         assert "[E:tool_end]" in tokenizer.special_tokens
         assert "[E:tool_out]" in tokenizer.special_tokens

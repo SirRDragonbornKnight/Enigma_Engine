@@ -1,7 +1,7 @@
 PROTOCOL CONFIGURATION
 ======================
 
-This folder contains configuration files for connecting Enigma AI to external systems.
+This folder contains configuration files for connecting AI Tester to external systems.
 
 HOW TO ADD A NEW CONNECTION
 ---------------------------

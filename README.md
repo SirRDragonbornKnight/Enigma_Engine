@@ -25,7 +25,7 @@ AI Tester is a complete framework for building, training, and running your own A
 ```bash
 # Clone the repository
 git clone https://github.com/SirRDragonbornKnight/AI_Tester.git
-cd enigma_engine
+cd AI_Tester
 
 # Create virtual environment (recommended)
 python -m venv venv
