@@ -667,10 +667,17 @@ class AITester(nn.Module):
 
 
 # =============================================================================
-# Factory Functions & Aliases
+# Aliases (for backwards compatibility)
 # =============================================================================
 
-def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Enigma:
+# Primary alias - 'Enigma' is the original name
+Enigma = AITester
+
+# =============================================================================
+# Factory Functions
+# =============================================================================
+
+def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> AITester:
     """
     Create an Enigma model from a preset configuration.
 
@@ -717,7 +724,7 @@ def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Enigm
 
     # Create model
     try:
-        model = Enigma(config=config)
+        model = AITester(config=config)
     except Exception as e:
         logger.error(f"Failed to initialize model: {e}")
         raise RuntimeError(f"Model creation failed: {e}") from e
@@ -727,6 +734,6 @@ def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Enigm
     return model
 
 
-# Backwards compatibility
-TinyAITester = Enigma
-AITesterModel = Enigma
+# Additional aliases
+TinyAITester = AITester
+AITesterModel = AITester

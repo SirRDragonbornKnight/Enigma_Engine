@@ -86,14 +86,14 @@ class AIGenerationWorker(QThread):
                         self.text,
                         history=self.history if self.history else None,
                         system_prompt=self.system_prompt,
-                        max_new_tokens=200,
+                        max_new_tokens=50,
                         temperature=0.7
                     )
                 else:
                     self.thinking.emit("Tokenizing input...")
                     response = self.engine.model.generate(
                         self.text,
-                        max_new_tokens=150,
+                        max_new_tokens=50,
                         temperature=0.8,
                         top_p=0.92,
                         top_k=50,

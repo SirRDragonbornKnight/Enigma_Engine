@@ -848,14 +848,23 @@ class ImageTab(QWidget):
         self.status_label.setText("Reference image cleared")
     
     def _generate_image(self):
-        """Generate an image using the router/local provider."""
+        """Generate an image using available providers."""
         prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
             return
         
-        # Always use 'local' provider (router handles auto-loading)
-        provider_name = 'local'
+        # Try providers in order of preference: replicate (API), local (SD), placeholder
+        # Replicate is fast and cheap, local SD is slow on Pi, placeholder is fallback
+        import os
+        
+        if os.environ.get("REPLICATE_API_TOKEN"):
+            provider_name = 'replicate'
+        elif os.environ.get("OPENAI_API_KEY"):
+            provider_name = 'openai'
+        else:
+            # Fall back to local (will fail without diffusers) or placeholder
+            provider_name = 'local'
         
         self.generate_btn.setEnabled(False)
         self.progress.setVisible(True)

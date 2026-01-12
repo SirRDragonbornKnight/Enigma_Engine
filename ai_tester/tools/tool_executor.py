@@ -527,7 +527,17 @@ class ToolExecutor:
                 from ..gui.tabs.image_tab import get_provider
                 
                 # Get local SD provider
-                provider = get_provider('local')
+                # Choose provider based on what's available
+                # Replicate is fast and cheap, local SD is slow on Pi
+                import os
+                if os.environ.get("REPLICATE_API_TOKEN"):
+                    provider_name = 'replicate'
+                elif os.environ.get("OPENAI_API_KEY"):
+                    provider_name = 'openai'
+                else:
+                    provider_name = 'local'
+                
+                provider = get_provider(provider_name)
                 
                 if provider is None:
                     return {

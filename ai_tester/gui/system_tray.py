@@ -951,6 +951,26 @@ class QuickCommandOverlay(QWidget):
         from PyQt5.QtWidgets import QApplication
         QApplication.quit()
     
+    # === Header drag handlers ===
+    def _header_mouse_press(self, event):
+        """Handle mouse press on header for dragging."""
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+            self._header_widget.setCursor(Qt.ClosedHandCursor)
+        event.accept()
+    
+    def _header_mouse_move(self, event):
+        """Handle mouse move on header for dragging."""
+        if event.buttons() & Qt.LeftButton and self._drag_pos:
+            self.move(event.globalPos() - self._drag_pos)
+        event.accept()
+    
+    def _header_mouse_release(self, event):
+        """Handle mouse release on header."""
+        self._drag_pos = None
+        self._header_widget.setCursor(Qt.OpenHandCursor)
+        event.accept()
+    
     # === Resizing support ===
     def mousePressEvent(self, event):
         """Handle mouse press for dragging/resizing."""
