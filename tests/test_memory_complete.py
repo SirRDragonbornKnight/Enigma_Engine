@@ -24,7 +24,7 @@ class TestMemoryDatabase:
     
     def test_database_init(self):
         """Test database initialization."""
-        from enigma.memory.memory_db import MemoryDatabase
+        from ai_tester.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
@@ -36,7 +36,7 @@ class TestMemoryDatabase:
     
     def test_add_and_get(self):
         """Test adding and retrieving memories."""
-        from enigma.memory.memory_db import MemoryDatabase
+        from ai_tester.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory() as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
@@ -58,7 +58,7 @@ class TestMemoryDatabase:
     
     def test_search(self):
         """Test memory search."""
-        from enigma.memory.memory_db import MemoryDatabase
+        from ai_tester.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory() as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
@@ -82,8 +82,8 @@ class TestRAGSystem:
     
     def test_rag_init(self):
         """Test RAG system initialization."""
-        from enigma.memory.rag import RAGSystem
-        from enigma.memory.vector_db import SimpleVectorDB
+        from ai_tester.memory.rag import RAGSystem
+        from ai_tester.memory.vector_db import SimpleVectorDB
         
         vector_db = SimpleVectorDB(dim=128)
         rag = RAGSystem(vector_db)
@@ -93,8 +93,8 @@ class TestRAGSystem:
     
     def test_document_chunking(self):
         """Test document chunking."""
-        from enigma.memory.rag import RAGSystem
-        from enigma.memory.vector_db import SimpleVectorDB
+        from ai_tester.memory.rag import RAGSystem
+        from ai_tester.memory.vector_db import SimpleVectorDB
         
         vector_db = SimpleVectorDB(dim=128)
         rag = RAGSystem(vector_db)
@@ -112,7 +112,7 @@ class TestEmbeddings:
     
     def test_embedding_generator(self):
         """Test embedding generator."""
-        from enigma.memory.embeddings import EmbeddingGenerator
+        from ai_tester.memory.embeddings import EmbeddingGenerator
         
         # Should fall back to hash-based embeddings if sentence-transformers not available
         embedder = EmbeddingGenerator(model="local")
@@ -122,7 +122,7 @@ class TestEmbeddings:
     
     def test_embed_text(self):
         """Test text embedding."""
-        from enigma.memory.embeddings import EmbeddingGenerator
+        from ai_tester.memory.embeddings import EmbeddingGenerator
         
         embedder = EmbeddingGenerator(model="local")
         
@@ -132,8 +132,8 @@ class TestEmbeddings:
     
     def test_auto_embedding_vector_db(self):
         """Test auto-embedding vector DB."""
-        from enigma.memory.embeddings import AutoEmbeddingVectorDB, EmbeddingGenerator
-        from enigma.memory.vector_db import SimpleVectorDB
+        from ai_tester.memory.embeddings import AutoEmbeddingVectorDB, EmbeddingGenerator
+        from ai_tester.memory.vector_db import SimpleVectorDB
         
         vector_db = SimpleVectorDB(dim=128)
         embedder = EmbeddingGenerator(model="local")
@@ -152,8 +152,8 @@ class TestConsolidation:
     
     def test_consolidator_init(self):
         """Test consolidator initialization."""
-        from enigma.memory.consolidation import MemoryConsolidator
-        from enigma.memory.categorization import MemoryCategorization
+        from ai_tester.memory.consolidation import MemoryConsolidator
+        from ai_tester.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         consolidator = MemoryConsolidator(memory_system)
@@ -163,8 +163,8 @@ class TestConsolidation:
     
     def test_merge_similar_memories(self):
         """Test merging similar memories."""
-        from enigma.memory.consolidation import MemoryConsolidator
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.consolidation import MemoryConsolidator
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         
@@ -185,7 +185,7 @@ class TestAsyncMemory:
         """Test async database operations (sync wrapper)."""
         try:
             import asyncio
-            from enigma.memory.async_memory import AsyncMemoryDatabase
+            from ai_tester.memory.async_memory import AsyncMemoryDatabase
             
             async def run_test():
                 with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -215,8 +215,8 @@ class TestMemorySearch:
     
     def test_search_init(self):
         """Test search initialization."""
-        from enigma.memory.search import MemorySearch
-        from enigma.memory.memory_db import MemoryDatabase
+        from ai_tester.memory.search import MemorySearch
+        from ai_tester.memory.memory_db import MemoryDatabase
         
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             db = MemoryDatabase(Path(tmpdir) / "test.db")
@@ -234,8 +234,8 @@ class TestDeduplication:
     
     def test_deduplicator_init(self):
         """Test deduplicator initialization."""
-        from enigma.memory.deduplication import MemoryDeduplicator
-        from enigma.memory.categorization import MemoryCategorization
+        from ai_tester.memory.deduplication import MemoryDeduplicator
+        from ai_tester.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         dedup = MemoryDeduplicator(memory_system)
@@ -244,8 +244,8 @@ class TestDeduplication:
     
     def test_find_duplicates(self):
         """Test finding duplicates."""
-        from enigma.memory.deduplication import MemoryDeduplicator
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.deduplication import MemoryDeduplicator
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         import time
         
         memory_system = MemoryCategorization()
@@ -269,8 +269,8 @@ class TestExportImport:
     
     def test_export_compressed(self):
         """Test compressed export."""
-        from enigma.memory.export_import import MemoryExporter
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.export_import import MemoryExporter
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test memory", MemoryType.SHORT_TERM)
@@ -293,8 +293,8 @@ class TestVisualization:
     
     def test_visualizer_init(self):
         """Test visualizer initialization."""
-        from enigma.memory.visualization import MemoryVisualizer
-        from enigma.memory.categorization import MemoryCategorization
+        from ai_tester.memory.visualization import MemoryVisualizer
+        from ai_tester.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         viz = MemoryVisualizer(memory_system)
@@ -303,8 +303,8 @@ class TestVisualization:
     
     def test_generate_timeline(self):
         """Test timeline generation."""
-        from enigma.memory.visualization import MemoryVisualizer
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.visualization import MemoryVisualizer
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test 1", MemoryType.SHORT_TERM)
@@ -319,8 +319,8 @@ class TestVisualization:
     
     def test_export_html(self):
         """Test HTML export."""
-        from enigma.memory.visualization import MemoryVisualizer
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.visualization import MemoryVisualizer
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test", MemoryType.SHORT_TERM)
@@ -340,8 +340,8 @@ class TestAnalytics:
     
     def test_analytics_init(self):
         """Test analytics initialization."""
-        from enigma.memory.analytics import MemoryAnalytics
-        from enigma.memory.categorization import MemoryCategorization
+        from ai_tester.memory.analytics import MemoryAnalytics
+        from ai_tester.memory.categorization import MemoryCategorization
         
         memory_system = MemoryCategorization()
         analytics = MemoryAnalytics(memory_system)
@@ -350,8 +350,8 @@ class TestAnalytics:
     
     def test_get_statistics(self):
         """Test statistics generation."""
-        from enigma.memory.analytics import MemoryAnalytics
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.analytics import MemoryAnalytics
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test", MemoryType.SHORT_TERM, importance=0.8)
@@ -364,8 +364,8 @@ class TestAnalytics:
     
     def test_generate_report(self):
         """Test report generation."""
-        from enigma.memory.analytics import MemoryAnalytics
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.analytics import MemoryAnalytics
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         memory_system = MemoryCategorization()
         memory_system.add_memory("Test", MemoryType.SHORT_TERM)
@@ -384,7 +384,7 @@ class TestEncryption:
     def test_encryption_init(self):
         """Test encryption initialization."""
         try:
-            from enigma.memory.encryption import MemoryEncryption
+            from ai_tester.memory.encryption import MemoryEncryption
             
             encryption = MemoryEncryption()
             
@@ -397,7 +397,7 @@ class TestEncryption:
     def test_encrypt_decrypt(self):
         """Test encryption and decryption."""
         try:
-            from enigma.memory.encryption import MemoryEncryption
+            from ai_tester.memory.encryption import MemoryEncryption
             
             encryption = MemoryEncryption()
             
@@ -417,8 +417,8 @@ class TestBackup:
     
     def test_backup_scheduler_init(self):
         """Test backup scheduler initialization."""
-        from enigma.memory.backup import MemoryBackupScheduler
-        from enigma.memory.categorization import MemoryCategorization
+        from ai_tester.memory.backup import MemoryBackupScheduler
+        from ai_tester.memory.categorization import MemoryCategorization
         
         with tempfile.TemporaryDirectory() as tmpdir:
             memory_system = MemoryCategorization()
@@ -429,8 +429,8 @@ class TestBackup:
     
     def test_create_backup(self):
         """Test creating a backup."""
-        from enigma.memory.backup import MemoryBackupScheduler
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.backup import MemoryBackupScheduler
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         with tempfile.TemporaryDirectory() as tmpdir:
             memory_system = MemoryCategorization()
@@ -445,8 +445,8 @@ class TestBackup:
     
     def test_list_backups(self):
         """Test listing backups."""
-        from enigma.memory.backup import MemoryBackupScheduler
-        from enigma.memory.categorization import MemoryCategorization, MemoryType
+        from ai_tester.memory.backup import MemoryBackupScheduler
+        from ai_tester.memory.categorization import MemoryCategorization, MemoryType
         
         with tempfile.TemporaryDirectory() as tmpdir:
             memory_system = MemoryCategorization()
@@ -471,7 +471,7 @@ class TestBackwardCompatibility:
         from pathlib import Path
         
         # Temporarily override CONFIG for this test
-        from enigma.config import CONFIG
+        from ai_tester.config import CONFIG
         
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             # Save original path
@@ -486,7 +486,7 @@ class TestBackwardCompatibility:
                 if 'ai_tester.memory.memory_db' in sys.modules:
                     del sys.modules['ai_tester.memory.memory_db']
                 
-                from enigma.memory.memory_db import add_memory, recent
+                from ai_tester.memory.memory_db import add_memory, recent
                 
                 # These should still work
                 add_memory("Legacy test", source="test")

@@ -1392,7 +1392,7 @@ class ToolExecutor:
             loaded_ids = set(self.module_manager.list_loaded())
             
             # Get all registered modules
-            from enigma.modules.registry import MODULE_REGISTRY
+            from ai_tester.modules.registry import MODULE_REGISTRY
             
             modules_info = []
             for mod_id, mod_class in MODULE_REGISTRY.items():

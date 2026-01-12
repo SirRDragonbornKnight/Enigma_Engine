@@ -107,8 +107,8 @@ def _toggle_avatar_autonomous(parent, state):
     enabled = state == 2  # Qt.Checked
     
     try:
-        from enigma.avatar import get_avatar
-        from enigma.avatar.autonomous import get_autonomous_avatar
+        from ai_tester.avatar import get_avatar
+        from ai_tester.avatar.autonomous import get_autonomous_avatar
         
         avatar = get_avatar()
         autonomous = get_autonomous_avatar(avatar)
@@ -133,7 +133,7 @@ def _change_robot_mode(parent):
     mode = parent.robot_mode_combo.currentData()
     
     try:
-        from enigma.tools.robot_modes import get_mode_controller, RobotMode
+        from ai_tester.tools.robot_modes import get_mode_controller, RobotMode
         
         controller = get_mode_controller()
         
@@ -171,7 +171,7 @@ def _change_robot_mode(parent):
 def _robot_estop(parent):
     """Emergency stop the robot."""
     try:
-        from enigma.tools.robot_modes import get_mode_controller
+        from ai_tester.tools.robot_modes import get_mode_controller
         
         controller = get_mode_controller()
         controller.emergency_stop("User pressed E-STOP button")
@@ -194,7 +194,7 @@ def _toggle_robot_camera(parent, state):
     enabled = state == 2
     
     try:
-        from enigma.tools.robot_modes import get_mode_controller, CameraConfig
+        from ai_tester.tools.robot_modes import get_mode_controller, CameraConfig
         
         controller = get_mode_controller()
         
@@ -223,7 +223,7 @@ def _toggle_game_detection(parent, state):
     enabled = state == 2
     
     try:
-        from enigma.tools.game_router import get_game_router
+        from ai_tester.tools.game_router import get_game_router
         
         router = get_game_router()
         
@@ -253,7 +253,7 @@ def _toggle_game_detection(parent, state):
 def _on_game_detected(parent, game_id: str):
     """Called when a game is auto-detected."""
     try:
-        from enigma.tools.game_router import get_game_router
+        from ai_tester.tools.game_router import get_game_router
         router = get_game_router()
         config = router.get_game(game_id)
         
@@ -287,7 +287,7 @@ def _change_active_game(parent):
         return
     
     try:
-        from enigma.tools.game_router import get_game_router
+        from ai_tester.tools.game_router import get_game_router
         router = get_game_router()
         
         if game_id == "none":

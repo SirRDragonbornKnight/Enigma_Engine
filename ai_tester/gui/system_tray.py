@@ -1045,7 +1045,7 @@ class QuickCommandOverlay(QWidget):
         self.setGeometry(geo)
 
 
-class EnigmaSystemTray(QObject):
+class AITesterSystemTray(QObject):
     """
     System tray integration for Enigma.
     
@@ -1437,7 +1437,7 @@ class EnigmaSystemTray(QObject):
                 else:
                     # Try to create/get engine directly
                     try:
-                        from enigma.core.inference import AITesterEngine
+                        from ai_tester.core.inference import AITesterEngine
                         engine = AITesterEngine()
                         response = engine.generate(
                             message,

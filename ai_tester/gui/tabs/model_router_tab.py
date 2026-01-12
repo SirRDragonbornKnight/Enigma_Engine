@@ -207,7 +207,7 @@ class ToolAssignmentWidget(QFrame):
         # Add Enigma models
         self.model_input.addItem("-- Enigma Models --")
         try:
-            from enigma.core.model_registry import ModelRegistry
+            from ai_tester.core.model_registry import ModelRegistry
             registry = ModelRegistry()
             for model in registry.list_models():
                 model_name = model.get("name", model) if isinstance(model, dict) else str(model)
@@ -471,7 +471,7 @@ class ModelRouterTab(QWidget):
         
         # Create tool widgets in a single column (responsive)
         try:
-            from enigma.core.tool_router import TOOL_DEFINITIONS
+            from ai_tester.core.tool_router import TOOL_DEFINITIONS
             tools = TOOL_DEFINITIONS
         except ImportError:
             tools = {}
@@ -495,7 +495,7 @@ class ModelRouterTab(QWidget):
     def _load_config(self):
         """Load routing configuration."""
         try:
-            from enigma.core.tool_router import get_router
+            from ai_tester.core.tool_router import get_router
             router = get_router()
             
             for tool_name, widget in self.tool_widgets.items():
@@ -520,7 +520,7 @@ class ModelRouterTab(QWidget):
     def _save_config(self):
         """Save routing configuration."""
         try:
-            from enigma.core.tool_router import get_router
+            from ai_tester.core.tool_router import get_router
             router = get_router()
             
             for tool_name, widget in self.tool_widgets.items():
@@ -555,7 +555,7 @@ class ModelRouterTab(QWidget):
         
         if reply == QMessageBox.Yes:
             try:
-                from enigma.core.tool_router import get_router
+                from ai_tester.core.tool_router import get_router
                 router = get_router()
                 router._set_defaults()
                 self._load_config()
@@ -576,7 +576,7 @@ class ModelRouterTab(QWidget):
         # Try to get model size info
         size_suffix = ""
         try:
-            from enigma.core.huggingface_loader import get_huggingface_model_info
+            from ai_tester.core.huggingface_loader import get_huggingface_model_info
             # Extract just the model ID part (after "huggingface:")
             hf_id = model_id.replace("huggingface:", "")
             info = get_huggingface_model_info(hf_id)
@@ -606,7 +606,7 @@ class ModelRouterTab(QWidget):
         
         # Add Enigma models from registry
         try:
-            from enigma.core.model_registry import ModelRegistry
+            from ai_tester.core.model_registry import ModelRegistry
             registry = ModelRegistry()
             for name, info in registry.registry.get("models", {}).items():
                 size = info.get("size", "?")
@@ -640,7 +640,7 @@ class ModelRouterTab(QWidget):
             return
             
         try:
-            from enigma.core.tool_router import get_router
+            from ai_tester.core.tool_router import get_router
             router = get_router()
             
             # Apply to all tools

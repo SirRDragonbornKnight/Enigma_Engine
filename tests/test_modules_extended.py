@@ -18,17 +18,17 @@ from unittest.mock import Mock, patch
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.modules import (
+from ai_tester.modules import (
     ModuleManager, Module, ModuleInfo, ModuleState, 
     ModuleCategory, ModuleHealth
 )
-from enigma.modules.sandbox import (
+from ai_tester.modules.sandbox import (
     ModuleSandbox, SandboxConfig, SandboxViolationError,
     create_default_sandbox_config
 )
-from enigma.modules.docs import ModuleDocGenerator
-from enigma.modules.updater import ModuleUpdater, ModuleUpdate
-from enigma.modules.registry import register_all
+from ai_tester.modules.docs import ModuleDocGenerator
+from ai_tester.modules.updater import ModuleUpdater, ModuleUpdate
+from ai_tester.modules.registry import register_all
 
 
 class TestModuleHealthChecks(unittest.TestCase):

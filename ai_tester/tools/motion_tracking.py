@@ -6,7 +6,7 @@ Real-time motion tracking for user gesture mimicry using MediaPipe.
 Can track poses, hands, face, or full holistic tracking.
 
 Usage:
-    from enigma.tools.motion_tracking import MotionTracker
+    from ai_tester.tools.motion_tracking import MotionTracker
     
     tracker = MotionTracker(camera_id=0, tracking_mode='holistic')
     tracker.start()

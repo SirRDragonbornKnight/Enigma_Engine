@@ -72,7 +72,7 @@ class ModelModule(Module):
     )
 
     def load(self) -> bool:
-        from enigma.core.model import create_model
+        from ai_tester.core.model import create_model
 
         size = self.config.get('size', 'small')
         vocab_size = self.config.get('vocab_size', 8000)
@@ -118,7 +118,7 @@ class TokenizerModule(Module):
     )
 
     def load(self) -> bool:
-        from enigma.core.tokenizer import get_tokenizer
+        from ai_tester.core.tokenizer import get_tokenizer
 
         tok_type = self.config.get('type', 'auto')
         self._instance = get_tokenizer(tok_type)
@@ -169,7 +169,7 @@ class TrainingModule(Module):
     )
 
     def load(self) -> bool:
-        from enigma.core.training import Trainer, TrainingConfig
+        from ai_tester.core.training import Trainer, TrainingConfig
         self._trainer_class = Trainer
         self._config_class = TrainingConfig
         return True
@@ -201,7 +201,7 @@ class InferenceModule(Module):
     )
 
     def load(self) -> bool:
-        from enigma.core.inference import AITesterEngine
+        from ai_tester.core.inference import AITesterEngine
         self._engine_class = AITesterEngine
         return True
 
@@ -426,7 +426,7 @@ class GGUFLoaderModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.core.gguf_loader import GGUFModel
+            from ai_tester.core.gguf_loader import GGUFModel
             model_path = self.config.get('model_path', '')
             if not model_path:
                 logger.warning("No GGUF model path specified")
@@ -469,7 +469,7 @@ class MemoryModule(Module):
     )
 
     def load(self) -> bool:
-        from enigma.memory.manager import ConversationManager
+        from ai_tester.memory.manager import ConversationManager
         self._instance = ConversationManager()
         return True
 
@@ -503,7 +503,7 @@ class VoiceInputModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.voice.stt_simple import transcribe_from_mic, transcribe_from_file
+            from ai_tester.voice.stt_simple import transcribe_from_mic, transcribe_from_file
             # Wrap functions in a simple class for consistency
             class STTWrapper:
                 def __init__(self):
@@ -554,7 +554,7 @@ class VoiceOutputModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.voice.tts_simple import speak
+            from ai_tester.voice.tts_simple import speak
             # Wrap function in a simple class for consistency
             class TTSWrapper:
                 def __init__(self):
@@ -606,7 +606,7 @@ class VisionModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.tools.vision import ScreenVision
+            from ai_tester.tools.vision import ScreenVision
             self._instance = ScreenVision()
             return True
         except Exception as e:
@@ -634,7 +634,7 @@ class AvatarModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.avatar.controller import AvatarController
+            from ai_tester.avatar.controller import AvatarController
             self._instance = AvatarController()
             return True
         except Exception as e:
@@ -661,7 +661,7 @@ class WebToolsModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.tools.web_tools import WebTools
+            from ai_tester.tools.web_tools import WebTools
             self._instance = WebTools()
             return True
         except Exception:
@@ -687,7 +687,7 @@ class FileToolsModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.tools.file_tools import FileTools
+            from ai_tester.tools.file_tools import FileTools
             self._instance = FileTools()
             return True
         except Exception:
@@ -732,7 +732,7 @@ class ToolRouterModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.core.tool_router import get_router
+            from ai_tester.core.tool_router import get_router
             use_specialized = self.config.get('use_specialized', True)
             self._instance = get_router(use_specialized=use_specialized)
             logger.info(f"Tool router loaded (specialized: {use_specialized})")
@@ -771,7 +771,7 @@ class APIServerModule(Module):
     )
 
     def load(self) -> bool:
-        from enigma.comms.api_server import create_app
+        from ai_tester.comms.api_server import create_app
         self._app_factory = create_app
         return True
 
@@ -811,7 +811,7 @@ class NetworkModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.comms.network import AITesterNode
+            from ai_tester.comms.network import AITesterNode
             self._instance = AITesterNode()
             return True
         except Exception:
@@ -931,7 +931,7 @@ class ImageGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.image_tab import StableDiffusionLocal
+            from ai_tester.gui.tabs.image_tab import StableDiffusionLocal
             self._addon = StableDiffusionLocal()
             return self._addon.load()
         except Exception as e:
@@ -971,10 +971,10 @@ class ImageGenAPIModule(GenerationModule):
         try:
             provider = self.config.get('provider', 'openai')
             if provider == 'openai':
-                from enigma.gui.tabs.image_tab import OpenAIImage
+                from ai_tester.gui.tabs.image_tab import OpenAIImage
                 self._addon = OpenAIImage(api_key=self.config.get('api_key'))
             else:
-                from enigma.gui.tabs.image_tab import ReplicateImage
+                from ai_tester.gui.tabs.image_tab import ReplicateImage
                 self._addon = ReplicateImage(api_key=self.config.get('api_key'))
             return self._addon.load()
         except Exception as e:
@@ -1001,7 +1001,7 @@ class CodeGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.code_tab import AITesterCode
+            from ai_tester.gui.tabs.code_tab import AITesterCode
             self._addon = AITesterCode(model_name=self.config.get('model_name', 'sacrifice'))
             return self._addon.load()
         except Exception as e:
@@ -1037,7 +1037,7 @@ class CodeGenAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.code_tab import OpenAICode
+            from ai_tester.gui.tabs.code_tab import OpenAICode
             self._addon = OpenAICode(
                 api_key=self.config.get('api_key'),
                 model=self.config.get(
@@ -1070,7 +1070,7 @@ class VideoGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.video_tab import LocalVideo
+            from ai_tester.gui.tabs.video_tab import LocalVideo
             self._addon = LocalVideo()
             return self._addon.load()
         except Exception as e:
@@ -1098,7 +1098,7 @@ class VideoGenAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.video_tab import ReplicateVideo
+            from ai_tester.gui.tabs.video_tab import ReplicateVideo
             self._addon = ReplicateVideo(api_key=self.config.get('api_key'))
             return self._addon.load()
         except Exception as e:
@@ -1125,7 +1125,7 @@ class AudioGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.audio_tab import LocalTTS
+            from ai_tester.gui.tabs.audio_tab import LocalTTS
             self._addon = LocalTTS()
             return self._addon.load()
         except Exception as e:
@@ -1168,10 +1168,10 @@ class AudioGenAPIModule(GenerationModule):
         try:
             provider = self.config.get('provider', 'elevenlabs')
             if provider == 'elevenlabs':
-                from enigma.gui.tabs.audio_tab import ElevenLabsTTS
+                from ai_tester.gui.tabs.audio_tab import ElevenLabsTTS
                 self._addon = ElevenLabsTTS(api_key=self.config.get('api_key'))
             else:
-                from enigma.gui.tabs.audio_tab import ReplicateAudio
+                from ai_tester.gui.tabs.audio_tab import ReplicateAudio
                 self._addon = ReplicateAudio(api_key=self.config.get('api_key'))
             return self._addon.load()
         except Exception as e:
@@ -1204,7 +1204,7 @@ class EmbeddingLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.embeddings_tab import LocalEmbedding
+            from ai_tester.gui.tabs.embeddings_tab import LocalEmbedding
             self._addon = LocalEmbedding(model_name=self.config.get('model', 'all-MiniLM-L6-v2'))
             return self._addon.load()
         except Exception as e:
@@ -1241,7 +1241,7 @@ class EmbeddingAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.embeddings_tab import OpenAIEmbedding
+            from ai_tester.gui.tabs.embeddings_tab import OpenAIEmbedding
             self._addon = OpenAIEmbedding(
                 api_key=self.config.get('api_key'),
                 model=self.config.get('model'))
@@ -1288,7 +1288,7 @@ class ThreeDGenLocalModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.threed_tab import Local3DGen
+            from ai_tester.gui.tabs.threed_tab import Local3DGen
             self._addon = Local3DGen(
                 model=self.config.get('model', 'shap-e')
             )
@@ -1326,7 +1326,7 @@ class ThreeDGenAPIModule(GenerationModule):
 
     def load(self) -> bool:
         try:
-            from enigma.gui.tabs.threed_tab import Cloud3DGen
+            from ai_tester.gui.tabs.threed_tab import Cloud3DGen
             self._addon = Cloud3DGen(
                 api_key=self.config.get('api_key'),
                 service=self.config.get('service', 'replicate')
@@ -1372,7 +1372,7 @@ class MotionTrackingModule(Module):
 
     def load(self) -> bool:
         try:
-            from enigma.tools.motion_tracking import MotionTracker
+            from ai_tester.tools.motion_tracking import MotionTracker
             self._instance = MotionTracker(
                 camera_id=self.config.get('camera_id', 0),
                 tracking_mode=self.config.get('tracking_mode', 'holistic')

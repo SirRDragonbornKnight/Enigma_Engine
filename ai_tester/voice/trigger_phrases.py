@@ -15,7 +15,7 @@ Features:
 - Multiple wake word "personalities" (formal vs casual)
 
 Usage:
-    from enigma.voice.trigger_phrases import TriggerPhraseDetector, SmartWakeWords
+    from ai_tester.voice.trigger_phrases import TriggerPhraseDetector, SmartWakeWords
     
     detector = TriggerPhraseDetector()
     detector.add_phrase("hey ai tester")

@@ -7,7 +7,7 @@ This module allows:
   3. User-configurable voice settings
 
 Usage:
-    from enigma.voice.voice_profile import VoiceProfile, VoiceEngine
+    from ai_tester.voice.voice_profile import VoiceProfile, VoiceEngine
     
     # Create a GLaDOS-like voice
     glados = VoiceProfile(

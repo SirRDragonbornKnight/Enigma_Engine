@@ -14,7 +14,7 @@ Perfect for:
   - Single-purpose installations (just camera, just image gen, etc.)
 
 USAGE:
-    from enigma.tools.tool_manager import ToolManager
+    from ai_tester.tools.tool_manager import ToolManager
     
     manager = ToolManager()
     

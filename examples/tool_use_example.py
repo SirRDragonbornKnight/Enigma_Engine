@@ -10,9 +10,9 @@ Steps:
 3. Have a conversation where AI uses tools
 """
 
-from enigma.core.inference import AITesterEngine
-from enigma.modules import ModuleManager
-from enigma.tools import get_available_tools_for_prompt
+from ai_tester.core.inference import AITesterEngine
+from ai_tester.modules import ModuleManager
+from ai_tester.tools import get_available_tools_for_prompt
 
 
 def main():
@@ -54,7 +54,7 @@ def main():
     print("=" * 80)
     
     # Show available tools
-    from enigma.tools import get_all_tools
+    from ai_tester.tools import get_all_tools
     tools = get_all_tools()
     
     print(f"\nThe AI has access to {len(tools)} tools:")

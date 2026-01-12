@@ -12,7 +12,7 @@ Features:
 - Multiplayer/singleplayer awareness
 
 Usage:
-    from enigma.tools.game_router import GameAIRouter
+    from ai_tester.tools.game_router import GameAIRouter
     
     router = GameAIRouter()
     router.register_game("minecraft", config={
@@ -250,7 +250,7 @@ class GameAIRouter:
         if config_path:
             self._config_path = Path(config_path)
         else:
-            from enigma.config import CONFIG
+            from ai_tester.config import CONFIG
             data_dir = CONFIG.get('data_dir', 'data') if isinstance(CONFIG, dict) else getattr(CONFIG, 'data_dir', 'data')
             self._config_path = Path(data_dir) / "game_configs.json"
         
@@ -455,7 +455,7 @@ class GameAIRouter:
         # If no engine provided, try to get one
         if engine is None:
             try:
-                from enigma.core.inference import AITesterEngine
+                from ai_tester.core.inference import AITesterEngine
                 engine = AITesterEngine()
             except Exception:
                 return "[No AI engine available]"

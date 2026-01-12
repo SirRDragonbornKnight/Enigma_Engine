@@ -178,7 +178,7 @@ class ModuleDocGenerator:
         lines.append("## Usage Example")
         lines.append("")
         lines.append("```python")
-        lines.append("from enigma.modules import ModuleManager")
+        lines.append("from ai_tester.modules import ModuleManager")
         lines.append("")
         lines.append("manager = ModuleManager()")
         

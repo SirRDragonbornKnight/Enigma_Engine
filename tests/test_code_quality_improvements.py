@@ -16,21 +16,21 @@ class TestVersionExport:
     
     def test_version_exists(self):
         """Test that __version__ can be imported."""
-        from enigma import __version__
+        from ai_tester import __version__
         assert __version__ is not None
     
     def test_version_value(self):
         """Test that __version__ has the correct value."""
-        from enigma import __version__
+        from ai_tester import __version__
         assert __version__ == "0.1.0"
     
     def test_version_in_all(self):
         """Test that __version__ is in __all__ exports."""
-        from enigma import __all__
+        from ai_tester import __all__
         assert '__version__' in __all__
 
 
-class TestEnigmaConfigValidation:
+class TestAITesterConfigValidation:
     """Tests for AITesterConfig parameter validation."""
     
     def test_valid_config(self):

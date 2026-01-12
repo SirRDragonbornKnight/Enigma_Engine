@@ -9,9 +9,9 @@ This demonstrates the workflow for:
 NO NEED TO COPY THE ENGINE - one engine, many models!
 """
 
-from enigma.core.model_registry import ModelRegistry
-from enigma.core.model_config import print_model_info
-from enigma.core.trainer import AITesterTrainer, train_model_by_name
+from ai_tester.core.model_registry import ModelRegistry
+from ai_tester.core.model_config import print_model_info
+from ai_tester.core.trainer import AITesterTrainer, train_model_by_name
 
 # =============================================================================
 # STEP 1: See available model sizes

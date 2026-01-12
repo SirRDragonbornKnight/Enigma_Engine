@@ -8,7 +8,7 @@ This system allows:
   - Tool execution and result handling
 
 USAGE:
-    from enigma.core.tool_router import ToolRouter, get_router
+    from ai_tester.core.tool_router import ToolRouter, get_router
     
     router = get_router()
     

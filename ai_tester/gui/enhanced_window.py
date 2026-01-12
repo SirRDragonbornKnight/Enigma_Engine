@@ -1108,7 +1108,7 @@ class SetupWizard(QWizard):
     
     def _create_welcome_page(self):
         page = QWizardPage()
-        page.setTitle("Welcome to Enigma")
+        page.setTitle("Welcome to AI Tester")
         page.setSubTitle("Let's set up your AI")
         
         layout = QVBoxLayout()
@@ -2732,7 +2732,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # Initialize module manager and register all built-in modules
         try:
-            from enigma.modules import ModuleManager, register_all
+            from ai_tester.modules import ModuleManager, register_all
             self.module_manager = ModuleManager()
             register_all(self.module_manager)
         except Exception as e:
@@ -5234,7 +5234,7 @@ class EnhancedMainWindow(QMainWindow):
             emotion = self._detect_emotion_from_text(response_lower)
             if emotion:
                 try:
-                    from enigma.avatar import get_avatar
+                    from ai_tester.avatar import get_avatar
                     avatar = get_avatar()
                     if avatar and avatar.is_enabled:
                         avatar.set_expression(emotion)
@@ -5244,7 +5244,7 @@ class EnhancedMainWindow(QMainWindow):
             # Auto-speak through avatar if auto_speak is on
             if getattr(self, 'auto_speak', False):
                 try:
-                    from enigma.avatar import get_avatar
+                    from ai_tester.avatar import get_avatar
                     avatar = get_avatar()
                     if avatar and avatar.is_enabled:
                         # Strip HTML and tool calls for clean speech
@@ -5266,7 +5266,7 @@ class EnhancedMainWindow(QMainWindow):
             robot_command = self._detect_robot_command(response_lower)
             if robot_command:
                 try:
-                    from enigma.tools.robot_tools import get_robot
+                    from ai_tester.tools.robot_tools import get_robot
                     robot = get_robot()
                     action, params = robot_command
                     if action == 'move':

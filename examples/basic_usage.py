@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.core.inference import EnigmaEngine
+from ai_tester.core.inference import AITesterEngine
 
 
 def main():
     # Create inference engine (auto-loads model)
-    print("Loading Enigma...")
-    engine = EnigmaEngine()
+    print("Loading AI Tester...")
+    engine = AITesterEngine()
     
     # Simple generation
     prompt = "Once upon a time"

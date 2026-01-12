@@ -6,7 +6,7 @@ Utilities for improving user text input, including typo correction,
 suggestion generation, and formatting helpers.
 
 Usage:
-    from enigma.utils.text_enhancement import correct_typos, suggest_command
+    from ai_tester.utils.text_enhancement import correct_typos, suggest_command
     
     corrected = correct_typos("Helo wrld")  # "Hello world"
     suggestion = suggest_command("tran", ["train", "transfer", "translate"])

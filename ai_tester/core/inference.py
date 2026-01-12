@@ -13,7 +13,7 @@ Features:
   - Automatic device selection and optimization
 
 Usage:
-    from enigma.core.inference import AITesterEngine
+    from ai_tester.core.inference import AITesterEngine
 
     engine = AITesterEngine()
     response = engine.generate("Hello, my name is")
