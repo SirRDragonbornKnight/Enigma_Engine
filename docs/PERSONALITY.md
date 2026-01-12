@@ -2,7 +2,7 @@
 
 ## Overview
 
-Enigma Engine includes a self-evolving personality system that allows your AI to develop its own unique character over time through interactions.
+AI Tester includes a self-evolving personality system that allows your AI to develop its own unique character over time through interactions.
 
 ## Features
 
@@ -18,7 +18,7 @@ Enigma Engine includes a self-evolving personality system that allows your AI to
 ### Creating a Personality
 
 ```python
-from enigma.core.personality import AIPersonality
+from ai_tester.core.personality import AIPersonality
 
 # Create new personality
 personality = AIPersonality("my_model")
@@ -31,7 +31,7 @@ personality = AIPersonality.create_preset("my_model", "friendly")
 ### Loading Existing Personality
 
 ```python
-from enigma.core.personality import load_personality
+from ai_tester.core.personality import load_personality
 
 personality = load_personality("my_model")
 print(personality.get_personality_description())
@@ -154,7 +154,7 @@ To train your model with personality awareness, include examples from:
 Personality automatically influences voice profile generation:
 
 ```python
-from enigma.voice.voice_generator import generate_voice_for_personality
+from ai_tester.voice.voice_generator import generate_voice_for_personality
 
 voice_profile = generate_voice_for_personality(personality)
 ```
@@ -178,8 +178,8 @@ Access personality settings at `/settings` in the web dashboard.
 ## Example: Complete Workflow
 
 ```python
-from enigma.core.personality import AIPersonality
-from enigma.core.inference import InferenceEngine
+from ai_tester.core.personality import AIPersonality
+from ai_tester.core.inference import InferenceEngine
 
 # Setup
 model = "my_chatbot"

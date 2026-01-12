@@ -27,10 +27,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     import torch
-    from enigma.core.model import create_model, MODEL_PRESETS
-    from enigma.core.tokenizer import get_tokenizer, train_tokenizer
-    from enigma.core.training import Trainer, TrainingConfig, train_model
-    from enigma.config import CONFIG
+    from ai_tester.core.model import create_model, MODEL_PRESETS
+    from ai_tester.core.tokenizer import get_tokenizer, train_tokenizer
+    from ai_tester.core.training import Trainer, TrainingConfig, train_model
+    from ai_tester.config import CONFIG
 except ImportError as e:
     print(f"Error: Required dependencies not installed: {e}")
     print("Please install requirements: pip install -r requirements.txt")
@@ -101,11 +101,11 @@ def get_shared_tokenizer():
         if config_path.exists():
             with open(config_path, 'r') as f:
                 config = json.load(f)
-                tokenizer_path = config.get("shared_tokenizer", "enigma/vocab_model/bpe_vocab.json")
+                tokenizer_path = config.get("shared_tokenizer", "ai_tester/vocab_model/bpe_vocab.json")
         else:
-            tokenizer_path = "enigma/vocab_model/bpe_vocab.json"
+            tokenizer_path = "ai_tester/vocab_model/bpe_vocab.json"
     except Exception:
-        tokenizer_path = "enigma/vocab_model/bpe_vocab.json"
+        tokenizer_path = "ai_tester/vocab_model/bpe_vocab.json"
     
     vocab_file = Path(__file__).parent.parent / tokenizer_path
     

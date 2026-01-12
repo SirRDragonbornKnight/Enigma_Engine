@@ -3,7 +3,7 @@
 Module System Demo
 ==================
 
-Demonstrates the Enigma Module System in action.
+Demonstrates the AI Tester Module System in action.
 Shows loading, conflict detection, and module usage.
 """
 
@@ -13,8 +13,8 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.modules import ModuleManager, ModuleCategory
-from enigma.modules.registry import register_all
+from ai_tester.modules import ModuleManager, ModuleCategory
+from ai_tester.modules.registry import register_all
 
 
 def print_header(text):

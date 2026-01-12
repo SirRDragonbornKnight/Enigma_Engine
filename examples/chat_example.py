@@ -8,12 +8,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.core.inference import EnigmaEngine
+from ai_tester.core.inference import AITesterEngine
 
 
 def main():
-    print("Loading Enigma...")
-    engine = EnigmaEngine()
+    print("Loading AI Tester...")
+    engine = AITesterEngine()
     
     print("\n=== Enigma Chat ===")
     print("Type 'quit' to exit, 'clear' to reset history")

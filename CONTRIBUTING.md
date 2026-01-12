@@ -1,6 +1,6 @@
-# Contributing to Enigma Engine
+# Contributing to AI Tester
 
-Thank you for considering contributing to Enigma Engine! This document provides guidelines for contributing to the project.
+Thank you for considering contributing to AI Tester! This document provides guidelines for contributing to the project.
 
 ## Table of Contents
 
@@ -567,4 +567,4 @@ Your contributions will be credited in:
 
 ---
 
-**Thank you for making Enigma Engine better!** 🚀
+**Thank you for making AI Tester better!** 🚀

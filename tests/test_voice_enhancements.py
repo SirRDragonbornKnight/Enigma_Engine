@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 # Test voice identity
-from enigma.voice.voice_identity import (
+from ai_tester.voice.voice_identity import (
     AIVoiceIdentity,
     discover_voice,
     describe_voice,
@@ -14,7 +14,7 @@ from enigma.voice.voice_identity import (
 )
 
 # Test voice effects
-from enigma.voice.voice_effects import (
+from ai_tester.voice.voice_effects import (
     VoiceEffects,
     apply_effect,
     apply_effects,
@@ -23,29 +23,29 @@ from enigma.voice.voice_effects import (
 )
 
 # Test dynamic adapter
-from enigma.voice.dynamic_adapter import (
+from ai_tester.voice.dynamic_adapter import (
     DynamicVoiceAdapter,
     adapt_voice_for_emotion,
     adapt_voice_for_context
 )
 
 # Test voice customizer
-from enigma.voice.voice_customizer import (
+from ai_tester.voice.voice_customizer import (
     VoiceCustomizer,
     import_voice_profile,
     export_voice_profile
 )
 
 # Test audio analyzer
-from enigma.voice.audio_analyzer import AudioAnalyzer
+from ai_tester.voice.audio_analyzer import AudioAnalyzer
 
 # Test smart wake words
-from enigma.voice.trigger_phrases import (
+from ai_tester.voice.trigger_phrases import (
     SmartWakeWords,
     suggest_wake_phrases
 )
 
-from enigma.voice import VoiceProfile
+from ai_tester.voice import VoiceProfile
 
 
 class TestVoiceIdentity:
@@ -327,22 +327,22 @@ class TestSmartWakeWords:
         """Test basic wake phrase suggestions."""
         smart = SmartWakeWords()
         
-        suggestions = smart.suggest_wake_phrases("Enigma", num_suggestions=5)
+        suggestions = smart.suggest_wake_phrases("AI Tester", num_suggestions=5)
         
         assert len(suggestions) > 0
-        assert any("enigma" in s.lower() for s in suggestions)
+        assert any("ai_tester" in s.lower() for s in suggestions)
     
     def test_categorize_wake_phrase(self):
         """Test wake phrase categorization."""
         smart = SmartWakeWords()
         
-        smart.categorize_wake_phrase("hey enigma", "casual")
+        smart.categorize_wake_phrase("hey ai tester", "casual")
         smart.categorize_wake_phrase("greetings enigma", "formal")
         
         casual = smart.get_phrases_by_personality("casual")
         formal = smart.get_phrases_by_personality("formal")
         
-        assert "hey enigma" in casual
+        assert "hey ai tester" in casual
         assert "greetings enigma" in formal
     
     def test_train_custom_phrase(self):
@@ -359,19 +359,19 @@ class TestSmartWakeWords:
         smart = SmartWakeWords()
         
         # Exact match
-        score = smart.improve_confidence("hey enigma", "hey enigma")
+        score = smart.improve_confidence("hey ai tester", "hey ai tester")
         assert score == 1.0
         
         # Substring match at start
-        score = smart.improve_confidence("hey enigma", "hey enigma listen")
+        score = smart.improve_confidence("hey ai tester", "hey ai tester listen")
         assert score > 0.9
         
         # Word overlap
-        score = smart.improve_confidence("ok enigma", "okay enigma please")
+        score = smart.improve_confidence("ok ai tester", "okay enigma please")
         assert score > 0.5
         
         # No match
-        score = smart.improve_confidence("hey enigma", "hello world")
+        score = smart.improve_confidence("hey ai tester", "hello world")
         assert score < 0.5
 
 
@@ -392,7 +392,7 @@ class TestVoiceIntegration:
         """Test personality and voice integration."""
         # Import at the end to avoid torch import issues in other tests
         try:
-            from enigma.core.personality import AIPersonality
+            from ai_tester.core.personality import AIPersonality
             
             personality = AIPersonality("test_model")
             personality.voice_preferences = {

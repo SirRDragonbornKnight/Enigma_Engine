@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Integration tests for Enigma Engine.
+Integration tests for AI Tester.
 
 These tests verify that different components work together correctly.
 
@@ -19,17 +19,17 @@ class TestModelToInference:
     
     def test_model_in_engine(self):
         """Test that engine uses correct model."""
-        from enigma.core.inference import EnigmaEngine
-        from enigma.core.model import Enigma
+        from ai_tester.core.inference import AITesterEngine
+        from ai_tester.core.model import Enigma
         
-        engine = EnigmaEngine()
+        engine = AITesterEngine()
         assert isinstance(engine.model, Enigma)
     
     def test_tokenizer_vocab_matches_model(self):
         """Test tokenizer vocab matches model embedding."""
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
-        engine = EnigmaEngine()
+        engine = AITesterEngine()
         tok_vocab = getattr(engine.tokenizer, 'vocab_size', None) or getattr(engine.tokenizer, 'n_vocab', 32000)
         model_vocab = engine.model.vocab_size
         
@@ -38,9 +38,9 @@ class TestModelToInference:
     
     def test_full_generation_pipeline(self):
         """Test full pipeline from prompt to text."""
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
-        engine = EnigmaEngine()
+        engine = AITesterEngine()
         
         # Encode
         prompt = "Hello world"
@@ -59,8 +59,8 @@ class TestTrainingPipeline:
     
     def test_train_and_save(self, tmp_path):
         """Test training and saving model."""
-        from enigma.core.model import Enigma
-        from enigma.core.training import train_model
+        from ai_tester.core.model import Enigma
+        from ai_tester.core.training import train_model
         
         # Create small model
         model = Enigma(vocab_size=1000, dim=32, depth=1, heads=2)
@@ -75,8 +75,8 @@ class TestTrainingPipeline:
     
     def test_model_checkpointing(self, tmp_path):
         """Test saving and loading model checkpoints."""
-        from enigma.core.model import Enigma
-        from enigma.core.model_registry import safe_load_weights
+        from ai_tester.core.model import Enigma
+        from ai_tester.core.model_registry import safe_load_weights
         import torch
         
         # Create and save
@@ -98,7 +98,7 @@ class TestModelRegistry:
     
     def test_create_and_load_model(self, tmp_path):
         """Test creating and loading model through registry."""
-        from enigma.core.model_registry import ModelRegistry
+        from ai_tester.core.model_registry import ModelRegistry
         import shutil
         
         # Create registry with temp dir
@@ -126,10 +126,10 @@ class TestConfigIntegration:
     
     def test_config_affects_model(self):
         """Test that CONFIG affects model creation."""
-        from enigma.config import CONFIG
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.config import CONFIG
+        from ai_tester.core.inference import AITesterEngine
         
-        engine = EnigmaEngine()
+        engine = AITesterEngine()
         
         # Model should have a valid max_len
         assert hasattr(engine.model, 'max_len')
@@ -142,9 +142,9 @@ class TestEndToEnd:
     
     def test_conversation_flow(self):
         """Test a full conversation flow."""
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
-        engine = EnigmaEngine()
+        engine = AITesterEngine()
         
         # Start conversation with history
         history = []
@@ -162,9 +162,9 @@ class TestEndToEnd:
     
     def test_streaming_generation(self):
         """Test streaming generation collects all tokens."""
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
-        engine = EnigmaEngine()
+        engine = AITesterEngine()
         
         tokens = []
         for token in engine.stream_generate("Test", max_gen=5):

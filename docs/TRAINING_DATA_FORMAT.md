@@ -2,7 +2,7 @@
 
 ## Overview
 
-All training data files in the Enigma AI Engine follow standardized formats to ensure consistency and proper model training. This guide documents the official formats.
+All training data files in the AI Tester AI Engine follow standardized formats to ensure consistency and proper model training. This guide documents the official formats.
 
 ## File Structure
 
@@ -206,7 +206,7 @@ grep '"tool":' data/*.txt | head -5
 
 ### Test with Tokenizer
 ```python
-from enigma.core.tokenizer import get_tokenizer
+from ai_tester.core.tokenizer import get_tokenizer
 
 tokenizer = get_tokenizer()
 with open('data/tool_training_data.txt', 'r') as f:
@@ -253,6 +253,6 @@ Done!
 
 **Last Updated**: January 2026
 
-**Maintained By**: Enigma AI Engine Development Team
+**Maintained By**: AI Tester Engine Development Team
 
 **Questions?** See `docs/TOOL_USE.md` for usage documentation

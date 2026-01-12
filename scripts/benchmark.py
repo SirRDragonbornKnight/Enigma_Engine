@@ -53,9 +53,9 @@ def main():
     args = parser.parse_args()
     
     import torch
-    from enigma.core.model import Enigma
-    from enigma.core.model_config import get_model_config
-    from enigma.core.tokenizer import load_tokenizer
+    from ai_tester.core.model import Enigma
+    from ai_tester.core.model_config import get_model_config
+    from ai_tester.core.tokenizer import load_tokenizer
     
     # Setup device
     if args.device:

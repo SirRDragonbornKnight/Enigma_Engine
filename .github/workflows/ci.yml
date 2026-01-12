@@ -46,7 +46,7 @@ jobs:
       
       - name: Generate coverage report
         run: |
-          pytest tests/ --cov=enigma --cov-report=xml --cov-report=term
+          pytest tests/ --cov=ai_tester --cov-report=xml --cov-report=term
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5.5.2
@@ -80,17 +80,17 @@ jobs:
           # F7: Syntax errors in type comments, docstrings
           # F821: Undefined name
           # F822: Undefined name in __all__
-          flake8 enigma/ --count --select=E9,F63,F7,F821,F822 --show-source --statistics
+          flake8 ai_tester/ --count --select=E9,F63,F7,F821,F822 --show-source --statistics
       
       - name: Check for unused imports (F401)
         run: |
           # Check that we have no unused imports (warning only)
-          flake8 enigma/ --count --select=F401 --statistics || true
+          flake8 ai_tester/ --count --select=F401 --statistics || true
       
       - name: Check code style with flake8
         run: |
           # Full style check (exit-zero treats all errors as warnings)
-          flake8 enigma/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --show-source
+          flake8 ai_tester/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --show-source
       
       - name: Check for security issues
         run: |
@@ -98,12 +98,12 @@ jobs:
           # Uses extended regex with POSIX character classes (works with GNU grep in Ubuntu)
           # Pattern: (\s|^|[^[:alnum:]_.]) matches whitespace, start of line, or non-word/non-dot chars
           # This catches eval(...) but not .eval() method calls
-          if grep -rE '(\s|^|[^[:alnum:]_.])eval\s*\(' enigma/ 2>/dev/null; then
+          if grep -rE.*ai_tester/ 2>/dev/null; then
             echo "ERROR: Found eval() function usage which is a security risk"
             exit 1
           fi
           # Same pattern for exec() - catches exec(...) but not .exec() method calls
-          if grep -rE '(\s|^|[^[:alnum:]_.])exec\s*\(' enigma/ 2>/dev/null; then
+          if grep -rE.*ai_tester/ 2>/dev/null; then
             echo "ERROR: Found exec() function usage which is a security risk"
             exit 1
           fi

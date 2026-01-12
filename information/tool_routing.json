@@ -26,8 +26,8 @@
         }
       },
       {
-        "model_id": "enigma:default",
-        "model_type": "enigma",
+        "model_id": "ai_tester:default",
+        "model_type": "ai_tester",
         "priority": 10,
         "config": {}
       }
@@ -50,8 +50,8 @@
         }
       },
       {
-        "model_id": "enigma:default",
-        "model_type": "enigma",
+        "model_id": "ai_tester:default",
+        "model_type": "ai_tester",
         "priority": 10,
         "config": {}
       }

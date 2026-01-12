@@ -50,7 +50,7 @@ def main():
     
     args = parser.parse_args()
     
-    from enigma.core.model_registry import ModelRegistry
+    from ai_tester.core.model_registry import ModelRegistry
     
     registry = ModelRegistry()
     
@@ -68,7 +68,7 @@ def main():
         return
     
     if args.grow:
-        from enigma.core.model_scaling import grow_model
+        from ai_tester.core.model_scaling import grow_model
         
         output_name = args.output or f"{args.model}_{args.grow}"
         print(f"Growing {args.model} to {args.grow} as {output_name}...")
@@ -87,7 +87,7 @@ def main():
         print(f"Created {output_name}")
     
     elif args.shrink:
-        from enigma.core.model_scaling import shrink_model
+        from ai_tester.core.model_scaling import shrink_model
         
         output_name = args.output or f"{args.model}_{args.shrink}"
         print(f"Shrinking {args.model} to {args.shrink} as {output_name}...")

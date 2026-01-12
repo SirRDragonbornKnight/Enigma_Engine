@@ -33,14 +33,14 @@ class TestAsyncExecution:
     
     def test_async_executor_init(self):
         """Test async executor initialization."""
-        from enigma.tools import AsyncToolExecutor
+        from ai_tester.tools import AsyncToolExecutor
         executor = AsyncToolExecutor(max_workers=2)
         assert executor.max_workers == 2
         executor.shutdown()
     
     def test_async_execute_tool_sync(self):
         """Test sync wrapper for async execution."""
-        from enigma.tools import AsyncToolExecutor
+        from ai_tester.tools import AsyncToolExecutor
         executor = AsyncToolExecutor()
         
         result = executor.execute_tool_sync("get_system_info", {})
@@ -51,7 +51,7 @@ class TestAsyncExecution:
     
     def test_async_execute_multiple_sync(self):
         """Test executing multiple tools concurrently."""
-        from enigma.tools import AsyncToolExecutor
+        from ai_tester.tools import AsyncToolExecutor
         executor = AsyncToolExecutor()
         
         tool_calls = [
@@ -71,14 +71,14 @@ class TestToolCache:
     
     def test_cache_init(self, tmp_path):
         """Test cache initialization."""
-        from enigma.tools import ToolCache
+        from ai_tester.tools import ToolCache
         cache = ToolCache(cache_dir=tmp_path / "cache")
         assert cache.default_ttl == 300
         assert cache.max_memory_items == 100
     
     def test_cache_get_set(self, tmp_path):
         """Test cache get and set."""
-        from enigma.tools import ToolCache
+        from ai_tester.tools import ToolCache
         cache = ToolCache(cache_dir=tmp_path / "cache", default_ttl=10)
         
         # Cache miss
@@ -95,7 +95,7 @@ class TestToolCache:
     
     def test_cache_statistics(self, tmp_path):
         """Test cache statistics."""
-        from enigma.tools import ToolCache
+        from ai_tester.tools import ToolCache
         cache = ToolCache(cache_dir=tmp_path / "cache")
         
         stats = cache.get_statistics()
@@ -109,13 +109,13 @@ class TestRateLimiting:
     
     def test_rate_limiter_init(self):
         """Test rate limiter initialization."""
-        from enigma.tools import RateLimiter
+        from ai_tester.tools import RateLimiter
         limiter = RateLimiter()
         assert len(limiter.limits) > 0
     
     def test_rate_limiter_allow(self):
         """Test rate limit checking."""
-        from enigma.tools import RateLimiter
+        from ai_tester.tools import RateLimiter
         limiter = RateLimiter(custom_limits={"test_tool": 2}, window_seconds=60)
         
         # First request allowed
@@ -131,7 +131,7 @@ class TestRateLimiting:
     
     def test_rate_limiter_statistics(self):
         """Test rate limiter statistics."""
-        from enigma.tools import RateLimiter
+        from ai_tester.tools import RateLimiter
         limiter = RateLimiter()
         
         stats = limiter.get_statistics()
@@ -144,13 +144,13 @@ class TestExecutionHistory:
     
     def test_history_init(self, tmp_path):
         """Test history initialization."""
-        from enigma.tools import ToolExecutionHistory
+        from ai_tester.tools import ToolExecutionHistory
         history = ToolExecutionHistory(max_history=100, log_file=tmp_path / "log.txt")
         assert history.max_history == 100
     
     def test_history_record(self):
         """Test recording executions."""
-        from enigma.tools import ToolExecutionHistory
+        from ai_tester.tools import ToolExecutionHistory
         history = ToolExecutionHistory()
         
         history.record("test_tool", {"param": "value"}, {"success": True, "result": "ok"}, 123.45)
@@ -162,7 +162,7 @@ class TestExecutionHistory:
     
     def test_history_statistics(self):
         """Test execution statistics."""
-        from enigma.tools import ToolExecutionHistory
+        from ai_tester.tools import ToolExecutionHistory
         history = ToolExecutionHistory()
         
         # Record some executions
@@ -181,13 +181,13 @@ class TestPermissions:
     
     def test_permission_manager_init(self):
         """Test permission manager initialization."""
-        from enigma.tools import ToolPermissionManager, PermissionLevel
+        from ai_tester.tools import ToolPermissionManager, PermissionLevel
         manager = ToolPermissionManager(user_permission_level=PermissionLevel.WRITE)
         assert manager.user_permission_level == PermissionLevel.WRITE
     
     def test_can_execute(self):
         """Test permission checking."""
-        from enigma.tools import ToolPermissionManager, PermissionLevel
+        from ai_tester.tools import ToolPermissionManager, PermissionLevel
         manager = ToolPermissionManager(user_permission_level=PermissionLevel.READ)
         
         # Read tool allowed
@@ -201,7 +201,7 @@ class TestPermissions:
     
     def test_get_available_tools(self):
         """Test getting available tools."""
-        from enigma.tools import ToolPermissionManager, PermissionLevel
+        from ai_tester.tools import ToolPermissionManager, PermissionLevel
         manager = ToolPermissionManager(user_permission_level=PermissionLevel.WRITE)
         
         available = manager.get_available_tools()
@@ -214,13 +214,13 @@ class TestDependencyChecker:
     
     def test_dependency_checker_init(self):
         """Test dependency checker initialization."""
-        from enigma.tools import ToolDependencyChecker
+        from ai_tester.tools import ToolDependencyChecker
         checker = ToolDependencyChecker()
         assert checker is not None
     
     def test_check_all_tools(self):
         """Test checking all tools."""
-        from enigma.tools import ToolDependencyChecker
+        from ai_tester.tools import ToolDependencyChecker
         checker = ToolDependencyChecker()
         
         results = checker.check_all_tools()
@@ -229,7 +229,7 @@ class TestDependencyChecker:
     
     def test_get_missing_report(self):
         """Test getting missing dependencies report."""
-        from enigma.tools import ToolDependencyChecker
+        from ai_tester.tools import ToolDependencyChecker
         checker = ToolDependencyChecker()
         
         report = checker.get_missing_report()
@@ -242,14 +242,14 @@ class TestParallelExecution:
     
     def test_parallel_executor_init(self):
         """Test parallel executor initialization."""
-        from enigma.tools import ParallelToolExecutor
+        from ai_tester.tools import ParallelToolExecutor
         executor = ParallelToolExecutor(max_workers=2)
         assert executor.max_workers == 2
         executor.shutdown()
     
     def test_execute_parallel(self):
         """Test parallel execution."""
-        from enigma.tools import ParallelToolExecutor
+        from ai_tester.tools import ParallelToolExecutor
         executor = ParallelToolExecutor()
         
         tool_calls = [
@@ -265,7 +265,7 @@ class TestParallelExecution:
     
     def test_execute_batch(self):
         """Test batch execution."""
-        from enigma.tools import ParallelToolExecutor
+        from ai_tester.tools import ParallelToolExecutor
         executor = ParallelToolExecutor()
         
         params_list = [
@@ -284,7 +284,7 @@ class TestURLSafety:
     
     def test_url_safety_config(self, tmp_path):
         """Test URL safety with config."""
-        from enigma.tools.url_safety import URLSafety
+        from ai_tester.tools.url_safety import URLSafety
         config_path = tmp_path / "url_config.json"
         
         safety = URLSafety(config_path=config_path)
@@ -292,7 +292,7 @@ class TestURLSafety:
     
     def test_add_trusted_domain(self):
         """Test adding trusted domain."""
-        from enigma.tools.url_safety import URLSafety
+        from ai_tester.tools.url_safety import URLSafety
         safety = URLSafety()
         
         safety.add_trusted_domain("example.com")
@@ -306,13 +306,13 @@ class TestAnalytics:
     
     def test_analytics_init(self):
         """Test analytics initialization."""
-        from enigma.tools import ToolAnalytics
+        from ai_tester.tools import ToolAnalytics
         analytics = ToolAnalytics()
         assert analytics.max_records == 10000
     
     def test_record_usage(self):
         """Test recording usage."""
-        from enigma.tools import ToolAnalytics
+        from ai_tester.tools import ToolAnalytics
         analytics = ToolAnalytics()
         
         analytics.record_usage("test_tool", True, 100.5)
@@ -320,7 +320,7 @@ class TestAnalytics:
     
     def test_get_usage_report(self):
         """Test usage report generation."""
-        from enigma.tools import ToolAnalytics
+        from ai_tester.tools import ToolAnalytics
         analytics = ToolAnalytics()
         
         # Record some usage
@@ -338,7 +338,7 @@ class TestToolVersioning:
     
     def test_tool_version_fields(self):
         """Test version fields on ToolDefinition."""
-        from enigma.tools import ToolDefinition, ToolParameter
+        from ai_tester.tools import ToolDefinition, ToolParameter
         
         tool = ToolDefinition(
             name="test_tool",
@@ -355,7 +355,7 @@ class TestToolVersioning:
     
     def test_version_compatibility(self):
         """Test version compatibility checking."""
-        from enigma.tools import ToolDefinition, ToolParameter
+        from ai_tester.tools import ToolDefinition, ToolParameter
         
         tool = ToolDefinition(
             name="test_tool",
@@ -379,13 +379,13 @@ class TestSchemaValidation:
     
     def test_validator_init(self):
         """Test validator initialization."""
-        from enigma.tools import ToolSchemaValidator
+        from ai_tester.tools import ToolSchemaValidator
         validator = ToolSchemaValidator(strict_mode=True)
         assert validator.strict_mode is True
     
     def test_validate_params(self):
         """Test parameter validation."""
-        from enigma.tools import ToolSchemaValidator, ToolDefinition, ToolParameter
+        from ai_tester.tools import ToolSchemaValidator, ToolDefinition, ToolParameter
         
         tool = ToolDefinition(
             name="test",
@@ -416,7 +416,7 @@ class TestPluginDiscovery:
     
     def test_plugin_loader_init(self, tmp_path):
         """Test plugin loader initialization."""
-        from enigma.tools import ToolPluginLoader
+        from ai_tester.tools import ToolPluginLoader
         
         plugin_dir = tmp_path / "plugins"
         plugin_dir.mkdir()
@@ -426,7 +426,7 @@ class TestPluginDiscovery:
     
     def test_discover_plugins(self, tmp_path):
         """Test plugin discovery."""
-        from enigma.tools import ToolPluginLoader
+        from ai_tester.tools import ToolPluginLoader
         
         plugin_dir = tmp_path / "plugins"
         plugin_dir.mkdir()
@@ -444,13 +444,13 @@ class TestStreaming:
     
     def test_streaming_result_init(self):
         """Test streaming result initialization."""
-        from enigma.tools import StreamingToolResult
+        from ai_tester.tools import StreamingToolResult
         stream = StreamingToolResult("test_tool")
         assert stream.tool_name == "test_tool"
     
     def test_streaming_put_get(self):
         """Test putting and getting from stream."""
-        from enigma.tools import StreamingToolResult
+        from ai_tester.tools import StreamingToolResult
         stream = StreamingToolResult("test_tool")
         
         stream.put("item1")
@@ -464,7 +464,7 @@ class TestStreaming:
     
     def test_streaming_executor(self):
         """Test streaming executor."""
-        from enigma.tools import StreamingToolExecutor
+        from ai_tester.tools import StreamingToolExecutor
         executor = StreamingToolExecutor()
         
         stream = executor.execute_streaming("get_system_info", {})
@@ -479,7 +479,7 @@ class TestIntegration:
     
     def test_async_with_cache(self, tmp_path):
         """Test async execution with caching."""
-        from enigma.tools import ToolCache
+        from ai_tester.tools import ToolCache
         
         cache = ToolCache(cache_dir=tmp_path / "cache", default_ttl=60)
         
@@ -501,7 +501,7 @@ class TestIntegration:
     
     def test_parallel_with_history(self):
         """Test parallel execution with history tracking."""
-        from enigma.tools import ParallelToolExecutor, ToolExecutionHistory
+        from ai_tester.tools import ParallelToolExecutor, ToolExecutionHistory
         
         history = ToolExecutionHistory()
         executor = ParallelToolExecutor()

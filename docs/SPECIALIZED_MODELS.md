@@ -2,7 +2,7 @@
 
 ## Overview
 
-Enigma Engine supports training and deploying **specialized smaller AI models** for specific tasks like intent classification, vision captioning, and code generation. All specialized models share the same tokenizer architecture, allowing seamless interoperability across the system.
+AI Tester supports training and deploying **specialized smaller AI models** for specific tasks like intent classification, vision captioning, and code generation. All specialized models share the same tokenizer architecture, allowing seamless interoperability across the system.
 
 This approach offers several advantages:
 - **Efficiency**: Use tiny models (1-5M params) for simple classification tasks
@@ -13,7 +13,7 @@ This approach offers several advantages:
 ## Architecture
 
 ### Shared Tokenizer
-All models in Enigma Engine use the same tokenizer, ensuring:
+All models in AI Tester use the same tokenizer, ensuring:
 - Consistent vocabulary across all models
 - Easy model switching without re-tokenization
 - Simplified training pipeline
@@ -138,10 +138,10 @@ def reverse_string(text):
 ### In Python Code
 
 ```python
-from enigma.core.inference import EnigmaEngine
+from ai_tester.core.inference import AITesterEngine
 
 # Enable routing with specialized models
-engine = EnigmaEngine(use_routing=True)
+engine = AITesterEngine(use_routing=True)
 
 # Router automatically detects intent and routes to specialized model
 response = engine.generate("draw me a cat")  # Routes to image tool
@@ -154,7 +154,7 @@ response = engine.generate("how are you today?")  # Uses main chat model
 ### Direct Router Usage
 
 ```python
-from enigma.core.tool_router import get_router
+from ai_tester.core.tool_router import get_router
 
 # Get router with specialized models
 router = get_router(use_specialized=True)
@@ -325,10 +325,10 @@ A: def sort_list(items): return sorted(items)
 
 ## Integration with Module System
 
-Specialized models integrate with Enigma's module system. To enable via module manager:
+Specialized models integrate with AI Tester's module system. To enable via module manager:
 
 ```python
-from enigma.modules.manager import ModuleManager
+from ai_tester.modules.manager import ModuleManager
 
 manager = ModuleManager()
 
@@ -416,8 +416,8 @@ python scripts/train_specialized_model.py \
 
 # 4. Use the system
 python -c "
-from enigma.core.inference import EnigmaEngine
-engine = EnigmaEngine(use_routing=True)
+from ai_tester.core.inference import AITesterEngine
+engine = AITesterEngine(use_routing=True)
 print(engine.generate('write a hello world function'))
 "
 ```
@@ -465,9 +465,9 @@ Optional:
 
 ### Python API
 
-**EnigmaEngine with Routing:**
+**AITesterEngine with Routing:**
 ```python
-engine = EnigmaEngine(
+engine = AITesterEngine(
     use_routing=True,      # Enable specialized models
     enable_tools=True,     # Enable tool system
     device='cuda'          # Use GPU
@@ -482,7 +482,7 @@ response = engine.generate(
 
 **Direct Router Access:**
 ```python
-from enigma.core.tool_router import get_router
+from ai_tester.core.tool_router import get_router
 
 router = get_router(use_specialized=True)
 
@@ -507,4 +507,4 @@ Key takeaways:
 - **Monitor performance**: Track classification accuracy
 - **Scale as needed**: Upgrade model sizes for complex tasks
 
-For questions or issues, refer to the main Enigma Engine documentation or open an issue on GitHub.
+For questions or issues, refer to the main AI Tester documentation or open an issue on GitHub.

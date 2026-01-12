@@ -1,4 +1,4 @@
-# Enigma Engine
+# AI Tester
 
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,7 +11,7 @@
 
 ## What is this?
 
-Enigma Engine is a complete framework for building, training, and running your own AI assistant. It's designed to be:
+AI Tester is a complete framework for building, training, and running your own AI assistant. It's designed to be:
 
 - **Easy to use** - GUI interface, no coding required to get started
 - **Educational** - See exactly how your AI learns and works
@@ -24,8 +24,8 @@ Enigma Engine is a complete framework for building, training, and running your o
 
 ```bash
 # Clone the repository
-git clone https://github.com/SirRDragonbornKnight/enigma_engine.git
-cd enigma_engine
+git clone https://github.com/SirRDragonbornKnight/AI_Tester.git
+cd AI_Tester
 
 # Create virtual environment (recommended)
 python -m venv venv
@@ -140,7 +140,7 @@ python run.py --serve   # Start API server
 
 ### Specialized Model System 🎯
 
-Enigma Engine supports training **specialized smaller models** for specific tasks:
+AI Tester supports training **specialized smaller models** for specific tasks:
 
 - **Intent Router** (~1M params) - Classify user requests (nano model, instant)
 - **Vision Captioning** (~5M params) - Describe images from features (tiny model)
@@ -157,8 +157,8 @@ python scripts/train_specialized_model.py \
     --model-size nano
 
 # Use in code
-from enigma.core.inference import EnigmaEngine
-engine = EnigmaEngine(use_routing=True)
+from ai_tester.core.inference import AITesterEngine
+engine = AITesterEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
 
@@ -201,11 +201,11 @@ This is normal for a new AI! Go to the Train tab and train it.
 
 ## Privacy & Local-First Design 🔒
 
-Enigma Engine is an **"open black box"** - completely transparent about what runs locally vs what requires cloud services.
+AI Tester is an **"open black box"** - completely transparent about what runs locally vs what requires cloud services.
 
 ### 100% Local by Default
 
-**Enigma Engine runs in local-only mode by default.** This means:
+**AI Tester runs in local-only mode by default.** This means:
 - ✅ No API keys required
 - ✅ No data leaves your machine
 - ✅ Works completely offline

@@ -18,17 +18,17 @@ from unittest.mock import Mock, patch
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.modules import (
+from ai_tester.modules import (
     ModuleManager, Module, ModuleInfo, ModuleState, 
     ModuleCategory, ModuleHealth
 )
-from enigma.modules.sandbox import (
+from ai_tester.modules.sandbox import (
     ModuleSandbox, SandboxConfig, SandboxViolationError,
     create_default_sandbox_config
 )
-from enigma.modules.docs import ModuleDocGenerator
-from enigma.modules.updater import ModuleUpdater, ModuleUpdate
-from enigma.modules.registry import register_all
+from ai_tester.modules.docs import ModuleDocGenerator
+from ai_tester.modules.updater import ModuleUpdater, ModuleUpdate
+from ai_tester.modules.registry import register_all
 
 
 class TestModuleHealthChecks(unittest.TestCase):
@@ -283,7 +283,7 @@ class TestModuleDocGenerator(unittest.TestCase):
         markdown = self.doc_gen.generate_all_markdown()
         
         self.assertIsInstance(markdown, str)
-        self.assertIn('# Enigma Engine', markdown)
+        self.assertIn('# AI Tester', markdown)
         self.assertIn('Module Documentation', markdown)
         self.assertIn('Table of Contents', markdown)
         
@@ -334,7 +334,7 @@ class TestModuleDocGenerator(unittest.TestCase):
             
             self.assertTrue(output_path.exists())
             content = output_path.read_text(encoding='utf-8')
-            self.assertIn('Enigma Engine', content)
+            self.assertIn('AI Tester', content)
             self.assertGreater(len(content), 100)
     
     def test_export_to_file_mermaid(self):

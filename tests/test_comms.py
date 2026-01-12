@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the Enigma communications module.
+Tests for the AI Tester communications module.
 
 Run with: pytest tests/test_comms.py -v
 """
@@ -16,7 +16,7 @@ class TestAPIServer:
     
     def test_create_app(self):
         """Test app creation."""
-        from enigma.comms.api_server import create_app
+        from ai_tester.comms.api_server import create_app
         app = create_app()
         assert app is not None
 
@@ -26,7 +26,7 @@ class TestRemoteClient:
     
     def test_client_init(self):
         """Test client initialization."""
-        from enigma.comms.remote_client import RemoteClient
+        from ai_tester.comms.remote_client import RemoteClient
         client = RemoteClient("http://localhost:5000")
         assert client is not None
         assert client.base == "http://localhost:5000"
@@ -35,10 +35,10 @@ class TestRemoteClient:
 class TestNetwork:
     """Tests for network utilities."""
     
-    def test_enigma_node_init(self):
-        """Test EnigmaNode initialization."""
-        from enigma.comms.network import EnigmaNode
-        node = EnigmaNode(port=0)  # Port 0 = auto-assign
+    def test_ai_tester_node_init(self):
+        """Test AITesterNode initialization."""
+        from ai_tester.comms.network import AITesterNode
+        node = AITesterNode(port=0)  # Port 0 = auto-assign
         assert node is not None
 
 
@@ -47,7 +47,7 @@ class TestDiscovery:
     
     def test_discovery_init(self):
         """Test discovery module initialization."""
-        from enigma.comms.discovery import DeviceDiscovery
+        from ai_tester.comms.discovery import DeviceDiscovery
         service = DeviceDiscovery(node_name="test_node", node_port=5000)
         assert service is not None
         assert service.node_name == "test_node"
@@ -59,7 +59,7 @@ class TestMobileAPI:
     def test_mobile_api_init(self):
         """Test MobileAPI initialization."""
         try:
-            from enigma.comms.mobile_api import MobileAPI
+            from ai_tester.comms.mobile_api import MobileAPI
             api = MobileAPI(port=5001)  # Use non-default port
             assert api is not None
             assert api.port == 5001

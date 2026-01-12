@@ -1,6 +1,6 @@
 # Information Directory
 
-This directory contains data files used by Enigma Engine.
+This directory contains data files used by AI Tester.
 
 ## Contents
 

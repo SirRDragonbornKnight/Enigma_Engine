@@ -1,5 +1,5 @@
 """
-Enigma Engine - Main Entry Point
+AI Tester - Main Entry Point
 
 Run your AI with one of these commands:
     python run.py --gui     # GUI interface (recommended)
@@ -20,14 +20,14 @@ from pathlib import Path
 def _print_startup_banner():
     """Print a clean startup message."""
     print("=" * 50)
-    print("  Enigma Engine - Starting...")
+    print("  AI Tester - Starting...")
     print("  (Audio warnings below are normal on headless Pi)")
     print("=" * 50)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Enigma Engine - Build and run your own AI",
+        description="AI Tester - Build and run your own AI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -67,7 +67,7 @@ Examples:
     # If no arguments, show help and suggest GUI
     if not any([args.train, args.build, args.serve, args.run, args.gui, args.web, args.background]):
         print("\n" + "=" * 60)
-        print("  ENIGMA ENGINE - Build Your Own AI")
+        print("  AI TESTER - Build Your Own AI")
         print("=" * 60)
         print("\nQuick Start Options:\n")
         print("  python run.py --gui")
@@ -91,11 +91,11 @@ Examples:
     if args.build:
         # Full build: train tokenizer + model from scratch
         print("\n" + "=" * 60)
-        print("ENIGMA ENGINE - FULL BUILD")
+        print("AI TESTER - FULL BUILD")
         print("=" * 60)
         
-        from enigma.core.training import train_model
-        from enigma.config import CONFIG
+        from ai_tester.core.training import train_model
+        from ai_tester.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_enigma.pth"
@@ -118,8 +118,8 @@ Examples:
         print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.train:
-        from enigma.core.training import train_model
-        from enigma.config import CONFIG
+        from ai_tester.core.training import train_model
+        from ai_tester.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output
@@ -143,22 +143,22 @@ Examples:
             print(f"  Final loss: {results.get('final_loss', 'N/A')}")
 
     if args.serve:
-        from enigma.comms.api_server import create_app
+        from ai_tester.comms.api_server import create_app
         app = create_app()
         print("\nStarting API server at http://127.0.0.1:5000")
         print("Press Ctrl+C to stop\n")
         app.run(host="127.0.0.1", port=5000, debug=True)
 
     if args.run:
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         print("\n" + "=" * 50)
-        print("Enigma CLI Chat")
+        print("AI Tester CLI Chat")
         print("=" * 50)
         print("Type your message and press Enter.")
         print("Type 'quit' or 'exit' to stop.\n")
 
         try:
-            engine = EnigmaEngine()
+            engine = AITesterEngine()
         except FileNotFoundError as e:
             print(f"\n[ERROR] Model not found")
             print(f"   {e}")
@@ -211,7 +211,7 @@ Examples:
     if args.gui:
         _print_startup_banner()
         try:
-            from enigma.gui.enhanced_window import run_app
+            from ai_tester.gui.enhanced_window import run_app
         except ImportError as e:
             print(f"\n[ERROR] GUI requires PyQt5")
             print(f"   Error: {e}")
@@ -225,7 +225,7 @@ Examples:
     
     if args.background:
         try:
-            from enigma.background import main as run_background
+            from ai_tester.background import main as run_background
         except ImportError as e:
             print(f"\n[ERROR] Background mode requires PyQt5")
             print(f"   Error: {e}")
@@ -235,7 +235,7 @@ Examples:
             sys.exit(1)
         
         print("\n" + "=" * 60)
-        print("ENIGMA ENGINE - BACKGROUND MODE")
+        print("AI TESTER - BACKGROUND MODE")
         print("=" * 60)
         print("\nRunning in system tray...")
         print("Click tray icon or press Ctrl+Space for quick commands")
@@ -244,7 +244,7 @@ Examples:
     
     if args.web:
         try:
-            from enigma.web.app import run_web
+            from ai_tester.web.app import run_web
         except ImportError as e:
             print(f"\n[ERROR] Web dashboard requires flask-socketio")
             print(f"   Error: {e}")
@@ -254,13 +254,13 @@ Examples:
             sys.exit(1)
         
         print("\n" + "=" * 60)
-        print("ENIGMA ENGINE - WEB DASHBOARD")
+        print("AI TESTER - WEB DASHBOARD")
         print("=" * 60)
         print(f"\nStarting web server...")
         
         # Setup instance manager if needed
         if args.instance or args.new_instance:
-            from enigma.core.instance_manager import InstanceManager
+            from ai_tester.core.instance_manager import InstanceManager
             instance_manager = InstanceManager(instance_id=args.instance)
             print(f"Instance ID: {instance_manager.instance_id}")
         

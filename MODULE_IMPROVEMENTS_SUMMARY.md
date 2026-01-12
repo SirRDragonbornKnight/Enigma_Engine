@@ -2,7 +2,7 @@
 
 ## Summary
 
-This PR adds the remaining module system improvements that weren't covered in the first PR, completing the comprehensive module management system for Enigma Engine.
+This PR adds the remaining module system improvements that weren't covered in the first PR, completing the comprehensive module management system for AI Tester.
 
 ## Features Implemented
 
@@ -55,8 +55,8 @@ All functionality is thoroughly tested with 41 comprehensive tests:
 
 ### Health Checks
 ```python
-from enigma.modules import ModuleManager
-from enigma.modules.registry import register_all
+from ai_tester.modules import ModuleManager
+from ai_tester.modules.registry import register_all
 
 manager = ModuleManager()
 register_all(manager)
@@ -73,7 +73,7 @@ manager.start_health_monitor(interval_seconds=60)
 
 ### Sandboxing
 ```python
-from enigma.modules import SandboxConfig
+from ai_tester.modules import SandboxConfig
 
 # Create sandbox configuration
 config = SandboxConfig(
@@ -89,7 +89,7 @@ manager.load_sandboxed('untrusted_module', config)
 
 ### Documentation Generation
 ```python
-from enigma.modules import ModuleDocGenerator
+from ai_tester.modules import ModuleDocGenerator
 
 doc_gen = ModuleDocGenerator(manager)
 
@@ -105,7 +105,7 @@ doc_gen.export_to_file('docs/modules.md', 'markdown')
 
 ### Update Checking
 ```python
-from enigma.modules import ModuleUpdater
+from ai_tester.modules import ModuleUpdater
 
 updater = ModuleUpdater(manager)
 

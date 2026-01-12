@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example: Using Specialized Model Routing in Enigma Engine
+Example: Using Specialized Model Routing in AI Tester
 
 This example demonstrates:
 1. Training specialized models
@@ -16,18 +16,18 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 def example_1_basic_routing():
-    """Example 1: Basic routing with EnigmaEngine"""
+    """Example 1: Basic routing with AITesterEngine"""
     print("=" * 70)
-    print("Example 1: Basic Routing with EnigmaEngine")
+    print("Example 1: Basic Routing with AITesterEngine")
     print("=" * 70)
     print()
     
     try:
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
         # Create engine with routing enabled
-        print("Creating EnigmaEngine with routing enabled...")
-        engine = EnigmaEngine(use_routing=True)
+        print("Creating AITesterEngine with routing enabled...")
+        engine = AITesterEngine(use_routing=True)
         
         # The router will automatically classify intent and route to appropriate model
         print("\n1. Asking for code generation:")
@@ -42,7 +42,7 @@ def example_1_basic_routing():
         print('   Input: "how are you today?"')
         print('   Expected: Router detects "chat" intent')
         
-        print("\n✓ EnigmaEngine routing setup successful!")
+        print("\n✓ AITesterEngine routing setup successful!")
         print("  Note: Specialized models need to be trained first")
         print("  Run: python scripts/train_specialized_model.py --type router --data data/specialized/router_training.txt --model-size nano")
         
@@ -60,7 +60,7 @@ def example_2_direct_router_access():
     print()
     
     try:
-        from enigma.core.tool_router import get_router
+        from ai_tester.core.tool_router import get_router
         
         # Get router with specialized models disabled (works without training)
         print("Getting router with keyword-based detection...")
@@ -130,8 +130,8 @@ def example_3_training_workflow():
     
     print("Step 5: Use in your application")
     print("  Python code:")
-    print("    from enigma.core.inference import EnigmaEngine")
-    print("    engine = EnigmaEngine(use_routing=True)")
+    print("    from ai_tester.core.inference import AITesterEngine")
+    print("    engine = AITesterEngine(use_routing=True)")
     print("    response = engine.generate('write a sort function')")
     print()
 
@@ -145,7 +145,7 @@ def example_4_module_system():
     print()
     
     try:
-        from enigma.modules.manager import ModuleManager
+        from ai_tester.modules.manager import ModuleManager
         
         print("Using ModuleManager to load tool router...")
         manager = ModuleManager()

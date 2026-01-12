@@ -1,8 +1,8 @@
-# Enigma Engine - AI Coding Guidelines
+# AI Tester - AI Coding Guidelines
 
 ## Architecture Overview
 
-Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleable module. This prevents conflicts and allows flexible configuration from Raspberry Pi to datacenter.
+AI Tester is a **fully modular AI framework** where EVERYTHING is a toggleable module. This prevents conflicts and allows flexible configuration from Raspberry Pi to datacenter.
 
 ### System Architecture
 ```
@@ -60,7 +60,7 @@ Enigma Engine is a **fully modular AI framework** where EVERYTHING is a toggleab
 - **enigma/core/model.py**: `Enigma`, `create_model()` - Main transformer model implementation
 - **enigma/core/tokenizer.py**: `get_tokenizer()`, `SimpleTokenizer`, `TiktokenWrapper` - Text tokenization
 - **enigma/core/training.py**: `Trainer`, `TrainingConfig`, `train_model()` - Model training
-- **enigma/core/inference.py**: `EnigmaEngine` class - Model inference with optional `use_routing` for specialized models
+- **enigma/core/inference.py**: `AITesterEngine` class - Model inference with optional `use_routing` for specialized models
 - **enigma/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models
 - **enigma/core/tool_router.py**: `ToolRouter`, `get_router()`, `classify_intent()`, `describe_image()`, `generate_code()` - Specialized model routing
 - **enigma/core/huggingface_loader.py**: `load_huggingface_model()` - Load HuggingFace models
@@ -119,7 +119,7 @@ Each tab contains both the implementation (provider classes) and the GUI:
 
 ### How It Works
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 
