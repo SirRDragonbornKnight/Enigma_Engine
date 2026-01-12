@@ -18,39 +18,71 @@ from pathlib import Path
 
 
 def _suppress_noise():
-    """Suppress noisy warnings from Qt, pygame, and other libs."""
+    """Suppress noisy warnings from Qt, pygame, ALSA, and other libs.
+    
+    MUST be called BEFORE any other imports that might load audio libs.
+    """
     import os
     import warnings
     import logging
+    import ctypes
     
-    # Suppress Qt debug messages only (don't override platform)
+    # ===== ALSA ERROR SUPPRESSION =====
+    # Suppress ALSA error messages at the C level
+    # This MUST happen before any audio library is loaded
+    try:
+        # Try to load libasound and redirect errors to null
+        ERROR_HANDLER_FUNC = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int,
+                                               ctypes.c_char_p, ctypes.c_int,
+                                               ctypes.c_char_p)
+        def py_error_handler(filename, line, function, err, fmt):
+            pass  # Swallow all ALSA errors
+        
+        c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+        
+        try:
+            asound = ctypes.cdll.LoadLibrary('libasound.so.2')
+            asound.snd_lib_error_set_handler(c_error_handler)
+        except OSError:
+            pass  # libasound not available, that's fine
+    except Exception:
+        pass  # If this fails, continue anyway
+    
+    # ===== QT NOISE SUPPRESSION =====
     os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
-    # Don't set QT_QPA_PLATFORM - let Qt auto-detect
     
-    # Suppress pygame welcome message
+    # ===== AUDIO DRIVER SETTINGS =====
+    # Use dummy audio driver if no real audio needed
     os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
-    
-    # Suppress ALSA/audio warnings on headless Pi
     os.environ["SDL_AUDIODRIVER"] = "dummy"
     
-    # Set logging level to reduce noise
+    # Suppress JACK server warnings
+    os.environ["JACK_NO_START_SERVER"] = "1"
+    
+    # ===== PYTHON LOGGING =====
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("transformers").setLevel(logging.WARNING)
     logging.getLogger("diffusers").setLevel(logging.WARNING)
     logging.getLogger("torch").setLevel(logging.WARNING)
+    logging.getLogger("alsa").setLevel(logging.CRITICAL)
+    logging.getLogger("jack").setLevel(logging.CRITICAL)
     
-    # Suppress Python deprecation warnings
+    # ===== PYTHON WARNINGS =====
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("ignore", category=FutureWarning)
     warnings.filterwarnings("ignore", message=".*ALSA.*")
     warnings.filterwarnings("ignore", message=".*audio.*")
+    warnings.filterwarnings("ignore", message=".*jack.*")
+
+
+# MUST suppress noise BEFORE any other imports
+_suppress_noise()
 
 
 def _print_startup_banner():
     """Print a clean startup message."""
-    _suppress_noise()
     print("=" * 50)
     print("  ForgeAI - Starting...")
     print("=" * 50)

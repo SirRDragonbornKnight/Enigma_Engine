@@ -131,76 +131,53 @@ def kill_other_forge_ai_instances() -> dict:
 
 
 class CommandProcessor(QObject):
-    """Process natural language commands in background."""
+    """Process natural language commands in background.
+    
+    NOTE: This class uses ChatSync's shared engine instead of creating its own.
+    The engine property delegates to ChatSync to ensure only one engine exists.
+    """
     
     result_ready = pyqtSignal(dict)
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._engine = None
-        self._engine_loaded = False
         self.tool_interface = None
         self.model_name = "Not loaded"
-        # Don't load engine immediately - lazy load on first use
-    
-    def _ensure_engine_loaded(self):
-        """Lazy-load the engine only when actually needed."""
-        if self._engine_loaded:
-            return
-        self._engine_loaded = True
-        self._load_engine()
     
     @property
     def engine(self):
-        """Lazy-load engine on first access."""
-        if not self._engine_loaded:
-            self._ensure_engine_loaded()
-        return self._engine
+        """Get engine from ChatSync (shared singleton)."""
+        try:
+            from .chat_sync import ChatSync
+            return ChatSync.instance()._engine
+        except Exception:
+            return None
     
     @engine.setter
     def engine(self, value):
-        self._engine = value
-    
-    def _load_engine(self):
-        """Load the inference engine using the saved model from settings."""
+        """Set engine on ChatSync (shared singleton)."""
         try:
-            from ..core.tool_interface import ToolInterface
-            from ..core.model_registry import ModelRegistry
-            
-            # Get the model name from saved settings
-            self.model_name = get_current_model_name()
-            
-            # Load the model through the registry (respects HuggingFace models)
-            registry = ModelRegistry()
-            if self.model_name in registry.registry.get("models", {}):
-                model, config = registry.load_model(self.model_name)
-                
-                # Check if it's a HuggingFace model (already has generate/chat methods)
-                is_hf = config.get("source") == "huggingface"
-                
-                if is_hf:
-                    # HuggingFace models are ready to use directly
-                    self.engine = model  # HuggingFaceModel wrapper
-                else:
-                    # For Forge models, wrap in ForgeEngine
-                    from ..core.inference import ForgeEngine
-                    import torch
-                    self.engine = ForgeEngine.__new__(ForgeEngine)
-                    self.engine.model = model
-                    self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                    self.engine.use_half = False
-                    self.engine.enable_tools = False
-                    self.engine._is_huggingface = False
-            else:
-                # Fallback: create default engine (untrained)
-                from ..core.inference import ForgeEngine
-                self.engine = ForgeEngine()
-                
-            self.tool_interface = ToolInterface()
-        except Exception as e:
-            print(f"Note: AI engine not loaded yet: {e}")
-            self.model_name = "Not loaded"
-            self.engine = None
+            from .chat_sync import ChatSync
+            ChatSync.instance().set_engine(value)
+        except Exception:
+            pass
+    
+    def _ensure_engine(self):
+        """Ensure tool interface is initialized."""
+        if self.tool_interface is None:
+            try:
+                from ..core.tool_interface import ToolInterface
+                self.tool_interface = ToolInterface()
+            except Exception:
+                pass
+        # Update model name from ChatSync
+        try:
+            from .chat_sync import ChatSync
+            chat_sync = ChatSync.instance()
+            if chat_sync._model_name:
+                self.model_name = chat_sync._model_name
+        except Exception:
+            pass
     
     def process_command(self, command: str) -> Dict[str, Any]:
         """
@@ -1487,78 +1464,21 @@ class ForgeSystemTray(QObject):
         # So we don't need the else branch anymore
     
     def _process_chat_in_mini(self, message: str):
-        """Process a chat message directly in the mini chat and sync to main chat."""
-        import threading
-        import time
+        """Process a chat message - delegates to ChatSync for shared engine.
         
-        # Store reference to check for stop
-        self._current_generation_thread = None
+        NOTE: This is a legacy method. New code should use _on_chat() which
+        directly calls ChatSync.generate_response().
+        """
+        # Use ChatSync for shared generation
+        from .chat_sync import ChatSync
+        chat_sync = ChatSync.instance()
         
-        def generate_response():
-            try:
-                response = None
-                
-                # Check if stop was requested before starting
-                if self.overlay._stop_requested:
-                    return
-                
-                # Try to use the main window's engine if available
-                if self.main_window and hasattr(self.main_window, 'engine') and self.main_window.engine:
-                    engine = self.main_window.engine
-                    response = engine.generate(
-                        message,
-                        max_gen=200,
-                        temperature=0.8
-                    )
-                else:
-                    # Try to create/get engine directly
-                    try:
-                        from forge_ai.core.inference import ForgeEngine
-                        engine = ForgeEngine()
-                        response = engine.generate(
-                            message,
-                            max_gen=200,
-                            temperature=0.8
-                        )
-                    except Exception as e:
-                        response = f"[No AI loaded - open full GUI to load a model]\n\nYour message: {message}"
-                
-                # Check if stop was requested during generation
-                if self.overlay._stop_requested:
-                    return
-                
-                # Sync to main window's chat history
-                if self.main_window:
-                    self._sync_to_main_chat(message, response)
-                
-                # Update UI from main thread
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
-                QMetaObject.invokeMethod(
-                    self.overlay, "show_response",
-                    Qt.QueuedConnection, Q_ARG(str, response)
-                )
-                QMetaObject.invokeMethod(
-                    self.overlay, "set_status",
-                    Qt.QueuedConnection, Q_ARG(str, "Ready")
-                )
-                
-            except Exception as e:
-                # Don't show error if stop was requested
-                if self.overlay._stop_requested:
-                    return
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
-                QMetaObject.invokeMethod(
-                    self.overlay, "show_response",
-                    Qt.QueuedConnection, Q_ARG(str, f"<span style='color: #e74c3c;'>Error: {e}</span>")
-                )
-                QMetaObject.invokeMethod(
-                    self.overlay, "set_status",
-                    Qt.QueuedConnection, Q_ARG(str, "Error")
-                )
+        if chat_sync.is_generating:
+            self.overlay.set_status("Still generating...")
+            return
         
-        # Run in background thread
-        thread = threading.Thread(target=generate_response, daemon=True)
-        thread.start()
+        # ChatSync handles everything: shows response in both UIs, syncs history
+        chat_sync.generate_response(message, source="quick")
     
     def _sync_to_main_chat(self, user_message: str, ai_response: str):
         """Sync mini chat messages to main window's chat history."""
