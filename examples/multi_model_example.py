@@ -11,7 +11,7 @@ NO NEED TO COPY THE ENGINE - one engine, many models!
 
 from enigma.core.model_registry import ModelRegistry
 from enigma.core.model_config import print_model_info
-from enigma.core.trainer import EnigmaTrainer, train_model_by_name
+from enigma.core.trainer import AITesterTrainer, train_model_by_name
 
 # =============================================================================
 # STEP 1: See available model sizes
@@ -79,7 +79,7 @@ print("TRAINING MODELS")
 print("="*70)
 
 # Train artemis on philosophical text:
-# trainer_artemis = EnigmaTrainer(
+# trainer_artemis = AITesterTrainer(
 #     model=model_artemis,
 #     model_name="artemis",
 #     registry=registry,
@@ -91,7 +91,7 @@ print("="*70)
 # trainer_artemis.train(epochs=100, save_every=10)
 
 # Train apollo on technical text:
-# trainer_apollo = EnigmaTrainer(
+# trainer_apollo = AITesterTrainer(
 #     model=model_apollo,
 #     model_name="apollo",
 #     registry=registry,

@@ -21,7 +21,7 @@ pip install huggingface-hub transformers diffusers sentence-transformers
 The Image Tab uses Stable Diffusion models from HuggingFace:
 
 ```python
-from enigma.gui.tabs.image_tab import StableDiffusionLocal
+from ai_tester.gui.tabs.image_tab import StableDiffusionLocal
 
 # Create local image generator
 generator = StableDiffusionLocal(
@@ -42,7 +42,7 @@ print(f"Saved to: {result['path']}")
 The Embeddings Tab uses sentence-transformers from HuggingFace:
 
 ```python
-from enigma.gui.tabs.embeddings_tab import LocalEmbedding
+from ai_tester.gui.tabs.embeddings_tab import LocalEmbedding
 
 # Create local embedding generator
 embedder = LocalEmbedding(
@@ -61,7 +61,7 @@ print(f"Similarity: {similarity['similarity']:.2%}")
 ### Audio/TTS (Audio Tab)
 
 ```python
-from enigma.gui.tabs.audio_tab import LocalTTS
+from ai_tester.gui.tabs.audio_tab import LocalTTS
 
 # Create local TTS
 tts = LocalTTS()
@@ -76,7 +76,7 @@ print(f"Saved to: {result['path']}")
 The module system wraps the tab implementations:
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 

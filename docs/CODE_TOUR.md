@@ -1,4 +1,4 @@
-# Enigma Engine - Code Tour Guide
+# AI Tester - Code Tour Guide
 
 Welcome! This guide walks you through the codebase so you understand how everything works together.
 
@@ -7,7 +7,7 @@ Welcome! This guide walks you through the codebase so you understand how everyth
 ## 🏗️ Project Structure Overview
 
 ```
-enigma_engine/
+ai_tester/
 ├── run.py                  # 🚀 MAIN ENTRY POINT - Start here!
 ├── requirements.txt        # Dependencies to install
 ├── setup.py               # Package installation config
@@ -105,9 +105,9 @@ Production-ready training loop:
 ### inference.py - Getting Responses
 **File:** [enigma/core/inference.py](../enigma/core/inference.py)
 
-`EnigmaEngine` class - the main way to interact with the AI:
+`AITesterEngine` class - the main way to interact with the AI:
 ```python
-engine = EnigmaEngine()
+engine = AITesterEngine()
 response = engine.generate("Hello!", temperature=0.8, top_p=0.9)
 
 # Streaming generation
@@ -143,7 +143,7 @@ Defines model sizes from mobile to server-scale:
 ### trainer.py - Advanced Training
 **File:** [enigma/core/trainer.py](../enigma/core/trainer.py)
 
-Full-featured `EnigmaTrainer` class:
+Full-featured `AITesterTrainer` class:
 - Multi-GPU support (DataParallel)
 - Mixed precision training
 - Gradient accumulation
@@ -270,7 +270,7 @@ Speech capabilities.
 
 Makes the AI speak using pyttsx3:
 ```python
-from enigma.voice import speak
+from ai_tester.voice import speak
 speak("Hello, I am Enigma!")
 ```
 
@@ -279,7 +279,7 @@ speak("Hello, I am Enigma!")
 
 Listen to user's voice:
 ```python
-from enigma.voice import listen
+from ai_tester.voice import listen
 text = listen(timeout=5)
 ```
 
@@ -374,27 +374,27 @@ AI Response
 
 ### Create a new AI
 ```python
-from enigma.core.model_registry import ModelRegistry
+from ai_tester.core.model_registry import ModelRegistry
 registry = ModelRegistry()
 registry.create_model("my_ai", size="small")
 ```
 
 ### Train your AI
 ```python
-from enigma.core.training import train_model
+from ai_tester.core.training import train_model
 train_model(force=True, num_epochs=10)
 ```
 
 ### Chat with your AI
 ```python
-from enigma.core.inference import EnigmaEngine
-engine = EnigmaEngine()
+from ai_tester.core.inference import AITesterEngine
+engine = AITesterEngine()
 print(engine.generate("Hello!"))
 ```
 
 ### Run multiple AIs talking to each other
 ```python
-from enigma.comms.network import EnigmaNode
+from ai_tester.comms.network import EnigmaNode
 node = EnigmaNode(name="my_node")
 node.start_ai_conversation("other_ai", num_turns=5)
 ```

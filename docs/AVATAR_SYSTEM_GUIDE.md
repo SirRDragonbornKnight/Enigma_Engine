@@ -16,8 +16,8 @@ The Enhanced Avatar System allows AI to design its own visual appearance based o
 ### 1. AI Self-Design from Personality
 
 ```python
-from enigma.avatar import get_avatar
-from enigma.core.personality import load_personality
+from ai_tester.avatar import get_avatar
+from ai_tester.core.personality import load_personality
 
 # Get avatar and load AI personality
 avatar = get_avatar()
@@ -36,7 +36,7 @@ print(avatar.explain_appearance())
 ### 2. Natural Language Description
 
 ```python
-from enigma.avatar import get_avatar
+from ai_tester.avatar import get_avatar
 
 avatar = get_avatar()
 
@@ -50,7 +50,7 @@ appearance = avatar.describe_desired_appearance(
 ### 3. User Customization
 
 ```python
-from enigma.avatar import get_avatar
+from ai_tester.avatar import get_avatar
 
 avatar = get_avatar()
 customizer = avatar.get_customizer()
@@ -73,8 +73,8 @@ customizer.set_animations(idle="bounce", movement="bounce")
 ### 4. Emotion Synchronization
 
 ```python
-from enigma.avatar import get_avatar
-from enigma.core.personality import load_personality
+from ai_tester.avatar import get_avatar
+from ai_tester.core.personality import load_personality
 
 avatar = get_avatar()
 personality = load_personality("my_model")
@@ -163,7 +163,7 @@ All sprites support custom colors (primary, secondary, accent).
 Works everywhere, console output:
 
 ```python
-from enigma.avatar.renderers import SpriteRenderer
+from ai_tester.avatar.renderers import SpriteRenderer
 
 renderer = SpriteRenderer(controller)
 renderer.show()  # Prints to console
@@ -173,7 +173,7 @@ renderer.show()  # Prints to console
 Transparent overlay window:
 
 ```python
-from enigma.avatar.renderers import QtAvatarRenderer
+from ai_tester.avatar.renderers import QtAvatarRenderer
 
 renderer = QtAvatarRenderer(controller)
 renderer.show()  # Shows draggable window
@@ -183,7 +183,7 @@ renderer.show()  # Shows draggable window
 For web dashboard:
 
 ```python
-from enigma.avatar.renderers import WebAvatarRenderer
+from ai_tester.avatar.renderers import WebAvatarRenderer
 
 renderer = WebAvatarRenderer(controller, socketio)
 renderer.show()  # Sends to web clients
@@ -255,7 +255,7 @@ appearance = customizer.interactive_customize()
 ### Generate All Sprites
 
 ```python
-from enigma.avatar.renderers import SpriteRenderer
+from ai_tester.avatar.renderers import SpriteRenderer
 
 renderer = SpriteRenderer(controller)
 renderer.export_sprites("./my_sprites/")

@@ -1,6 +1,6 @@
 ================================================================================
                     TOOL TRAINING QUICK START
-                       Enigma Engine Guide
+                       AI Tester Guide
 ================================================================================
 
 This is a quick-start guide. For detailed info, see:

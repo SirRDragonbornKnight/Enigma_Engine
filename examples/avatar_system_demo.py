@@ -11,12 +11,12 @@ from pathlib import Path
 # Add enigma to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.avatar import (
+from ai_tester.avatar import (
     get_avatar,
     AIAvatarIdentity,
     AvatarAppearance,
 )
-from enigma.core.personality import AIPersonality
+from ai_tester.core.personality import AIPersonality
 
 
 def demo_ai_design():
@@ -154,7 +154,7 @@ def demo_emotion_sync():
     print("DEMO 5: Emotion Synchronization")
     print("="*60)
     
-    from enigma.avatar import EmotionExpressionSync
+    from ai_tester.avatar import EmotionExpressionSync
     
     avatar = get_avatar()
     personality = AIPersonality("demo_model")
@@ -188,7 +188,7 @@ def demo_sprite_generation():
     print("DEMO 6: Built-in Sprites")
     print("="*60)
     
-    from enigma.avatar.renderers import SPRITE_TEMPLATES, generate_sprite
+    from ai_tester.avatar.renderers import SPRITE_TEMPLATES, generate_sprite
     
     print(f"\nAvailable Built-in Sprites: {len(SPRITE_TEMPLATES)}")
     for sprite_name in SPRITE_TEMPLATES.keys():

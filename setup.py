@@ -1,5 +1,5 @@
 """
-Enigma Engine Setup Script
+AI Tester Setup Script
 
 Install with: pip install -e .
 Or for full install: pip install -e .[full]
@@ -25,14 +25,14 @@ def read_requirements():
     return reqs
 
 setup(
-    name="enigma-engine",
+    name="ai-tester",
     version="1.1.0",
     description="Personal AI Framework - Train and deploy your own AI with GUI, voice, vision, and more",
     long_description=open("README.md").read() if __import__("os").path.exists("README.md") else "",
     long_description_content_type="text/markdown",
     author="SirRDragonbornKnight",
     author_email="sirknighth3@gmail.com",
-    url="https://github.com/SirRDragonbornKnight/Enigma_Engine",
+    url="https://github.com/SirRDragonbornKnight/AI_Tester",
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
@@ -93,15 +93,15 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "enigma=run:main",
-            "enigma-train=run:train",
-            "enigma-serve=run:serve",
-            "enigma-gui=run:gui",
+            "ai-tester=run:main",
+            "ai-tester-train=run:train",
+            "ai-tester-serve=run:serve",
+            "ai-tester-gui=run:gui",
         ],
     },
     include_package_data=True,
     package_data={
-        "enigma": [
+        "ai_tester": [
             "vocab_model/*",
             "data/*",
             "py.typed",

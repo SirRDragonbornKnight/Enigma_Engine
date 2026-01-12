@@ -8,12 +8,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.core.inference import EnigmaEngine
+from enigma.core.inference import AITesterEngine
 
 
 def main():
     print("Loading Enigma...")
-    engine = EnigmaEngine()
+    engine = AITesterEngine()
     
     prompt = "In a land far away, there lived a"
     

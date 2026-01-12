@@ -174,11 +174,11 @@ class TestHuggingFaceAddons:
         # Test that the new tab-based providers exist
         try:
             from enigma.gui.tabs.image_tab import StableDiffusionLocal, OpenAIImage
-            from enigma.gui.tabs.code_tab import EnigmaCode, OpenAICode
+            from enigma.gui.tabs.code_tab import AITesterCode, OpenAICode
             from enigma.gui.tabs.embeddings_tab import LocalEmbedding, OpenAIEmbedding
             assert StableDiffusionLocal is not None
             assert OpenAIImage is not None
-            assert EnigmaCode is not None
+            assert AITesterCode is not None
             assert OpenAICode is not None
             assert LocalEmbedding is not None
             assert OpenAIEmbedding is not None

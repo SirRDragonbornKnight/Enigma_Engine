@@ -26,7 +26,7 @@ python run.py --run --new-instance
 ### In Python Code
 
 ```python
-from enigma.core.instance_manager import InstanceManager
+from ai_tester.core.instance_manager import InstanceManager
 
 # Create instance
 with InstanceManager(instance_id="bot1") as manager:
@@ -94,7 +94,7 @@ Instance locks are stored in `~/.enigma/locks/`:
 Stale locks (from crashed processes) are automatically removed:
 
 ```python
-from enigma.core.instance_manager import cleanup_stale_locks
+from ai_tester.core.instance_manager import cleanup_stale_locks
 
 cleanup_stale_locks()
 ```
@@ -128,7 +128,7 @@ python run.py --run --instance chat
 python run.py --web --instance web
 
 # Terminal 2: Mobile API
-python -c "from enigma.mobile.api import run_mobile_api; run_mobile_api()"
+python -c "from ai_tester.mobile.api import run_mobile_api; run_mobile_api()"
 ```
 
 ## Best Practices
@@ -157,7 +157,7 @@ python -c "from enigma.mobile.api import run_mobile_api; run_mobile_api()"
 ## Example: Coordinated Training
 
 ```python
-from enigma.core.instance_manager import InstanceManager
+from ai_tester.core.instance_manager import InstanceManager
 
 # Instance 1: Data preparation
 with InstanceManager("prep") as manager:

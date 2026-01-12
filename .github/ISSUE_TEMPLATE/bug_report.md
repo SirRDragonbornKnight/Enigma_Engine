@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug or issue with Enigma Engine
+about: Report a bug or issue with AI Tester
 title: "[BUG] "
 labels: bug
 assignees: ''
@@ -26,7 +26,7 @@ What actually happened instead.
 ## Environment
 - **OS:** [e.g. Windows 10, Ubuntu 22.04, macOS 13]
 - **Python Version:** [e.g. 3.10.5]
-- **Enigma Engine Version:** [e.g. commit hash or release tag]
+- **AI Tester Version:** [e.g. commit hash or release tag]
 - **Model Size:** [e.g. small, medium, large]
 - **Installation Method:** [pip, source, Docker]
 

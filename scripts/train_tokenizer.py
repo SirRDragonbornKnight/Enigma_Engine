@@ -61,7 +61,7 @@ def main():
     print(f"\nTotal: {total_chars:,} characters from {len(texts)} file(s)")
     
     # Train tokenizer
-    from enigma.core.bpe_tokenizer import BPETokenizer
+    from ai_tester.core.bpe_tokenizer import BPETokenizer
     
     tokenizer = BPETokenizer()
     tokenizer.train(texts, vocab_size=args.vocab_size, min_frequency=args.min_freq, verbose=True)

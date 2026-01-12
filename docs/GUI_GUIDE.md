@@ -1,4 +1,4 @@
-# 📖 Enigma Engine - Complete GUI Guide
+# 📖 AI Tester - Complete GUI Guide
 
 **Everything you need to know to use the Enigma GUI, organized for easy reading and skimming.**
 

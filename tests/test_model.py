@@ -44,16 +44,16 @@ class TestAttention:
     
     def test_creation(self):
         """Test Attention can be created."""
-        from enigma.core.model import Attention, EnigmaConfig
-        config = EnigmaConfig(dim=64, n_heads=4, n_kv_heads=2)
+        from enigma.core.model import Attention, AITesterConfig
+        config = AITesterConfig(dim=64, n_heads=4, n_kv_heads=2)
         attn = Attention(config)
         assert attn.n_heads == 4
         assert attn.n_kv_heads == 2
     
     def test_forward(self):
         """Test attention forward pass."""
-        from enigma.core.model import Attention, EnigmaConfig
-        config = EnigmaConfig(dim=64, n_heads=4, n_kv_heads=2)
+        from enigma.core.model import Attention, AITesterConfig
+        config = AITesterConfig(dim=64, n_heads=4, n_kv_heads=2)
         attn = Attention(config)
         x = torch.randn(2, 10, 64)
         out = attn(x)
@@ -61,8 +61,8 @@ class TestAttention:
     
     def test_cache(self):
         """Test attention with cache."""
-        from enigma.core.model import Attention, EnigmaConfig
-        config = EnigmaConfig(dim=64, n_heads=4, n_kv_heads=2)
+        from enigma.core.model import Attention, AITesterConfig
+        config = AITesterConfig(dim=64, n_heads=4, n_kv_heads=2)
         attn = Attention(config)
         
         # First pass with cache
@@ -81,15 +81,15 @@ class TestFeedForward:
     
     def test_creation_swiglu(self):
         """Test SwiGLU FeedForward can be created."""
-        from enigma.core.model import FeedForward, EnigmaConfig
-        config = EnigmaConfig(dim=64, use_swiglu=True)
+        from enigma.core.model import FeedForward, AITesterConfig
+        config = AITesterConfig(dim=64, use_swiglu=True)
         ff = FeedForward(config)
         assert ff.use_swiglu == True
     
     def test_forward(self):
         """Test FeedForward forward pass."""
-        from enigma.core.model import FeedForward, EnigmaConfig
-        config = EnigmaConfig(dim=64, use_swiglu=True)
+        from enigma.core.model import FeedForward, AITesterConfig
+        config = AITesterConfig(dim=64, use_swiglu=True)
         ff = FeedForward(config)
         x = torch.randn(2, 10, 64)
         out = ff(x)
@@ -101,15 +101,15 @@ class TestTransformerBlock:
     
     def test_creation(self):
         """Test TransformerBlock can be created."""
-        from enigma.core.model import TransformerBlock, EnigmaConfig
-        config = EnigmaConfig(dim=64, n_heads=4)
+        from enigma.core.model import TransformerBlock, AITesterConfig
+        config = AITesterConfig(dim=64, n_heads=4)
         block = TransformerBlock(config, layer_id=0)
         assert block is not None
     
     def test_forward(self):
         """Test TransformerBlock forward pass."""
-        from enigma.core.model import TransformerBlock, EnigmaConfig
-        config = EnigmaConfig(dim=64, n_heads=4)
+        from enigma.core.model import TransformerBlock, AITesterConfig
+        config = AITesterConfig(dim=64, n_heads=4)
         block = TransformerBlock(config, layer_id=0)
         x = torch.randn(2, 10, 64)
         out = block(x)
@@ -168,9 +168,9 @@ class TestEnigmaModel:
         assert torch.equal(out1, out2)
     
     def test_backwards_compat(self):
-        """Test TinyEnigma alias."""
-        from enigma.core.model import Enigma, TinyEnigma
-        assert TinyEnigma is Enigma
+        """Test TinyAITester alias."""
+        from enigma.core.model import Enigma, TinyAITester
+        assert TinyAITester is Enigma
 
 
 class TestModelPresets:
@@ -195,26 +195,26 @@ class TestModelConfig:
     """Tests for model configuration."""
     
     def test_config_creation(self):
-        """Test EnigmaConfig can be created."""
-        from enigma.core.model import EnigmaConfig
-        config = EnigmaConfig(dim=256, n_layers=6, n_heads=8)
+        """Test AITesterConfig can be created."""
+        from enigma.core.model import AITesterConfig
+        config = AITesterConfig(dim=256, n_layers=6, n_heads=8)
         assert config.dim == 256
         assert config.n_layers == 6
         assert config.n_heads == 8
     
     def test_config_to_dict(self):
         """Test config serialization."""
-        from enigma.core.model import EnigmaConfig
-        config = EnigmaConfig(dim=256)
+        from enigma.core.model import AITesterConfig
+        config = AITesterConfig(dim=256)
         d = config.to_dict()
         assert isinstance(d, dict)
         assert d['dim'] == 256
     
     def test_config_from_dict(self):
         """Test config deserialization."""
-        from enigma.core.model import EnigmaConfig
+        from enigma.core.model import AITesterConfig
         d = {'dim': 128, 'n_layers': 4, 'n_heads': 4}
-        config = EnigmaConfig.from_dict(d)
+        config = AITesterConfig.from_dict(d)
         assert config.dim == 128
         assert config.n_layers == 4
 

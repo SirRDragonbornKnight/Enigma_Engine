@@ -10,8 +10,8 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.modules.manager import ModuleManager, ModuleInfo, ModuleCategory
-from enigma.modules import registry
+from ai_tester.modules.manager import ModuleManager, ModuleInfo, ModuleCategory
+from ai_tester.modules import registry
 
 
 def test_cloud_modules_marked():

@@ -6,8 +6,8 @@ from pathlib import Path
 import tempfile
 import json
 
-from enigma.tools.url_safety import URLSafety, ContentFilter
-from enigma.gui.theme_system import (
+from ai_tester.tools.url_safety import URLSafety, ContentFilter
+from ai_tester.gui.theme_system import (
     Theme,
     ThemeColors,
     ThemeManager

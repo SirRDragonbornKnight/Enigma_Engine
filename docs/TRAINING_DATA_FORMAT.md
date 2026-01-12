@@ -206,7 +206,7 @@ grep '"tool":' data/*.txt | head -5
 
 ### Test with Tokenizer
 ```python
-from enigma.core.tokenizer import get_tokenizer
+from ai_tester.core.tokenizer import get_tokenizer
 
 tokenizer = get_tokenizer()
 with open('data/tool_training_data.txt', 'r') as f:

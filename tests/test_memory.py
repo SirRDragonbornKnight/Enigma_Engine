@@ -18,13 +18,13 @@ class TestConversationManager:
     
     def test_manager_init(self):
         """Test conversation manager initialization."""
-        from enigma.memory.manager import ConversationManager
+        from ai_tester.memory.manager import ConversationManager
         manager = ConversationManager()
         assert manager is not None
     
     def test_save_conversation(self):
         """Test saving conversation."""
-        from enigma.memory.manager import ConversationManager
+        from ai_tester.memory.manager import ConversationManager
         manager = ConversationManager()
         
         messages = [
@@ -37,7 +37,7 @@ class TestConversationManager:
     
     def test_load_conversation(self):
         """Test loading conversation."""
-        from enigma.memory.manager import ConversationManager
+        from ai_tester.memory.manager import ConversationManager
         manager = ConversationManager()
         
         messages = [
@@ -52,7 +52,7 @@ class TestConversationManager:
     
     def test_list_conversations(self):
         """Test listing conversations."""
-        from enigma.memory.manager import ConversationManager
+        from ai_tester.memory.manager import ConversationManager
         manager = ConversationManager()
         
         # Save a conversation
@@ -67,14 +67,14 @@ class TestSimpleVectorDB:
     
     def test_db_init(self):
         """Test vector DB initialization."""
-        from enigma.memory.vector_utils import SimpleVectorDB
+        from ai_tester.memory.vector_utils import SimpleVectorDB
         db = SimpleVectorDB(dim=64)
         assert db is not None
         assert db.dim == 64
     
     def test_add_and_search(self):
         """Test adding and searching vectors."""
-        from enigma.memory.vector_utils import SimpleVectorDB
+        from ai_tester.memory.vector_utils import SimpleVectorDB
         db = SimpleVectorDB(dim=3)
         
         # Add some vectors

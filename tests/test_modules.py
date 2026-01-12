@@ -16,11 +16,11 @@ from pathlib import Path
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from enigma.modules.manager import (
+from ai_tester.modules.manager import (
     ModuleManager, Module, ModuleInfo, ModuleState, 
     ModuleCategory
 )
-from enigma.modules.registry import (
+from ai_tester.modules.registry import (
     MODULE_REGISTRY, register_all, 
     ModelModule, TokenizerModule, InferenceModule
 )
@@ -281,7 +281,7 @@ class TestGenerationModules(unittest.TestCase):
     
     def test_generation_module_interface(self):
         """Test that generation modules expose generate() method."""
-        from enigma.modules.registry import ImageGenLocalModule
+        from ai_tester.modules.registry import ImageGenLocalModule
         
         # Check the class has the method
         self.assertTrue(hasattr(ImageGenLocalModule, 'generate'))

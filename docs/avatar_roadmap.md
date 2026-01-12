@@ -100,7 +100,7 @@ avatar/
 
 **Integration**:
 ```
-Enigma Engine <--HTTP/WebSocket--> Godot Game
+AI Tester <--HTTP/WebSocket--> Godot Game
      AI                           Avatar + World
 ```
 
@@ -130,7 +130,7 @@ Enigma Engine <--HTTP/WebSocket--> Godot Game
 ```lua
 -- GMod Lua addon
 local socket = require("socket")
--- Connect to Enigma Engine API
+-- Connect to AI Tester API
 -- Receive movement commands
 -- Control playermodel/NPC
 ```
@@ -150,7 +150,7 @@ local socket = require("socket")
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                 Enigma Engine                    │
+│                 AI Tester                    │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────┐ │
 │  │   AI Core   │  │   Vision    │  │  Voice  │ │
 │  │  (Brain)    │  │ (Eyes)      │  │ (Ears/  │ │

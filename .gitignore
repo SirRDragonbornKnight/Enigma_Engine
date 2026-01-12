@@ -87,7 +87,7 @@ secrets/
 credentials/
 *_secrets.json
 *_credentials.json
-enigma_config.json
+ai_tester_config.json
 
 # Keep data structure but not contents
 data/*
@@ -121,7 +121,7 @@ memory/*.db
 memory/*.db-*
 
 # Instance locks
-.enigma/
+.ai_tester/
 
 # Voice samples
 models/*/voice/samples/

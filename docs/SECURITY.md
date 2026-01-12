@@ -1,6 +1,6 @@
-# Security Best Practices for Enigma Engine
+# Security Best Practices for AI Tester
 
-This document outlines security considerations and best practices when using and developing Enigma Engine.
+This document outlines security considerations and best practices when using and developing AI Tester.
 
 ## Configuration Security
 
@@ -134,7 +134,7 @@ The network discovery system broadcasts on the local network. In untrusted envir
 
 ### Local-First by Default
 
-Enigma Engine is designed to run locally by default:
+AI Tester is designed to run locally by default:
 - ✅ No data sent to external services without explicit opt-in
 - ✅ All processing happens on your machine
 - ✅ API keys only needed for cloud providers

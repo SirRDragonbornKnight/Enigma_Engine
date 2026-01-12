@@ -48,7 +48,7 @@ engine = AIEngine()  # Loads EVERYTHING
 
 ```python
 # ✅ Module way - load only what you need
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model')      # Core AI
@@ -73,7 +73,7 @@ manager.load('image_gen_local')  # Now uses 8GB RAM
 ### Quick Start (5 lines)
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model', {'size': 'small'})
@@ -88,7 +88,7 @@ response = engine.generate("Hello!")
 ### With Generation Capabilities
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -344,7 +344,7 @@ if not can_load:
 ### Simple Module
 
 ```python
-from enigma.modules import Module, ModuleInfo, ModuleCategory
+from ai_tester.modules import Module, ModuleInfo, ModuleCategory
 
 class MyModule(Module):
     INFO = ModuleInfo(
@@ -369,7 +369,7 @@ class MyModule(Module):
         return self._instance
 
 # Register it
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 manager.register(MyModule)
@@ -405,7 +405,7 @@ class AdvancedModule(Module):
 ### Generation Module (Using Tab Providers)
 
 ```python
-from enigma.modules.registry import GenerationModule, ModuleInfo, ModuleCategory
+from ai_tester.modules.registry import GenerationModule, ModuleInfo, ModuleCategory
 
 class MyImageGenModule(GenerationModule):
     """Custom image generation module using tab providers."""
@@ -420,7 +420,7 @@ class MyImageGenModule(GenerationModule):
     
     def load(self) -> bool:
         # Import from the tab where implementations live
-        from enigma.gui.tabs.image_tab import StableDiffusionLocal
+        from ai_tester.gui.tabs.image_tab import StableDiffusionLocal
         self._provider = StableDiffusionLocal()
         return self._provider.load()
     
@@ -435,7 +435,7 @@ class MyImageGenModule(GenerationModule):
 ### Example 1: Minimal Chat Bot
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 def create_chatbot():
     manager = ModuleManager()
@@ -467,7 +467,7 @@ manager.unload('model')
 ### Example 2: Multimodal AI (Text + Images)
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 
@@ -503,7 +503,7 @@ def chat_with_images(prompt):
 ### Example 3: Hardware-Aware Loading
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 def smart_load(manager):
     """Load modules based on available hardware."""
@@ -534,7 +534,7 @@ smart_load(manager)
 ### Example 4: Dynamic Module Switching
 
 ```python
-from enigma.modules import ModuleManager
+from ai_tester.modules import ModuleManager
 
 manager = ModuleManager()
 manager.load('model')
@@ -630,7 +630,7 @@ new_manager.load_config(Path("my_config.json"))
 
 ```python
 # At startup, register all modules once
-from enigma.modules.registry import register_all
+from ai_tester.modules.registry import register_all
 
 manager = ModuleManager()
 register_all(manager)
@@ -641,7 +641,7 @@ register_all(manager)
 ### 7. Use Categories to Organize
 
 ```python
-from enigma.modules import ModuleCategory
+from ai_tester.modules import ModuleCategory
 
 # Load all core modules
 for module_info in manager.list_modules(ModuleCategory.CORE):
@@ -659,7 +659,7 @@ for module_info in manager.list_modules(ModuleCategory.CORE):
 
 **Solution:**
 ```python
-from enigma.modules.registry import register_all
+from ai_tester.modules.registry import register_all
 
 manager = ModuleManager()
 register_all(manager)  # Register built-in modules

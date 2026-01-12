@@ -26,7 +26,7 @@ The `enigma.comms` package provides everything needed for multi-device AI commun
 Run an AI server that responds to HTTP requests:
 
 ```python
-from enigma.comms import create_api_server
+from ai_tester.comms import create_api_server
 
 # Start server on port 5000
 server = create_api_server()
@@ -39,7 +39,7 @@ server = create_api_server()
 Full web interface with WebSocket support:
 
 ```python
-from enigma.comms import create_web_server
+from ai_tester.comms import create_web_server
 
 server = create_web_server(port=5000)
 server.run()
@@ -52,7 +52,7 @@ server.run()
 Connect multiple Enigma instances:
 
 ```python
-from enigma.comms import EnigmaNode
+from ai_tester.comms import EnigmaNode
 
 # On Device 1 (Server)
 node1 = EnigmaNode(name="desktop", port=5000)
@@ -72,7 +72,7 @@ response = node2.ask_peer("desktop", "What is 2+2?")
 Automatically find other Enigma nodes:
 
 ```python
-from enigma.comms import discover_enigma_nodes
+from ai_tester.comms import discover_enigma_nodes
 
 # Find all Enigma nodes on the network
 nodes = discover_enigma_nodes()
@@ -85,7 +85,7 @@ for name, info in nodes.items():
 Let multiple AIs talk to each other:
 
 ```python
-from enigma.comms import AIConversation
+from ai_tester.comms import AIConversation
 
 conv = AIConversation()
 conv.add_participant("Alice", personality="friendly and helpful")
@@ -140,7 +140,7 @@ Manage connection protocols for games, robots, and external APIs:
 Simple client for connecting to any Enigma API server:
 
 ```python
-from enigma.comms import RemoteClient
+from ai_tester.comms import RemoteClient
 
 client = RemoteClient("http://192.168.1.100:5000")
 if client.is_available():
@@ -182,7 +182,7 @@ Response:
 Share models between devices:
 
 ```python
-from enigma.comms import ModelExporter
+from ai_tester.comms import ModelExporter
 
 # Export a model as portable package
 ModelExporter.export_model("my_model", "/path/to/output")
@@ -197,14 +197,14 @@ ModelExporter.import_model("/path/to/my_model_package.zip")
 Keep multiple devices in sync:
 
 ```python
-from enigma.comms import MemorySync
+from ai_tester.comms import MemorySync
 
 # On Device 1
 sync = MemorySync()
 sync.sync_with_peer("http://192.168.1.101:5000", "laptop")
 
 # For offline devices (USB transfer)
-from enigma.comms import OfflineSync
+from ai_tester.comms import OfflineSync
 
 OfflineSync.export_to_file("/usb/enigma_memories.json")
 # Copy USB to other device, then:

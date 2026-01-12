@@ -27,10 +27,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     import torch
-    from enigma.core.model import create_model, MODEL_PRESETS
-    from enigma.core.tokenizer import get_tokenizer, train_tokenizer
-    from enigma.core.training import Trainer, TrainingConfig, train_model
-    from enigma.config import CONFIG
+    from ai_tester.core.model import create_model, MODEL_PRESETS
+    from ai_tester.core.tokenizer import get_tokenizer, train_tokenizer
+    from ai_tester.core.training import Trainer, TrainingConfig, train_model
+    from ai_tester.config import CONFIG
 except ImportError as e:
     print(f"Error: Required dependencies not installed: {e}")
     print("Please install requirements: pip install -r requirements.txt")

@@ -1,5 +1,5 @@
 """
-Enigma Engine - Example Scripts
+AI Tester - Example Scripts
 
 This directory contains example scripts demonstrating various Enigma features:
 

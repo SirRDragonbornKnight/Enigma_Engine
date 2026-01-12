@@ -7,18 +7,18 @@ from pathlib import Path
 import tempfile
 import time
 
-from enigma.memory.vector_db import (
+from ai_tester.memory.vector_db import (
     SimpleVectorDB,
     FAISSVectorDB,
     create_vector_db
 )
-from enigma.memory.categorization import (
+from ai_tester.memory.categorization import (
     Memory,
     MemoryType,
     MemoryCategory,
     MemoryCategorization
 )
-from enigma.memory.export_import import (
+from ai_tester.memory.export_import import (
     MemoryExporter,
     MemoryImporter
 )

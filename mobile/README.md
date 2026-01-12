@@ -7,8 +7,8 @@ This directory contains starter templates and guides for building mobile apps th
 ### 1. Start the Mobile API Server
 
 ```bash
-# From the Enigma Engine root directory
-python -c "from enigma.mobile.api import run_mobile_api; run_mobile_api()"
+# From the AI Tester root directory
+python -c "from ai_tester.mobile.api import run_mobile_api; run_mobile_api()"
 ```
 
 This will start the API server on `http://0.0.0.0:5001`

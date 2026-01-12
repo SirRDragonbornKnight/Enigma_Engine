@@ -3,12 +3,12 @@ Tests for context awareness and bias detection systems.
 """
 import pytest
 
-from enigma.core.context_awareness import (
+from ai_tester.core.context_awareness import (
     ContextTracker,
     ContextAwareConversation,
     ConversationTurn
 )
-from enigma.tools.bias_detection import (
+from ai_tester.tools.bias_detection import (
     BiasDetector,
     OffensiveContentFilter,
     SafeReinforcementLogic

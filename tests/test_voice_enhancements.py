@@ -330,19 +330,19 @@ class TestSmartWakeWords:
         suggestions = smart.suggest_wake_phrases("Enigma", num_suggestions=5)
         
         assert len(suggestions) > 0
-        assert any("enigma" in s.lower() for s in suggestions)
+        assert any("ai_tester" in s.lower() for s in suggestions)
     
     def test_categorize_wake_phrase(self):
         """Test wake phrase categorization."""
         smart = SmartWakeWords()
         
-        smart.categorize_wake_phrase("hey enigma", "casual")
+        smart.categorize_wake_phrase("hey ai tester", "casual")
         smart.categorize_wake_phrase("greetings enigma", "formal")
         
         casual = smart.get_phrases_by_personality("casual")
         formal = smart.get_phrases_by_personality("formal")
         
-        assert "hey enigma" in casual
+        assert "hey ai tester" in casual
         assert "greetings enigma" in formal
     
     def test_train_custom_phrase(self):
@@ -359,19 +359,19 @@ class TestSmartWakeWords:
         smart = SmartWakeWords()
         
         # Exact match
-        score = smart.improve_confidence("hey enigma", "hey enigma")
+        score = smart.improve_confidence("hey ai tester", "hey ai tester")
         assert score == 1.0
         
         # Substring match at start
-        score = smart.improve_confidence("hey enigma", "hey enigma listen")
+        score = smart.improve_confidence("hey ai tester", "hey ai tester listen")
         assert score > 0.9
         
         # Word overlap
-        score = smart.improve_confidence("ok enigma", "okay enigma please")
+        score = smart.improve_confidence("ok ai tester", "okay enigma please")
         assert score > 0.5
         
         # No match
-        score = smart.improve_confidence("hey enigma", "hello world")
+        score = smart.improve_confidence("hey ai tester", "hello world")
         assert score < 0.5
 
 

@@ -246,8 +246,8 @@ Get content from a webpage.
 Train the AI on tool use examples:
 
 ```python
-from enigma.core.tokenizer import train_tokenizer
-from enigma.core.trainer import train_model
+from ai_tester.core.tokenizer import train_tokenizer
+from ai_tester.core.trainer import train_model
 
 # Train tokenizer on tool use data
 tokenizer = train_tokenizer(
@@ -269,8 +269,8 @@ train_model(
 Initialize the inference engine with tool support:
 
 ```python
-from enigma.core.inference import EnigmaEngine
-from enigma.modules import ModuleManager
+from ai_tester.core.inference import AITesterEngine
+from ai_tester.modules import ModuleManager
 
 # Initialize module manager
 manager = ModuleManager()
@@ -283,7 +283,7 @@ manager.load('vision')            # For image analysis
 manager.load('avatar')            # For avatar control
 
 # Create inference engine with tools enabled
-engine = EnigmaEngine(
+engine = AITesterEngine(
     model_path="models/enigma.pth",
     enable_tools=True,
     module_manager=manager
@@ -315,7 +315,7 @@ print(response)
 You can also execute tools directly:
 
 ```python
-from enigma.tools import ToolExecutor
+from ai_tester.tools import ToolExecutor
 
 executor = ToolExecutor(module_manager=manager)
 
@@ -473,7 +473,7 @@ manager.configure('image_gen_local', {
 
 1. **Check training**: Ensure model was trained on tool use examples
 2. **Verify modules**: Confirm required modules are loaded
-3. **Enable tools**: Set `enable_tools=True` in EnigmaEngine
+3. **Enable tools**: Set `enable_tools=True` in AITesterEngine
 4. **Check prompt**: Include clear requests that require tools
 
 ### Tool Execution Errors
@@ -516,10 +516,10 @@ class ToolExecutor:
     def format_tool_result(self, result: Dict) -> str
 ```
 
-### EnigmaEngine (Tool Support)
+### AITesterEngine (Tool Support)
 
 ```python
-class EnigmaEngine:
+class AITesterEngine:
     def __init__(
         self,
         ...,

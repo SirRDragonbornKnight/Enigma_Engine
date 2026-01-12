@@ -16,7 +16,7 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_has_tool_tokens(self):
         """Test that tokenizer has tool use special tokens."""
-        from enigma.core.advanced_tokenizer import EnigmaTokenizer as AdvancedBPETokenizer
+        from ai_tester.core.advanced_tokenizer import AITesterTokenizer as AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         
@@ -28,7 +28,7 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_bpe_dropout(self):
         """Test BPE dropout functionality."""
-        from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+        from ai_tester.core.advanced_tokenizer import AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         tokenizer.set_bpe_dropout(0.1)
@@ -41,7 +41,7 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_streaming(self):
         """Test streaming tokenization."""
-        from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+        from ai_tester.core.advanced_tokenizer import AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         
@@ -59,7 +59,7 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_improved_decode(self):
         """Test improved decoding with space cleanup."""
-        from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+        from ai_tester.core.advanced_tokenizer import AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         
@@ -73,7 +73,7 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_compression_ratio(self):
         """Test compression ratio calculation."""
-        from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+        from ai_tester.core.advanced_tokenizer import AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         
@@ -86,7 +86,7 @@ class TestTokenizerEnhancements:
     
     def test_tokenizer_stats(self):
         """Test tokenization statistics."""
-        from enigma.core.advanced_tokenizer import AdvancedBPETokenizer
+        from ai_tester.core.advanced_tokenizer import AdvancedBPETokenizer
         
         tokenizer = AdvancedBPETokenizer()
         
@@ -108,7 +108,7 @@ class TestToolDefinitions:
     
     def test_get_tool_definition(self):
         """Test getting a tool definition."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("generate_image")
         
@@ -118,7 +118,7 @@ class TestToolDefinitions:
     
     def test_get_all_tools(self):
         """Test getting all tools."""
-        from enigma.tools.tool_definitions import get_all_tools
+        from ai_tester.tools.tool_definitions import get_all_tools
         
         tools = get_all_tools()
         
@@ -127,7 +127,7 @@ class TestToolDefinitions:
     
     def test_get_tools_by_category(self):
         """Test getting tools by category."""
-        from enigma.tools.tool_definitions import get_tools_by_category
+        from ai_tester.tools.tool_definitions import get_tools_by_category
         
         gen_tools = get_tools_by_category("generation")
         
@@ -136,7 +136,7 @@ class TestToolDefinitions:
     
     def test_tool_schemas(self):
         """Test tool schema generation."""
-        from enigma.tools.tool_definitions import get_tool_schemas
+        from ai_tester.tools.tool_definitions import get_tool_schemas
         
         schemas = get_tool_schemas()
         
@@ -146,7 +146,7 @@ class TestToolDefinitions:
     
     def test_available_tools_prompt(self):
         """Test available tools prompt generation."""
-        from enigma.tools.tool_definitions import get_available_tools_for_prompt
+        from ai_tester.tools.tool_definitions import get_available_tools_for_prompt
         
         prompt = get_available_tools_for_prompt()
         
@@ -161,7 +161,7 @@ class TestToolExecutor:
     
     def test_parse_tool_calls(self):
         """Test parsing tool calls from text."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -180,7 +180,7 @@ More text"""
     
     def test_parse_multiple_tool_calls(self):
         """Test parsing multiple tool calls."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -196,7 +196,7 @@ Some text
     
     def test_validate_params_success(self):
         """Test parameter validation success."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -211,7 +211,7 @@ Some text
     
     def test_validate_params_missing_required(self):
         """Test parameter validation with missing required param."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -226,7 +226,7 @@ Some text
     
     def test_validate_params_type_conversion(self):
         """Test parameter type conversion."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -240,7 +240,7 @@ Some text
     
     def test_format_tool_result(self):
         """Test formatting tool results."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -260,7 +260,7 @@ Some text
     
     def test_execute_unknown_tool(self):
         """Test executing unknown tool."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -275,10 +275,10 @@ class TestInferenceToolIntegration:
     
     def test_engine_init_with_tools(self):
         """Test initializing engine with tools enabled."""
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
         # Initialize without module manager (tools won't work but should init)
-        engine = EnigmaEngine(
+        engine = AITesterEngine(
             model_size="nano",  # Use smallest model for testing
             enable_tools=True,
             module_manager=None
@@ -290,9 +290,9 @@ class TestInferenceToolIntegration:
     
     def test_engine_init_without_tools(self):
         """Test initializing engine without tools."""
-        from enigma.core.inference import EnigmaEngine
+        from ai_tester.core.inference import AITesterEngine
         
-        engine = EnigmaEngine(
+        engine = AITesterEngine(
             model_size="nano",
             enable_tools=False
         )
@@ -332,7 +332,7 @@ class TestToolTrainingData:
     
     def test_training_data_tokenizable(self):
         """Test that training data can be tokenized."""
-        from enigma.core.tokenizer import get_tokenizer
+        from ai_tester.core.tokenizer import get_tokenizer
         
         data_file = Path(__file__).parent.parent / "data" / "tool_training_data.txt"
         
@@ -354,7 +354,7 @@ class TestToolUseEndToEnd:
     
     def test_parse_and_format_roundtrip(self):
         """Test parsing and formatting roundtrip."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -382,7 +382,7 @@ More text"""
     
     def test_execute_tool_from_text(self):
         """Test executing tools from text."""
-        from enigma.tools.tool_executor import execute_tool_from_text
+        from ai_tester.tools.tool_executor import execute_tool_from_text
         
         text = """Some text
 <tool_call>{"tool": "list_directory", "params": {"path": "."}}</tool_call>
@@ -401,7 +401,7 @@ class TestGIFGeneration:
     
     def test_generate_gif_tool_definition(self):
         """Test that generate_gif tool is properly defined."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("generate_gif")
         
@@ -418,7 +418,7 @@ class TestGIFGeneration:
     
     def test_generate_gif_params_validation(self):
         """Test parameter validation for generate_gif."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -436,7 +436,7 @@ class TestGIFGeneration:
     
     def test_generate_gif_missing_frames(self):
         """Test generate_gif with missing frames parameter."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -452,7 +452,7 @@ class TestGIFGeneration:
     
     def test_generate_gif_default_values(self):
         """Test that default values are applied for optional parameters."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("generate_gif")
         
@@ -469,7 +469,7 @@ class TestMediaEditingTools:
     
     def test_edit_image_tool_definition(self):
         """Test that edit_image tool is properly defined."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("edit_image")
         
@@ -484,7 +484,7 @@ class TestMediaEditingTools:
     
     def test_edit_gif_tool_definition(self):
         """Test that edit_gif tool is properly defined."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("edit_gif")
         
@@ -498,7 +498,7 @@ class TestMediaEditingTools:
     
     def test_edit_video_tool_definition(self):
         """Test that edit_video tool is properly defined."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         tool = get_tool_definition("edit_video")
         
@@ -512,7 +512,7 @@ class TestMediaEditingTools:
     
     def test_edit_image_params_validation(self):
         """Test parameter validation for edit_image."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -528,7 +528,7 @@ class TestMediaEditingTools:
     
     def test_edit_image_invalid_edit_type(self):
         """Test edit_image with invalid edit type."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -543,7 +543,7 @@ class TestMediaEditingTools:
     
     def test_edit_image_execution_file_not_found(self):
         """Test edit_image with non-existent file."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -557,7 +557,7 @@ class TestMediaEditingTools:
     
     def test_edit_gif_execution_file_not_found(self):
         """Test edit_gif with non-existent file."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -571,7 +571,7 @@ class TestMediaEditingTools:
     
     def test_edit_video_execution_file_not_found(self):
         """Test edit_video with non-existent file."""
-        from enigma.tools.tool_executor import ToolExecutor
+        from ai_tester.tools.tool_executor import ToolExecutor
         
         executor = ToolExecutor()
         
@@ -589,7 +589,7 @@ class TestToolIntegration:
     
     def test_all_new_tools_registered(self):
         """Test that all new tools are in the registry."""
-        from enigma.tools.tool_definitions import TOOLS_BY_NAME
+        from ai_tester.tools.tool_definitions import TOOLS_BY_NAME
         
         assert "generate_gif" in TOOLS_BY_NAME
         assert "edit_image" in TOOLS_BY_NAME
@@ -598,7 +598,7 @@ class TestToolIntegration:
     
     def test_new_tools_have_examples(self):
         """Test that new tools have usage examples."""
-        from enigma.tools.tool_definitions import get_tool_definition
+        from ai_tester.tools.tool_definitions import get_tool_definition
         
         gif_tool = get_tool_definition("generate_gif")
         assert len(gif_tool.examples) > 0
@@ -608,7 +608,7 @@ class TestToolIntegration:
     
     def test_tool_schemas_include_new_tools(self):
         """Test that tool schemas include new tools."""
-        from enigma.tools.tool_definitions import get_tool_schemas
+        from ai_tester.tools.tool_definitions import get_tool_schemas
         
         schemas = get_tool_schemas()
         

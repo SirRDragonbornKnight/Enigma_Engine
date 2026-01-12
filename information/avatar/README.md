@@ -45,7 +45,7 @@ The GUI component that shows:
 
 ### Basic Usage
 ```python
-from enigma.avatar import get_avatar, enable_avatar, disable_avatar
+from ai_tester.avatar import get_avatar, enable_avatar, disable_avatar
 
 # Get the global avatar instance
 avatar = get_avatar()
@@ -69,7 +69,7 @@ avatar.disable()
 ### In AI Responses
 The AI can control the avatar during responses:
 ```python
-from enigma.gui.tabs.avatar import set_avatar_expression
+from ai_tester.gui.tabs.avatar import set_avatar_expression
 
 # When AI generates a happy response
 set_avatar_expression(main_window, "happy")

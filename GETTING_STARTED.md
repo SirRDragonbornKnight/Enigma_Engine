@@ -1,4 +1,4 @@
-# 🚀 Getting Started with Enigma Engine
+# 🚀 Getting Started with AI Tester
 
 ## Quick Start (5 Minutes)
 

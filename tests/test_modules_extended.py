@@ -283,7 +283,7 @@ class TestModuleDocGenerator(unittest.TestCase):
         markdown = self.doc_gen.generate_all_markdown()
         
         self.assertIsInstance(markdown, str)
-        self.assertIn('# Enigma Engine', markdown)
+        self.assertIn('# AI Tester', markdown)
         self.assertIn('Module Documentation', markdown)
         self.assertIn('Table of Contents', markdown)
         
@@ -334,7 +334,7 @@ class TestModuleDocGenerator(unittest.TestCase):
             
             self.assertTrue(output_path.exists())
             content = output_path.read_text(encoding='utf-8')
-            self.assertIn('Enigma Engine', content)
+            self.assertIn('AI Tester', content)
             self.assertGreater(len(content), 100)
     
     def test_export_to_file_mermaid(self):
