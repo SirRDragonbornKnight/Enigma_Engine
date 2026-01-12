@@ -3299,6 +3299,10 @@ class EnhancedMainWindow(QMainWindow):
             if hasattr(self, 'chat_status'):
                 self.chat_status.setText(f"Model ready ({self.engine.device})")
             
+            # Update status bar model button
+            if hasattr(self, 'model_status_btn'):
+                self.model_status_btn.setText(f"Model: {self.current_model_name}  v")
+            
             # Update system tray with model name
             try:
                 tray = get_system_tray()

@@ -4,8 +4,9 @@ Model Router Tab - Assign models to tools.
 This tab lets you:
   - See all available tools (chat, image, code, etc.)
   - Assign models to each tool (Forge, HuggingFace, local, API)
-  - Set priorities for fallback
-  - Add HuggingFace models by ID
+  - Set priorities for fallback ordering
+  
+Priority: Higher numbers are tried first. Use 100 for primary, 50 for fallback.
 """
 
 from typing import Dict, List, Optional, Any
@@ -130,9 +131,9 @@ class ToolAssignmentWidget(QFrame):
         
         self.priority_spin = QSpinBox()
         self.priority_spin.setRange(1, 100)
-        self.priority_spin.setValue(10)
-        self.priority_spin.setPrefix("P:")
-        self.priority_spin.setFixedWidth(60)
+        self.priority_spin.setValue(50)
+        self.priority_spin.setToolTip("Priority: Higher = tried first (100=primary, 50=backup)")
+        self.priority_spin.setFixedWidth(55)
         add_layout.addWidget(self.priority_spin)
         
         add_btn = QPushButton("+")
@@ -290,8 +291,9 @@ class ToolAssignmentWidget(QFrame):
                 color = "#888"
                 icon = "[?]"
                 
-            item = QListWidgetItem(f"{icon} {model_id} (P:{priority})")
+            item = QListWidgetItem(f"{icon} {model_id.split(':')[-1]} [{priority}]")
             item.setData(Qt.ItemDataRole.UserRole, model_id)
+            item.setToolTip(f"Full ID: {model_id}\nPriority: {priority} (higher = tried first)")
             item.setForeground(Qt.GlobalColor.white)
             self.model_list.addItem(item)
             
@@ -412,46 +414,12 @@ class ModelRouterTab(QWidget):
         
         # Description
         desc = QLabel(
-            "Assign AI models to each tool. Higher priority models are tried first. "
-            "You can assign multiple models for fallback support."
+            "Assign AI models to each tool. Higher priority numbers are tried first. "
+            "Select a model from the dropdown and click + to add, - to remove."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #888; margin-bottom: 10px;")
         layout.addWidget(desc)
-        
-        # Quick assign section - Apply model to all tools
-        quick_group = QGroupBox("Quick Assign - Apply to All Tools")
-        quick_layout = QHBoxLayout(quick_group)
-        
-        quick_layout.addWidget(QLabel("Model:"))
-        self.quick_model_combo = QComboBox()
-        self.quick_model_combo.setMinimumWidth(250)
-        self._populate_quick_combo()
-        quick_layout.addWidget(self.quick_model_combo)
-        
-        apply_all_btn = QPushButton("⚡ Apply to ALL Tools")
-        apply_all_btn.setStyleSheet("background-color: #f9e2af; color: #1e1e2e; font-weight: bold;")
-        apply_all_btn.setToolTip("Assign this model to every tool at once")
-        apply_all_btn.clicked.connect(self._apply_to_all_tools)
-        quick_layout.addWidget(apply_all_btn)
-        
-        quick_layout.addStretch()
-        layout.addWidget(quick_group)
-        
-        # Add HuggingFace model section
-        hf_group = QGroupBox("Add HuggingFace Model")
-        hf_layout = QHBoxLayout(hf_group)
-        
-        hf_layout.addWidget(QLabel("Model ID:"))
-        self.hf_input = QLineEdit()
-        self.hf_input.setPlaceholderText("e.g., mistralai/Mistral-7B-Instruct-v0.2")
-        hf_layout.addWidget(self.hf_input)
-        
-        hf_add_btn = QPushButton("Add to List")
-        hf_add_btn.clicked.connect(self._add_hf_model)
-        hf_layout.addWidget(hf_add_btn)
-        
-        layout.addWidget(hf_group)
         
         # Scroll area for tools
         scroll = QScrollArea()
@@ -563,106 +531,13 @@ class ModelRouterTab(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to reset: {e}")
                 
-    def _add_hf_model(self):
-        """Add a HuggingFace model to all dropdowns."""
-        model_id = self.hf_input.text().strip()
-        if not model_id:
-            return
-            
-        # Format as huggingface:repo/model
-        if not model_id.startswith("huggingface:"):
-            model_id = f"huggingface:{model_id}"
-        
-        # Try to get model size info
-        size_suffix = ""
-        try:
-            from forge_ai.core.huggingface_loader import get_huggingface_model_info
-            # Extract just the model ID part (after "huggingface:")
-            hf_id = model_id.replace("huggingface:", "")
-            info = get_huggingface_model_info(hf_id)
-            if not info.get("error"):
-                size_suffix = f" ({info['size_str']})"
-        except Exception:
-            pass
-        
-        display_text = f"{model_id}{size_suffix}"
-            
-        # Add to all tool widgets
-        for widget in self.tool_widgets.values():
-            widget.model_input.addItem(display_text)
-            
-        self.hf_input.clear()
-        self.status_label.setText(f"Added {display_text} to model list")
-        
     def _on_assignment_changed(self, tool_name: str):
         """Handle assignment change in a tool widget."""
         self.status_label.setText(f"Modified {tool_name} - remember to save!")
         self.status_label.setStyleSheet("color: #f39c12; font-style: italic;")
-
-    def _populate_quick_combo(self):
-        """Populate the quick assign model dropdown."""
-        self.quick_model_combo.clear()
-        self.quick_model_combo.addItem("Select a model...")
-        
-        # Add Forge models from registry
-        try:
-            from forge_ai.core.model_registry import ModelRegistry
-            registry = ModelRegistry()
-            for name, info in registry.registry.get("models", {}).items():
-                size = info.get("size", "?")
-                source = info.get("source", "forge_ai")
-                if source == "huggingface":
-                    hf_id = info.get("huggingface_id", name)
-                    self.quick_model_combo.addItem(f"huggingface:{hf_id} [{size}]", f"huggingface:{hf_id}")
-                else:
-                    self.quick_model_combo.addItem(f"{name} [{size}]", name)
-        except Exception as e:
-            print(f"Error loading models for quick combo: {e}")
-            
-    def _apply_to_all_tools(self):
-        """Apply selected model to all tools at once."""
-        if self.quick_model_combo.currentIndex() == 0:
-            QMessageBox.warning(self, "No Model", "Please select a model first")
-            return
-            
-        model_id = self.quick_model_combo.currentData()
-        if not model_id:
-            model_id = self.quick_model_combo.currentText().split(" [")[0]
-            
-        reply = QMessageBox.question(
-            self, "Apply to All?",
-            f"Assign '{model_id}' to ALL tools?\n\n"
-            "This will replace all existing assignments.",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if reply != QMessageBox.Yes:
-            return
-            
-        try:
-            from forge_ai.core.tool_router import get_router
-            router = get_router()
-            
-            # Apply to all tools
-            count = 0
-            for tool_name, widget in self.tool_widgets.items():
-                # Clear existing and set new
-                router.assign_model(tool_name, model_id, priority=100)
-                count += 1
-                
-            # Reload UI
-            self._load_config()
-            
-            # Save configuration
-            router._save_config()
-            
-            self.status_label.setText(f"Applied '{model_id}' to {count} tools")
-            self.status_label.setStyleSheet("color: #2ecc71; font-style: italic;")
-            
-            QMessageBox.information(
-                self, "Applied", 
-                f"'{model_id}' has been assigned to all {count} tools and saved."
-            )
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to apply: {e}")
+    
+    def refresh_models(self):
+        """Refresh model dropdowns in all tool widgets."""
+        for tool_name, widget in self.tool_widgets.items():
+            widget._populate_model_options()
+        self.status_label.setText("Model list refreshed")
