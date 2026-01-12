@@ -2766,6 +2766,16 @@ class EnhancedMainWindow(QMainWindow):
         
         # Track if current model is HuggingFace (for feature restrictions)
         self._is_hf_model = False
+        
+        # Build UI first (before model load so user sees the window immediately)
+        self._build_ui()
+        
+        # Check if first run (no models) - this needs to be synchronous
+        if not self.registry.registry.get("models"):
+            self._run_setup_wizard()
+        else:
+            # Defer model loading to after GUI is shown
+            self._show_model_selector_deferred()
     
     def _on_chat_sync_started(self, user_text: str):
         """Handle when shared ChatSync starts generating (from quick chat)."""
@@ -2796,16 +2806,6 @@ class EnhancedMainWindow(QMainWindow):
     def _on_chat_sync_stopped(self):
         """Handle when shared ChatSync generation is stopped."""
         self._on_chat_sync_finished("")
-        
-        # Build UI first (before model load so user sees the window immediately)
-        self._build_ui()
-        
-        # Check if first run (no models) - this needs to be synchronous
-        if not self.registry.registry.get("models"):
-            self._run_setup_wizard()
-        else:
-            # Defer model loading to after GUI is shown
-            self._show_model_selector_deferred()
     
     def _set_window_icon(self):
         """Set the window icon from file or create a default."""
@@ -6042,42 +6042,6 @@ def run_app(minimize_to_tray: bool = True):
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern look
     app.setQuitOnLastWindowClosed(False)  # Keep running when window closes
-    
-    # Apply dark theme palette
-    from PyQt5.QtGui import QPalette, QColor
-    palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(30, 30, 46))
-    palette.setColor(QPalette.WindowText, QColor(205, 214, 244))
-    palette.setColor(QPalette.Base, QColor(24, 24, 37))
-    palette.setColor(QPalette.AlternateBase, QColor(30, 30, 46))
-    palette.setColor(QPalette.ToolTipBase, QColor(30, 30, 46))
-    palette.setColor(QPalette.ToolTipText, QColor(205, 214, 244))
-    palette.setColor(QPalette.Text, QColor(205, 214, 244))
-    palette.setColor(QPalette.Button, QColor(49, 50, 68))
-    palette.setColor(QPalette.ButtonText, QColor(205, 214, 244))
-    palette.setColor(QPalette.BrightText, QColor(243, 139, 168))
-    palette.setColor(QPalette.Link, QColor(137, 180, 250))
-    palette.setColor(QPalette.Highlight, QColor(137, 180, 250))
-    palette.setColor(QPalette.HighlightedText, QColor(30, 30, 46))
-    palette.setColor(QPalette.Disabled, QPalette.Text, QColor(108, 112, 134))
-    palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(108, 112, 134))
-    app.setPalette(palette)
-    
-    # Global stylesheet for text selection and consistent styling
-    app.setStyleSheet("""
-        QLabel { 
-            selection-background-color: #89b4fa;
-            selection-color: #1e1e2e;
-        }
-        QTextEdit, QPlainTextEdit, QTextBrowser, QLineEdit {
-            selection-background-color: #89b4fa;
-            selection-color: #1e1e2e;
-        }
-        QListWidget, QTreeWidget, QTableWidget {
-            selection-background-color: #89b4fa;
-            selection-color: #1e1e2e;
-        }
-    """)
     
     window = EnhancedMainWindow()
     
