@@ -13,7 +13,16 @@ For first-time users, start with --gui
 
 import argparse
 import sys
+import os
 from pathlib import Path
+
+
+def _print_startup_banner():
+    """Print a clean startup message."""
+    print("=" * 50)
+    print("  Enigma Engine - Starting...")
+    print("  (Audio warnings below are normal on headless Pi)")
+    print("=" * 50)
 
 
 def main():
@@ -200,6 +209,7 @@ Examples:
                 break
 
     if args.gui:
+        _print_startup_banner()
         try:
             from enigma.gui.enhanced_window import run_app
         except ImportError as e:

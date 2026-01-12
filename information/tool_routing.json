@@ -2,39 +2,51 @@
   "assignments": {
     "chat": [
       {
-        "model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b",
+        "model_id": "huggingface:Qwen/Qwen2-0.5B-Instruct",
         "model_type": "huggingface",
         "priority": 100,
         "config": {
-          "description": "Fast 1.6B chat - great balance"
+          "description": "Best for Pi 5 - 0.5B instruct model, fast and smart"
         }
-      },
-      {
-        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
-        "model_type": "huggingface",
-        "priority": 100,
-        "config": {}
-      },
-      {
-        "model_id": "huggingface:microsoft/DialoGPT-small",
-        "model_type": "huggingface",
-        "priority": 100,
-        "config": {}
       },
       {
         "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         "model_type": "huggingface",
         "priority": 90,
         "config": {
-          "description": "Quick 1.1B chat model"
+          "description": "TinyLlama 1.1B - good chat quality"
         }
       },
       {
-        "model_id": "huggingface:microsoft/DialoGPT-medium",
+        "model_id": "huggingface:microsoft/DialoGPT-small",
         "model_type": "huggingface",
         "priority": 80,
         "config": {
-          "description": "Reddit-style casual chat"
+          "description": "DialoGPT - fast casual chat"
+        }
+      },
+      {
+        "model_id": "enigma:default",
+        "model_type": "enigma",
+        "priority": 10,
+        "config": {}
+      }
+    ],
+    "code": [
+      {
+        "model_id": "huggingface:Qwen/Qwen2-0.5B-Instruct",
+        "model_type": "huggingface",
+        "priority": 100,
+        "config": {
+          "description": "Qwen2 can do basic code"
+        }
+      },
+      {
+        "model_id": "huggingface:Salesforce/codegen-350M-mono",
+        "model_type": "huggingface",
+        "priority": 90,
+        "config": {
+          "description": "Python specialist - very fast"
         }
       },
       {
@@ -46,123 +58,29 @@
     ],
     "reasoning": [
       {
-        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
+        "model_id": "huggingface:Qwen/Qwen2-0.5B-Instruct",
         "model_type": "huggingface",
         "priority": 100,
         "config": {
-          "description": "Best reasoning - needs GPU",
-          "requires_gpu": true
+          "description": "Best reasoning for Pi 5"
         }
       },
       {
-        "model_id": "huggingface:microsoft/phi-2",
+        "model_id": "huggingface:TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         "model_type": "huggingface",
         "priority": 90,
         "config": {
-          "description": "Smart 2.7B - good reasoning"
+          "description": "TinyLlama for basic reasoning"
         }
-      },
-      {
-        "model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct",
-        "model_type": "huggingface",
-        "priority": 80,
-        "config": {
-          "description": "Multilingual instruct model"
-        }
-      }
-    ],
-    "math": [
-      {
-        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
-        "model_type": "huggingface",
-        "priority": 100,
-        "config": {
-          "description": "Best for complex math - needs GPU",
-          "requires_gpu": true
-        }
-      },
-      {
-        "model_id": "huggingface:microsoft/phi-2",
-        "model_type": "huggingface",
-        "priority": 90,
-        "config": {
-          "description": "Good math ability for size"
-        }
-      },
-      {
-        "model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct",
-        "model_type": "huggingface",
-        "priority": 80,
-        "config": {
-          "description": "Decent at basic math"
-        }
-      }
-    ],
-    "code": [
-      {
-        "model_id": "huggingface:Qwen/Qwen2.5-Coder-1.5B-Instruct",
-        "model_type": "huggingface",
-        "priority": 100,
-        "config": {
-          "description": "Best small code model - multi-language"
-        }
-      },
-      {
-        "model_id": "huggingface:Salesforce/codegen-350M-mono",
-        "model_type": "huggingface",
-        "priority": 95,
-        "config": {
-          "description": "Python specialist - very fast"
-        }
-      },
-      {
-        "model_id": "huggingface:microsoft/phi-2",
-        "model_type": "huggingface",
-        "priority": 85,
-        "config": {
-          "description": "Good general code ability"
-        }
-      },
-      {
-        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
-        "model_type": "huggingface",
-        "priority": 80,
-        "config": {
-          "description": "Multi-language code - needs GPU",
-          "requires_gpu": true
-        }
-      },
-      {
-        "model_id": "enigma:default",
-        "model_type": "enigma",
-        "priority": 10,
-        "config": {}
       }
     ],
     "instruct": [
       {
-        "model_id": "huggingface:Qwen/Qwen2-1.5B-Instruct",
+        "model_id": "huggingface:Qwen/Qwen2-0.5B-Instruct",
         "model_type": "huggingface",
         "priority": 100,
         "config": {
           "description": "Great at following instructions"
-        }
-      },
-      {
-        "model_id": "huggingface:mistralai/Mistral-7B-Instruct-v0.2",
-        "model_type": "huggingface",
-        "priority": 90,
-        "config": {
-          "description": "Best quality - needs GPU",
-          "requires_gpu": true
-        }
-      },
-      {
-        "model_id": "huggingface:stabilityai/stablelm-2-zephyr-1_6b",
-        "model_type": "huggingface",
-        "priority": 80,
-        "config": {
-          "description": "Good instruction follower"
         }
       }
     ],
@@ -255,5 +173,5 @@
       }
     ]
   },
-  "updated": "2026-01-08T16:51:04.297072"
+  "updated": "2026-01-12T10:00:00.000000"
 }

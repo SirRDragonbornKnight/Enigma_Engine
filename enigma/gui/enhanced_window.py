@@ -3042,6 +3042,10 @@ class EnhancedMainWindow(QMainWindow):
             else:
                 self.current_model_name = models[0]
         
+        # Update chat model label immediately so it shows the name even before load completes
+        if hasattr(self, 'chat_model_label') and self.current_model_name:
+            self.chat_model_label.setText(f"[AI] {self.current_model_name} (loading...)")
+        
         # Show "loading" status in chat immediately
         if hasattr(self, 'chat_display'):
             self.chat_display.append(
@@ -4872,6 +4876,23 @@ class EnhancedMainWindow(QMainWindow):
         
         self._ai_worker.start()
     
+    def _remove_thinking_indicator(self):
+        """Remove the thinking indicator from chat display."""
+        if hasattr(self, 'chat_display'):
+            import re
+            html = self.chat_display.toHtml()
+            # Remove the thinking div
+            html = re.sub(
+                r'<div[^>]*id="thinking"[^>]*>.*?</div>',
+                '',
+                html,
+                flags=re.DOTALL | re.IGNORECASE
+            )
+            self.chat_display.setHtml(html)
+            # Scroll to bottom
+            scrollbar = self.chat_display.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+    
     def _on_thinking_update(self, status: str):
         """Update the thinking indicator with current status."""
         if hasattr(self, 'thinking_label'):
@@ -5031,6 +5052,9 @@ class EnhancedMainWindow(QMainWindow):
         # Clear thinking status
         if hasattr(self, 'chat_status'):
             self.chat_status.setText("")
+        
+        # Remove the thinking indicator from chat display
+        self._remove_thinking_indicator()
         
         # AUTO-CONTROL: Automatically control avatar/robot/game based on response
         self._auto_control_from_response(response)

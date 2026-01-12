@@ -1,12 +1,12 @@
 {
-  "last_model": "mistralai_mistral_7b_instruct_v0.2",
+  "last_model": "qwen2_0_5b_instruct",
   "window_width": 1000,
   "window_height": 700,
-  "window_x": 4687,
-  "window_y": 451,
+  "window_x": 0,
+  "window_y": 0,
   "auto_speak": false,
   "microphone_enabled": false,
-  "last_tab": 27,
+  "last_tab": 0,
   "always_on_top": false,
-  "monitor_index": 2
+  "monitor_index": 0
 }

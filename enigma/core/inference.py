@@ -334,25 +334,14 @@ class EnigmaEngine:
                 )
                 logger.warning(f"Could not load weights: {e}")
         else:
-            # Create new model
-            if model_size == "auto":
-                model_size = "small"
-                logger.warning(
-                    f"No model file found. Creating new '{model_size}' model with random weights.\n"
-                    f"To use a trained model:\n"
-                    f"  1. Train a model: python run.py --train\n"
-                    f"  2. Place a .pth file in: {MODELS_DIR}\n"
-                    f"  3. Or specify model_path when creating EnigmaEngine"
-                )
-
-            try:
-                model = create_model(model_size, vocab_size=vocab_size)
-                logger.info(f"Created new {model_size} model (no weights loaded)")
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to create model with size '{model_size}': {e}\n"
-                    f"Try one of these standard sizes: 'nano', 'micro', 'tiny', 'small', 'medium', 'large'"
-                ) from e
+            # No model file found - raise error instead of creating untrained model
+            raise FileNotFoundError(
+                f"No trained model found in {MODELS_DIR}\n"
+                f"To use a trained model:\n"
+                f"  1. Train a model: python run.py --train\n"
+                f"  2. Download a HuggingFace model via the GUI Model Manager\n"
+                f"  3. Or specify model_path when creating EnigmaEngine"
+            )
 
         return model
 

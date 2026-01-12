@@ -137,22 +137,70 @@ class CommandProcessor(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.engine = None
+        self._engine = None
+        self._engine_loaded = False
         self.tool_interface = None
-        self.model_name = "Loading..."
+        self.model_name = "Not loaded"
+        # Don't load engine immediately - lazy load on first use
+    
+    def _ensure_engine_loaded(self):
+        """Lazy-load the engine only when actually needed."""
+        if self._engine_loaded:
+            return
+        self._engine_loaded = True
         self._load_engine()
     
+    @property
+    def engine(self):
+        """Lazy-load engine on first access."""
+        if not self._engine_loaded:
+            self._ensure_engine_loaded()
+        return self._engine
+    
+    @engine.setter
+    def engine(self, value):
+        self._engine = value
+    
     def _load_engine(self):
-        """Load the inference engine."""
+        """Load the inference engine using the saved model from settings."""
         try:
-            from ..core.inference import EnigmaEngine
             from ..core.tool_interface import ToolInterface
-            self.engine = EnigmaEngine()
-            self.tool_interface = ToolInterface()
+            from ..core.model_registry import ModelRegistry
+            
+            # Get the model name from saved settings
             self.model_name = get_current_model_name()
+            
+            # Load the model through the registry (respects HuggingFace models)
+            registry = ModelRegistry()
+            if self.model_name in registry.registry.get("models", {}):
+                model, config = registry.load_model(self.model_name)
+                
+                # Check if it's a HuggingFace model (already has generate/chat methods)
+                is_hf = config.get("source") == "huggingface"
+                
+                if is_hf:
+                    # HuggingFace models are ready to use directly
+                    self.engine = model  # HuggingFaceModel wrapper
+                else:
+                    # For Enigma models, wrap in EnigmaEngine
+                    from ..core.inference import EnigmaEngine
+                    import torch
+                    self.engine = EnigmaEngine.__new__(EnigmaEngine)
+                    self.engine.model = model
+                    self.engine.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                    self.engine.use_half = False
+                    self.engine.enable_tools = False
+                    self.engine._is_huggingface = False
+            else:
+                # Fallback: create default engine (untrained)
+                from ..core.inference import EnigmaEngine
+                self.engine = EnigmaEngine()
+                
+            self.tool_interface = ToolInterface()
         except Exception as e:
             print(f"Note: AI engine not loaded yet: {e}")
             self.model_name = "Not loaded"
+            self.engine = None
     
     def process_command(self, command: str) -> Dict[str, Any]:
         """
@@ -1649,16 +1697,40 @@ class EnigmaSystemTray(QObject):
         
         self.tray_icon.showMessage("Generating Image", f"Creating: {prompt[:50]}...", QSystemTrayIcon.Information, 2000)
         
-        # Use placeholder generator for now
+        # Try local SD first, fall back to placeholder with warning
         try:
             from .tabs.image_tab import get_provider
+            
+            # Try local Stable Diffusion first
+            provider = get_provider('local')
+            if provider:
+                if not provider.is_loaded:
+                    provider.load()
+                
+                if provider.is_loaded:
+                    result = provider.generate(prompt)
+                    if result.get("success"):
+                        path = result.get("path", "")
+                        self.tray_icon.showMessage("Image Generated", f"Saved to: {path}", QSystemTrayIcon.Information, 3000)
+                        from .tabs.output_helpers import open_file_in_explorer
+                        open_file_in_explorer(path)
+                        return
+            
+            # Fall back to placeholder with warning
+            self.tray_icon.showMessage(
+                "Using Placeholder", 
+                "Stable Diffusion not available. Install: pip install diffusers transformers accelerate",
+                QSystemTrayIcon.Warning, 
+                4000
+            )
+            
             provider = get_provider('placeholder')
             if provider:
                 provider.load()
                 result = provider.generate(prompt)
                 if result.get("success"):
                     path = result.get("path", "")
-                    self.tray_icon.showMessage("Image Generated", f"Saved to: {path}", QSystemTrayIcon.Information, 3000)
+                    self.tray_icon.showMessage("Placeholder Generated", f"(Not real image) Saved to: {path}", QSystemTrayIcon.Information, 3000)
                     from .tabs.output_helpers import open_file_in_explorer
                     open_file_in_explorer(path)
         except Exception as e:

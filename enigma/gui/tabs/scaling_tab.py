@@ -10,7 +10,11 @@ Features:
   - One-click model creation
 """
 
-from typing import Optional
+from __future__ import annotations
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from PyQt5.QtGui import QPaintEvent, QMouseEvent
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
@@ -18,7 +22,7 @@ from PyQt5.QtWidgets import (
     QSlider, QSpinBox, QComboBox, QStackedWidget, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath, QPaintEvent, QMouseEvent
+from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
 
 # Qt enum constants
 NoBrush = Qt.BrushStyle.NoBrush

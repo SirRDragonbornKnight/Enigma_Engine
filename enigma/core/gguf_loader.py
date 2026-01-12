@@ -27,7 +27,8 @@ try:
     from llama_cpp import Llama
     HAVE_LLAMA_CPP = True
 except ImportError:
-    logger.warning("llama-cpp-python not available - GGUF loading disabled")
+    # Silently disable GGUF - it's an optional feature
+    pass
 
 
 class GGUFModel:
