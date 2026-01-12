@@ -61,9 +61,10 @@ ForgeAI is a **fully modular AI framework** where EVERYTHING is a toggleable mod
 - **enigma/core/tokenizer.py**: `get_tokenizer()`, `SimpleTokenizer`, `TiktokenWrapper` - Text tokenization
 - **enigma/core/training.py**: `Trainer`, `TrainingConfig`, `train_model()` - Model training
 - **enigma/core/inference.py**: `ForgeEngine` class - Model inference with optional `use_routing` for specialized models
-- **enigma/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models
+- **enigma/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models, `export_to_huggingface()` for uploading to HF Hub
 - **enigma/core/tool_router.py**: `ToolRouter`, `get_router()`, `classify_intent()`, `describe_image()`, `generate_code()` - Specialized model routing
 - **enigma/core/huggingface_loader.py**: `load_huggingface_model()` - Load HuggingFace models
+- **enigma/core/huggingface_exporter.py**: `HuggingFaceExporter`, `export_model_to_hub()`, `export_model_locally()` - Upload ForgeAI models to HuggingFace
 - **enigma/core/gguf_loader.py**: GGUF format model loading
 
 ### AI Generation Tabs (in enigma/gui/tabs/)

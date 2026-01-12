@@ -472,8 +472,20 @@ class QuickCommandOverlay(QWidget):
         frame_layout.setContentsMargins(15, 8, 15, 10)
         frame_layout.setSpacing(6)
         
-        # Header with title bar controls (like a window)
-        header_layout = QHBoxLayout()
+        # Header widget for dragging (like a window title bar)
+        self._header_widget = QFrame()
+        self._header_widget.setFixedHeight(30)
+        self._header_widget.setCursor(Qt.OpenHandCursor)
+        self._header_widget.setStyleSheet("background: rgba(50, 50, 50, 0.5); border-radius: 4px;")
+        self._header_widget.setMouseTracking(True)
+        
+        # Install event filter for proper drag handling
+        self._header_widget.mousePressEvent = lambda e: self._header_mouse_press(e)
+        self._header_widget.mouseMoveEvent = lambda e: self._header_mouse_move(e)
+        self._header_widget.mouseReleaseEvent = lambda e: self._header_mouse_release(e)
+        
+        header_layout = QHBoxLayout(self._header_widget)
+        header_layout.setContentsMargins(8, 0, 0, 0)
         header_layout.setSpacing(8)
         
         self.title_label = QLabel(get_current_model_name())
@@ -550,7 +562,7 @@ class QuickCommandOverlay(QWidget):
         close_btn.clicked.connect(self._close_overlay)
         header_layout.addWidget(close_btn)
         
-        frame_layout.addLayout(header_layout)
+        frame_layout.addWidget(self._header_widget)
         
         # Chat history area (always visible, above input like main chat)
         self.response_area = QTextEdit()
@@ -668,6 +680,29 @@ class QuickCommandOverlay(QWidget):
         """)
         self.voice_btn.clicked.connect(self._toggle_voice)
         input_layout.addWidget(self.voice_btn)
+        
+        # Open GUI button
+        self.gui_btn = QPushButton("GUI")
+        self.gui_btn.setFixedSize(50, 40)
+        self.gui_btn.setToolTip("Open Full GUI")
+        self.gui_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9b59b6;
+                border: none;
+                border-radius: 8px;
+                color: white;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #8e44ad;
+            }
+            QPushButton:pressed {
+                background-color: #6c3483;
+            }
+        """)
+        self.gui_btn.clicked.connect(self._open_gui)
+        input_layout.addWidget(self.gui_btn)
         
         frame_layout.addLayout(input_layout)
         
@@ -793,29 +828,32 @@ class QuickCommandOverlay(QWidget):
         self.set_status("New chat")
     
     def _on_chat(self):
-        """Handle chat message - process in mini chat, don't go to main GUI."""
+        """Handle chat message - use shared ChatSync for single engine."""
         command = self.command_input.text().strip()
-        if command and not self._is_responding:
-            self.history.append(command)
-            self.history_index = len(self.history)
-            
-            # Show user message with customized name
-            user_name = getattr(self, 'user_display_name', 'You')
-            self.response_area.append(
-                f"<div style='color: #9b59b6; margin: 4px 0;'><b>{user_name}:</b> {command}</div>"
-            )
-            self.command_input.clear()
-            
-            # Start responding indicator
-            self.start_responding()
-            
-            # Scroll to bottom
-            self.response_area.verticalScrollBar().setValue(
-                self.response_area.verticalScrollBar().maximum()
-            )
-            
-            # Emit signal for processing
-            self.command_submitted.emit(command)
+        if not command:
+            return
+        
+        # Check if ChatSync is already generating
+        from .chat_sync import ChatSync
+        chat_sync = ChatSync.instance()
+        
+        if chat_sync.is_generating:
+            self.set_status("Still generating...")
+            return
+        
+        if self._is_responding:
+            return
+        
+        # Add to local history
+        self.history.append(command)
+        self.history_index = len(self.history)
+        self.command_input.clear()
+        
+        # Start responding indicator
+        self.start_responding()
+        
+        # Use ChatSync for shared generation (updates both UIs)
+        chat_sync.generate_response(command, source="quick")
     
     def _on_submit(self):
         """Legacy submit handler - redirects to chat."""
@@ -1106,6 +1144,13 @@ class ForgeSystemTray(QObject):
         self.overlay.command_submitted.connect(self._on_command)
         self.overlay.close_requested.connect(self._on_overlay_closed)
         self.overlay.open_gui_requested.connect(self._show_main_window)  # ESC opens GUI
+        
+        # Connect overlay to ChatSync for shared generation
+        from .chat_sync import ChatSync
+        chat_sync = ChatSync.instance()
+        chat_sync.set_quick_chat(self.overlay)
+        chat_sync.generation_finished.connect(self._on_chat_sync_finished)
+        chat_sync.generation_stopped.connect(self._on_chat_sync_stopped)
         
         # Command processor
         self.processor = CommandProcessor()
@@ -1412,8 +1457,20 @@ class ForgeSystemTray(QObject):
         """Handle overlay close."""
         pass
     
+    def _on_chat_sync_finished(self, response: str):
+        """Handle when shared ChatSync finishes generating."""
+        if self.overlay:
+            self.overlay.stop_responding()
+            self.overlay.set_status("Ready")
+    
+    def _on_chat_sync_stopped(self):
+        """Handle when shared ChatSync generation is stopped."""
+        if self.overlay:
+            self.overlay.stop_responding()
+            self.overlay.set_status("Stopped")
+    
     def _on_command(self, command: str):
-        """Process a command from the overlay - chat directly in mini chat."""
+        """Process a command from the overlay - use shared ChatSync."""
         self.overlay.set_status("Thinking...")
         
         # Check if this is a quick action command
@@ -1426,9 +1483,8 @@ class ForgeSystemTray(QObject):
             self.overlay.show_response(result.get("response", "Done"))
             self.overlay.set_status("Ready")
             self._execute_action(result.get("action", ""), result.get("params", {}))
-        else:
-            # It's a chat message - process directly in mini chat
-            self._process_chat_in_mini(command)
+        # Chat messages are now handled directly in _on_chat via ChatSync
+        # So we don't need the else branch anymore
     
     def _process_chat_in_mini(self, message: str):
         """Process a chat message directly in the mini chat and sync to main chat."""

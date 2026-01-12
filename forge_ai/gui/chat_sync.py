@@ -48,7 +48,7 @@ class ChatMessage:
         )
 
 
-class ChatSync(QObject):
+class ChatSync(QObject if HAS_PYQT else object):
     """
     Singleton manager for synchronized chat between main window and quick chat.
     
@@ -60,13 +60,14 @@ class ChatSync(QObject):
     
     _instance = None
     
-    # Signals for UI updates
-    message_added = pyqtSignal(dict)  # Emitted when any message is added
-    chat_cleared = pyqtSignal()  # Emitted when chat is cleared
-    model_changed = pyqtSignal(str)  # Emitted when model changes
-    generation_started = pyqtSignal(str)  # Emitted when AI starts thinking (user text)
-    generation_finished = pyqtSignal(str)  # Emitted when AI finishes (response text)
-    generation_stopped = pyqtSignal()  # Emitted when generation is stopped
+    # Signals for UI updates (only defined if PyQt available)
+    if HAS_PYQT:
+        message_added = pyqtSignal(dict)  # Emitted when any message is added
+        chat_cleared = pyqtSignal()  # Emitted when chat is cleared
+        model_changed = pyqtSignal(str)  # Emitted when model changes
+        generation_started = pyqtSignal(str)  # Emitted when AI starts thinking (user text)
+        generation_finished = pyqtSignal(str)  # Emitted when AI finishes (response text)
+        generation_stopped = pyqtSignal()  # Emitted when generation is stopped
     
     @classmethod
     def instance(cls) -> "ChatSync":
@@ -75,10 +76,24 @@ class ChatSync(QObject):
             cls._instance = cls()
         return cls._instance
     
+    @classmethod
+    def reset_instance(cls):
+        """Reset the singleton (useful for testing or re-initialization)."""
+        cls._instance = None
+    
     def __init__(self):
         if ChatSync._instance is not None:
             raise RuntimeError("Use ChatSync.instance() to get the singleton")
-        super().__init__()
+        
+        # Only call QObject.__init__ if we have PyQt and QApplication exists
+        if HAS_PYQT:
+            from PyQt5.QtWidgets import QApplication
+            if QApplication.instance() is not None:
+                super().__init__()
+            else:
+                # QApplication doesn't exist yet - we're being imported too early
+                # Just initialize as a regular object, signals won't work
+                pass
         
         self._messages: List[ChatMessage] = []
         self._model_name = "No model"

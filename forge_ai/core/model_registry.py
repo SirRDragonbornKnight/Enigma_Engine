@@ -581,6 +581,68 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             "registry": reg_info,
         }
 
+    def export_to_huggingface(
+        self,
+        name: str,
+        output_dir: Optional[str] = None,
+        repo_id: Optional[str] = None,
+        token: Optional[str] = None,
+        private: bool = False
+    ) -> str:
+        """
+        Export a ForgeAI model to HuggingFace format.
+        
+        Can either save locally or push directly to HuggingFace Hub.
+        
+        Args:
+            name: Model name in registry
+            output_dir: Local directory to save (if not pushing to Hub)
+            repo_id: HuggingFace repo ID (e.g., "username/model-name") to push to
+            token: HuggingFace API token (or set HF_TOKEN env var)
+            private: Make the HuggingFace repo private
+            
+        Returns:
+            Path to exported model (local) or URL (if pushed to Hub)
+            
+        Example:
+            # Export locally
+            registry.export_to_huggingface("my_model", output_dir="./hf_export")
+            
+            # Push to Hub
+            registry.export_to_huggingface(
+                "my_model",
+                repo_id="username/my-model",
+                token="hf_..."
+            )
+        """
+        from .huggingface_exporter import HuggingFaceExporter
+        
+        name = name.lower().strip()
+        if name not in self.registry["models"]:
+            raise ValueError(f"Model '{name}' not found")
+        
+        reg_info = self.registry["models"][name]
+        if reg_info.get("source") == "huggingface":
+            raise ValueError(
+                f"Model '{name}' is already a HuggingFace model. "
+                "Only ForgeAI-trained models can be exported."
+            )
+        
+        exporter = HuggingFaceExporter(str(self.models_dir))
+        
+        if repo_id:
+            # Push to Hub
+            return exporter.push_to_hub(name, repo_id, token=token, private=private)
+        elif output_dir:
+            # Export locally
+            path = exporter.export_to_hf_format(name, output_dir)
+            return str(path)
+        else:
+            # Default: export to models_dir/name_hf_export
+            default_output = self.models_dir / f"{name}_hf_export"
+            path = exporter.export_to_hf_format(name, str(default_output))
+            return str(path)
+
 
 # Convenience function
 def get_registry(models_dir: Optional[str] = None) -> ModelRegistry:

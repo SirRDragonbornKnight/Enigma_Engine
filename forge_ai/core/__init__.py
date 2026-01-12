@@ -104,6 +104,50 @@ try:
 except ImportError:
     GGUFModel = None
 
+# HuggingFace exporter (for uploading ForgeAI models to HF Hub)
+HuggingFaceExporter = None
+export_model_to_hub = None
+export_model_locally = None
+
+def _lazy_load_hf_exporter():
+    """Lazy load HuggingFace exporter on first use."""
+    global HuggingFaceExporter, export_model_to_hub, export_model_locally
+    if HuggingFaceExporter is None:
+        try:
+            from .huggingface_exporter import (
+                HuggingFaceExporter as _HFE,
+                export_model_to_hub as _export_hub,
+                export_model_locally as _export_local,
+            )
+            HuggingFaceExporter = _HFE
+            export_model_to_hub = _export_hub
+            export_model_locally = _export_local
+        except ImportError:
+            pass
+    return HuggingFaceExporter, export_model_to_hub, export_model_locally
+
+# Multi-platform model export system
+ModelExporter = None
+export_model = None
+list_export_providers = None
+
+def _lazy_load_model_exporter():
+    """Lazy load model export system on first use."""
+    global ModelExporter, export_model, list_export_providers
+    if ModelExporter is None:
+        try:
+            from .model_export import (
+                ModelExporter as _ME,
+                export_model as _export,
+                list_export_providers as _list_providers,
+            )
+            ModelExporter = _ME
+            export_model = _export
+            list_export_providers = _list_providers
+        except ImportError:
+            pass
+    return ModelExporter, export_model, list_export_providers
+
 
 __all__ = [
     # Model
@@ -152,4 +196,14 @@ __all__ = [
     "HuggingFaceEngine",
     "load_huggingface_model",
     "GGUFModel",
+    
+    # HuggingFace export (upload ForgeAI models to Hub)
+    "HuggingFaceExporter",
+    "export_model_to_hub",
+    "export_model_locally",
+    
+    # Multi-platform model export
+    "ModelExporter",
+    "export_model",
+    "list_export_providers",
 ]

@@ -17,11 +17,42 @@ import os
 from pathlib import Path
 
 
+def _suppress_noise():
+    """Suppress noisy warnings from Qt, pygame, and other libs."""
+    import os
+    import warnings
+    import logging
+    
+    # Suppress Qt debug messages only (don't override platform)
+    os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+    # Don't set QT_QPA_PLATFORM - let Qt auto-detect
+    
+    # Suppress pygame welcome message
+    os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+    
+    # Suppress ALSA/audio warnings on headless Pi
+    os.environ["SDL_AUDIODRIVER"] = "dummy"
+    
+    # Set logging level to reduce noise
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("transformers").setLevel(logging.WARNING)
+    logging.getLogger("diffusers").setLevel(logging.WARNING)
+    logging.getLogger("torch").setLevel(logging.WARNING)
+    
+    # Suppress Python deprecation warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", message=".*ALSA.*")
+    warnings.filterwarnings("ignore", message=".*audio.*")
+
+
 def _print_startup_banner():
     """Print a clean startup message."""
+    _suppress_noise()
     print("=" * 50)
     print("  ForgeAI - Starting...")
-    print("  (Audio warnings below are normal on headless Pi)")
     print("=" * 50)
 
 

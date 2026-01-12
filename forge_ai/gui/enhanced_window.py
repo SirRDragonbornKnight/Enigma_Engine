@@ -2749,12 +2749,53 @@ class EnhancedMainWindow(QMainWindow):
         # Initialize display names
         self.user_display_name = self._gui_settings.get("user_display_name", "You")
         
+        # Initialize shared chat sync (single engine for main + quick chat)
+        # Reset any pre-existing instance created before QApplication
+        from .chat_sync import ChatSync
+        ChatSync.reset_instance()  # Ensure fresh instance with QApplication
+        self._chat_sync = ChatSync.instance()
+        self._chat_sync.set_main_window(self)
+        self._chat_sync.set_user_name(self.user_display_name)
+        self._chat_sync.generation_started.connect(self._on_chat_sync_started)
+        self._chat_sync.generation_finished.connect(self._on_chat_sync_finished)
+        self._chat_sync.generation_stopped.connect(self._on_chat_sync_stopped)
+        
         # Training lock to prevent concurrent training
         self._is_training = False
         self._stop_training = False
         
         # Track if current model is HuggingFace (for feature restrictions)
         self._is_hf_model = False
+    
+    def _on_chat_sync_started(self, user_text: str):
+        """Handle when shared ChatSync starts generating (from quick chat)."""
+        # Show thinking indicator
+        if hasattr(self, 'thinking_frame'):
+            self.thinking_frame.show()
+            self.thinking_label.setText("Generating response...")
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.show()
+            self.stop_btn.setEnabled(True)
+        if hasattr(self, 'send_btn'):
+            self.send_btn.setEnabled(False)
+            self.send_btn.setText("...")
+    
+    def _on_chat_sync_finished(self, response: str):
+        """Handle when shared ChatSync finishes generating."""
+        # Hide thinking indicator
+        if hasattr(self, 'thinking_frame'):
+            self.thinking_frame.hide()
+        if hasattr(self, 'stop_btn'):
+            self.stop_btn.hide()
+        if hasattr(self, 'send_btn'):
+            self.send_btn.setEnabled(True)
+            self.send_btn.setText("Send")
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText("Ready")
+    
+    def _on_chat_sync_stopped(self):
+        """Handle when shared ChatSync generation is stopped."""
+        self._on_chat_sync_finished("")
         
         # Build UI first (before model load so user sees the window immediately)
         self._build_ui()
@@ -3265,6 +3306,11 @@ class EnhancedMainWindow(QMainWindow):
                     tray.update_model_name(self.current_model_name)
             except:
                 pass
+            
+            # Sync engine to ChatSync for shared generation with quick chat
+            if hasattr(self, '_chat_sync'):
+                self._chat_sync.set_engine(self.engine)
+                self._chat_sync.set_model_name(self.current_model_name)
             
             # Refresh notes files for new model
             if hasattr(self, 'notes_file_combo'):
@@ -4780,7 +4826,12 @@ class EnhancedMainWindow(QMainWindow):
             self.chat_input.clear()
             return
         
-        # Check if already generating (prevent double-sends)
+        # Check if ChatSync is already generating (shared with quick chat)
+        if hasattr(self, '_chat_sync') and self._chat_sync.is_generating:
+            self.chat_display.append("<b style='color:#f9e2af;'>System:</b> Still generating... please wait.")
+            return
+        
+        # Also check legacy worker
         if hasattr(self, '_ai_worker') and self._ai_worker and self._ai_worker.isRunning():
             self.chat_display.append("<b style='color:#f9e2af;'>System:</b> Still generating... please wait.")
             return
@@ -5991,6 +6042,42 @@ def run_app(minimize_to_tray: bool = True):
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Modern look
     app.setQuitOnLastWindowClosed(False)  # Keep running when window closes
+    
+    # Apply dark theme palette
+    from PyQt5.QtGui import QPalette, QColor
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(30, 30, 46))
+    palette.setColor(QPalette.WindowText, QColor(205, 214, 244))
+    palette.setColor(QPalette.Base, QColor(24, 24, 37))
+    palette.setColor(QPalette.AlternateBase, QColor(30, 30, 46))
+    palette.setColor(QPalette.ToolTipBase, QColor(30, 30, 46))
+    palette.setColor(QPalette.ToolTipText, QColor(205, 214, 244))
+    palette.setColor(QPalette.Text, QColor(205, 214, 244))
+    palette.setColor(QPalette.Button, QColor(49, 50, 68))
+    palette.setColor(QPalette.ButtonText, QColor(205, 214, 244))
+    palette.setColor(QPalette.BrightText, QColor(243, 139, 168))
+    palette.setColor(QPalette.Link, QColor(137, 180, 250))
+    palette.setColor(QPalette.Highlight, QColor(137, 180, 250))
+    palette.setColor(QPalette.HighlightedText, QColor(30, 30, 46))
+    palette.setColor(QPalette.Disabled, QPalette.Text, QColor(108, 112, 134))
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(108, 112, 134))
+    app.setPalette(palette)
+    
+    # Global stylesheet for text selection and consistent styling
+    app.setStyleSheet("""
+        QLabel { 
+            selection-background-color: #89b4fa;
+            selection-color: #1e1e2e;
+        }
+        QTextEdit, QPlainTextEdit, QTextBrowser, QLineEdit {
+            selection-background-color: #89b4fa;
+            selection-color: #1e1e2e;
+        }
+        QListWidget, QTreeWidget, QTableWidget {
+            selection-background-color: #89b4fa;
+            selection-color: #1e1e2e;
+        }
+    """)
     
     window = EnhancedMainWindow()
     
