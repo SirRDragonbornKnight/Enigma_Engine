@@ -957,3 +957,9 @@ def get_manager() -> ModuleManager:
     if _manager is None:
         _manager = ModuleManager()
     return _manager
+
+
+def set_manager(manager: ModuleManager) -> None:
+    """Set the global module manager instance."""
+    global _manager
+    _manager = manager

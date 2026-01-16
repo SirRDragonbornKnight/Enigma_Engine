@@ -2783,9 +2783,11 @@ class EnhancedMainWindow(QMainWindow):
         
         # Initialize module manager and register all built-in modules
         try:
-            from forge_ai.modules import ModuleManager, register_all
+            from forge_ai.modules import ModuleManager, register_all, set_manager
             self.module_manager = ModuleManager()
             register_all(self.module_manager)
+            # Set as global manager so get_manager() returns this instance
+            set_manager(self.module_manager)
         except Exception as e:
             print(f"Could not initialize ModuleManager: {e}")
             self.module_manager = None
