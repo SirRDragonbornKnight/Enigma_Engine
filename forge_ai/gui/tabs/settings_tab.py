@@ -2409,8 +2409,9 @@ def _get_audio_devices():
                 output_devices.append((name, i))
         
         p.terminate()
-    except ImportError:
-        pass  # pyaudio not installed
+    except (ImportError, OSError, TypeError) as e:
+        # pyaudio not installed, or audio system issue (e.g., portaudio ctypes callback)
+        print(f"[Audio] Could not enumerate devices: {type(e).__name__}")
     except Exception as e:
         print(f"Error getting audio devices: {e}")
     
@@ -2548,13 +2549,16 @@ def _test_microphone(parent):
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(0, update_ui)
             
-        except ImportError:
+        except (ImportError, OSError, TypeError) as e:
             def show_error():
                 parent._mic_test_running = False
                 parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
                 parent.mic_test_btn.setText("🎤 Test Microphone")
-                parent.mic_status_label.setText("Install: pip install pyaudio")
+                if isinstance(e, ImportError):
+                    parent.mic_status_label.setText("Install: pip install pyaudio")
+                else:
+                    parent.mic_status_label.setText("Audio system unavailable")
                 parent.mic_status_label.setStyleSheet("color: #ef4444;")
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(0, show_error)
