@@ -1609,18 +1609,56 @@ def create_settings_tab(parent):
     
     reset_buttons = QHBoxLayout()
     
-    reset_window_btn = QPushButton("Reset Window Position")
+    reset_window_btn = QPushButton("🔲 Reset Window Position")
     reset_window_btn.setToolTip("Center window on primary screen")
+    reset_window_btn.setStyleSheet("""
+        QPushButton {
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QPushButton:hover {
+            background: #2563eb;
+        }
+    """)
     reset_window_btn.clicked.connect(lambda: _reset_window_position(parent))
     reset_buttons.addWidget(reset_window_btn)
     
-    reset_ontop_btn = QPushButton("Disable Always-On-Top")
+    reset_ontop_btn = QPushButton("📌 Disable Always-On-Top")
     reset_ontop_btn.setToolTip("Turn off always-on-top for main window")
+    reset_ontop_btn.setStyleSheet("""
+        QPushButton {
+            background: #8b5cf6;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QPushButton:hover {
+            background: #7c3aed;
+        }
+    """)
     reset_ontop_btn.clicked.connect(lambda: _disable_always_on_top(parent))
     reset_buttons.addWidget(reset_ontop_btn)
     
-    reset_all_btn = QPushButton("Reset All Settings")
-    reset_all_btn.setStyleSheet("background: #7f1d1d; color: white;")
+    reset_all_btn = QPushButton("⚠️ Reset All Settings")
+    reset_all_btn.setStyleSheet("""
+        QPushButton {
+            background: #dc2626;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QPushButton:hover {
+            background: #b91c1c;
+        }
+    """)
     reset_all_btn.setToolTip("Reset all settings to defaults (requires restart)")
     reset_all_btn.clicked.connect(lambda: _reset_all_settings(parent))
     reset_buttons.addWidget(reset_all_btn)

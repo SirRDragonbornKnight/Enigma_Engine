@@ -770,11 +770,48 @@ def create_avatar_subtab(parent):
     # Load list
     _refresh_list(parent)
     
+    # Set up file watcher timer to auto-refresh when files change
+    parent._avatar_file_watcher = QTimer()
+    parent._avatar_file_watcher.timeout.connect(lambda: _check_for_new_files(parent))
+    parent._avatar_file_watcher.start(3000)  # Check every 3 seconds
+    parent._last_file_count = parent.avatar_combo.count()
+    
     # Show default sprite on initialization
     parent._using_builtin_sprite = True
     _show_default_preview(parent)
     
     return widget
+
+
+def _check_for_new_files(parent):
+    """Check if new files were added and refresh if so."""
+    try:
+        # Count current files
+        count = 0
+        if AVATAR_CONFIG_DIR.exists():
+            count += len(list(AVATAR_CONFIG_DIR.glob("*.json")))
+        if AVATAR_IMAGES_DIR.exists():
+            count += len([f for f in AVATAR_IMAGES_DIR.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS])
+        if AVATAR_MODELS_DIR.exists():
+            # Count direct files
+            count += len([f for f in AVATAR_MODELS_DIR.iterdir() if f.is_file() and f.suffix.lower() in MODEL_3D_EXTENSIONS])
+            # Count subdirectories with models
+            for subdir in AVATAR_MODELS_DIR.iterdir():
+                if subdir.is_dir():
+                    if (subdir / "scene.gltf").exists() or (subdir / "scene.glb").exists():
+                        count += 1
+                    else:
+                        count += len([f for f in subdir.glob("*") if f.suffix.lower() in MODEL_3D_EXTENSIONS])
+        
+        # If count changed, refresh
+        expected = getattr(parent, '_last_file_count', 0) - 1  # Minus the "-- Select --" item
+        if count != expected:
+            _refresh_list(parent)
+            parent._last_file_count = parent.avatar_combo.count()
+            parent.avatar_status.setText(f"Found {count} avatars (auto-refreshed)")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    except Exception:
+        pass  # Silently ignore errors in background check
 
 
 def _is_avatar_module_enabled() -> bool:
@@ -1079,7 +1116,7 @@ def _reset_view(parent):
 
 
 def _refresh_list(parent):
-    """Refresh avatar list."""
+    """Refresh avatar list - scans all subdirectories too."""
     parent.avatar_combo.clear()
     parent.avatar_combo.addItem("-- Select Avatar --", None)
     
@@ -1097,11 +1134,35 @@ def _refresh_list(parent):
             if f.suffix.lower() in IMAGE_EXTENSIONS:
                 parent.avatar_combo.addItem(f"🖼️ {f.name}", ("image", str(f)))
     
-    # 3D models
+    # 3D models - scan direct files AND subdirectories
     if AVATAR_MODELS_DIR.exists():
+        # Direct model files
         for f in sorted(AVATAR_MODELS_DIR.iterdir()):
-            if f.suffix.lower() in MODEL_3D_EXTENSIONS:
+            if f.is_file() and f.suffix.lower() in MODEL_3D_EXTENSIONS:
                 parent.avatar_combo.addItem(f"🎮 {f.name}", ("model", str(f)))
+        
+        # Subdirectories containing models (e.g., glados/, rurune/)
+        for subdir in sorted(AVATAR_MODELS_DIR.iterdir()):
+            if subdir.is_dir():
+                # Look for scene.gltf or scene.glb first (common format)
+                scene_gltf = subdir / "scene.gltf"
+                scene_glb = subdir / "scene.glb"
+                
+                if scene_gltf.exists():
+                    parent.avatar_combo.addItem(f"🎮 {subdir.name}", ("model", str(scene_gltf)))
+                elif scene_glb.exists():
+                    parent.avatar_combo.addItem(f"🎮 {subdir.name}", ("model", str(scene_glb)))
+                else:
+                    # Look for any model file in subdirectory
+                    for f in sorted(subdir.glob("*")):
+                        if f.suffix.lower() in MODEL_3D_EXTENSIONS:
+                            parent.avatar_combo.addItem(f"🎮 {subdir.name}/{f.name}", ("model", str(f)))
+                            break  # Only add first model found
+    
+    # Update status
+    count = parent.avatar_combo.count() - 1  # Exclude "-- Select --"
+    parent.avatar_status.setText(f"Found {count} avatars")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;" if count > 0 else "color: #6c7086;")
 
 
 def _load_json(path: Path) -> dict:

@@ -43,6 +43,7 @@ from .shared_components import (
     SettingsPersistence,
     create_settings_group,
     create_action_button,
+    DirectoryWatcher,
 )
 
 __all__ = [
@@ -100,4 +101,5 @@ __all__ = [
     'SettingsPersistence',
     'create_settings_group',
     'create_action_button',
+    'DirectoryWatcher',
 ]

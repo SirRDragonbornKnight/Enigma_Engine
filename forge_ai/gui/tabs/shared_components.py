@@ -411,6 +411,77 @@ if HAS_PYQT:
             painter.drawRoundedRect(5, 5, self._size - 10, self._size - 10, 10, 10)
 
 
+class DirectoryWatcher:
+    """Watch a directory for file changes and trigger callbacks.
+    
+    Usage:
+        watcher = DirectoryWatcher("/path/to/watch", [".png", ".jpg"])
+        watcher.on_change(lambda: refresh_list())
+        watcher.start()  # Starts checking every 3 seconds
+        watcher.stop()   # Stop watching
+    """
+    
+    def __init__(self, directory: Path, extensions: Optional[List[str]] = None, 
+                 interval_ms: int = 3000, recursive: bool = True):
+        from PyQt5.QtCore import QTimer
+        
+        self.directory = Path(directory)
+        self.extensions = set(ext.lower() for ext in (extensions or []))
+        self.interval = interval_ms
+        self.recursive = recursive
+        self._callbacks: List[Callable] = []
+        self._last_state: Dict[str, float] = {}
+        self._timer: Optional[QTimer] = None
+    
+    def on_change(self, callback: Callable):
+        """Register a callback for when files change."""
+        self._callbacks.append(callback)
+    
+    def start(self):
+        """Start watching."""
+        from PyQt5.QtCore import QTimer
+        self._last_state = self._scan_files()
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._check)
+        self._timer.start(self.interval)
+    
+    def stop(self):
+        """Stop watching."""
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
+    
+    def _scan_files(self) -> Dict[str, float]:
+        """Scan directory and return file paths with modification times."""
+        files = {}
+        if not self.directory.exists():
+            return files
+        
+        pattern = "**/*" if self.recursive else "*"
+        for f in self.directory.glob(pattern):
+            if f.is_file():
+                if not self.extensions or f.suffix.lower() in self.extensions:
+                    try:
+                        files[str(f)] = f.stat().st_mtime
+                    except OSError:
+                        pass
+        return files
+    
+    def _check(self):
+        """Check for changes."""
+        try:
+            current = self._scan_files()
+            if current != self._last_state:
+                self._last_state = current
+                for cb in self._callbacks:
+                    try:
+                        cb()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+
 # Export all
 __all__ = [
     'STYLE_PRESETS',
@@ -422,4 +493,5 @@ __all__ = [
     'create_settings_group',
     'create_action_button',
     'FloatingOverlay',
+    'DirectoryWatcher',
 ]
