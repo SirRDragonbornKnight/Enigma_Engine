@@ -3097,6 +3097,14 @@ class EnhancedMainWindow(QMainWindow):
             except Exception as e:
                 print(f"Error stopping health monitor: {e}")
         
+        # Close avatar overlay if open
+        if hasattr(self, '_overlay') and self._overlay:
+            try:
+                self._overlay.close()
+                self._overlay = None
+            except Exception as e:
+                print(f"Error closing avatar overlay: {e}")
+        
         event.accept()
     
     def keyPressEvent(self, event):

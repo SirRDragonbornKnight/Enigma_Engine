@@ -51,8 +51,10 @@ from ....avatar.customizer import AvatarCustomizer
 # Try importing 3D libraries
 HAS_TRIMESH = False
 HAS_OPENGL = False
+HAS_PYRENDER = False
 trimesh = None
 np = None
+pyrender = None
 
 try:
     import trimesh as _trimesh
@@ -61,6 +63,15 @@ try:
     np = _np
     HAS_TRIMESH = True
 except ImportError:
+    pass
+
+try:
+    import pyrender as _pyrender
+    from PIL import Image as PILImage
+    pyrender = _pyrender
+    HAS_PYRENDER = True
+except ImportError:
+    PILImage = None  # type: ignore
     pass
 
 # OpenGL imports with explicit names to avoid wildcard import issues
@@ -72,15 +83,104 @@ except ImportError:
     GL = None  # type: ignore
     GLU = None  # type: ignore
 
+# Try importing USD support
+HAS_USD = False
+try:
+    from pxr import Usd, UsdGeom
+    HAS_USD = True
+except ImportError:
+    pass
+
 # Supported file extensions
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
-MODEL_3D_EXTENSIONS = {'.glb', '.gltf', '.obj', '.fbx', '.dae'}
+MODEL_3D_EXTENSIONS = {'.glb', '.gltf', '.obj', '.fbx', '.dae', '.usd', '.usda', '.usdc', '.usdz'}
 ALL_AVATAR_EXTENSIONS = IMAGE_EXTENSIONS | MODEL_3D_EXTENSIONS
 
 # Avatar directories
 AVATAR_CONFIG_DIR = Path(CONFIG["data_dir"]) / "avatar"
 AVATAR_MODELS_DIR = AVATAR_CONFIG_DIR / "models"
 AVATAR_IMAGES_DIR = AVATAR_CONFIG_DIR / "images"
+
+
+def convert_usd_to_glb(usd_path: Path) -> Optional[Path]:
+    """Convert USD file to GLB format for compatibility."""
+    if not HAS_USD or not HAS_TRIMESH:
+        return None
+    
+    try:
+        from pxr import Usd, UsdGeom, Gf
+        import numpy as np
+        
+        # Output path
+        glb_path = usd_path.parent / f"{usd_path.stem}_converted.glb"
+        
+        # If already converted, return cached version
+        if glb_path.exists():
+            return glb_path
+        
+        # Open USD stage
+        stage = Usd.Stage.Open(str(usd_path))
+        if not stage:
+            return None
+        
+        # Collect all mesh data
+        all_vertices = []
+        all_faces = []
+        vertex_offset = 0
+        
+        for prim in stage.Traverse():
+            if prim.IsA(UsdGeom.Mesh):
+                mesh = UsdGeom.Mesh(prim)
+                
+                # Get points
+                points_attr = mesh.GetPointsAttr()
+                if points_attr:
+                    points = points_attr.Get()
+                    if points:
+                        vertices = np.array([[p[0], p[1], p[2]] for p in points])
+                        all_vertices.append(vertices)
+                        
+                        # Get face indices
+                        face_counts = mesh.GetFaceVertexCountsAttr().Get()
+                        face_indices = mesh.GetFaceVertexIndicesAttr().Get()
+                        
+                        if face_counts and face_indices:
+                            idx = 0
+                            for count in face_counts:
+                                if count == 3:
+                                    face = [face_indices[idx + i] + vertex_offset for i in range(3)]
+                                    all_faces.append(face)
+                                elif count == 4:
+                                    # Triangulate quad
+                                    face1 = [face_indices[idx] + vertex_offset, 
+                                            face_indices[idx + 1] + vertex_offset, 
+                                            face_indices[idx + 2] + vertex_offset]
+                                    face2 = [face_indices[idx] + vertex_offset, 
+                                            face_indices[idx + 2] + vertex_offset, 
+                                            face_indices[idx + 3] + vertex_offset]
+                                    all_faces.extend([face1, face2])
+                                idx += count
+                        
+                        vertex_offset += len(vertices)
+        
+        if not all_vertices:
+            return None
+        
+        # Combine all meshes
+        combined_vertices = np.vstack(all_vertices)
+        combined_faces = np.array(all_faces)
+        
+        # Create trimesh
+        mesh = trimesh.Trimesh(vertices=combined_vertices, faces=combined_faces)
+        
+        # Export to GLB
+        mesh.export(str(glb_path), file_type='glb')
+        
+        return glb_path
+        
+    except Exception as e:
+        print(f"USD conversion error: {e}")
+        return None
 
 
 class OpenGL3DWidget(QOpenGLWidget):
@@ -103,6 +203,17 @@ class OpenGL3DWidget(QOpenGLWidget):
         if not HAS_TRIMESH or trimesh is None or np is None:
             return False
         try:
+            model_path = Path(path)
+            
+            # Check if this is a USD file that needs conversion
+            if model_path.suffix.lower() in {'.usd', '.usda', '.usdc', '.usdz'}:
+                converted = convert_usd_to_glb(model_path)
+                if converted:
+                    path = str(converted)
+                else:
+                    print(f"Could not convert USD file: {model_path}")
+                    return False
+            
             scene = trimesh.load(str(path))  # type: ignore[union-attr]
             # Convert scene to single mesh if needed
             if hasattr(scene, 'geometry'):
@@ -230,20 +341,26 @@ class AvatarOverlayWindow(QWidget):
     - Right-click to hide
     - Scroll wheel to resize
     - Always on top of other windows
+    - Background color control (AI can change)
+    - Quick avatar switching
     """
     
     closed = pyqtSignal()
+    avatar_changed = pyqtSignal(str)  # Signal when avatar changes (path)
     
-    def __init__(self):
+    def __init__(self, parent_tab=None):
         super().__init__(None)
+        self._parent_tab = parent_tab  # Reference to main avatar tab for syncing
         
-        # Transparent, always-on-top, no taskbar
+        # Transparent, always-on-top, no taskbar, but accept mouse input
         self.setWindowFlags(
             Qt_FramelessWindowHint |
             Qt_WindowStaysOnTopHint |
             Qt_Tool
         )
         self.setAttribute(Qt_WA_TranslucentBackground, True)
+        # Important: Make sure we receive mouse events
+        self.setAttribute(Qt.WA_NoSystemBackground, True) if hasattr(Qt, 'WA_NoSystemBackground') else None
         
         self._size = 300
         self.setFixedSize(self._size, self._size)
@@ -253,6 +370,13 @@ class AvatarOverlayWindow(QWidget):
         self._original_pixmap = None
         self._drag_pos = None
         
+        # Background settings (AI controllable)
+        self._bg_color = QColor(0, 0, 0, 0)  # Start transparent/clear
+        self._bg_shape = "none"  # none, circle, square, glow
+        
+        # Available avatars cache (for quick menu)
+        self._available_avatars = []
+        
         # Enable mouse tracking for visual cursor feedback
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_OpenHandCursor))
@@ -261,6 +385,21 @@ class AvatarOverlayWindow(QWidget):
         """Set avatar image."""
         self._original_pixmap = pixmap
         self._update_scaled_pixmap()
+    
+    def set_background(self, color: QColor = None, shape: str = "none"):
+        """Set avatar background (AI controllable).
+        
+        Args:
+            color: Background color (None = transparent)
+            shape: 'none', 'circle', 'square', 'glow'
+        """
+        self._bg_color = color if color else QColor(0, 0, 0, 0)
+        self._bg_shape = shape
+        self.update()
+    
+    def set_available_avatars(self, avatars: list):
+        """Set list of available avatars for quick menu."""
+        self._available_avatars = avatars
         
     def _update_scaled_pixmap(self):
         """Update scaled pixmap to match current size."""
@@ -272,7 +411,7 @@ class AvatarOverlayWindow(QWidget):
         self.update()
         
     def paintEvent(self, a0):
-        """Draw avatar with subtle shadow."""
+        """Draw avatar with background."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
@@ -281,10 +420,25 @@ class AvatarOverlayWindow(QWidget):
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             
-            # Draw a subtle circular background/glow
+            # Draw background based on shape
             painter.setPen(Qt_NoPen)
-            painter.setBrush(QColor(30, 30, 46, 80))  # Semi-transparent dark
-            painter.drawEllipse(x - 5, y - 5, self.pixmap.width() + 10, self.pixmap.height() + 10)
+            if self._bg_shape == "circle":
+                painter.setBrush(self._bg_color)
+                painter.drawEllipse(x - 5, y - 5, self.pixmap.width() + 10, self.pixmap.height() + 10)
+            elif self._bg_shape == "square":
+                painter.setBrush(self._bg_color)
+                painter.drawRoundedRect(x - 5, y - 5, self.pixmap.width() + 10, self.pixmap.height() + 10, 10, 10)
+            elif self._bg_shape == "glow":
+                # Glow effect - semi-transparent with blur simulation
+                glow_color = QColor(self._bg_color)
+                for i in range(3):
+                    glow_color.setAlpha(max(0, self._bg_color.alpha() - i * 30))
+                    painter.setBrush(glow_color)
+                    offset = (3 - i) * 5
+                    painter.drawEllipse(x - offset, y - offset, 
+                                       self.pixmap.width() + offset * 2, 
+                                       self.pixmap.height() + offset * 2)
+            # else: "none" - no background
             
             # Draw the avatar
             painter.drawPixmap(x, y, self.pixmap)
@@ -354,11 +508,72 @@ class AvatarOverlayWindow(QWidget):
             }
         """)
         
-        # Expression submenu
-        expr_menu = menu.addMenu("😊 Expression")
-        expressions = ["idle", "happy", "sad", "thinking", "surprised", "excited", "angry", "love", "sleeping", "winking"]
-        for expr in expressions:
-            action = expr_menu.addAction(expr.title())
+        # === Quick Avatar Switch ===
+        if self._available_avatars:
+            avatar_menu = menu.addMenu("🔄 Switch Avatar")
+            for name, data in self._available_avatars[:15]:  # Limit to 15
+                action = avatar_menu.addAction(name)
+                action.triggered.connect(lambda checked, d=data: self._quick_switch_avatar(d))
+            if len(self._available_avatars) > 15:
+                avatar_menu.addSeparator()
+                more_action = avatar_menu.addAction("📂 Browse more...")
+                more_action.triggered.connect(self._change_avatar_file)
+        else:
+            change_avatar = menu.addAction("📂 Change Avatar...")
+            change_avatar.triggered.connect(self._change_avatar_file)
+        
+        menu.addSeparator()
+        
+        # === Background Options ===
+        bg_menu = menu.addMenu("🎨 Background")
+        
+        # Clear/transparent (default)
+        clear_action = bg_menu.addAction("✨ Clear (Transparent)")
+        clear_action.triggered.connect(lambda: self.set_background(None, "none"))
+        
+        bg_menu.addSeparator()
+        bg_menu.addAction("── Shapes ──").setEnabled(False)
+        
+        # Shape options with default dark color
+        circle_action = bg_menu.addAction("⚫ Dark Circle")
+        circle_action.triggered.connect(lambda: self.set_background(QColor(30, 30, 46, 180), "circle"))
+        
+        glow_action = bg_menu.addAction("💫 Glow Effect")  
+        glow_action.triggered.connect(lambda: self.set_background(QColor(99, 102, 241, 100), "glow"))
+        
+        square_action = bg_menu.addAction("⬛ Rounded Square")
+        square_action.triggered.connect(lambda: self.set_background(QColor(30, 30, 46, 180), "square"))
+        
+        bg_menu.addSeparator()
+        bg_menu.addAction("── Colors ──").setEnabled(False)
+        
+        # Color presets
+        colors = [
+            ("🔵 Blue Glow", QColor(59, 130, 246, 100), "glow"),
+            ("🟣 Purple Glow", QColor(139, 92, 246, 100), "glow"),
+            ("🟢 Green Glow", QColor(16, 185, 129, 100), "glow"),
+            ("🔴 Red Glow", QColor(239, 68, 68, 100), "glow"),
+            ("🟡 Gold Glow", QColor(245, 158, 11, 100), "glow"),
+        ]
+        for name, color, shape in colors:
+            action = bg_menu.addAction(name)
+            action.triggered.connect(lambda checked, c=color, s=shape: self.set_background(c, s))
+        
+        menu.addSeparator()
+        
+        # Style submenu (Blob vs Anime)
+        style_menu = menu.addMenu("😊 Expression")
+        blob_action = style_menu.addAction("Blob (Default)")
+        blob_action.triggered.connect(lambda: self._change_expression("idle"))
+        anime_action = style_menu.addAction("Anime Girl")
+        anime_action.triggered.connect(lambda: self._change_expression("anime_idle"))
+        
+        style_menu.addSeparator()
+        
+        # Quick expressions
+        quick_expr = ["happy", "thinking", "surprised", "love", "sleeping"]
+        for expr in quick_expr:
+            action = style_menu.addAction(f"  {expr.title()}")
             action.triggered.connect(lambda checked, e=expr: self._change_expression(e))
         
         menu.addSeparator()
@@ -375,10 +590,6 @@ class AvatarOverlayWindow(QWidget):
         reset_pos = menu.addAction("🏠 Reset Position")
         reset_pos.triggered.connect(lambda: self.move(100, 100))
         
-        # Reset size
-        reset_size = menu.addAction("↩️ Reset Size")
-        reset_size.triggered.connect(lambda: self._set_size(300))
-        
         menu.addSeparator()
         
         # Close
@@ -386,6 +597,37 @@ class AvatarOverlayWindow(QWidget):
         close_action.triggered.connect(self._close_avatar)
         
         menu.exec_(a0.globalPos())
+    
+    def _quick_switch_avatar(self, data):
+        """Quick switch to a different avatar."""
+        if not data:
+            return
+        
+        file_type, path_str = data
+        path = Path(path_str)
+        
+        if not path.exists():
+            return
+        
+        # Emit signal so parent tab can update
+        self.avatar_changed.emit(path_str)
+        
+        # For images, load directly
+        if file_type == "image" or path.suffix.lower() in IMAGE_EXTENSIONS:
+            pixmap = QPixmap(str(path))
+            if not pixmap.isNull():
+                self.set_avatar(pixmap)
+        elif file_type == "model" or path.suffix.lower() in MODEL_3D_EXTENSIONS:
+            # For 3D models, render a preview and use that
+            if self._parent_tab:
+                # Trigger render in parent tab and get the pixmap
+                self._parent_tab._current_path = path
+                self._parent_tab._is_3d_model = True
+                _preview_3d_model(self._parent_tab, path)
+                # Get the rendered pixmap
+                pixmap = self._parent_tab.avatar_preview_2d.original_pixmap
+                if pixmap:
+                    self.set_avatar(pixmap)
         
     def _change_expression(self, expression: str):
         """Change avatar expression."""
@@ -419,6 +661,37 @@ class AvatarOverlayWindow(QWidget):
         """Close the avatar."""
         self.hide()
         self.closed.emit()
+    
+    def _change_avatar_file(self):
+        """Open file dialog to change avatar."""
+        from PyQt5.QtWidgets import QFileDialog
+        
+        # Build filter string
+        img_exts = " ".join(f"*{ext}" for ext in IMAGE_EXTENSIONS)
+        model_exts = " ".join(f"*{ext}" for ext in MODEL_3D_EXTENSIONS)
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Avatar",
+            str(AVATAR_MODELS_DIR),
+            f"All Avatar Files ({img_exts} {model_exts});;Images ({img_exts});;3D Models ({model_exts})"
+        )
+        
+        if file_path:
+            path = Path(file_path)
+            if path.suffix.lower() in IMAGE_EXTENSIONS:
+                # Load image directly
+                pixmap = QPixmap(str(path))
+                if not pixmap.isNull():
+                    self.set_avatar(pixmap)
+            elif path.suffix.lower() in MODEL_3D_EXTENSIONS:
+                # For 3D models, show a message (would need full 3D rendering setup)
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self, "3D Model",
+                    f"3D model loaded: {path.name}\n\n"
+                    "For full 3D rendering, use the Avatar tab in the main GUI."
+                )
         
     def mouseDoubleClickEvent(self, a0):  # type: ignore
         """Double-click to reset size."""
@@ -427,10 +700,66 @@ class AvatarOverlayWindow(QWidget):
         self._update_scaled_pixmap()
 
 
+class LoadingOverlay(QWidget):
+    """Semi-transparent loading overlay with progress bar."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt_WA_TranslucentBackground, True)
+        self.setVisible(False)
+        
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt_AlignCenter)
+        
+        # Loading label
+        self.label = QLabel("Loading avatar...")
+        self.label.setStyleSheet("color: #cdd6f4; font-size: 14px; font-weight: bold;")
+        self.label.setAlignment(Qt_AlignCenter)
+        layout.addWidget(self.label)
+        
+        # Progress bar
+        from PyQt5.QtWidgets import QProgressBar
+        self.progress = QProgressBar()
+        self.progress.setMinimum(0)
+        self.progress.setMaximum(0)  # Indeterminate
+        self.progress.setFixedWidth(200)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #45475a;
+                border-radius: 5px;
+                background: #1e1e2e;
+                height: 20px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #89b4fa, stop:1 #cba6f7);
+                border-radius: 3px;
+            }
+        """)
+        layout.addWidget(self.progress)
+        
+    def paintEvent(self, a0):
+        """Draw semi-transparent background."""
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(30, 30, 46, 200))
+        
+    def show_loading(self, text: str = "Loading avatar..."):
+        """Show loading overlay."""
+        self.label.setText(text)
+        self.setVisible(True)
+        self.raise_()
+        QApplication.processEvents()
+        
+    def hide_loading(self):
+        """Hide loading overlay."""
+        self.setVisible(False)
+
+
 class AvatarPreviewWidget(QFrame):
-    """2D image preview with drag-to-rotate for 3D simulation."""
+    """2D image preview with drag-to-rotate for 3D models."""
     
     expression_changed = pyqtSignal(str)  # Signal when expression changes
+    rotation_changed = pyqtSignal(float, float)  # Signal when rotation changes (rx, ry)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -438,6 +767,17 @@ class AvatarPreviewWidget(QFrame):
         self.original_pixmap = None
         self._svg_mode = False
         self._current_svg = None
+        
+        # 3D rotation state
+        self._is_3d = False
+        self._rotation_x = 0.0  # Pitch (up/down)
+        self._rotation_y = 0.0  # Yaw (left/right)
+        self._last_mouse_pos = None
+        self._model_path = None
+        self._cached_mesh = None
+        
+        # Loading overlay
+        self._loading_overlay = None
         
         self.setMinimumSize(250, 250)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -448,12 +788,168 @@ class AvatarPreviewWidget(QFrame):
                 background: #1e1e2e;
             }
         """)
+        self.setMouseTracking(True)
         
     def set_avatar(self, pixmap: QPixmap):
         """Set avatar image."""
         self.original_pixmap = pixmap
         self._svg_mode = False
+        self._is_3d = False
         self._update_display()
+    
+    def set_3d_model(self, path: Path, mesh=None):
+        """Set 3D model for rotatable preview."""
+        self._is_3d = True
+        self._model_path = path
+        self._cached_mesh = mesh
+        self._rotation_x = 0.0
+        self._rotation_y = 0.0
+        self.setCursor(QCursor(Qt_OpenHandCursor))
+        
+    def get_rotation(self) -> tuple:
+        """Get current rotation angles."""
+        return (self._rotation_x, self._rotation_y)
+    
+    def set_rotation(self, rx: float, ry: float):
+        """Set rotation angles and re-render."""
+        self._rotation_x = rx
+        self._rotation_y = ry
+        if self._is_3d and self._model_path:
+            self._render_3d_at_rotation()
+    
+    def _render_3d_at_rotation(self):
+        """Render 3D model at current rotation."""
+        if not HAS_PYRENDER or not HAS_TRIMESH or not self._model_path:
+            return
+        
+        try:
+            # Use cached mesh if available
+            if self._cached_mesh is not None:
+                mesh = self._cached_mesh
+            else:
+                scene = trimesh.load(str(self._model_path))
+                if hasattr(scene, 'geometry') and scene.geometry:
+                    meshes = list(scene.geometry.values())
+                    mesh = trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0]
+                elif hasattr(scene, 'vertices'):
+                    mesh = scene
+                else:
+                    return
+                
+                # Center and scale
+                mesh.vertices -= mesh.centroid
+                if max(mesh.extents) > 0:
+                    mesh.vertices *= 1.0 / max(mesh.extents)
+                self._cached_mesh = mesh
+            
+            # Build rotation matrix
+            rx = np.radians(self._rotation_x)
+            ry = np.radians(self._rotation_y)
+            
+            # Rotation matrices
+            rot_x = np.array([
+                [1, 0, 0, 0],
+                [0, np.cos(rx), -np.sin(rx), 0],
+                [0, np.sin(rx), np.cos(rx), 0],
+                [0, 0, 0, 1]
+            ], dtype=float)
+            
+            rot_y = np.array([
+                [np.cos(ry), 0, np.sin(ry), 0],
+                [0, 1, 0, 0],
+                [-np.sin(ry), 0, np.cos(ry), 0],
+                [0, 0, 0, 1]
+            ], dtype=float)
+            
+            model_pose = rot_y @ rot_x
+            
+            # Create scene
+            pr_scene = pyrender.Scene(bg_color=[30/255, 30/255, 46/255, 1.0])
+            pr_mesh = pyrender.Mesh.from_trimesh(mesh)
+            pr_scene.add(pr_mesh, pose=model_pose)
+            
+            # Camera
+            camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+            camera_pose = np.array([
+                [1, 0, 0, 0],
+                [0, 1, 0, 0.2],
+                [0, 0, 1, 2.0],
+                [0, 0, 0, 1]
+            ], dtype=float)
+            pr_scene.add(camera, pose=camera_pose)
+            
+            # Lights
+            light = pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=2.0)
+            pr_scene.add(light, pose=camera_pose)
+            
+            fill_pose = np.array([
+                [0.7, 0, 0.7, 1.5],
+                [0, 1, 0, 0.5],
+                [-0.7, 0, 0.7, 1.5],
+                [0, 0, 0, 1]
+            ], dtype=float)
+            fill_light = pyrender.DirectionalLight(color=[0.8, 0.85, 1.0], intensity=1.0)
+            pr_scene.add(fill_light, pose=fill_pose)
+            
+            # Render
+            r = pyrender.OffscreenRenderer(256, 256)
+            color, depth = r.render(pr_scene)
+            r.delete()
+            
+            # Convert to pixmap
+            import io
+            img = PILImage.fromarray(color)
+            buffer = io.BytesIO()
+            img.save(buffer, format='PNG')
+            buffer.seek(0)
+            
+            qimg = QImage()
+            qimg.loadFromData(buffer.read())
+            pixmap = QPixmap.fromImage(qimg)
+            
+            self.original_pixmap = pixmap
+            self._svg_mode = False
+            self._update_display()
+            
+            # Emit rotation changed signal
+            self.rotation_changed.emit(self._rotation_x, self._rotation_y)
+            
+        except Exception as e:
+            print(f"Error rendering rotated 3D: {e}")
+    
+    def mousePressEvent(self, a0):
+        """Start drag for rotation."""
+        if self._is_3d:
+            self._last_mouse_pos = a0.pos()
+            self.setCursor(QCursor(Qt_ClosedHandCursor))
+        
+    def mouseMoveEvent(self, a0):
+        """Rotate on drag."""
+        if self._is_3d and self._last_mouse_pos is not None:
+            dx = a0.x() - self._last_mouse_pos.x()
+            dy = a0.y() - self._last_mouse_pos.y()
+            
+            self._rotation_y += dx * 0.5
+            self._rotation_x += dy * 0.5
+            
+            # Clamp pitch
+            self._rotation_x = max(-90, min(90, self._rotation_x))
+            
+            self._last_mouse_pos = a0.pos()
+            self._render_3d_at_rotation()
+            
+    def mouseReleaseEvent(self, a0):
+        """End drag."""
+        if self._is_3d:
+            self._last_mouse_pos = None
+            self.setCursor(QCursor(Qt_OpenHandCursor))
+    
+    def mouseDoubleClickEvent(self, a0):
+        """Reset rotation on double-click."""
+        if self._is_3d:
+            self._rotation_x = 0.0
+            self._rotation_y = 0.0
+            self._render_3d_at_rotation()
     
     def set_svg_sprite(self, svg_data: str):
         """Set avatar from SVG data."""
@@ -490,7 +986,7 @@ class AvatarPreviewWidget(QFrame):
         self.update()
         
     def paintEvent(self, a0):
-        """Draw avatar."""
+        """Draw avatar with rotation hint for 3D models."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
@@ -499,6 +995,17 @@ class AvatarPreviewWidget(QFrame):
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             painter.drawPixmap(x, y, self.pixmap)
+            
+            # Show rotation hint for 3D models
+            if self._is_3d:
+                painter.setPen(QColor("#6c7086"))
+                font = painter.font()
+                font.setPointSize(9)
+                painter.setFont(font)
+                hint = f"Drag to rotate • Double-click to reset"
+                if self._rotation_x != 0 or self._rotation_y != 0:
+                    hint = f"↻ {self._rotation_y:.0f}° / {self._rotation_x:.0f}° • Double-click to reset"
+                painter.drawText(5, self.height() - 8, hint)
         else:
             painter.setPen(QColor("#6c7086"))
             painter.drawText(self.rect(), Qt_AlignCenter, 
@@ -580,6 +1087,9 @@ def create_avatar_subtab(parent):
     parent.avatar_preview_2d = AvatarPreviewWidget()
     left_panel.addWidget(parent.avatar_preview_2d, stretch=1)
     
+    # Add loading overlay on top of preview
+    parent._loading_overlay = LoadingOverlay(parent.avatar_preview_2d)
+    
     if HAS_OPENGL and HAS_TRIMESH:
         parent.avatar_preview_3d = OpenGL3DWidget()
         parent.avatar_preview_3d.setVisible(False)
@@ -606,9 +1116,10 @@ def create_avatar_subtab(parent):
     parent.avatar_combo.setEnabled(avatar_module_enabled)
     select_row.addWidget(parent.avatar_combo, stretch=1)
     
-    btn_refresh = QPushButton("Refresh")
-    btn_refresh.setFixedWidth(60)
-    btn_refresh.setToolTip("Refresh list")
+    btn_refresh = QPushButton("↻")
+    btn_refresh.setFixedWidth(30)
+    btn_refresh.setToolTip("Refresh avatar list")
+    btn_refresh.setStyleSheet("font-size: 14px;")
     btn_refresh.clicked.connect(lambda: _refresh_list(parent))
     select_row.addWidget(btn_refresh)
     left_panel.addLayout(select_row)
@@ -617,13 +1128,11 @@ def create_avatar_subtab(parent):
     btn_row2 = QHBoxLayout()
     parent.load_btn = QPushButton("Load Avatar")
     parent.load_btn.clicked.connect(lambda: _load_avatar_file(parent))
-    parent.load_btn.setEnabled(avatar_module_enabled)
     btn_row2.addWidget(parent.load_btn)
     
     parent.apply_btn = QPushButton("Apply Avatar")
     parent.apply_btn.clicked.connect(lambda: _apply_avatar(parent))
-    parent.apply_btn.setStyleSheet("background: #45475a;")
-    parent.apply_btn.setEnabled(avatar_module_enabled)
+    parent.apply_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
     btn_row2.addWidget(parent.apply_btn)
     left_panel.addLayout(btn_row2)
     
@@ -637,26 +1146,22 @@ def create_avatar_subtab(parent):
     # Right side - Customization Controls
     right_panel = QVBoxLayout()
     
-    # === Expression Preview (read-only) ===
-    expression_group = QGroupBox("Expression Preview")
-    expression_layout = QVBoxLayout()
+    # === Built-in 2D Avatar Option ===
+    builtin_group = QGroupBox("Simple 2D Avatar")
+    builtin_layout = QVBoxLayout()
     
-    parent.expression_label = QLabel("Current: neutral")
-    parent.expression_label.setStyleSheet("color: #cdd6f4; font-size: 11px;")
-    expression_layout.addWidget(parent.expression_label)
+    builtin_info = QLabel("Use a simple animated 2D avatar instead of loading a file. Good for quick setup.")
+    builtin_info.setStyleSheet("color: #6c7086; font-size: 10px;")
+    builtin_info.setWordWrap(True)
+    builtin_layout.addWidget(builtin_info)
     
-    expression_info = QLabel("Expressions change automatically based on AI mood and conversation.")
-    expression_info.setStyleSheet("color: #6c7086; font-size: 10px;")
-    expression_info.setWordWrap(True)
-    expression_layout.addWidget(expression_info)
+    parent.use_builtin_btn = QPushButton("Use Built-in 2D Avatar")
+    parent.use_builtin_btn.clicked.connect(lambda: _use_builtin_avatar(parent))
+    parent.use_builtin_btn.setEnabled(avatar_module_enabled)
+    builtin_layout.addWidget(parent.use_builtin_btn)
     
-    parent.test_expression_btn = QPushButton("Test Random Expression")
-    parent.test_expression_btn.clicked.connect(lambda: _test_random_expression(parent))
-    parent.test_expression_btn.setEnabled(avatar_module_enabled)
-    expression_layout.addWidget(parent.test_expression_btn)
-    
-    expression_group.setLayout(expression_layout)
-    right_panel.addWidget(expression_group)
+    builtin_group.setLayout(builtin_layout)
+    right_panel.addWidget(builtin_group)
     
     # === Color Customization ===
     color_group = QGroupBox("Colors")
@@ -758,8 +1263,8 @@ def create_avatar_subtab(parent):
     # Load list
     _refresh_list(parent)
     
-    # Show default sprite on initialization
-    parent._using_builtin_sprite = True
+    # Start with no avatar loaded - user can choose
+    parent._using_builtin_sprite = False
     _show_default_preview(parent)
     
     return widget
@@ -767,18 +1272,23 @@ def create_avatar_subtab(parent):
 
 def _is_avatar_module_enabled() -> bool:
     """Check if avatar module is enabled in ModuleManager."""
-    try:
-        from ....modules import get_manager
-        manager = get_manager()
-        if manager:
-            return manager.is_loaded('avatar')
-    except Exception:
-        pass
-    return True  # Default to enabled if can't check
+    # Avatar is always available - it's a built-in feature
+    # No external dependencies required
+    return True
 
 
 def _show_default_preview(parent):
-    """Show a default preview sprite in the preview area."""
+    """Show placeholder text in the preview area (no avatar loaded)."""
+    # Clear the preview - don't show built-in sprite by default
+    parent.avatar_preview_2d.pixmap = None
+    parent.avatar_preview_2d.original_pixmap = None
+    parent.avatar_preview_2d._is_3d = False
+    parent.avatar_preview_2d.update()
+    parent._using_builtin_sprite = False
+
+
+def _use_builtin_avatar(parent):
+    """Use the simple built-in 2D avatar."""
     svg_data = generate_sprite(
         "neutral",
         parent._current_colors["primary"],
@@ -787,32 +1297,10 @@ def _show_default_preview(parent):
     )
     parent.avatar_preview_2d.set_svg_sprite(svg_data)
     parent._using_builtin_sprite = True
-
-
-def _test_random_expression(parent):
-    """Test a random expression in the preview."""
-    import random
-    expressions = list(SPRITE_TEMPLATES.keys())
-    if expressions:
-        expr = random.choice(expressions)
-        parent.current_expression = expr
-        if hasattr(parent, 'expression_label'):
-            parent.expression_label.setText(f"Current: {expr}")
-        
-        svg_data = generate_sprite(
-            expr,
-            parent._current_colors["primary"],
-            parent._current_colors["secondary"],
-            parent._current_colors["accent"]
-        )
-        parent.avatar_preview_2d.set_svg_sprite(svg_data)
-        
-        # Also update overlay if visible
-        if parent._overlay and parent._overlay.isVisible():
-            pixmap = parent.avatar_preview_2d.original_pixmap
-            if pixmap:
-                scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-                parent._overlay.set_avatar(scaled)
+    parent._current_path = None
+    parent._is_3d_model = False
+    parent.avatar_status.setText("Using built-in 2D avatar")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
 
 
 def _set_expression(parent, expression: str):
@@ -1005,11 +1493,21 @@ def _toggle_overlay(parent):
         return
     
     if parent._overlay is None:
-        parent._overlay = AvatarOverlayWindow()
+        parent._overlay = AvatarOverlayWindow(parent_tab=parent)
         parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
+        parent._overlay.avatar_changed.connect(lambda path: _on_overlay_avatar_changed(parent, path))
+        
+        # Connect preview rotation changes to sync with overlay
+        parent.avatar_preview_2d.rotation_changed.connect(
+            lambda rx, ry: _sync_rotation_to_overlay(parent, rx, ry)
+        )
     
     if parent.show_overlay_btn.isChecked():
-        # Get current pixmap, or generate default if none
+        # Build avatar list for quick switching
+        avatar_list = _get_avatar_list_for_menu(parent)
+        parent._overlay.set_available_avatars(avatar_list)
+        
+        # Get current pixmap from preview (syncs the view)
         pixmap = parent.avatar_preview_2d.original_pixmap
         if not pixmap:
             # Generate default sprite
@@ -1022,7 +1520,7 @@ def _toggle_overlay(parent):
             parent._overlay.show()
             parent._overlay.raise_()  # Bring to front
             parent.show_overlay_btn.setText("Hide from Desktop")
-            parent.avatar_status.setText("Avatar shown on desktop! Drag to move, right-click to hide.")
+            parent.avatar_status.setText("Avatar on desktop! Right-click for options.")
             parent.avatar_status.setStyleSheet("color: #a6e3a1;")
         else:
             parent.show_overlay_btn.setChecked(False)
@@ -1033,6 +1531,68 @@ def _toggle_overlay(parent):
         parent.show_overlay_btn.setText("Show on Desktop")
         parent.avatar_status.setText("Avatar hidden from desktop")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _sync_rotation_to_overlay(parent, rx: float, ry: float):
+    """Sync rotation from preview to overlay when visible."""
+    if parent._overlay and parent._overlay.isVisible():
+        # Get the updated pixmap from preview
+        pixmap = parent.avatar_preview_2d.original_pixmap
+        if pixmap:
+            scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
+            parent._overlay.set_avatar(scaled)
+
+
+def _get_avatar_list_for_menu(parent) -> list:
+    """Get list of avatars for quick-switch menu."""
+    avatars = []
+    
+    # Direct images
+    if AVATAR_IMAGES_DIR.exists():
+        for f in sorted(AVATAR_IMAGES_DIR.iterdir()):
+            if f.suffix.lower() in IMAGE_EXTENSIONS:
+                avatars.append((f"🖼️ {f.stem}", ("image", str(f))))
+    
+    # 3D models (direct files)
+    if AVATAR_MODELS_DIR.exists():
+        for f in sorted(AVATAR_MODELS_DIR.iterdir()):
+            if f.suffix.lower() in MODEL_3D_EXTENSIONS:
+                avatars.append((f"🎮 {f.stem}", ("model", str(f))))
+        
+        # Subdirectories with scene files
+        for folder in sorted(AVATAR_MODELS_DIR.iterdir()):
+            if folder.is_dir():
+                for scene_name in ["scene_converted.glb", "scene.gltf", "scene.glb"]:
+                    scene_file = folder / scene_name
+                    if scene_file.exists():
+                        display_name = folder.name.replace("_", " ").replace("-", " ").title()
+                        if len(display_name) > 25:
+                            display_name = display_name[:22] + "..."
+                        avatars.append((f"🎮 {display_name}", ("model", str(scene_file))))
+                        break
+    
+    return avatars
+
+
+def _on_overlay_avatar_changed(parent, path_str: str):
+    """Handle avatar change from overlay."""
+    path = Path(path_str)
+    if not path.exists():
+        return
+    
+    # Update parent state
+    parent._current_path = path
+    parent._is_3d_model = path.suffix.lower() in MODEL_3D_EXTENSIONS
+    
+    # Find and select in combo box
+    for i in range(parent.avatar_combo.count()):
+        data = parent.avatar_combo.itemData(i)
+        if data and data[1] == path_str:
+            parent.avatar_combo.setCurrentIndex(i)
+            break
+    
+    parent.avatar_status.setText(f"Switched to: {path.stem}")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
 
 
 def _on_overlay_closed(parent):
@@ -1085,11 +1645,47 @@ def _refresh_list(parent):
             if f.suffix.lower() in IMAGE_EXTENSIONS:
                 parent.avatar_combo.addItem(f"🖼️ {f.name}", ("image", str(f)))
     
-    # 3D models
+    # 3D models (direct files)
     if AVATAR_MODELS_DIR.exists():
         for f in sorted(AVATAR_MODELS_DIR.iterdir()):
             if f.suffix.lower() in MODEL_3D_EXTENSIONS:
                 parent.avatar_combo.addItem(f"🎮 {f.name}", ("model", str(f)))
+        
+        # Also scan subdirectories for GLTF folders (scene.gltf inside)
+        for folder in sorted(AVATAR_MODELS_DIR.iterdir()):
+            if folder.is_dir():
+                # Check for common model file names in order of preference
+                scene_converted = folder / "scene_converted.glb"  # Our USD conversions
+                scene_gltf = folder / "scene.gltf"
+                scene_glb = folder / "scene.glb"
+                
+                model_file = None
+                if scene_converted.exists():
+                    model_file = scene_converted
+                elif scene_gltf.exists():
+                    model_file = scene_gltf
+                elif scene_glb.exists():
+                    model_file = scene_glb
+                else:
+                    # Look for any supported model file in the folder
+                    for ext in ['.glb', '.gltf', '.obj', '.fbx', '.dae']:  # Prefer these over USD
+                        matches = list(folder.glob(f"*{ext}"))
+                        if matches:
+                            model_file = matches[0]
+                            break
+                    
+                    # If still nothing, check for USD files and try to convert
+                    if not model_file:
+                        for ext in ['.usdc', '.usd', '.usda', '.usdz']:
+                            matches = list(folder.glob(f"*{ext}"))
+                            if matches:
+                                model_file = matches[0]
+                                break
+                
+                if model_file:
+                    # Use folder name as display name, clean it up
+                    display_name = folder.name.replace("_", " ").replace("-", " ").title()
+                    parent.avatar_combo.addItem(f"🎮 {display_name}", ("model", str(model_file)))
 
 
 def _load_json(path: Path) -> dict:
@@ -1147,8 +1743,26 @@ def _on_avatar_selected(parent):
     parent.avatar_status.setStyleSheet("color: #fab387;")
 
 
+def _show_loading(parent, text: str = "Loading..."):
+    """Show loading overlay on the preview widget."""
+    if hasattr(parent, '_loading_overlay') and parent._loading_overlay:
+        parent._loading_overlay.show_loading(text)
+        # Process events to show immediately
+        from PyQt5.QtWidgets import QApplication
+        QApplication.processEvents()
+
+
+def _hide_loading(parent):
+    """Hide loading overlay."""
+    if hasattr(parent, '_loading_overlay') and parent._loading_overlay:
+        parent._loading_overlay.hide_loading()
+
+
 def _preview_image(parent, path: Path):
     """Preview a 2D image."""
+    # Show loading
+    _show_loading(parent, "Loading image...")
+    
     pixmap = QPixmap(str(path))
     if not pixmap.isNull():
         parent.avatar_preview_2d.set_avatar(pixmap)
@@ -1157,31 +1771,130 @@ def _preview_image(parent, path: Path):
         if parent.use_3d_render_checkbox:
             parent.use_3d_render_checkbox.setEnabled(False)
             parent.use_3d_render_checkbox.setChecked(False)
+    
+    _hide_loading(parent)
 
 
 def _preview_3d_model(parent, path: Path):
-    """Preview a 3D model - render a thumbnail."""
+    """Preview a 3D model - render a thumbnail using pyrender or trimesh."""
+    # Show loading indicator
+    _show_loading(parent, "Loading 3D model...")
+    
     # Enable 3D rendering option
     if parent.use_3d_render_checkbox:
         parent.use_3d_render_checkbox.setEnabled(True)
     
-    # Create a preview thumbnail using trimesh
+    # Try to render using pyrender (preferred - works with pyglet 2.x)
+    if HAS_PYRENDER and HAS_TRIMESH and np is not None:
+        try:
+            _show_loading(parent, "Parsing model geometry...")
+            scene = trimesh.load(str(path))
+            
+            # Get mesh(es) from scene
+            if hasattr(scene, 'geometry') and scene.geometry:
+                meshes = list(scene.geometry.values())
+                if meshes:
+                    mesh = trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0]
+                else:
+                    _hide_loading(parent)
+                    _create_model_info_card(parent, path)
+                    return
+            elif hasattr(scene, 'vertices'):
+                mesh = scene
+            else:
+                _hide_loading(parent)
+                _create_model_info_card(parent, path)
+                return
+            
+            _show_loading(parent, "Preparing model for preview...")
+            
+            # Center and scale the mesh
+            mesh.vertices -= mesh.centroid
+            if max(mesh.extents) > 0:
+                scale = 1.0 / max(mesh.extents)
+                mesh.vertices *= scale
+            
+            # Enable rotation mode on preview widget - pass the mesh for interactive rotation
+            parent.avatar_preview_2d.set_3d_model(str(path), mesh)
+            
+            _show_loading(parent, "Rendering preview...")
+            
+            # Create pyrender scene with dark background
+            pr_scene = pyrender.Scene(bg_color=[30/255, 30/255, 46/255, 1.0])
+            
+            # Add mesh - try to preserve colors/materials
+            pr_mesh = pyrender.Mesh.from_trimesh(mesh)
+            pr_scene.add(pr_mesh)
+            
+            # Add camera
+            camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+            # Position camera to view the model from front-ish angle
+            camera_pose = np.array([
+                [1, 0, 0, 0],
+                [0, 1, 0, 0.2],  # Slightly above
+                [0, 0, 1, 2.0],  # Distance back
+                [0, 0, 0, 1]
+            ], dtype=float)
+            pr_scene.add(camera, pose=camera_pose)
+            
+            # Add lights for better visibility
+            # Main directional light
+            light = pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=2.0)
+            pr_scene.add(light, pose=camera_pose)
+            
+            # Fill light from side
+            fill_pose = np.array([
+                [0.7, 0, 0.7, 1.5],
+                [0, 1, 0, 0.5],
+                [-0.7, 0, 0.7, 1.5],
+                [0, 0, 0, 1]
+            ], dtype=float)
+            fill_light = pyrender.DirectionalLight(color=[0.8, 0.85, 1.0], intensity=1.0)
+            pr_scene.add(fill_light, pose=fill_pose)
+            
+            # Render offscreen
+            try:
+                r = pyrender.OffscreenRenderer(256, 256)
+                color, depth = r.render(pr_scene)
+                r.delete()
+                
+                # Convert to QPixmap using PIL
+                import io
+                img = PILImage.fromarray(color)
+                buffer = io.BytesIO()
+                img.save(buffer, format='PNG')
+                buffer.seek(0)
+                
+                qimg = QImage()
+                qimg.loadFromData(buffer.read())
+                pixmap = QPixmap.fromImage(qimg)
+                parent.avatar_preview_2d.set_avatar(pixmap)
+                _hide_loading(parent)
+                return
+            except Exception as e:
+                print(f"Pyrender offscreen render error: {e}")
+        except Exception as e:
+            print(f"Error loading 3D model with pyrender: {e}")
+    
+    _hide_loading(parent)
+    
+    # Fallback: try trimesh's save_image (requires pyglet<2)
     if HAS_TRIMESH:
+        _show_loading(parent, "Trying alternative renderer...")
         try:
             scene = trimesh.load(str(path))
             
             # Render to image
             if hasattr(scene, 'geometry') and scene.geometry:
-                # Get scene with all geometry
                 png_data = scene.save_image(resolution=[256, 256])
                 if png_data:
                     img = QImage()
                     img.loadFromData(png_data)
                     pixmap = QPixmap.fromImage(img)
                     parent.avatar_preview_2d.set_avatar(pixmap)
+                    _hide_loading(parent)
                     return
             elif hasattr(scene, 'vertices'):
-                # Single mesh - create scene and render
                 render_scene = trimesh.Scene(scene)
                 png_data = render_scene.save_image(resolution=[256, 256])
                 if png_data:
@@ -1189,16 +1902,24 @@ def _preview_3d_model(parent, path: Path):
                     img.loadFromData(png_data)
                     pixmap = QPixmap.fromImage(img)
                     parent.avatar_preview_2d.set_avatar(pixmap)
+                    _hide_loading(parent)
                     return
+        except ImportError:
+            # pyglet<2 not available
+            pass
         except Exception as e:
-            print(f"Error rendering 3D preview: {e}")
+            print(f"Error rendering 3D preview with trimesh: {e}")
     
-    # Fallback - create info card
+    _hide_loading(parent)
+    
+    # Final fallback - create info card
     _create_model_info_card(parent, path)
 
 
 def _create_model_info_card(parent, path: Path):
-    """Create an info card pixmap for 3D model."""
+    """Create an info card pixmap for 3D model - show friendly message."""
+    from PyQt5.QtGui import QPolygon
+    
     size = 256
     pixmap = QPixmap(size, size)
     pixmap.fill(QColor("#1e1e2e"))
@@ -1206,44 +1927,51 @@ def _create_model_info_card(parent, path: Path):
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.Antialiasing, True)
     
-    # Model icon
+    # Draw a 3D cube icon in the center
     painter.setPen(QColor("#89b4fa"))
-    font = painter.font()
-    font.setPointSize(36)
-    painter.setFont(font)
-    painter.drawText(0, 40, size, 60, Qt_AlignCenter, "📦")
+    painter.setBrush(QColor("#313244"))
     
-    # "3D Model" label
-    font.setPointSize(14)
-    font.setBold(True)
+    # Simple 3D box shape
+    cx, cy = size // 2, size // 2 - 20
+    box_size = 60
+    offset = 20
+    
+    # Front face
+    painter.drawRect(cx - box_size//2, cy - box_size//2, box_size, box_size)
+    
+    # Top face (parallelogram)
+    top_poly = QPolygon([
+        QPoint(cx - box_size//2, cy - box_size//2),
+        QPoint(cx - box_size//2 + offset, cy - box_size//2 - offset),
+        QPoint(cx + box_size//2 + offset, cy - box_size//2 - offset),
+        QPoint(cx + box_size//2, cy - box_size//2),
+    ])
+    painter.drawPolygon(top_poly)
+    
+    # Right face
+    right_poly = QPolygon([
+        QPoint(cx + box_size//2, cy - box_size//2),
+        QPoint(cx + box_size//2 + offset, cy - box_size//2 - offset),
+        QPoint(cx + box_size//2 + offset, cy + box_size//2 - offset),
+        QPoint(cx + box_size//2, cy + box_size//2),
+    ])
+    painter.drawPolygon(right_poly)
+    
+    # File name at bottom
+    font = painter.font()
+    font.setPointSize(10)
     painter.setFont(font)
     painter.setPen(QColor("#cdd6f4"))
-    painter.drawText(0, 100, size, 25, Qt_AlignCenter, "3D Model")
+    name = path.stem  # Just the name without extension
+    if len(name) > 20:
+        name = name[:17] + "..."
+    painter.drawText(0, size - 50, size, 20, Qt_AlignCenter, name)
     
-    # File name
-    font.setPointSize(10)
-    font.setBold(False)
-    painter.setFont(font)
-    painter.setPen(QColor("#a6e3a1"))
-    name = path.name
-    if len(name) > 25:
-        name = name[:22] + "..."
-    painter.drawText(0, 130, size, 20, Qt_AlignCenter, name)
-    
-    # File size
-    size_kb = path.stat().st_size / 1024
+    # "3D Model" label
     painter.setPen(QColor("#6c7086"))
-    if size_kb > 1024:
-        size_str = f"{size_kb/1024:.1f} MB"
-    else:
-        size_str = f"{size_kb:.1f} KB"
-    painter.drawText(0, 155, size, 20, Qt_AlignCenter, size_str)
-    
-    # Instructions
     font.setPointSize(9)
     painter.setFont(font)
-    painter.setPen(QColor("#fab387"))
-    painter.drawText(0, 200, size, 40, Qt_AlignCenter, "Enable '3D Rendering'\nfor full preview")
+    painter.drawText(0, size - 30, size, 20, Qt_AlignCenter, "(3D Model - Enable 3D Rendering to preview)")
     
     painter.end()
     parent.avatar_preview_2d.set_avatar(pixmap)
@@ -1336,3 +2064,108 @@ def set_avatar_expression(parent, expression: str):
 def load_avatar_config(config_path: Path) -> dict:
     """Load avatar config (compatibility)."""
     return _load_json(config_path)
+
+
+def sync_preview_to_overlay(parent):
+    """Sync the current preview to the desktop overlay."""
+    if parent._overlay and parent._overlay.isVisible():
+        pixmap = parent.avatar_preview_2d.original_pixmap
+        if pixmap:
+            scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
+            parent._overlay.set_avatar(scaled)
+
+
+# === AI Control Functions ===
+# These can be called by the AI to control the avatar
+
+def ai_set_avatar_background(parent, color: str = None, shape: str = "none"):
+    """
+    AI can set avatar background.
+    
+    Args:
+        parent: The avatar tab parent widget
+        color: Hex color like "#FF0000" or None for transparent
+        shape: 'none' (transparent), 'circle', 'square', 'glow'
+    
+    Example:
+        ai_set_avatar_background(avatar_tab, "#6366f1", "glow")  # Blue glow
+        ai_set_avatar_background(avatar_tab, None, "none")  # Clear/transparent
+    """
+    if not parent._overlay:
+        return
+    
+    if color:
+        qcolor = QColor(color)
+        qcolor.setAlpha(100)  # Semi-transparent
+    else:
+        qcolor = None
+    
+    parent._overlay.set_background(qcolor, shape)
+
+
+def ai_switch_avatar(parent, avatar_name: str):
+    """
+    AI can switch to a different avatar by name.
+    
+    Args:
+        parent: The avatar tab parent widget
+        avatar_name: Partial name match (case insensitive)
+    
+    Example:
+        ai_switch_avatar(avatar_tab, "freddy")  # Switches to Glamrock Freddy
+        ai_switch_avatar(avatar_tab, "robot")  # Switches to Robot.glb
+    """
+    name_lower = avatar_name.lower()
+    
+    # Search in combo box
+    for i in range(parent.avatar_combo.count()):
+        item_text = parent.avatar_combo.itemText(i).lower()
+        if name_lower in item_text:
+            parent.avatar_combo.setCurrentIndex(i)
+            _apply_avatar(parent)
+            return True
+    
+    return False
+
+
+def ai_set_expression(parent, expression: str):
+    """
+    AI can change avatar expression.
+    
+    Args:
+        parent: The avatar tab parent widget
+        expression: Expression name (happy, sad, thinking, surprised, etc.)
+    """
+    _set_expression(parent, expression)
+    sync_preview_to_overlay(parent)
+
+
+def ai_show_avatar(parent, show: bool = True):
+    """
+    AI can show/hide the desktop avatar.
+    
+    Args:
+        parent: The avatar tab parent widget
+        show: True to show, False to hide
+    """
+    if show and not parent.show_overlay_btn.isChecked():
+        parent.show_overlay_btn.setChecked(True)
+        _toggle_overlay(parent)
+    elif not show and parent.show_overlay_btn.isChecked():
+        parent.show_overlay_btn.setChecked(False)
+        _toggle_overlay(parent)
+
+
+def get_ai_avatar_controls():
+    """
+    Get dict of AI-callable avatar control functions.
+    
+    Returns:
+        Dict of function name -> function
+    """
+    return {
+        "set_background": ai_set_avatar_background,
+        "switch_avatar": ai_switch_avatar,
+        "set_expression": ai_set_expression,
+        "show_avatar": ai_show_avatar,
+    }
