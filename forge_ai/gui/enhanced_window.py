@@ -1351,7 +1351,8 @@ class ModelLoadingDialog(QDialog):
         self.setWindowTitle("Loading Model")
         self.setFixedSize(450, 270)
         self.setModal(False)  # Non-modal so user can move the main window
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)  # Stay on top but movable
+        # Don't use WindowStaysOnTopHint during loading - it can block interaction
+        # Instead we use raise_() and activateWindow() when showing
         self.cancelled = False
         self.show_terminal = show_terminal
         self._log_lines = []
@@ -3856,10 +3857,11 @@ class EnhancedMainWindow(QMainWindow):
                         screen_geo.y() + (screen_geo.height() - self.height()) // 2
                     )
         
-        # Restore always on top
+        # Restore always on top - defer to after window is shown
+        # Using QTimer to ensure window is fully loaded first
         if settings.get("always_on_top", False):
-            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-            self.show()
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(500, self._restore_always_on_top)
         
         # Restore auto-speak state
         if settings.get("auto_speak", False):
@@ -3881,6 +3883,19 @@ class EnhancedMainWindow(QMainWindow):
         
         # Initialize tab visibility based on loaded modules
         self.update_tab_visibility()
+    
+    def _restore_always_on_top(self):
+        """Restore always-on-top setting after window is fully loaded."""
+        try:
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+            self.show()
+            # Update checkbox if it exists
+            if hasattr(self, 'always_on_top_check'):
+                self.always_on_top_check.blockSignals(True)
+                self.always_on_top_check.setChecked(True)
+                self.always_on_top_check.blockSignals(False)
+        except Exception as e:
+            print(f"Could not restore always-on-top: {e}")
     
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""
