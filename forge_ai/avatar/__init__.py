@@ -81,6 +81,23 @@ from .presets import (
     get_preset_manager,
 )
 
+# Desktop pet (DesktopMate-style)
+from .desktop_pet import (
+    DesktopPet,
+    PetState,
+    PetConfig,
+    get_desktop_pet,
+)
+
+# Blender integration
+from .blender_bridge import (
+    BlenderBridge,
+    BlenderBridgeConfig,
+    BlenderModelInfo,
+    get_blender_bridge,
+    save_blender_addon,
+)
+
 __all__ = [
     # Controller
     "AvatarController",
@@ -115,4 +132,17 @@ __all__ = [
     "AvatarPreset",
     "PresetManager",
     "get_preset_manager",
+    
+    # Desktop Pet
+    "DesktopPet",
+    "PetState",
+    "PetConfig",
+    "get_desktop_pet",
+    
+    # Blender Bridge
+    "BlenderBridge",
+    "BlenderBridgeConfig",
+    "BlenderModelInfo",
+    "get_blender_bridge",
+    "save_blender_addon",
 ]

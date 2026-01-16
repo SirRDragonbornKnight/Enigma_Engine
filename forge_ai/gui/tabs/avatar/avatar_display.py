@@ -23,7 +23,15 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent
-from PyQt5.QtSvg import QSvgWidget
+
+# Optional SVG support - not all PyQt5 installs have it
+try:
+    from PyQt5.QtSvg import QSvgWidget, QSvgRenderer
+    HAS_SVG = True
+except ImportError:
+    QSvgWidget = None  # type: ignore
+    QSvgRenderer = None  # type: ignore
+    HAS_SVG = False
 
 # Define Qt flags for compatibility with different PyQt5 versions
 # These work at runtime even if type checker complains
@@ -397,15 +405,16 @@ class AvatarOverlayWindow(QWidget):
                 "#10b981"
             )
             # Convert SVG to pixmap
-            from PyQt5.QtSvg import QSvgRenderer
-            from PyQt5.QtCore import QByteArray
-            renderer = QSvgRenderer(QByteArray(svg_data.encode('utf-8')))
-            pixmap = QPixmap(280, 280)
-            pixmap.fill(QColor(0, 0, 0, 0))
-            painter = QPainter(pixmap)
-            renderer.render(painter)
-            painter.end()
-            self.set_avatar(pixmap)
+            if HAS_SVG and QSvgRenderer is not None:
+                renderer = QSvgRenderer(QByteArray(svg_data.encode('utf-8')))
+                pixmap = QPixmap(280, 280)
+                pixmap.fill(QColor(0, 0, 0, 0))
+                painter = QPainter(pixmap)
+                renderer.render(painter)
+                painter.end()
+                self.set_avatar(pixmap)
+            else:
+                print("SVG support not available")
         except Exception as e:
             print(f"Error changing expression: {e}")
             
@@ -457,11 +466,14 @@ class AvatarPreviewWidget(QFrame):
     
     def set_svg_sprite(self, svg_data: str):
         """Set avatar from SVG data."""
+        if not HAS_SVG or QSvgRenderer is None:
+            print("SVG support not available - using fallback")
+            return
+        
         self._svg_mode = True
         self._current_svg = svg_data
         
         # Convert SVG to pixmap for display
-        from PyQt5.QtSvg import QSvgRenderer
         renderer = QSvgRenderer(QByteArray(svg_data.encode('utf-8')))
         
         # Use minimum size of 200 if widget not yet sized

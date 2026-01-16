@@ -3684,7 +3684,37 @@ class EnhancedMainWindow(QMainWindow):
         
         # Add items to sidebar
         self._nav_map = {}  # Map item text to stack index
+        self._sidebar_items = {}  # Map key to QListWidgetItem for visibility control
+        self._sidebar_rows = {}  # Map key to row index
         stack_index = 0
+        row_index = 0
+        
+        # Module-to-sidebar mapping: which modules control which sidebar items
+        self._module_to_tabs = {
+            'image_gen_local': ['image'],
+            'image_gen_api': ['image'],
+            'code_gen_local': ['code'],
+            'code_gen_api': ['code'],
+            'video_gen_local': ['video'],
+            'video_gen_api': ['video'],
+            'audio_gen_local': ['audio'],
+            'audio_gen_api': ['audio'],
+            'threed_gen_local': ['3d'],
+            'threed_gen_api': ['3d'],
+            'embedding_local': ['search'],
+            'embedding_api': ['search'],
+            'avatar': ['avatar'],
+            'vision': ['vision', 'camera'],
+            'voice_input': [],
+            'voice_output': [],
+        }
+        
+        # Tabs that should always be visible (core tabs)
+        self._always_visible_tabs = [
+            'chat', 'train', 'history', 'scale', 'modules', 'tools', 'router',
+            'game', 'robot', 'terminal', 'files', 'logs', 'notes', 'network',
+            'analytics', 'scheduler', 'examples', 'settings', 'gif'
+        ]
         
         for item in nav_items:
             if item[0] == "section":
@@ -3707,7 +3737,10 @@ class EnhancedMainWindow(QMainWindow):
                 list_item.setSizeHint(QSize(170, 38))
                 self.sidebar.addItem(list_item)
                 self._nav_map[key] = stack_index
+                self._sidebar_items[key] = list_item
+                self._sidebar_rows[key] = row_index
                 stack_index += 1
+            row_index += 1
         
         sidebar_layout.addWidget(self.sidebar)
         main_layout.addWidget(sidebar_container)
@@ -3845,6 +3878,9 @@ class EnhancedMainWindow(QMainWindow):
             if item and item.data(Qt.UserRole) == 'chat':
                 self.sidebar.setCurrentRow(i)
                 break
+        
+        # Initialize tab visibility based on loaded modules
+        self.update_tab_visibility()
     
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""
@@ -4157,6 +4193,8 @@ class EnhancedMainWindow(QMainWindow):
                     if success:
                         self._enable_avatar()
                         self.avatar_action.setText("Avatar (ON)")
+                        self.refresh_avatar_tab()
+                        self.update_tab_visibility('avatar', True)
                     else:
                         self.avatar_action.setChecked(False)
                         self.avatar_action.setText("Avatar (OFF)")
@@ -4166,6 +4204,8 @@ class EnhancedMainWindow(QMainWindow):
                     self.module_manager.unload('avatar')
                     self._disable_avatar()
                     self.avatar_action.setText("Avatar (OFF)")
+                    self.refresh_avatar_tab()
+                    self.update_tab_visibility('avatar', False)
             else:
                 # Fallback if no module manager
                 if checked:
@@ -4179,6 +4219,84 @@ class EnhancedMainWindow(QMainWindow):
             self.avatar_action.setChecked(False)
             self.avatar_action.setText("Avatar (OFF)")
             print(f"Avatar toggle error: {e}")
+    
+    def update_tab_visibility(self, module_id: str = None, enabled: bool = None):
+        """
+        Update sidebar tab visibility based on module state.
+        If module_id is None, updates all tabs based on current module states.
+        """
+        if not hasattr(self, '_sidebar_items'):
+            return
+        
+        if module_id and module_id in self._module_to_tabs:
+            # Update specific tabs for this module
+            tabs = self._module_to_tabs[module_id]
+            for tab_key in tabs:
+                if tab_key in self._sidebar_items:
+                    item = self._sidebar_items[tab_key]
+                    # Show if enabled, hide if disabled (unless always visible)
+                    if tab_key in self._always_visible_tabs:
+                        item.setHidden(False)
+                    else:
+                        item.setHidden(not enabled)
+        else:
+            # Update all tabs based on current module state
+            if self.module_manager:
+                loaded_modules = set(self.module_manager.list_loaded())
+            else:
+                loaded_modules = set()
+            
+            # Build set of tabs that should be visible
+            visible_tabs = set(self._always_visible_tabs)
+            for mod_id, tabs in self._module_to_tabs.items():
+                if mod_id in loaded_modules:
+                    visible_tabs.update(tabs)
+            
+            # Update visibility
+            for tab_key, item in self._sidebar_items.items():
+                should_show = tab_key in visible_tabs
+                item.setHidden(not should_show)
+    
+    def refresh_avatar_tab(self):
+        """Refresh avatar tab UI to reflect current module state."""
+        try:
+            # Update the module status label and controls
+            from .tabs.avatar.avatar_display import _is_avatar_module_enabled
+            is_enabled = _is_avatar_module_enabled()
+            
+            # Update module status label
+            if hasattr(self, 'module_status_label'):
+                self.module_status_label.setVisible(not is_enabled)
+            
+            # Update checkbox state
+            if hasattr(self, 'avatar_enabled_checkbox'):
+                self.avatar_enabled_checkbox.setEnabled(is_enabled)
+                if is_enabled:
+                    # Re-enable and sync with avatar state
+                    from ..avatar import get_avatar
+                    avatar = get_avatar()
+                    self.avatar_enabled_checkbox.blockSignals(True)
+                    self.avatar_enabled_checkbox.setChecked(avatar.is_enabled)
+                    self.avatar_enabled_checkbox.blockSignals(False)
+            
+            # Update show overlay button
+            if hasattr(self, 'show_overlay_btn'):
+                self.show_overlay_btn.setEnabled(is_enabled)
+            
+        except Exception as e:
+            print(f"Error refreshing avatar tab: {e}")
+    
+    def on_module_toggled(self, module_id: str, enabled: bool):
+        """
+        Called when a module is toggled in the Modules tab.
+        Updates tab visibility and refreshes relevant tabs.
+        """
+        # Update sidebar visibility
+        self.update_tab_visibility(module_id, enabled)
+        
+        # Refresh specific tabs based on module
+        if module_id == 'avatar':
+            self.refresh_avatar_tab()
     
     def _toggle_screen_watching(self, checked):
         """Toggle continuous screen watching."""

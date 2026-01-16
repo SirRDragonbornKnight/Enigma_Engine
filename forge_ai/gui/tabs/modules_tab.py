@@ -469,6 +469,7 @@ class ModulesTab(QWidget):
                     return
                 
                 self._sync_options_menu(module_id, enabled)
+                self._sync_tab_visibility(module_id, enabled)
                 
             except Exception as e:
                 self._log(f"ERROR: {str(e)}")
@@ -479,6 +480,18 @@ class ModulesTab(QWidget):
         
         self._log(f"OK: {module_id} {'enabled' if enabled else 'disabled'}")
         self._update_stats()
+    
+    def _sync_tab_visibility(self, module_id: str, enabled: bool):
+        """Sync tab visibility with module state in main window."""
+        try:
+            main_window: Any = self.parent()
+            while main_window and not hasattr(main_window, 'on_module_toggled'):
+                main_window = main_window.parent()
+            
+            if main_window and hasattr(main_window, 'on_module_toggled'):
+                main_window.on_module_toggled(module_id, enabled)
+        except Exception:
+            pass
     
     def _sync_options_menu(self, module_id: str, enabled: bool):
         """Sync with main window Options menu."""
