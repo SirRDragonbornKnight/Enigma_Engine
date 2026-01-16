@@ -95,22 +95,24 @@ class OpenGL3DWidget(QOpenGLWidget):
     """Sketchfab-style OpenGL widget for rendering 3D models.
     
     Features:
-    - Dark gradient background
-    - Grid floor
+    - Dark gradient background (or transparent)
+    - Grid floor (toggleable)
     - Smooth orbit controls (drag to rotate)
     - Scroll to zoom
-    - Nice lighting with rim light effect
+    - Adjustable lighting
     - Auto-rotate option
+    - Wireframe mode
     - Double-click to reset view
     """
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, transparent_bg=False):
         super().__init__(parent)
         self.mesh = None
         self.vertices = None
         self.faces = None
         self.normals = None
         self.colors = None
+        self.texture_colors = None  # Per-vertex colors from texture
         
         # Camera
         self.rotation_x = 20.0  # Slight tilt for better view
@@ -118,6 +120,11 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.zoom = 3.0
         self.pan_x = 0.0
         self.pan_y = 0.0
+        
+        # Default camera settings (for reset)
+        self._default_rotation_x = 20.0
+        self._default_rotation_y = 45.0
+        self._default_zoom = 3.0
         
         # Interaction
         self.last_pos = None
@@ -128,78 +135,260 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.auto_rotate_speed = 0.5
         self._rotate_timer = None
         
+        # Display options
+        self.transparent_bg = transparent_bg
+        self.show_grid = True
+        self.wireframe_mode = False
+        self.ambient_strength = 0.15
+        self.light_intensity = 1.0
+        self.model_color = [0.75, 0.75, 0.82]  # Default color when no texture
+        
         # Loading state
         self.is_loading = False
         self.model_name = ""
+        self._model_path = None
         
         self.setMinimumSize(250, 250)
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_OpenHandCursor))
         
     def load_model(self, path: str) -> bool:
-        """Load a 3D model file."""
+        """Load a 3D model file with texture support."""
         if not HAS_TRIMESH or trimesh is None or np is None:
             return False
         
         self.is_loading = True
         self.model_name = Path(path).stem
+        self._model_path = path
         self.update()
         
         try:
+            # Load with texture resolver for GLTF files
             scene = trimesh.load(str(path))
             
-            # Convert scene to single mesh if needed
+            # Collect all meshes with their colors
+            all_vertices = []
+            all_faces = []
+            all_normals = []
+            all_colors = []
+            vertex_offset = 0
+            
+            # Get list of meshes (handle both Scene and single Mesh)
             if hasattr(scene, 'geometry') and scene.geometry:
                 meshes = list(scene.geometry.values())
-                if meshes:
-                    self.mesh = trimesh.util.concatenate(meshes)
-                else:
-                    self.is_loading = False
-                    return False
             else:
-                self.mesh = scene
+                meshes = [scene]
+            
+            for mesh in meshes:
+                if not hasattr(mesh, 'vertices') or len(mesh.vertices) == 0:
+                    continue
+                    
+                verts = np.array(mesh.vertices, dtype=np.float32)
+                faces = np.array(mesh.faces, dtype=np.uint32) + vertex_offset
+                
+                all_vertices.append(verts)
+                all_faces.append(faces)
+                
+                # Normals
+                if hasattr(mesh, 'vertex_normals') and mesh.vertex_normals is not None:
+                    all_normals.append(np.array(mesh.vertex_normals, dtype=np.float32))
+                else:
+                    # Generate normals if missing
+                    all_normals.append(np.zeros_like(verts))
+                
+                # Extract colors from this mesh's visual
+                mesh_colors = self._extract_mesh_colors(mesh, len(verts))
+                all_colors.append(mesh_colors)
+                
+                vertex_offset += len(verts)
+            
+            if not all_vertices:
+                self.is_loading = False
+                return False
+            
+            # Combine all meshes
+            self.vertices = np.vstack(all_vertices)
+            self.faces = np.vstack(all_faces)
+            self.normals = np.vstack(all_normals)
+            self.colors = np.vstack(all_colors) if all_colors else None
+            
+            # Check if we actually got colors
+            if self.colors is not None:
+                # Check if colors are all the same (default gray)
+                unique_colors = np.unique(self.colors, axis=0)
+                if len(unique_colors) <= 1:
+                    print("[Avatar] Colors appear to be uniform - trying texture loading...")
+                    self.colors = self._load_textures_from_files(path, meshes)
             
             # Center and scale the mesh
-            self.mesh.vertices -= self.mesh.centroid
-            max_extent = max(self.mesh.extents)
+            centroid = self.vertices.mean(axis=0)
+            self.vertices -= centroid
+            max_extent = max(self.vertices.max(axis=0) - self.vertices.min(axis=0))
             if max_extent > 0:
                 scale = 1.5 / max_extent
-                self.mesh.vertices *= scale
-            
-            self.vertices = np.array(self.mesh.vertices, dtype=np.float32)
-            self.faces = np.array(self.mesh.faces, dtype=np.uint32)
-            
-            if hasattr(self.mesh, 'vertex_normals') and self.mesh.vertex_normals is not None:
-                self.normals = np.array(self.mesh.vertex_normals, dtype=np.float32)
-            else:
-                self.normals = None
-            
-            # Try to get vertex colors
-            if hasattr(self.mesh, 'visual') and hasattr(self.mesh.visual, 'vertex_colors'):
-                vc = self.mesh.visual.vertex_colors
-                if vc is not None and len(vc) > 0:
-                    self.colors = np.array(vc[:, :3] / 255.0, dtype=np.float32)
-                else:
-                    self.colors = None
-            else:
-                self.colors = None
+                self.vertices *= scale
             
             self.is_loading = False
             self.reset_view()
+            
+            # Log info
+            print(f"[Avatar] Loaded {Path(path).name}: {len(self.vertices)} vertices, "
+                  f"{len(self.faces)} faces, colors: {'yes' if self.colors is not None else 'no'}")
+            
             return True
             
         except Exception as e:
             print(f"Error loading 3D model: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_loading = False
             return False
     
+    def _extract_mesh_colors(self, mesh, num_verts):
+        """Extract colors from a single mesh's visual."""
+        default_color = np.tile(self.model_color, (num_verts, 1)).astype(np.float32)
+        
+        if not hasattr(mesh, 'visual'):
+            return default_color
+        
+        visual = mesh.visual
+        
+        # Method 1: Direct vertex colors
+        if hasattr(visual, 'vertex_colors') and visual.vertex_colors is not None:
+            vc = visual.vertex_colors
+            if len(vc) == num_verts and not np.all(vc[:, :3] == vc[0, :3]):
+                return np.array(vc[:, :3] / 255.0, dtype=np.float32)
+        
+        # Method 2: Try to_color() to bake textures
+        if hasattr(visual, 'to_color'):
+            try:
+                color_visual = visual.to_color()
+                if hasattr(color_visual, 'vertex_colors') and color_visual.vertex_colors is not None:
+                    vc = color_visual.vertex_colors
+                    if len(vc) == num_verts:
+                        return np.array(vc[:, :3] / 255.0, dtype=np.float32)
+            except Exception:
+                pass
+        
+        # Method 3: Sample from texture image using UVs
+        if hasattr(visual, 'uv') and visual.uv is not None:
+            try:
+                material = getattr(visual, 'material', None)
+                if material:
+                    # Get base color texture
+                    img = None
+                    if hasattr(material, 'baseColorTexture') and material.baseColorTexture is not None:
+                        img = material.baseColorTexture
+                    elif hasattr(material, 'image') and material.image is not None:
+                        img = material.image
+                    
+                    if img is not None:
+                        from PIL import Image
+                        uv = visual.uv
+                        img_array = np.array(img)
+                        h, w = img_array.shape[:2]
+                        
+                        # Handle UV coordinates
+                        u = np.clip(uv[:, 0] % 1.0, 0, 1)
+                        v = np.clip((1 - uv[:, 1]) % 1.0, 0, 1)
+                        
+                        px = (u * (w - 1)).astype(int)
+                        py = (v * (h - 1)).astype(int)
+                        
+                        if img_array.ndim == 3:
+                            if img_array.shape[2] >= 3:
+                                return img_array[py, px, :3].astype(np.float32) / 255.0
+                        else:
+                            gray = img_array[py, px].astype(np.float32) / 255.0
+                            return np.stack([gray, gray, gray], axis=-1)
+            except Exception as e:
+                print(f"[Avatar] UV texture sampling failed: {e}")
+        
+        # Method 4: Material base color
+        if hasattr(visual, 'material'):
+            material = visual.material
+            if hasattr(material, 'main_color') and material.main_color is not None:
+                color = np.array(material.main_color[:3]) / 255.0
+                return np.tile(color, (num_verts, 1)).astype(np.float32)
+            elif hasattr(material, 'baseColorFactor') and material.baseColorFactor is not None:
+                color = np.array(material.baseColorFactor[:3])
+                return np.tile(color, (num_verts, 1)).astype(np.float32)
+        
+        return default_color
+    
+    def _load_textures_from_files(self, model_path, meshes):
+        """Try to load textures directly from files in the model directory."""
+        try:
+            from PIL import Image
+            model_dir = Path(model_path).parent
+            
+            # Look for texture directory
+            texture_dirs = [
+                model_dir / "textures",
+                model_dir / "texture",
+                model_dir,
+            ]
+            
+            texture_files = {}
+            for tex_dir in texture_dirs:
+                if tex_dir.exists():
+                    for f in tex_dir.iterdir():
+                        if f.suffix.lower() in {'.png', '.jpg', '.jpeg'}:
+                            # Prioritize baseColor textures
+                            name = f.stem.lower()
+                            if 'basecolor' in name or 'diffuse' in name or 'albedo' in name:
+                                texture_files[name] = f
+            
+            if not texture_files:
+                print(f"[Avatar] No texture files found in {model_dir}")
+                return None
+            
+            print(f"[Avatar] Found {len(texture_files)} texture files")
+            
+            # For now, just load the first baseColor texture and apply it globally
+            # This is a fallback when trimesh fails to apply textures
+            for name, tex_path in texture_files.items():
+                try:
+                    img = Image.open(tex_path).convert('RGB')
+                    # Sample average color from texture
+                    img_small = img.resize((32, 32))
+                    img_array = np.array(img_small) / 255.0
+                    avg_color = img_array.mean(axis=(0, 1))
+                    
+                    print(f"[Avatar] Using texture {tex_path.name}, avg color: {avg_color}")
+                    
+                    # Apply this color to all vertices
+                    return np.tile(avg_color, (len(self.vertices), 1)).astype(np.float32)
+                except Exception as e:
+                    print(f"[Avatar] Failed to load {tex_path}: {e}")
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            print(f"[Avatar] Texture file loading failed: {e}")
+            return None
+    
     def reset_view(self):
         """Reset camera to default position."""
-        self.rotation_x = 20.0
-        self.rotation_y = 45.0
-        self.zoom = 3.0
+        self.rotation_x = self._default_rotation_x
+        self.rotation_y = self._default_rotation_y
+        self.zoom = self._default_zoom
         self.pan_x = 0.0
         self.pan_y = 0.0
+        self.update()
+    
+    def reset_all(self):
+        """Reset everything including display settings."""
+        self.reset_view()
+        self.auto_rotate = False
+        self.wireframe_mode = False
+        self.show_grid = True
+        self.ambient_strength = 0.15
+        self.light_intensity = 1.0
+        self.model_color = [0.75, 0.75, 0.82]
+        if self._rotate_timer:
+            self._rotate_timer.stop()
         self.update()
     
     def start_auto_rotate(self):
@@ -228,8 +417,11 @@ class OpenGL3DWidget(QOpenGLWidget):
             return
         
         try:
-            # Dark gradient will be drawn in paintGL
-            GL.glClearColor(0.08, 0.08, 0.12, 1.0)
+            # Transparent or dark background
+            if self.transparent_bg:
+                GL.glClearColor(0.0, 0.0, 0.0, 0.0)
+            else:
+                GL.glClearColor(0.08, 0.08, 0.12, 1.0)
             
             GL.glEnable(GL.GL_DEPTH_TEST)
             GL.glEnable(GL.GL_LIGHTING)
@@ -241,32 +433,48 @@ class OpenGL3DWidget(QOpenGLWidget):
             # Enable smooth shading
             GL.glShadeModel(GL.GL_SMOOTH)
             
-            # Key light (warm, from top-right-front)
-            GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, [2.0, 3.0, 2.0, 0.0])
-            GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, [1.0, 0.95, 0.9, 1.0])
-            GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, [0.15, 0.15, 0.18, 1.0])
-            GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+            # Enable blending for transparency
+            GL.glEnable(GL.GL_BLEND)
+            GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
             
-            # Fill/rim light (cool, from bottom-left-back)
-            GL.glLightfv(GL.GL_LIGHT1, GL.GL_POSITION, [-2.0, -1.0, -2.0, 0.0])
-            GL.glLightfv(GL.GL_LIGHT1, GL.GL_DIFFUSE, [0.3, 0.35, 0.5, 1.0])
-            GL.glLightfv(GL.GL_LIGHT1, GL.GL_AMBIENT, [0.0, 0.0, 0.0, 1.0])
-            
-            # Material properties
-            GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
-            GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 30.0)
+            self._update_lighting()
             
             # Anti-aliasing (may not be supported on all systems)
             try:
                 GL.glEnable(GL.GL_LINE_SMOOTH)
+                GL.glEnable(GL.GL_POLYGON_SMOOTH)
                 GL.glHint(GL.GL_LINE_SMOOTH_HINT, GL.GL_NICEST)
+                GL.glHint(GL.GL_POLYGON_SMOOTH_HINT, GL.GL_NICEST)
             except Exception:
-                pass  # Line smoothing not supported
+                pass  # Smoothing not supported
                 
             self._gl_initialized = True
         except Exception as e:
             print(f"OpenGL init error (may still work): {e}")
             self._gl_initialized = False
+    
+    def _update_lighting(self):
+        """Update lighting based on current settings."""
+        if not HAS_OPENGL or GL is None:
+            return
+        
+        intensity = self.light_intensity
+        ambient = self.ambient_strength
+        
+        # Key light (warm, from top-right-front)
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, [2.0, 3.0, 2.0, 0.0])
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, [intensity, intensity * 0.95, intensity * 0.9, 1.0])
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, [ambient, ambient, ambient * 1.2, 1.0])
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+        
+        # Fill/rim light (cool, from bottom-left-back)
+        GL.glLightfv(GL.GL_LIGHT1, GL.GL_POSITION, [-2.0, -1.0, -2.0, 0.0])
+        GL.glLightfv(GL.GL_LIGHT1, GL.GL_DIFFUSE, [intensity * 0.3, intensity * 0.35, intensity * 0.5, 1.0])
+        GL.glLightfv(GL.GL_LIGHT1, GL.GL_AMBIENT, [0.0, 0.0, 0.0, 1.0])
+        
+        # Material properties
+        GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+        GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 30.0)
         
     def resizeGL(self, w, h):
         """Handle resize."""
@@ -287,11 +495,13 @@ class OpenGL3DWidget(QOpenGLWidget):
         try:
             GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
             
-            # Draw gradient background (disable lighting for this)
-            self._draw_gradient_background()
+            # Draw gradient background (skip if transparent)
+            if not self.transparent_bg:
+                self._draw_gradient_background()
             
-            # Draw grid floor
-            self._draw_grid()
+            # Draw grid floor (if enabled and not transparent)
+            if self.show_grid and not self.transparent_bg:
+                self._draw_grid()
             
             GL.glLoadIdentity()
             
@@ -304,19 +514,25 @@ class OpenGL3DWidget(QOpenGLWidget):
                 # Draw loading indicator
                 GL.glDisable(GL.GL_LIGHTING)
                 GL.glColor3f(0.5, 0.5, 0.6)
-                # Simple rotating indicator would go here
                 GL.glEnable(GL.GL_LIGHTING)
                 return
             
             if self.vertices is not None and self.faces is not None:
-                GL.glEnable(GL.GL_LIGHTING)
+                # Wireframe mode
+                if self.wireframe_mode:
+                    GL.glDisable(GL.GL_LIGHTING)
+                    GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
+                    GL.glColor3f(0.4, 0.6, 0.9)  # Blue wireframe
+                else:
+                    GL.glEnable(GL.GL_LIGHTING)
+                    GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
                 
-                # Use vertex colors if available, otherwise nice default
-                if self.colors is not None:
+                # Use vertex colors if available, otherwise model_color
+                if self.colors is not None and not self.wireframe_mode:
                     GL.glEnableClientState(GL.GL_COLOR_ARRAY)
                     GL.glColorPointer(3, GL.GL_FLOAT, 0, self.colors)
                 else:
-                    GL.glColor3f(0.75, 0.75, 0.82)  # Soft gray-blue
+                    GL.glColor3f(*self.model_color)
                 
                 GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
                 GL.glVertexPointer(3, GL.GL_FLOAT, 0, self.vertices)
@@ -330,8 +546,11 @@ class OpenGL3DWidget(QOpenGLWidget):
                 GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
                 if self.normals is not None:
                     GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
-                if self.colors is not None:
+                if self.colors is not None and not self.wireframe_mode:
                     GL.glDisableClientState(GL.GL_COLOR_ARRAY)
+                    
+                # Reset polygon mode
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
         except Exception as e:
             # OpenGL error - may happen on some systems
             if not getattr(self, '_paint_error_logged', False):
@@ -675,6 +894,283 @@ class AvatarOverlayWindow(QWidget):
         self._update_scaled_pixmap()
 
 
+class Avatar3DOverlayWindow(QWidget):
+    """Transparent 3D overlay window for desktop avatar display.
+    
+    Features:
+    - Drag handle at top to move (not the whole window)
+    - 3D model can be rotated/zoomed normally
+    - Circular mask that wraps around the avatar
+    - Right-click menu for options
+    """
+    
+    closed = pyqtSignal()
+    
+    def __init__(self):
+        super().__init__(None)
+        
+        # Transparent, always-on-top, frameless
+        self.setWindowFlags(
+            Qt_FramelessWindowHint |
+            Qt_WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt_WA_TranslucentBackground, True)
+        self.setFocusPolicy(Qt.StrongFocus if hasattr(Qt, 'StrongFocus') else 0x0b)
+        
+        self._size = 300
+        self._drag_handle_height = 24
+        self.setFixedSize(self._size, self._size + self._drag_handle_height)
+        self.move(100, 100)
+        
+        self._drag_pos = None
+        self._model_path = None
+        self._use_circular_mask = True
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Drag handle bar at top
+        self._drag_handle = QWidget()
+        self._drag_handle.setFixedHeight(self._drag_handle_height)
+        self._drag_handle.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(99, 102, 241, 180),
+                    stop:0.5 rgba(139, 92, 246, 200),
+                    stop:1 rgba(99, 102, 241, 180));
+                border-radius: 12px;
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+            }
+        """)
+        self._drag_handle.setCursor(QCursor(Qt_OpenHandCursor))
+        self._drag_handle.setToolTip("Drag to move • Right-click for menu • Scroll to resize")
+        
+        # Add grip dots to drag handle
+        handle_layout = QHBoxLayout(self._drag_handle)
+        handle_layout.setContentsMargins(0, 0, 0, 0)
+        grip_label = QLabel("⋮⋮⋮")
+        grip_label.setStyleSheet("color: rgba(255,255,255,0.7); font-size: 10px; background: transparent;")
+        grip_label.setAlignment(Qt_AlignCenter)
+        handle_layout.addWidget(grip_label)
+        
+        main_layout.addWidget(self._drag_handle)
+        
+        # Container for the 3D widget with circular mask
+        self._gl_container = QWidget()
+        self._gl_container.setFixedSize(self._size, self._size)
+        self._gl_container.setStyleSheet("background: transparent;")
+        
+        gl_layout = QVBoxLayout(self._gl_container)
+        gl_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create 3D widget with transparent background
+        if HAS_OPENGL and HAS_TRIMESH:
+            self._gl_widget = OpenGL3DWidget(self._gl_container, transparent_bg=True)
+            self._gl_widget.setFixedSize(self._size, self._size)
+            self._gl_widget.start_auto_rotate()
+            gl_layout.addWidget(self._gl_widget)
+            
+            # Apply circular mask to the GL widget
+            self._apply_circular_mask()
+        else:
+            self._gl_widget = None
+            placeholder = QLabel("3D not available")
+            placeholder.setStyleSheet("color: white; background: rgba(30,30,46,150); border-radius: 50%;")
+            placeholder.setAlignment(Qt_AlignCenter)
+            gl_layout.addWidget(placeholder)
+        
+        main_layout.addWidget(self._gl_container)
+        
+        # Install event filter on drag handle for dragging
+        self._drag_handle.installEventFilter(self)
+        
+        self.setMouseTracking(True)
+    
+    def _apply_circular_mask(self):
+        """Apply a circular/elliptical mask to wrap around the avatar."""
+        if not self._use_circular_mask:
+            return
+        
+        from PyQt5.QtGui import QRegion, QBitmap, QPainterPath
+        from PyQt5.QtCore import QRectF
+        
+        # Create circular region for the GL widget
+        path = QPainterPath()
+        # Slightly smaller circle with padding
+        padding = 10
+        path.addEllipse(QRectF(padding, padding, self._size - padding*2, self._size - padding*2))
+        
+        region = QRegion(path.toFillPolygon().toPolygon())
+        if self._gl_widget:
+            self._gl_widget.setMask(region)
+    
+    def load_model(self, path: str) -> bool:
+        """Load a 3D model into the overlay."""
+        self._model_path = path
+        if self._gl_widget:
+            result = self._gl_widget.load_model(path)
+            # Re-apply mask after loading
+            self._apply_circular_mask()
+            return result
+        return False
+    
+    def eventFilter(self, obj, event):
+        """Handle drag events on the drag handle."""
+        if obj == self._drag_handle:
+            if event.type() == event.MouseButtonPress and event.button() == Qt_LeftButton:
+                self._drag_pos = event.globalPos() - self.pos()
+                self._drag_handle.setCursor(QCursor(Qt_ClosedHandCursor))
+                return True
+            elif event.type() == event.MouseMove and self._drag_pos is not None:
+                self.move(event.globalPos() - self._drag_pos)
+                return True
+            elif event.type() == event.MouseButtonRelease:
+                self._drag_pos = None
+                self._drag_handle.setCursor(QCursor(Qt_OpenHandCursor))
+                return True
+        return super().eventFilter(obj, event)
+    
+    def wheelEvent(self, event):
+        """Scroll on drag handle to resize."""
+        # Only resize if scrolling over drag handle area
+        if event.pos().y() <= self._drag_handle_height:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self._size = min(600, self._size + 30)
+            else:
+                self._size = max(150, self._size - 30)
+            
+            self.setFixedSize(self._size, self._size + self._drag_handle_height)
+            self._gl_container.setFixedSize(self._size, self._size)
+            if self._gl_widget:
+                self._gl_widget.setFixedSize(self._size, self._size)
+                self._apply_circular_mask()
+            event.accept()
+        else:
+            # Pass to GL widget for zoom
+            if self._gl_widget:
+                self._gl_widget.wheelEvent(event)
+    
+    def keyPressEvent(self, event):
+        """ESC to close, R to toggle rotation."""
+        key = event.key()
+        if key == (Qt.Key_Escape if hasattr(Qt, 'Key_Escape') else 0x01000000):
+            self.hide()
+            self.closed.emit()
+        elif key == (Qt.Key_R if hasattr(Qt, 'Key_R') else 0x52):
+            if self._gl_widget:
+                if self._gl_widget.auto_rotate:
+                    self._gl_widget.stop_auto_rotate()
+                else:
+                    self._gl_widget.start_auto_rotate()
+        elif key == (Qt.Key_W if hasattr(Qt, 'Key_W') else 0x57):
+            if self._gl_widget:
+                self._gl_widget.wireframe_mode = not self._gl_widget.wireframe_mode
+                self._gl_widget.update()
+        elif key == (Qt.Key_M if hasattr(Qt, 'Key_M') else 0x4D):
+            # Toggle mask
+            self._use_circular_mask = not self._use_circular_mask
+            if self._use_circular_mask:
+                self._apply_circular_mask()
+            elif self._gl_widget:
+                self._gl_widget.clearMask()
+    
+    def contextMenuEvent(self, event):
+        """Right-click menu."""
+        from PyQt5.QtWidgets import QMenu
+        
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background: #1e1e2e;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                border-radius: 8px;
+                padding: 5px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background: #45475a;
+            }
+        """)
+        
+        # Toggle rotation
+        rotate_text = "⏸️ Stop Rotation" if (self._gl_widget and self._gl_widget.auto_rotate) else "🔄 Start Rotation"
+        rotate_action = menu.addAction(f"{rotate_text} (R)")
+        rotate_action.triggered.connect(lambda: self._toggle_rotation())
+        
+        # Toggle wireframe
+        wireframe_action = menu.addAction("🔲 Toggle Wireframe (W)")
+        wireframe_action.triggered.connect(lambda: self._toggle_wireframe())
+        
+        # Toggle circular mask
+        mask_text = "⬜ Square Mode" if self._use_circular_mask else "⚫ Circular Mode"
+        mask_action = menu.addAction(f"{mask_text} (M)")
+        mask_action.triggered.connect(lambda: self._toggle_mask())
+        
+        menu.addSeparator()
+        
+        # Size options
+        size_menu = menu.addMenu("📐 Size")
+        for size in [200, 300, 400, 500, 600]:
+            action = size_menu.addAction(f"{size}px")
+            action.triggered.connect(lambda checked, s=size: self._set_size(s))
+        
+        menu.addSeparator()
+        
+        # Reset view
+        reset_action = menu.addAction("↩️ Reset View")
+        reset_action.triggered.connect(lambda: self._reset_view())
+        
+        # Close
+        close_action = menu.addAction("❌ Hide Avatar")
+        close_action.triggered.connect(self._close)
+        
+        menu.exec_(event.globalPos())
+    
+    def _toggle_rotation(self):
+        if self._gl_widget:
+            if self._gl_widget.auto_rotate:
+                self._gl_widget.stop_auto_rotate()
+            else:
+                self._gl_widget.start_auto_rotate()
+    
+    def _toggle_wireframe(self):
+        if self._gl_widget:
+            self._gl_widget.wireframe_mode = not self._gl_widget.wireframe_mode
+            self._gl_widget.update()
+    
+    def _toggle_mask(self):
+        self._use_circular_mask = not self._use_circular_mask
+        if self._use_circular_mask:
+            self._apply_circular_mask()
+        elif self._gl_widget:
+            self._gl_widget.clearMask()
+    
+    def _set_size(self, size: int):
+        self._size = size
+        self.setFixedSize(self._size, self._size + self._drag_handle_height)
+        self._gl_container.setFixedSize(self._size, self._size)
+        if self._gl_widget:
+            self._gl_widget.setFixedSize(self._size, self._size)
+            self._apply_circular_mask()
+    
+    def _reset_view(self):
+        if self._gl_widget:
+            self._gl_widget.reset_view()
+        self._set_size(300)
+    
+    def _close(self):
+        self.hide()
+        self.closed.emit()
+
+
 class AvatarPreviewWidget(QFrame):
     """2D image preview with drag-to-rotate for 3D simulation."""
     
@@ -974,6 +1470,81 @@ def create_avatar_subtab(parent):
     actions_group.setLayout(actions_layout)
     right_panel.addWidget(actions_group)
     
+    # === 3D Viewer Settings (Sketchfab-style) ===
+    if HAS_OPENGL and HAS_TRIMESH:
+        viewer_group = QGroupBox("3D Viewer Settings")
+        viewer_layout = QVBoxLayout()
+        
+        # Wireframe toggle
+        parent.wireframe_checkbox = QCheckBox("Wireframe Mode")
+        parent.wireframe_checkbox.toggled.connect(lambda c: _set_wireframe(parent, c))
+        viewer_layout.addWidget(parent.wireframe_checkbox)
+        
+        # Show grid toggle
+        parent.show_grid_checkbox = QCheckBox("Show Grid Floor")
+        parent.show_grid_checkbox.setChecked(True)
+        parent.show_grid_checkbox.toggled.connect(lambda c: _set_show_grid(parent, c))
+        viewer_layout.addWidget(parent.show_grid_checkbox)
+        
+        # Lighting controls
+        light_row = QHBoxLayout()
+        light_row.addWidget(QLabel("Lighting:"))
+        parent.light_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.light_slider.setRange(0, 200)
+        parent.light_slider.setValue(100)
+        parent.light_slider.valueChanged.connect(lambda v: _set_lighting(parent, v / 100.0))
+        light_row.addWidget(parent.light_slider)
+        viewer_layout.addLayout(light_row)
+        
+        # Ambient strength
+        ambient_row = QHBoxLayout()
+        ambient_row.addWidget(QLabel("Ambient:"))
+        parent.ambient_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.ambient_slider.setRange(0, 100)
+        parent.ambient_slider.setValue(15)
+        parent.ambient_slider.valueChanged.connect(lambda v: _set_ambient(parent, v / 100.0))
+        ambient_row.addWidget(parent.ambient_slider)
+        viewer_layout.addLayout(ambient_row)
+        
+        # Auto-rotate speed
+        speed_row = QHBoxLayout()
+        speed_row.addWidget(QLabel("Rotate Speed:"))
+        parent.rotate_speed_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.rotate_speed_slider.setRange(1, 30)
+        parent.rotate_speed_slider.setValue(5)
+        parent.rotate_speed_slider.valueChanged.connect(lambda v: _set_rotate_speed(parent, v / 10.0))
+        speed_row.addWidget(parent.rotate_speed_slider)
+        viewer_layout.addLayout(speed_row)
+        
+        viewer_group.setLayout(viewer_layout)
+        right_panel.addWidget(viewer_group)
+    
+    # === Reset Buttons ===
+    reset_group = QGroupBox("Reset Options")
+    reset_layout = QVBoxLayout()
+    
+    # Reset preview (camera, settings)
+    parent.reset_preview_btn = QPushButton("🔄 Reset Preview")
+    parent.reset_preview_btn.setToolTip("Reset 3D preview camera and settings")
+    parent.reset_preview_btn.clicked.connect(lambda: _reset_preview(parent))
+    reset_layout.addWidget(parent.reset_preview_btn)
+    
+    # Reset desktop overlay
+    parent.reset_overlay_btn = QPushButton("🖥️ Reset Desktop Overlay")
+    parent.reset_overlay_btn.setToolTip("Reset desktop avatar position and size")
+    parent.reset_overlay_btn.clicked.connect(lambda: _reset_overlay(parent))
+    reset_layout.addWidget(parent.reset_overlay_btn)
+    
+    # Reset all (both preview and overlay)
+    parent.reset_all_btn = QPushButton("↩️ Reset Everything")
+    parent.reset_all_btn.setToolTip("Reset all avatar settings to default")
+    parent.reset_all_btn.clicked.connect(lambda: _reset_all_avatar(parent))
+    parent.reset_all_btn.setStyleSheet("background: #f38ba8; color: #1e1e2e;")
+    reset_layout.addWidget(parent.reset_all_btn)
+    
+    reset_group.setLayout(reset_layout)
+    right_panel.addWidget(reset_group)
+    
     right_panel.addStretch()
     
     # Info
@@ -989,6 +1560,7 @@ def create_avatar_subtab(parent):
     # Initialize state
     parent._avatar_controller = avatar
     parent._overlay = None
+    parent._overlay_3d = None  # 3D transparent overlay
     parent._current_path = None
     parent._is_3d_model = False
     parent._using_3d_render = HAS_OPENGL and HAS_TRIMESH  # True if 3D available
@@ -1020,6 +1592,12 @@ def create_avatar_subtab(parent):
     parent._avatar_file_watcher.timeout.connect(lambda: _check_for_new_files(parent))
     parent._avatar_file_watcher.start(3000)  # Check every 3 seconds
     parent._last_file_count = parent.avatar_combo.count()
+    
+    # Set up AI customization polling
+    parent._ai_customize_watcher = QTimer()
+    parent._ai_customize_watcher.timeout.connect(lambda: _poll_ai_customizations(parent))
+    parent._ai_customize_watcher.start(1000)  # Check every 1 second
+    parent._last_ai_customize_time = 0.0
     
     # Show default sprite on initialization
     parent._using_builtin_sprite = True
@@ -1057,6 +1635,189 @@ def _check_for_new_files(parent):
             parent.avatar_status.setStyleSheet("color: #a6e3a1;")
     except Exception:
         pass  # Silently ignore errors in background check
+
+
+def _poll_ai_customizations(parent):
+    """Check for AI-requested avatar customizations."""
+    try:
+        # Check the customization file
+        from pathlib import Path
+        settings_path = Path(__file__).parent.parent.parent.parent.parent / "information" / "avatar" / "customization.json"
+        
+        if not settings_path.exists():
+            return
+        
+        # Read settings
+        settings = json.loads(settings_path.read_text())
+        last_updated = settings.get("_last_updated", 0)
+        
+        # Skip if no new changes
+        if last_updated <= parent._last_ai_customize_time:
+            return
+        
+        parent._last_ai_customize_time = last_updated
+        
+        # Apply customizations
+        for setting, value in settings.items():
+            if setting.startswith("_"):
+                continue  # Skip metadata
+                
+            try:
+                _apply_ai_customization(parent, setting, value)
+            except Exception as e:
+                print(f"[Avatar AI] Error applying {setting}={value}: {e}")
+        
+        # Clear the file after processing
+        settings_path.write_text(json.dumps({"_processed": True}))
+        
+    except Exception as e:
+        pass  # Silently ignore errors in background check
+
+
+def _apply_ai_customization(parent, setting: str, value: str):
+    """Apply a single AI customization to the avatar."""
+    # Get the 3D widget if available
+    widget_3d = getattr(parent, 'avatar_preview_3d', None)
+    overlay = getattr(parent, '_overlay', None)
+    
+    setting = setting.lower()
+    value_lower = value.lower() if isinstance(value, str) else value
+    
+    # Parse boolean values
+    def parse_bool(v):
+        if isinstance(v, bool):
+            return v
+        return v.lower() in ('true', '1', 'yes', 'on')
+    
+    # Parse numeric values (0-100 -> 0.0-1.0)
+    def parse_float(v, min_val=0.0, max_val=1.0):
+        try:
+            n = float(v)
+            if n > 1.0:  # Assume 0-100 scale
+                n = n / 100.0
+            return max(min_val, min(max_val, n))
+        except:
+            return 0.5
+    
+    # Parse hex color
+    def parse_color(v):
+        if isinstance(v, str) and v.startswith('#'):
+            try:
+                r = int(v[1:3], 16) / 255.0
+                g = int(v[3:5], 16) / 255.0
+                b = int(v[5:7], 16) / 255.0
+                return [r, g, b]
+            except:
+                pass
+        return None
+    
+    # Apply the setting
+    if setting == "wireframe":
+        if widget_3d:
+            widget_3d.wireframe_mode = parse_bool(value)
+            widget_3d.update()
+        # Update checkbox if exists
+        checkbox = getattr(parent, 'wireframe_checkbox', None)
+        if checkbox:
+            checkbox.setChecked(parse_bool(value))
+            
+    elif setting == "show_grid":
+        if widget_3d:
+            widget_3d.show_grid = parse_bool(value)
+            widget_3d.update()
+        checkbox = getattr(parent, 'grid_checkbox', None)
+        if checkbox:
+            checkbox.setChecked(parse_bool(value))
+            
+    elif setting == "light_intensity":
+        val = parse_float(value)
+        if widget_3d:
+            widget_3d.light_intensity = val * 2.0  # 0-2 range
+            widget_3d._update_lighting()
+            widget_3d.update()
+        slider = getattr(parent, 'light_slider', None)
+        if slider:
+            slider.setValue(int(val * 100))
+            
+    elif setting == "ambient_strength":
+        val = parse_float(value)
+        if widget_3d:
+            widget_3d.ambient_strength = val * 0.5  # 0-0.5 range
+            widget_3d._update_lighting()
+            widget_3d.update()
+        slider = getattr(parent, 'ambient_slider', None)
+        if slider:
+            slider.setValue(int(val * 100))
+            
+    elif setting == "rotate_speed":
+        val = parse_float(value)
+        if widget_3d:
+            widget_3d.auto_rotate_speed = val * 2.0  # 0-2 range
+        slider = getattr(parent, 'rotate_speed_slider', None)
+        if slider:
+            slider.setValue(int(val * 100))
+            
+    elif setting == "auto_rotate":
+        if widget_3d:
+            if parse_bool(value):
+                widget_3d.start_auto_rotate()
+            else:
+                widget_3d.stop_auto_rotate()
+        checkbox = getattr(parent, 'auto_rotate_checkbox', None)
+        if checkbox:
+            checkbox.setChecked(parse_bool(value))
+            
+    elif setting == "primary_color":
+        color = parse_color(value)
+        if color:
+            # Update 2D sprite colors
+            parent._current_colors["primary"] = value
+            _update_sprite_colors(parent)
+            # Also set 3D model color
+            if widget_3d:
+                widget_3d.model_color = color
+                widget_3d.update()
+                
+    elif setting == "secondary_color":
+        color = parse_color(value)
+        if color:
+            parent._current_colors["secondary"] = value
+            _update_sprite_colors(parent)
+            
+    elif setting == "accent_color":
+        color = parse_color(value)
+        if color:
+            parent._current_colors["accent"] = value
+            _update_sprite_colors(parent)
+            
+    elif setting == "reset":
+        # Reset everything
+        if widget_3d:
+            widget_3d.reset_all()
+        # Reset colors to defaults
+        parent._current_colors = {
+            "primary": "#6366f1",
+            "secondary": "#4f46e5",
+            "accent": "#818cf8"
+        }
+        _update_sprite_colors(parent)
+        
+    print(f"[Avatar AI] Applied: {setting} = {value}")
+
+
+def _update_sprite_colors(parent):
+    """Update the 2D sprite with current colors."""
+    try:
+        expr = getattr(parent, 'current_expression', 'neutral')
+        svg_data = generate_sprite(
+            expr,
+            parent._current_colors["primary"],
+            parent._current_colors["secondary"],
+            parent._current_colors["accent"]
+        )
+        parent.avatar_preview_2d.set_svg_sprite(svg_data)
+    except Exception:
+        pass
 
 
 def _is_avatar_module_enabled() -> bool:
@@ -1289,7 +2050,7 @@ def _toggle_avatar(parent, enabled):
 
 
 def _toggle_overlay(parent):
-    """Toggle desktop overlay."""
+    """Toggle desktop overlay (2D or 3D based on current model)."""
     # Check if module is enabled
     if not getattr(parent, '_avatar_module_enabled', True):
         parent.show_overlay_btn.setChecked(False)
@@ -1297,32 +2058,58 @@ def _toggle_overlay(parent):
         parent.avatar_status.setStyleSheet("color: #fab387;")
         return
     
-    if parent._overlay is None:
-        parent._overlay = AvatarOverlayWindow()
-        parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
+    is_3d = getattr(parent, '_is_3d_model', False) and getattr(parent, '_using_3d_render', False)
     
     if parent.show_overlay_btn.isChecked():
-        # Get current pixmap, or generate default if none
-        pixmap = parent.avatar_preview_2d.original_pixmap
-        if not pixmap:
-            # Generate default sprite
-            _show_default_preview(parent)
-            pixmap = parent.avatar_preview_2d.original_pixmap
-        
-        if pixmap:
-            scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-            parent._overlay.set_avatar(scaled)
-            parent._overlay.show()
-            parent._overlay.raise_()  # Bring to front
-            parent.show_overlay_btn.setText("Hide from Desktop")
-            parent.avatar_status.setText("Avatar shown on desktop! Drag to move, right-click to hide.")
-            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        # Create or show overlay
+        if is_3d and HAS_OPENGL and HAS_TRIMESH:
+            # Use 3D overlay
+            if parent._overlay_3d is None:
+                parent._overlay_3d = Avatar3DOverlayWindow()
+                parent._overlay_3d.closed.connect(lambda: _on_overlay_closed(parent))
+            
+            # Load the model into 3D overlay
+            if parent._current_path:
+                parent._overlay_3d.load_model(str(parent._current_path))
+                parent._overlay_3d.show()
+                parent._overlay_3d.raise_()
+                parent.show_overlay_btn.setText("Hide from Desktop")
+                parent.avatar_status.setText("3D avatar on desktop! Drag to move, R to rotate, right-click for menu.")
+                parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+            else:
+                parent.show_overlay_btn.setChecked(False)
+                parent.avatar_status.setText("No 3D model loaded")
+                parent.avatar_status.setStyleSheet("color: #fab387;")
         else:
-            parent.show_overlay_btn.setChecked(False)
-            parent.avatar_status.setText("Could not create avatar sprite")
-            parent.avatar_status.setStyleSheet("color: #f38ba8;")
+            # Use 2D overlay
+            if parent._overlay is None:
+                parent._overlay = AvatarOverlayWindow()
+                parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
+            
+            # Get current pixmap, or generate default if none
+            pixmap = parent.avatar_preview_2d.original_pixmap
+            if not pixmap:
+                _show_default_preview(parent)
+                pixmap = parent.avatar_preview_2d.original_pixmap
+            
+            if pixmap:
+                scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
+                parent._overlay.set_avatar(scaled)
+                parent._overlay.show()
+                parent._overlay.raise_()
+                parent.show_overlay_btn.setText("Hide from Desktop")
+                parent.avatar_status.setText("Avatar on desktop! Drag to move, scroll to resize, right-click for menu.")
+                parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+            else:
+                parent.show_overlay_btn.setChecked(False)
+                parent.avatar_status.setText("Could not create avatar sprite")
+                parent.avatar_status.setStyleSheet("color: #f38ba8;")
     else:
-        parent._overlay.hide()
+        # Hide overlays
+        if parent._overlay:
+            parent._overlay.hide()
+        if parent._overlay_3d:
+            parent._overlay_3d.hide()
         parent.show_overlay_btn.setText("Show on Desktop")
         parent.avatar_status.setText("Avatar hidden from desktop")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
@@ -1369,6 +2156,114 @@ def _toggle_auto_rotate(parent):
             parent.avatar_preview_3d.start_auto_rotate()
         else:
             parent.avatar_preview_3d.stop_auto_rotate()
+
+
+def _set_wireframe(parent, enabled: bool):
+    """Toggle wireframe mode."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.wireframe_mode = enabled
+        parent.avatar_preview_3d.update()
+
+
+def _set_show_grid(parent, enabled: bool):
+    """Toggle grid floor."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.show_grid = enabled
+        parent.avatar_preview_3d.update()
+
+
+def _set_lighting(parent, intensity: float):
+    """Set lighting intensity."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.light_intensity = intensity
+        parent.avatar_preview_3d._update_lighting()
+        parent.avatar_preview_3d.update()
+
+
+def _set_ambient(parent, strength: float):
+    """Set ambient light strength."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.ambient_strength = strength
+        parent.avatar_preview_3d._update_lighting()
+        parent.avatar_preview_3d.update()
+
+
+def _set_rotate_speed(parent, speed: float):
+    """Set auto-rotate speed."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.auto_rotate_speed = speed
+
+
+def _reset_preview(parent):
+    """Reset 3D preview to defaults."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.reset_all()
+        
+        # Reset UI controls
+        if hasattr(parent, 'wireframe_checkbox'):
+            parent.wireframe_checkbox.setChecked(False)
+        if hasattr(parent, 'show_grid_checkbox'):
+            parent.show_grid_checkbox.setChecked(True)
+        if hasattr(parent, 'light_slider'):
+            parent.light_slider.setValue(100)
+        if hasattr(parent, 'ambient_slider'):
+            parent.ambient_slider.setValue(15)
+        if hasattr(parent, 'rotate_speed_slider'):
+            parent.rotate_speed_slider.setValue(5)
+        if hasattr(parent, 'auto_rotate_btn'):
+            parent.auto_rotate_btn.setChecked(False)
+    
+    parent.avatar_status.setText("Preview reset to defaults")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+def _reset_overlay(parent):
+    """Reset desktop overlay to defaults."""
+    if parent._overlay and parent._overlay.isVisible():
+        parent._overlay.move(100, 100)
+        parent._overlay._size = 300
+        parent._overlay.setFixedSize(300, 300)
+        parent._overlay._update_scaled_pixmap()
+        
+        parent.avatar_status.setText("Desktop overlay reset")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    else:
+        parent.avatar_status.setText("No overlay active")
+        parent.avatar_status.setStyleSheet("color: #fab387;")
+
+
+def _reset_all_avatar(parent):
+    """Reset all avatar settings to defaults."""
+    # Reset 3D preview
+    _reset_preview(parent)
+    
+    # Reset overlay
+    if parent._overlay:
+        parent._overlay.move(100, 100)
+        parent._overlay._size = 300
+        parent._overlay.setFixedSize(300, 300)
+        parent._overlay._update_scaled_pixmap()
+    
+    # Reset colors
+    parent._current_colors = {
+        "primary": "#6366f1",
+        "secondary": "#8b5cf6",
+        "accent": "#10b981"
+    }
+    if hasattr(parent, 'primary_color_btn'):
+        parent.primary_color_btn.setStyleSheet("background: #6366f1; color: white;")
+    if hasattr(parent, 'secondary_color_btn'):
+        parent.secondary_color_btn.setStyleSheet("background: #8b5cf6; color: white;")
+    if hasattr(parent, 'accent_color_btn'):
+        parent.accent_color_btn.setStyleSheet("background: #10b981; color: white;")
+    if hasattr(parent, 'color_preset_combo'):
+        parent.color_preset_combo.setCurrentText("Default")
+    
+    # Reset expression
+    parent.current_expression = "neutral"
+    
+    parent.avatar_status.setText("All avatar settings reset to defaults")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
 
 
 def _refresh_list(parent):

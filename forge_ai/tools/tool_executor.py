@@ -382,6 +382,8 @@ class ToolExecutor:
             return self._execute_analyze_image(module, params)
         elif tool_name == "control_avatar":
             return self._execute_control_avatar(module, params)
+        elif tool_name == "customize_avatar":
+            return self._execute_customize_avatar(module, params)
         elif tool_name == "speak":
             return self._execute_speak(module, params)
         elif tool_name == "generate_code":
@@ -682,6 +684,61 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "control_avatar",
+            }
+    
+    def _execute_customize_avatar(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute avatar customization (colors, lighting, effects)."""
+        try:
+            setting = params.get("setting", "")
+            value = params.get("value", "")
+            
+            # Store customization request in a shared state that the GUI can read
+            # The GUI's avatar tab will poll for these settings
+            customization = {
+                "setting": setting,
+                "value": value,
+                "timestamp": __import__("time").time(),
+            }
+            
+            # Try to use a shared state or signal system
+            # First try module method
+            if hasattr(module, "customize"):
+                result = module.customize(setting=setting, value=value)
+            elif hasattr(module, "_instance") and hasattr(module._instance, "customize"):
+                result = module._instance.customize(setting=setting, value=value)
+            else:
+                # Store in a file that the GUI can watch
+                import json
+                from pathlib import Path
+                settings_path = Path(__file__).parent.parent.parent / "information" / "avatar" / "customization.json"
+                settings_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Read existing settings
+                existing = {}
+                if settings_path.exists():
+                    try:
+                        existing = json.loads(settings_path.read_text())
+                    except:
+                        existing = {}
+                
+                # Update setting
+                existing[setting] = value
+                existing["_last_updated"] = customization["timestamp"]
+                
+                # Write back
+                settings_path.write_text(json.dumps(existing, indent=2))
+            
+            return {
+                "success": True,
+                "result": f"Avatar {setting} set to {value}",
+                "tool": "customize_avatar",
+            }
+        
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "customize_avatar",
             }
     
     def _execute_speak(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
