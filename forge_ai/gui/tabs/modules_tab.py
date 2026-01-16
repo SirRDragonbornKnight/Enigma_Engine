@@ -453,6 +453,12 @@ class ModulesTab(QWidget):
         
         if self.module_manager:
             try:
+                # Debug: check can_load first
+                if enabled:
+                    can_load, reason = self.module_manager.can_load(module_id)
+                    if not can_load:
+                        self._log(f"Cannot load {module_id}: {reason}")
+                    
                 if enabled:
                     success = self.module_manager.load(module_id)
                 else:

@@ -92,7 +92,17 @@ AVATAR_IMAGES_DIR = AVATAR_CONFIG_DIR / "images"
 
 
 class OpenGL3DWidget(QOpenGLWidget):
-    """OpenGL widget for rendering 3D models."""
+    """Sketchfab-style OpenGL widget for rendering 3D models.
+    
+    Features:
+    - Dark gradient background
+    - Grid floor
+    - Smooth orbit controls (drag to rotate)
+    - Scroll to zoom
+    - Nice lighting with rim light effect
+    - Auto-rotate option
+    - Double-click to reset view
+    """
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -100,68 +110,154 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.vertices = None
         self.faces = None
         self.normals = None
-        self.rotation_x = 0
-        self.rotation_y = 0
-        self.zoom = 2.0
+        self.colors = None
+        
+        # Camera
+        self.rotation_x = 20.0  # Slight tilt for better view
+        self.rotation_y = 45.0  # Start at 45 degrees
+        self.zoom = 3.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
+        
+        # Interaction
         self.last_pos = None
-        self.setMinimumSize(200, 200)
+        self.is_panning = False
+        
+        # Auto-rotate
+        self.auto_rotate = False
+        self.auto_rotate_speed = 0.5
+        self._rotate_timer = None
+        
+        # Loading state
+        self.is_loading = False
+        self.model_name = ""
+        
+        self.setMinimumSize(250, 250)
+        self.setMouseTracking(True)
+        self.setCursor(QCursor(Qt_OpenHandCursor))
         
     def load_model(self, path: str) -> bool:
         """Load a 3D model file."""
         if not HAS_TRIMESH or trimesh is None or np is None:
             return False
+        
+        self.is_loading = True
+        self.model_name = Path(path).stem
+        self.update()
+        
         try:
-            scene = trimesh.load(str(path))  # type: ignore[union-attr]
+            scene = trimesh.load(str(path))
+            
             # Convert scene to single mesh if needed
-            if hasattr(scene, 'geometry'):
-                meshes = list(scene.geometry.values())  # type: ignore[union-attr]
+            if hasattr(scene, 'geometry') and scene.geometry:
+                meshes = list(scene.geometry.values())
                 if meshes:
-                    self.mesh = trimesh.util.concatenate(meshes)  # type: ignore[union-attr]
+                    self.mesh = trimesh.util.concatenate(meshes)
                 else:
+                    self.is_loading = False
                     return False
             else:
                 self.mesh = scene
             
             # Center and scale the mesh
-            self.mesh.vertices -= self.mesh.centroid  # type: ignore[union-attr]
-            scale = 1.0 / max(self.mesh.extents)  # type: ignore[union-attr]
-            self.mesh.vertices *= scale  # type: ignore[union-attr]
+            self.mesh.vertices -= self.mesh.centroid
+            max_extent = max(self.mesh.extents)
+            if max_extent > 0:
+                scale = 1.5 / max_extent
+                self.mesh.vertices *= scale
             
-            self.vertices = np.array(self.mesh.vertices, dtype=np.float32)  # type: ignore[union-attr]
-            self.faces = np.array(self.mesh.faces, dtype=np.uint32)  # type: ignore[union-attr]
-            if hasattr(self.mesh, 'vertex_normals'):
-                self.normals = np.array(self.mesh.vertex_normals, dtype=np.float32)  # type: ignore[union-attr]
+            self.vertices = np.array(self.mesh.vertices, dtype=np.float32)
+            self.faces = np.array(self.mesh.faces, dtype=np.uint32)
+            
+            if hasattr(self.mesh, 'vertex_normals') and self.mesh.vertex_normals is not None:
+                self.normals = np.array(self.mesh.vertex_normals, dtype=np.float32)
             else:
                 self.normals = None
             
-            self.update()
+            # Try to get vertex colors
+            if hasattr(self.mesh, 'visual') and hasattr(self.mesh.visual, 'vertex_colors'):
+                vc = self.mesh.visual.vertex_colors
+                if vc is not None and len(vc) > 0:
+                    self.colors = np.array(vc[:, :3] / 255.0, dtype=np.float32)
+                else:
+                    self.colors = None
+            else:
+                self.colors = None
+            
+            self.is_loading = False
+            self.reset_view()
             return True
+            
         except Exception as e:
             print(f"Error loading 3D model: {e}")
+            self.is_loading = False
             return False
     
     def reset_view(self):
-        """Reset rotation to default."""
-        self.rotation_x = 0
-        self.rotation_y = 0
-        self.zoom = 2.0
+        """Reset camera to default position."""
+        self.rotation_x = 20.0
+        self.rotation_y = 45.0
+        self.zoom = 3.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
         self.update()
     
+    def start_auto_rotate(self):
+        """Start auto-rotation."""
+        self.auto_rotate = True
+        if self._rotate_timer is None:
+            self._rotate_timer = QTimer()
+            self._rotate_timer.timeout.connect(self._do_auto_rotate)
+        self._rotate_timer.start(16)  # ~60fps
+    
+    def stop_auto_rotate(self):
+        """Stop auto-rotation."""
+        self.auto_rotate = False
+        if self._rotate_timer:
+            self._rotate_timer.stop()
+    
+    def _do_auto_rotate(self):
+        """Auto-rotate step."""
+        if self.auto_rotate:
+            self.rotation_y += self.auto_rotate_speed
+            self.update()
+    
     def initializeGL(self):
-        """Initialize OpenGL settings."""
+        """Initialize OpenGL with Sketchfab-style settings."""
         if not HAS_OPENGL or GL is None:
             return
-        GL.glClearColor(0.12, 0.12, 0.18, 1.0)  # Dark background
+        
+        # Dark gradient will be drawn in paintGL
+        GL.glClearColor(0.08, 0.08, 0.12, 1.0)
+        
         GL.glEnable(GL.GL_DEPTH_TEST)
         GL.glEnable(GL.GL_LIGHTING)
         GL.glEnable(GL.GL_LIGHT0)
+        GL.glEnable(GL.GL_LIGHT1)  # Rim/fill light
         GL.glEnable(GL.GL_COLOR_MATERIAL)
         GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
         
-        # Light setup
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, [1, 1, 1, 0])
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, [1, 1, 1, 1])
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, [0.3, 0.3, 0.3, 1])
+        # Enable smooth shading
+        GL.glShadeModel(GL.GL_SMOOTH)
+        
+        # Key light (warm, from top-right-front)
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, [2.0, 3.0, 2.0, 0.0])
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, [1.0, 0.95, 0.9, 1.0])
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, [0.15, 0.15, 0.18, 1.0])
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+        
+        # Fill/rim light (cool, from bottom-left-back)
+        GL.glLightfv(GL.GL_LIGHT1, GL.GL_POSITION, [-2.0, -1.0, -2.0, 0.0])
+        GL.glLightfv(GL.GL_LIGHT1, GL.GL_DIFFUSE, [0.3, 0.35, 0.5, 1.0])
+        GL.glLightfv(GL.GL_LIGHT1, GL.GL_AMBIENT, [0.0, 0.0, 0.0, 1.0])
+        
+        # Material properties
+        GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+        GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 30.0)
+        
+        # Anti-aliasing
+        GL.glEnable(GL.GL_LINE_SMOOTH)
+        GL.glHint(GL.GL_LINE_SMOOTH_HINT, GL.GL_NICEST)
         
     def resizeGL(self, w, h):
         """Handle resize."""
@@ -171,23 +267,47 @@ class OpenGL3DWidget(QOpenGLWidget):
         GL.glMatrixMode(GL.GL_PROJECTION)
         GL.glLoadIdentity()
         aspect = w / h if h > 0 else 1
-        GLU.gluPerspective(45, aspect, 0.1, 100.0)
+        GLU.gluPerspective(35, aspect, 0.1, 100.0)  # Narrower FOV for less distortion
         GL.glMatrixMode(GL.GL_MODELVIEW)
         
     def paintGL(self):
-        """Render the 3D model."""
+        """Render with Sketchfab-style visuals."""
         if not HAS_OPENGL or GL is None:
             return
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)  # type: ignore[operator]
+        
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
+        
+        # Draw gradient background (disable lighting for this)
+        self._draw_gradient_background()
+        
+        # Draw grid floor
+        self._draw_grid()
+        
         GL.glLoadIdentity()
         
-        # Camera position
-        GL.glTranslatef(0, 0, -self.zoom)
+        # Camera
+        GL.glTranslatef(self.pan_x, self.pan_y, -self.zoom)
         GL.glRotatef(self.rotation_x, 1, 0, 0)
         GL.glRotatef(self.rotation_y, 0, 1, 0)
         
+        if self.is_loading:
+            # Draw loading indicator
+            GL.glDisable(GL.GL_LIGHTING)
+            GL.glColor3f(0.5, 0.5, 0.6)
+            # Simple rotating indicator would go here
+            GL.glEnable(GL.GL_LIGHTING)
+            return
+        
         if self.vertices is not None and self.faces is not None:
-            GL.glColor3f(0.7, 0.7, 0.8)  # Light gray-blue
+            GL.glEnable(GL.GL_LIGHTING)
+            
+            # Use vertex colors if available, otherwise nice default
+            if self.colors is not None:
+                GL.glEnableClientState(GL.GL_COLOR_ARRAY)
+                GL.glColorPointer(3, GL.GL_FLOAT, 0, self.colors)
+            else:
+                GL.glColor3f(0.75, 0.75, 0.82)  # Soft gray-blue
+            
             GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
             GL.glVertexPointer(3, GL.GL_FLOAT, 0, self.vertices)
             
@@ -200,34 +320,132 @@ class OpenGL3DWidget(QOpenGLWidget):
             GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
             if self.normals is not None:
                 GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
+            if self.colors is not None:
+                GL.glDisableClientState(GL.GL_COLOR_ARRAY)
     
-    def mousePressEvent(self, a0):  # type: ignore
-        """Start drag."""
-        self.last_pos = a0.pos()
+    def _draw_gradient_background(self):
+        """Draw Sketchfab-style gradient background."""
+        if not HAS_OPENGL or GL is None:
+            return
         
-    def mouseMoveEvent(self, a0):  # type: ignore
-        """Rotate on drag."""
-        if self.last_pos is not None:
-            dx = a0.x() - self.last_pos.x()
-            dy = a0.y() - self.last_pos.y()
-            self.rotation_y += dx * 0.5
-            self.rotation_x += dy * 0.5
-            self.last_pos = a0.pos()
-            self.update()
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glPushMatrix()
+        GL.glLoadIdentity()
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glPushMatrix()
+        GL.glLoadIdentity()
+        
+        GL.glDisable(GL.GL_DEPTH_TEST)
+        GL.glDisable(GL.GL_LIGHTING)
+        
+        GL.glBegin(GL.GL_QUADS)
+        # Top - darker
+        GL.glColor3f(0.06, 0.06, 0.10)
+        GL.glVertex2f(-1, 1)
+        GL.glVertex2f(1, 1)
+        # Bottom - slightly lighter
+        GL.glColor3f(0.12, 0.12, 0.18)
+        GL.glVertex2f(1, -1)
+        GL.glVertex2f(-1, -1)
+        GL.glEnd()
+        
+        GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glEnable(GL.GL_LIGHTING)
+        
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glPopMatrix()
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glPopMatrix()
+    
+    def _draw_grid(self):
+        """Draw Sketchfab-style grid floor."""
+        if not HAS_OPENGL or GL is None:
+            return
+        
+        GL.glDisable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_BLEND)
+        GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
+        
+        GL.glPushMatrix()
+        GL.glTranslatef(self.pan_x, self.pan_y, -self.zoom)
+        GL.glRotatef(self.rotation_x, 1, 0, 0)
+        GL.glRotatef(self.rotation_y, 0, 1, 0)
+        
+        # Grid at y = -0.8
+        grid_y = -0.8
+        grid_size = 3.0
+        grid_step = 0.25
+        
+        GL.glBegin(GL.GL_LINES)
+        
+        # Draw grid lines with fade
+        steps = int(grid_size / grid_step)
+        for i in range(-steps, steps + 1):
+            x = i * grid_step
+            # Fade based on distance from center
+            dist = abs(i) / steps
+            alpha = max(0.05, 0.2 * (1 - dist))
             
-    def mouseReleaseEvent(self, a0):  # type: ignore
+            GL.glColor4f(0.3, 0.35, 0.45, alpha)
+            GL.glVertex3f(x, grid_y, -grid_size)
+            GL.glVertex3f(x, grid_y, grid_size)
+            
+            GL.glVertex3f(-grid_size, grid_y, x)
+            GL.glVertex3f(grid_size, grid_y, x)
+        
+        GL.glEnd()
+        
+        GL.glPopMatrix()
+        GL.glDisable(GL.GL_BLEND)
+        GL.glEnable(GL.GL_LIGHTING)
+    
+    def mousePressEvent(self, event):
+        """Start drag or pan."""
+        self.last_pos = event.pos()
+        if event.button() == Qt_LeftButton:
+            self.is_panning = event.modifiers() == Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else False
+            self.setCursor(QCursor(Qt_ClosedHandCursor))
+        event.accept()
+        
+    def mouseMoveEvent(self, event):
+        """Rotate or pan on drag."""
+        if self.last_pos is not None:
+            dx = event.x() - self.last_pos.x()
+            dy = event.y() - self.last_pos.y()
+            
+            if self.is_panning:
+                # Pan
+                self.pan_x += dx * 0.005
+                self.pan_y -= dy * 0.005
+            else:
+                # Rotate
+                self.rotation_y += dx * 0.5
+                self.rotation_x += dy * 0.5
+                # Clamp vertical rotation
+                self.rotation_x = max(-90, min(90, self.rotation_x))
+            
+            self.last_pos = event.pos()
+            self.update()
+        event.accept()
+            
+    def mouseReleaseEvent(self, event):
         """End drag."""
         self.last_pos = None
+        self.is_panning = False
+        self.setCursor(QCursor(Qt_OpenHandCursor))
+        event.accept()
         
-    def wheelEvent(self, a0):  # type: ignore
+    def wheelEvent(self, event):
         """Zoom with scroll wheel."""
-        delta = a0.angleDelta().y() / 120
-        self.zoom = max(0.5, min(10.0, self.zoom - delta * 0.2))
+        delta = event.angleDelta().y() / 120
+        self.zoom = max(1.0, min(15.0, self.zoom - delta * 0.3))
         self.update()
+        event.accept()
         
-    def mouseDoubleClickEvent(self, a0):  # type: ignore
+    def mouseDoubleClickEvent(self, event):
         """Reset view on double click."""
         self.reset_view()
+        event.accept()
 
 
 class AvatarOverlayWindow(QWidget):
@@ -599,15 +817,48 @@ def create_avatar_subtab(parent):
     else:
         parent.avatar_preview_3d = None
     
-    # Home/reset button
-    btn_row = QHBoxLayout()
-    btn_row.addStretch()
-    parent.reset_view_btn = QPushButton("Reset View")
+    # 3D viewer controls (Sketchfab-style)
+    viewer_controls = QHBoxLayout()
+    viewer_controls.addStretch()
+    
+    parent.auto_rotate_btn = QPushButton("🔄 Auto-Rotate")
+    parent.auto_rotate_btn.setCheckable(True)
+    parent.auto_rotate_btn.setToolTip("Toggle auto-rotation")
+    parent.auto_rotate_btn.clicked.connect(lambda: _toggle_auto_rotate(parent))
+    parent.auto_rotate_btn.setVisible(False)
+    parent.auto_rotate_btn.setStyleSheet("""
+        QPushButton {
+            background: #2d2d3d;
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        QPushButton:checked {
+            background: #45475a;
+            border-color: #89b4fa;
+        }
+    """)
+    viewer_controls.addWidget(parent.auto_rotate_btn)
+    
+    parent.reset_view_btn = QPushButton("🏠 Reset")
+    parent.reset_view_btn.setToolTip("Reset camera (or double-click)")
     parent.reset_view_btn.clicked.connect(lambda: _reset_view(parent))
     parent.reset_view_btn.setVisible(False)
-    btn_row.addWidget(parent.reset_view_btn)
-    btn_row.addStretch()
-    left_panel.addLayout(btn_row)
+    parent.reset_view_btn.setStyleSheet("""
+        QPushButton {
+            background: #2d2d3d;
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        QPushButton:hover {
+            background: #45475a;
+        }
+    """)
+    viewer_controls.addWidget(parent.reset_view_btn)
+    
+    viewer_controls.addStretch()
+    left_panel.addLayout(viewer_controls)
     
     # Avatar selector
     select_row = QHBoxLayout()
@@ -1098,6 +1349,7 @@ def _toggle_3d_render(parent, enabled):
         parent.avatar_preview_2d.setVisible(False)
         parent.avatar_preview_3d.setVisible(True)
         parent.reset_view_btn.setVisible(True)
+        parent.auto_rotate_btn.setVisible(True)
         
         # Load model into 3D viewer if we have a 3D model
         if parent._is_3d_model and parent._current_path:
@@ -1107,12 +1359,23 @@ def _toggle_3d_render(parent, enabled):
         if parent.avatar_preview_3d:
             parent.avatar_preview_3d.setVisible(False)
         parent.reset_view_btn.setVisible(False)
+        parent.auto_rotate_btn.setVisible(False)
+        parent.auto_rotate_btn.setVisible(False)
 
 
 def _reset_view(parent):
     """Reset 3D view."""
     if parent.avatar_preview_3d:
         parent.avatar_preview_3d.reset_view()
+
+
+def _toggle_auto_rotate(parent):
+    """Toggle auto-rotation on 3D preview."""
+    if parent.avatar_preview_3d:
+        if parent.auto_rotate_btn.isChecked():
+            parent.avatar_preview_3d.start_auto_rotate()
+        else:
+            parent.avatar_preview_3d.stop_auto_rotate()
 
 
 def _refresh_list(parent):
