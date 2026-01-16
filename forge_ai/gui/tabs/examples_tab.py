@@ -352,18 +352,9 @@ class ExamplesTab(QWidget):
             
         file_path = self.examples_dir / self.current_file
         if file_path.exists():
-            # Try to open with default editor
-            import subprocess
-            import platform
-            
-            system = platform.system()
+            from .output_helpers import open_in_default_viewer
             try:
-                if system == "Darwin":  # macOS
-                    subprocess.run(["open", str(file_path)])
-                elif system == "Windows":
-                    os.startfile(str(file_path))
-                else:  # Linux
-                    subprocess.run(["xdg-open", str(file_path)])
+                open_in_default_viewer(file_path)
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Could not open file: {e}")
 

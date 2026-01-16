@@ -499,15 +499,8 @@ class ThreeDTab(QWidget):
     
     def _open_3d(self):
         if self.last_3d_path and Path(self.last_3d_path).exists():
-            import subprocess
-            import sys
-            
-            if sys.platform == 'darwin':
-                subprocess.run(['open', self.last_3d_path])
-            elif sys.platform == 'win32':
-                os.startfile(self.last_3d_path)
-            else:
-                subprocess.run(['xdg-open', self.last_3d_path])
+            from .output_helpers import open_in_default_viewer
+            open_in_default_viewer(self.last_3d_path)
     
     def _save_3d(self):
         """Save the generated 3D model to a custom location."""
@@ -527,15 +520,8 @@ class ThreeDTab(QWidget):
             QMessageBox.information(self, "Saved", f"3D model saved to:\n{path}")
     
     def _open_output_folder(self):
-        import subprocess
-        import sys
-        
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(OUTPUT_DIR)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', str(OUTPUT_DIR)])
-        else:
-            subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+        from .output_helpers import open_folder
+        open_folder(OUTPUT_DIR)
     
     def _browse_reference(self):
         """Browse for a reference image for image-to-3D generation."""

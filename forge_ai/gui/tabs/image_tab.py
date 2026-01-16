@@ -754,6 +754,21 @@ class ImageTab(QWidget):
         prompt_group.setLayout(prompt_layout)
         layout.addWidget(prompt_group)
         
+        # Style Presets (from shared components)
+        try:
+            from .shared_components import PresetSelector, STYLE_PRESETS
+            
+            preset_row = QHBoxLayout()
+            self.style_preset = PresetSelector("image", self)
+            self.style_preset.preset_changed.connect(self._apply_style_preset)
+            preset_row.addWidget(self.style_preset)
+            preset_row.addStretch()
+            layout.addLayout(preset_row)
+            
+            self._style_suffix = ""  # Will be appended to prompt
+        except ImportError:
+            self._style_suffix = ""
+        
         # Options
         options_group = QGroupBox("Options")
         options_layout = QHBoxLayout()
@@ -904,12 +919,52 @@ class ImageTab(QWidget):
         self.ref_image_path.clear()
         self.status_label.setText("Reference image cleared")
     
+    def _apply_style_preset(self, name: str, preset: dict):
+        """Apply a style preset."""
+        if name.startswith("__save__"):
+            # User wants to save current settings as preset
+            save_name = name.replace("__save__", "")
+            current = {
+                "width": self.width_spin.value(),
+                "height": self.height_spin.value(),
+                "steps": self.steps_spin.value(),
+                "guidance": self.guidance_spin.value(),
+                "suffix": self._style_suffix
+            }
+            if hasattr(self, 'style_preset'):
+                self.style_preset.add_custom_preset(save_name, current)
+            self.status_label.setText(f"Saved preset: {save_name}")
+            return
+            
+        # Apply preset settings
+        if "suffix" in preset:
+            self._style_suffix = preset["suffix"]
+        else:
+            self._style_suffix = ""
+        
+        # Apply dimensions based on quality
+        quality = preset.get("quality", "standard")
+        if quality == "fast":
+            self.width_spin.setValue(384)
+            self.height_spin.setValue(384)
+            self.steps_spin.setValue(15)
+        elif quality == "high":
+            self.width_spin.setValue(768)
+            self.height_spin.setValue(768)
+            self.steps_spin.setValue(50)
+        
+        self.status_label.setText(f"Applied style: {name}")
+    
     def _generate_image(self):
         """Generate an image using available providers."""
         prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
             return
+        
+        # Apply style suffix if set
+        if hasattr(self, '_style_suffix') and self._style_suffix:
+            prompt = prompt + self._style_suffix
         
         # Prefer LOCAL providers - only fall back to cloud if local unavailable
         # Local is private, free, and works offline
@@ -1027,24 +1082,13 @@ class ImageTab(QWidget):
     
     def _open_file_in_explorer(self, path: str):
         """Open file explorer with the file selected."""
-        path = Path(path)
-        if sys.platform == 'darwin':
-            subprocess.run(['open', '-R', str(path)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', '/select,', str(path)])
-        else:
-            # Linux - open containing folder
-            subprocess.run(['xdg-open', str(path.parent)])
+        from .output_helpers import open_file_in_explorer
+        open_file_in_explorer(path)
     
     def _open_in_default_viewer(self, path: str):
         """Open file in the default application."""
-        path = Path(path)
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(path)])
-        elif sys.platform == 'win32':
-            os.startfile(str(path))
-        else:
-            subprocess.run(['xdg-open', str(path)])
+        from .output_helpers import open_in_default_viewer
+        open_in_default_viewer(path)
     
     def _save_image(self):
         """Save the generated image to a custom location."""
@@ -1064,12 +1108,8 @@ class ImageTab(QWidget):
     
     def _open_output_folder(self):
         """Open the output folder in file manager."""
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(OUTPUT_DIR)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', str(OUTPUT_DIR)])
-        else:
-            subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+        from .output_helpers import open_folder
+        open_folder(OUTPUT_DIR)
 
 
 def create_image_tab(parent) -> QWidget:

@@ -52,7 +52,7 @@ Conflict Prevention:
     - embedding_local / embedding_api
 """
 
-from .manager import ModuleManager, Module, ModuleState, ModuleCategory, ModuleInfo, ModuleHealth, get_manager
+from .manager import ModuleManager, Module, ModuleState, ModuleCategory, ModuleInfo, ModuleHealth, get_manager, set_manager
 from .registry import (
     MODULE_REGISTRY,
     get_module,
@@ -75,6 +75,7 @@ __all__ = [
     'ModuleInfo',
     'ModuleHealth',
     'get_manager',
+    'set_manager',
     # Registry
     'MODULE_REGISTRY',
     'get_module',

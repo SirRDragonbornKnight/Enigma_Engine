@@ -58,6 +58,7 @@ def create_game_subtab(parent):
     game_select_row.addWidget(QLabel("Active Game:"))
     parent.game_routing_combo = QComboBox()
     parent.game_routing_combo.addItem("(None)", "none")
+    parent.game_routing_combo.addItem("Blender (Avatar)", "blender")
     parent.game_routing_combo.addItem("Minecraft", "minecraft")
     parent.game_routing_combo.addItem("Terraria", "terraria")
     parent.game_routing_combo.addItem("Valorant", "valorant")

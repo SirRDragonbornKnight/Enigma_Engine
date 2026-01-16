@@ -261,6 +261,36 @@ CONTROL_AVATAR = ToolDefinition(
     ],
 )
 
+CUSTOMIZE_AVATAR = ToolDefinition(
+    name="customize_avatar",
+    description="Customize the avatar's visual appearance (colors, lighting, rotation speed)",
+    category="control",
+    module="avatar",
+    parameters=[
+        ToolParameter(
+            name="setting",
+            type="string",
+            description="Setting to change",
+            required=True,
+            enum=["primary_color", "secondary_color", "accent_color", "light_intensity", 
+                  "ambient_strength", "wireframe", "show_grid", "rotate_speed", "auto_rotate", "reset"],
+        ),
+        ToolParameter(
+            name="value",
+            type="string",
+            description="Value for the setting (color hex like '#ff0000', number 0-100, or 'true'/'false' for booleans)",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Change avatar primary color to red",
+        "Turn on wireframe mode",
+        "Set lighting to 80%",
+        "Enable auto-rotation",
+        "Reset avatar settings",
+    ],
+)
+
 # --- Text-to-Speech Tools ---
 
 SPEAK = ToolDefinition(
@@ -1238,6 +1268,7 @@ ALL_TOOLS = [
     
     # Control
     CONTROL_AVATAR,
+    CUSTOMIZE_AVATAR,
     SPEAK,
     
     # System - File Operations

@@ -347,7 +347,7 @@ class GameAIRouter:
                     if process.lower() in running:
                         return game_id
             
-            # Try window titles (Windows only)
+            # Try window titles
             import sys
             if sys.platform == 'win32':
                 try:
@@ -367,6 +367,49 @@ class GameAIRouter:
                             for window_title in config.window_titles:
                                 if window_title.lower() in title.value.lower():
                                     return game_id
+                except Exception:
+                    pass
+            else:
+                # Linux/macOS - use Xlib for active window (internal)
+                try:
+                    from Xlib import X, display
+                    
+                    d = display.Display()
+                    root = d.screen().root
+                    
+                    # Get active window
+                    active = root.get_full_property(
+                        d.intern_atom('_NET_ACTIVE_WINDOW'),
+                        X.AnyPropertyType
+                    )
+                    
+                    if active and active.value:
+                        win_id = active.value[0]
+                        window = d.create_resource_object('window', win_id)
+                        
+                        # Get window name
+                        name_prop = window.get_full_property(
+                            d.intern_atom('_NET_WM_NAME'),
+                            X.AnyPropertyType
+                        )
+                        if not name_prop:
+                            name_prop = window.get_full_property(
+                                d.intern_atom('WM_NAME'),
+                                X.AnyPropertyType
+                            )
+                        
+                        if name_prop:
+                            title = name_prop.value.decode() if isinstance(name_prop.value, bytes) else str(name_prop.value)
+                            for game_id, config in self._games.items():
+                                for window_title in config.window_titles:
+                                    if window_title.lower() in title.lower():
+                                        d.close()
+                                        return game_id
+                    
+                    d.close()
+                except ImportError:
+                    # Xlib not available, rely on process detection only
+                    pass
                 except Exception:
                     pass
             

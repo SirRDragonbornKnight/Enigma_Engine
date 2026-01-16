@@ -444,12 +444,10 @@ class AutonomousAvatar:
         self._screen_regions.clear()
         
         try:
-            # Try to get window list
-            import subprocess
             import sys
             
             if sys.platform == 'win32':
-                # Windows - get visible windows
+                # Windows - get visible windows using ctypes (internal)
                 import ctypes
                 from ctypes import wintypes
                 
@@ -487,6 +485,85 @@ class AutonomousAvatar:
                 
                 WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
                 user32.EnumWindows(WNDENUMPROC(callback), 0)
+            
+            else:
+                # Linux/macOS - use Xlib or fallback to process-based detection (internal)
+                try:
+                    # Try python-xlib for X11 (internal library)
+                    from Xlib import X, display
+                    from Xlib.protocol import rq
+                    
+                    d = display.Display()
+                    root = d.screen().root
+                    
+                    # Get window list from X11
+                    window_ids = root.get_full_property(
+                        d.intern_atom('_NET_CLIENT_LIST'),
+                        X.AnyPropertyType
+                    )
+                    
+                    if window_ids:
+                        for win_id in window_ids.value:
+                            try:
+                                window = d.create_resource_object('window', win_id)
+                                
+                                # Get window name
+                                name_prop = window.get_full_property(
+                                    d.intern_atom('_NET_WM_NAME'),
+                                    X.AnyPropertyType
+                                )
+                                if not name_prop:
+                                    name_prop = window.get_full_property(
+                                        d.intern_atom('WM_NAME'),
+                                        X.AnyPropertyType
+                                    )
+                                
+                                title = name_prop.value.decode() if name_prop else "Unknown"
+                                
+                                # Get geometry
+                                geom = window.get_geometry()
+                                
+                                if geom.width > 100 and geom.height > 100:
+                                    region = ScreenRegion(
+                                        x=geom.x, y=geom.y,
+                                        width=geom.width, height=geom.height,
+                                        title=title,
+                                        content_type=self._classify_window(title),
+                                        interest_score=self._calc_interest(title)
+                                    )
+                                    self._screen_regions.append(region)
+                                    
+                                    if title not in self._seen_windows:
+                                        self._seen_windows.append(title)
+                                        region.interest_score = 0.9
+                                        region.content_type = "new_window"
+                            except Exception:
+                                pass
+                    
+                    d.close()
+                    
+                except ImportError:
+                    # Xlib not available - use psutil for process-based detection (internal)
+                    try:
+                        import psutil
+                        for proc in psutil.process_iter(['name', 'cmdline']):
+                            try:
+                                name = proc.info['name'] or ''
+                                # Create pseudo-regions from running processes
+                                region = ScreenRegion(
+                                    x=0, y=0, width=800, height=600,
+                                    title=name,
+                                    content_type=self._classify_window(name),
+                                    interest_score=self._calc_interest(name)
+                                )
+                                if name not in self._seen_windows:
+                                    self._seen_windows.append(name)
+                                    region.interest_score = 0.5
+                                self._screen_regions.append(region)
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                pass
+                    except ImportError:
+                        pass
                 
         except Exception as e:
             # Screen scanning failed, continue without

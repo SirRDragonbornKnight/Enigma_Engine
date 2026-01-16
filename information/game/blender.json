@@ -1,0 +1,66 @@
+{
+  "name": "Blender Avatar",
+  "description": "Control 3D avatars in Blender - real-time expressions, poses, and lip sync",
+  "protocol": "tcp",
+  "host": "127.0.0.1",
+  "port": 9876,
+  "endpoint": "/",
+  
+  "avatar_integration": true,
+  
+  "commands": {
+    "set_expression": {
+      "description": "Set avatar facial expression",
+      "params": ["expression_name"],
+      "examples": ["happy", "sad", "angry", "surprised", "thinking", "excited", "sleeping"]
+    },
+    "set_bone_rotation": {
+      "description": "Rotate a bone (head, neck, spine, etc.)",
+      "params": ["bone_name", "pitch", "yaw", "roll"]
+    },
+    "look_at": {
+      "description": "Make avatar look at screen position",
+      "params": ["x", "y"]
+    },
+    "set_viseme": {
+      "description": "Set mouth shape for lip sync",
+      "params": ["viseme"],
+      "examples": ["AA", "E", "I", "O", "U", "PP", "FF", "TH", "SS"]
+    },
+    "play_animation": {
+      "description": "Play a named animation",
+      "params": ["animation_name", "loop"]
+    },
+    "load_model": {
+      "description": "Load a 3D model file",
+      "params": ["filepath"],
+      "supported_formats": [".glb", ".gltf", ".fbx", ".obj", ".vrm", ".blend"]
+    }
+  },
+  
+  "ai_behaviors": {
+    "auto_expressions": true,
+    "follow_conversation": true,
+    "lip_sync_with_tts": true,
+    "idle_movements": true,
+    "react_to_user": true
+  },
+  
+  "bone_mappings": {
+    "head": "Head",
+    "neck": "Neck",
+    "spine": "Spine",
+    "chest": "Chest",
+    "left_eye": "LeftEye",
+    "right_eye": "RightEye"
+  },
+  
+  "notes": [
+    "1. Install Blender addon: forge_ai/avatar/blender_bridge.py contains BLENDER_ADDON_CODE",
+    "2. Or run: from forge_ai.avatar import save_blender_addon; save_blender_addon()",
+    "3. In Blender: Edit > Preferences > Add-ons > Install > Select the saved .py file",
+    "4. Enable 'ForgeAI Avatar Bridge' addon",
+    "5. In Blender sidebar (N key) > ForgeAI tab > Click 'Start Server'",
+    "6. Then connect from ForgeAI"
+  ]
+}

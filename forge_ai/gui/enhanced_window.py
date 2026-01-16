@@ -412,29 +412,18 @@ class GenerationPreviewPopup(QDialog):
     
     def _open_file(self):
         """Open the generated file."""
-        import os
-        import subprocess
+        from .tabs.output_helpers import open_in_default_viewer
         path = Path(self.result_path)
         if path.exists():
-            if sys.platform == 'darwin':
-                subprocess.run(['open', str(path)])
-            elif sys.platform == 'win32':
-                os.startfile(str(path))
-            else:
-                subprocess.run(['xdg-open', str(path)])
+            open_in_default_viewer(path)
         self.close()
     
     def _open_folder(self):
         """Open the containing folder."""
-        import subprocess
+        from .tabs.output_helpers import open_file_in_explorer
         path = Path(self.result_path)
         if path.exists():
-            if sys.platform == 'darwin':
-                subprocess.run(['open', '-R', str(path)])
-            elif sys.platform == 'win32':
-                subprocess.run(['explorer', '/select,', str(path)])
-            else:
-                subprocess.run(['xdg-open', str(path.parent)])
+            open_file_in_explorer(path)
         self.close()
     
     def mousePressEvent(self, event):
@@ -1351,7 +1340,8 @@ class ModelLoadingDialog(QDialog):
         self.setWindowTitle("Loading Model")
         self.setFixedSize(450, 270)
         self.setModal(False)  # Non-modal so user can move the main window
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)  # Stay on top but movable
+        # Don't use WindowStaysOnTopHint during loading - it can block interaction
+        # Instead we use raise_() and activateWindow() when showing
         self.cancelled = False
         self.show_terminal = show_terminal
         self._log_lines = []
@@ -2504,17 +2494,10 @@ Checkpoints: {checkpoints}
             QMessageBox.warning(self, "Not Found", "Model folder not found")
             return
         
-        import subprocess
-        import platform
+        from .tabs.output_helpers import open_folder
         
         try:
-            if platform.system() == "Windows":
-                import os
-                os.startfile(str(folder))
-            elif platform.system() == "Darwin":
-                subprocess.run(["open", str(folder)])
-            else:
-                subprocess.run(["xdg-open", str(folder)])
+            open_folder(folder)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Could not open folder: {e}")
     
@@ -2782,9 +2765,11 @@ class EnhancedMainWindow(QMainWindow):
         
         # Initialize module manager and register all built-in modules
         try:
-            from forge_ai.modules import ModuleManager, register_all
+            from forge_ai.modules import ModuleManager, register_all, set_manager
             self.module_manager = ModuleManager()
             register_all(self.module_manager)
+            # Set as global manager so get_manager() returns this instance
+            set_manager(self.module_manager)
         except Exception as e:
             print(f"Could not initialize ModuleManager: {e}")
             self.module_manager = None
@@ -3692,7 +3677,37 @@ class EnhancedMainWindow(QMainWindow):
         
         # Add items to sidebar
         self._nav_map = {}  # Map item text to stack index
+        self._sidebar_items = {}  # Map key to QListWidgetItem for visibility control
+        self._sidebar_rows = {}  # Map key to row index
         stack_index = 0
+        row_index = 0
+        
+        # Module-to-sidebar mapping: which modules control which sidebar items
+        self._module_to_tabs = {
+            'image_gen_local': ['image'],
+            'image_gen_api': ['image'],
+            'code_gen_local': ['code'],
+            'code_gen_api': ['code'],
+            'video_gen_local': ['video'],
+            'video_gen_api': ['video'],
+            'audio_gen_local': ['audio'],
+            'audio_gen_api': ['audio'],
+            'threed_gen_local': ['3d'],
+            'threed_gen_api': ['3d'],
+            'embedding_local': ['search'],
+            'embedding_api': ['search'],
+            'avatar': ['avatar'],
+            'vision': ['vision', 'camera'],
+            'voice_input': [],
+            'voice_output': [],
+        }
+        
+        # Tabs that should always be visible (core tabs)
+        self._always_visible_tabs = [
+            'chat', 'train', 'history', 'scale', 'modules', 'tools', 'router',
+            'game', 'robot', 'terminal', 'files', 'logs', 'notes', 'network',
+            'analytics', 'scheduler', 'examples', 'settings', 'gif'
+        ]
         
         for item in nav_items:
             if item[0] == "section":
@@ -3715,7 +3730,10 @@ class EnhancedMainWindow(QMainWindow):
                 list_item.setSizeHint(QSize(170, 38))
                 self.sidebar.addItem(list_item)
                 self._nav_map[key] = stack_index
+                self._sidebar_items[key] = list_item
+                self._sidebar_rows[key] = row_index
                 stack_index += 1
+            row_index += 1
         
         sidebar_layout.addWidget(self.sidebar)
         main_layout.addWidget(sidebar_container)
@@ -3831,10 +3849,11 @@ class EnhancedMainWindow(QMainWindow):
                         screen_geo.y() + (screen_geo.height() - self.height()) // 2
                     )
         
-        # Restore always on top
+        # Restore always on top - defer to after window is shown
+        # Using QTimer to ensure window is fully loaded first
         if settings.get("always_on_top", False):
-            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-            self.show()
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(500, self._restore_always_on_top)
         
         # Restore auto-speak state
         if settings.get("auto_speak", False):
@@ -3853,6 +3872,22 @@ class EnhancedMainWindow(QMainWindow):
             if item and item.data(Qt.UserRole) == 'chat':
                 self.sidebar.setCurrentRow(i)
                 break
+        
+        # Initialize tab visibility based on loaded modules
+        self.update_tab_visibility()
+    
+    def _restore_always_on_top(self):
+        """Restore always-on-top setting after window is fully loaded."""
+        try:
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+            self.show()
+            # Update checkbox if it exists
+            if hasattr(self, 'always_on_top_check'):
+                self.always_on_top_check.blockSignals(True)
+                self.always_on_top_check.setChecked(True)
+                self.always_on_top_check.blockSignals(False)
+        except Exception as e:
+            print(f"Could not restore always-on-top: {e}")
     
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""
@@ -4165,6 +4200,8 @@ class EnhancedMainWindow(QMainWindow):
                     if success:
                         self._enable_avatar()
                         self.avatar_action.setText("Avatar (ON)")
+                        self.refresh_avatar_tab()
+                        self.update_tab_visibility('avatar', True)
                     else:
                         self.avatar_action.setChecked(False)
                         self.avatar_action.setText("Avatar (OFF)")
@@ -4174,6 +4211,8 @@ class EnhancedMainWindow(QMainWindow):
                     self.module_manager.unload('avatar')
                     self._disable_avatar()
                     self.avatar_action.setText("Avatar (OFF)")
+                    self.refresh_avatar_tab()
+                    self.update_tab_visibility('avatar', False)
             else:
                 # Fallback if no module manager
                 if checked:
@@ -4187,6 +4226,84 @@ class EnhancedMainWindow(QMainWindow):
             self.avatar_action.setChecked(False)
             self.avatar_action.setText("Avatar (OFF)")
             print(f"Avatar toggle error: {e}")
+    
+    def update_tab_visibility(self, module_id: str = None, enabled: bool = None):
+        """
+        Update sidebar tab visibility based on module state.
+        If module_id is None, updates all tabs based on current module states.
+        """
+        if not hasattr(self, '_sidebar_items'):
+            return
+        
+        if module_id and module_id in self._module_to_tabs:
+            # Update specific tabs for this module
+            tabs = self._module_to_tabs[module_id]
+            for tab_key in tabs:
+                if tab_key in self._sidebar_items:
+                    item = self._sidebar_items[tab_key]
+                    # Show if enabled, hide if disabled (unless always visible)
+                    if tab_key in self._always_visible_tabs:
+                        item.setHidden(False)
+                    else:
+                        item.setHidden(not enabled)
+        else:
+            # Update all tabs based on current module state
+            if self.module_manager:
+                loaded_modules = set(self.module_manager.list_loaded())
+            else:
+                loaded_modules = set()
+            
+            # Build set of tabs that should be visible
+            visible_tabs = set(self._always_visible_tabs)
+            for mod_id, tabs in self._module_to_tabs.items():
+                if mod_id in loaded_modules:
+                    visible_tabs.update(tabs)
+            
+            # Update visibility
+            for tab_key, item in self._sidebar_items.items():
+                should_show = tab_key in visible_tabs
+                item.setHidden(not should_show)
+    
+    def refresh_avatar_tab(self):
+        """Refresh avatar tab UI to reflect current module state."""
+        try:
+            # Update the module status label and controls
+            from .tabs.avatar.avatar_display import _is_avatar_module_enabled
+            is_enabled = _is_avatar_module_enabled()
+            
+            # Update module status label
+            if hasattr(self, 'module_status_label'):
+                self.module_status_label.setVisible(not is_enabled)
+            
+            # Update checkbox state
+            if hasattr(self, 'avatar_enabled_checkbox'):
+                self.avatar_enabled_checkbox.setEnabled(is_enabled)
+                if is_enabled:
+                    # Re-enable and sync with avatar state
+                    from ..avatar import get_avatar
+                    avatar = get_avatar()
+                    self.avatar_enabled_checkbox.blockSignals(True)
+                    self.avatar_enabled_checkbox.setChecked(avatar.is_enabled)
+                    self.avatar_enabled_checkbox.blockSignals(False)
+            
+            # Update show overlay button
+            if hasattr(self, 'show_overlay_btn'):
+                self.show_overlay_btn.setEnabled(is_enabled)
+            
+        except Exception as e:
+            print(f"Error refreshing avatar tab: {e}")
+    
+    def on_module_toggled(self, module_id: str, enabled: bool):
+        """
+        Called when a module is toggled in the Modules tab.
+        Updates tab visibility and refreshes relevant tabs.
+        """
+        # Update sidebar visibility
+        self.update_tab_visibility(module_id, enabled)
+        
+        # Refresh specific tabs based on module
+        if module_id == 'avatar':
+            self.refresh_avatar_tab()
     
     def _toggle_screen_watching(self, checked):
         """Toggle continuous screen watching."""
@@ -5069,17 +5186,7 @@ class EnhancedMainWindow(QMainWindow):
                 # Don't pass custom tokenizer - let model use its own
                 custom_tok = None
             
-            system_prompt = (
-                "You are an AI assistant running in the ForgeAI GUI. "
-                "You can generate images, videos, code, audio, and 3D models directly. "
-                "When the user asks you to create something, output a tool call using this format:\n"
-                "<tool_call>{\"tool\": \"tool_name\", \"params\": {\"prompt\": \"description\"}}</tool_call>\n"
-                "Available tools: generate_image, generate_video, generate_code, generate_audio, generate_3d\n"
-                "For example, if asked to create an image of a sunset, respond with:\n"
-                "I'll create that image for you!\n"
-                "<tool_call>{\"tool\": \"generate_image\", \"params\": {\"prompt\": \"beautiful sunset over mountains\"}}</tool_call>\n"
-                "Be helpful, concise, and friendly."
-            )
+            system_prompt = self._build_tool_enabled_system_prompt()
         
         # Start background worker
         self._ai_worker = AIGenerationWorker(
@@ -5219,14 +5326,182 @@ class EnhancedMainWindow(QMainWindow):
                 tool_data = json.loads(match)
                 tool_name = tool_data.get('tool', '')
                 params = tool_data.get('params', {})
-                prompt = params.get('prompt', params.get('text', params.get('description', '')))
                 
-                result = self._execute_generation_tool(tool_name, prompt)
+                # Check if this tool needs permission
+                if self._tool_needs_permission(tool_name):
+                    if not self._request_tool_permission(tool_name, params):
+                        results.append({
+                            'success': False, 
+                            'error': 'User denied permission',
+                            'tool': tool_name
+                        })
+                        continue
+                
+                # Try generation tools first (for backwards compatibility)
+                prompt = params.get('prompt', params.get('text', params.get('description', '')))
+                if tool_name in ('generate_image', 'generate_video', 'generate_code', 
+                                'generate_audio', 'generate_3d'):
+                    result = self._execute_generation_tool(tool_name, prompt)
+                else:
+                    # Use full ToolExecutor for other tools
+                    result = self._execute_full_tool(tool_name, params)
+                
                 results.append(result)
             except json.JSONDecodeError:
                 results.append({'success': False, 'error': 'Invalid tool call format'})
         
         return response, results
+    
+    def _tool_needs_permission(self, tool_name: str) -> bool:
+        """Check if a tool requires user permission before execution."""
+        # Tools that modify the system or access sensitive resources
+        PERMISSION_REQUIRED_TOOLS = {
+            # File operations
+            'write_file', 'delete_file', 'move_file',
+            # System operations
+            'run_command', 'process_kill', 'ssh_execute',
+            # Docker operations
+            'docker_control',
+            # Git operations (push changes)
+            'git_commit', 'git_push',
+            # IoT/Hardware control
+            'gpio_write', 'gpio_pwm', 'robot_move', 'robot_gripper',
+            'home_assistant_control',
+            # Automation
+            'schedule_task', 'play_macro', 'clipboard_write',
+            # Media operations that modify files
+            'edit_image', 'edit_video', 'edit_gif',
+            # MQTT (external communication)
+            'mqtt_publish',
+        }
+        return tool_name in PERMISSION_REQUIRED_TOOLS
+    
+    def _request_tool_permission(self, tool_name: str, params: dict) -> bool:
+        """Show a permission dialog asking user to approve tool execution."""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        # Format parameter summary
+        param_summary = "\n".join([f"  • {k}: {str(v)[:50]}{'...' if len(str(v)) > 50 else ''}" 
+                                   for k, v in params.items()])
+        if not param_summary:
+            param_summary = "  (no parameters)"
+        
+        # Create friendly tool descriptions
+        tool_descriptions = {
+            'write_file': 'Write content to a file',
+            'delete_file': 'Delete a file from your system',
+            'move_file': 'Move or rename a file',
+            'run_command': 'Execute a system command',
+            'process_kill': 'Terminate a running process',
+            'ssh_execute': 'Run a command on a remote server',
+            'docker_control': 'Control a Docker container',
+            'git_commit': 'Create a Git commit',
+            'git_push': 'Push changes to a remote repository',
+            'gpio_write': 'Control GPIO pin output',
+            'gpio_pwm': 'Set PWM signal on GPIO pin',
+            'robot_move': 'Move the robot',
+            'robot_gripper': 'Control robot gripper',
+            'home_assistant_control': 'Control a smart home device',
+            'schedule_task': 'Schedule a task to run later',
+            'play_macro': 'Play a recorded macro',
+            'clipboard_write': 'Write to clipboard',
+            'edit_image': 'Modify an image file',
+            'edit_video': 'Modify a video file',
+            'edit_gif': 'Modify a GIF file',
+            'mqtt_publish': 'Send an MQTT message',
+        }
+        
+        description = tool_descriptions.get(tool_name, f'Execute {tool_name}')
+        
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle("Permission Required")
+        msg.setText(f"<b>The AI wants to: {description}</b>")
+        msg.setInformativeText(
+            f"<b>Tool:</b> {tool_name}\n\n"
+            f"<b>Parameters:</b>\n{param_summary}\n\n"
+            "Do you want to allow this action?"
+        )
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg.setDefaultButton(QMessageBox.No)
+        
+        # Style the dialog
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #1e1e2e;
+            }
+            QMessageBox QLabel {
+                color: #cdd6f4;
+                font-size: 12px;
+            }
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                padding: 6px 12px;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+            }
+            QPushButton:default {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+            }
+        """)
+        
+        result = msg.exec_()
+        
+        # Show result in chat
+        if result == QMessageBox.Yes:
+            self.chat_display.append(
+                f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #a6e3a1;">'
+                f'<span style="color: #a6e3a1;">✅ Allowed:</span> <code>{tool_name}</code></div>'
+            )
+            return True
+        else:
+            self.chat_display.append(
+                f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #f38ba8;">'
+                f'<span style="color: #f38ba8;">❌ Denied:</span> <code>{tool_name}</code></div>'
+            )
+            return False
+    
+    def _execute_full_tool(self, tool_name: str, params: dict) -> dict:
+        """Execute any tool using the full ToolExecutor."""
+        try:
+            from ..tools.tool_executor import ToolExecutor
+            from ..modules import ModuleManager
+            
+            # Get or create module manager
+            module_manager = getattr(self, 'module_manager', None)
+            if not module_manager:
+                module_manager = ModuleManager()
+            
+            executor = ToolExecutor(module_manager=module_manager)
+            result = executor.execute_tool(tool_name, params)
+            
+            # Show result in chat
+            if result.get('success'):
+                result_text = str(result.get('result', 'Done'))[:200]
+                self.chat_display.append(
+                    f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #94e2d5;">'
+                    f'<span style="color: #94e2d5;">🔧 {tool_name}:</span> {result_text}</div>'
+                )
+            else:
+                error = result.get('error', 'Unknown error')
+                self.chat_display.append(
+                    f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #f38ba8;">'
+                    f'<span style="color: #f38ba8;">⚠️ {tool_name} failed:</span> {error}</div>'
+                )
+            
+            return result
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'tool': tool_name
+            }
     
     def _execute_generation_tool(self, tool_name: str, prompt: str):
         """Execute a generation tool and return the result."""
@@ -5441,6 +5716,56 @@ class EnhancedMainWindow(QMainWindow):
             popup.show()
         except Exception as e:
             print(f"Could not show preview popup: {e}")
+    
+    def _build_tool_enabled_system_prompt(self) -> str:
+        """Build system prompt with all available tools the AI can use."""
+        try:
+            from ..tools.tool_registry import ToolRegistry
+            registry = ToolRegistry()
+            tools = registry.list_tools()
+            
+            # Group tools by category
+            tool_list = []
+            for tool in tools[:40]:  # Limit to avoid token overflow
+                tool_list.append(f"- {tool['name']}: {tool['description'][:60]}")
+            tools_str = "\n".join(tool_list)
+        except Exception:
+            tools_str = """- generate_image: Create an image from a text description
+- generate_video: Generate a video from a description
+- generate_code: Generate code for a task
+- generate_audio: Generate speech or audio
+- generate_3d: Generate a 3D model
+- read_file: Read contents of a file
+- write_file: Write content to a file (requires permission)
+- web_search: Search the web
+- screenshot: Take a screenshot
+- run_command: Run a system command (requires permission)"""
+        
+        return f"""You are ForgeAI, an intelligent AI assistant with access to various tools and capabilities.
+
+## Tool Usage
+When you need to perform an action (generate media, access files, etc.), use this format:
+<tool_call>{{"tool": "tool_name", "params": {{"param1": "value1"}}}}</tool_call>
+
+## Available Tools
+{tools_str}
+
+## Important
+- For system-modifying actions (write_file, run_command, etc.), the user will be asked for permission
+- Always explain what you're about to do before using a tool
+- Be helpful, accurate, and respect user privacy
+- For creative tasks, be imaginative and detailed
+
+## Examples
+User: "Create an image of a sunset"
+You: I'll create that image for you!
+<tool_call>{{"tool": "generate_image", "params": {{"prompt": "beautiful golden sunset over calm ocean with vibrant orange and purple clouds"}}}}</tool_call>
+
+User: "What's in this folder?"
+You: Let me check that folder for you.
+<tool_call>{{"tool": "list_directory", "params": {{"path": "/home/user/Documents"}}}}</tool_call>
+
+Be friendly, concise, and proactive in helping users accomplish their goals."""
 
     def _on_ai_error(self, error_msg: str):
         """Handle AI generation error."""

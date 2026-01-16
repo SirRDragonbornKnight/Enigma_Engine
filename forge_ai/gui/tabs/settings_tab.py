@@ -580,6 +580,88 @@ def _toggle_always_on_top(parent, state):
     main_window.show()
 
 
+def _disable_always_on_top(parent):
+    """Disable always-on-top for main window."""
+    from PyQt5.QtCore import Qt
+    
+    main_window = parent.window()
+    if not main_window:
+        return
+    
+    current_flags = main_window.windowFlags()
+    main_window.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
+    main_window.show()
+    
+    # Update checkbox if it exists
+    if hasattr(parent, 'always_on_top_check'):
+        parent.always_on_top_check.blockSignals(True)
+        parent.always_on_top_check.setChecked(False)
+        parent.always_on_top_check.blockSignals(False)
+
+
+def _reset_window_position(parent):
+    """Reset main window to center of primary screen."""
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtGui import QGuiApplication
+    
+    main_window = parent.window()
+    if not main_window:
+        return
+    
+    # Get primary screen
+    screen = QGuiApplication.primaryScreen()
+    if screen:
+        screen_geo = screen.availableGeometry()
+        # Center window
+        x = screen_geo.x() + (screen_geo.width() - main_window.width()) // 2
+        y = screen_geo.y() + (screen_geo.height() - main_window.height()) // 2
+        main_window.move(x, y)
+
+
+def _reset_all_settings(parent):
+    """Reset all GUI settings to defaults."""
+    import json
+    from pathlib import Path
+    from PyQt5.QtWidgets import QMessageBox
+    from ...config import CONFIG
+    
+    reply = QMessageBox.question(
+        parent, "Reset All Settings",
+        "This will reset ALL GUI settings to defaults.\n\n"
+        "The application will close. Restart to apply changes.\n\n"
+        "Continue?",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.No
+    )
+    
+    if reply != QMessageBox.Yes:
+        return
+    
+    try:
+        # Delete gui_settings.json
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        if settings_path.exists():
+            settings_path.unlink()
+        
+        # Also reset data dir settings
+        data_settings = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        if data_settings.exists():
+            data_settings.unlink()
+        
+        QMessageBox.information(
+            parent, "Settings Reset",
+            "Settings have been reset.\n\nThe application will now close."
+        )
+        
+        # Close the application
+        main_window = parent.window()
+        if main_window:
+            main_window.close()
+            
+    except Exception as e:
+        QMessageBox.warning(parent, "Error", f"Could not reset settings: {e}")
+
+
 def _toggle_mini_chat_on_top(parent, state):
     """Toggle mini chat always on top and save setting."""
     import json
@@ -1514,6 +1596,78 @@ def create_settings_tab(parent):
     
     layout.addWidget(status_group)
     
+    # === RESET SETTINGS ===
+    reset_group = QGroupBox("Reset Settings")
+    reset_layout = QVBoxLayout(reset_group)
+    
+    reset_desc = QLabel(
+        "Reset GUI settings to defaults. Use this if you're having issues "
+        "or want to restore original window positions and preferences."
+    )
+    reset_desc.setWordWrap(True)
+    reset_layout.addWidget(reset_desc)
+    
+    reset_buttons = QHBoxLayout()
+    
+    reset_window_btn = QPushButton("🔲 Reset Window Position")
+    reset_window_btn.setToolTip("Center window on primary screen")
+    reset_window_btn.setStyleSheet("""
+        QPushButton {
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QPushButton:hover {
+            background: #2563eb;
+        }
+    """)
+    reset_window_btn.clicked.connect(lambda: _reset_window_position(parent))
+    reset_buttons.addWidget(reset_window_btn)
+    
+    reset_ontop_btn = QPushButton("📌 Disable Always-On-Top")
+    reset_ontop_btn.setToolTip("Turn off always-on-top for main window")
+    reset_ontop_btn.setStyleSheet("""
+        QPushButton {
+            background: #8b5cf6;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QPushButton:hover {
+            background: #7c3aed;
+        }
+    """)
+    reset_ontop_btn.clicked.connect(lambda: _disable_always_on_top(parent))
+    reset_buttons.addWidget(reset_ontop_btn)
+    
+    reset_all_btn = QPushButton("⚠️ Reset All Settings")
+    reset_all_btn.setStyleSheet("""
+        QPushButton {
+            background: #dc2626;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QPushButton:hover {
+            background: #b91c1c;
+        }
+    """)
+    reset_all_btn.setToolTip("Reset all settings to defaults (requires restart)")
+    reset_all_btn.clicked.connect(lambda: _reset_all_settings(parent))
+    reset_buttons.addWidget(reset_all_btn)
+    
+    reset_buttons.addStretch()
+    reset_layout.addLayout(reset_buttons)
+    
+    layout.addWidget(reset_group)
+    
     layout.addStretch()
     
     # Initial status refresh
@@ -1769,9 +1923,6 @@ def _refresh_cache_info(parent):
 
 def _open_cache_folder(parent):
     """Open the cache folder in file explorer."""
-    import subprocess
-    import os
-    
     cache_path = _get_cache_path()
     
     if not cache_path.exists():
@@ -1782,11 +1933,8 @@ def _open_cache_folder(parent):
         )
         return
     
-    # Open in file explorer
-    if os.name == 'nt':  # Windows
-        subprocess.run(['explorer', str(cache_path)])
-    elif os.name == 'posix':  # Linux/Mac
-        subprocess.run(['xdg-open' if os.uname().sysname == 'Linux' else 'open', str(cache_path)])
+    from .output_helpers import open_folder
+    open_folder(cache_path)
 
 
 def _clear_cache(parent):
@@ -2261,8 +2409,9 @@ def _get_audio_devices():
                 output_devices.append((name, i))
         
         p.terminate()
-    except ImportError:
-        pass  # pyaudio not installed
+    except (ImportError, OSError, TypeError) as e:
+        # pyaudio not installed, or audio system issue (e.g., portaudio ctypes callback)
+        print(f"[Audio] Could not enumerate devices: {type(e).__name__}")
     except Exception as e:
         print(f"Error getting audio devices: {e}")
     
@@ -2400,13 +2549,16 @@ def _test_microphone(parent):
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(0, update_ui)
             
-        except ImportError:
+        except (ImportError, OSError, TypeError) as e:
             def show_error():
                 parent._mic_test_running = False
                 parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
                 parent.mic_test_btn.setText("🎤 Test Microphone")
-                parent.mic_status_label.setText("Install: pip install pyaudio")
+                if isinstance(e, ImportError):
+                    parent.mic_status_label.setText("Install: pip install pyaudio")
+                else:
+                    parent.mic_status_label.setText("Audio system unavailable")
                 parent.mic_status_label.setStyleSheet("color: #ef4444;")
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(0, show_error)

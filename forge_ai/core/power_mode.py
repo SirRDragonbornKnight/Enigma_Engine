@@ -126,14 +126,24 @@ class PowerManager:
                 except ImportError:
                     pass
             
-            # Set process priority on Windows
-            if os.name == 'nt' and level in (PowerLevel.LOW, PowerLevel.GAMING, PowerLevel.BACKGROUND):
+            # Set process priority
+            if level in (PowerLevel.LOW, PowerLevel.GAMING, PowerLevel.BACKGROUND):
                 try:
                     import psutil
                     p = psutil.Process()
-                    p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS if hasattr(psutil, 'BELOW_NORMAL_PRIORITY_CLASS') else 16384)
+                    if os.name == 'nt':
+                        # Windows: use BELOW_NORMAL_PRIORITY_CLASS
+                        p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS if hasattr(psutil, 'BELOW_NORMAL_PRIORITY_CLASS') else 16384)
+                    else:
+                        # Linux/macOS: use nice value (10 = lower priority)
+                        p.nice(10)
                 except (ImportError, OSError, AttributeError):
-                    pass
+                    # Fallback: try os.nice on Linux/macOS
+                    if os.name != 'nt':
+                        try:
+                            os.nice(10)
+                        except (OSError, AttributeError):
+                            pass
     
     def pause(self):
         """Pause AI operations."""
