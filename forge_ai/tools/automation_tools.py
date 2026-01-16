@@ -298,34 +298,28 @@ class ClipboardHistory:
 
 
 def _get_clipboard() -> str:
-    """Get clipboard content (cross-platform)."""
+    """Get clipboard content (cross-platform, internal only)."""
+    # Try pyperclip first (pure Python with fallbacks)
     try:
-        # Try pyperclip first
         import pyperclip
         return pyperclip.paste()
     except ImportError:
         pass
     
-    # Linux: xclip or xsel
-    if os.name != 'nt':
-        try:
-            result = subprocess.run(['xclip', '-selection', 'clipboard', '-o'],
-                                   capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                return result.stdout
-        except:
-            pass
+    # Try PyQt5 QClipboard (internal)
+    try:
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QMimeData
         
-        try:
-            result = subprocess.run(['xsel', '--clipboard', '--output'],
-                                   capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                return result.stdout
-        except:
-            pass
+        app = QApplication.instance()
+        if app:
+            clipboard = app.clipboard()
+            return clipboard.text() or ""
+    except ImportError:
+        pass
     
-    # Windows
-    else:
+    # Windows fallback using ctypes (internal)
+    if os.name == 'nt':
         try:
             import ctypes
             CF_TEXT = 1
@@ -343,7 +337,8 @@ def _get_clipboard() -> str:
 
 
 def _set_clipboard(text: str) -> bool:
-    """Set clipboard content (cross-platform)."""
+    """Set clipboard content (cross-platform, internal only)."""
+    # Try pyperclip first (pure Python with fallbacks)
     try:
         import pyperclip
         pyperclip.copy(text)
@@ -351,23 +346,17 @@ def _set_clipboard(text: str) -> bool:
     except ImportError:
         pass
     
-    # Linux
-    if os.name != 'nt':
-        try:
-            process = subprocess.Popen(['xclip', '-selection', 'clipboard'],
-                                      stdin=subprocess.PIPE)
-            process.communicate(text.encode('utf-8'))
-            return process.returncode == 0
-        except:
-            pass
+    # Try PyQt5 QClipboard (internal)
+    try:
+        from PyQt5.QtWidgets import QApplication
         
-        try:
-            process = subprocess.Popen(['xsel', '--clipboard', '--input'],
-                                      stdin=subprocess.PIPE)
-            process.communicate(text.encode('utf-8'))
-            return process.returncode == 0
-        except:
-            pass
+        app = QApplication.instance()
+        if app:
+            clipboard = app.clipboard()
+            clipboard.setText(text)
+            return True
+    except ImportError:
+        pass
     
     return False
 

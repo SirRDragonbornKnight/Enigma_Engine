@@ -68,24 +68,26 @@ def _run_browser_command(browser: str, action: str) -> Dict[str, Any]:
         except Exception:
             pass
         
-        # Try xdotool to send media keys
+        # Try pynput for media keys (internal Python library)
         try:
+            from pynput.keyboard import Key, Controller
+            keyboard = Controller()
+            
             key_map = {
-                "play_pause": "XF86AudioPlay",
-                "pause": "XF86AudioPause", 
-                "next": "XF86AudioNext",
-                "previous": "XF86AudioPrev",
-                "mute": "XF86AudioMute",
-                "volume_up": "XF86AudioRaiseVolume",
-                "volume_down": "XF86AudioLowerVolume",
+                "play_pause": Key.media_play_pause,
+                "pause": Key.media_play_pause, 
+                "next": Key.media_next,
+                "previous": Key.media_previous,
+                "mute": Key.media_volume_mute,
+                "volume_up": Key.media_volume_up,
+                "volume_down": Key.media_volume_down,
             }
             if action in key_map:
-                result = subprocess.run(
-                    ["xdotool", "key", key_map[action]],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    return {"success": True, "method": "xdotool", "action": action}
+                keyboard.press(key_map[action])
+                keyboard.release(key_map[action])
+                return {"success": True, "method": "pynput", "action": action}
+        except ImportError:
+            pass
         except Exception:
             pass
     
@@ -376,62 +378,97 @@ class BrowserFocusTool(Tool):
         
         try:
             if os.name == "posix":
-                # Try wmctrl
+                # Try Xlib (internal Python library)
                 try:
-                    browser_wm_class = {
-                        "chrome": "Google-chrome",
-                        "chromium": "Chromium",
-                        "firefox": "Firefox",
-                        "opera": "Opera",
-                        "brave": "Brave-browser",
-                        "edge": "Microsoft-edge",
+                    from Xlib import X, display
+                    
+                    d = display.Display()
+                    root = d.screen().root
+                    
+                    # Get window list
+                    window_ids = root.get_full_property(
+                        d.intern_atom('_NET_CLIENT_LIST'),
+                        X.AnyPropertyType
+                    )
+                    
+                    browser_keywords = {
+                        "chrome": ["google chrome", "chromium"],
+                        "firefox": ["firefox", "mozilla firefox"],
+                        "opera": ["opera"],
+                        "brave": ["brave"],
+                        "edge": ["microsoft edge", "edge"],
                     }
                     
-                    wm_class = browser_wm_class.get(browser.lower(), browser)
-                    result = subprocess.run(
-                        ["wmctrl", "-a", wm_class],
-                        capture_output=True, text=True, timeout=5
-                    )
-                    if result.returncode == 0:
-                        return {"success": True, "browser": browser, "method": "wmctrl"}
-                except:
-                    pass
-                
-                # Try xdotool
-                try:
-                    result = subprocess.run(
-                        ["xdotool", "search", "--name", browser, "windowactivate"],
-                        capture_output=True, text=True, timeout=5
-                    )
-                    if result.returncode == 0:
-                        return {"success": True, "browser": browser, "method": "xdotool"}
-                except:
+                    keywords = browser_keywords.get(browser.lower(), [browser.lower()])
+                    
+                    if window_ids:
+                        for win_id in window_ids.value:
+                            try:
+                                window = d.create_resource_object('window', win_id)
+                                name_prop = window.get_full_property(
+                                    d.intern_atom('_NET_WM_NAME'),
+                                    X.AnyPropertyType
+                                )
+                                if not name_prop:
+                                    name_prop = window.get_full_property(
+                                        d.intern_atom('WM_NAME'),
+                                        X.AnyPropertyType
+                                    )
+                                
+                                if name_prop:
+                                    title = name_prop.value.decode() if isinstance(name_prop.value, bytes) else str(name_prop.value)
+                                    if any(kw in title.lower() for kw in keywords):
+                                        # Activate window
+                                        window.set_input_focus(X.RevertToParent, X.CurrentTime)
+                                        window.configure(stack_mode=X.Above)
+                                        d.sync()
+                                        d.close()
+                                        return {"success": True, "browser": browser, "method": "xlib"}
+                            except Exception:
+                                pass
+                    
+                    d.close()
+                except ImportError:
                     pass
             
             elif os.name == "nt":
-                # Windows - use PowerShell
-                exe_names = {
-                    "chrome": "chrome",
-                    "firefox": "firefox", 
-                    "opera": "opera",
-                    "brave": "brave",
-                    "edge": "msedge",
-                }
-                exe = exe_names.get(browser.lower(), browser)
-                
-                ps_script = f"""
-$wshell = New-Object -ComObject WScript.Shell
-$processes = Get-Process -Name "{exe}" -ErrorAction SilentlyContinue
-if ($processes) {{
-    $wshell.AppActivate("{exe}")
-}}
-"""
-                result = subprocess.run(
-                    ["powershell", "-Command", ps_script],
-                    capture_output=True, text=True, timeout=5
-                )
-                return {"success": True, "browser": browser, "method": "powershell"}
+                # Windows - use ctypes (internal)
+                try:
+                    import ctypes
+                    from ctypes import wintypes
+                    
+                    user32 = ctypes.windll.user32
+                    
+                    exe_names = {
+                        "chrome": "chrome",
+                        "firefox": "firefox", 
+                        "opera": "opera",
+                        "brave": "brave",
+                        "edge": "msedge",
+                    }
+                    exe = exe_names.get(browser.lower(), browser)
+                    
+                    # Find window by process name
+                    def callback(hwnd, windows):
+                        if user32.IsWindowVisible(hwnd):
+                            length = user32.GetWindowTextLengthW(hwnd)
+                            if length:
+                                buff = ctypes.create_unicode_buffer(length + 1)
+                                user32.GetWindowTextW(hwnd, buff, length + 1)
+                                if exe.lower() in buff.value.lower():
+                                    windows.append(hwnd)
+                        return True
+                    
+                    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.py_object)
+                    windows = []
+                    user32.EnumWindows(WNDENUMPROC(callback), windows)
+                    
+                    if windows:
+                        user32.SetForegroundWindow(windows[0])
+                        return {"success": True, "browser": browser, "method": "ctypes"}
+                except Exception:
+                    pass
             
-            return {"success": False, "error": f"Could not focus {browser}"}
+            return {"success": False, "error": f"Could not focus {browser}. Install python-xlib for Linux support."}
         except Exception as e:
             return {"success": False, "error": str(e)}

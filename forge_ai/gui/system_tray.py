@@ -1726,12 +1726,8 @@ class ForgeSystemTray(QObject):
         operation = params.get("operation", "open")
         
         if path:
-            import subprocess
-            import sys
-            if sys.platform == 'win32':
-                subprocess.run(['notepad', path])
-            else:
-                subprocess.run(['xdg-open', path])
+            from .tabs.output_helpers import open_in_default_viewer
+            open_in_default_viewer(path)
     
     def _handle_avatar(self, params: Dict):
         """Handle avatar commands."""
@@ -2081,28 +2077,19 @@ class ForgeSystemTray(QObject):
         if not folder_path.is_absolute():
             folder_path = Path(CONFIG.get("root_dir", ".")) / folder_path
         
-        if folder_path.exists():
-            if sys.platform == 'win32':
-                os.startfile(str(folder_path))
-            elif sys.platform == 'darwin':
-                subprocess.run(['open', str(folder_path)])
-            else:
-                subprocess.run(['xdg-open', str(folder_path)])
-            
-            self.tray_icon.showMessage(
-                "Folder Opened",
-                f"Opened: {folder_name}",
-                QSystemTrayIcon.Information,
-                2000
-            )
-        else:
+        from .tabs.output_helpers import open_folder
+        
+        if not folder_path.exists():
             folder_path.mkdir(parents=True, exist_ok=True)
-            if sys.platform == 'win32':
-                os.startfile(str(folder_path))
-            elif sys.platform == 'darwin':
-                subprocess.run(['open', str(folder_path)])
-            else:
-                subprocess.run(['xdg-open', str(folder_path)])
+        
+        open_folder(folder_path)
+        
+        self.tray_icon.showMessage(
+            "Folder Opened",
+            f"Opened: {folder_name}",
+            QSystemTrayIcon.Information,
+            2000
+        )
     
     def _exit_app(self):
         """Exit the application completely."""

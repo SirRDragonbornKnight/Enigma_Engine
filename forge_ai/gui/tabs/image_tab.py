@@ -1082,24 +1082,13 @@ class ImageTab(QWidget):
     
     def _open_file_in_explorer(self, path: str):
         """Open file explorer with the file selected."""
-        path = Path(path)
-        if sys.platform == 'darwin':
-            subprocess.run(['open', '-R', str(path)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', '/select,', str(path)])
-        else:
-            # Linux - open containing folder
-            subprocess.run(['xdg-open', str(path.parent)])
+        from .output_helpers import open_file_in_explorer
+        open_file_in_explorer(path)
     
     def _open_in_default_viewer(self, path: str):
         """Open file in the default application."""
-        path = Path(path)
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(path)])
-        elif sys.platform == 'win32':
-            os.startfile(str(path))
-        else:
-            subprocess.run(['xdg-open', str(path)])
+        from .output_helpers import open_in_default_viewer
+        open_in_default_viewer(path)
     
     def _save_image(self):
         """Save the generated image to a custom location."""
@@ -1119,12 +1108,8 @@ class ImageTab(QWidget):
     
     def _open_output_folder(self):
         """Open the output folder in file manager."""
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(OUTPUT_DIR)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', str(OUTPUT_DIR)])
-        else:
-            subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+        from .output_helpers import open_folder
+        open_folder(OUTPUT_DIR)
 
 
 def create_image_tab(parent) -> QWidget:

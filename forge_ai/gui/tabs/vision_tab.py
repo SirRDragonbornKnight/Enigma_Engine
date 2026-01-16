@@ -187,14 +187,8 @@ def _open_images_folder(parent):
     """Open the images folder in the system file explorer."""
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Cross-platform folder opening
-    import sys
-    if sys.platform == "win32":
-        os.startfile(str(IMAGES_DIR))
-    elif sys.platform == "darwin":
-        subprocess.run(["open", str(IMAGES_DIR)])
-    else:
-        subprocess.run(["xdg-open", str(IMAGES_DIR)])
+    from .output_helpers import open_folder
+    open_folder(IMAGES_DIR)
 
 
 def _save_current_image(parent):

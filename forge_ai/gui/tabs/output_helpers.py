@@ -9,12 +9,13 @@ Provides common utilities for:
 
 import os
 import sys
-import subprocess
 from pathlib import Path
 from typing import Union, Optional, Tuple, Any
 
 try:
     from PyQt5.QtWidgets import QCheckBox, QHBoxLayout  # type: ignore[import]
+    from PyQt5.QtCore import QUrl  # type: ignore[import]
+    from PyQt5.QtGui import QDesktopServices  # type: ignore[import]
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -25,14 +26,12 @@ def open_file_in_explorer(path: Union[str, Path]) -> None:
     file_path = Path(path)
     if not file_path.exists():
         return
-        
-    if sys.platform == 'darwin':
-        subprocess.run(['open', '-R', str(file_path)])
+    
+    # Use Qt's cross-platform file opening (internal, no external tools)
+    if HAS_PYQT:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path.parent)))
     elif sys.platform == 'win32':
-        subprocess.run(['explorer', '/select,', str(file_path)])
-    else:
-        # Linux - open containing folder
-        subprocess.run(['xdg-open', str(file_path.parent)])
+        os.startfile(str(file_path.parent))  # type: ignore[attr-defined]
 
 
 def open_in_default_viewer(path: Union[str, Path]) -> None:
@@ -40,13 +39,12 @@ def open_in_default_viewer(path: Union[str, Path]) -> None:
     file_path = Path(path)
     if not file_path.exists():
         return
-        
-    if sys.platform == 'darwin':
-        subprocess.run(['open', str(file_path)])
+    
+    # Use Qt's cross-platform file opening (internal, no external tools)
+    if HAS_PYQT:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path)))
     elif sys.platform == 'win32':
         os.startfile(str(file_path))  # type: ignore[attr-defined]
-    else:
-        subprocess.run(['xdg-open', str(file_path)])
 
 
 def open_folder(folder_path: Union[str, Path]) -> None:
@@ -55,12 +53,11 @@ def open_folder(folder_path: Union[str, Path]) -> None:
     if not folder.exists():
         folder.mkdir(parents=True, exist_ok=True)
     
-    if sys.platform == 'darwin':
-        subprocess.run(['open', str(folder)])
+    # Use Qt's cross-platform folder opening (internal, no external tools)
+    if HAS_PYQT:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
     elif sys.platform == 'win32':
-        subprocess.run(['explorer', str(folder)])
-    else:
-        subprocess.run(['xdg-open', str(folder)])
+        os.startfile(str(folder))  # type: ignore[attr-defined]
 
 
 def create_auto_open_options(parent: Any) -> Tuple[Any, Any, Any]:

@@ -244,11 +244,26 @@ class ColorCustomizer(QWidget):
 
 
 class ModuleStateChecker:
-    """Check if a module is enabled in ModuleManager."""
+    """Check if a module is enabled in ModuleManager.
+    
+    NOTE: For UI purposes, we typically want features enabled by default.
+    Use is_actually_loaded() for operational checks where you need to know
+    if a module is truly available.
+    """
     
     @staticmethod
     def is_enabled(module_name: str) -> bool:
-        """Check if module is loaded."""
+        """Check if module features should be enabled in UI.
+        
+        Returns True by default to allow tab functionality to work
+        without requiring modules to be explicitly loaded.
+        """
+        # Default to True - tabs should work standalone
+        return True
+    
+    @staticmethod
+    def is_actually_loaded(module_name: str) -> bool:
+        """Check if module is actually loaded (for operational checks)."""
         try:
             from ...modules import get_manager
             manager = get_manager()

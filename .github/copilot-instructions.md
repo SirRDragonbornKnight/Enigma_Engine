@@ -160,7 +160,8 @@ The module manager automatically prevents:
 - Resource conflicts between modules
 
 ## Developer Workflows
-- **Setup**: `python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt`
+- **Setup (Linux/macOS)**: `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`
+- **Setup (Windows)**: `python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt`
 - **Train Model**: `python run.py --train`
 - **Train Specialized**: `python scripts/train_specialized_model.py --type router --data data/specialized/router_training.txt`
 - **Run Inference**: `python run.py --run` (CLI) or `python run.py --serve` (API)

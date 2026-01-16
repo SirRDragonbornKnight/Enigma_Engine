@@ -398,15 +398,8 @@ class GIFTab(QWidget):
     
     def _open_output_folder(self):
         """Open the output folder in file manager."""
-        import subprocess
-        import sys
-        
-        if sys.platform == 'darwin':
-            subprocess.run(['open', str(OUTPUT_DIR)])
-        elif sys.platform == 'win32':
-            subprocess.run(['explorer', str(OUTPUT_DIR)])
-        else:
-            subprocess.run(['xdg-open', str(OUTPUT_DIR)])
+        from .output_helpers import open_folder
+        open_folder(OUTPUT_DIR)
 
 
 def create_gif_tab(parent) -> QWidget:

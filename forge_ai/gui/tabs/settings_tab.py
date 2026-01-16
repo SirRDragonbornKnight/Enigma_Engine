@@ -1923,9 +1923,6 @@ def _refresh_cache_info(parent):
 
 def _open_cache_folder(parent):
     """Open the cache folder in file explorer."""
-    import subprocess
-    import os
-    
     cache_path = _get_cache_path()
     
     if not cache_path.exists():
@@ -1936,11 +1933,8 @@ def _open_cache_folder(parent):
         )
         return
     
-    # Open in file explorer
-    if os.name == 'nt':  # Windows
-        subprocess.run(['explorer', str(cache_path)])
-    elif os.name == 'posix':  # Linux/Mac
-        subprocess.run(['xdg-open' if os.uname().sysname == 'Linux' else 'open', str(cache_path)])
+    from .output_helpers import open_folder
+    open_folder(cache_path)
 
 
 def _clear_cache(parent):

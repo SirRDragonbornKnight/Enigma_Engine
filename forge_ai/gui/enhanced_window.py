@@ -412,29 +412,18 @@ class GenerationPreviewPopup(QDialog):
     
     def _open_file(self):
         """Open the generated file."""
-        import os
-        import subprocess
+        from .tabs.output_helpers import open_in_default_viewer
         path = Path(self.result_path)
         if path.exists():
-            if sys.platform == 'darwin':
-                subprocess.run(['open', str(path)])
-            elif sys.platform == 'win32':
-                os.startfile(str(path))
-            else:
-                subprocess.run(['xdg-open', str(path)])
+            open_in_default_viewer(path)
         self.close()
     
     def _open_folder(self):
         """Open the containing folder."""
-        import subprocess
+        from .tabs.output_helpers import open_file_in_explorer
         path = Path(self.result_path)
         if path.exists():
-            if sys.platform == 'darwin':
-                subprocess.run(['open', '-R', str(path)])
-            elif sys.platform == 'win32':
-                subprocess.run(['explorer', '/select,', str(path)])
-            else:
-                subprocess.run(['xdg-open', str(path.parent)])
+            open_file_in_explorer(path)
         self.close()
     
     def mousePressEvent(self, event):
@@ -2505,17 +2494,10 @@ Checkpoints: {checkpoints}
             QMessageBox.warning(self, "Not Found", "Model folder not found")
             return
         
-        import subprocess
-        import platform
+        from .tabs.output_helpers import open_folder
         
         try:
-            if platform.system() == "Windows":
-                import os
-                os.startfile(str(folder))
-            elif platform.system() == "Darwin":
-                subprocess.run(["open", str(folder)])
-            else:
-                subprocess.run(["xdg-open", str(folder)])
+            open_folder(folder)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Could not open folder: {e}")
     

@@ -71,7 +71,7 @@ opencv-python>=4.5.0
 # For local 3D model generation:
 # shap-e>=0.0.1  # Shap-E for 3D generation
 # point-e>=0.0.1  # Point-E alternative
-# trimesh>=3.20.0  # For 3D mesh manipulation
+trimesh>=3.20.0  # For 3D mesh manipulation and viewing
 
 # === GGUF MODELS (Optional) ===
 # For loading llama.cpp compatible models:
@@ -87,6 +87,11 @@ opencv-python>=4.5.0
 # Uncomment to enable web scraping:
 # requests>=2.28.0
 # beautifulsoup4>=4.11.0
+
+# === LINUX X11 WINDOW MANAGEMENT (Optional) ===
+# For internal window management on Linux (no external tools needed):
+# python-xlib>=0.33  # Uncomment for Linux X11 support
+# pynput>=1.7.0  # For keyboard/mouse control
 
 # === SAFETY & FILTERING ===
 beautifulsoup4>=4.11.0    # For content extraction

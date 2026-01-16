@@ -227,37 +227,46 @@ class OpenGL3DWidget(QOpenGLWidget):
         if not HAS_OPENGL or GL is None:
             return
         
-        # Dark gradient will be drawn in paintGL
-        GL.glClearColor(0.08, 0.08, 0.12, 1.0)
-        
-        GL.glEnable(GL.GL_DEPTH_TEST)
-        GL.glEnable(GL.GL_LIGHTING)
-        GL.glEnable(GL.GL_LIGHT0)
-        GL.glEnable(GL.GL_LIGHT1)  # Rim/fill light
-        GL.glEnable(GL.GL_COLOR_MATERIAL)
-        GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
-        
-        # Enable smooth shading
-        GL.glShadeModel(GL.GL_SMOOTH)
-        
-        # Key light (warm, from top-right-front)
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, [2.0, 3.0, 2.0, 0.0])
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, [1.0, 0.95, 0.9, 1.0])
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, [0.15, 0.15, 0.18, 1.0])
-        GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-        
-        # Fill/rim light (cool, from bottom-left-back)
-        GL.glLightfv(GL.GL_LIGHT1, GL.GL_POSITION, [-2.0, -1.0, -2.0, 0.0])
-        GL.glLightfv(GL.GL_LIGHT1, GL.GL_DIFFUSE, [0.3, 0.35, 0.5, 1.0])
-        GL.glLightfv(GL.GL_LIGHT1, GL.GL_AMBIENT, [0.0, 0.0, 0.0, 1.0])
-        
-        # Material properties
-        GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
-        GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 30.0)
-        
-        # Anti-aliasing
-        GL.glEnable(GL.GL_LINE_SMOOTH)
-        GL.glHint(GL.GL_LINE_SMOOTH_HINT, GL.GL_NICEST)
+        try:
+            # Dark gradient will be drawn in paintGL
+            GL.glClearColor(0.08, 0.08, 0.12, 1.0)
+            
+            GL.glEnable(GL.GL_DEPTH_TEST)
+            GL.glEnable(GL.GL_LIGHTING)
+            GL.glEnable(GL.GL_LIGHT0)
+            GL.glEnable(GL.GL_LIGHT1)  # Rim/fill light
+            GL.glEnable(GL.GL_COLOR_MATERIAL)
+            GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
+            
+            # Enable smooth shading
+            GL.glShadeModel(GL.GL_SMOOTH)
+            
+            # Key light (warm, from top-right-front)
+            GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, [2.0, 3.0, 2.0, 0.0])
+            GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, [1.0, 0.95, 0.9, 1.0])
+            GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, [0.15, 0.15, 0.18, 1.0])
+            GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+            
+            # Fill/rim light (cool, from bottom-left-back)
+            GL.glLightfv(GL.GL_LIGHT1, GL.GL_POSITION, [-2.0, -1.0, -2.0, 0.0])
+            GL.glLightfv(GL.GL_LIGHT1, GL.GL_DIFFUSE, [0.3, 0.35, 0.5, 1.0])
+            GL.glLightfv(GL.GL_LIGHT1, GL.GL_AMBIENT, [0.0, 0.0, 0.0, 1.0])
+            
+            # Material properties
+            GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+            GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 30.0)
+            
+            # Anti-aliasing (may not be supported on all systems)
+            try:
+                GL.glEnable(GL.GL_LINE_SMOOTH)
+                GL.glHint(GL.GL_LINE_SMOOTH_HINT, GL.GL_NICEST)
+            except Exception:
+                pass  # Line smoothing not supported
+                
+            self._gl_initialized = True
+        except Exception as e:
+            print(f"OpenGL init error (may still work): {e}")
+            self._gl_initialized = False
         
     def resizeGL(self, w, h):
         """Handle resize."""
@@ -275,53 +284,59 @@ class OpenGL3DWidget(QOpenGLWidget):
         if not HAS_OPENGL or GL is None:
             return
         
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-        
-        # Draw gradient background (disable lighting for this)
-        self._draw_gradient_background()
-        
-        # Draw grid floor
-        self._draw_grid()
-        
-        GL.glLoadIdentity()
-        
-        # Camera
-        GL.glTranslatef(self.pan_x, self.pan_y, -self.zoom)
-        GL.glRotatef(self.rotation_x, 1, 0, 0)
-        GL.glRotatef(self.rotation_y, 0, 1, 0)
-        
-        if self.is_loading:
-            # Draw loading indicator
-            GL.glDisable(GL.GL_LIGHTING)
-            GL.glColor3f(0.5, 0.5, 0.6)
-            # Simple rotating indicator would go here
-            GL.glEnable(GL.GL_LIGHTING)
-            return
-        
-        if self.vertices is not None and self.faces is not None:
-            GL.glEnable(GL.GL_LIGHTING)
+        try:
+            GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
             
-            # Use vertex colors if available, otherwise nice default
-            if self.colors is not None:
-                GL.glEnableClientState(GL.GL_COLOR_ARRAY)
-                GL.glColorPointer(3, GL.GL_FLOAT, 0, self.colors)
-            else:
-                GL.glColor3f(0.75, 0.75, 0.82)  # Soft gray-blue
+            # Draw gradient background (disable lighting for this)
+            self._draw_gradient_background()
             
-            GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
-            GL.glVertexPointer(3, GL.GL_FLOAT, 0, self.vertices)
+            # Draw grid floor
+            self._draw_grid()
             
-            if self.normals is not None:
-                GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
-                GL.glNormalPointer(GL.GL_FLOAT, 0, self.normals)
+            GL.glLoadIdentity()
             
-            GL.glDrawElements(GL.GL_TRIANGLES, len(self.faces) * 3, GL.GL_UNSIGNED_INT, self.faces)
+            # Camera
+            GL.glTranslatef(self.pan_x, self.pan_y, -self.zoom)
+            GL.glRotatef(self.rotation_x, 1, 0, 0)
+            GL.glRotatef(self.rotation_y, 0, 1, 0)
             
-            GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
-            if self.normals is not None:
-                GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
-            if self.colors is not None:
-                GL.glDisableClientState(GL.GL_COLOR_ARRAY)
+            if self.is_loading:
+                # Draw loading indicator
+                GL.glDisable(GL.GL_LIGHTING)
+                GL.glColor3f(0.5, 0.5, 0.6)
+                # Simple rotating indicator would go here
+                GL.glEnable(GL.GL_LIGHTING)
+                return
+            
+            if self.vertices is not None and self.faces is not None:
+                GL.glEnable(GL.GL_LIGHTING)
+                
+                # Use vertex colors if available, otherwise nice default
+                if self.colors is not None:
+                    GL.glEnableClientState(GL.GL_COLOR_ARRAY)
+                    GL.glColorPointer(3, GL.GL_FLOAT, 0, self.colors)
+                else:
+                    GL.glColor3f(0.75, 0.75, 0.82)  # Soft gray-blue
+                
+                GL.glEnableClientState(GL.GL_VERTEX_ARRAY)
+                GL.glVertexPointer(3, GL.GL_FLOAT, 0, self.vertices)
+                
+                if self.normals is not None:
+                    GL.glEnableClientState(GL.GL_NORMAL_ARRAY)
+                    GL.glNormalPointer(GL.GL_FLOAT, 0, self.normals)
+                
+                GL.glDrawElements(GL.GL_TRIANGLES, len(self.faces) * 3, GL.GL_UNSIGNED_INT, self.faces)
+                
+                GL.glDisableClientState(GL.GL_VERTEX_ARRAY)
+                if self.normals is not None:
+                    GL.glDisableClientState(GL.GL_NORMAL_ARRAY)
+                if self.colors is not None:
+                    GL.glDisableClientState(GL.GL_COLOR_ARRAY)
+        except Exception as e:
+            # OpenGL error - may happen on some systems
+            if not getattr(self, '_paint_error_logged', False):
+                print(f"OpenGL paint error: {e}")
+                self._paint_error_logged = True
     
     def _draw_gradient_background(self):
         """Draw Sketchfab-style gradient background."""
@@ -453,7 +468,7 @@ class AvatarOverlayWindow(QWidget):
     
     Features:
     - Drag anywhere to move
-    - Right-click to hide
+    - Right-click for menu (expressions, size, close)
     - Scroll wheel to resize
     - Always on top of other windows
     """
@@ -464,12 +479,17 @@ class AvatarOverlayWindow(QWidget):
         super().__init__(None)
         
         # Transparent, always-on-top, no taskbar
+        # Note: Qt_Tool makes it not appear in taskbar but can affect input
+        # We need WindowStaysOnTopHint + FramelessWindowHint for proper behavior
         self.setWindowFlags(
             Qt_FramelessWindowHint |
-            Qt_WindowStaysOnTopHint |
-            Qt_Tool
+            Qt_WindowStaysOnTopHint
         )
         self.setAttribute(Qt_WA_TranslucentBackground, True)
+        
+        # IMPORTANT: Don't set WA_TransparentForMouseEvents - we want clicks!
+        # Ensure the window can receive focus and input
+        self.setFocusPolicy(Qt.StrongFocus if hasattr(Qt, 'StrongFocus') else 0x0b)
         
         self._size = 300
         self.setFixedSize(self._size, self._size)
@@ -527,18 +547,19 @@ class AvatarOverlayWindow(QWidget):
         if a0.button() == Qt_LeftButton:
             self._drag_pos = a0.globalPos() - self.pos()
             self.setCursor(QCursor(Qt_ClosedHandCursor))
-            a0.accept()
+        a0.accept()  # Always accept to ensure we get events
             
     def mouseMoveEvent(self, a0):  # type: ignore
         """Drag to move window."""
         if self._drag_pos is not None and a0.buttons() == Qt_LeftButton:
             self.move(a0.globalPos() - self._drag_pos)
-            a0.accept()
+        a0.accept()
             
     def mouseReleaseEvent(self, a0):  # type: ignore
         """End drag."""
         self._drag_pos = None
         self.setCursor(QCursor(Qt_OpenHandCursor))
+        a0.accept()
         
     def keyPressEvent(self, a0):  # type: ignore
         """ESC to close."""
@@ -782,13 +803,11 @@ def create_avatar_subtab(parent):
     parent.avatar_enabled_checkbox = QCheckBox("Enable Avatar")
     parent.avatar_enabled_checkbox.setChecked(avatar.is_enabled)
     parent.avatar_enabled_checkbox.toggled.connect(lambda c: _toggle_avatar(parent, c))
-    parent.avatar_enabled_checkbox.setEnabled(avatar_module_enabled)
     top_row.addWidget(parent.avatar_enabled_checkbox)
     
     parent.show_overlay_btn = QPushButton("Show on Desktop")
     parent.show_overlay_btn.setCheckable(True)
     parent.show_overlay_btn.clicked.connect(lambda: _toggle_overlay(parent))
-    parent.show_overlay_btn.setEnabled(avatar_module_enabled)
     top_row.addWidget(parent.show_overlay_btn)
     
     top_row.addStretch()
@@ -797,8 +816,8 @@ def create_avatar_subtab(parent):
     # 3D rendering toggle (only if libraries available)
     if HAS_OPENGL and HAS_TRIMESH:
         render_row = QHBoxLayout()
-        parent.use_3d_render_checkbox = QCheckBox("Enable 3D Rendering (uses more resources)")
-        parent.use_3d_render_checkbox.setChecked(False)
+        parent.use_3d_render_checkbox = QCheckBox("Enable 3D Rendering")
+        # Don't set checked yet - widgets don't exist
         parent.use_3d_render_checkbox.toggled.connect(lambda c: _toggle_3d_render(parent, c))
         render_row.addWidget(parent.use_3d_render_checkbox)
         render_row.addStretch()
@@ -812,7 +831,7 @@ def create_avatar_subtab(parent):
     
     if HAS_OPENGL and HAS_TRIMESH:
         parent.avatar_preview_3d = OpenGL3DWidget()
-        parent.avatar_preview_3d.setVisible(False)
+        parent.avatar_preview_3d.setVisible(False)  # Start hidden, will show when checkbox is set
         left_panel.addWidget(parent.avatar_preview_3d, stretch=1)
     else:
         parent.avatar_preview_3d = None
@@ -866,7 +885,6 @@ def create_avatar_subtab(parent):
     parent.avatar_combo = QComboBox()
     parent.avatar_combo.setMinimumWidth(200)
     parent.avatar_combo.currentIndexChanged.connect(lambda: _on_avatar_selected(parent))
-    parent.avatar_combo.setEnabled(avatar_module_enabled)
     select_row.addWidget(parent.avatar_combo, stretch=1)
     
     btn_refresh = QPushButton("Refresh")
@@ -880,13 +898,11 @@ def create_avatar_subtab(parent):
     btn_row2 = QHBoxLayout()
     parent.load_btn = QPushButton("Load Avatar")
     parent.load_btn.clicked.connect(lambda: _load_avatar_file(parent))
-    parent.load_btn.setEnabled(avatar_module_enabled)
     btn_row2.addWidget(parent.load_btn)
     
     parent.apply_btn = QPushButton("Apply Avatar")
     parent.apply_btn.clicked.connect(lambda: _apply_avatar(parent))
     parent.apply_btn.setStyleSheet("background: #45475a;")
-    parent.apply_btn.setEnabled(avatar_module_enabled)
     btn_row2.addWidget(parent.apply_btn)
     left_panel.addLayout(btn_row2)
     
@@ -899,27 +915,6 @@ def create_avatar_subtab(parent):
     
     # Right side - Customization Controls
     right_panel = QVBoxLayout()
-    
-    # === Expression Preview (read-only) ===
-    expression_group = QGroupBox("Expression Preview")
-    expression_layout = QVBoxLayout()
-    
-    parent.expression_label = QLabel("Current: neutral")
-    parent.expression_label.setStyleSheet("color: #cdd6f4; font-size: 11px;")
-    expression_layout.addWidget(parent.expression_label)
-    
-    expression_info = QLabel("Expressions change automatically based on AI mood and conversation.")
-    expression_info.setStyleSheet("color: #6c7086; font-size: 10px;")
-    expression_info.setWordWrap(True)
-    expression_layout.addWidget(expression_info)
-    
-    parent.test_expression_btn = QPushButton("Test Random Expression")
-    parent.test_expression_btn.clicked.connect(lambda: _test_random_expression(parent))
-    parent.test_expression_btn.setEnabled(avatar_module_enabled)
-    expression_layout.addWidget(parent.test_expression_btn)
-    
-    expression_group.setLayout(expression_layout)
-    right_panel.addWidget(expression_group)
     
     # === Color Customization ===
     color_group = QGroupBox("Colors")
@@ -936,7 +931,6 @@ def create_avatar_subtab(parent):
     parent.color_preset_combo.currentTextChanged.connect(
         lambda preset: _apply_color_preset(parent, preset.lower())
     )
-    parent.color_preset_combo.setEnabled(avatar_module_enabled)
     preset_row.addWidget(parent.color_preset_combo, stretch=1)
     color_layout.addLayout(preset_row)
     
@@ -946,19 +940,16 @@ def create_avatar_subtab(parent):
     parent.primary_color_btn = QPushButton("Primary")
     parent.primary_color_btn.setStyleSheet("background: #6366f1; color: white;")
     parent.primary_color_btn.clicked.connect(lambda: _pick_color(parent, "primary"))
-    parent.primary_color_btn.setEnabled(avatar_module_enabled)
     color_btn_row.addWidget(parent.primary_color_btn)
     
     parent.secondary_color_btn = QPushButton("Secondary")
     parent.secondary_color_btn.setStyleSheet("background: #8b5cf6; color: white;")
     parent.secondary_color_btn.clicked.connect(lambda: _pick_color(parent, "secondary"))
-    parent.secondary_color_btn.setEnabled(avatar_module_enabled)
     color_btn_row.addWidget(parent.secondary_color_btn)
     
     parent.accent_color_btn = QPushButton("Accent")
     parent.accent_color_btn.setStyleSheet("background: #10b981; color: white;")
     parent.accent_color_btn.clicked.connect(lambda: _pick_color(parent, "accent"))
-    parent.accent_color_btn.setEnabled(avatar_module_enabled)
     color_btn_row.addWidget(parent.accent_color_btn)
     
     color_layout.addLayout(color_btn_row)
@@ -973,13 +964,11 @@ def create_avatar_subtab(parent):
     parent.auto_design_btn = QPushButton("AI Auto-Design")
     parent.auto_design_btn.setToolTip("Let AI design avatar based on its personality")
     parent.auto_design_btn.clicked.connect(lambda: _auto_design_avatar(parent))
-    parent.auto_design_btn.setEnabled(avatar_module_enabled)
     actions_layout.addWidget(parent.auto_design_btn)
     
     # Export sprite button
     parent.export_btn = QPushButton("Export Current Sprite")
     parent.export_btn.clicked.connect(lambda: _export_sprite(parent))
-    parent.export_btn.setEnabled(avatar_module_enabled)
     actions_layout.addWidget(parent.export_btn)
     
     actions_group.setLayout(actions_layout)
@@ -1002,7 +991,7 @@ def create_avatar_subtab(parent):
     parent._overlay = None
     parent._current_path = None
     parent._is_3d_model = False
-    parent._using_3d_render = False
+    parent._using_3d_render = HAS_OPENGL and HAS_TRIMESH  # True if 3D available
     parent.avatar_expressions = {}
     parent.current_expression = "neutral"
     parent._current_colors = {
@@ -1017,6 +1006,11 @@ def create_avatar_subtab(parent):
     AVATAR_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     AVATAR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
     AVATAR_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize 3D view state - NOW set the checkbox (widgets exist)
+    if HAS_OPENGL and HAS_TRIMESH and parent.use_3d_render_checkbox:
+        # This triggers _toggle_3d_render which shows the 3D view
+        parent.use_3d_render_checkbox.setChecked(True)
     
     # Load list
     _refresh_list(parent)
@@ -1066,15 +1060,14 @@ def _check_for_new_files(parent):
 
 
 def _is_avatar_module_enabled() -> bool:
-    """Check if avatar module is enabled in ModuleManager."""
-    try:
-        from ....modules import get_manager
-        manager = get_manager()
-        if manager:
-            return manager.is_loaded('avatar')
-    except Exception:
-        pass
-    return True  # Default to enabled if can't check
+    """Check if avatar module is enabled in ModuleManager.
+    
+    NOTE: We default to True because the avatar tab provides its own
+    functionality for previewing/customizing avatars. The module check
+    is only relevant for integration with the main chat system.
+    """
+    # Always return True - avatar tab features work standalone
+    return True
 
 
 def _show_default_preview(parent):
@@ -1496,12 +1489,23 @@ def _preview_image(parent, path: Path):
 
 
 def _preview_3d_model(parent, path: Path):
-    """Preview a 3D model - render a thumbnail."""
-    # Enable 3D rendering option
-    if parent.use_3d_render_checkbox:
-        parent.use_3d_render_checkbox.setEnabled(True)
+    """Preview a 3D model - auto-enable 3D rendering and load into viewer."""
+    # Auto-enable 3D rendering when loading a 3D model
+    if parent.use_3d_render_checkbox and HAS_OPENGL and HAS_TRIMESH:
+        if not parent.use_3d_render_checkbox.isChecked():
+            parent.use_3d_render_checkbox.setChecked(True)  # This triggers _toggle_3d_render
+        
+        # Load directly into 3D viewer
+        if parent.avatar_preview_3d:
+            try:
+                parent.avatar_preview_3d.load_model(str(path))
+                parent.avatar_status.setText(f"Loaded 3D model: {path.name}")
+                parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                return
+            except Exception as e:
+                print(f"Error loading 3D model into viewer: {e}")
     
-    # Create a preview thumbnail using trimesh
+    # Fallback - create a preview thumbnail using trimesh
     if HAS_TRIMESH:
         try:
             scene = trimesh.load(str(path))
