@@ -498,7 +498,7 @@ class BlenderBridge:
             "position": [x, y, z],
             "relative": relative
         })
-        return response and response.get("status") == "ok"
+        return bool(response and response.get("status") == "ok")
     
     def reset_pose(self) -> bool:
         """Reset all bones to rest pose."""
@@ -546,7 +546,7 @@ class BlenderBridge:
             "name": name,
             "value": max(0.0, min(1.0, value))
         })
-        return response and response.get("status") == "ok"
+        return bool(response and response.get("status") == "ok")
     
     def set_expression(self, expression: str, intensity: float = 1.0) -> bool:
         """
@@ -634,12 +634,12 @@ class BlenderBridge:
             "name": name,
             "loop": loop
         })
-        return response and response.get("status") == "ok"
+        return bool(response and response.get("status") == "ok")
     
     def stop_animation(self) -> bool:
         """Stop current animation."""
         response = self._send_command(BlenderCommand.STOP_ANIMATION, {})
-        return response and response.get("status") == "ok"
+        return bool(response and response.get("status") == "ok")
     
     # === Callbacks ===
     
@@ -1006,12 +1006,12 @@ def save_blender_addon(output_dir: Optional[str] = None) -> str:
     Returns the path to the saved addon.
     """
     if output_dir is None:
-        output_dir = Path(CONFIG.get("data_dir", "data")) / "blender"
+        out_path = Path(CONFIG.get("data_dir", "data")) / "blender"
     else:
-        output_dir = Path(output_dir)
+        out_path = Path(output_dir)
     
-    output_dir.mkdir(parents=True, exist_ok=True)
-    addon_path = output_dir / "forgeai_blender_addon.py"
+    out_path.mkdir(parents=True, exist_ok=True)
+    addon_path = out_path / "forgeai_blender_addon.py"
     
     with open(addon_path, 'w') as f:
         f.write(BLENDER_ADDON_CODE)

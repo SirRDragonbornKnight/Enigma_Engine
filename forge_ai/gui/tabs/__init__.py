@@ -33,6 +33,18 @@ from .gif_tab import GIFTab, create_gif_tab
 from .settings_tab import create_settings_tab
 from .model_router_tab import ModelRouterTab
 
+# Shared UI components for use across all tabs
+from .shared_components import (
+    STYLE_PRESETS,
+    COLOR_PRESETS,
+    PresetSelector,
+    ColorCustomizer,
+    ModuleStateChecker,
+    SettingsPersistence,
+    create_settings_group,
+    create_action_button,
+)
+
 __all__ = [
     'create_chat_tab',
     'create_training_tab', 
@@ -79,4 +91,13 @@ __all__ = [
     'create_gif_tab',
     'create_settings_tab',
     'ModelRouterTab',
+    # Shared components
+    'STYLE_PRESETS',
+    'COLOR_PRESETS',
+    'PresetSelector',
+    'ColorCustomizer',
+    'ModuleStateChecker',
+    'SettingsPersistence',
+    'create_settings_group',
+    'create_action_button',
 ]

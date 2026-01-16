@@ -754,6 +754,21 @@ class ImageTab(QWidget):
         prompt_group.setLayout(prompt_layout)
         layout.addWidget(prompt_group)
         
+        # Style Presets (from shared components)
+        try:
+            from .shared_components import PresetSelector, STYLE_PRESETS
+            
+            preset_row = QHBoxLayout()
+            self.style_preset = PresetSelector("image", self)
+            self.style_preset.preset_changed.connect(self._apply_style_preset)
+            preset_row.addWidget(self.style_preset)
+            preset_row.addStretch()
+            layout.addLayout(preset_row)
+            
+            self._style_suffix = ""  # Will be appended to prompt
+        except ImportError:
+            self._style_suffix = ""
+        
         # Options
         options_group = QGroupBox("Options")
         options_layout = QHBoxLayout()
@@ -904,12 +919,52 @@ class ImageTab(QWidget):
         self.ref_image_path.clear()
         self.status_label.setText("Reference image cleared")
     
+    def _apply_style_preset(self, name: str, preset: dict):
+        """Apply a style preset."""
+        if name.startswith("__save__"):
+            # User wants to save current settings as preset
+            save_name = name.replace("__save__", "")
+            current = {
+                "width": self.width_spin.value(),
+                "height": self.height_spin.value(),
+                "steps": self.steps_spin.value(),
+                "guidance": self.guidance_spin.value(),
+                "suffix": self._style_suffix
+            }
+            if hasattr(self, 'style_preset'):
+                self.style_preset.add_custom_preset(save_name, current)
+            self.status_label.setText(f"Saved preset: {save_name}")
+            return
+            
+        # Apply preset settings
+        if "suffix" in preset:
+            self._style_suffix = preset["suffix"]
+        else:
+            self._style_suffix = ""
+        
+        # Apply dimensions based on quality
+        quality = preset.get("quality", "standard")
+        if quality == "fast":
+            self.width_spin.setValue(384)
+            self.height_spin.setValue(384)
+            self.steps_spin.setValue(15)
+        elif quality == "high":
+            self.width_spin.setValue(768)
+            self.height_spin.setValue(768)
+            self.steps_spin.setValue(50)
+        
+        self.status_label.setText(f"Applied style: {name}")
+    
     def _generate_image(self):
         """Generate an image using available providers."""
         prompt = self.prompt_input.toPlainText().strip()
         if not prompt:
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
             return
+        
+        # Apply style suffix if set
+        if hasattr(self, '_style_suffix') and self._style_suffix:
+            prompt = prompt + self._style_suffix
         
         # Prefer LOCAL providers - only fall back to cloud if local unavailable
         # Local is private, free, and works offline

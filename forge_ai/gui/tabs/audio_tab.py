@@ -477,6 +477,19 @@ class AudioTab(QWidget):
         settings_layout.addStretch()
         layout.addLayout(settings_layout)
         
+        # Voice Preset selector (from shared components)
+        try:
+            from .shared_components import PresetSelector, STYLE_PRESETS
+            
+            preset_row = QHBoxLayout()
+            self.voice_preset = PresetSelector("audio", self)
+            self.voice_preset.preset_changed.connect(self._apply_voice_preset)
+            preset_row.addWidget(self.voice_preset)
+            preset_row.addStretch()
+            layout.addLayout(preset_row)
+        except ImportError:
+            pass
+        
         # Text input - compact
         text_layout = QHBoxLayout()
         text_layout.addWidget(QLabel("Text:"))
@@ -584,6 +597,33 @@ class AudioTab(QWidget):
         provider = get_provider('local')
         if provider and provider.is_loaded:
             provider.set_volume(value / 100.0)
+    
+    def _apply_voice_preset(self, name: str, preset: dict):
+        """Apply a voice preset."""
+        if name.startswith("__save__"):
+            # User wants to save current settings as preset
+            save_name = name.replace("__save__", "")
+            current = {
+                "rate": self.rate_slider.value(),
+                "volume": self.volume_slider.value() / 100.0,
+            }
+            if hasattr(self, 'voice_preset'):
+                self.voice_preset.add_custom_preset(save_name, current)
+            self.status_label.setText(f"Saved preset: {save_name}")
+            return
+        
+        # Apply preset settings
+        if "rate" in preset:
+            rate = int(preset["rate"])
+            self.rate_slider.setValue(rate)
+            self.rate_label.setText(str(rate))
+        
+        if "volume" in preset:
+            vol = int(preset["volume"] * 100)
+            self.volume_slider.setValue(vol)
+            self.volume_label.setText(f"{vol}%")
+        
+        self.status_label.setText(f"Applied voice: {name}")
     
     def _load_provider(self):
         provider_name = self._get_provider_name()
