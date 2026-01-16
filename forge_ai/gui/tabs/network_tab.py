@@ -296,7 +296,7 @@ class NetworkTab(QWidget):
         
         try:
             # Try to start the API server
-            # This would normally use enigma.comms.api_server
+            # This would normally use forge_ai.comms.api_server
             self._log(f"Starting API server on port {port}...")
             
             # For now, just update status (actual server would be started here)

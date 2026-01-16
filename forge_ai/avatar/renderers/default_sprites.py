@@ -206,6 +206,159 @@ SPRITE_TEMPLATES = {
     <!-- Mouth - speaking position 2 (more closed) -->
     <ellipse cx="100" cy="117" rx="12" ry="6" fill="{accent_color}"/>
 </svg>""",
+
+    "winking": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle -->
+    <circle cx="100" cy="100" r="80" fill="{primary_color}" opacity="0.2"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Left eye - winking -->
+    <path d="M 70 90 Q 80 85 90 90" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Right eye - open -->
+    <ellipse cx="120" cy="90" rx="8" ry="12" fill="{accent_color}"/>
+    <circle cx="120" cy="92" r="4" fill="#1e1e2e"/>
+    
+    <!-- Mouth - playful smile -->
+    <path d="M 75 115 Q 100 130 125 115" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Blush on winking side -->
+    <circle cx="55" cy="105" r="8" fill="{secondary_color}" opacity="0.5"/>
+</svg>""",
+
+    "sleeping": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle -->
+    <circle cx="100" cy="100" r="80" fill="{primary_color}" opacity="0.2"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Eyes - closed sleeping -->
+    <path d="M 65 92 Q 80 88 95 92" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M 105 92 Q 120 88 135 92" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Mouth - relaxed -->
+    <ellipse cx="100" cy="120" rx="8" ry="4" fill="{accent_color}" opacity="0.5"/>
+    
+    <!-- Z's for sleeping -->
+    <text x="140" y="55" font-size="16" fill="{secondary_color}" opacity="0.8">Z</text>
+    <text x="150" y="45" font-size="14" fill="{secondary_color}" opacity="0.6">z</text>
+    <text x="158" y="38" font-size="12" fill="{secondary_color}" opacity="0.4">z</text>
+</svg>""",
+
+    "angry": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle - reddish tint -->
+    <circle cx="100" cy="100" r="80" fill="#ef4444" opacity="0.15"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Eyes - narrowed angry -->
+    <ellipse cx="80" cy="92" rx="10" ry="6" fill="{accent_color}"/>
+    <ellipse cx="120" cy="92" rx="10" ry="6" fill="{accent_color}"/>
+    
+    <!-- Pupils -->
+    <circle cx="80" cy="92" r="3" fill="#1e1e2e"/>
+    <circle cx="120" cy="92" r="3" fill="#1e1e2e"/>
+    
+    <!-- Angry eyebrows -->
+    <path d="M 65 78 L 90 85" stroke="{accent_color}" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 135 78 L 110 85" stroke="{accent_color}" stroke-width="4" stroke-linecap="round"/>
+    
+    <!-- Mouth - angry frown -->
+    <path d="M 75 125 Q 100 115 125 125" stroke="{accent_color}" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>""",
+
+    "love": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle with hearts -->
+    <circle cx="100" cy="100" r="80" fill="#ec4899" opacity="0.15"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Heart eyes -->
+    <path d="M 68 90 C 68 82 80 82 80 90 C 80 82 92 82 92 90 C 92 102 80 110 80 110 C 80 110 68 102 68 90" fill="#ef4444"/>
+    <path d="M 108 90 C 108 82 120 82 120 90 C 120 82 132 82 132 90 C 132 102 120 110 120 110 C 120 110 108 102 108 90" fill="#ef4444"/>
+    
+    <!-- Mouth - happy smile -->
+    <path d="M 75 115 Q 100 130 125 115" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Floating hearts -->
+    <path d="M 145 55 C 145 50 150 50 150 55 C 150 50 155 50 155 55 C 155 62 150 67 150 67 C 150 67 145 62 145 55" fill="#ec4899" opacity="0.7"/>
+    <path d="M 38 60 C 38 56 42 56 42 60 C 42 56 46 56 46 60 C 46 65 42 69 42 69 C 42 69 38 65 38 60" fill="#ec4899" opacity="0.5"/>
+</svg>""",
+
+    "worried": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle -->
+    <circle cx="100" cy="100" r="80" fill="{primary_color}" opacity="0.2"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Eyes - worried wide -->
+    <ellipse cx="80" cy="90" rx="9" ry="13" fill="{accent_color}"/>
+    <ellipse cx="120" cy="90" rx="9" ry="13" fill="{accent_color}"/>
+    
+    <!-- Pupils - looking to the side nervously -->
+    <circle cx="82" cy="91" r="4" fill="#1e1e2e"/>
+    <circle cx="122" cy="91" r="4" fill="#1e1e2e"/>
+    
+    <!-- Worried eyebrows -->
+    <path d="M 65 75 Q 80 80 95 78" stroke="{accent_color}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M 105 78 Q 120 80 135 75" stroke="{accent_color}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    
+    <!-- Mouth - worried wavy -->
+    <path d="M 80 120 Q 90 115 100 120 Q 110 125 120 120" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Sweat drop -->
+    <ellipse cx="145" cy="80" rx="4" ry="6" fill="#60a5fa" opacity="0.7"/>
+</svg>""",
+
+    "neutral": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle -->
+    <circle cx="100" cy="100" r="80" fill="{primary_color}" opacity="0.2"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Eyes -->
+    <ellipse cx="80" cy="90" rx="8" ry="12" fill="{accent_color}"/>
+    <ellipse cx="120" cy="90" rx="8" ry="12" fill="{accent_color}"/>
+    
+    <!-- Pupils -->
+    <circle cx="80" cy="92" r="4" fill="#1e1e2e"/>
+    <circle cx="120" cy="92" r="4" fill="#1e1e2e"/>
+    
+    <!-- Mouth - straight neutral line -->
+    <line x1="85" y1="118" x2="115" y2="118" stroke="{accent_color}" stroke-width="3" stroke-linecap="round"/>
+</svg>""",
+
+    "friendly": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background circle -->
+    <circle cx="100" cy="100" r="80" fill="{primary_color}" opacity="0.2"/>
+    
+    <!-- Main body/head -->
+    <circle cx="100" cy="100" r="60" fill="{primary_color}"/>
+    
+    <!-- Eyes - warm and friendly -->
+    <ellipse cx="80" cy="90" rx="9" ry="11" fill="{accent_color}"/>
+    <ellipse cx="120" cy="90" rx="9" ry="11" fill="{accent_color}"/>
+    
+    <!-- Pupils with highlights -->
+    <circle cx="80" cy="91" r="5" fill="#1e1e2e"/>
+    <circle cx="120" cy="91" r="5" fill="#1e1e2e"/>
+    <circle cx="77" cy="88" r="2" fill="white"/>
+    <circle cx="117" cy="88" r="2" fill="white"/>
+    
+    <!-- Mouth - warm smile -->
+    <path d="M 75 112 Q 100 125 125 112" stroke="{accent_color}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Subtle blush -->
+    <circle cx="60" cy="105" r="7" fill="{secondary_color}" opacity="0.3"/>
+    <circle cx="140" cy="105" r="7" fill="{secondary_color}" opacity="0.3"/>
+</svg>""",
 }
 
 

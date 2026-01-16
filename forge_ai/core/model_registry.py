@@ -380,7 +380,13 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             report("Downloading/loading model files...", 20)
             hf_model.load()
             report("HuggingFace model loaded", 35)
-            config = {"source": "huggingface", "model_id": hf_model_id}
+            # Return full registry info as config (includes use_custom_tokenizer setting)
+            config = {
+                "source": "huggingface",
+                "model_id": hf_model_id,
+                "use_custom_tokenizer": reg_info.get("use_custom_tokenizer", False),
+                **{k: v for k, v in reg_info.items() if k not in ["path", "created"]}
+            }
             # Return the HuggingFaceModel wrapper (has .generate(), .chat(), etc.)
             return hf_model, config
 

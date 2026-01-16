@@ -187,7 +187,7 @@ ModelExporter.import_model("/media/usb/my_model_package.zip")
 
 ## Files Created
 
-- `enigma/comms/network.py` - EnigmaNode for multi-device communication
-- `enigma/comms/discovery.py` - Auto-discovery on network
-- `enigma/comms/memory_sync.py` - Memory synchronization
+- `forge_ai/comms/network.py` - EnigmaNode for multi-device communication
+- `forge_ai/comms/discovery.py` - Auto-discovery on network
+- `forge_ai/comms/memory_sync.py` - Memory synchronization
 - `examples/multi_device_example.py` - Example usage

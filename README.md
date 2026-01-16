@@ -103,12 +103,12 @@ Choose based on your hardware:
 ## Project Structure
 
 ```
-enigma_engine/
+forge_ai/
 ├── run.py              # Main entry point
 ├── data/               # Training data goes here
 │   └── training.txt    # Consolidated training data
 ├── models/             # Your trained AI models
-├── enigma/
+├── forge_ai/
 │   ├── core/          # AI model & training
 │   ├── gui/           # User interface
 │   ├── voice/         # Speech features

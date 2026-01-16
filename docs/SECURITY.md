@@ -61,7 +61,7 @@ When working with file paths, always:
 3. **Check file size** - Limit file sizes to prevent memory exhaustion
 4. **Sanitize filenames** - Remove dangerous characters from user-provided names
 
-Example from `enigma/tools/file_tools.py`:
+Example from `forge_ai/tools/file_tools.py`:
 ```python
 # Validate empty path
 if not path:
@@ -92,7 +92,7 @@ When fetching external content:
 3. **Check content types** - Verify response content type before processing
 4. **Limit response size** - Cap downloaded content to prevent memory issues
 
-Example from `enigma/tools/web_tools.py`:
+Example from `forge_ai/tools/web_tools.py`:
 ```python
 # Validate URL format
 if not url.startswith(('http://', 'https://')):

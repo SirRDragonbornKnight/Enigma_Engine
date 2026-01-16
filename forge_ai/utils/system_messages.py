@@ -50,9 +50,13 @@ def ai_msg(text: str) -> str:
     return f"{MessagePrefix.AI} {text}"
 
 
-def enigma_msg(text: str) -> str:
-    """Format an ForgeAI message (preferred name)."""
+def forge_msg(text: str) -> str:
+    """Format a ForgeAI message (preferred name)."""
     return f"{MessagePrefix.AI} {text}"
+
+
+# Legacy alias for backwards compatibility
+enigma_msg = forge_msg
 
 
 def user_msg(text: str) -> str:

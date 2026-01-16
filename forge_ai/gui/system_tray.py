@@ -235,7 +235,7 @@ Response:"""
         """Detect quick actions from keywords."""
         
         # Open GUI
-        if any(kw in command for kw in ["open gui", "show gui", "open window", "show window", "open enigma"]):
+        if any(kw in command for kw in ["open gui", "show gui", "open window", "show window", "open forge", "open enigma"]):
             return {"action": "open_gui", "params": {}, "response": "Opening the main window..."}
         
         # Screenshot
@@ -1157,9 +1157,9 @@ class ForgeSystemTray(QObject):
         """Load icon from file or create a simple one."""
         # Try to load the custom icon
         icon_paths = [
-            Path(__file__).parent / "icons" / "enigma.ico",
-            Path(__file__).parent / "icons" / "enigma_32.png",
-            Path(CONFIG.get("data_dir", "data")) / "icons" / "enigma.ico",
+            Path(__file__).parent / "icons" / "forge.ico",
+            Path(__file__).parent / "icons" / "forge_32.png",
+            Path(CONFIG.get("data_dir", "data")) / "icons" / "forge.ico",
         ]
         
         for icon_path in icon_paths:

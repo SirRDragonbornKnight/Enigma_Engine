@@ -296,7 +296,7 @@ class LogsTab(QWidget):
         # Try to find system log
         system_log = LOGS_DIR / "system.log"
         if not system_log.exists():
-            system_log = PROJECT_LOGS / "enigma.log"
+            system_log = PROJECT_LOGS / "forge.log"
         if system_log.exists():
             self.system_viewer.set_log_path(system_log)
         
@@ -332,7 +332,7 @@ class LogsTab(QWidget):
         
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Export Log", 
-            str(Path.home() / "enigma_logs_export.txt"),
+            str(Path.home() / "forge_logs_export.txt"),
             "Text Files (*.txt);;All Files (*)"
         )
         

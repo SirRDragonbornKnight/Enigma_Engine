@@ -14,6 +14,7 @@ Contains the core components of the ForgeAI AI framework:
 from .model import (
     Forge,
     TinyForge,  # Backwards compatibility alias
+    Enigma,     # Legacy name for backwards compatibility
     ForgeConfig,
     create_model,
     MODEL_PRESETS,

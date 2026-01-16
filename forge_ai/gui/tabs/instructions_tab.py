@@ -251,8 +251,8 @@ def _refresh_file_tree(parent):
         # Fallback: go up 4 levels from this file
         return start_path.parent.parent.parent.parent
     
-    enigma_root = find_project_root(Path(__file__).resolve())
-    docs_dir = enigma_root / "docs"
+    forge_root = find_project_root(Path(__file__).resolve())
+    docs_dir = forge_root / "docs"
     
     # Add data folder section
     if data_dir.exists():
@@ -269,10 +269,10 @@ def _refresh_file_tree(parent):
         _add_txt_files_to_tree(docs_item, docs_dir, include_md=True)
     
     # Add root level .txt files
-    root_txt_files = list(enigma_root.glob("*.txt"))
+    root_txt_files = list(forge_root.glob("*.txt"))
     if root_txt_files:
         root_item = QTreeWidgetItem(parent.file_tree, ["Root Files"])
-        root_item.setData(0, Qt.UserRole, str(enigma_root))
+        root_item.setData(0, Qt.UserRole, str(forge_root))
         root_item.setExpanded(True)
         for txt_file in sorted(root_txt_files):
             file_item = QTreeWidgetItem(root_item, [f"{txt_file.name}"])

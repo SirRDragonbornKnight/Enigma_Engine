@@ -175,16 +175,16 @@ The voice system is now production-ready and provides a solid foundation for:
 ## Files Changed Summary
 
 ```
- enigma/core/personality.py           |   4 +-
- enigma/voice/__init__.py             | 136 +++++++-
- enigma/voice/audio_analyzer.py       | 415 ++++++++++++++++++++++
- enigma/voice/dynamic_adapter.py      | 485 ++++++++++++++++++++++++++
- enigma/voice/trigger_phrases.py      | 241 ++++++++++++-
- enigma/voice/voice_customizer.py     | 450 ++++++++++++++++++++++++
- enigma/voice/voice_effects.py        | 430 +++++++++++++++++++++++
- enigma/voice/voice_generator.py      |  76 +++--
- enigma/voice/voice_identity.py       | 580 +++++++++++++++++++++++++++++++
- enigma/voice/voice_profile.py        |  19 +-
+ forge_ai/core/personality.py           |   4 +-
+ forge_ai/voice/__init__.py             | 136 +++++++-
+ forge_ai/voice/audio_analyzer.py       | 415 ++++++++++++++++++++++
+ forge_ai/voice/dynamic_adapter.py      | 485 ++++++++++++++++++++++++++
+ forge_ai/voice/trigger_phrases.py      | 241 ++++++++++++-
+ forge_ai/voice/voice_customizer.py     | 450 ++++++++++++++++++++++++
+ forge_ai/voice/voice_effects.py        | 430 +++++++++++++++++++++++
+ forge_ai/voice/voice_generator.py      |  76 +++--
+ forge_ai/voice/voice_identity.py       | 580 +++++++++++++++++++++++++++++++
+ forge_ai/voice/voice_profile.py        |  19 +-
  docs/ENHANCED_VOICE_SYSTEM.md        | 759 +++++++++++++++++++++++++++++++++++++++
  examples/voice_system_demo.py        | 219 +++++++++++++
  tests/test_voice_enhancements.py     | 406 +++++++++++++++++++++

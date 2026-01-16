@@ -149,11 +149,11 @@ updater.set_auto_update(True, check_interval_hours=24)
 
 ## Files Changed
 
-- `enigma/modules/manager.py`: Added health check methods and sandboxed loading
-- `enigma/modules/sandbox.py`: New file for sandboxing functionality
-- `enigma/modules/docs.py`: New file for documentation generation
-- `enigma/modules/updater.py`: New file for update management
-- `enigma/modules/__init__.py`: Updated exports
+- `forge_ai/modules/manager.py`: Added health check methods and sandboxed loading
+- `forge_ai/modules/sandbox.py`: New file for sandboxing functionality
+- `forge_ai/modules/docs.py`: New file for documentation generation
+- `forge_ai/modules/updater.py`: New file for update management
+- `forge_ai/modules/__init__.py`: Updated exports
 - `tests/test_modules_extended.py`: New comprehensive test suite
 - `demo_module_improvements.py`: Demo script showing all features
 

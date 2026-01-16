@@ -51,9 +51,9 @@ Access at: `http://localhost:8080`
 
 ### Customization
 
-Templates: `enigma/web/templates/`
-Styles: `enigma/web/static/css/style.css`
-Scripts: `enigma/web/static/js/app.js`
+Templates: `forge_ai/web/templates/`
+Styles: `forge_ai/web/static/css/style.css`
+Scripts: `forge_ai/web/static/js/app.js`
 
 ## Mobile API
 
@@ -195,7 +195,7 @@ For production:
 ### Add Basic API Key
 
 ```python
-# In enigma/web/app.py or enigma/mobile/api.py
+# In forge_ai/web/app.py or forge_ai/mobile/api.py
 
 API_KEY = "your-secret-key"
 

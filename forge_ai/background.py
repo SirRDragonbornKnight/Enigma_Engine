@@ -5,7 +5,7 @@ This starts Forge in the system tray with quick command access.
 The full GUI can be opened from the tray menu when needed.
 
 Usage:
-    python -m enigma.background
+    python -m forge_ai.background
     
 Or from run.py:
     python run.py --background

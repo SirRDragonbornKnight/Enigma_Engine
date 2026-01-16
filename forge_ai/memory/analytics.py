@@ -299,7 +299,7 @@ class MemoryAnalytics:
         type_analysis = self.get_type_analysis()
         
         report = f"""
-ENIGMA ENGINE MEMORY ANALYTICS REPORT
+FORGE AI MEMORY ANALYTICS REPORT
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 {'=' * 60}
 

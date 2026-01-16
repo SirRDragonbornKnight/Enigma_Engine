@@ -141,6 +141,9 @@ class TestModuleManager(unittest.TestCase):
         """Test that capability conflicts are detected."""
         register_all(self.manager)
         
+        # Disable local_only mode so we can test cloud modules
+        self.manager.local_only = False
+        
         # Both provide 'image_generation'
         # Load one (without GPU check - use mock)
         img_local_info = self.manager.module_classes['image_gen_local'].get_info()

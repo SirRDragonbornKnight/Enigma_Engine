@@ -161,7 +161,7 @@ Examples:
         from forge_ai.config import CONFIG
         
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
-        output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_enigma.pth"
+        output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_forge.pth"
         
         print(f"\nBuilding {args.model} model from {data_path}")
         print(f"Output: {output_path}")

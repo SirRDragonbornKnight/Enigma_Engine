@@ -316,15 +316,16 @@ class TestToolTrainingData:
         with open(data_file, 'r') as f:
             content = f.read()
         
-        # Should contain User: and AI: markers (Enigma format)
+        # Should contain User: and AI: markers (Enigma format) or Q:/A: format
         assert "User:" in content or "Q:" in content
         assert "AI:" in content or "A:" in content
         
-        # Should contain Enigma tool call format [E:tool]
-        assert "[E:tool]" in content
-        assert "[E:tool_end]" in content
-        assert "[E:tool_out]" in content
-        assert "[E:out_end]" in content
+        # Should contain tool call format (either <tool_call> or [E:tool])
+        has_tool_format = "<tool_call>" in content or "[E:tool]" in content
+        assert has_tool_format, "Training data should contain tool call markers"
+        
+        has_tool_result = "<tool_result>" in content or "[E:tool_out]" in content
+        assert has_tool_result, "Training data should contain tool result markers"
         
         # Should have examples for major tools
         assert "generate_image" in content

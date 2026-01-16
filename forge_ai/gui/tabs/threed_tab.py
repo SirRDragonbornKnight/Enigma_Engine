@@ -2,7 +2,7 @@
 3D Generation Tab - Generate 3D models from text prompts.
 
 Providers:
-  - LOCAL: Shap-E or Point-E (requires diffusers with shap-e support)
+  - LOCAL: Shap-E (or built-in OBJ fallback)
   - REPLICATE: Cloud 3D generation (requires replicate, API key)
 """
 
@@ -36,14 +36,17 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class Local3DGen:
-    """Local 3D generation using Shap-E."""
+    """Local 3D generation using Shap-E with built-in fallback."""
     
     def __init__(self, model: str = "shap-e"):
         self.model_type = model
         self.pipe = None
         self.is_loaded = False
+        self._using_builtin = False
+        self._builtin_3d = None
     
     def load(self) -> bool:
+        # Try Shap-E first
         try:
             import torch
             from diffusers import ShapEPipeline
@@ -57,14 +60,26 @@ class Local3DGen:
                 self.pipe = self.pipe.to("cuda")
             
             self.is_loaded = True
+            self._using_builtin = False
             return True
-        except ImportError as e:
-            print(f"Install: pip install diffusers[torch] transformers accelerate")
-            print(f"Missing: {e}")
-            return False
+        except ImportError:
+            pass
         except Exception as e:
-            print(f"Failed to load 3D model: {e}")
-            return False
+            print(f"Shap-E not available: {e}")
+        
+        # Fall back to built-in 3D generator
+        try:
+            from ...builtin import Builtin3DGen
+            self._builtin_3d = Builtin3DGen()
+            if self._builtin_3d.load():
+                self.is_loaded = True
+                self._using_builtin = True
+                print("Using built-in 3D generator (geometric primitives)")
+                return True
+        except Exception as e:
+            print(f"Built-in 3D gen failed: {e}")
+        
+        return False
     
     def unload(self):
         if self.pipe:
@@ -76,12 +91,27 @@ class Local3DGen:
                     torch.cuda.empty_cache()
             except ImportError:
                 pass
+        if self._builtin_3d:
+            self._builtin_3d.unload()
+            self._builtin_3d = None
         self.is_loaded = False
+        self._using_builtin = False
     
     def generate(self, prompt: str, guidance_scale: float = 15.0,
                  num_inference_steps: int = 64, **kwargs) -> Dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
+        
+        # Use built-in if available
+        if self._using_builtin:
+            timestamp = int(time.time())
+            filepath = str(OUTPUT_DIR / f"3d_{timestamp}.obj")
+            result = self._builtin_3d.generate(prompt)
+            if result.get("success") and result.get("obj_data"):
+                with open(filepath, 'w') as f:
+                    f.write(result["obj_data"])
+                result["path"] = filepath
+            return result
         
         try:
             start = time.time()

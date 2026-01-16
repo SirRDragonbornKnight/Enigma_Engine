@@ -361,7 +361,7 @@ def run_mobile_api(host: str = '0.0.0.0', port: int = 5001):
         return
     
     print(f"\n{'='*60}")
-    print("ENIGMA MOBILE API")
+    print("FORGE AI MOBILE API")
     print(f"{'='*60}")
     print(f"\nAPI starting on http://{host}:{port}")
     print(f"\nEndpoints:")

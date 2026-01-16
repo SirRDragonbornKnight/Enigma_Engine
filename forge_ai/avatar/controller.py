@@ -188,9 +188,14 @@ class AvatarController:
     def _init_renderer(self) -> None:
         """Initialize the renderer component."""
         if self._renderer is None:
-            # Lazy import to avoid circular dependencies
-            from .renderers import SpriteRenderer
-            self._renderer = SpriteRenderer(self)
+            # Try to use Qt renderer if PyQt5 is available (for visual rendering)
+            # Fall back to SpriteRenderer (console-only) if not
+            try:
+                from .renderers import QtAvatarRenderer
+                self._renderer = QtAvatarRenderer(self)
+            except ImportError:
+                from .renderers import SpriteRenderer
+                self._renderer = SpriteRenderer(self)
             
             # Set appearance if we have an identity
             if self._identity and self._identity.appearance:

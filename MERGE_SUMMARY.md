@@ -17,10 +17,10 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 - Bug fix: corrected 'base' model preset n_kv_heads (4→2)
 
 **Files Modified:**
-- `enigma/__init__.py`
-- `enigma/core/inference.py`
-- `enigma/core/model.py`
-- `enigma/py.typed` (new)
+- `forge_ai/__init__.py`
+- `forge_ai/core/inference.py`
+- `forge_ai/core/model.py`
+- `forge_ai/py.typed` (new)
 - `tests/test_code_quality_improvements.py` (new)
 
 ### PR #25: Module System Enhancements
@@ -36,9 +36,9 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 - 41 comprehensive tests
 
 **New Files:**
-- `enigma/modules/docs.py`
-- `enigma/modules/sandbox.py`
-- `enigma/modules/updater.py`
+- `forge_ai/modules/docs.py`
+- `forge_ai/modules/sandbox.py`
+- `forge_ai/modules/updater.py`
 - `tests/test_modules_extended.py`
 - `MODULE_IMPROVEMENTS_SUMMARY.md`
 - `demo_module_improvements.py`
@@ -61,16 +61,16 @@ Successfully merged three major feature pull requests into the `copilot/merge-pr
 - 32 comprehensive tests
 
 **New Files:**
-- `enigma/memory/rag.py`
-- `enigma/memory/embeddings.py`
-- `enigma/memory/consolidation.py`
-- `enigma/memory/async_memory.py`
-- `enigma/memory/search.py`
-- `enigma/memory/deduplication.py`
-- `enigma/memory/analytics.py`
-- `enigma/memory/visualization.py`
-- `enigma/memory/encryption.py`
-- `enigma/memory/backup.py`
+- `forge_ai/memory/rag.py`
+- `forge_ai/memory/embeddings.py`
+- `forge_ai/memory/consolidation.py`
+- `forge_ai/memory/async_memory.py`
+- `forge_ai/memory/search.py`
+- `forge_ai/memory/deduplication.py`
+- `forge_ai/memory/analytics.py`
+- `forge_ai/memory/visualization.py`
+- `forge_ai/memory/encryption.py`
+- `forge_ai/memory/backup.py`
 - `tests/test_memory_complete.py`
 
 ## Total Impact

@@ -175,7 +175,7 @@ class FAISSVectorDB(VectorDBInterface):
 class PineconeVectorDB(VectorDBInterface):
     """Pinecone-based vector database (cloud, managed, scalable)."""
     
-    def __init__(self, dim: int, api_key: str, environment: str, index_name: str = "enigma-memory"):
+    def __init__(self, dim: int, api_key: str, environment: str, index_name: str = "forge-memory"):
         """
         Initialize Pinecone vector database.
         
@@ -398,7 +398,7 @@ def create_vector_db(
     elif backend == "pinecone":
         api_key = kwargs.get('api_key')
         environment = kwargs.get('environment')
-        index_name = kwargs.get('index_name', 'enigma-memory')
+        index_name = kwargs.get('index_name', 'forge-memory')
         if not api_key or not environment:
             raise ValueError("Pinecone requires 'api_key' and 'environment'")
         return PineconeVectorDB(dim, api_key, environment, index_name)

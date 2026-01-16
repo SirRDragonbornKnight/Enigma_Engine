@@ -106,6 +106,28 @@ def create_chat_tab(parent):
     """)
     layout.addWidget(parent.chat_display, stretch=1)
     
+    # Thinking/Status panel (shown during generation) - ABOVE the input
+    parent.thinking_frame = QFrame()
+    parent.thinking_frame.setStyleSheet("""
+        QFrame {
+            background: rgba(249, 226, 175, 0.15);
+            border: 1px solid #f9e2af;
+            border-radius: 6px;
+            padding: 4px;
+        }
+    """)
+    thinking_layout = QHBoxLayout(parent.thinking_frame)
+    thinking_layout.setContentsMargins(8, 4, 8, 4)
+    
+    parent.thinking_label = QLabel("🤔 Thinking...")
+    parent.thinking_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+    thinking_layout.addWidget(parent.thinking_label)
+    
+    thinking_layout.addStretch()
+    
+    parent.thinking_frame.hide()  # Hidden by default
+    layout.addWidget(parent.thinking_frame)
+    
     # Input area with better layout
     input_frame = QFrame()
     input_frame.setStyleSheet("""
@@ -188,28 +210,6 @@ def create_chat_tab(parent):
     input_layout.addWidget(parent.send_btn)
     
     layout.addWidget(input_frame)
-    
-    # Thinking/Status panel (collapsible, shown during generation)
-    parent.thinking_frame = QFrame()
-    parent.thinking_frame.setStyleSheet("""
-        QFrame {
-            background: rgba(249, 226, 175, 0.1);
-            border: 1px solid #f9e2af;
-            border-radius: 6px;
-            padding: 4px;
-        }
-    """)
-    thinking_layout = QHBoxLayout(parent.thinking_frame)
-    thinking_layout.setContentsMargins(8, 4, 8, 4)
-    
-    parent.thinking_label = QLabel("🤔 Thinking...")
-    parent.thinking_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
-    thinking_layout.addWidget(parent.thinking_label)
-    
-    thinking_layout.addStretch()
-    
-    parent.thinking_frame.hide()  # Hidden by default
-    layout.addWidget(parent.thinking_frame)
     
     # Status bar at bottom
     status_layout = QHBoxLayout()

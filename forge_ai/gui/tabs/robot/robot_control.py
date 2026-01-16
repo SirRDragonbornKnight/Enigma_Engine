@@ -317,7 +317,7 @@ def _connect_robot(parent):
             try:
                 import rospy  # type: ignore
                 if not rospy.core.is_initialized():
-                    rospy.init_node('enigma_robot_client', anonymous=True)
+                    rospy.init_node('forge_robot_client', anonymous=True)
                 parent.robot_connection = {"type": "ros", "host": host, "port": port}
                 parent.robot_log.append("[OK] ROS node initialized")
             except ImportError:

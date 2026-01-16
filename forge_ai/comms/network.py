@@ -177,7 +177,7 @@ class ForgeNode:
         from flask import Flask, request, jsonify
         from flask_cors import CORS
         
-        app = Flask(f"enigma_{self.name}")
+        app = Flask(f"forge_{self.name}")
         CORS(app)
         
         @app.route("/health")

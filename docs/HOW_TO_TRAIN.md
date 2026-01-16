@@ -151,7 +151,7 @@ python run.py --train --model tiny --epochs 100
 
 ### Advanced Parameters (config.py)
 
-Edit `enigma/config.py` for fine-tuning:
+Edit `forge_ai/config.py` for fine-tuning:
 
 ```python
 # Learning rate (default: 1e-4)

@@ -10,6 +10,8 @@ Features:
 - Curiosity: "Look at" interesting things on screen
 - Mood system: Gradual mood changes based on what it sees
 - Memory: Remember what it's seen/done
+- Context awareness: React to user activity
+- Time-based behaviors: Different behaviors at different times
 
 Usage:
     from forge_ai.avatar import get_avatar
@@ -29,6 +31,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
+from datetime import datetime
 
 if TYPE_CHECKING:
     from .controller import AvatarController
@@ -46,6 +49,8 @@ class AvatarMood(Enum):
     EXCITED = "excited"
     SLEEPY = "sleepy"
     FOCUSED = "focused"
+    PLAYFUL = "playful"
+    THOUGHTFUL = "thoughtful"
 
 
 @dataclass
@@ -86,6 +91,14 @@ class AutonomousConfig:
     # Mood
     mood_change_rate: float = 0.1  # How fast mood changes
     get_bored_after: float = 300.0  # Seconds of no activity before bored
+    
+    # Time-based behavior
+    enable_time_awareness: bool = True
+    sleepy_hours: List[int] = field(default_factory=lambda: [22, 23, 0, 1, 2, 3, 4, 5])  # Night hours
+    energetic_hours: List[int] = field(default_factory=lambda: [9, 10, 11, 14, 15, 16])  # Day hours
+    
+    # Personality influence
+    personality_influence: float = 0.5  # How much personality affects behavior
 
 
 class AutonomousAvatar:
@@ -98,6 +111,8 @@ class AutonomousAvatar:
     - "Look at" interesting things
     - Change mood over time
     - Occasionally do random gestures
+    - React to time of day
+    - Be influenced by AI personality
     """
     
     def __init__(self, avatar: 'AvatarController', config: Optional[AutonomousConfig] = None):
@@ -118,10 +133,14 @@ class AutonomousAvatar:
         # Memory - what has avatar seen/done
         self._seen_windows: List[str] = []
         self._recent_actions: List[str] = []
+        self._interaction_count: int = 0
         
         # Callbacks for external integration
         self._on_mood_change: List[Callable] = []
         self._on_action: List[Callable] = []
+        
+        # Personality link
+        self._personality = None
     
     @property
     def mood(self) -> AvatarMood:
@@ -130,6 +149,10 @@ class AutonomousAvatar:
     @property
     def is_running(self) -> bool:
         return self._running
+    
+    def link_personality(self, personality) -> None:
+        """Link AI personality to influence avatar behavior."""
+        self._personality = personality
     
     def start(self):
         """Start autonomous behavior."""
@@ -163,10 +186,12 @@ class AutonomousAvatar:
                 AvatarMood.HAPPY: "happy",
                 AvatarMood.CURIOUS: "thinking",
                 AvatarMood.BORED: "neutral",
-                AvatarMood.EXCITED: "surprised",
-                AvatarMood.SLEEPY: "sad",
+                AvatarMood.EXCITED: "excited",
+                AvatarMood.SLEEPY: "sleeping",
                 AvatarMood.FOCUSED: "thinking",
                 AvatarMood.NEUTRAL: "neutral",
+                AvatarMood.PLAYFUL: "winking",
+                AvatarMood.THOUGHTFUL: "thinking",
             }
             self.avatar.set_expression(mood_expressions.get(mood, "neutral"))
             
@@ -188,8 +213,34 @@ class AutonomousAvatar:
     def notify_activity(self):
         """Call this when user does something - resets boredom timer."""
         self._last_activity_time = time.time()
+        self._interaction_count += 1
         if self._mood == AvatarMood.BORED:
             self.set_mood(AvatarMood.NEUTRAL)
+    
+    def notify_chat_message(self, is_from_user: bool = True):
+        """Call when a chat message is received/sent."""
+        self.notify_activity()
+        if is_from_user:
+            # User engaged, avatar gets curious/happy
+            if random.random() > 0.5:
+                self.set_mood(AvatarMood.CURIOUS)
+            else:
+                self.set_mood(AvatarMood.HAPPY)
+    
+    def _get_time_based_mood_modifier(self) -> Optional[AvatarMood]:
+        """Get mood based on time of day."""
+        if not self.config.enable_time_awareness:
+            return None
+        
+        hour = datetime.now().hour
+        
+        if hour in self.config.sleepy_hours:
+            return AvatarMood.SLEEPY
+        elif hour in self.config.energetic_hours:
+            if random.random() > 0.7:
+                return AvatarMood.PLAYFUL
+        
+        return None
     
     def _behavior_loop(self):
         """Main autonomous behavior loop."""
@@ -214,8 +265,13 @@ class AutonomousAvatar:
                 
                 # Check for boredom
                 if current_time - self._last_activity_time > self.config.get_bored_after:
-                    if self._mood != AvatarMood.BORED:
+                    if self._mood != AvatarMood.BORED and self._mood != AvatarMood.SLEEPY:
                         self.set_mood(AvatarMood.BORED)
+                
+                # Time-based mood check
+                time_mood = self._get_time_based_mood_modifier()
+                if time_mood and random.random() > 0.95:  # Rarely override
+                    self.set_mood(time_mood)
                 
                 time.sleep(0.5)
                 
@@ -225,13 +281,15 @@ class AutonomousAvatar:
     
     def _do_autonomous_action(self):
         """Choose and perform an autonomous action."""
-        # Weight-based action selection
+        # Adjust weights based on mood
+        weights = self._get_adjusted_weights()
+        
         actions = [
-            (self.config.idle_animation_weight, self._do_idle_animation),
-            (self.config.look_around_weight, self._look_around),
-            (self.config.react_to_screen_weight, self._react_to_screen),
-            (self.config.express_mood_weight, self._express_mood),
-            (self.config.random_gesture_weight, self._random_gesture),
+            (weights['idle'], self._do_idle_animation),
+            (weights['look'], self._look_around),
+            (weights['react'], self._react_to_screen),
+            (weights['express'], self._express_mood),
+            (weights['gesture'], self._random_gesture),
         ]
         
         # Normalize weights
@@ -244,6 +302,46 @@ class AutonomousAvatar:
             if rand <= cumulative:
                 action()
                 break
+    
+    def _get_adjusted_weights(self) -> Dict[str, float]:
+        """Get behavior weights adjusted for current mood."""
+        base = {
+            'idle': self.config.idle_animation_weight,
+            'look': self.config.look_around_weight,
+            'react': self.config.react_to_screen_weight,
+            'express': self.config.express_mood_weight,
+            'gesture': self.config.random_gesture_weight,
+        }
+        
+        # Adjust based on mood
+        if self._mood == AvatarMood.BORED:
+            base['idle'] *= 1.5
+            base['look'] *= 0.5
+        elif self._mood == AvatarMood.CURIOUS:
+            base['look'] *= 2.0
+            base['react'] *= 1.5
+        elif self._mood == AvatarMood.PLAYFUL:
+            base['gesture'] *= 2.0
+            base['express'] *= 1.5
+        elif self._mood == AvatarMood.SLEEPY:
+            base['idle'] *= 2.0
+            base['gesture'] *= 0.3
+            base['look'] *= 0.5
+        elif self._mood == AvatarMood.EXCITED:
+            base['gesture'] *= 1.5
+            base['express'] *= 1.5
+        
+        # Adjust based on personality if linked
+        if self._personality and hasattr(self._personality, 'get_effective_trait'):
+            try:
+                playfulness = self._personality.get_effective_trait('playfulness')
+                if playfulness > 0.6:
+                    base['gesture'] *= 1.3
+                    base['express'] *= 1.2
+            except Exception:
+                pass
+        
+        return base
     
     def _do_idle_animation(self):
         """Small idle movement/animation."""
@@ -307,13 +405,15 @@ class AutonomousAvatar:
     def _express_mood(self):
         """Express current mood through animation/expression."""
         mood_expressions = {
-            AvatarMood.HAPPY: ["smile", "happy", "nod"],
-            AvatarMood.CURIOUS: ["tilt_head", "thinking", "look_closer"],
-            AvatarMood.BORED: ["yawn", "sigh", "look_away"],
-            AvatarMood.EXCITED: ["bounce", "surprised", "wave"],
-            AvatarMood.SLEEPY: ["drowsy", "slow_blink", "head_droop"],
-            AvatarMood.FOCUSED: ["squint", "lean_in", "concentrate"],
-            AvatarMood.NEUTRAL: ["blink", "subtle_smile"],
+            AvatarMood.HAPPY: ["happy", "friendly", "winking"],
+            AvatarMood.CURIOUS: ["thinking", "confused"],
+            AvatarMood.BORED: ["neutral", "sleeping"],
+            AvatarMood.EXCITED: ["excited", "surprised", "happy"],
+            AvatarMood.SLEEPY: ["sleeping", "neutral"],
+            AvatarMood.FOCUSED: ["thinking", "neutral"],
+            AvatarMood.NEUTRAL: ["neutral", "idle"],
+            AvatarMood.PLAYFUL: ["winking", "happy", "excited"],
+            AvatarMood.THOUGHTFUL: ["thinking", "neutral"],
         }
         
         expressions = mood_expressions.get(self._mood, ["neutral"])

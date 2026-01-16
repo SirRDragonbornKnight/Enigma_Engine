@@ -440,13 +440,13 @@ monitor.record_generation(
 
 See individual module documentation:
 
-- `enigma.modules.registry` - Module definitions
-- `enigma.core.gguf_loader` - GGUF loading
-- `enigma.core.lora_utils` - LoRA training
-- `enigma.core.resources` - Resource management
-- `enigma.tools.motion_tracking` - Motion tracking
-- `enigma.utils.text_enhancement` - Text utilities
-- `enigma.gui.resource_monitor` - Resource monitoring widget
+- `forge_ai.modules.registry` - Module definitions
+- `forge_ai.core.gguf_loader` - GGUF loading
+- `forge_ai.core.lora_utils` - LoRA training
+- `forge_ai.core.resources` - Resource management
+- `forge_ai.tools.motion_tracking` - Motion tracking
+- `forge_ai.utils.text_enhancement` - Text utilities
+- `forge_ai.gui.resource_monitor` - Resource monitoring widget
 
 ---
 
@@ -465,7 +465,7 @@ Complete examples available in `examples/` directory:
 
 To add more features, follow the module system pattern:
 
-1. Create module class in `enigma/modules/registry.py`
+1. Create module class in `forge_ai/modules/registry.py`
 2. Add to `MODULE_REGISTRY` dict
 3. Implement load/unload methods
 4. Add tests

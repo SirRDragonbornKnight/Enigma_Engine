@@ -19,7 +19,7 @@ All models in ForgeAI use the same tokenizer, ensuring:
 - Simplified training pipeline
 - Better interoperability
 
-The shared tokenizer is located at `enigma/vocab_model/bpe_vocab.json` (or character tokenizer as fallback).
+The shared tokenizer is located at `forge_ai/vocab_model/bpe_vocab.json` (or character tokenizer as fallback).
 
 ### Model Types
 
@@ -179,7 +179,7 @@ Specialized models are configured in `information/specialized_models.json`:
 ```json
 {
   "enabled": true,
-  "shared_tokenizer": "enigma/vocab_model/bpe_vocab.json",
+  "shared_tokenizer": "forge_ai/vocab_model/bpe_vocab.json",
   "models": {
     "router": {
       "path": "models/specialized/intent_router_nano.pth",

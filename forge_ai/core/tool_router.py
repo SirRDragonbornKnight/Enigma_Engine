@@ -13,7 +13,7 @@ USAGE:
     router = get_router()
     
     # Assign models to tools
-    router.assign_model("chat", "enigma:small_forge_ai")
+    router.assign_model("chat", "forge:small_forge_ai")
     router.assign_model("chat", "huggingface:mistralai/Mistral-7B-Instruct-v0.2")
     router.assign_model("image", "local:stable-diffusion")
     
@@ -45,7 +45,7 @@ class ToolDefinition:
 @dataclass 
 class ModelAssignment:
     """A model assigned to a tool."""
-    model_id: str  # "enigma:name", "huggingface:repo/model", "local:name"
+    model_id: str  # "forge:name", "huggingface:repo/model", "local:name"
     model_type: str  # "forge_ai", "huggingface", "local", "api"
     priority: int = 0  # Higher = try first
     config: Dict[str, Any] = field(default_factory=dict)
@@ -246,9 +246,9 @@ class ToolRouter:
     def _set_defaults(self):
         """Set default model assignments."""
         self.assignments = {
-            "chat": [ModelAssignment("enigma:default", "forge_ai", priority=10)],
+            "chat": [ModelAssignment("forge:default", "forge_ai", priority=10)],
             "image": [ModelAssignment("local:stable-diffusion", "local", priority=10)],
-            "code": [ModelAssignment("enigma:default", "forge_ai", priority=10)],
+            "code": [ModelAssignment("forge:default", "forge_ai", priority=10)],
             "video": [ModelAssignment("local:animatediff", "local", priority=10)],
             "audio": [ModelAssignment("local:tts", "local", priority=10)],
             "3d": [ModelAssignment("local:shap-e", "local", priority=10)],
@@ -563,7 +563,7 @@ class ToolRouter:
         Args:
             tool_name: Tool to assign to (chat, image, code, etc.)
             model_id: Model identifier:
-                - "enigma:model_name" - Forge model from registry
+                - "forge:model_name" - Forge model from registry
                 - "huggingface:repo/model" - HuggingFace model
                 - "local:name" - Local module (stable-diffusion, etc.)
                 - "api:provider" - API provider (openai, replicate)
@@ -578,7 +578,7 @@ class ToolRouter:
             model_type = model_id.split(":")[0]
         else:
             model_type = "forge_ai"  # Default
-            model_id = f"enigma:{model_id}"
+            model_id = f"forge:{model_id}"
             
         assignment = ModelAssignment(
             model_id=model_id,
@@ -633,7 +633,7 @@ class ToolRouter:
         
         Returns dict with:
             - model_id: Full model identifier (e.g., "huggingface:microsoft/DialoGPT-medium")
-            - model_type: Type (enigma, huggingface, api, local)
+            - model_type: Type (forge, huggingface, api, local)
             - model_name: Short name
             - loaded: Whether model is currently loaded
             - priority: Priority level
@@ -767,7 +767,7 @@ class ToolRouter:
         model = None
         
         if model_type == "forge_ai":
-            model = self._load_enigma_model(model_name)
+            model = self._load_forge_model(model_name)
         elif model_type == "huggingface":
             model = self._load_huggingface_model(model_name)
         elif model_type == "local":
@@ -780,8 +780,8 @@ class ToolRouter:
             
         return model
     
-    def _load_enigma_model(self, name: str) -> Any:
-        """Load an Forge model."""
+    def _load_forge_model(self, name: str) -> Any:
+        """Load a ForgeAI model."""
         try:
             from .model_registry import ModelRegistry
             registry = ModelRegistry()
@@ -959,7 +959,7 @@ class ToolRouter:
             # Route to appropriate handler based on module name
             if module_name in ("stable-diffusion", "sd", "image"):
                 return self._execute_image_generation(params)
-            elif module_name in ("code", "enigma-code"):
+            elif module_name in ("code", "forge-code"):
                 return self._execute_code_generation(params)
             elif module_name in ("tts", "audio", "speech"):
                 return self._execute_audio_generation(params)

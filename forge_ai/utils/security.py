@@ -220,7 +220,7 @@ def _save_to_config():
         from ..config import CONFIG
         
         # Find config file
-        config_path = Path(CONFIG.get("root", ".")) / "enigma_config.json"
+        config_path = Path(CONFIG.get("root", ".")) / "forge_config.json"
         
         # Load existing or create new
         if config_path.exists():

@@ -734,6 +734,7 @@ def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Forge
     return model
 
 
-# Additional aliases
+# Additional aliases for backwards compatibility
 TinyForge = Forge
 ForgeModel = Forge
+Enigma = Forge  # Legacy name used in tests and documentation

@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Default model paths
 MODELS_DIR = Path(CONFIG.get("models_dir", "models"))
-DEFAULT_MODEL = MODELS_DIR / "enigma.pth"
+DEFAULT_MODEL = MODELS_DIR / "forge.pth"
 LEGACY_MODEL = MODELS_DIR / "tiny_forge_ai.pth"
 
 

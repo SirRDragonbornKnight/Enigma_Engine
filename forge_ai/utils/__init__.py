@@ -10,7 +10,7 @@ from typing import Optional, Iterator, Any
 # Re-export from submodules for convenience
 from .system_messages import (
     system_msg, error_msg, warning_msg, info_msg, debug_msg, 
-    ai_msg, user_msg, enigma_msg, thinking_msg, memory_msg,
+    ai_msg, user_msg, forge_msg, enigma_msg, thinking_msg, memory_msg,
     MessagePrefix
 )
 from .text_formatting import TextFormatter
@@ -160,7 +160,8 @@ __all__ = [
     'info_msg',
     'debug_msg',
     'ai_msg',
-    'enigma_msg',
+    'forge_msg',
+    'enigma_msg',  # Legacy alias
     'user_msg',
     'thinking_msg',
     'memory_msg',

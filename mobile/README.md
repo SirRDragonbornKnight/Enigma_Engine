@@ -259,7 +259,7 @@ sudo ufw allow 5001/tcp
 ### Adding Basic API Key Authentication
 
 ```python
-# In enigma/mobile/api.py, add before each route:
+# In forge_ai/mobile/api.py, add before each route:
 
 API_KEY = "your-secret-key"
 

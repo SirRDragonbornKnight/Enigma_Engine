@@ -2,7 +2,17 @@
 
 ForgeAI is designed to be an **"open black box"** - completely transparent about what runs locally vs what connects to external services.
 
-## 🏠 100% Local Modules (No Internet Required)
+## � LOCAL-FIRST DESIGN
+
+**ForgeAI prioritizes local execution by default.** All generation tabs (image, code, video, audio, embeddings, 3D) will automatically use local providers. Cloud providers are only used if explicitly configured.
+
+This means:
+- **Zero data sent to cloud services by default**
+- **Works offline out of the box**
+- **No API keys required for basic functionality**
+- **Your data stays on your machine**
+
+## �🏠 100% Local Modules (No Internet Required)
 
 These modules run entirely on your machine with **zero external API calls**:
 

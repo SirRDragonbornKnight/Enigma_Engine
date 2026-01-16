@@ -43,7 +43,7 @@ class MobileAPI:
         
         self.port = port
         self.model_name = model_name
-        self.app = Flask("enigma_mobile")
+        self.app = Flask("forge_mobile")
         CORS(self.app)
         
         # Engine (lazy loaded)
@@ -405,11 +405,11 @@ class ForgeClient {
     "react_native": '''
 // React Native client for Forge Mobile API
 
-const ENIGMA_URL = 'http://YOUR_SERVER:5000';
+const FORGE_URL = 'http://YOUR_SERVER:5000';
 const DEVICE_ID = 'react_native_app';
 
 export async function chat(message) {
-  const response = await fetch(`${ENIGMA_URL}/chat`, {
+  const response = await fetch(`${FORGE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -423,12 +423,12 @@ export async function chat(message) {
 }
 
 export async function getStatus() {
-  const response = await fetch(`${ENIGMA_URL}/status`);
+  const response = await fetch(`${FORGE_URL}/status`);
   return response.json();
 }
 
 export async function clearContext() {
-  await fetch(`${ENIGMA_URL}/context/clear`, {
+  await fetch(`${FORGE_URL}/context/clear`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device_id: DEVICE_ID }),

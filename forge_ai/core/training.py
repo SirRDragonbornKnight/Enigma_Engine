@@ -439,7 +439,7 @@ class Trainer:
         # Print training info
         if self.config.verbose:
             print("=" * 60)
-            print(system_msg("ENIGMA TRAINING"))
+            print(system_msg("FORGE AI TRAINING"))
             print("=" * 60)
             print(info_msg(f"Device: {self.device}"))
             print(info_msg(f"Model parameters: {sum(p.numel() for p in self.model.parameters()):,}"))
@@ -678,7 +678,7 @@ def train_model(
     data_path = Path(data_path)
 
     if output_path is None:
-        output_path = MODELS_DIR / f"{model_size}_enigma.pth"
+        output_path = MODELS_DIR / f"{model_size}_forge.pth"
     output_path = Path(output_path)
 
     # Validate data file exists and is readable

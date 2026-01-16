@@ -168,11 +168,11 @@ def grow_registered_model(
 
     Example:
         # Start with small model
-        registry.create_model("enigma_v1", size="small")
+        registry.create_model("forge_v1", size="small")
         # Train it...
 
         # Grow it to medium
-        grow_registered_model(registry, "enigma_v1", "enigma_v2", "medium")
+        grow_registered_model(registry, "forge_v1", "forge_v2", "medium")
         # Continue training the larger model...
     """
     # Load source

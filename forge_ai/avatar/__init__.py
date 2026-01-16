@@ -10,6 +10,8 @@ Provides a controllable avatar that can:
   - Control a 3D model (when renderer implemented)
   - AI self-design based on personality
   - User customization
+  - Load VRM/Live2D models (stubs available)
+  - Use preset appearances
 
 USAGE:
     from forge_ai.avatar import get_avatar, toggle_avatar
@@ -29,6 +31,12 @@ USAGE:
     customizer = avatar.get_customizer()
     customizer.set_style("anime")
     customizer.apply_color_preset("sunset")
+    
+    # Or use presets
+    from forge_ai.avatar.presets import get_preset_manager
+    manager = get_preset_manager()
+    preset = manager.get_preset("[builtin] friendly_helper")
+    avatar.set_appearance(preset.appearance)
     
     avatar.move_to(500, 300)
     avatar.speak("Hello!")
@@ -66,6 +74,13 @@ from .autonomous import (
     get_autonomous_avatar,
 )
 
+# Preset system
+from .presets import (
+    AvatarPreset,
+    PresetManager,
+    get_preset_manager,
+)
+
 __all__ = [
     # Controller
     "AvatarController",
@@ -95,4 +110,9 @@ __all__ = [
     "AutonomousConfig",
     "ScreenRegion",
     "get_autonomous_avatar",
+    
+    # Presets
+    "AvatarPreset",
+    "PresetManager",
+    "get_preset_manager",
 ]

@@ -749,11 +749,11 @@ If effects don't seem to work:
 ## API Reference
 
 See inline documentation in each module:
-- `enigma.voice.voice_identity` - AI voice discovery
-- `enigma.voice.voice_effects` - Effects system
-- `enigma.voice.dynamic_adapter` - Voice adaptation
-- `enigma.voice.voice_customizer` - User tools
-- `enigma.voice.audio_analyzer` - Audio analysis
-- `enigma.voice.trigger_phrases` - Wake words
+- `forge_ai.voice.voice_identity` - AI voice discovery
+- `forge_ai.voice.voice_effects` - Effects system
+- `forge_ai.voice.dynamic_adapter` - Voice adaptation
+- `forge_ai.voice.voice_customizer` - User tools
+- `forge_ai.voice.audio_analyzer` - Audio analysis
+- `forge_ai.voice.trigger_phrases` - Wake words
 
 All modules include comprehensive docstrings and examples.

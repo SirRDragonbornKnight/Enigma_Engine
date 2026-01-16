@@ -270,7 +270,7 @@ else:
 - **Full Guide:** `docs/MODULE_GUIDE.md`
 - **Examples:** `examples/module_system_demo.py`
 - **Tests:** `tests/test_modules.py`
-- **Source:** `enigma/modules/`
+- **Source:** `forge_ai/modules/`
 
 ## Quick Recipes
 

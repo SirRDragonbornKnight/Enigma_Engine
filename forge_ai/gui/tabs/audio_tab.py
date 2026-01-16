@@ -2,7 +2,7 @@
 Audio Generation Tab - Text-to-speech and audio generation.
 
 Providers:
-  - LOCAL: pyttsx3 offline TTS
+  - LOCAL: pyttsx3 offline TTS (or built-in fallback)
   - ELEVENLABS: High-quality cloud TTS (requires API key)
   - REPLICATE: Cloud audio generation (requires API key)
 """
@@ -37,27 +37,45 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class LocalTTS:
-    """Local text-to-speech using pyttsx3."""
+    """Local text-to-speech using pyttsx3 with built-in fallback."""
     
     def __init__(self):
         self.engine = None
         self.is_loaded = False
         self.voices = []
         self.current_voice = 0
+        self._using_builtin = False
+        self._builtin_tts = None
     
     def load(self) -> bool:
+        # Try pyttsx3 first
         try:
             import pyttsx3
             self.engine = pyttsx3.init()
             self.voices = self.engine.getProperty('voices')
             self.is_loaded = True
+            self._using_builtin = False
             return True
         except ImportError:
-            print("Install: pip install pyttsx3")
-            return False
+            pass
         except Exception as e:
-            print(f"Failed to load TTS: {e}")
-            return False
+            print(f"pyttsx3 failed: {e}")
+        
+        # Fall back to built-in TTS
+        try:
+            from ...builtin import BuiltinTTS
+            self._builtin_tts = BuiltinTTS()
+            if self._builtin_tts.load():
+                self.voices = self._builtin_tts.get_voices()
+                self.is_loaded = True
+                self._using_builtin = True
+                print("Using built-in TTS (system speech)")
+                return True
+        except Exception as e:
+            print(f"Built-in TTS failed: {e}")
+        
+        print("No TTS available. Install pyttsx3 or use system speech.")
+        return False
     
     def unload(self):
         if self.engine:
@@ -66,30 +84,56 @@ class LocalTTS:
             except RuntimeError:
                 pass
             self.engine = None
+        if self._builtin_tts:
+            self._builtin_tts.unload()
+            self._builtin_tts = None
         self.is_loaded = False
+        self._using_builtin = False
     
     def get_voices(self) -> list:
         if not self.is_loaded:
             return []
+        if self._using_builtin:
+            return self._builtin_tts.get_voices() if self._builtin_tts else []
         return [v.name for v in self.voices]
     
     def set_voice(self, index: int):
-        if self.is_loaded and 0 <= index < len(self.voices):
+        if not self.is_loaded:
+            return
+        if self._using_builtin:
+            if self._builtin_tts:
+                voices = self._builtin_tts.get_voices()
+                if 0 <= index < len(voices):
+                    self._builtin_tts.set_voice(voices[index])
+        elif 0 <= index < len(self.voices):
             self.engine.setProperty('voice', self.voices[index].id)
             self.current_voice = index
     
     def set_rate(self, rate: int):
-        if self.is_loaded:
+        if not self.is_loaded:
+            return
+        if self._using_builtin:
+            if self._builtin_tts:
+                self._builtin_tts.set_rate(rate)
+        else:
             self.engine.setProperty('rate', rate)
     
     def set_volume(self, volume: float):
-        if self.is_loaded:
+        if not self.is_loaded:
+            return
+        if self._using_builtin:
+            if self._builtin_tts:
+                self._builtin_tts.set_volume(volume)
+        else:
             self.engine.setProperty('volume', volume)
     
     def speak(self, text: str) -> Dict[str, Any]:
         """Speak text directly (no file)."""
         if not self.is_loaded:
             return {"success": False, "error": "TTS not loaded"}
+        
+        if self._using_builtin:
+            return self._builtin_tts.speak(text) if self._builtin_tts else {"success": False, "error": "No TTS"}
         
         try:
             self.engine.say(text)
@@ -102,6 +146,11 @@ class LocalTTS:
         """Generate audio file from text."""
         if not self.is_loaded:
             return {"success": False, "error": "TTS not loaded"}
+        
+        if self._using_builtin:
+            timestamp = int(time.time())
+            filepath = str(OUTPUT_DIR / f"tts_{timestamp}.wav")
+            return self._builtin_tts.generate(text, filepath) if self._builtin_tts else {"success": False, "error": "No TTS"}
         
         try:
             start = time.time()

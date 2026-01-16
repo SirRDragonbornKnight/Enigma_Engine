@@ -778,7 +778,7 @@ The ForgeAI Module System provides:
 
 **Next Steps:**
 1. Try the [Quick Start](#getting-started) example
-2. Browse available modules in `enigma.modules.registry`
+2. Browse available modules in `forge_ai.modules.registry`
 3. Create your first custom module
 4. Join the community and share your modules!
 

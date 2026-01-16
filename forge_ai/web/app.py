@@ -725,7 +725,7 @@ def run_web(host: str = '0.0.0.0', port: int = 8080, debug: bool = False):
         return
     
     print(f"\n{'='*60}")
-    print("ENIGMA WEB DASHBOARD")
+    print("FORGE AI WEB DASHBOARD")
     print(f"{'='*60}")
     print(f"\nServer starting on http://{host}:{port}")
     print(f"\nAccess from:")

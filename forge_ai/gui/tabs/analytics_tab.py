@@ -418,7 +418,7 @@ class AnalyticsTab(QWidget):
         
         filename, _ = QFileDialog.getSaveFileName(
             self, "Export Analytics", 
-            str(Path.home() / "enigma_analytics.json"),
+            str(Path.home() / "forge_analytics.json"),
             "JSON Files (*.json)"
         )
         

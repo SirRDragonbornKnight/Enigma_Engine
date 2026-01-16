@@ -8,7 +8,7 @@ USAGE:
     config = get_model_config("medium")  # or "tiny", "small", "large", "xl"
     
 NOTE: This module re-exports from forge_ai.core.model for backward compatibility.
-The canonical MODEL_PRESETS are defined in enigma.core.model.
+The canonical MODEL_PRESETS are defined in forge_ai.core.model.
 """
 
 # Import from the canonical location
@@ -76,7 +76,7 @@ def estimate_parameters(
 def print_model_info():
     """Print all available model presets."""
     print("\n" + "=" * 70)
-    print("ENIGMA MODEL SIZE PRESETS")
+    print("FORGE AI MODEL SIZE PRESETS")
     print("=" * 70)
 
     for name, preset in MODEL_PRESETS.items():

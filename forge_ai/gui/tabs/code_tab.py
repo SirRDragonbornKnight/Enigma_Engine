@@ -2,7 +2,7 @@
 Code Generation Tab - Generate code using local or cloud models.
 
 Providers:
-  - LOCAL: Uses ForgeAI's own model
+  - LOCAL: Uses ForgeAI's own model (or built-in template fallback)
   - OPENAI: GPT-4 (requires openai, API key)
 """
 
@@ -36,14 +36,17 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class ForgeCode:
-    """Use ForgeAI's own model for code generation."""
+    """Use ForgeAI's own model for code generation with built-in fallback."""
     
     def __init__(self, model_name: str = "small_forge_ai"):
         self.model_name = model_name
         self.engine = None
         self.is_loaded = False
+        self._using_builtin = False
+        self._builtin_code = None
     
     def load(self) -> bool:
+        # Try ForgeAI model first
         try:
             from ...core.model_registry import ModelRegistry
             registry = ModelRegistry()
@@ -66,18 +69,39 @@ class ForgeCode:
             self.engine._tool_executor = None
             
             self.is_loaded = True
+            self._using_builtin = False
             return True
         except Exception as e:
-            print(f"Failed to load Forge model: {e}")
-            return False
+            print(f"Forge model not available: {e}")
+        
+        # Fall back to built-in template-based code generation
+        try:
+            from ...builtin import BuiltinCodeGen
+            self._builtin_code = BuiltinCodeGen()
+            if self._builtin_code.load():
+                self.is_loaded = True
+                self._using_builtin = True
+                print("Using built-in code generator (template-based)")
+                return True
+        except Exception as e:
+            print(f"Built-in code gen failed: {e}")
+        
+        return False
     
     def unload(self):
         self.engine = None
+        if self._builtin_code:
+            self._builtin_code.unload()
+            self._builtin_code = None
         self.is_loaded = False
+        self._using_builtin = False
     
     def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
+        
+        if self._using_builtin:
+            return self._builtin_code.generate(prompt, language=language)
         
         try:
             start = time.time()

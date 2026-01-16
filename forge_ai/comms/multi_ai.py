@@ -10,8 +10,8 @@ Usage:
     
     # Create conversation between two models
     conv = AIConversation()
-    conv.add_participant("enigma_1", model_name="forge_ai")
-    conv.add_participant("enigma_2", model_name="forge_ai")
+    conv.add_participant("forge_1", model_name="forge_ai")
+    conv.add_participant("forge_2", model_name="forge_ai")
     
     # Start conversation
     for exchange in conv.converse("Hello, who are you?", num_turns=5):

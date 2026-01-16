@@ -226,7 +226,7 @@ class OffloadingConfig:
                 offload_folder=CONFIG.get("offload_folder"),
                 offload_to_disk=CONFIG.get("offload_to_disk", False)
             )
-        except:
+        except Exception:
             return cls()
 
 

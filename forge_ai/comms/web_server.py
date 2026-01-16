@@ -7,7 +7,7 @@ Provides:
   - Simple web interface
   - QR code for easy phone connection
 
-Run with: python -m enigma.comms.web_server
+Run with: python -m forge_ai.comms.web_server
 """
 
 from datetime import datetime

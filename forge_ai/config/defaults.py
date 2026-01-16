@@ -4,8 +4,8 @@ Default configuration values for ForgeAI.
 This is the SINGLE SOURCE OF TRUTH for all configuration.
 
 These can be overridden by:
-1. User config file (enigma_config.json)
-2. Environment variables (ENIGMA_*)
+1. User config file (forge_config.json)
+2. Environment variables (FORGE_*)
 """
 import os
 import json
@@ -15,14 +15,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Base directory (where enigma package is)
+# Base directory (where forge_ai package is)
 BASE_DIR = Path(__file__).parent.parent.parent
 
 # Default configuration - SINGLE SOURCE OF TRUTH
 CONFIG = {
     # === Paths ===
     "root": str(BASE_DIR),
-    "data_dir": str(BASE_DIR / "information"),
+    "data_dir": str(BASE_DIR / "data"),              # Training data, icons, themes
+    "info_dir": str(BASE_DIR / "information"),       # Runtime settings, tasks, reminders
     "models_dir": str(BASE_DIR / "models"),
     "memory_dir": str(BASE_DIR / "memory"),
     "db_path": str(BASE_DIR / "memory" / "memory.db"),
@@ -124,8 +125,11 @@ CONFIG = {
 def _load_user_config() -> None:
     """Load user configuration file if it exists."""
     config_paths = [
-        Path.cwd() / "enigma_config.json",
+        Path.cwd() / "forge_config.json",
         Path.home() / ".forge_ai" / "config.json",
+        BASE_DIR / "forge_config.json",
+        # Legacy paths for backwards compatibility
+        Path.cwd() / "enigma_config.json",
         BASE_DIR / "enigma_config.json",
     ]
 
@@ -149,6 +153,15 @@ def _load_user_config() -> None:
 def _load_env_config() -> None:
     """Load configuration from environment variables."""
     env_mappings = {
+        # New FORGE_ prefix (preferred)
+        "FORGE_DATA_DIR": "data_dir",
+        "FORGE_MODELS_DIR": "models_dir",
+        "FORGE_MEMORY_DIR": "memory_dir",
+        "FORGE_DEVICE": "device",
+        "FORGE_API_HOST": "api_host",
+        "FORGE_API_PORT": "api_port",
+        "FORGE_LOG_LEVEL": "log_level",
+        # Legacy ENIGMA_ prefix (still supported)
         "ENIGMA_DATA_DIR": "data_dir",
         "ENIGMA_MODELS_DIR": "models_dir",
         "ENIGMA_MEMORY_DIR": "memory_dir",
@@ -208,13 +221,13 @@ def save_config(path: Optional[str] = None) -> None:
     Save current configuration to file.
 
     Args:
-        path: Path to save config file (default: enigma_config.json in base directory)
+        path: Path to save config file (default: forge_config.json in base directory)
 
     Raises:
         IOError: If file cannot be written
     """
     if path is None:
-        path = str(BASE_DIR / "enigma_config.json")
+        path = str(BASE_DIR / "forge_config.json")
 
     try:
         config_path = Path(path)

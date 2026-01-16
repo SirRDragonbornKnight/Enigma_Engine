@@ -427,7 +427,7 @@ def _change_active_game(parent):
         QMessageBox.information(
             parent, "Custom Game",
             "Custom game configuration coming soon!\n"
-            "For now, add games in enigma/tools/game_router.py"
+            "For now, add games in forge_ai/tools/game_router.py"
         )
         parent.game_routing_combo.setCurrentIndex(0)
         return

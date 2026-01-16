@@ -2,7 +2,7 @@
 Image Generation Tab - Generate images using local or cloud models.
 
 Providers:
-  - PLACEHOLDER: Simple test images (no dependencies)
+  - PLACEHOLDER: Simple test images (built-in procedural art)
   - LOCAL: Stable Diffusion (requires diffusers, torch)
   - OPENAI: DALL-E 3 (requires openai, API key)
   - REPLICATE: SDXL/Flux (requires replicate, API key)
@@ -42,29 +42,59 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class PlaceholderImage:
-    """Placeholder image generator - creates simple test images with no dependencies."""
+    """
+    Built-in image generator - creates procedural images with no external dependencies.
+    Uses the forge_ai.builtin.BuiltinImageGen for actual generation.
+    """
     
     def __init__(self):
         self.is_loaded = False
+        self._builtin_gen = None
     
     def load(self) -> bool:
-        self.is_loaded = True
-        return True
+        # Try to use our built-in generator
+        try:
+            from ...builtin import BuiltinImageGen
+            self._builtin_gen = BuiltinImageGen()
+            self._builtin_gen.load()
+            self.is_loaded = True
+            return True
+        except Exception as e:
+            print(f"Built-in image gen failed: {e}")
+            # Still return True - we have fallback
+            self.is_loaded = True
+            return True
     
     def unload(self):
+        if self._builtin_gen:
+            self._builtin_gen.unload()
+            self._builtin_gen = None
         self.is_loaded = False
     
     def generate(self, prompt: str, width: int = 512, height: int = 512,
                  **kwargs) -> Dict[str, Any]:
-        """Generate a simple placeholder image with the prompt text."""
+        """Generate a procedural image based on the prompt."""
         try:
             start = time.time()
-            
-            # Create a simple image with text using PIL if available, else Qt
             timestamp = int(time.time())
-            filename = f"placeholder_{timestamp}.png"
+            filename = f"generated_{timestamp}.png"
             filepath = OUTPUT_DIR / filename
             
+            # Try built-in generator first
+            if self._builtin_gen:
+                result = self._builtin_gen.generate(prompt, width=width, height=height)
+                if result.get("success") and result.get("image_data"):
+                    with open(filepath, 'wb') as f:
+                        f.write(result["image_data"])
+                    return {
+                        "success": True,
+                        "path": str(filepath),
+                        "duration": time.time() - start,
+                        "style": result.get("style", "procedural"),
+                        "is_builtin": True
+                    }
+            
+            # Fallback: create using Qt or PIL
             try:
                 from PIL import Image, ImageDraw, ImageFont
                 
@@ -508,10 +538,19 @@ class ImageGenerationWorker(QThread):
         self.guidance = guidance
         self.negative_prompt = negative_prompt
         self.provider_name = provider_name
+        self._stop_requested = False
+    
+    def request_stop(self):
+        """Request the worker to stop."""
+        self._stop_requested = True
     
     def run(self):
         global _load_errors
         try:
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
+                
             self.progress.emit(10)
             
             # Check if router has image assignments - use router if configured
@@ -521,6 +560,9 @@ class ImageGenerationWorker(QThread):
                 assignments = router.get_assignments("image")
                 
                 if assignments:
+                    if self._stop_requested:
+                        self.finished.emit({"success": False, "error": "Cancelled by user"})
+                        return
                     # Use router to execute with assigned model
                     self.progress.emit(30)
                     params = {
@@ -539,6 +581,10 @@ class ImageGenerationWorker(QThread):
                 # Router not available or failed, fall back to direct provider
                 print(f"Router fallback: {router_error}")
             
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
+                
             # Direct provider fallback
             provider = get_provider(self.provider_name)
             if provider is None:
@@ -577,6 +623,10 @@ class ImageGenerationWorker(QThread):
                     self.finished.emit({"success": False, "error": error_msg})
                     return
             
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
+                
             self.progress.emit(40)
             
             # Generate - ensure prompt is definitely a string
@@ -763,6 +813,13 @@ class ImageTab(QWidget):
         self.generate_btn.clicked.connect(self._generate_image)
         btn_layout.addWidget(self.generate_btn)
         
+        self.stop_btn = QPushButton("⏹ Stop")
+        self.stop_btn.setStyleSheet("background-color: #7f8c8d; font-weight: bold; padding: 10px;")
+        self.stop_btn.clicked.connect(self._stop_generation)
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.setToolTip("Stop the current generation")
+        btn_layout.addWidget(self.stop_btn)
+        
         self.save_btn = QPushButton("Save As...")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self._save_image)
@@ -854,19 +911,20 @@ class ImageTab(QWidget):
             QMessageBox.warning(self, "No Prompt", "Please enter a prompt")
             return
         
-        # Try providers in order of preference: replicate (API), local (SD), placeholder
-        # Replicate is fast and cheap, local SD is slow on Pi, placeholder is fallback
-        import os
+        # Prefer LOCAL providers - only fall back to cloud if local unavailable
+        # Local is private, free, and works offline
+        provider_name = 'local'  # Default to local Stable Diffusion
         
-        if os.environ.get("REPLICATE_API_TOKEN"):
-            provider_name = 'replicate'
-        elif os.environ.get("OPENAI_API_KEY"):
-            provider_name = 'openai'
-        else:
-            # Fall back to local (will fail without diffusers) or placeholder
+        # Check if local provider can be used
+        provider = get_provider('local')
+        if provider and provider.is_loaded:
             provider_name = 'local'
+        elif not provider:
+            # Local not available, try placeholder as fallback
+            provider_name = 'placeholder'
         
         self.generate_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self.status_label.setText("Generating...")
@@ -884,9 +942,26 @@ class ImageTab(QWidget):
         self.worker.finished.connect(self._on_generation_complete)
         self.worker.start()
     
+    def _stop_generation(self):
+        """Stop the current generation."""
+        if self.worker and self.worker.isRunning():
+            self.status_label.setText("Stopping generation...")
+            self.worker.request_stop()
+            self.stop_btn.setEnabled(False)
+            
+            # Force terminate if still running after 2 seconds
+            from PyQt5.QtCore import QTimer
+            def force_stop():
+                if self.worker and self.worker.isRunning():
+                    self.worker.terminate()
+                    self.worker.wait(1000)
+                    self._on_generation_complete({"success": False, "error": "Force stopped by user"})
+            QTimer.singleShot(2000, force_stop)
+    
     def _on_generation_complete(self, result: dict):
         """Handle generation completion."""
         self.generate_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         self.progress.setVisible(False)
         
         if result.get("success"):

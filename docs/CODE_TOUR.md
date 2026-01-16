@@ -12,7 +12,7 @@ forge_ai/
 ├── requirements.txt        # Dependencies to install
 ├── setup.py               # Package installation config
 │
-├── enigma/                # === THE MAIN PACKAGE ===
+├── forge_ai/                # === THE MAIN PACKAGE ===
 │   ├── __init__.py        # Package exports
 │   ├── config.py          # Global configuration
 │   │
@@ -52,12 +52,12 @@ python run.py --serve    # Start API server
 
 ---
 
-## 🧠 Core Package: enigma/core/
+## 🧠 Core Package: forge_ai/core/
 
 This is the **brain** of the AI - where all the neural network magic happens.
 
 ### model.py - The Neural Network Architecture
-**File:** [enigma/core/model.py](../forge_ai/core/model.py)
+**File:** [forge_ai/core/model.py](../forge_ai/core/model.py)
 
 Contains `Enigma`, a production-grade transformer language model.
 
@@ -84,16 +84,16 @@ Enigma(
 **Backwards Compatibility:** `TinyEnigma` is an alias for `Enigma`.
 
 ### tokenizer.py - Text ↔ Numbers
-**File:** [enigma/core/tokenizer.py](../forge_ai/core/tokenizer.py)
+**File:** [forge_ai/core/tokenizer.py](../forge_ai/core/tokenizer.py)
 
 Converts human text into numbers the AI can understand.
 - Full character-level tokenizer (every character gets a number)
 - Includes a dictionary for ~3000 common words
-- Custom dictionary support (`enigma/vocab_model/dictionary.txt`)
+- Custom dictionary support (`forge_ai/vocab_model/dictionary.txt`)
 - Handles special tokens (padding, start, end, unknown)
 
 ### training.py - Teaching the AI
-**File:** [enigma/core/training.py](../forge_ai/core/training.py)
+**File:** [forge_ai/core/training.py](../forge_ai/core/training.py)
 
 Production-ready training loop:
 - **Mixed Precision (AMP)** - Faster training on GPUs
@@ -103,7 +103,7 @@ Production-ready training loop:
 - **Checkpointing** - Save best and periodic checkpoints
 
 ### inference.py - Getting Responses
-**File:** [enigma/core/inference.py](../forge_ai/core/inference.py)
+**File:** [forge_ai/core/inference.py](../forge_ai/core/inference.py)
 
 `ForgeEngine` class - the main way to interact with the AI:
 ```python
@@ -119,7 +119,7 @@ response = engine.chat("What's the weather?", history=[...])
 ```
 
 ### model_registry.py - Managing Multiple AIs
-**File:** [enigma/core/model_registry.py](../forge_ai/core/model_registry.py)
+**File:** [forge_ai/core/model_registry.py](../forge_ai/core/model_registry.py)
 
 Create and manage named AI personalities:
 ```python
@@ -129,7 +129,7 @@ registry.create_model("nova", size="large")
 ```
 
 ### model_config.py - Size Presets
-**File:** [enigma/core/model_config.py](../forge_ai/core/model_config.py)
+**File:** [forge_ai/core/model_config.py](../forge_ai/core/model_config.py)
 
 Defines model sizes from mobile to server-scale:
 - `tiny`: ~2M params - Raspberry Pi, mobile, testing
@@ -141,7 +141,7 @@ Defines model sizes from mobile to server-scale:
 - `xxxl`: ~1.5B params - Like GPT-2 XL
 
 ### trainer.py - Advanced Training
-**File:** [enigma/core/trainer.py](../forge_ai/core/trainer.py)
+**File:** [forge_ai/core/trainer.py](../forge_ai/core/trainer.py)
 
 Full-featured `ForgeTrainer` class:
 - Multi-GPU support (DataParallel)
@@ -152,7 +152,7 @@ Full-featured `ForgeTrainer` class:
 - Comprehensive logging
 
 ### model_scaling.py - Grow Your AI
-**File:** [enigma/core/model_scaling.py](../forge_ai/core/model_scaling.py)
+**File:** [forge_ai/core/model_scaling.py](../forge_ai/core/model_scaling.py)
 
 Scale models up or down:
 - `grow_model()` - Expand small → large while preserving learning
@@ -160,7 +160,7 @@ Scale models up or down:
 - `KnowledgeDistiller` - Train small model to mimic large model
 
 ### layers.py - Building Blocks
-**File:** [enigma/core/layers.py](../forge_ai/core/layers.py)
+**File:** [forge_ai/core/layers.py](../forge_ai/core/layers.py)
 
 Additional neural network components:
 - `FeedForward`, `GLU`, `GeGLU` - FFN variants
@@ -171,18 +171,18 @@ Additional neural network components:
 - `MixtureOfExperts` - Sparse scaling
 
 ### hardware.py - Auto-Detection
-**File:** [enigma/core/hardware.py](../forge_ai/core/hardware.py)
+**File:** [forge_ai/core/hardware.py](../forge_ai/core/hardware.py)
 
 Automatically detects your hardware and recommends optimal settings.
 
 ---
 
-## 💾 Memory Package: enigma/memory/
+## 💾 Memory Package: forge_ai/memory/
 
 Where the AI stores and retrieves information.
 
 ### manager.py - Conversation Storage
-**File:** [enigma/memory/manager.py](../forge_ai/memory/manager.py)
+**File:** [forge_ai/memory/manager.py](../forge_ai/memory/manager.py)
 
 Saves conversations to JSON files:
 ```python
@@ -191,23 +191,23 @@ manager.save_conversation("chat_with_bob", messages)
 ```
 
 ### memory_db.py - SQLite Database
-**File:** [enigma/memory/memory_db.py](../forge_ai/memory/memory_db.py)
+**File:** [forge_ai/memory/memory_db.py](../forge_ai/memory/memory_db.py)
 
 Long-term memory storage with search capabilities.
 
 ### vector_utils.py - Semantic Search
-**File:** [enigma/memory/vector_utils.py](../forge_ai/memory/vector_utils.py)
+**File:** [forge_ai/memory/vector_utils.py](../forge_ai/memory/vector_utils.py)
 
 Find similar memories using cosine similarity (vector math).
 
 ---
 
-## 🌐 Communications Package: enigma/comms/
+## 🌐 Communications Package: forge_ai/comms/
 
 Networking for multi-device setups.
 
 ### api_server.py - REST API
-**File:** [enigma/comms/api_server.py](../forge_ai/comms/api_server.py)
+**File:** [forge_ai/comms/api_server.py](../forge_ai/comms/api_server.py)
 
 Flask server with endpoints:
 - `POST /generate` - Get AI response
@@ -215,7 +215,7 @@ Flask server with endpoints:
 - `GET /models` - List available models
 
 ### network.py - Multi-Device Communication
-**File:** [enigma/comms/network.py](../forge_ai/comms/network.py)
+**File:** [forge_ai/comms/network.py](../forge_ai/comms/network.py)
 
 `EnigmaNode` class for device-to-device communication:
 - PC talks to Raspberry Pi
@@ -223,23 +223,23 @@ Flask server with endpoints:
 - Memory sync across devices
 
 ### discovery.py - Find Other Devices
-**File:** [enigma/comms/discovery.py](../forge_ai/comms/discovery.py)
+**File:** [forge_ai/comms/discovery.py](../forge_ai/comms/discovery.py)
 
 Auto-discover other Enigma instances on your network.
 
 ### mobile_api.py - Phone Support
-**File:** [enigma/comms/mobile_api.py](../forge_ai/comms/mobile_api.py)
+**File:** [forge_ai/comms/mobile_api.py](../forge_ai/comms/mobile_api.py)
 
 Optimized API for mobile apps.
 
 ---
 
-## 🖥️ GUI Package: enigma/gui/
+## 🖥️ GUI Package: forge_ai/gui/
 
 Desktop graphical interfaces.
 
 ### main_window.py - Basic GUI
-**File:** [enigma/gui/main_window.py](../forge_ai/gui/main_window.py)
+**File:** [forge_ai/gui/main_window.py](../forge_ai/gui/main_window.py)
 
 Simple PyQt5 window with:
 - Chat tab
@@ -248,7 +248,7 @@ Simple PyQt5 window with:
 - Avatar tab
 
 ### enhanced_window.py - Full-Featured GUI
-**File:** [enigma/gui/enhanced_window.py](../forge_ai/gui/enhanced_window.py)
+**File:** [forge_ai/gui/enhanced_window.py](../forge_ai/gui/enhanced_window.py)
 
 Advanced GUI with:
 - Setup wizard for first run
@@ -261,12 +261,12 @@ Advanced GUI with:
 
 ---
 
-## 🔊 Voice Package: enigma/voice/
+## 🔊 Voice Package: forge_ai/voice/
 
 Speech capabilities.
 
 ### tts_simple.py - Text-to-Speech
-**File:** [enigma/voice/tts_simple.py](../forge_ai/voice/tts_simple.py)
+**File:** [forge_ai/voice/tts_simple.py](../forge_ai/voice/tts_simple.py)
 
 Makes the AI speak using pyttsx3:
 ```python
@@ -275,7 +275,7 @@ speak("Hello, I am Enigma!")
 ```
 
 ### stt_simple.py - Speech-to-Text
-**File:** [enigma/voice/stt_simple.py](../forge_ai/voice/stt_simple.py)
+**File:** [forge_ai/voice/stt_simple.py](../forge_ai/voice/stt_simple.py)
 
 Listen to user's voice:
 ```python
@@ -285,17 +285,17 @@ text = listen(timeout=5)
 
 ---
 
-## 🤖 Avatar Package: enigma/avatar/
+## 🤖 Avatar Package: forge_ai/avatar/
 
 Visual character representation.
 
 ### avatar_api.py - Basic Avatar Control
-**File:** [enigma/avatar/avatar_api.py](../forge_ai/avatar/avatar_api.py)
+**File:** [forge_ai/avatar/avatar_api.py](../forge_ai/avatar/avatar_api.py)
 
 Simple avatar interface stub.
 
 ### controller.py - Full Avatar System
-**File:** [enigma/avatar/controller.py](../forge_ai/avatar/controller.py)
+**File:** [forge_ai/avatar/controller.py](../forge_ai/avatar/controller.py)
 
 ```python
 avatar = get_avatar()
@@ -307,12 +307,12 @@ avatar.speak("Hello!")
 
 ---
 
-## 🔧 Tools Package: enigma/tools/
+## 🔧 Tools Package: forge_ai/tools/
 
 AI capabilities to interact with the world.
 
 ### tool_registry.py - Tool Framework
-**File:** [enigma/tools/tool_registry.py](../forge_ai/tools/tool_registry.py)
+**File:** [forge_ai/tools/tool_registry.py](../forge_ai/tools/tool_registry.py)
 
 Register and execute tools:
 ```python
@@ -320,7 +320,7 @@ result = execute_tool("web_search", query="Python tutorials")
 ```
 
 ### vision.py - Screen Vision
-**File:** [enigma/tools/vision.py](../forge_ai/tools/vision.py)
+**File:** [forge_ai/tools/vision.py](../forge_ai/tools/vision.py)
 
 AI can "see" the screen:
 - Capture screenshots
@@ -328,17 +328,17 @@ AI can "see" the screen:
 - Find elements on screen
 
 ### web_tools.py - Internet Access
-**File:** [enigma/tools/web_tools.py](../forge_ai/tools/web_tools.py)
+**File:** [forge_ai/tools/web_tools.py](../forge_ai/tools/web_tools.py)
 
 Search the web, fetch pages.
 
 ### file_tools.py - File Operations
-**File:** [enigma/tools/file_tools.py](../forge_ai/tools/file_tools.py)
+**File:** [forge_ai/tools/file_tools.py](../forge_ai/tools/file_tools.py)
 
 Read, write, list, move files.
 
 ### document_tools.py - Document Reading
-**File:** [enigma/tools/document_tools.py](../forge_ai/tools/document_tools.py)
+**File:** [forge_ai/tools/document_tools.py](../forge_ai/tools/document_tools.py)
 
 Read PDF, EPUB, DOCX files.
 
@@ -405,22 +405,22 @@ node.start_ai_conversation("other_ai", num_turns=5)
 
 ```
 run.py
-  └── Uses: enigma/core/training.py (--train)
-  └── Uses: enigma/core/inference.py (--run)
-  └── Uses: enigma/gui/enhanced_window.py (--gui)
-  └── Uses: enigma/comms/api_server.py (--serve)
+  └── Uses: forge_ai/core/training.py (--train)
+  └── Uses: forge_ai/core/inference.py (--run)
+  └── Uses: forge_ai/gui/enhanced_window.py (--gui)
+  └── Uses: forge_ai/comms/api_server.py (--serve)
 
 enhanced_window.py
-  └── Uses: enigma/core/model_registry.py (model management)
-  └── Uses: enigma/core/inference.py (chat)
-  └── Uses: enigma/memory/manager.py (history)
-  └── Uses: enigma/tools/vision.py (screen capture)
-  └── Uses: enigma/avatar/controller.py (avatar)
-  └── Uses: enigma/voice/ (TTS/STT)
+  └── Uses: forge_ai/core/model_registry.py (model management)
+  └── Uses: forge_ai/core/inference.py (chat)
+  └── Uses: forge_ai/memory/manager.py (history)
+  └── Uses: forge_ai/tools/vision.py (screen capture)
+  └── Uses: forge_ai/avatar/controller.py (avatar)
+  └── Uses: forge_ai/voice/ (TTS/STT)
 
 api_server.py
-  └── Uses: enigma/core/inference.py (generate responses)
-  └── Uses: enigma/core/model_registry.py (model info)
+  └── Uses: forge_ai/core/inference.py (generate responses)
+  └── Uses: forge_ai/core/model_registry.py (model info)
 ```
 
 ---

@@ -5,7 +5,7 @@ This module provides building blocks that can be used to extend or customize
 the ForgeAI model architecture. These are standalone components that can be
 mixed and matched.
 
-NOTE: These components are also available in the enigma.core.nn subpackage
+NOTE: These components are also available in the forge_ai.core.nn subpackage
 with more documentation and features. Consider importing from there instead:
 
     from forge_ai.core.nn import (

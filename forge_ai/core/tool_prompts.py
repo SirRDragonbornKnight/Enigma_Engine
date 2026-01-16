@@ -199,7 +199,7 @@ def format_conversation_with_tools(
         elif role == "user":
             parts.append(f"[E:user]{content}[E:end]")
         elif role in ("assistant", "forge_ai"):
-            parts.append(f"[E:enigma]{content}[E:end]")
+            parts.append(f"[E:forge]{content}[E:end]")
     
     return "\n".join(parts)
 

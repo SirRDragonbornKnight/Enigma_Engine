@@ -2,7 +2,7 @@
 Video Generation Tab - Generate videos using local or cloud models.
 
 Providers:
-  - LOCAL: AnimateDiff (requires diffusers with video support)
+  - LOCAL: AnimateDiff (or built-in GIF fallback)
   - REPLICATE: Cloud video generation (requires replicate, API key)
 """
 
@@ -37,14 +37,17 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class LocalVideo:
-    """Local video generation using AnimateDiff."""
+    """Local video generation using AnimateDiff with built-in fallback."""
     
     def __init__(self, model_id: str = "guoyww/animatediff-motion-adapter-v1-5-2"):
         self.model_id = model_id
         self.pipe = None
         self.is_loaded = False
+        self._using_builtin = False
+        self._builtin_video = None
     
     def load(self) -> bool:
+        # Try AnimateDiff first
         try:
             from diffusers import AnimateDiffPipeline, MotionAdapter, DDIMScheduler
             import torch
@@ -66,13 +69,26 @@ class LocalVideo:
                 self.pipe = self.pipe.to("cuda")
             
             self.is_loaded = True
+            self._using_builtin = False
             return True
         except ImportError:
-            print("Install: pip install diffusers[torch] transformers accelerate")
-            return False
+            pass
         except Exception as e:
-            print(f"Failed to load video model: {e}")
-            return False
+            print(f"AnimateDiff not available: {e}")
+        
+        # Fall back to built-in video generator
+        try:
+            from ...builtin import BuiltinVideoGen
+            self._builtin_video = BuiltinVideoGen()
+            if self._builtin_video.load():
+                self.is_loaded = True
+                self._using_builtin = True
+                print("Using built-in video generator (animated GIF)")
+                return True
+        except Exception as e:
+            print(f"Built-in video gen failed: {e}")
+        
+        return False
     
     def unload(self):
         if self.pipe:
@@ -84,12 +100,27 @@ class LocalVideo:
                     torch.cuda.empty_cache()
             except ImportError:
                 pass
+        if self._builtin_video:
+            self._builtin_video.unload()
+            self._builtin_video = None
         self.is_loaded = False
+        self._using_builtin = False
     
     def generate(self, prompt: str, duration: float = 2.0, fps: int = 8,
                  **kwargs) -> Dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
+        
+        # Use built-in if available
+        if self._using_builtin:
+            timestamp = int(time.time())
+            filepath = str(OUTPUT_DIR / f"video_{timestamp}.gif")
+            result = self._builtin_video.generate(prompt, frames=int(duration * fps), duration=duration)
+            if result.get("success") and result.get("video_data"):
+                with open(filepath, 'wb') as f:
+                    f.write(result["video_data"])
+                result["path"] = filepath
+            return result
         
         try:
             start = time.time()
@@ -228,9 +259,18 @@ class VideoGenerationWorker(QThread):
         self.duration = duration
         self.fps = fps
         self.provider_name = provider_name
+        self._stop_requested = False
+    
+    def request_stop(self):
+        """Request the worker to stop."""
+        self._stop_requested = True
     
     def run(self):
         try:
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
+                
             self.progress.emit(10)
             
             # Check if router has video assignments - use router if configured
@@ -240,6 +280,9 @@ class VideoGenerationWorker(QThread):
                 assignments = router.get_assignments("video")
                 
                 if assignments:
+                    if self._stop_requested:
+                        self.finished.emit({"success": False, "error": "Cancelled by user"})
+                        return
                     self.progress.emit(30)
                     params = {
                         "prompt": str(self.prompt).strip() if self.prompt else "",
@@ -253,6 +296,10 @@ class VideoGenerationWorker(QThread):
             except Exception as router_error:
                 print(f"Router fallback: {router_error}")
             
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
+                
             # Direct provider fallback
             provider = get_provider(self.provider_name)
             if provider is None:
@@ -265,6 +312,10 @@ class VideoGenerationWorker(QThread):
                     self.finished.emit({"success": False, "error": "Failed to load provider"})
                     return
             
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
+                
             self.progress.emit(40)
             
             result = provider.generate(
@@ -334,14 +385,16 @@ class VideoTab(QWidget):
         settings_layout.addWidget(QLabel("Duration:"))
         self.duration_spin = QDoubleSpinBox()
         self.duration_spin.setRange(0.5, 10.0)
-        self.duration_spin.setValue(2.0)
+        self.duration_spin.setValue(1.0)  # Lower default for GPU memory
         self.duration_spin.setSuffix("s")
+        self.duration_spin.setToolTip("Lower values use less GPU memory (1-2s recommended for 8GB VRAM)")
         settings_layout.addWidget(self.duration_spin)
         
         settings_layout.addWidget(QLabel("FPS:"))
         self.fps_spin = QSpinBox()
         self.fps_spin.setRange(4, 30)
-        self.fps_spin.setValue(8)
+        self.fps_spin.setValue(6)  # Lower default for GPU memory
+        self.fps_spin.setToolTip("Lower FPS = fewer frames = less GPU memory (6-8 recommended for 8GB VRAM)")
         settings_layout.addWidget(self.fps_spin)
         
         settings_layout.addStretch()
@@ -390,6 +443,13 @@ class VideoTab(QWidget):
         self.generate_btn.setStyleSheet("background-color: #9b59b6; font-weight: bold; padding: 8px;")
         self.generate_btn.clicked.connect(self._generate_video)
         btn_layout.addWidget(self.generate_btn)
+        
+        self.stop_btn = QPushButton("⏹ Stop")
+        self.stop_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 8px;")
+        self.stop_btn.clicked.connect(self._stop_generation)
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.setToolTip("Stop the current generation (may take a moment)")
+        btn_layout.addWidget(self.stop_btn)
         
         self.open_btn = QPushButton("Open")
         self.open_btn.setEnabled(False)
@@ -444,6 +504,7 @@ class VideoTab(QWidget):
         provider_name = self._get_provider_name()
         
         self.generate_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self.status_label.setText("Generating video (this may take a while)...")
@@ -458,8 +519,25 @@ class VideoTab(QWidget):
         self.worker.finished.connect(self._on_generation_complete)
         self.worker.start()
     
+    def _stop_generation(self):
+        """Stop the current generation."""
+        if self.worker and self.worker.isRunning():
+            self.status_label.setText("Stopping generation...")
+            self.worker.request_stop()
+            self.stop_btn.setEnabled(False)
+            
+            # Force terminate if still running after 2 seconds
+            from PyQt5.QtCore import QTimer
+            def force_stop():
+                if self.worker and self.worker.isRunning():
+                    self.worker.terminate()
+                    self.worker.wait(1000)
+                    self._on_generation_complete({"success": False, "error": "Force stopped by user"})
+            QTimer.singleShot(2000, force_stop)
+    
     def _on_generation_complete(self, result: dict):
         self.generate_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         self.progress.setVisible(False)
         
         if result.get("success"):

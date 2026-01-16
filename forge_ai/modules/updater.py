@@ -56,7 +56,7 @@ class ModuleUpdater:
         self.manager = manager
         self.registry_url = (
             registry_url or 
-            "https://enigma-modules.example.com/registry"
+            "https://forge-modules.example.com/registry"
         )
         self.backup_dir = Path("backups/modules")
         self.backup_dir.mkdir(parents=True, exist_ok=True)

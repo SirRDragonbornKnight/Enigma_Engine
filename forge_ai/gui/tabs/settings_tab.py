@@ -281,7 +281,7 @@ def _change_active_game(parent):
         QMessageBox.information(
             parent, "Custom Game",
             "Custom game configuration coming soon!\n"
-            "For now, add games in enigma/tools/game_router.py"
+            "For now, add games in forge_ai/tools/game_router.py"
         )
         parent.game_combo.setCurrentIndex(0)
         return
@@ -1873,7 +1873,7 @@ def _apply_theme(parent):
         QMessageBox.warning(
             parent, "Theme Error",
             "Theme system module (theme_system) not found.\n\n"
-            "Please ensure the enigma.gui.theme_system module is properly installed."
+            "Please ensure the forge_ai.gui.theme_system module is properly installed."
         )
     except Exception as e:
         QMessageBox.warning(parent, "Error", f"Failed to apply theme: {e}")
@@ -2106,7 +2106,7 @@ System:
     except ImportError:
         parent.power_status.setPlainText(
             "Power mode manager not available.\n"
-            "Make sure enigma.core.power_mode module exists."
+            "Make sure forge_ai.core.power_mode module exists."
         )
     except Exception as e:
         parent.power_status.setPlainText(f"Error getting status: {e}")

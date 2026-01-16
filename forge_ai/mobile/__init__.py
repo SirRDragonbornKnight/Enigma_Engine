@@ -3,7 +3,7 @@ Mobile Package for ForgeAI
 
 This module re-exports from forge_ai.comms.mobile_api for backwards compatibility.
 
-The main mobile API implementation lives in enigma.comms.mobile_api.
+The main mobile API implementation lives in forge_ai.comms.mobile_api.
 
 Usage:
     from forge_ai.mobile import MobileAPI, run_mobile_api

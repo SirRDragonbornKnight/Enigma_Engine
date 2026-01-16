@@ -143,13 +143,13 @@ export ELEVENLABS_API_KEY="your_key"
 
 ## Note on Legacy Addons
 
-The previous addon system (`enigma.addons`) has been removed. All functionality is now in the GUI tabs:
-- `enigma/gui/tabs/image_tab.py`
-- `enigma/gui/tabs/code_tab.py`
-- `enigma/gui/tabs/video_tab.py`
-- `enigma/gui/tabs/audio_tab.py`
-- `enigma/gui/tabs/embeddings_tab.py`
-- `enigma/gui/tabs/threed_tab.py`
+The previous addon system (`forge_ai.addons`) has been removed. All functionality is now in the GUI tabs:
+- `forge_ai/gui/tabs/image_tab.py`
+- `forge_ai/gui/tabs/code_tab.py`
+- `forge_ai/gui/tabs/video_tab.py`
+- `forge_ai/gui/tabs/audio_tab.py`
+- `forge_ai/gui/tabs/embeddings_tab.py`
+- `forge_ai/gui/tabs/threed_tab.py`
 
 Each tab contains both the implementation classes and the GUI.
 ## Exporting ForgeAI Models to HuggingFace

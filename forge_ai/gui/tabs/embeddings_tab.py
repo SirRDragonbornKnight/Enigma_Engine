@@ -2,7 +2,7 @@
 Embeddings Tab - Generate and compare text embeddings.
 
 Providers:
-  - LOCAL: sentence-transformers (all-MiniLM-L6-v2 or other models)
+  - LOCAL: sentence-transformers (or built-in fallback)
   - OPENAI: OpenAI embedding API (requires API key)
 """
 
@@ -38,36 +38,60 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =============================================================================
 
 class LocalEmbedding:
-    """Local embeddings using sentence-transformers."""
+    """Local embeddings using sentence-transformers with built-in fallback."""
     
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.model_name = model_name
         self.model = None
         self.is_loaded = False
+        self._using_builtin = False
+        self._builtin_emb = None
     
     def load(self) -> bool:
+        # Try sentence-transformers first
         try:
             from sentence_transformers import SentenceTransformer
             self.model = SentenceTransformer(self.model_name)
             self.is_loaded = True
+            self._using_builtin = False
             return True
         except ImportError:
-            print("Install: pip install sentence-transformers")
-            return False
+            pass
         except Exception as e:
-            print(f"Failed to load embedding model: {e}")
-            return False
+            print(f"sentence-transformers failed: {e}")
+        
+        # Fall back to built-in embeddings
+        try:
+            from ...builtin import BuiltinEmbeddings
+            self._builtin_emb = BuiltinEmbeddings()
+            if self._builtin_emb.load():
+                self.is_loaded = True
+                self._using_builtin = True
+                print("Using built-in embeddings (TF-IDF based)")
+                return True
+        except Exception as e:
+            print(f"Built-in embeddings failed: {e}")
+        
+        print("No embeddings available. Install sentence-transformers for better quality.")
+        return False
     
     def unload(self):
         if self.model:
             del self.model
             self.model = None
+        if self._builtin_emb:
+            self._builtin_emb.unload()
+            self._builtin_emb = None
         self.is_loaded = False
+        self._using_builtin = False
     
     def embed(self, text: str) -> Dict[str, Any]:
         """Generate embedding for a single text."""
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
+        
+        if self._using_builtin:
+            return self._builtin_emb.embed(text) if self._builtin_emb else {"success": False, "error": "No embeddings"}
         
         try:
             start = time.time()
@@ -86,6 +110,9 @@ class LocalEmbedding:
         """Generate embeddings for multiple texts."""
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
+        
+        if self._using_builtin:
+            return self._builtin_emb.embed_batch(texts) if self._builtin_emb else {"success": False, "error": "No embeddings"}
         
         try:
             start = time.time()

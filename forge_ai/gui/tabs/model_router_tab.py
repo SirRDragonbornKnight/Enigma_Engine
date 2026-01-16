@@ -212,9 +212,9 @@ class ToolAssignmentWidget(QFrame):
             registry = ModelRegistry()
             for model in registry.list_models():
                 model_name = model.get("name", model) if isinstance(model, dict) else str(model)
-                self.model_input.addItem(f"enigma:{model_name}")
+                self.model_input.addItem(f"forge:{model_name}")
         except Exception:
-            self.model_input.addItem("enigma:default")
+            self.model_input.addItem("forge:default")
             
         self.model_input.addItem("-- API Providers --")
         api_providers = [
@@ -275,9 +275,9 @@ class ToolAssignmentWidget(QFrame):
             priority = assign.get("priority", 10)
             
             # Determine type and color
-            if model_id.startswith("enigma:"):
+            if model_id.startswith("forge:"):
                 color = "#3498db"
-                icon = "[E]"
+                icon = "[F]"
             elif model_id.startswith("huggingface:"):
                 color = "#f39c12"
                 icon = "[HF]"

@@ -197,7 +197,7 @@ def _init_personality(parent):
         parent.personality = None
         parent.personality_status.setPlainText(
             "Personality system not available.\n"
-            "Make sure enigma.core.personality module exists."
+            "Make sure forge_ai.core.personality module exists."
         )
     except Exception as e:
         parent.personality = None

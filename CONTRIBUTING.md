@@ -61,7 +61,7 @@ pip install pytest black flake8 mypy
 python -m pytest tests/ -v
 
 # Check imports
-python -c "from enigma.modules import ModuleManager; print('✓ OK')"
+python -c "from forge_ai.modules import ModuleManager; print('✓ OK')"
 ```
 
 ## Project Architecture
@@ -94,7 +94,7 @@ Enigma uses a **module-based architecture** where everything is toggleable:
 ### Package Structure
 
 ```
-enigma/
+forge_ai/
 ├── core/          # AI model, training, inference
 ├── modules/       # Module system (manager, registry)
 ├── addons/        # AI generation addons (wrapped as modules)
@@ -141,8 +141,8 @@ enigma/
 **Example:** Adding a new AI capability
 
 ```python
-# enigma/modules/my_module.py
-from enigma.modules import Module, ModuleInfo, ModuleCategory
+# forge_ai/modules/my_module.py
+from forge_ai.modules import Module, ModuleInfo, ModuleCategory
 
 class MyModule(Module):
     INFO = ModuleInfo(
@@ -166,39 +166,40 @@ class MyModule(Module):
         return True
 ```
 
-Then register it in `enigma/modules/registry.py`:
+Then register it in `forge_ai/modules/registry.py`:
 ```python
 MODULE_REGISTRY['my_module'] = MyModule
 ```
 
-### Creating an Addon
+### Adding a New Generation Tab
 
-**Example:** Adding a new image generator
+Generation capabilities now live in GUI tabs. To add a new generator:
 
 ```python
-# enigma/addons/my_image_gen.py
-from enigma.addons.base import ImageAddon, AddonConfig, AddonType, AddonProvider
+# forge_ai/gui/tabs/my_gen_tab.py
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTextEdit
+from ..base_tab import BaseTab
 
-class MyImageGen(ImageAddon):
-    def __init__(self):
-        super().__init__(AddonConfig(
-            name="my_image_gen",
-            addon_type=AddonType.IMAGE,
-            provider=AddonProvider.LOCAL,
-        ))
+class MyGenTab(BaseTab):
+    """Custom generation tab."""
     
-    def load(self) -> bool:
-        # Load your model
-        self.is_loaded = True
-        return True
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
     
-    def generate(self, prompt: str, **kwargs):
-        # Generate image
-        return AddonResult(
-            success=True,
-            output=image_bytes,
-            metadata={"model": "my-model"}
-        )
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        self.prompt_input = QTextEdit()
+        self.generate_btn = QPushButton("Generate")
+        self.generate_btn.clicked.connect(self.generate)
+        layout.addWidget(self.prompt_input)
+        layout.addWidget(self.generate_btn)
+    
+    def generate(self):
+        prompt = self.prompt_input.toPlainText()
+        # Your generation logic here
+        result = self._do_generation(prompt)
+        self.show_result(result)
 ```
 
 ## Coding Standards
@@ -322,13 +323,13 @@ def calculate_loss(predictions, targets):
 
 ```bash
 # Format code
-black enigma/
+black forge_ai/
 
 # Check style
-flake8 enigma/
+flake8 forge_ai/
 
 # Type checking
-mypy enigma/
+mypy forge_ai/
 ```
 
 ### Common Patterns
@@ -437,8 +438,8 @@ pytest tests/ -v
 ```python
 # tests/test_my_module.py
 import unittest
-from enigma.modules import ModuleManager
-from enigma.modules.my_module import MyModule
+from forge_ai.modules import ModuleManager
+from forge_ai.modules.my_module import MyModule
 
 class TestMyModule(unittest.TestCase):
     def setUp(self):

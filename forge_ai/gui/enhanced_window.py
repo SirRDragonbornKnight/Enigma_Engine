@@ -62,6 +62,10 @@ class AIGenerationWorker(QThread):
             import time
             self._start_time = time.time()
             
+            # Debug output
+            print(f"[DEBUG] AIWorker starting - is_hf={self.is_hf}, custom_tokenizer={self.custom_tokenizer is not None}")
+            print(f"[DEBUG] Engine model type: {type(self.engine.model)}")
+            
             # Emit initial thinking status
             self.thinking.emit("Analyzing your message...")
             
@@ -79,6 +83,7 @@ class AIGenerationWorker(QThread):
                     return
                 
                 self.thinking.emit("Processing with language model...")
+                print(f"[DEBUG] Has chat method: {hasattr(self.engine.model, 'chat')}")
                 
                 # HuggingFace model
                 if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
@@ -86,7 +91,7 @@ class AIGenerationWorker(QThread):
                         self.text,
                         history=self.history if self.history else None,
                         system_prompt=self.system_prompt,
-                        max_new_tokens=50,
+                        max_new_tokens=200,
                         temperature=0.7
                     )
                 else:
@@ -176,6 +181,33 @@ class AIGenerationWorker(QThread):
             if not response:
                 response = "(No response generated - model may need more training)"
             
+            # Validate response - detect garbage/code output
+            garbage_indicators = [
+                'torch.tensor', 'np.array', 'def test_', 'assert ', 'import torch',
+                'class Test', 'self.setup', '.to(device)', 'cudnn.enabled',
+                'torch.randn', 'torch.zeros', 'return Tensor', '# Convert',
+                'dtype=torch.float', 'skip_special_tokens'
+            ]
+            
+            is_garbage = False
+            for indicator in garbage_indicators:
+                if indicator in response:
+                    is_garbage = True
+                    break
+            
+            # Also check if response is mostly code-like
+            if not is_garbage:
+                code_chars = response.count('(') + response.count(')') + response.count('[') + response.count(']') + response.count('=')
+                if len(response) > 50 and code_chars > len(response) * 0.1:
+                    is_garbage = True
+            
+            if is_garbage:
+                response = (
+                    "⚠️ I encountered an issue generating a proper response. "
+                    "This can happen when the model tokenizer has a mismatch. "
+                    "Try restarting the application or switching models."
+                )
+            
             elapsed = time.time() - self._start_time
             self.thinking.emit(f"Done in {elapsed:.1f}s")
             self.finished.emit(response)
@@ -206,11 +238,8 @@ class GenerationPreviewPopup(QDialog):
         self._setup_ui(title or f"{result_type.title()} Generated")
         self._position_window()
         
-        # Auto-close after 15 seconds (or click to close)
-        from PyQt5.QtCore import QTimer
-        self._auto_close_timer = QTimer(self)
-        self._auto_close_timer.timeout.connect(self.close)
-        self._auto_close_timer.start(15000)
+        # No auto-close - window stays until user closes it
+        # User can click X button or click anywhere outside to close
         
         # Track dragging
         self._drag_pos = None
@@ -1006,7 +1035,7 @@ THEMES = {
     "midnight": MIDNIGHT_STYLE,
 }
 
-# Import enigma modules
+# Import forge_ai modules
 try:
     from ..core.model_registry import ModelRegistry
     from ..core.model_config import MODEL_PRESETS
@@ -1320,7 +1349,7 @@ class ModelLoadingDialog(QDialog):
     def __init__(self, model_name: str, parent=None, show_terminal: bool = False):
         super().__init__(parent)
         self.setWindowTitle("Loading Model")
-        self.setFixedSize(450, 240)
+        self.setFixedSize(450, 270)
         self.setModal(False)  # Non-modal so user can move the main window
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)  # Stay on top but movable
         self.cancelled = False
@@ -1433,12 +1462,29 @@ class ModelLoadingDialog(QDialog):
         
         btn_layout.addStretch()
         
-        # Cancel button
-        self.cancel_btn = QPushButton("Cancel")
+        # Cancel button - more visible
+        self.cancel_btn = QPushButton("⛔ Cancel Loading")
+        self.cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f38ba8;
+                color: #1e1e2e;
+                font-weight: bold;
+                padding: 8px 20px;
+            }
+            QPushButton:hover {
+                background-color: #ef4444;
+            }
+        """)
         self.cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self.cancel_btn)
         
         layout.addLayout(btn_layout)
+        
+        # Help tip
+        tip_label = QLabel("💡 Tip: Press Ctrl+C in terminal to force stop")
+        tip_label.setStyleSheet("font-size: 10px; color: #6c7086;")
+        tip_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(tip_label)
         
         # Animation timer for activity dots
         self._dot_state = 0
@@ -1476,13 +1522,17 @@ class ModelLoadingDialog(QDialog):
             self.setFixedSize(450, 340)
         else:
             self.terminal_btn.setText("📺 Show Log")
-            self.setFixedSize(450, 240)
+            self.setFixedSize(450, 270)
     
     def _on_cancel(self):
         """Handle cancel button click."""
         self.cancelled = True
-        self.status_label.setText("Cancelling...")
-        self.log("Cancelled by user")
+        self.status_label.setText("⏹ Cancelling... (waiting for current operation)")
+        self.status_label.setStyleSheet("font-size: 12px; color: #f38ba8; font-weight: bold;")
+        self.cancel_btn.setText("⏹ Cancelling...")
+        self.cancel_btn.setEnabled(False)
+        self.log("❌ Cancelled by user - will stop at next checkpoint")
+        self.log("💡 If stuck, press Ctrl+C in the terminal window")
         QApplication.processEvents()
     
     def is_cancelled(self) -> bool:
@@ -2812,9 +2862,9 @@ class EnhancedMainWindow(QMainWindow):
         from pathlib import Path
         try:
             icon_paths = [
-                Path(__file__).parent / "icons" / "enigma.ico",
-                Path(__file__).parent / "icons" / "enigma_256.png",
-                Path(CONFIG.get("data_dir", "data")) / "icons" / "enigma.ico",
+                Path(__file__).parent / "icons" / "forge.ico",
+                Path(__file__).parent / "icons" / "forge_256.png",
+                Path(CONFIG.get("data_dir", "data")) / "icons" / "forge.ico",
             ]
             
             for icon_path in icon_paths:
@@ -2955,19 +3005,19 @@ class EnhancedMainWindow(QMainWindow):
                     "Click to toggle learning on/off."
                 )
     
-    def _require_enigma_model(self, feature_name: str) -> bool:
+    def _require_forge_model(self, feature_name: str) -> bool:
         """
         Check if current model is Forge. If HuggingFace, show warning and return False.
         Use this to guard Forge-only features like training.
         """
         if self._is_huggingface_model():
             # Get list of local Forge models
-            enigma_models = []
+            forge_models = []
             for name, info in self.registry.registry.get("models", {}).items():
                 if info.get("source") != "huggingface":
-                    enigma_models.append(name)
+                    forge_models.append(name)
             
-            model_list = ", ".join(enigma_models) if enigma_models else "Create one in Model Manager"
+            model_list = ", ".join(forge_models) if forge_models else "Create one in Model Manager"
             
             QMessageBox.warning(
                 self, 
@@ -3049,6 +3099,69 @@ class EnhancedMainWindow(QMainWindow):
         
         event.accept()
     
+    def keyPressEvent(self, event):
+        """Handle key press events - Escape stops all generations."""
+        from PyQt5.QtCore import Qt
+        if event.key() == Qt.Key_Escape:
+            self._stop_all_generations()
+        else:
+            super().keyPressEvent(event)
+    
+    def _stop_all_generations(self):
+        """Emergency stop all running generation tasks."""
+        stopped_any = False
+        
+        # Stop chat AI worker
+        if hasattr(self, '_ai_worker') and self._ai_worker:
+            if self._ai_worker.isRunning():
+                self._ai_worker.stop()
+                stopped_any = True
+        
+        # Stop image generation
+        if hasattr(self, 'image_tab') and self.image_tab:
+            if hasattr(self.image_tab, 'worker') and self.image_tab.worker:
+                if self.image_tab.worker.isRunning():
+                    self.image_tab.worker.request_stop()
+                    self.image_tab.worker.terminate()
+                    stopped_any = True
+        
+        # Stop video generation
+        if hasattr(self, 'video_tab') and self.video_tab:
+            if hasattr(self.video_tab, 'worker') and self.video_tab.worker:
+                if self.video_tab.worker.isRunning():
+                    self.video_tab.worker.request_stop()
+                    self.video_tab.worker.terminate()
+                    stopped_any = True
+        
+        # Stop audio generation  
+        if hasattr(self, 'audio_tab') and self.audio_tab:
+            if hasattr(self.audio_tab, 'worker') and self.audio_tab.worker:
+                if self.audio_tab.worker.isRunning():
+                    if hasattr(self.audio_tab.worker, 'request_stop'):
+                        self.audio_tab.worker.request_stop()
+                    self.audio_tab.worker.terminate()
+                    stopped_any = True
+        
+        # Stop code generation
+        if hasattr(self, 'code_tab') and self.code_tab:
+            if hasattr(self.code_tab, 'worker') and self.code_tab.worker:
+                if self.code_tab.worker.isRunning():
+                    if hasattr(self.code_tab.worker, 'request_stop'):
+                        self.code_tab.worker.request_stop()
+                    self.code_tab.worker.terminate()
+                    stopped_any = True
+        
+        # Clear CUDA cache to free GPU memory
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except:
+            pass
+        
+        if stopped_any:
+            self.statusBar().showMessage("⏹ All generations stopped (Escape pressed)", 3000)
+    
     def _run_setup_wizard(self):
         """Run first-time setup wizard."""
         wizard = SetupWizard(self.registry, self)
@@ -3118,21 +3231,46 @@ class EnhancedMainWindow(QMainWindow):
     
     def _load_current_model(self):
         """Load the current model into the engine with progress dialog."""
+        print(f"[DEBUG] _load_current_model called, model={self.current_model_name}")
+        import sys
+        sys.stdout.flush()
+        
         if not self.current_model_name:
+            print("[DEBUG] No model name, returning")
             return
             
+        print(f"[DEBUG] Creating loading dialog...")
+        sys.stdout.flush()
+        
         # Create and show loading dialog
         loading_dialog = ModelLoadingDialog(self.current_model_name, self)
         loading_dialog.show()
+        loading_dialog.raise_()  # Bring to front
+        loading_dialog.activateWindow()  # Make active
+        
+        print(f"[DEBUG] Dialog shown, processing events...")
+        sys.stdout.flush()
         
         # Force dialog to fully render before starting loading
         QApplication.processEvents()
         QApplication.processEvents()  # Double process to ensure rendering
         
+        # Small delay to ensure dialog is visible
+        import time
+        time.sleep(0.1)
+        QApplication.processEvents()
+        
+        print(f"[DEBUG] Starting model load...")
+        sys.stdout.flush()
+        
         try:
+            print(f"[DEBUG] Set status Initializing...")
+            sys.stdout.flush()
             loading_dialog.set_status("Initializing...", 5)
             QApplication.processEvents()
             
+            print(f"[DEBUG] Reading registry...")
+            sys.stdout.flush()
             loading_dialog.set_status("Reading model registry...", 10)
             
             # Check for cancellation
@@ -3141,6 +3279,8 @@ class EnhancedMainWindow(QMainWindow):
                 return
             
             # Create engine with selected model
+            print(f"[DEBUG] About to call registry.load_model...")
+            sys.stdout.flush()
             loading_dialog.set_status("Loading model weights from disk...", 15)
             
             # Progress callback for detailed model loading updates
@@ -3148,12 +3288,17 @@ class EnhancedMainWindow(QMainWindow):
                 # Map registry progress (5-38%) to dialog progress (15-40%)
                 mapped_pct = 15 + int((pct / 40) * 25)
                 loading_dialog.set_status(msg, mapped_pct)
+                print(f"[DEBUG] Load progress: {msg} ({pct}%)")
+                sys.stdout.flush()
             
             model, config = self.registry.load_model(
                 self.current_model_name,
                 progress_callback=on_load_progress
             )
+            print(f"[DEBUG] Model loaded! config={config}")
+            sys.stdout.flush()
             loading_dialog.set_status("✓ Model weights loaded", 40)
+            
             
             if loading_dialog.is_cancelled():
                 loading_dialog.close()
@@ -3277,6 +3422,11 @@ class EnhancedMainWindow(QMainWindow):
                 self.chat_model_label.setText(f"[AI] {self.current_model_name}")
             
             loading_dialog.set_status("Ready!", 100)
+            QApplication.processEvents()  # Ensure dialog updates
+            
+            # Brief pause to show completion
+            import time
+            time.sleep(0.3)
             
             # Show welcome message in chat
             if hasattr(self, 'chat_display'):
@@ -3474,7 +3624,7 @@ class EnhancedMainWindow(QMainWindow):
         """)
         title_layout = QHBoxLayout(title_widget)
         title_layout.setContentsMargins(16, 0, 16, 0)
-        app_title = QLabel("ENIGMA")
+        app_title = QLabel("FORGE AI")
         app_title.setStyleSheet("""
             color: #89b4fa;
             font-size: 16px;
@@ -4902,8 +5052,14 @@ class EnhancedMainWindow(QMainWindow):
                     role = "user" if msg.get("role") == "user" else "assistant"
                     history.append({"role": role, "content": msg.get("text", "")})
             
-            if getattr(self.engine, '_using_custom_tokenizer', False):
-                custom_tok = self.engine.tokenizer
+            # Check if using custom tokenizer - should be False for HuggingFace models!
+            using_custom = getattr(self.engine, '_using_custom_tokenizer', False)
+            print(f"[DEBUG] _using_custom_tokenizer = {using_custom}")
+            
+            if using_custom:
+                print("[WARNING] Custom tokenizer is enabled but this causes issues with HF models!")
+                # Don't pass custom tokenizer - let model use its own
+                custom_tok = None
             
             system_prompt = (
                 "You are an AI assistant running in the ForgeAI GUI. "
@@ -4934,16 +5090,20 @@ class EnhancedMainWindow(QMainWindow):
     def _remove_thinking_indicator(self):
         """Remove the thinking indicator from chat display."""
         if hasattr(self, 'chat_display'):
-            import re
+            # Get current HTML and remove thinking div
             html = self.chat_display.toHtml()
-            # Remove the thinking div
-            html = re.sub(
-                r'<div[^>]*id="thinking"[^>]*>.*?</div>',
-                '',
-                html,
-                flags=re.DOTALL | re.IGNORECASE
-            )
+            
+            # Remove the thinking div - handle multiple possible formats
+            import re
+            # Pattern 1: div with id=thinking
+            html = re.sub(r'<div[^>]*id=["\']?thinking["\']?[^>]*>.*?</div>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            # Pattern 2: italic text with "is thinking"
+            html = re.sub(r'<div[^>]*>\s*<i>[^<]*is thinking[^<]*</i>\s*</div>', '', html, flags=re.DOTALL | re.IGNORECASE)
+            # Pattern 3: just the thinking text without div
+            html = re.sub(r'<i>[^<]*is thinking\.\.\.[^<]*</i>', '', html, flags=re.IGNORECASE)
+            
             self.chat_display.setHtml(html)
+            
             # Scroll to bottom
             scrollbar = self.chat_display.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
@@ -5170,6 +5330,36 @@ class EnhancedMainWindow(QMainWindow):
             )
         self.last_response = response
         self._last_response_id = response_id
+        
+        # AUTO-SPEAK: Read response aloud if enabled
+        if getattr(self, 'auto_speak', False):
+            try:
+                # Try to speak the response (clean text only)
+                import re
+                clean_text = re.sub(r'<[^>]+>', '', display_response)  # Remove HTML
+                clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
+                clean_text = clean_text.strip()[:500]  # Limit length
+                
+                if clean_text and not clean_text.startswith("⚠️"):  # Don't speak error messages
+                    # Try pyttsx3 first (built-in TTS)
+                    try:
+                        import pyttsx3
+                        engine = pyttsx3.init()
+                        engine.setProperty('rate', 150)  # Speed
+                        engine.say(clean_text)
+                        engine.runAndWait()
+                    except ImportError:
+                        # Try system TTS as fallback
+                        import subprocess
+                        import sys
+                        if sys.platform == 'win32':
+                            # Windows PowerShell TTS
+                            subprocess.Popen(
+                                ['powershell', '-Command', f'Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak(\"{clean_text[:200]}\")'],
+                                creationflags=subprocess.CREATE_NO_WINDOW
+                            )
+            except Exception as e:
+                print(f"[DEBUG] TTS error: {e}")
         
         # Store response for feedback
         if not hasattr(self, '_response_history'):
@@ -5649,7 +5839,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             return
         
         # Check if this is a HuggingFace model - training not supported
-        if not self._require_enigma_model("Training"):
+        if not self._require_forge_model("Training"):
             return
         
         # DON'T auto-save editor - it might overwrite good data with truncated content
@@ -5876,7 +6066,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                         # Send MQTT message
                         client = self.robot_connection.get('client')
                         if client:
-                            client.publish("enigma/robot/command", command)
+                            client.publish("forge/robot/command", command)
                             if hasattr(self, 'robot_log'):
                                 self.robot_log.append(f"AI >> {command} (MQTT)")
                             return f"Sent to robot via MQTT: {command}"

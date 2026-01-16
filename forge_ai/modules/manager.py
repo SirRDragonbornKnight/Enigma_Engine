@@ -208,7 +208,7 @@ class ModuleManager:
     def __init__(self, config_path: Optional[Path] = None, local_only: bool = True):
         self.modules: Dict[str, Module] = {}
         self.module_classes: Dict[str, type] = {}
-        self.config_path = config_path or Path("enigma_modules.json")
+        self.config_path = config_path or Path("forge_modules.json")
         self.hardware_profile: Dict[str, Any] = {}
         self.local_only = local_only  # Default to local-only for privacy
 
@@ -528,6 +528,10 @@ class ModuleManager:
         """Get a module's public interface."""
         module = self.modules.get(module_id)
         return module.get_interface() if module else None
+
+    def is_loaded(self, module_id: str) -> bool:
+        """Check if a module is currently loaded."""
+        return module_id in self.modules and self.modules[module_id].state == ModuleState.LOADED
 
     def list_modules(self, category: Optional[ModuleCategory] = None) -> List[ModuleInfo]:
         """List all registered modules."""

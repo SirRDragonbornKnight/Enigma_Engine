@@ -25,7 +25,7 @@ python scripts/train_specialized_model.py \
     --epochs 50
 ```
 
-### 2. Enhanced Tool Router (`enigma/core/tool_router.py`)
+### 2. Enhanced Tool Router (`forge_ai/core/tool_router.py`)
 - **Specialized model loading**: Lazy loading with caching
 - **Intent classification**: `classify_intent()` method using nano router model
 - **Vision captioning**: `describe_image()` method for image descriptions
@@ -39,7 +39,7 @@ python scripts/train_specialized_model.py \
 - `describe_image(features: str) -> str` - Generate image captions
 - `generate_code(prompt: str) -> str` - Generate code snippets
 
-### 3. Inference Engine Integration (`enigma/core/inference.py`)
+### 3. Inference Engine Integration (`forge_ai/core/inference.py`)
 - **New parameter**: `use_routing` (default: False for backwards compatibility)
 - **Automatic routing**: Routes requests through specialized models
 - **Transparent**: Works seamlessly with existing inference API
@@ -52,7 +52,7 @@ engine = ForgeEngine(use_routing=True)
 response = engine.generate("write a sort function")  # Routes to code model
 ```
 
-### 4. Module System Integration (`enigma/modules/registry.py`)
+### 4. Module System Integration (`forge_ai/modules/registry.py`)
 - **ToolRouterModule**: New module for specialized routing
 - **Configuration options**: Enable/disable individual specialized models
 - **Clean lifecycle**: Proper load/unload with cache cleanup
@@ -95,7 +95,7 @@ Created three comprehensive training data files in `data/specialized/`:
 ```json
 {
   "enabled": true,
-  "shared_tokenizer": "enigma/vocab_model/bpe_vocab.json",
+  "shared_tokenizer": "forge_ai/vocab_model/bpe_vocab.json",
   "models": {
     "router": { "path": "...", "size": "nano", ... },
     "vision": { "path": "...", "size": "tiny", ... },
@@ -185,9 +185,9 @@ All specialized models use the same tokenizer, enabling:
 
 ## Files Modified (5)
 
-1. `enigma/core/tool_router.py` - Enhanced routing (+280 lines)
-2. `enigma/core/inference.py` - Added use_routing parameter (+20 lines)
-3. `enigma/modules/registry.py` - Added ToolRouterModule (+60 lines)
+1. `forge_ai/core/tool_router.py` - Enhanced routing (+280 lines)
+2. `forge_ai/core/inference.py` - Added use_routing parameter (+20 lines)
+3. `forge_ai/modules/registry.py` - Added ToolRouterModule (+60 lines)
 4. `README.md` - Added specialized models section (+30 lines)
 5. `.gitignore` - Allow data/specialized/ directory (+1 line)
 

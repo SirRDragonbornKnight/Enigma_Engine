@@ -12,7 +12,7 @@ Endpoints:
   POST /generate  - Generate response (prompt, max_gen, temperature)
 
 Usage:
-  python -m enigma.comms.api_server
+  python -m forge_ai.comms.api_server
   # or
   python run.py --serve
 """
@@ -23,7 +23,7 @@ from ..core.inference import ForgeEngine
 
 def create_app():
     """Create Flask app without starting it."""
-    app = Flask("enigma_api")
+    app = Flask("forge_api")
     CORS(app)
     engine = ForgeEngine()
 

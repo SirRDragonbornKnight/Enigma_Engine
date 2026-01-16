@@ -126,7 +126,7 @@ The AI then continues based on the result.
 To teach the AI to use tools:
 
 1. Train the tokenizer with tool tokens:
-   python -m enigma.core.tokenizer data/tool_training_data.txt
+   python -m forge_ai.core.tokenizer data/tool_training_data.txt
 
 2. Train the model on tool examples:
    python run.py --train --data data/tool_training_data.txt

@@ -70,7 +70,7 @@ customizer.add_accessory("hat")
 ## Files & Structure
 
 ```
-enigma/avatar/
+forge_ai/avatar/
 ├── __init__.py                    # Main exports
 ├── controller.py                  # Avatar controller (enhanced)
 ├── avatar_identity.py             # AI self-design system

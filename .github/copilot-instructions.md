@@ -8,10 +8,10 @@ ForgeAI is a **fully modular AI framework** where EVERYTHING is a toggleable mod
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           MODULE MANAGER                                 │
-│              enigma/modules/manager.py - Central Control                 │
+│            forge_ai/modules/manager.py - Central Control                 │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                           MODULE REGISTRY                                │
-│          enigma/modules/registry.py - All Available Modules              │
+│        forge_ai/modules/registry.py - All Available Modules              │
 ├──────────────┬──────────────┬──────────────┬───────────────────────────┤
 │    CORE      │  GENERATION  │   MEMORY     │    PERCEPTION/OUTPUT      │
 │  - model     │  - image_gen │  - memory    │  - voice_input/output     │
@@ -28,15 +28,15 @@ ForgeAI is a **fully modular AI framework** where EVERYTHING is a toggleable mod
 ```
 
 ### Core Packages
-- **enigma.core**: Enigma transformer model with RoPE, RMSNorm, SwiGLU, KV-cache, tool routing
-- **enigma.modules**: Module system - manager, registry, state handling
-- **enigma.gui.tabs**: Generation capabilities in standalone tabs (image, code, video, audio, 3D, embeddings, camera)
-- **enigma.memory**: Conversation storage (JSON/SQLite), vector search
-- **enigma.comms**: API server, remote client, multi-device networking
-- **enigma.gui**: PyQt5 interface with Module Manager tab
-- **enigma.voice**: TTS/STT wrappers
-- **enigma.avatar**: Avatar control and rendering
-- **enigma.tools**: Vision, web, file, document, robot, game tools
+- **forge_ai.core**: Forge transformer model with RoPE, RMSNorm, SwiGLU, KV-cache, tool routing
+- **forge_ai.modules**: Module system - manager, registry, state handling
+- **forge_ai.gui.tabs**: Generation capabilities in standalone tabs (image, code, video, audio, 3D, embeddings, camera)
+- **forge_ai.memory**: Conversation storage (JSON/SQLite), vector search
+- **forge_ai.comms**: API server, remote client, multi-device networking
+- **forge_ai.gui**: PyQt5 interface with Module Manager tab
+- **forge_ai.voice**: TTS/STT wrappers
+- **forge_ai.avatar**: Avatar control and rendering
+- **forge_ai.tools**: Vision, web, file, document, robot, game tools
 
 ### Model Sizes (15 presets)
 | Size | Params | Use Case |
@@ -52,25 +52,25 @@ ForgeAI is a **fully modular AI framework** where EVERYTHING is a toggleable mod
 ## Key Files & Classes Reference
 
 ### Module Management
-- **enigma/modules/manager.py**: `ModuleManager`, `Module`, `ModuleInfo`, `ModuleState` classes - Central module system
-- **enigma/modules/registry.py**: Module classes (`ModelModule`, `TokenizerModule`, `ToolRouterModule`, etc.)
-- **enigma/modules/sandbox.py**: Sandboxed module execution
+- **forge_ai/modules/manager.py**: `ModuleManager`, `Module`, `ModuleInfo`, `ModuleState` classes - Central module system
+- **forge_ai/modules/registry.py**: Module classes (`ModelModule`, `TokenizerModule`, `ToolRouterModule`, etc.)
+- **forge_ai/modules/sandbox.py**: Sandboxed module execution
 
 ### Core AI Components
-- **enigma/core/model.py**: `Enigma`, `create_model()` - Main transformer model implementation
-- **enigma/core/tokenizer.py**: `get_tokenizer()`, `SimpleTokenizer`, `TiktokenWrapper` - Text tokenization
-- **enigma/core/training.py**: `Trainer`, `TrainingConfig`, `train_model()` - Model training
-- **enigma/core/inference.py**: `ForgeEngine` class - Model inference with optional `use_routing` for specialized models
-- **enigma/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models, `export_to_huggingface()` for uploading to HF Hub
-- **enigma/core/tool_router.py**: `ToolRouter`, `get_router()`, `classify_intent()`, `describe_image()`, `generate_code()` - Specialized model routing
-- **enigma/core/huggingface_loader.py**: `load_huggingface_model()` - Load HuggingFace models
-- **enigma/core/huggingface_exporter.py**: `HuggingFaceExporter`, `export_model_to_hub()`, `export_model_locally()` - Upload ForgeAI models to HuggingFace
-- **enigma/core/gguf_loader.py**: GGUF format model loading
+- **forge_ai/core/model.py**: `Forge`, `create_model()` - Main transformer model implementation
+- **forge_ai/core/tokenizer.py**: `get_tokenizer()`, `SimpleTokenizer`, `TiktokenWrapper` - Text tokenization
+- **forge_ai/core/training.py**: `Trainer`, `TrainingConfig`, `train_model()` - Model training
+- **forge_ai/core/inference.py**: `ForgeEngine` class - Model inference with optional `use_routing` for specialized models
+- **forge_ai/core/model_registry.py**: `ModelRegistry` class - Manages multiple loaded models, `export_to_huggingface()` for uploading to HF Hub
+- **forge_ai/core/tool_router.py**: `ToolRouter`, `get_router()`, `classify_intent()`, `describe_image()`, `generate_code()` - Specialized model routing
+- **forge_ai/core/huggingface_loader.py**: `load_huggingface_model()` - Load HuggingFace models
+- **forge_ai/core/huggingface_exporter.py**: `HuggingFaceExporter`, `export_model_to_hub()`, `export_model_locally()` - Upload ForgeAI models to HuggingFace
+- **forge_ai/core/gguf_loader.py**: GGUF format model loading
 
-### AI Generation Tabs (in enigma/gui/tabs/)
+### AI Generation Tabs (in forge_ai/gui/tabs/)
 Each tab contains both the implementation (provider classes) and the GUI:
 - **image_tab.py**: `StableDiffusionLocal`, `OpenAIImage`, `ReplicateImage` + `ImageTab`
-- **code_tab.py**: `EnigmaCode`, `OpenAICode` + `CodeTab`
+- **code_tab.py**: `ForgeCode`, `OpenAICode` + `CodeTab`
 - **video_tab.py**: `LocalVideo`, `ReplicateVideo` + `VideoTab`
 - **audio_tab.py**: `LocalTTS`, `ElevenLabsTTS`, `ReplicateAudio` + `AudioTab`
 - **embeddings_tab.py**: `LocalEmbedding`, `OpenAIEmbedding` + `EmbeddingsTab`
@@ -81,40 +81,40 @@ Each tab contains both the implementation (provider classes) and the GUI:
 - **model_router_tab.py**: `ModelRouterTab` class - Tool-to-model assignment UI
 
 ### Memory System
-- **enigma/memory/manager.py**: `ConversationManager` class - Stores chat history
-- **enigma/memory/vector_db.py**: `VectorDBInterface`, `FAISSVectorDB`, `SimpleVectorDB` - Semantic search over memories
+- **forge_ai/memory/manager.py**: `ConversationManager` class - Stores chat history
+- **forge_ai/memory/vector_db.py**: `VectorDBInterface`, `FAISSVectorDB`, `SimpleVectorDB` - Semantic search over memories
 
 ### Communication & Networking
-- **enigma/comms/api_server.py**: `create_api_server()` function - REST API for remote access
-- **enigma/comms/network.py**: `EnigmaNode`, `Message`, `ModelExporter` classes - Multi-device networking
+- **forge_ai/comms/api_server.py**: `create_api_server()` function - REST API for remote access
+- **forge_ai/comms/network.py**: `ForgeNode`, `Message`, `ModelExporter` classes - Multi-device networking
 
 ### Voice System
-- **enigma/voice/voice_generator.py**: `AIVoiceGenerator`, `VoiceEvolution` classes - Voice synthesis
-- **enigma/voice/listener.py**: `VoiceListener` class - Speech-to-text input
+- **forge_ai/voice/voice_generator.py**: `AIVoiceGenerator`, `VoiceEvolution` classes - Voice synthesis
+- **forge_ai/voice/listener.py**: `VoiceListener` class - Speech-to-text input
 
 ### User Interface
-- **enigma/gui/enhanced_window.py**: `EnhancedMainWindow` class - PyQt5 main application window
-- **enigma/gui/tabs/modules_tab.py**: `ModulesTab` class - UI for toggling modules on/off
-- **enigma/gui/system_tray.py**: `QuickCommandOverlay` class - Mini chat window
+- **forge_ai/gui/enhanced_window.py**: `EnhancedMainWindow` class - PyQt5 main application window
+- **forge_ai/gui/tabs/modules_tab.py**: `ModulesTab` class - UI for toggling modules on/off
+- **forge_ai/gui/system_tray.py**: `QuickCommandOverlay` class - Mini chat window
 
 ### Web Interface
-- **enigma/web/app.py**: `run_web()` function - Flask web dashboard, `app` Flask instance
+- **forge_ai/web/app.py**: `run_web()` function - Flask web dashboard, `app` Flask instance
 
 ### Autonomous Systems (Avatar/Robot/Game Control)
-- **enigma/avatar/autonomous.py**: `AutonomousAvatar`, `AutonomousConfig`, `ScreenRegion` - Avatar auto-behavior
-- **enigma/tools/robot_modes.py**: `RobotModeController`, `get_mode_controller()` - Robot hardware control
-- **enigma/tools/game_router.py**: `GameAIRouter`, `GameConfig`, `get_game_router()` - Game-specific AI routing
+- **forge_ai/avatar/autonomous.py**: `AutonomousAvatar`, `AutonomousConfig`, `ScreenRegion` - Avatar auto-behavior
+- **forge_ai/tools/robot_modes.py**: `RobotModeController`, `get_mode_controller()` - Robot hardware control
+- **forge_ai/tools/game_router.py**: `GameAIRouter`, `GameConfig`, `get_game_router()` - Game-specific AI routing
 
 ### Tools System
-- **enigma/tools/tool_executor.py**: `ToolExecutor` class - Executes AI tool calls
-- **enigma/tools/tool_definitions.py**: `ToolDefinition`, `ToolParameter` classes, `get_all_tools()` function
-- **enigma/tools/tool_registry.py**: `ToolRegistry` class - Manages available tools
+- **forge_ai/tools/tool_executor.py**: `ToolExecutor` class - Executes AI tool calls
+- **forge_ai/tools/tool_definitions.py**: `ToolDefinition`, `ToolParameter` classes, `get_all_tools()` function
+- **forge_ai/tools/tool_registry.py**: `ToolRegistry` class - Manages available tools
 
 ### Security
-- **enigma/utils/security.py**: `is_path_blocked()`, `get_blocked_paths()` functions - Path blocking for AI safety
+- **forge_ai/utils/security.py**: `is_path_blocked()`, `get_blocked_paths()` functions - Path blocking for AI safety
 
 ### Configuration
-- **enigma/config.py**: `CONFIG` object - Global configuration (paths, model sizes, hyperparameters)
+- **forge_ai/config/**: `CONFIG` object - Global configuration (paths, model sizes, hyperparameters)
 
 ## Module System
 
@@ -167,7 +167,7 @@ The module manager automatically prevents:
 - **GUI**: `python run.py --gui` - Module Manager tab to toggle capabilities
 
 ## Conventions
-- **Imports**: Relative within enigma (`from ..config import CONFIG`)
+- **Imports**: Relative within forge_ai (`from ..config import CONFIG`)
 - **Paths**: Use `pathlib.Path`, dirs auto-created via CONFIG
 - **Modules**: Always use ModuleManager for loading capabilities
 - **Tabs**: Generation implementations live directly in their GUI tabs

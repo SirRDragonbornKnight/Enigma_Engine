@@ -284,7 +284,7 @@ manager.load('avatar')            # For avatar control
 
 # Create inference engine with tools enabled
 engine = ForgeEngine(
-    model_path="models/enigma.pth",
+    model_path="models/forge_ai.pth",
     enable_tools=True,
     module_manager=manager
 )
@@ -333,7 +333,7 @@ print(result)
 
 ### 1. Define the Tool
 
-Add to `enigma/tools/tool_definitions.py`:
+Add to `forge_ai/tools/tool_definitions.py`:
 
 ```python
 MY_TOOL = ToolDefinition(
@@ -363,7 +363,7 @@ ALL_TOOLS = [
 
 ### 2. Implement Execution
 
-Add to `enigma/tools/tool_executor.py`:
+Add to `forge_ai/tools/tool_executor.py`:
 
 ```python
 def _execute_my_tool(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -558,7 +558,7 @@ To contribute new tools:
 ---
 
 For more information, see:
-- `enigma/tools/tool_definitions.py` - Tool schemas
-- `enigma/tools/tool_executor.py` - Execution logic
-- `enigma/core/inference.py` - Integration with AI
+- `forge_ai/tools/tool_definitions.py` - Tool schemas
+- `forge_ai/tools/tool_executor.py` - Execution logic
+- `forge_ai/core/inference.py` - Integration with AI
 - `data/tool_training_data.txt` - Training examples
