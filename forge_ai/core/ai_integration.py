@@ -178,7 +178,7 @@ class AIIntegration:
             
             # Check if model is assigned
             if self.router:
-                models = self.router.get_assigned_models(feature)
+                models = self.router.get_assignments(feature)
                 if models:
                     fs.has_model = True
                     fs.model_id = models[0].model_id
