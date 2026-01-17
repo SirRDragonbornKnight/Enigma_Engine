@@ -1,152 +1,144 @@
 #!/usr/bin/env python3
 """
-Download recommended models for ForgeAI GUI.
+Download HuggingFace models for ForgeAI.
 
-This script downloads HuggingFace models that work well with the GUI
-and fit in your GPU memory (RTX 2080 with 8GB VRAM).
-
-Recommended models:
-- TinyLlama-1.1B-Chat: Fast, small, great for chat (~1.1B params, ~2.5GB VRAM)
-- Phi-2: Microsoft's small but powerful model (~2.7B params, ~6GB VRAM)  
-- DialoGPT-medium: Good conversational model (~355M params, ~1.5GB VRAM)
-- Qwen2-0.5B-Instruct: Excellent small instruct model (~0.5B params, ~1GB VRAM)
+Usage:
+    python scripts/download_models.py                           # Interactive menu
+    python scripts/download_models.py Qwen/Qwen2-0.5B-Instruct  # Download specific model
+    python scripts/download_models.py --list                    # List recommended models
 """
 
 import sys
-import os
-from typing import Optional
-
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from pathlib import Path
+from datetime import datetime
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Recommended models (id, local_name, description)
+RECOMMENDED = [
+    ("Qwen/Qwen2-0.5B-Instruct", "qwen2_0.5b", "~0.5B, ~1GB VRAM - Fast"),
+    ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", "tinyllama", "~1.1B, ~2.5GB VRAM - Chat"),
+    ("microsoft/DialoGPT-medium", "dialogpt", "~355M, ~1.5GB VRAM - Conversational"),
+    ("microsoft/phi-2", "phi2", "~2.7B, ~6GB VRAM - Capable"),
+]
 
 
-def download_model(model_id: str, model_name: Optional[str] = None):
-    """Download a HuggingFace model."""
-    from forge_ai.core.huggingface_loader import HuggingFaceModel, get_huggingface_model_info
-    from forge_ai.core.model_registry import ModelRegistry
+def download_model(model_id: str, local_name: str | None = None) -> bool:
+    """Download and register a HuggingFace model."""
+    try:
+        from forge_ai.core.huggingface_loader import HuggingFaceModel, get_huggingface_model_info
+        from forge_ai.core.model_registry import ModelRegistry
+    except ImportError as e:
+        print(f"Error: Missing dependencies: {e}")
+        return False
     
-    if model_name is None:
-        model_name = model_id.replace("/", "_").lower()
+    if local_name is None:
+        local_name = model_id.replace("/", "_").lower()
     
-    print(f"\n{'='*60}")
+    print(f"\n{'='*50}")
     print(f"Downloading: {model_id}")
-    print(f"Local name: {model_name}")
-    print("="*60)
+    print(f"Local name: {local_name}")
+    print("="*50)
     
-    # Get model info first
+    # Get info
     info = get_huggingface_model_info(model_id)
-    if info.get("error"):
-        print(f"Warning: Could not get model info: {info['error']}")
-    else:
-        print(f"  Size: {info['size_str']} parameters")
-        print(f"  Architecture: {info['architecture']}")
-        print(f"  Hidden size: {info['hidden_size']}")
-        print(f"  Layers: {info['num_layers']}")
+    if not info.get("error"):
+        print(f"Size: {info['size_str']} | Arch: {info['architecture']}")
     
-    print("\nDownloading model files (this may take a while)...")
+    print("\nDownloading (this may take a while)...")
     
     try:
-        # Create the model instance and load it (triggers download)
-        model = HuggingFaceModel(
-            model_id,
-            device="cuda",
-            torch_dtype="float16"
-        )
+        model = HuggingFaceModel(model_id, device="cuda", torch_dtype="float16")
         model.load()
+        print("[OK] Model loaded!")
         
-        print(f"✓ Model loaded successfully!")
-        
-        # Register in the model registry
+        # Register
         registry = ModelRegistry()
-        
-        # Save model info to registry
-        models_dir = Path("models") / model_name
+        models_dir = Path("models") / local_name
         models_dir.mkdir(parents=True, exist_ok=True)
         
-        registry.registry["models"][model_name] = {
+        registry.registry["models"][local_name] = {
             "path": str(models_dir.absolute()),
             "size": "huggingface",
-            "created": __import__("datetime").datetime.now().isoformat(),
-            "has_weights": False,  # Weights are in HF cache
+            "created": datetime.now().isoformat(),
+            "has_weights": False,
             "source": "huggingface",
             "huggingface_id": model_id,
-            "use_custom_tokenizer": False
         }
         registry._save_registry()
+        print(f"[OK] Registered as '{local_name}'")
         
-        print(f"✓ Registered as '{model_name}' in model registry")
-        
-        # Test generation
-        print("\nTesting generation...")
+        # Quick test
+        print("\nTesting...")
         response = model.generate("Hello, I am", max_new_tokens=20)
-        print(f"  Test output: {response[:100]}...")
+        print(f"Test: {response[:80]}...")
         
-        # Unload to free VRAM
+        # Cleanup
         del model
         import torch
         torch.cuda.empty_cache()
         
-        print(f"\n✓ {model_name} ready to use!")
+        print(f"\n[OK] {local_name} ready!")
         return True
         
     except Exception as e:
-        print(f"✗ Failed to download {model_id}: {e}")
+        print(f"[FAIL] Failed: {e}")
         return False
 
 
-def main():
-    """Download recommended models."""
-    print("="*60)
+def main() -> int:
+    """CLI entry point."""
+    print("="*50)
     print("ForgeAI Model Downloader")
-    print("="*60)
-    print("\nThis will download models from HuggingFace Hub.")
-    print("Models will be cached in your HuggingFace cache directory.")
-    print("\nRecommended models for RTX 2080 (8GB VRAM):")
-    print()
+    print("="*50)
     
-    # Models sorted by size (smallest first)
-    recommended_models = [
-        ("Qwen/Qwen2-0.5B-Instruct", "qwen2_0.5b", "~0.5B params, ~1GB VRAM - Fast & capable"),
-        ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", "tinyllama_chat", "~1.1B params, ~2.5GB VRAM - Great for chat"),
-        ("microsoft/DialoGPT-medium", "dialogpt_medium", "~355M params, ~1.5GB VRAM - Conversational"),
-        ("microsoft/phi-2", "phi2", "~2.7B params, ~6GB VRAM - Very capable"),
-    ]
+    # Direct download
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        
+        if arg == "--list":
+            print("\nRecommended models:")
+            for model_id, name, desc in RECOMMENDED:
+                print(f"  {name}: {desc}")
+                print(f"    {model_id}")
+            return 0
+        
+        # Check if it's a known model
+        for model_id, name, _ in RECOMMENDED:
+            if arg == name or arg == model_id:
+                return 0 if download_model(model_id, name) else 1
+        
+        # Assume it's a custom HuggingFace ID
+        local_name = sys.argv[2] if len(sys.argv) > 2 else None
+        return 0 if download_model(arg, local_name) else 1
     
-    for i, (model_id, name, desc) in enumerate(recommended_models, 1):
+    # Interactive menu
+    print("\nRecommended models:\n")
+    for i, (model_id, name, desc) in enumerate(RECOMMENDED, 1):
         print(f"  {i}. {name}: {desc}")
-    
-    print(f"\n  A. Download ALL recommended models")
+    print(f"\n  A. Download ALL")
     print(f"  Q. Quit")
     
-    choice = input("\nEnter your choice (1-4, A, or Q): ").strip().upper()
+    choice = input("\nChoice (1-4, A, Q): ").strip().upper()
     
     if choice == 'Q':
-        print("Exiting.")
-        return
+        return 0
     
     if choice == 'A':
-        print("\nDownloading all recommended models...")
-        for model_id, name, _ in recommended_models:
+        for model_id, name, _ in RECOMMENDED:
             download_model(model_id, name)
-    elif choice.isdigit() and 1 <= int(choice) <= len(recommended_models):
-        idx = int(choice) - 1
-        model_id, name, _ = recommended_models[idx]
+    elif choice.isdigit() and 1 <= int(choice) <= len(RECOMMENDED):
+        model_id, name, _ = RECOMMENDED[int(choice) - 1]
         download_model(model_id, name)
     else:
         print("Invalid choice.")
-        return
+        return 1
     
-    print("\n" + "="*60)
-    print("Download complete!")
-    print("="*60)
-    print("\nYou can now use these models in the ForgeAI GUI:")
-    print("  1. Open the GUI: python run.py --gui")
-    print("  2. Go to Model Manager tab")
-    print("  3. Select your downloaded model from the list")
-    print("  4. Click 'Load Model'")
+    print("\n" + "="*50)
+    print("Done! Use models in GUI: python run.py --gui")
+    print("="*50)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

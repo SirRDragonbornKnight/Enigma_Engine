@@ -2,198 +2,316 @@
 """
 Reset ForgeAI for Public Sharing
 
-This script removes user-specific data and settings to prepare
-the project for public release/sharing.
+Removes user-specific data and settings to prepare for public release.
 
 What gets cleaned:
-- Trained models (models/ folder contents)
+- Trained models (models/)
 - Conversation history (data/conversations/)
-- User training data (data/user_training.txt)
-- GUI settings (data/gui_settings.json)
-- Module configuration
-- Avatar orientation settings
-- Voice profiles (data/voice_profiles/)
-- Output files (outputs/)
-- Memory database (memory/)
-- Logs (logs/)
-- URL blocklist cache
+- User training data, GUI settings, module config
+- Voice profiles, avatar settings
+- Outputs, memory database, logs, cache
 
 What is preserved:
 - All source code
 - Example data files
 - Documentation
-- Default configuration
+
+Usage:
+    python scripts/reset_for_sharing.py --preview      # See what will be cleaned
+    python scripts/reset_for_sharing.py --yes          # Clean without confirmation
+    python scripts/reset_for_sharing.py --skip models  # Keep models folder
+    python scripts/reset_for_sharing.py --skip models --skip outputs  # Keep multiple
 """
+
+from __future__ import annotations
 
 import argparse
 import shutil
 import json
+import sys
+from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
+# Valid skip options (for typo detection)
+VALID_SKIP_OPTIONS = frozenset({
+    'models', 'outputs', 'memory', 'logs', 'conversations',
+    'voice_profiles', 'avatar', '__pycache__', 'gui_settings',
+    'user_training', 'url_blocklist', 'tool_routing', 
+    'information_gui', 'module_config'
+})
 
+DEFAULT_GUI_SETTINGS: dict[str, str | int] = {
+    "theme": "dark",
+    "window_width": 1400,
+    "window_height": 900
+}
+
+
+@dataclass
+class CleanupItem:
+    """Represents an item to be cleaned."""
+    path: Path
+    description: str
+    name: str  # For skip matching
+    is_directory: bool = True
+    
+    def exists(self) -> bool:
+        return self.path.is_dir() if self.is_directory else self.path.is_file()
+    
+    def count(self) -> int:
+        if not self.exists():
+            return 0
+        return sum(1 for _ in self.path.rglob('*')) if self.is_directory else 1
+
+
+@dataclass
+class CleanupResult:
+    """Result of a cleanup operation."""
+    success: bool = True
+    items_removed: int = 0
+    errors: list[str] = field(default_factory=list)
+
+
+@lru_cache(maxsize=1)
 def get_project_root() -> Path:
-    """Get the project root directory."""
+    """Get the project root directory (cached)."""
     return Path(__file__).parent.parent.resolve()
 
 
-def get_items_to_clean():
-    """Get list of items to clean with descriptions."""
-    root = get_project_root()
+def get_cleanup_items(root: Path) -> tuple[list[CleanupItem], list[CleanupItem]]:
+    """Get directories and files to clean."""
+    directories = [
+        CleanupItem(root / 'models', 'Trained models', 'models'),
+        CleanupItem(root / 'outputs', 'Generated outputs', 'outputs'),
+        CleanupItem(root / 'memory', 'Memory database', 'memory'),
+        CleanupItem(root / 'logs', 'Log files', 'logs'),
+        CleanupItem(root / 'data' / 'conversations', 'Conversation history', 'conversations'),
+        CleanupItem(root / 'data' / 'voice_profiles', 'Voice profiles', 'voice_profiles'),
+        CleanupItem(root / 'data' / 'avatar', 'Avatar settings', 'avatar'),
+        CleanupItem(root / '__pycache__', 'Python cache', '__pycache__'),
+    ]
     
-    return {
-        'directories': [
-            (root / 'models', 'Trained models'),
-            (root / 'outputs', 'Generated outputs'),
-            (root / 'memory', 'Memory database'),
-            (root / 'logs', 'Log files'),
-            (root / 'data' / 'conversations', 'Conversation history'),
-            (root / 'data' / 'voice_profiles', 'Voice profiles'),
-            (root / 'data' / 'avatar', 'Avatar settings'),
-        ],
-        'files': [
-            (root / 'data' / 'gui_settings.json', 'GUI settings'),
-            (root / 'data' / 'user_training.txt', 'User training data'),
-            (root / 'data' / 'url_blocklist_cache.json', 'URL blocklist cache'),
-            (root / 'data' / 'tool_routing.json', 'Tool routing config'),
-            (root / 'information' / 'gui_settings.json', 'Information GUI settings'),
-            (root / 'forge_ai' / 'modules' / 'module_config.json', 'Module configuration'),
-        ],
-    }
+    files = [
+        CleanupItem(root / 'data' / 'gui_settings.json', 'GUI settings', 'gui_settings', is_directory=False),
+        CleanupItem(root / 'data' / 'user_training.txt', 'User training data', 'user_training', is_directory=False),
+        CleanupItem(root / 'data' / 'url_blocklist_cache.json', 'URL blocklist cache', 'url_blocklist', is_directory=False),
+        CleanupItem(root / 'data' / 'tool_routing.json', 'Tool routing config', 'tool_routing', is_directory=False),
+        CleanupItem(root / 'information' / 'gui_settings.json', 'Information GUI settings', 'information_gui', is_directory=False),
+        CleanupItem(root / 'forge_ai' / 'modules' / 'module_config.json', 'Module configuration', 'module_config', is_directory=False),
+    ]
+    
+    return directories, files
 
 
-def preview_cleanup():
-    """Show what will be cleaned without actually deleting."""
-    items = get_items_to_clean()
+def validate_skip_items(skip_items: list[str]) -> list[str]:
+    """
+    Validate skip items and suggest corrections for typos.
+    
+    Returns list of error messages (empty if all valid).
+    """
+    errors = []
+    for item in skip_items:
+        item_lower = item.lower()
+        if item_lower not in VALID_SKIP_OPTIONS:
+            # Find similar options (simple fuzzy match)
+            suggestions = [opt for opt in VALID_SKIP_OPTIONS 
+                          if opt.startswith(item_lower[:3]) or item_lower[:3] in opt]
+            
+            msg = f"Unknown skip item: '{item}'"
+            if suggestions:
+                msg += f" - did you mean: {', '.join(sorted(suggestions))}?"
+            else:
+                msg += f"\n  Valid options: {', '.join(sorted(VALID_SKIP_OPTIONS))}"
+            errors.append(msg)
+    
+    return errors
+
+
+def preview_cleanup(root: Path, skip_items: set[str]) -> None:
+    """Show what will be cleaned."""
+    directories, files = get_cleanup_items(root)
     
     print("\n=== Items to be cleaned ===\n")
     
-    print("DIRECTORIES (will be emptied, not deleted):")
-    for path, desc in items['directories']:
-        exists = path.exists()
-        status = "EXISTS" if exists else "not found"
-        if exists and path.is_dir():
-            count = len(list(path.glob('**/*')))
-            status = f"EXISTS ({count} items)"
-        print(f"  [{status}] {path.relative_to(get_project_root())} - {desc}")
+    print("DIRECTORIES (will be emptied):")
+    for item in directories:
+        if item.name in skip_items:
+            print(f"  [SKIP] {item.path.relative_to(root)} - {item.description}")
+        elif item.exists():
+            print(f"  [EXISTS ({item.count()} items)] {item.path.relative_to(root)} - {item.description}")
+        else:
+            print(f"  [not found] {item.path.relative_to(root)} - {item.description}")
     
     print("\nFILES (will be deleted):")
-    for path, desc in items['files']:
-        exists = path.exists()
-        status = "EXISTS" if exists else "not found"
-        print(f"  [{status}] {path.relative_to(get_project_root())} - {desc}")
+    for item in files:
+        if item.name in skip_items:
+            print(f"  [SKIP] {item.path.relative_to(root)} - {item.description}")
+        else:
+            status = "EXISTS" if item.exists() else "not found"
+            print(f"  [{status}] {item.path.relative_to(root)} - {item.description}")
     
     print()
 
 
-def clean_directory(path: Path, keep_gitkeep: bool = True):
-    """Clean a directory but keep the folder itself."""
-    if not path.exists():
+def clean_directory(path: Path, result: CleanupResult) -> int:
+    """Clean a directory but keep the folder and .gitkeep."""
+    if not path.is_dir():
         return 0
     
     count = 0
     for item in path.iterdir():
-        if keep_gitkeep and item.name == '.gitkeep':
+        if item.name == '.gitkeep':
             continue
-        
-        if item.is_dir():
-            shutil.rmtree(item)
-        else:
-            item.unlink()
-        count += 1
+        try:
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+            count += 1
+        except (PermissionError, OSError) as e:
+            result.errors.append(f"Could not remove {item.name}: {e}")
+            result.success = False
     
     return count
 
 
-def perform_cleanup(verbose: bool = True):
+def perform_cleanup(root: Path, skip_items: set[str], verbose: bool = True) -> CleanupResult:
     """Perform the actual cleanup."""
-    items = get_items_to_clean()
+    result = CleanupResult()
+    directories, files = get_cleanup_items(root)
     
-    print("\n=== Cleaning ForgeAI for sharing ===\n")
+    if verbose:
+        print("\n=== Cleaning ForgeAI for sharing ===\n")
     
     # Clean directories
-    for path, desc in items['directories']:
-        if path.exists() and path.is_dir():
-            count = clean_directory(path)
+    for item in directories:
+        if item.name in skip_items:
             if verbose:
-                print(f"Cleaned {desc}: {count} items removed")
+                print(f"Skipped {item.description}")
+            continue
             
-            # Add .gitkeep to keep directory structure
-            gitkeep = path / '.gitkeep'
+        if item.exists():
+            count = clean_directory(item.path, result)
+            result.items_removed += count
+            if verbose:
+                print(f"Cleaned {item.description}: {count} items removed")
+            
+            # Add .gitkeep to preserve directory
+            gitkeep = item.path / '.gitkeep'
             if not gitkeep.exists():
-                gitkeep.touch()
+                try:
+                    gitkeep.touch()
+                except OSError:
+                    pass
         elif verbose:
-            print(f"Skipped {desc}: directory not found")
+            print(f"Skipped {item.description}: not found")
     
     # Delete files
-    for path, desc in items['files']:
-        if path.exists():
-            path.unlink()
+    for item in files:
+        if item.name in skip_items:
             if verbose:
-                print(f"Deleted {desc}")
+                print(f"Skipped {item.description}")
+            continue
+            
+        if item.exists():
+            try:
+                item.path.unlink()
+                result.items_removed += 1
+                if verbose:
+                    print(f"Deleted {item.description}")
+            except (PermissionError, OSError) as e:
+                result.errors.append(f"Could not delete {item.description}: {e}")
+                result.success = False
         elif verbose:
-            print(f"Skipped {desc}: file not found")
+            print(f"Skipped {item.description}: not found")
     
-    # Reset certain files to defaults
-    root = get_project_root()
+    # Reset gui_settings.json to defaults (unless skipped)
+    if 'gui_settings' not in skip_items:
+        gui_path = root / 'data' / 'gui_settings.json'
+        try:
+            gui_path.parent.mkdir(parents=True, exist_ok=True)
+            gui_path.write_text(json.dumps(DEFAULT_GUI_SETTINGS, indent=2))
+            if verbose:
+                print("Reset GUI settings to defaults")
+        except OSError as e:
+            result.errors.append(f"Could not reset GUI settings: {e}")
     
-    # Reset gui_settings.json to minimal defaults
-    default_gui_settings = {
-        "theme": "dark",
-        "window_width": 1400,
-        "window_height": 900
-    }
-    gui_settings_path = root / 'data' / 'gui_settings.json'
-    with open(gui_settings_path, 'w') as f:
-        json.dump(default_gui_settings, f, indent=2)
     if verbose:
-        print("Reset GUI settings to defaults")
+        print("\n=== Cleanup complete! ===")
+        if result.errors:
+            print(f"\nWarnings ({len(result.errors)}):")
+            for error in result.errors:
+                print(f"  - {error}")
+        print(f"\nTotal items removed: {result.items_removed}")
+        print("The project is now ready for public sharing.\n")
     
-    print("\n=== Cleanup complete! ===")
-    print("\nThe project is now ready for public sharing.")
-    print("User-specific data has been removed.\n")
+    return result
 
 
-def main():
+def main() -> int:
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description='Reset ForgeAI for public sharing by removing user-specific data.'
+        description='Reset ForgeAI for public sharing by removing user-specific data.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f"""
+Valid --skip options:
+  {', '.join(sorted(VALID_SKIP_OPTIONS))}
+
+Examples:
+  %(prog)s --preview              Show what will be cleaned
+  %(prog)s --yes                  Clean without confirmation  
+  %(prog)s --skip models          Keep trained models
+  %(prog)s -s models -s outputs   Keep multiple items
+        """
     )
-    parser.add_argument(
-        '--preview', '-p',
-        action='store_true',
-        help='Preview what will be cleaned without actually deleting'
-    )
-    parser.add_argument(
-        '--yes', '-y',
-        action='store_true',
-        help='Skip confirmation prompt'
-    )
-    parser.add_argument(
-        '--quiet', '-q',
-        action='store_true',
-        help='Minimal output'
-    )
+    parser.add_argument('--preview', '-p', action='store_true',
+                        help='Preview what will be cleaned')
+    parser.add_argument('--yes', '-y', action='store_true',
+                        help='Skip confirmation prompt')
+    parser.add_argument('--quiet', '-q', action='store_true',
+                        help='Minimal output')
+    parser.add_argument('--skip', '-s', action='append', default=[], metavar='ITEM',
+                        help='Skip cleaning specific items (can repeat)')
     
     args = parser.parse_args()
+    
+    # Validate skip items for typos
+    if args.skip:
+        errors = validate_skip_items(args.skip)
+        if errors:
+            print("Error:", file=sys.stderr)
+            for err in errors:
+                print(f"  {err}", file=sys.stderr)
+            return 1
+    
+    skip_items = {s.lower() for s in args.skip}
+    root = get_project_root()
     
     print("=" * 50)
     print("  ForgeAI - Reset for Public Sharing")
     print("=" * 50)
     
     if args.preview:
-        preview_cleanup()
-        return
+        preview_cleanup(root, skip_items)
+        return 0
     
-    preview_cleanup()
+    preview_cleanup(root, skip_items)
     
     if not args.yes:
         print("WARNING: This will permanently delete user data!")
-        response = input("Continue? [y/N]: ").strip().lower()
+        try:
+            response = input("Continue? [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+            return 1
         if response not in ('y', 'yes'):
             print("Cancelled.")
-            return
+            return 0
     
-    perform_cleanup(verbose=not args.quiet)
+    result = perform_cleanup(root, skip_items, verbose=not args.quiet)
+    return 0 if result.success else 1
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
