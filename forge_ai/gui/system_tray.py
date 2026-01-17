@@ -481,7 +481,7 @@ class QuickCommandOverlay(QWidget):
         # New Chat button
         new_chat_btn = QPushButton("+")
         new_chat_btn.setFixedSize(24, 24)
-        new_chat_btn.setToolTip("New Chat")
+        new_chat_btn.setToolTip("New Chat - Start a fresh conversation")
         new_chat_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -499,31 +499,11 @@ class QuickCommandOverlay(QWidget):
         new_chat_btn.clicked.connect(self._new_chat)
         header_layout.addWidget(new_chat_btn)
         
-        # Minimize button (opens GUI)
-        min_btn = QPushButton("_")
-        min_btn.setFixedSize(24, 24)
-        min_btn.setToolTip("Open Full GUI")
-        min_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 1px solid #555;
-                border-radius: 4px;
-                color: #888;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #444;
-                color: #3498db;
-            }
-        """)
-        min_btn.clicked.connect(self._open_gui)
-        header_layout.addWidget(min_btn)
-        
-        # Close button (like window X)
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
-        close_btn.setToolTip("Close (to tray)")
-        close_btn.setStyleSheet("""
+        # Close button - hides to tray (like main GUI)
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setFixedSize(24, 24)
+        self.close_btn.setToolTip("Hide to tray (right-click for more options)")
+        self.close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 border: 1px solid #555;
@@ -538,8 +518,10 @@ class QuickCommandOverlay(QWidget):
                 color: white;
             }
         """)
-        close_btn.clicked.connect(self._close_overlay)
-        header_layout.addWidget(close_btn)
+        self.close_btn.clicked.connect(self._close_overlay)  # Direct close like main GUI
+        self.close_btn.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.close_btn.customContextMenuRequested.connect(self._show_close_menu)
+        header_layout.addWidget(self.close_btn)
         
         frame_layout.addWidget(self._header_widget)
         
@@ -549,8 +531,10 @@ class QuickCommandOverlay(QWidget):
         self.response_area.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
         )
-        self.response_area.setPlaceholderText("Chat history will appear here...")
+        self.response_area.setPlaceholderText("Type a message below to chat with your AI")
         self.response_area.setMinimumHeight(150)
+        self.response_area.setLineWrapMode(QTextEdit.WidgetWidth)  # Wrap text at widget edge
+        self.response_area.setWordWrapMode(3)  # WrapAtWordBoundaryOrAnywhere
         self.response_area.setStyleSheet("""
             QTextEdit {
                 background-color: rgba(40, 40, 40, 0.9);
@@ -569,7 +553,7 @@ class QuickCommandOverlay(QWidget):
         
         # Command input
         self.command_input = QLineEdit()
-        self.command_input.setPlaceholderText("Chat here... (Esc = Open GUI)")
+        self.command_input.setPlaceholderText("Chat here...")
         self.command_input.setStyleSheet("""
             QLineEdit {
                 background-color: rgba(50, 50, 50, 0.9);
@@ -633,24 +617,29 @@ class QuickCommandOverlay(QWidget):
         self.stop_btn.hide()  # Hidden by default
         input_layout.addWidget(self.stop_btn)
         
-        # Voice input button (microphone)
-        self.voice_btn = QPushButton("🎤")
-        self.voice_btn.setFixedSize(40, 40)
-        self.voice_btn.setToolTip("Voice input (hold to speak)")
+        # Voice input button (record style)
+        self.voice_btn = QPushButton("REC")
+        self.voice_btn.setFixedSize(45, 40)
+        self.voice_btn.setToolTip("Record - Click to speak")
         self.voice_btn.setCheckable(True)
         self.voice_btn.setStyleSheet("""
             QPushButton {
-                background-color: #555;
-                border: none;
+                background-color: #444;
+                border: 2px solid #555;
                 border-radius: 8px;
-                color: white;
-                font-size: 14px;
+                color: #888;
+                font-size: 11px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #666;
+                background-color: #555;
+                border-color: #e74c3c;
+                color: #e74c3c;
             }
             QPushButton:checked {
                 background-color: #e74c3c;
+                border-color: #c0392b;
+                color: white;
             }
             QPushButton:checked:hover {
                 background-color: #c0392b;
@@ -666,7 +655,7 @@ class QuickCommandOverlay(QWidget):
         bottom_layout.setSpacing(8)
         
         # Clickable hint label - opens GUI when clicked
-        self.hint_label = QLabel("Enter=Send | <u>Esc=Open GUI</u> | Up/Down=History")
+        self.hint_label = QLabel("<u>Esc = Open GUI</u>")
         self.hint_label.setStyleSheet("""
             QLabel {
                 color: #666;
@@ -683,51 +672,32 @@ class QuickCommandOverlay(QWidget):
         
         bottom_layout.addStretch()
         
-        # Voice output toggle (small)
-        self.voice_out_btn = QPushButton("🔇")
-        self.voice_out_btn.setFixedSize(28, 22)
+        # Voice output toggle
+        self.voice_out_btn = QPushButton("OFF")
+        self.voice_out_btn.setFixedSize(36, 22)
         self.voice_out_btn.setCheckable(True)
-        self.voice_out_btn.setToolTip("Voice Output: OFF")
+        self.voice_out_btn.setToolTip("AI Voice: Click to toggle")
         self.voice_out_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
-                border: 1px solid #444;
+                background-color: #333;
+                border: 1px solid #555;
                 border-radius: 4px;
-                color: #666;
-                font-size: 12px;
+                color: #888;
+                font-size: 9px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #333;
-                border-color: #555;
+                background-color: #444;
+                border-color: #2ecc71;
             }
             QPushButton:checked {
-                color: #2ecc71;
-                border-color: #2ecc71;
+                background-color: #2ecc71;
+                border-color: #27ae60;
+                color: white;
             }
         """)
         self.voice_out_btn.clicked.connect(self._toggle_voice_output_small)
         bottom_layout.addWidget(self.voice_out_btn)
-        
-        # Speak last button (small)
-        self.speak_last_btn = QPushButton("🔊")
-        self.speak_last_btn.setFixedSize(28, 22)
-        self.speak_last_btn.setToolTip("Speak last response")
-        self.speak_last_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 1px solid #444;
-                border-radius: 4px;
-                color: #666;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #333;
-                border-color: #3498db;
-                color: #3498db;
-            }
-        """)
-        self.speak_last_btn.clicked.connect(self._speak_last_response)
-        bottom_layout.addWidget(self.speak_last_btn)
         
         frame_layout.addLayout(bottom_layout)
         
@@ -743,7 +713,7 @@ class QuickCommandOverlay(QWidget):
         self._responding_timer.timeout.connect(self._update_responding_indicator)
     
     def _load_mini_chat_settings(self):
-        """Load mini chat settings from gui_settings.json."""
+        """Load Quick Chat settings from gui_settings.json."""
         try:
             import json
             from pathlib import Path
@@ -777,11 +747,25 @@ class QuickCommandOverlay(QWidget):
         self.set_status(f"Thinking{dots}")
     
     def start_responding(self):
-        """Show the responding indicator (single line in chat, animated status)."""
+        """Show the responding indicator (animated status only, no chat spam)."""
         self._is_responding = True
         self._stop_requested = False
         self._responding_dots = 0
-        # Add single thinking indicator inline
+        # Don't add thinking indicator to chat - it shows before user message
+        # Instead just animate the status bar and show after a brief delay
+        self._responding_timer.start(400)  # Animate status bar only
+        self.chat_btn.hide()  # Hide send button
+        self.stop_btn.show()  # Show stop button
+        self.set_status("Thinking...")
+        
+        # Add thinking indicator AFTER user message is shown (use timer)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, self._add_thinking_indicator)
+    
+    def _add_thinking_indicator(self):
+        """Add thinking indicator after user message is displayed."""
+        if not self._is_responding:
+            return  # Already done
         ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
         self.response_area.append(
             f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>{ai_name} is thinking...</i></div>'
@@ -789,10 +773,6 @@ class QuickCommandOverlay(QWidget):
         self.response_area.verticalScrollBar().setValue(
             self.response_area.verticalScrollBar().maximum()
         )
-        self._responding_timer.start(400)  # Animate status bar only
-        self.chat_btn.hide()  # Hide send button
-        self.stop_btn.show()  # Show stop button
-        self.set_status("Thinking...")
     
     def stop_responding(self):
         """Remove the thinking indicator from chat."""
@@ -822,10 +802,59 @@ class QuickCommandOverlay(QWidget):
         html = re.sub(r'<div id="thinking"[^>]*>.*?</div>', '', html, flags=re.IGNORECASE | re.DOTALL)
         self.response_area.setHtml(html)
     
+    def _show_close_menu(self, pos=None):
+        """Show menu with close options (right-click context menu)."""
+        from PyQt5.QtWidgets import QMenu
+        
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2a2a2a;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QMenu::item {
+                color: #ccc;
+                padding: 6px 20px;
+                border-radius: 2px;
+            }
+            QMenu::item:selected {
+                background-color: #3498db;
+                color: white;
+            }
+        """)
+        
+        # Open GUI option
+        gui_action = menu.addAction("Open Full GUI")
+        gui_action.triggered.connect(self._open_gui)
+        
+        # Hide to tray option
+        hide_action = menu.addAction("Hide to Tray")
+        hide_action.triggered.connect(self._close_overlay)
+        
+        menu.addSeparator()
+        
+        # Quit option
+        quit_action = menu.addAction("Quit Forge")
+        quit_action.triggered.connect(self._quit_app)
+        
+        # Show menu at cursor position or button position
+        if pos:
+            menu.exec_(self.close_btn.mapToGlobal(pos))
+        else:
+            menu.exec_(self.close_btn.mapToGlobal(self.close_btn.rect().bottomLeft()))
+    
+    def _quit_app(self):
+        """Quit the entire application."""
+        from PyQt5.QtWidgets import QApplication
+        self.hide()
+        QApplication.quit()
+    
     def _open_gui(self):
-        """Open the full GUI (keeps mini chat open)."""
+        """Open the full GUI (keeps Quick Chat open)."""
         self.open_gui_requested.emit()
-        # Don't hide mini chat - keep it open
+        # Don't hide Quick Chat - keep it open
         # self.hide()
     
     def _close_overlay(self):
@@ -893,12 +922,12 @@ class QuickCommandOverlay(QWidget):
         self._auto_speak = is_on
         
         if is_on:
-            self.voice_out_btn.setText("🔊")
-            self.voice_out_btn.setToolTip("Voice Output: ON\nAI will speak responses")
+            self.voice_out_btn.setText("ON")
+            self.voice_out_btn.setToolTip("AI Voice: ON\nAI will speak responses")
             self.set_status("Voice output ON")
         else:
-            self.voice_out_btn.setText("🔇")
-            self.voice_out_btn.setToolTip("Voice Output: OFF")
+            self.voice_out_btn.setText("OFF")
+            self.voice_out_btn.setToolTip("AI Voice: OFF")
             self.set_status("Voice output OFF")
         
         # Sync with main window if available
@@ -1039,7 +1068,7 @@ class QuickCommandOverlay(QWidget):
                 from forge_ai.voice import speak
                 speak(clean_text)
         except Exception as e:
-            print(f"[MiniChat] TTS error: {e}")
+            print(f"[QuickChat] TTS error: {e}")
     
     @pyqtSlot(str)
     def set_status(self, text: str):
@@ -1530,19 +1559,19 @@ class ForgeSystemTray(QObject):
             self.show_overlay()
     
     def show_overlay(self):
-        """Show the quick command overlay (mini chat)."""
+        """Show the quick command overlay (Quick Chat)."""
         self.overlay.show()
         self.overlay.activateWindow()
         self.overlay.command_input.setFocus()
     
     # Alias for easier access
     def show_quick_command(self):
-        """Alias for show_overlay - opens the mini chat window."""
+        """Alias for show_overlay - opens the Quick Chat window."""
         self.show_overlay()
     
     # Another alias 
     def show_mini_chat(self):
-        """Alias for show_overlay - opens the mini chat window."""
+        """Alias for show_overlay - opens the Quick Chat window."""
         self.show_overlay()
     
     def hide_overlay(self):
@@ -1660,12 +1689,12 @@ class ForgeSystemTray(QObject):
             self._exit_app()
     
     def _show_main_window(self):
-        """Show the main GUI window (keeps mini chat open)."""
+        """Show the main GUI window (keeps Quick Chat open)."""
         self.show_gui_requested.emit()
         if self.main_window:
             self.main_window.show()
             self.main_window.activateWindow()
-            # Keep mini chat open too - always visible unless explicitly closed
+            # Keep Quick Chat open too - always visible unless explicitly closed
             if hasattr(self, 'overlay') and self.overlay:
                 self.overlay.show()
     

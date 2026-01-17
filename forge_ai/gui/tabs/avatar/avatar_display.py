@@ -997,25 +997,34 @@ class OpenGL3DWidget(QOpenGLWidget):
         GL.glEnable(GL.GL_LIGHTING)
     
     def mousePressEvent(self, event):
-        """Start drag or pan."""
+        """Start drag or pan. Left-click to rotate, Right-click to orbit (Sketchfab style), Shift+Left to pan."""
         self.last_pos = event.pos()
+        # Right-click OR left-click rotates (Sketchfab lets you orbit with right-click)
         if event.button() == Qt_LeftButton:
             self.is_panning = event.modifiers() == Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else False
+            self.setCursor(QCursor(Qt_ClosedHandCursor))
+        elif event.button() == Qt.RightButton if hasattr(Qt, 'RightButton') else 0x00000002:
+            # Right-click = orbit (rotation) - Sketchfab style
+            self.is_panning = False
             self.setCursor(QCursor(Qt_ClosedHandCursor))
         event.accept()
         
     def mouseMoveEvent(self, event):
-        """Rotate or pan on drag."""
+        """Rotate or pan on drag. Works with both left and right mouse buttons."""
         if self.last_pos is not None:
             dx = event.x() - self.last_pos.x()
             dy = event.y() - self.last_pos.y()
             
+            # Check which buttons are pressed
+            buttons = event.buttons()
+            right_button = Qt.RightButton if hasattr(Qt, 'RightButton') else 0x00000002
+            
             if self.is_panning:
-                # Pan
+                # Pan (Shift+Left click)
                 self.pan_x += dx * 0.005
                 self.pan_y -= dy * 0.005
-            else:
-                # Rotate - full 360 degree rotation allowed
+            elif (buttons & right_button) or (buttons & Qt_LeftButton):
+                # Rotate - full 360 degree rotation allowed (left OR right click)
                 self.rotation_y += dx * 0.5
                 self.rotation_x += dy * 0.5
             
@@ -2000,13 +2009,48 @@ def create_avatar_subtab(parent):
     parent.avatar_enabled_checkbox.toggled.connect(lambda c: _toggle_avatar(parent, c))
     top_row.addWidget(parent.avatar_enabled_checkbox)
     
-    parent.show_overlay_btn = QPushButton("Show on Desktop")
+    parent.show_overlay_btn = QPushButton("▶ Run")
     parent.show_overlay_btn.setCheckable(True)
+    parent.show_overlay_btn.setStyleSheet("""
+        QPushButton {
+            background: #a6e3a1;
+            color: #1e1e2e;
+            font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+        QPushButton:hover {
+            background: #94e2d5;
+        }
+        QPushButton:checked {
+            background: #f38ba8;
+        }
+        QPushButton:checked:hover {
+            background: #eba0ac;
+        }
+    """)
     parent.show_overlay_btn.clicked.connect(lambda: _toggle_overlay(parent))
     top_row.addWidget(parent.show_overlay_btn)
     
     top_row.addStretch()
     left_panel.addLayout(top_row)
+    
+    # Settings row: Auto-load on startup + Manual resize toggle
+    settings_row = QHBoxLayout()
+    
+    parent.avatar_auto_load_checkbox = QCheckBox("Auto-load on startup")
+    parent.avatar_auto_load_checkbox.setToolTip("Automatically load the last used avatar when ForgeAI starts")
+    parent.avatar_auto_load_checkbox.toggled.connect(lambda c: _toggle_auto_load(parent, c))
+    settings_row.addWidget(parent.avatar_auto_load_checkbox)
+    
+    parent.avatar_resize_checkbox = QCheckBox("Allow popup resize")
+    parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window")
+    parent.avatar_resize_checkbox.setChecked(True)  # Default on
+    parent.avatar_resize_checkbox.toggled.connect(lambda c: _toggle_resize_enabled(parent, c))
+    settings_row.addWidget(parent.avatar_resize_checkbox)
+    
+    settings_row.addStretch()
+    left_panel.addLayout(settings_row)
     
     # 3D rendering toggle (only if libraries available)
     if HAS_OPENGL and HAS_TRIMESH:
@@ -2063,9 +2107,9 @@ def create_avatar_subtab(parent):
     parent.avatar_combo.currentIndexChanged.connect(lambda: _on_avatar_selected(parent))
     select_row.addWidget(parent.avatar_combo, stretch=1)
     
-    btn_refresh = QPushButton("Refresh")
-    btn_refresh.setFixedWidth(60)
-    btn_refresh.setToolTip("Refresh list")
+    btn_refresh = QPushButton("🔄 Refresh")
+    btn_refresh.setMinimumWidth(80)
+    btn_refresh.setToolTip("Refresh avatar list")
     btn_refresh.clicked.connect(lambda: _refresh_list(parent))
     select_row.addWidget(btn_refresh)
     left_panel.addLayout(select_row)
@@ -2311,6 +2355,8 @@ def create_avatar_subtab(parent):
     }
     parent._using_builtin_sprite = False
     parent._avatar_module_enabled = avatar_module_enabled
+    parent._avatar_auto_load = False
+    parent._avatar_resize_enabled = True
     
     # Create directories
     AVATAR_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -2325,6 +2371,9 @@ def create_avatar_subtab(parent):
     # Load list
     _refresh_list(parent)
     
+    # Restore saved avatar settings
+    _restore_avatar_settings(parent)
+    
     # Set up file watcher timer to auto-refresh when files change
     parent._avatar_file_watcher = QTimer()
     parent._avatar_file_watcher.timeout.connect(lambda: _check_for_new_files(parent))
@@ -2337,11 +2386,128 @@ def create_avatar_subtab(parent):
     parent._ai_customize_watcher.start(1000)  # Check every 1 second
     parent._last_ai_customize_time = 0.0
     
-    # Show default sprite on initialization
-    parent._using_builtin_sprite = True
-    _show_default_preview(parent)
+    # Show default sprite on initialization (unless auto-loading)
+    if not getattr(parent, '_avatar_auto_loaded', False):
+        parent._using_builtin_sprite = True
+        _show_default_preview(parent)
     
     return widget
+
+
+def _restore_avatar_settings(parent):
+    """Restore saved avatar settings from gui_settings.json."""
+    try:
+        from pathlib import Path
+        from ....config import CONFIG
+        settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
+        if not settings_path.exists():
+            return
+        
+        with open(settings_path, 'r') as f:
+            settings = json.load(f)
+        
+        # Restore auto-load setting
+        parent._avatar_auto_load = settings.get("avatar_auto_load", False)
+        if hasattr(parent, 'avatar_auto_load_checkbox'):
+            parent.avatar_auto_load_checkbox.setChecked(parent._avatar_auto_load)
+        
+        # Restore resize enabled setting
+        parent._avatar_resize_enabled = settings.get("avatar_resize_enabled", True)
+        if hasattr(parent, 'avatar_resize_checkbox'):
+            parent.avatar_resize_checkbox.setChecked(parent._avatar_resize_enabled)
+        
+        # Restore last avatar selection
+        last_avatar_index = settings.get("last_avatar_index", 0)
+        last_avatar_path = settings.get("last_avatar_path", "")
+        
+        if last_avatar_index > 0 and last_avatar_index < parent.avatar_combo.count():
+            parent.avatar_combo.setCurrentIndex(last_avatar_index)
+            parent.avatar_status.setText(f"Restored last avatar selection")
+            parent.avatar_status.setStyleSheet("color: #89b4fa;")
+        elif last_avatar_path:
+            # Try to find by path
+            for i in range(parent.avatar_combo.count()):
+                data = parent.avatar_combo.itemData(i)
+                if data and len(data) > 1 and data[1] == last_avatar_path:
+                    parent.avatar_combo.setCurrentIndex(i)
+                    break
+        
+        # Auto-load avatar if setting is enabled
+        if parent._avatar_auto_load and (last_avatar_index > 0 or last_avatar_path):
+            parent._avatar_auto_loaded = True
+            # Apply the avatar after a brief delay (let UI settle)
+            QTimer.singleShot(500, lambda: _apply_avatar(parent))
+            parent.avatar_status.setText("Auto-loading avatar...")
+            parent.avatar_status.setStyleSheet("color: #f9e2af;")
+            
+    except Exception as e:
+        print(f"[Avatar] Could not restore settings: {e}")
+
+
+def _toggle_auto_load(parent, enabled: bool):
+    """Toggle auto-load avatar on startup setting."""
+    parent._avatar_auto_load = enabled
+    if enabled:
+        parent.avatar_status.setText("Avatar will auto-load on startup")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    else:
+        parent.avatar_status.setText("Avatar auto-load disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _toggle_resize_enabled(parent, enabled: bool):
+    """Toggle manual resize for avatar popup."""
+    parent._avatar_resize_enabled = enabled
+    
+    # Update 2D overlay if it exists
+    if parent._overlay:
+        if enabled:
+            # Enable scroll-to-resize
+            parent._overlay.wheelEvent = lambda e: _overlay_wheel_resize(parent._overlay, e)
+        else:
+            # Disable scroll-to-resize (no-op)
+            parent._overlay.wheelEvent = lambda e: e.accept()
+    
+    # Update 3D overlay if it exists
+    if parent._overlay_3d:
+        if enabled:
+            parent._overlay_3d.wheelEvent = lambda e: _overlay_3d_wheel_resize(parent._overlay_3d, e)
+        else:
+            parent._overlay_3d.wheelEvent = lambda e: e.accept()
+    
+    if enabled:
+        parent.avatar_status.setText("Popup resize enabled (scroll to resize)")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    else:
+        parent.avatar_status.setText("Popup resize disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _overlay_wheel_resize(overlay, event):
+    """Handle wheel event for 2D overlay resize."""
+    delta = event.angleDelta().y()
+    if delta > 0:
+        overlay._size = min(500, overlay._size + 20)
+    else:
+        overlay._size = max(100, overlay._size - 20)
+    overlay.setFixedSize(overlay._size, overlay._size)
+    overlay._update_scaled_pixmap()
+    event.accept()
+
+
+def _overlay_3d_wheel_resize(overlay, event):
+    """Handle wheel event for 3D overlay resize."""
+    delta = event.angleDelta().y()
+    if delta > 0:
+        overlay._size = min(500, overlay._size + 25)
+    else:
+        overlay._size = max(100, overlay._size - 25)
+    overlay.setFixedSize(overlay._size, overlay._size)
+    overlay._gl_container.setFixedSize(overlay._size, overlay._size)
+    if overlay._gl_widget:
+        overlay._gl_widget.setFixedSize(overlay._size, overlay._size)
+        overlay._apply_circular_mask()
+    event.accept()
 
 
 def _check_for_new_files(parent):
@@ -2838,8 +3004,8 @@ def _toggle_overlay(parent):
                 parent._overlay_3d.load_model(str(parent._current_path))
                 parent._overlay_3d.show()
                 parent._overlay_3d.raise_()
-                parent.show_overlay_btn.setText("Hide from Desktop")
-                parent.avatar_status.setText("3D avatar on desktop! Drag to move, R to rotate, right-click for menu.")
+                parent.show_overlay_btn.setText("⏹ Stop")
+                parent.avatar_status.setText("3D avatar on desktop! Drag to move, right-click for menu.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
                 parent.show_overlay_btn.setChecked(False)
@@ -2862,7 +3028,7 @@ def _toggle_overlay(parent):
                 parent._overlay.set_avatar(scaled)
                 parent._overlay.show()
                 parent._overlay.raise_()
-                parent.show_overlay_btn.setText("Hide from Desktop")
+                parent.show_overlay_btn.setText("⏹ Stop")
                 parent.avatar_status.setText("Avatar on desktop! Drag to move, scroll to resize, right-click for menu.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
@@ -2875,15 +3041,15 @@ def _toggle_overlay(parent):
             parent._overlay.hide()
         if parent._overlay_3d:
             parent._overlay_3d.hide()
-        parent.show_overlay_btn.setText("Show on Desktop")
-        parent.avatar_status.setText("Avatar hidden from desktop")
+        parent.show_overlay_btn.setText("▶ Run")
+        parent.avatar_status.setText("Avatar stopped")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
 
 
 def _on_overlay_closed(parent):
     """Handle overlay closed."""
     parent.show_overlay_btn.setChecked(False)
-    parent.show_overlay_btn.setText("Show on Desktop")
+    parent.show_overlay_btn.setText("▶ Run")
 
 
 def _toggle_3d_render(parent, enabled):

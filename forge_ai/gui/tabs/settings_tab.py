@@ -663,7 +663,7 @@ def _reset_all_settings(parent):
 
 
 def _toggle_mini_chat_on_top(parent, state):
-    """Toggle mini chat always on top and save setting."""
+    """Toggle Quick Chat always on top and save setting."""
     import json
     from pathlib import Path
     from ...config import CONFIG
@@ -681,9 +681,9 @@ def _toggle_mini_chat_on_top(parent, state):
         with open(settings_path, 'w') as f:
             json.dump(settings, f, indent=2)
     except Exception as e:
-        print(f"Could not save mini chat setting: {e}")
+        print(f"Could not save Quick Chat setting: {e}")
     
-    # Update the mini chat overlay if it exists
+    # Update the Quick Chat overlay if it exists
     main_window = parent.window()
     if hasattr(main_window, 'mini_chat') and main_window.mini_chat:
         main_window.mini_chat.set_always_on_top(on_top)
@@ -1114,9 +1114,9 @@ def create_settings_tab(parent):
     )
     display_layout.addWidget(parent.always_on_top_check)
     
-    # Mini chat always on top checkbox
-    parent.mini_chat_on_top_check = QCheckBox("Mini Chat Always on Top")
-    parent.mini_chat_on_top_check.setToolTip("Keep the mini chat window above other windows (default: on)")
+    # Quick Chat always on top checkbox
+    parent.mini_chat_on_top_check = QCheckBox("Quick Chat Always on Top")
+    parent.mini_chat_on_top_check.setToolTip("Keep the Quick Chat window above other windows (default: on)")
     parent.mini_chat_on_top_check.setChecked(True)  # Default to checked
     parent.mini_chat_on_top_check.stateChanged.connect(
         lambda state: _toggle_mini_chat_on_top(parent, state)

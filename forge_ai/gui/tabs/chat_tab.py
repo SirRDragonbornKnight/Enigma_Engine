@@ -128,11 +128,12 @@ def create_chat_tab(parent):
     parent.thinking_frame.hide()  # Hidden by default
     layout.addWidget(parent.thinking_frame)
     
-    # Input area with better layout
+    # Input area with better layout - similar style to Quick Chat
     input_frame = QFrame()
     input_frame.setStyleSheet("""
         QFrame {
-            background: rgba(49, 50, 68, 0.5);
+            background: rgba(49, 50, 68, 0.7);
+            border: 1px solid #45475a;
             border-radius: 8px;
             padding: 8px;
         }
@@ -143,82 +144,111 @@ def create_chat_tab(parent):
     
     # Text input
     parent.chat_input = QLineEdit()
-    parent.chat_input.setPlaceholderText("Type your message here... (Press Enter to send)")
+    parent.chat_input.setPlaceholderText("Chat here...")
     parent.chat_input.returnPressed.connect(parent._on_send)
     parent.chat_input.setStyleSheet("""
         QLineEdit {
-            padding: 10px 12px;
-            font-size: 13px;
-            border-radius: 6px;
+            background-color: rgba(50, 50, 50, 0.9);
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 14px;
+            color: white;
+        }
+        QLineEdit:focus {
+            border-color: #3498db;
         }
     """)
     input_layout.addWidget(parent.chat_input, stretch=1)
     
-    # Stop button (hidden by default, shown during generation)
-    parent.stop_btn = QPushButton("⏹ Stop")
-    parent.stop_btn.setToolTip("Stop AI generation")
-    parent.stop_btn.setMinimumWidth(70)
-    parent.stop_btn.setMinimumHeight(40)
-    parent.stop_btn.setStyleSheet("""
+    # Send button - matches Quick Chat style
+    parent.send_btn = QPushButton("Send")
+    parent.send_btn.setFixedSize(60, 40)
+    parent.send_btn.clicked.connect(parent._on_send)
+    parent.send_btn.setStyleSheet("""
         QPushButton {
-            background-color: #f38ba8;
-            color: #1e1e2e;
+            background-color: #3498db;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
             font-weight: bold;
-            font-size: 13px;
-            border-radius: 6px;
-            padding: 8px 12px;
         }
         QPushButton:hover {
-            background-color: #eba0ac;
+            background-color: #2980b9;
+        }
+        QPushButton:pressed {
+            background-color: #1c5980;
+        }
+    """)
+    input_layout.addWidget(parent.send_btn)
+    
+    # Stop button (hidden by default, shown during generation)
+    parent.stop_btn = QPushButton("Stop")
+    parent.stop_btn.setToolTip("Stop AI generation")
+    parent.stop_btn.setFixedSize(60, 40)
+    parent.stop_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #e74c3c;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #c0392b;
+        }
+        QPushButton:pressed {
+            background-color: #922b21;
         }
     """)
     parent.stop_btn.clicked.connect(lambda: _stop_generation(parent))
     parent.stop_btn.hide()  # Hidden by default
     input_layout.addWidget(parent.stop_btn)
     
-    # Voice On/Off toggle button
-    parent.voice_toggle_btn = QPushButton("🔇 Voice OFF")
-    parent.voice_toggle_btn.setToolTip("Toggle auto-speak for AI responses\nWhen ON, AI will read responses aloud")
-    parent.voice_toggle_btn.setMinimumWidth(100)
-    parent.voice_toggle_btn.setMinimumHeight(40)
-    parent.voice_toggle_btn.setCheckable(True)
-    parent.voice_toggle_btn.setChecked(getattr(parent, 'auto_speak', False))
-    parent.voice_toggle_btn.setStyleSheet("""
+    # Voice input button (REC style) - matches Quick Chat
+    parent.rec_btn = QPushButton("REC")
+    parent.rec_btn.setFixedSize(50, 40)
+    parent.rec_btn.setToolTip("Record - Click to speak")
+    parent.rec_btn.setCheckable(True)
+    parent.rec_btn.setStyleSheet("""
         QPushButton {
-            background-color: #45475a;
-            color: #cdd6f4;
+            background-color: #444;
+            border: 2px solid #555;
+            border-radius: 8px;
+            color: #888;
+            font-size: 11px;
             font-weight: bold;
-            font-size: 12px;
-            border-radius: 6px;
-            padding: 8px 10px;
         }
         QPushButton:hover {
-            background-color: #585b70;
+            background-color: #555;
+            border-color: #e74c3c;
+            color: #e74c3c;
         }
         QPushButton:checked {
-            background-color: #a6e3a1;
-            color: #1e1e2e;
+            background-color: #e74c3c;
+            border-color: #c0392b;
+            color: white;
         }
         QPushButton:checked:hover {
-            background-color: #94e2d5;
+            background-color: #c0392b;
         }
     """)
-    parent.voice_toggle_btn.clicked.connect(lambda: _toggle_voice_output(parent))
-    input_layout.addWidget(parent.voice_toggle_btn)
+    parent.rec_btn.clicked.connect(lambda: _toggle_voice_input(parent))
+    input_layout.addWidget(parent.rec_btn)
     
     # Speak Last button (for TTS on demand)
     parent.btn_speak = QPushButton("🔊")
     parent.btn_speak.setToolTip("Speak last AI response")
-    parent.btn_speak.setMinimumWidth(40)
-    parent.btn_speak.setMinimumHeight(40)
+    parent.btn_speak.setFixedSize(40, 40)
     parent.btn_speak.setStyleSheet("""
         QPushButton {
             background-color: #cba6f7;
             color: #1e1e2e;
             font-weight: bold;
             font-size: 16px;
-            border-radius: 6px;
-            padding: 8px;
+            border-radius: 8px;
         }
         QPushButton:hover {
             background-color: #f5c2e7;
@@ -227,28 +257,17 @@ def create_chat_tab(parent):
     parent.btn_speak.clicked.connect(parent._on_speak_last)
     input_layout.addWidget(parent.btn_speak)
     
-    # Send button
-    parent.send_btn = QPushButton("Send")
-    parent.send_btn.clicked.connect(parent._on_send)
-    parent.send_btn.setStyleSheet("""
-        QPushButton {
-            padding: 10px 20px;
-            font-weight: bold;
-            min-width: 80px;
-        }
-    """)
-    input_layout.addWidget(parent.send_btn)
-    
     layout.addWidget(input_frame)
     
-    # Status bar at bottom
-    status_layout = QHBoxLayout()
+    # Bottom row: status + voice toggle (like Quick Chat)
+    bottom_layout = QHBoxLayout()
+    bottom_layout.setSpacing(8)
     
     parent.chat_status = QLabel("")
     parent.chat_status.setStyleSheet("color: #6c7086; font-size: 11px;")
-    status_layout.addWidget(parent.chat_status)
+    bottom_layout.addWidget(parent.chat_status)
     
-    status_layout.addStretch()
+    bottom_layout.addStretch()
     
     # Learning indicator with detailed tooltip
     parent.learning_indicator = QLabel("📚 Learning: ON")
@@ -265,12 +284,40 @@ def create_chat_tab(parent):
     )
     parent.learning_indicator.setCursor(Qt.PointingHandCursor)
     parent.learning_indicator.mousePressEvent = lambda e: _toggle_learning(parent)
-    status_layout.addWidget(parent.learning_indicator)
+    bottom_layout.addWidget(parent.learning_indicator)
     
-    layout.addLayout(status_layout)
+    # Voice output toggle - compact style like Quick Chat
+    parent.voice_toggle_btn = QPushButton("OFF")
+    parent.voice_toggle_btn.setFixedSize(40, 24)
+    parent.voice_toggle_btn.setCheckable(True)
+    parent.voice_toggle_btn.setToolTip("AI Voice: Click to toggle auto-speak")
+    parent.voice_toggle_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #888;
+            font-size: 9px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #444;
+            border-color: #2ecc71;
+        }
+        QPushButton:checked {
+            background-color: #2ecc71;
+            border-color: #27ae60;
+            color: white;
+        }
+    """)
+    parent.voice_toggle_btn.clicked.connect(lambda: _toggle_voice_output(parent))
+    bottom_layout.addWidget(parent.voice_toggle_btn)
     
-    # Initialize auto_speak
+    layout.addLayout(bottom_layout)
+    
+    # Initialize auto_speak and voice thread tracking
     parent.auto_speak = False
+    parent._voice_thread = None
     
     # Update voice button state from saved settings
     _update_voice_button_state(parent)
@@ -307,9 +354,80 @@ def _update_voice_button_state(parent):
     parent.voice_toggle_btn.setChecked(is_on)
     
     if is_on:
-        parent.voice_toggle_btn.setText("🔊 Voice ON")
+        parent.voice_toggle_btn.setText("ON")
+        parent.voice_toggle_btn.setToolTip("AI Voice: ON\nAI will speak responses")
     else:
-        parent.voice_toggle_btn.setText("🔇 Voice OFF")
+        parent.voice_toggle_btn.setText("OFF")
+        parent.voice_toggle_btn.setToolTip("AI Voice: OFF")
+
+
+def _toggle_voice_input(parent):
+    """Toggle voice input (microphone recording)."""
+    is_listening = parent.rec_btn.isChecked()
+    
+    if is_listening:
+        parent.rec_btn.setToolTip("Listening... (click to stop)")
+        parent.chat_status.setText("🎤 Listening...")
+        
+        # Try to start voice recognition
+        try:
+            if hasattr(parent, '_voice_thread') and parent._voice_thread:
+                return
+            
+            import threading
+            parent._voice_thread = threading.Thread(target=lambda: _do_voice_input(parent), daemon=True)
+            parent._voice_thread.start()
+        except Exception as e:
+            parent.rec_btn.setChecked(False)
+            parent.chat_status.setText(f"Voice error: {e}")
+    else:
+        parent.rec_btn.setToolTip("Record - Click to speak")
+        parent.chat_status.setText("Ready")
+        parent._voice_thread = None
+
+
+def _do_voice_input(parent):
+    """Background voice recognition."""
+    try:
+        import speech_recognition as sr
+        recognizer = sr.Recognizer()
+        
+        with sr.Microphone() as source:
+            recognizer.adjust_for_ambient_noise(source, duration=0.3)
+            audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+        
+        text = recognizer.recognize_google(audio)
+        
+        # Update UI from main thread
+        from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+        QMetaObject.invokeMethod(
+            parent.chat_input, "setText",
+            Qt.QueuedConnection, Q_ARG(str, text)
+        )
+        # Un-check the button and reset status
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, lambda: _voice_input_done(parent))
+        
+    except Exception as e:
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, lambda: _voice_input_error(parent, str(e)))
+
+
+def _voice_input_done(parent):
+    """Called when voice input completes successfully."""
+    parent.rec_btn.setChecked(False)
+    parent.rec_btn.setToolTip("Record - Click to speak")
+    parent.chat_status.setText("✓ Voice captured - press Enter to send")
+    parent._voice_thread = None
+    parent.chat_input.setFocus()
+
+
+def _voice_input_error(parent, error: str):
+    """Called when voice input fails."""
+    parent.rec_btn.setChecked(False)
+    parent.rec_btn.setToolTip("Record - Click to speak")
+    parent.chat_status.setText(f"Voice error: {error[:40]}")
+    parent._voice_thread = None
 
 
 def _toggle_learning(parent):
