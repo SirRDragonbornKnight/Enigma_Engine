@@ -3605,6 +3605,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.scaling_tab import ScalingTab
         from .tabs.model_router_tab import ModelRouterTab
         from .tabs.tool_manager_tab import ToolManagerTab
+        from .tabs.voice_clone_tab import VoiceCloneTab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -3664,6 +3665,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Code", "code"),
             ("", "Video", "video"),
             ("", "Audio", "audio"),
+            ("", "Voice", "voice"),  # Voice cloning
             ("", "3D", "3d"),
             ("", "GIF", "gif"),
             # Connect
@@ -3718,7 +3720,7 @@ class EnhancedMainWindow(QMainWindow):
         self._always_visible_tabs = [
             'chat', 'train', 'history', 'scale', 'modules', 'tools', 'router',
             'game', 'robot', 'terminal', 'files', 'logs', 'notes', 'network',
-            'analytics', 'scheduler', 'examples', 'settings', 'gif'
+            'analytics', 'scheduler', 'examples', 'settings', 'gif', 'voice'
         ]
         
         for item in nav_items:
@@ -3776,6 +3778,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
         self.content_stack.addWidget(wrap_in_scroll(create_audio_tab(self)))  # Audio
+        self.content_stack.addWidget(wrap_in_scroll(VoiceCloneTab(self)))  # Voice
         self.content_stack.addWidget(wrap_in_scroll(create_threed_tab(self)))  # 3D
         self.content_stack.addWidget(wrap_in_scroll(create_gif_tab(self)))  # GIF
         self.content_stack.addWidget(wrap_in_scroll(create_embeddings_tab(self)))  # Search
@@ -3975,6 +3978,16 @@ class EnhancedMainWindow(QMainWindow):
                     self.auto_speak_action.setText("AI Auto-Speak (ON)")
                 else:
                     self.auto_speak_action.setText("AI Auto-Speak (OFF)")
+        
+        # Sync with voice_toggle_btn in chat tab
+        if hasattr(self, 'voice_toggle_btn'):
+            self.voice_toggle_btn.blockSignals(True)
+            self.voice_toggle_btn.setChecked(self.auto_speak)
+            if self.auto_speak:
+                self.voice_toggle_btn.setText("🔊 Voice ON")
+            else:
+                self.voice_toggle_btn.setText("🔇 Voice OFF")
+            self.voice_toggle_btn.blockSignals(False)
     
     def _toggle_microphone(self, checked):
         """Toggle microphone listening by loading/unloading voice input module."""
@@ -5626,35 +5639,7 @@ class EnhancedMainWindow(QMainWindow):
         self.last_response = response
         self._last_response_id = response_id
         
-        # AUTO-SPEAK: Read response aloud if enabled
-        if getattr(self, 'auto_speak', False):
-            try:
-                # Try to speak the response (clean text only)
-                import re
-                clean_text = re.sub(r'<[^>]+>', '', display_response)  # Remove HTML
-                clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
-                clean_text = clean_text.strip()[:500]  # Limit length
-                
-                if clean_text and not clean_text.startswith("⚠️"):  # Don't speak error messages
-                    # Try pyttsx3 first (built-in TTS)
-                    try:
-                        import pyttsx3
-                        engine = pyttsx3.init()
-                        engine.setProperty('rate', 150)  # Speed
-                        engine.say(clean_text)
-                        engine.runAndWait()
-                    except ImportError:
-                        # Try system TTS as fallback
-                        import subprocess
-                        import sys
-                        if sys.platform == 'win32':
-                            # Windows PowerShell TTS
-                            subprocess.Popen(
-                                ['powershell', '-Command', f'Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak(\"{clean_text[:200]}\")'],
-                                creationflags=subprocess.CREATE_NO_WINDOW
-                            )
-            except Exception as e:
-                print(f"[DEBUG] TTS error: {e}")
+        # AUTO-SPEAK: Read response aloud if enabled (handled at end after processing)
         
         # Store response for feedback
         if not hasattr(self, '_response_history'):
@@ -6122,12 +6107,39 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         self._switch_to_tab(tab_name)
     
     def _speak_text(self, text):
-        """Speak text using TTS."""
+        """Speak text using TTS with voice profile support."""
         try:
+            import re
+            # Clean text for TTS
+            clean_text = re.sub(r'<[^>]+>', '', text)  # Remove HTML
+            clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
+            clean_text = re.sub(r'```[\s\S]*?```', '', clean_text)  # Remove code blocks
+            clean_text = clean_text.strip()[:500]  # Limit length
+            
+            if not clean_text or clean_text.startswith("⚠️"):
+                return  # Don't speak empty or error messages
+            
+            # Try to use voice profile system first (uses avatar voice if available)
+            try:
+                from ..voice.voice_profile import get_engine
+                engine = get_engine()
+                
+                # Check if avatar has a custom voice
+                if hasattr(self, 'avatar') and self.avatar:
+                    avatar_voice = getattr(self.avatar, 'voice_profile', None)
+                    if avatar_voice:
+                        engine.set_profile(avatar_voice)
+                
+                engine.speak(clean_text)
+                return
+            except Exception:
+                pass
+            
+            # Fallback to simple speak
             from ..voice import speak
-            speak(text)
+            speak(clean_text)
         except Exception as e:
-            pass  # Silent fail for auto-speak
+            print(f"[DEBUG] TTS error: {e}")
     
     def _on_speak_last(self):
         if hasattr(self, 'last_response'):

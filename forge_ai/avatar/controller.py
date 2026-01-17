@@ -63,6 +63,7 @@ class AvatarConfig:
     idle_animation: bool = True
     follow_mouse: bool = False
     interaction_effects: bool = True
+    voice_profile: str = ""  # Name of voice profile for this avatar
 
 
 class AvatarController:
@@ -301,6 +302,41 @@ class AvatarController:
         except Exception as e:
             print(f"[Avatar] Could not center on screen: {e}")
     
+    # === Voice Profile ===
+    
+    def set_voice_profile(self, profile_name_or_profile) -> bool:
+        """
+        Set the avatar's voice profile.
+        
+        Args:
+            profile_name_or_profile: Either a profile name (str) or VoiceProfile object
+            
+        Returns:
+            True if successfully set
+        """
+        try:
+            from ..voice.voice_profile import VoiceProfile
+            
+            if isinstance(profile_name_or_profile, str):
+                # Try to load by name
+                profile = VoiceProfile.load(profile_name_or_profile)
+                self.config.voice_profile = profile_name_or_profile
+                self.voice_profile = profile
+            else:
+                # It's a VoiceProfile object
+                self.voice_profile = profile_name_or_profile
+                self.config.voice_profile = profile_name_or_profile.name
+            
+            print(f"[Avatar] Voice profile set to: {self.config.voice_profile}")
+            return True
+        except Exception as e:
+            print(f"[Avatar] Failed to set voice profile: {e}")
+            return False
+    
+    def get_voice_profile_name(self) -> str:
+        """Get the name of the current voice profile."""
+        return self.config.voice_profile or "default"
+    
     # === AI Control Interface ===
     
     def control(self, action: str, value: str = "") -> Dict:
@@ -349,13 +385,14 @@ class AvatarController:
     
     # === Speaking ===
     
-    def speak(self, text: str, animate: bool = True) -> None:
+    def speak(self, text: str, animate: bool = True, use_tts: bool = True) -> None:
         """
-        Animate avatar speaking.
+        Animate avatar speaking and optionally use TTS.
         
         Args:
             text: Text being spoken (affects animation duration)
             animate: Whether to animate mouth/expressions
+            use_tts: Whether to actually speak the text with TTS
         """
         if not self.is_enabled:
             return
@@ -372,11 +409,38 @@ class AvatarController:
                 "duration": duration,
             })
         
+        # Use TTS with avatar's voice profile
+        if use_tts:
+            self._speak_with_voice_profile(text)
+        
         for cb in self._callbacks["speak"]:
             try:
                 cb(text)
             except Exception as e:
                 print(f"[Avatar] Speak callback error: {e}")
+    
+    def _speak_with_voice_profile(self, text: str) -> None:
+        """Speak text using avatar's configured voice profile."""
+        try:
+            from ..voice.voice_profile import VoiceProfile, get_engine
+            
+            engine = get_engine()
+            
+            # Try to use avatar's voice profile
+            if self.config.voice_profile:
+                try:
+                    profile = VoiceProfile.load(self.config.voice_profile)
+                    engine.set_profile(profile)
+                except FileNotFoundError:
+                    pass  # Use default
+            
+            # Also check if voice_profile is set as an attribute (from VoiceCloneTab)
+            if hasattr(self, 'voice_profile') and self.voice_profile:
+                engine.set_profile(self.voice_profile)
+            
+            engine.speak(text)
+        except Exception as e:
+            print(f"[Avatar] TTS error: {e}")
     
     def think(self, duration: float = 2.0) -> None:
         """Show thinking animation."""

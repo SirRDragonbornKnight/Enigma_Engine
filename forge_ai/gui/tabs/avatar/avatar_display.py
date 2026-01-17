@@ -159,6 +159,7 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.is_loading = False
         self.model_name = ""
         self._model_path = None
+        self._model_metadata = {}  # AI-readable model analysis
         
         # Model orientation (user-adjustable, saved per model)
         self.model_pitch = 0.0  # Rotation around X axis (radians)
@@ -273,6 +274,9 @@ class OpenGL3DWidget(QOpenGLWidget):
             has_real_colors = self.colors is not None and len(np.unique(self.colors, axis=0)) > 1
             print(f"[Avatar] Loaded {Path(path).name}: {len(self.vertices)} vertices, "
                   f"{len(self.faces)} faces, colors: {'yes (varied)' if has_real_colors else 'no/uniform'}")
+            
+            # Store model metadata for AI awareness
+            self._model_metadata = self._analyze_model_structure(scene, meshes)
             
             return True
             
@@ -506,6 +510,120 @@ class OpenGL3DWidget(QOpenGLWidget):
             import traceback
             traceback.print_exc()
             return None
+    
+    def _analyze_model_structure(self, scene, meshes) -> dict:
+        """Analyze the 3D model structure for AI awareness.
+        
+        Returns a dictionary with:
+        - Basic geometry info (vertices, faces, size)
+        - Detected parts/meshes
+        - Bone/skeleton info if available (GLTF/GLB armature)
+        - Material info
+        - Estimated model type (humanoid, object, etc.)
+        """
+        info = {
+            'total_vertices': 0,
+            'total_faces': 0,
+            'mesh_count': len(meshes),
+            'mesh_names': [],
+            'bounding_box': None,
+            'center': None,
+            'size': None,
+            'has_skeleton': False,
+            'skeleton_bones': [],
+            'materials': [],
+            'estimated_type': 'unknown',
+            'has_textures': False,
+        }
+        
+        try:
+            # Basic geometry
+            if self.vertices is not None:
+                info['total_vertices'] = len(self.vertices)
+                info['bounding_box'] = {
+                    'min': self.vertices.min(axis=0).tolist(),
+                    'max': self.vertices.max(axis=0).tolist(),
+                }
+                info['center'] = self.vertices.mean(axis=0).tolist()
+                dims = self.vertices.max(axis=0) - self.vertices.min(axis=0)
+                info['size'] = {'width': float(dims[0]), 'height': float(dims[1]), 'depth': float(dims[2])}
+            
+            if self.faces is not None:
+                info['total_faces'] = len(self.faces)
+            
+            # Mesh names
+            for mesh in meshes:
+                name = getattr(mesh, 'name', None) or getattr(mesh.metadata, 'name', None) if hasattr(mesh, 'metadata') else None
+                if name:
+                    info['mesh_names'].append(name)
+            
+            # Check for skeleton/armature in GLTF scenes
+            if hasattr(scene, 'graph') and scene.graph is not None:
+                try:
+                    # GLTF scenes store skeleton info in the graph
+                    graph = scene.graph
+                    if hasattr(graph, 'nodes_geometry'):
+                        # Check for nodes that might be bones
+                        for node_name in graph.nodes:
+                            node_name_lower = str(node_name).lower()
+                            # Common bone naming patterns
+                            if any(bone_keyword in node_name_lower for bone_keyword in [
+                                'bone', 'joint', 'skeleton', 'armature', 'spine', 'hip', 'head',
+                                'arm', 'leg', 'hand', 'foot', 'finger', 'neck', 'shoulder', 'elbow',
+                                'knee', 'ankle', 'wrist', 'pelvis', 'chest', 'root'
+                            ]):
+                                info['skeleton_bones'].append(str(node_name))
+                                info['has_skeleton'] = True
+                except Exception as e:
+                    print(f"[Avatar] Skeleton detection error: {e}")
+            
+            # Materials
+            for mesh in meshes:
+                if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'material'):
+                    mat = mesh.visual.material
+                    mat_info = {'name': getattr(mat, 'name', 'unnamed')}
+                    
+                    # Check for textures
+                    for tex_attr in ['baseColorTexture', 'image', 'diffuse']:
+                        if getattr(mat, tex_attr, None) is not None:
+                            info['has_textures'] = True
+                            mat_info['has_texture'] = True
+                            break
+                    
+                    info['materials'].append(mat_info)
+            
+            # Estimate model type based on proportions and structure
+            if info['size']:
+                w, h, d = info['size']['width'], info['size']['height'], info['size']['depth']
+                
+                # Humanoid: taller than wide, has skeleton or named bones
+                if h > w * 1.5 and h > d * 1.5:
+                    if info['has_skeleton'] or len(info['skeleton_bones']) > 0:
+                        info['estimated_type'] = 'humanoid_rigged'
+                    else:
+                        info['estimated_type'] = 'humanoid_static'
+                # Check mesh names for hints
+                elif any('character' in name.lower() or 'body' in name.lower() or 'face' in name.lower() 
+                        for name in info['mesh_names']):
+                    info['estimated_type'] = 'character'
+                # Roughly cubic = object
+                elif abs(w - h) < w * 0.3 and abs(h - d) < h * 0.3:
+                    info['estimated_type'] = 'object'
+                else:
+                    info['estimated_type'] = 'model'
+            
+            print(f"[Avatar] Model analysis: {info['estimated_type']}, "
+                  f"{'skeleton with ' + str(len(info['skeleton_bones'])) + ' bones' if info['has_skeleton'] else 'no skeleton'}, "
+                  f"{len(info['materials'])} materials")
+            
+        except Exception as e:
+            print(f"[Avatar] Model analysis error: {e}")
+        
+        return info
+    
+    def get_model_metadata(self) -> dict:
+        """Get the analyzed model metadata for AI use."""
+        return getattr(self, '_model_metadata', {})
     
     def reset_view(self):
         """Reset camera to default position."""
@@ -1138,12 +1256,14 @@ class AvatarOverlayWindow(QWidget):
 
 
 class Avatar3DOverlayWindow(QWidget):
-    """Simple transparent 3D overlay for desktop avatar display.
+    """Advanced 3D overlay for desktop avatar display.
     
     Features:
-    - Drag to move anywhere
+    - Drag to move anywhere (rotation is DISABLED for desktop mode)
     - Right-click menu for options
-    - AI can control position via commands
+    - Adaptive animation system that works with ANY model
+    - AI can control: position, size, emotion, speaking, gestures
+    - Lip sync (adapts to model capabilities)
     """
     
     closed = pyqtSignal()
@@ -1174,6 +1294,35 @@ class Avatar3DOverlayWindow(QWidget):
         self._drag_pos = None
         self._model_path = None
         self._use_circular_mask = True
+        
+        # Adaptive Animator - works with ANY model
+        self._animator = None
+        try:
+            from ....avatar.adaptive_animator import AdaptiveAnimator
+            self._animator = AdaptiveAnimator()
+            self._animator.on_transform_update(self._on_animator_transform)
+        except ImportError as e:
+            print(f"[Avatar3DOverlay] AdaptiveAnimator not available: {e}")
+        
+        # Idle animation state (fallback if no animator)
+        self._idle_animation_enabled = True
+        self._idle_timer = QTimer()
+        self._idle_timer.timeout.connect(self._do_idle_animation)
+        self._idle_phase = 0.0  # Animation phase (radians)
+        self._idle_bob_amount = 0.02  # How much to bob up/down (fraction of zoom)
+        self._idle_sway_amount = 0.3  # How much to sway left/right (degrees)
+        self._idle_speed = 0.05  # Animation speed
+        self._base_pan_y = 0.0  # Base camera Y position
+        self._base_rotation_y = 0.0  # Base camera Y rotation
+        
+        # Model info (for AI awareness)
+        self._model_info = {
+            'vertices': 0,
+            'faces': 0,
+            'has_colors': False,
+            'bounds': None,
+            'center': None,
+        }
         
         # AI command watcher
         self._command_timer = QTimer()
@@ -1209,12 +1358,29 @@ class Avatar3DOverlayWindow(QWidget):
         
         main_layout.addWidget(self._gl_container)
         
-        # Install event filter for dragging
+        # Install event filter for dragging - this intercepts ALL mouse events
         if self._gl_widget:
             self._gl_widget.installEventFilter(self)
         
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_OpenHandCursor))
+    
+    def _on_animator_transform(self, pos_offset, rot_offset, scale):
+        """Callback from AdaptiveAnimator for transform updates."""
+        if not self._gl_widget:
+            return
+        
+        # Apply position offset (Y = vertical bob)
+        self._gl_widget.pan_y = self._base_pan_y + pos_offset[1]
+        
+        # Apply rotation offset (Y = sway)
+        self._gl_widget.rotation_y = self._base_rotation_y + rot_offset[1]
+        
+        # Apply scale (for speaking pulse effect)
+        # Note: OpenGL widget doesn't directly support scale, but we can adjust zoom
+        # self._gl_widget.zoom = self._base_zoom / scale
+        
+        self._gl_widget.update()
     
     def _apply_circular_mask(self):
         """Apply a circular mask."""
@@ -1238,23 +1404,140 @@ class Avatar3DOverlayWindow(QWidget):
         if self._gl_widget:
             result = self._gl_widget.load_model(path)
             self._apply_circular_mask()
+            
+            # Capture model info for AI awareness
+            if result and self._gl_widget.vertices is not None:
+                import numpy as np
+                self._model_info = {
+                    'vertices': len(self._gl_widget.vertices),
+                    'faces': len(self._gl_widget.faces) if self._gl_widget.faces is not None else 0,
+                    'has_colors': self._gl_widget.colors is not None and len(np.unique(self._gl_widget.colors, axis=0)) > 1,
+                    'bounds': {
+                        'min': self._gl_widget.vertices.min(axis=0).tolist(),
+                        'max': self._gl_widget.vertices.max(axis=0).tolist(),
+                    },
+                    'center': self._gl_widget.vertices.mean(axis=0).tolist(),
+                    'size': (self._gl_widget.vertices.max(axis=0) - self._gl_widget.vertices.min(axis=0)).tolist(),
+                }
+                
+                # Add detailed model metadata from analysis
+                metadata = self._gl_widget.get_model_metadata()
+                if metadata:
+                    self._model_info['mesh_count'] = metadata.get('mesh_count', 0)
+                    self._model_info['mesh_names'] = metadata.get('mesh_names', [])
+                    self._model_info['has_skeleton'] = metadata.get('has_skeleton', False)
+                    self._model_info['skeleton_bones'] = metadata.get('skeleton_bones', [])
+                    self._model_info['estimated_type'] = metadata.get('estimated_type', 'unknown')
+                    self._model_info['has_textures'] = metadata.get('has_textures', False)
+                    self._model_info['materials'] = metadata.get('materials', [])
+                
+                # Initialize AdaptiveAnimator with model capabilities
+                if self._animator:
+                    self._animator.set_model_info(self._model_info)
+                    self._animator.start()
+                    # Write capabilities for AI
+                    caps = self._animator.get_capabilities_for_ai()
+                    caps_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "capabilities.json"
+                    caps_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(caps_path, 'w') as f:
+                        json.dump(caps, f, indent=2)
+                    print(f"[Avatar3DOverlay] Model capabilities written to {caps_path}")
+                
+                # Save base camera positions for idle animation
+                self._base_pan_y = self._gl_widget.pan_y
+                self._base_rotation_y = self._gl_widget.rotation_y
+                
+                # Start idle animation (fallback if no animator)
+                if self._idle_animation_enabled and not self._animator:
+                    self._start_idle_animation()
+            
             return result
         return False
     
+    def _start_idle_animation(self):
+        """Start the idle bobbing/swaying animation."""
+        if not self._idle_timer.isActive():
+            self._idle_phase = 0.0
+            self._idle_timer.start(33)  # ~30fps for smooth animation
+    
+    def _stop_idle_animation(self):
+        """Stop the idle animation and reset to base position."""
+        self._idle_timer.stop()
+        if self._gl_widget:
+            self._gl_widget.pan_y = self._base_pan_y
+            self._gl_widget.rotation_y = self._base_rotation_y
+            self._gl_widget.update()
+    
+    def _do_idle_animation(self):
+        """Perform one frame of idle animation."""
+        import math
+        
+        if not self._gl_widget:
+            return
+        
+        self._idle_phase += self._idle_speed
+        
+        # Gentle bobbing (vertical movement)
+        bob_offset = math.sin(self._idle_phase) * self._idle_bob_amount
+        self._gl_widget.pan_y = self._base_pan_y + bob_offset
+        
+        # Gentle swaying (subtle rotation)
+        sway_offset = math.sin(self._idle_phase * 0.7) * self._idle_sway_amount
+        self._gl_widget.rotation_y = self._base_rotation_y + sway_offset
+        
+        self._gl_widget.update()
+    
+    def set_idle_animation(self, enabled: bool):
+        """Enable or disable idle animation."""
+        self._idle_animation_enabled = enabled
+        if enabled:
+            self._start_idle_animation()
+        else:
+            self._stop_idle_animation()
+    
+    def get_model_info(self) -> dict:
+        """Get information about the loaded model for AI awareness."""
+        return self._model_info.copy()
+    
     def eventFilter(self, obj, event):
-        """Handle mouse events for dragging."""
+        """Handle mouse events for dragging - blocks rotation in desktop mode."""
         if obj == self._gl_widget:
-            if event.type() == event.MouseButtonPress and event.button() == Qt_LeftButton:
-                self._drag_pos = event.globalPos() - self.pos()
-                self.setCursor(QCursor(Qt_ClosedHandCursor))
-                return True
-            elif event.type() == event.MouseMove and self._drag_pos is not None:
-                self.move(event.globalPos() - self._drag_pos)
-                return True
-            elif event.type() == event.MouseButtonRelease and event.button() == Qt_LeftButton:
-                self._drag_pos = None
-                self.setCursor(QCursor(Qt_OpenHandCursor))
-                return True
+            event_type = event.type()
+            
+            # Block ALL mouse events that would cause rotation
+            # Only allow: press for drag start, move for drag, release for drag end
+            if event_type == event.MouseButtonPress:
+                if event.button() == Qt_LeftButton:
+                    self._drag_pos = event.globalPos() - self.pos()
+                    self.setCursor(QCursor(Qt_ClosedHandCursor))
+                return True  # Block event from reaching GL widget
+                
+            elif event_type == event.MouseMove:
+                if self._drag_pos is not None:
+                    self.move(event.globalPos() - self._drag_pos)
+                return True  # Block event from reaching GL widget
+                
+            elif event_type == event.MouseButtonRelease:
+                if event.button() == Qt_LeftButton:
+                    self._drag_pos = None
+                    self.setCursor(QCursor(Qt_OpenHandCursor))
+                return True  # Block event from reaching GL widget
+            
+            elif event_type == event.MouseButtonDblClick:
+                # Double-click resets to center of screen
+                screen = QApplication.primaryScreen()
+                if screen:
+                    screen_geo = screen.availableGeometry()
+                    self.move(
+                        screen_geo.center().x() - self._size // 2,
+                        screen_geo.center().y() - self._size // 2
+                    )
+                return True  # Block event
+            
+            elif event_type == event.Wheel:
+                # Allow wheel events to pass through for resizing (handled by parent)
+                return False
+                
         return super().eventFilter(obj, event)
     
     def wheelEvent(self, event):
@@ -1294,6 +1577,19 @@ class Avatar3DOverlayWindow(QWidget):
             }
         """)
         
+        # Idle animation toggle
+        idle_text = "⏸ Pause Animation" if self._idle_animation_enabled else "▶ Resume Animation"
+        idle_action = menu.addAction(idle_text)
+        idle_action.triggered.connect(lambda: self.set_idle_animation(not self._idle_animation_enabled))
+        
+        # Animation speed submenu
+        anim_menu = menu.addMenu("Animation Speed")
+        for name, speed in [("Slow", 0.02), ("Normal", 0.05), ("Fast", 0.1), ("Energetic", 0.15)]:
+            action = anim_menu.addAction(name)
+            action.triggered.connect(lambda checked, s=speed: self._set_animation_speed(s))
+        
+        menu.addSeparator()
+        
         # Wireframe toggle
         wireframe_action = menu.addAction("Toggle Wireframe")
         wireframe_action.triggered.connect(lambda: self._toggle_wireframe())
@@ -1327,8 +1623,21 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
+        # Model info
+        if self._model_info.get('vertices', 0) > 0:
+            info_action = menu.addAction(f"ℹ Model: {self._model_info['vertices']} vertices")
+            info_action.setEnabled(False)  # Just for display
+        
+        menu.addSeparator()
+        
         close_action = menu.addAction("Hide Avatar")
         close_action.triggered.connect(self._close)
+        
+        menu.exec_(event.globalPos())
+    
+    def _set_animation_speed(self, speed: float):
+        """Set the idle animation speed."""
+        self._idle_speed = speed
         
         menu.exec_(event.globalPos())
     
@@ -1345,10 +1654,12 @@ class Avatar3DOverlayWindow(QWidget):
             self._gl_widget.clearMask()
     
     def _set_view_angle(self, rotation_x: float, rotation_y: float):
-        """Set the model view angle."""
+        """Set the model view angle and update base for animation."""
         if self._gl_widget:
             self._gl_widget.rotation_x = rotation_x
             self._gl_widget.rotation_y = rotation_y
+            # Update base rotation so animation sways around new angle
+            self._base_rotation_y = rotation_y
             self._gl_widget.update()
     
     def _set_size(self, size: int):
@@ -1416,16 +1727,146 @@ class Avatar3DOverlayWindow(QWidget):
                             self._set_view_angle(rx, ry)
                     except ValueError:
                         pass
-        except (json.JSONDecodeError, IOError):
+            
+            # === NEW: AdaptiveAnimator commands ===
+            elif action == "speak":
+                # Make avatar speak (lip sync or visual pulse)
+                if self._animator:
+                    duration = float(cmd.get("duration", 0)) if cmd.get("duration") else None
+                    self._animator.speak(value, duration)
+                else:
+                    # Fallback: just set speaking state visually
+                    self._do_speaking_pulse()
+            
+            elif action == "emotion":
+                # Set emotion/expression
+                if self._animator:
+                    self._animator.set_emotion(value)
+            
+            elif action == "nod":
+                # Nod gesture (yes)
+                if self._animator:
+                    intensity = float(value) if value else 1.0
+                    self._animator.nod(intensity)
+                else:
+                    self._do_nod_fallback()
+            
+            elif action == "shake":
+                # Shake gesture (no)
+                if self._animator:
+                    intensity = float(value) if value else 1.0
+                    self._animator.shake(intensity)
+                else:
+                    self._do_shake_fallback()
+            
+            elif action == "wave":
+                # Wave gesture
+                if self._animator:
+                    self._animator.wave()
+            
+            elif action == "blink":
+                # Blink
+                if self._animator:
+                    self._animator.blink()
+            
+            elif action == "look_at":
+                # Look at position
+                if self._animator:
+                    try:
+                        parts = value.split(",")
+                        if len(parts) >= 2:
+                            x, y = float(parts[0].strip()), float(parts[1].strip())
+                            z = float(parts[2].strip()) if len(parts) > 2 else 0.0
+                            self._animator.look_at(x, y, z)
+                    except ValueError:
+                        pass
+            
+            elif action == "get_capabilities":
+                # Write avatar capabilities for AI to read
+                caps_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "capabilities.json"
+                caps_path.parent.mkdir(parents=True, exist_ok=True)
+                if self._animator:
+                    caps = self._animator.get_capabilities_for_ai()
+                else:
+                    caps = {'strategy': 'TRANSFORM', 'can_lip_sync': False, 'can_emote': False}
+                caps['model_info'] = self._model_info
+                with open(caps_path, 'w') as f:
+                    json.dump(caps, f, indent=2)
+            
+            # Legacy commands
+            elif action == "animate":
+                value_lower = value.lower()
+                if value_lower in ("true", "on", "start", "yes", "1"):
+                    self.set_idle_animation(True)
+                elif value_lower in ("false", "off", "stop", "no", "0"):
+                    self.set_idle_animation(False)
+            elif action == "animation_speed":
+                try:
+                    speed = float(value)
+                    if speed > 1:
+                        speed = speed / 100.0
+                    self._idle_speed = max(0.01, min(0.2, speed * 0.2))
+                except ValueError:
+                    pass
+            elif action == "get_model_info":
+                info_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "model_info.json"
+                info_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(info_path, 'w') as f:
+                    json.dump(self._model_info, f, indent=2)
+        except (json.JSONDecodeError, IOError, ValueError):
             pass
+    
+    def _do_speaking_pulse(self):
+        """Fallback speaking animation when no animator."""
+        # Simple scale pulse handled by idle animation
+        pass
+    
+    def _do_nod_fallback(self):
+        """Fallback nod animation."""
+        if not self._gl_widget:
+            return
+        # Simple up-down via camera
+        import threading
+        def animate():
+            import time
+            original_x = self._gl_widget.rotation_x
+            for i in range(10):
+                self._gl_widget.rotation_x = original_x + math.sin(i * 0.6) * 15
+                self._gl_widget.update()
+                time.sleep(0.04)
+            self._gl_widget.rotation_x = original_x
+            self._gl_widget.update()
+        threading.Thread(target=animate, daemon=True).start()
+    
+    def _do_shake_fallback(self):
+        """Fallback shake animation."""
+        if not self._gl_widget:
+            return
+        import threading
+        def animate():
+            import time
+            original_y = self._gl_widget.rotation_y
+            for i in range(12):
+                self._gl_widget.rotation_y = original_y + math.sin(i * 1.0) * 20 * (1 - i/12)
+                self._gl_widget.update()
+                time.sleep(0.04)
+            self._gl_widget.rotation_y = original_y
+            self._gl_widget.update()
+        threading.Thread(target=animate, daemon=True).start()
     
     def _close(self):
         self._command_timer.stop()
+        self._idle_timer.stop()
+        if self._animator:
+            self._animator.stop()
         self.hide()
         self.closed.emit()
     
     def closeEvent(self, event):
         self._command_timer.stop()
+        self._idle_timer.stop()
+        if self._animator:
+            self._animator.stop()
         super().closeEvent(event)
 
 

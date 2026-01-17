@@ -66,6 +66,24 @@ from .emotion_sync import EmotionExpressionSync
 from .lip_sync import LipSync
 from .customizer import AvatarCustomizer
 
+# Adaptive animation system (works with ANY model)
+from .adaptive_animator import (
+    AdaptiveAnimator,
+    ModelCapabilities,
+    AnimationStrategy,
+    AnimationState,
+)
+
+# Speech synchronization (voice + lip sync)
+from .speech_sync import (
+    SpeechSync,
+    SpeechSyncConfig,
+    get_speech_sync,
+    sync_speak,
+    set_avatar_for_sync,
+    create_voice_avatar_bridge,
+)
+
 # Autonomous avatar system
 from .autonomous import (
     AutonomousAvatar,
@@ -119,6 +137,20 @@ __all__ = [
     # Sync & Animation
     "EmotionExpressionSync",
     "LipSync",
+    
+    # Adaptive Animation (universal)
+    "AdaptiveAnimator",
+    "ModelCapabilities", 
+    "AnimationStrategy",
+    "AnimationState",
+    
+    # Speech Sync (voice + avatar)
+    "SpeechSync",
+    "SpeechSyncConfig",
+    "get_speech_sync",
+    "sync_speak",
+    "set_avatar_for_sync",
+    "create_voice_avatar_bridge",
     
     # Customization
     "AvatarCustomizer",

@@ -1,0 +1,12 @@
+{
+  "name": "TestVoice",
+  "pitch": 0.8,
+  "speed": 0.9,
+  "volume": 0.85,
+  "voice": "male",
+  "effects": [
+    "calm"
+  ],
+  "language": "en",
+  "description": "Test voice for verification"
+}

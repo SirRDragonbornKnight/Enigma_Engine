@@ -413,6 +413,8 @@ class QuickCommandOverlay(QWidget):
         self._resize_edge = None
         self._is_responding = False  # Track if AI is responding
         self._stop_requested = False  # Track if stop was requested
+        self._auto_speak = False  # Voice output toggle
+        self._last_response = None  # Store last response for speak-last
         
         super().__init__(parent)
         
@@ -631,9 +633,9 @@ class QuickCommandOverlay(QWidget):
         self.stop_btn.hide()  # Hidden by default
         input_layout.addWidget(self.stop_btn)
         
-        # Voice button
-        self.voice_btn = QPushButton("Voice")
-        self.voice_btn.setFixedSize(50, 40)
+        # Voice input button (microphone)
+        self.voice_btn = QPushButton("🎤")
+        self.voice_btn.setFixedSize(40, 40)
         self.voice_btn.setToolTip("Voice input (hold to speak)")
         self.voice_btn.setCheckable(True)
         self.voice_btn.setStyleSheet("""
@@ -642,8 +644,7 @@ class QuickCommandOverlay(QWidget):
                 border: none;
                 border-radius: 8px;
                 color: white;
-                font-size: 12px;
-                font-weight: bold;
+                font-size: 14px;
             }
             QPushButton:hover {
                 background-color: #666;
@@ -655,41 +656,80 @@ class QuickCommandOverlay(QWidget):
                 background-color: #c0392b;
             }
         """)
-        self.voice_btn.clicked.connect(self._toggle_voice)
+        self.voice_btn.clicked.connect(self._toggle_voice_input)
         input_layout.addWidget(self.voice_btn)
-        
-        # Open GUI button
-        self.gui_btn = QPushButton("GUI")
-        self.gui_btn.setFixedSize(50, 40)
-        self.gui_btn.setToolTip("Open Full GUI")
-        self.gui_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9b59b6;
-                border: none;
-                border-radius: 8px;
-                color: white;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #8e44ad;
-            }
-            QPushButton:pressed {
-                background-color: #6c3483;
-            }
-        """)
-        self.gui_btn.clicked.connect(self._open_gui)
-        input_layout.addWidget(self.gui_btn)
         
         frame_layout.addLayout(input_layout)
         
-        # Hint row
-        hint_layout = QHBoxLayout()
-        hint = QLabel("Enter=Send | Esc=Open GUI | Up/Down=History")
-        hint.setStyleSheet("color: #555; font-size: 10px;")
-        hint_layout.addWidget(hint)
-        hint_layout.addStretch()
-        frame_layout.addLayout(hint_layout)
+        # Bottom row: hint text (clickable) + voice controls
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(8)
+        
+        # Clickable hint label - opens GUI when clicked
+        self.hint_label = QLabel("Enter=Send | <u>Esc=Open GUI</u> | Up/Down=History")
+        self.hint_label.setStyleSheet("""
+            QLabel {
+                color: #666;
+                font-size: 10px;
+            }
+            QLabel:hover {
+                color: #3498db;
+            }
+        """)
+        self.hint_label.setCursor(Qt.PointingHandCursor)
+        self.hint_label.setToolTip("Click to open full GUI")
+        self.hint_label.mousePressEvent = lambda e: self._open_gui()
+        bottom_layout.addWidget(self.hint_label)
+        
+        bottom_layout.addStretch()
+        
+        # Voice output toggle (small)
+        self.voice_out_btn = QPushButton("🔇")
+        self.voice_out_btn.setFixedSize(28, 22)
+        self.voice_out_btn.setCheckable(True)
+        self.voice_out_btn.setToolTip("Voice Output: OFF")
+        self.voice_out_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #444;
+                border-radius: 4px;
+                color: #666;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #333;
+                border-color: #555;
+            }
+            QPushButton:checked {
+                color: #2ecc71;
+                border-color: #2ecc71;
+            }
+        """)
+        self.voice_out_btn.clicked.connect(self._toggle_voice_output_small)
+        bottom_layout.addWidget(self.voice_out_btn)
+        
+        # Speak last button (small)
+        self.speak_last_btn = QPushButton("🔊")
+        self.speak_last_btn.setFixedSize(28, 22)
+        self.speak_last_btn.setToolTip("Speak last response")
+        self.speak_last_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #444;
+                border-radius: 4px;
+                color: #666;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #333;
+                border-color: #3498db;
+                color: #3498db;
+            }
+        """)
+        self.speak_last_btn.clicked.connect(self._speak_last_response)
+        bottom_layout.addWidget(self.speak_last_btn)
+        
+        frame_layout.addLayout(bottom_layout)
         
         layout.addWidget(self.frame)
         
@@ -793,6 +833,17 @@ class QuickCommandOverlay(QWidget):
         self.close_requested.emit()
         self.hide()
     
+    def _get_main_window(self):
+        """Get reference to the main window if available."""
+        try:
+            from PyQt5.QtWidgets import QApplication
+            for widget in QApplication.topLevelWidgets():
+                if widget.__class__.__name__ == 'EnhancedMainWindow':
+                    return widget
+        except Exception:
+            pass
+        return None
+    
     def _new_chat(self):
         """Clear the chat and start fresh."""
         if self._is_responding:
@@ -836,8 +887,50 @@ class QuickCommandOverlay(QWidget):
         """Legacy submit handler - redirects to chat."""
         self._on_chat()
     
-    def _toggle_voice(self):
-        """Toggle voice input."""
+    def _toggle_voice_output_small(self):
+        """Toggle voice output from the small bottom button."""
+        is_on = self.voice_out_btn.isChecked()
+        self._auto_speak = is_on
+        
+        if is_on:
+            self.voice_out_btn.setText("🔊")
+            self.voice_out_btn.setToolTip("Voice Output: ON\nAI will speak responses")
+            self.set_status("Voice output ON")
+        else:
+            self.voice_out_btn.setText("🔇")
+            self.voice_out_btn.setToolTip("Voice Output: OFF")
+            self.set_status("Voice output OFF")
+        
+        # Sync with main window if available
+        main_window = self._get_main_window()
+        if main_window:
+            main_window.auto_speak = is_on
+            if hasattr(main_window, 'voice_toggle_btn'):
+                main_window.voice_toggle_btn.setChecked(is_on)
+                if is_on:
+                    main_window.voice_toggle_btn.setText("🔊 Voice ON")
+                else:
+                    main_window.voice_toggle_btn.setText("🔇 Voice OFF")
+    
+    def _speak_last_response(self):
+        """Speak the last AI response."""
+        if hasattr(self, '_last_response') and self._last_response:
+            try:
+                from forge_ai.voice import speak
+                # Clean the text for speaking
+                import re
+                clean_text = re.sub(r'<[^>]+>', '', self._last_response)
+                clean_text = clean_text.strip()[:500]
+                if clean_text:
+                    speak(clean_text)
+                    self.set_status("Speaking...")
+            except Exception as e:
+                self.set_status(f"TTS error: {e}")
+        else:
+            self.set_status("No response to speak")
+    
+    def _toggle_voice_input(self):
+        """Toggle voice input (microphone)."""
         is_listening = self.voice_btn.isChecked()
         
         if is_listening:
@@ -860,6 +953,10 @@ class QuickCommandOverlay(QWidget):
             self.voice_btn.setToolTip("Voice input (click to speak)")
             self.set_status("Ready")
             self._voice_thread = None
+    
+    def _toggle_voice(self):
+        """Legacy toggle - redirects to voice input."""
+        self._toggle_voice_input()
     
     def _do_voice_input(self):
         """Background voice recognition."""
@@ -914,6 +1011,9 @@ class QuickCommandOverlay(QWidget):
         # Stop the responding indicator
         self.stop_responding()
         
+        # Store for speak last
+        self._last_response = text
+        
         # Use the AI's actual name instead of generic "AI"
         ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
         self.response_area.append(f"<div style='color: #3498db; margin-bottom: 8px;'><b>{ai_name}:</b> {text}</div>")
@@ -921,6 +1021,25 @@ class QuickCommandOverlay(QWidget):
         self.response_area.verticalScrollBar().setValue(
             self.response_area.verticalScrollBar().maximum()
         )
+        
+        # Auto-speak if enabled
+        if getattr(self, '_auto_speak', False):
+            self._speak_response(text)
+    
+    def _speak_response(self, text: str):
+        """Speak a response using TTS."""
+        try:
+            import re
+            # Clean the text for speaking
+            clean_text = re.sub(r'<[^>]+>', '', text)
+            clean_text = re.sub(r'```[\s\S]*?```', '', clean_text)  # Remove code blocks
+            clean_text = clean_text.strip()[:500]
+            
+            if clean_text and not clean_text.startswith("⚠️"):
+                from forge_ai.voice import speak
+                speak(clean_text)
+        except Exception as e:
+            print(f"[MiniChat] TTS error: {e}")
     
     @pyqtSlot(str)
     def set_status(self, text: str):

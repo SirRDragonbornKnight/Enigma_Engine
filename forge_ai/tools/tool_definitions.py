@@ -324,6 +324,40 @@ SPEAK = ToolDefinition(
     ],
 )
 
+CREATE_VOICE_PROFILE = ToolDefinition(
+    name="create_voice_profile",
+    description="Create a new voice profile for an avatar based on personality description. The AI analyzes the description and generates matching voice parameters.",
+    category="generation",
+    module="voice_output",
+    parameters=[
+        ToolParameter(
+            name="name",
+            type="string",
+            description="Name for the voice profile",
+            required=True,
+        ),
+        ToolParameter(
+            name="personality",
+            type="string",
+            description="Description of the character/personality (e.g., 'confident, deep-voiced leader who speaks calmly')",
+            required=True,
+        ),
+        ToolParameter(
+            name="base_voice",
+            type="string",
+            description="Base voice type",
+            required=False,
+            default="default",
+            enum=["default", "male", "female"],
+        ),
+    ],
+    examples=[
+        "Create a voice for a wise old mentor",
+        "Make a cheerful energetic assistant voice",
+        "Generate a robotic AI voice",
+    ],
+)
+
 # --- Code Generation Tools ---
 
 GENERATE_CODE = ToolDefinition(
@@ -1274,6 +1308,7 @@ ALL_TOOLS = [
     CONTROL_AVATAR,
     CUSTOMIZE_AVATAR,
     SPEAK,
+    CREATE_VOICE_PROFILE,
     
     # System - File Operations
     READ_FILE,

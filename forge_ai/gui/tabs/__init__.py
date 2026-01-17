@@ -32,6 +32,7 @@ from .scheduler_tab import SchedulerTab, create_scheduler_tab
 from .gif_tab import GIFTab, create_gif_tab
 from .settings_tab import create_settings_tab
 from .model_router_tab import ModelRouterTab
+from .voice_clone_tab import VoiceCloneTab
 
 # Shared UI components for use across all tabs
 from .shared_components import (
@@ -92,6 +93,7 @@ __all__ = [
     'create_gif_tab',
     'create_settings_tab',
     'ModelRouterTab',
+    'VoiceCloneTab',
     # Shared components
     'STYLE_PRESETS',
     'COLOR_PRESETS',

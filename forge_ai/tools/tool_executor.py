@@ -386,6 +386,8 @@ class ToolExecutor:
             return self._execute_customize_avatar(module, params)
         elif tool_name == "speak":
             return self._execute_speak(module, params)
+        elif tool_name == "create_voice_profile":
+            return self._execute_create_voice_profile(module, params)
         elif tool_name == "generate_code":
             return self._execute_generate_code(module, params)
         elif tool_name == "generate_video":
@@ -770,6 +772,50 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "speak",
+            }
+    
+    def _execute_create_voice_profile(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a voice profile from personality description."""
+        try:
+            name = params.get("name", "custom_voice")
+            personality = params.get("personality", "")
+            base_voice = params.get("base_voice", "default")
+            
+            if not personality:
+                return {
+                    "success": False,
+                    "error": "Personality description is required",
+                    "tool": "create_voice_profile",
+                }
+            
+            # Use voice identity system to create profile from description
+            from forge_ai.voice.voice_identity import AIVoiceIdentity
+            
+            identity = AIVoiceIdentity()
+            profile = identity.describe_desired_voice(personality)
+            profile.name = name
+            profile.voice = base_voice if base_voice != "default" else profile.voice
+            profile.save()
+            
+            return {
+                "success": True,
+                "result": f"Created voice profile '{name}' with pitch={profile.pitch:.2f}, speed={profile.speed:.2f}, volume={profile.volume:.2f}",
+                "profile_name": name,
+                "parameters": {
+                    "pitch": profile.pitch,
+                    "speed": profile.speed,
+                    "volume": profile.volume,
+                    "voice": profile.voice,
+                    "effects": profile.effects,
+                },
+                "tool": "create_voice_profile",
+            }
+        
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "create_voice_profile",
             }
     
     def _execute_generate_code(self, module, params: Dict[str, Any]) -> Dict[str, Any]:

@@ -176,19 +176,49 @@ def create_chat_tab(parent):
     parent.stop_btn.hide()  # Hidden by default
     input_layout.addWidget(parent.stop_btn)
     
-    # Speak button (for TTS)
-    parent.btn_speak = QPushButton("Voice")
-    parent.btn_speak.setToolTip("Speak last response")
-    parent.btn_speak.setMinimumWidth(90)
+    # Voice On/Off toggle button
+    parent.voice_toggle_btn = QPushButton("🔇 Voice OFF")
+    parent.voice_toggle_btn.setToolTip("Toggle auto-speak for AI responses\nWhen ON, AI will read responses aloud")
+    parent.voice_toggle_btn.setMinimumWidth(100)
+    parent.voice_toggle_btn.setMinimumHeight(40)
+    parent.voice_toggle_btn.setCheckable(True)
+    parent.voice_toggle_btn.setChecked(getattr(parent, 'auto_speak', False))
+    parent.voice_toggle_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #45475a;
+            color: #cdd6f4;
+            font-weight: bold;
+            font-size: 12px;
+            border-radius: 6px;
+            padding: 8px 10px;
+        }
+        QPushButton:hover {
+            background-color: #585b70;
+        }
+        QPushButton:checked {
+            background-color: #a6e3a1;
+            color: #1e1e2e;
+        }
+        QPushButton:checked:hover {
+            background-color: #94e2d5;
+        }
+    """)
+    parent.voice_toggle_btn.clicked.connect(lambda: _toggle_voice_output(parent))
+    input_layout.addWidget(parent.voice_toggle_btn)
+    
+    # Speak Last button (for TTS on demand)
+    parent.btn_speak = QPushButton("🔊")
+    parent.btn_speak.setToolTip("Speak last AI response")
+    parent.btn_speak.setMinimumWidth(40)
     parent.btn_speak.setMinimumHeight(40)
     parent.btn_speak.setStyleSheet("""
         QPushButton {
             background-color: #cba6f7;
             color: #1e1e2e;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 16px;
             border-radius: 6px;
-            padding: 8px 12px;
+            padding: 8px;
         }
         QPushButton:hover {
             background-color: #f5c2e7;
@@ -242,8 +272,44 @@ def create_chat_tab(parent):
     # Initialize auto_speak
     parent.auto_speak = False
     
+    # Update voice button state from saved settings
+    _update_voice_button_state(parent)
+    
     w.setLayout(layout)
     return w
+
+
+def _toggle_voice_output(parent):
+    """Toggle voice output on/off."""
+    parent.auto_speak = not getattr(parent, 'auto_speak', False)
+    _update_voice_button_state(parent)
+    
+    # Also sync with the auto_speak_action menu item if it exists
+    if hasattr(parent, 'auto_speak_action'):
+        parent.auto_speak_action.blockSignals(True)
+        parent.auto_speak_action.setChecked(parent.auto_speak)
+        parent.auto_speak_action.setText(f"AI Auto-Speak ({'ON' if parent.auto_speak else 'OFF'})")
+        parent.auto_speak_action.blockSignals(False)
+    
+    # Show status
+    if parent.auto_speak:
+        parent.chat_status.setText("🔊 Voice output ON - AI will speak responses aloud")
+    else:
+        parent.chat_status.setText("🔇 Voice output OFF")
+
+
+def _update_voice_button_state(parent):
+    """Update the voice toggle button appearance based on state."""
+    if not hasattr(parent, 'voice_toggle_btn'):
+        return
+    
+    is_on = getattr(parent, 'auto_speak', False)
+    parent.voice_toggle_btn.setChecked(is_on)
+    
+    if is_on:
+        parent.voice_toggle_btn.setText("🔊 Voice ON")
+    else:
+        parent.voice_toggle_btn.setText("🔇 Voice OFF")
 
 
 def _toggle_learning(parent):
