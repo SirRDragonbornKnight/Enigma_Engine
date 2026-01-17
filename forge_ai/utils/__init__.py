@@ -21,6 +21,9 @@ from .text_enhancement import (
     levenshtein_distance, find_closest_match, suggest_command, 
     format_did_you_mean
 )
+from .json_cache import (
+    read_json_cached, write_json_cached, invalidate_cache, get_cache_stats
+)
 
 
 def progress_bar(
@@ -176,4 +179,9 @@ __all__ = [
     'find_closest_match',
     'suggest_command',
     'format_did_you_mean',
+    # JSON caching
+    'read_json_cached',
+    'write_json_cached',
+    'invalidate_cache',
+    'get_cache_stats',
 ]

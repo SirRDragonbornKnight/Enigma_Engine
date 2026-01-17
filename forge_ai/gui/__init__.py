@@ -29,32 +29,13 @@ Components:
     - tabs/: Individual tab modules (chat, training, etc.)
 """
 
-# Main window
-try:
+from typing import TYPE_CHECKING
+
+# Only import for type checking, not at runtime
+if TYPE_CHECKING:
     from .enhanced_window import ForgeWindow
-except ImportError:
-    ForgeWindow = None
-
-# Theme system
-try:
-    from .theme_system import (
-        ThemeColors,
-        Theme,
-        ThemeManager,
-    )
-except ImportError:
-    ThemeColors = None
-    Theme = None
-    ThemeManager = None
-
-# Resource monitor
-try:
+    from .theme_system import ThemeColors, Theme, ThemeManager
     from .resource_monitor import ResourceMonitor
-except ImportError:
-    ResourceMonitor = None
-
-# Tab modules
-try:
     from .tabs import (
         create_chat_tab,
         create_training_tab,
@@ -70,21 +51,54 @@ try:
         ExamplesTab,
         create_examples_tab,
     )
-except ImportError:
-    # Tabs may not be available in all installations
-    create_chat_tab = None
-    create_training_tab = None
-    create_avatar_tab = None
-    create_vision_tab = None
-    create_sessions_tab = None
-    create_instructions_tab = None
-    create_terminal_tab = None
-    log_to_terminal = None
-    ModulesTab = None
-    ScalingTab = None
-    create_scaling_tab = None
-    ExamplesTab = None
-    create_examples_tab = None
+
+# Lazy loading cache
+_cache = {}
+
+def __getattr__(name: str):
+    """Lazy load GUI components only when accessed."""
+    if name in _cache:
+        return _cache[name]
+    
+    _imports = {
+        # Main window
+        'ForgeWindow': ('.enhanced_window', 'EnhancedMainWindow'),
+        'EnhancedMainWindow': ('.enhanced_window', 'EnhancedMainWindow'),
+        # Theme system
+        'ThemeColors': ('.theme_system', 'ThemeColors'),
+        'Theme': ('.theme_system', 'Theme'),
+        'ThemeManager': ('.theme_system', 'ThemeManager'),
+        # Resource monitor
+        'ResourceMonitor': ('.resource_monitor', 'ResourceMonitor'),
+        # Tab creators and classes (forward to tabs module)
+        'create_chat_tab': ('.tabs', 'create_chat_tab'),
+        'create_training_tab': ('.tabs', 'create_training_tab'),
+        'create_avatar_tab': ('.tabs', 'create_avatar_tab'),
+        'create_vision_tab': ('.tabs', 'create_vision_tab'),
+        'create_sessions_tab': ('.tabs', 'create_sessions_tab'),
+        'create_instructions_tab': ('.tabs', 'create_instructions_tab'),
+        'create_terminal_tab': ('.tabs', 'create_terminal_tab'),
+        'log_to_terminal': ('.tabs', 'log_to_terminal'),
+        'ModulesTab': ('.tabs', 'ModulesTab'),
+        'ScalingTab': ('.tabs', 'ScalingTab'),
+        'create_scaling_tab': ('.tabs', 'create_scaling_tab'),
+        'ExamplesTab': ('.tabs', 'ExamplesTab'),
+        'create_examples_tab': ('.tabs', 'create_examples_tab'),
+    }
+    
+    if name not in _imports:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    
+    module_path, attr_name = _imports[name]
+    
+    try:
+        import importlib
+        module = importlib.import_module(module_path, __package__)
+        value = getattr(module, attr_name)
+        _cache[name] = value
+        return value
+    except ImportError:
+        return None
 
 
 def launch_gui():
@@ -98,8 +112,10 @@ def launch_gui():
         from PyQt5.QtWidgets import QApplication
         import sys
         
+        from .enhanced_window import EnhancedMainWindow
+        
         app = QApplication(sys.argv)
-        window = ForgeWindow()
+        window = EnhancedMainWindow()
         window.show()
         return app.exec_()
     except ImportError as e:

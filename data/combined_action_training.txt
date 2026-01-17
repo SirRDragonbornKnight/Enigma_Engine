@@ -1,160 +1,154 @@
-# Combined Action Training Data
-# ==============================
-# Teaches the AI to use multiple tools in sequence for complex tasks
-# Uses standardized JSON tool format
+# ForgeAI Multi-Step Tool Training
+# ==================================
+# Training data for complex workflows that require multiple tools
+# Format: Q: / A: with <tool_call> JSON blocks
 # Updated: January 2026
 
 # =============================================================================
-# MULTI-STEP WORKFLOWS
+# FILE + ANALYSIS WORKFLOWS
 # =============================================================================
 
-Q: Take a screenshot and describe what you see.
-A: I'll capture your screen and analyze it.
-<tool_call>{"tool": "screenshot", "params": {"output_path": "outputs/screenshot_analysis.png"}}</tool_call>
-<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/screenshot_analysis.png"}</tool_result>
-Now let me analyze the image.
-<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
-<tool_result>{"tool": "see_screen", "success": true, "description": "A code editor with Python code visible, showing a function definition"}</tool_result>
-I can see you have a code editor open with Python code. There's a function definition visible on the screen.
-
-Q: Search for information about Python decorators and save it to a file.
-A: I'll search for information about decorators and save what I find.
-<tool_call>{"tool": "web_search", "params": {"query": "Python decorators tutorial", "num_results": 5}}</tool_call>
-<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Python Decorators Tutorial", "snippet": "Decorators allow you to modify functions..."}]}</tool_result>
-I found some good information. Now let me save it for you.
-<tool_call>{"tool": "write_file", "params": {"path": "notes/decorators.md", "content": "# Python Decorators\n\nDecorators allow you to modify functions using the @decorator syntax.\n\nKey concepts:\n- Functions as first-class objects\n- Wrapper functions\n- The @ syntax\n- Common use cases: logging, timing, authentication"}}</tool_call>
-<tool_result>{"tool": "write_file", "success": true, "path": "notes/decorators.md"}</tool_result>
-Done! I searched for Python decorators and saved a comprehensive summary to notes/decorators.md.
-
-Q: Generate an image of a sunset and tell me about it.
-A: I'll generate that image for you.
-<tool_call>{"tool": "generate_image", "params": {"prompt": "beautiful sunset over ocean, dramatic sky, orange and purple colors, photorealistic", "width": 512, "height": 512}}</tool_call>
-<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/sunset.png"}</tool_result>
-I've generated a sunset image! It shows a beautiful ocean sunset with dramatic orange and purple colors stretching across the sky. The sun is setting on the horizon, casting warm light across the water. The image has been saved to outputs/images/sunset.png.
-
-Q: What files are in my documents folder? Then read the todo list.
-A: Let me check your documents folder first.
-<tool_call>{"tool": "list_directory", "params": {"path": "documents"}}</tool_call>
-<tool_result>{"tool": "list_directory", "success": true, "items": [{"name": "report.txt", "type": "file"}, {"name": "notes.md", "type": "file"}, {"name": "todo.txt", "type": "file"}], "num_items": 3}</tool_result>
-I see 3 files. Let me read the todo list for you.
-<tool_call>{"tool": "read_file", "params": {"path": "documents/todo.txt"}}</tool_call>
-<tool_result>{"tool": "read_file", "success": true, "content": "1. Review code\n2. Write tests\n3. Deploy app"}</tool_result>
-Your documents folder contains: report.txt, notes.md, and todo.txt. Here's what's in your todo.txt:
-1. Review code
-2. Write tests
-3. Deploy app
-
-Q: Help me create a presentation. Search for tips and generate a title slide.
-A: I'll help you with both research and visuals.
-<tool_call>{"tool": "web_search", "params": {"query": "effective presentation tips best practices", "num_results": 5}}</tool_call>
-<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "10 Tips for Great Presentations", "snippet": "Keep slides simple, use visuals, practice delivery..."}]}</tool_result>
-Found some great tips! Now let me create a title slide for you.
-<tool_call>{"tool": "generate_image", "params": {"prompt": "professional presentation title slide, clean minimal design, business meeting background, modern corporate style", "width": 1024, "height": 576}}</tool_call>
-<tool_result>{"tool": "generate_image", "success": true, "output_path": "outputs/images/title_slide.png"}</tool_result>
-I've gathered presentation tips and created a title slide image. Key tips: keep slides simple, use visuals effectively, and practice your delivery. Your title slide is saved at outputs/images/title_slide.png.
-
-Q: Check what's on my screen, then create a summary document.
-A: Let me capture and analyze your screen first.
-<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
-<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/current_screen.png"}</tool_result>
-<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
-<tool_result>{"tool": "see_screen", "success": true, "description": "Browser showing an article about machine learning algorithms"}</tool_result>
-I can see you're reading an article about machine learning. Let me create a summary document.
-<tool_call>{"tool": "write_file", "params": {"path": "summaries/ml_article.md", "content": "# ML Article Summary\n\nCurrently reading: Article about machine learning algorithms\n\nKey topics to research further:\n- Neural networks\n- Training data preparation\n- Model evaluation metrics\n- Hyperparameter tuning"}}</tool_call>
-<tool_result>{"tool": "write_file", "success": true}</tool_result>
-Done! I captured your screen showing a machine learning article and created a summary document at summaries/ml_article.md with notes for further research.
-
-Q: Check my system specs and then search for compatible software.
-A: Let me check your system first.
-<tool_call>{"tool": "get_system_info", "params": {}}</tool_call>
-<tool_result>{"tool": "get_system_info", "success": true, "info": {"os": "Windows", "cpu_count": 12, "memory_total_gb": 32, "gpu_name": "NVIDIA RTX 2080", "gpu_memory_gb": 8}}</tool_result>
-You have a powerful system! Now let me search for compatible software.
-<tool_call>{"tool": "web_search", "params": {"query": "best software for RTX 2080 GPU Windows", "num_results": 5}}</tool_call>
-<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Best GPU Software for RTX Cards", "snippet": "CUDA, TensorFlow, PyTorch..."}]}</tool_result>
-Your system has Windows with 12 CPU cores, 32GB RAM, and an RTX 2080 with 8GB VRAM. Great for running AI software like TensorFlow and PyTorch, video editing, and gaming!
-
-Q: Create a project checklist and add a reminder to review it.
-A: I'll set up both for you.
-<tool_call>{"tool": "create_checklist", "params": {"name": "New Project", "items": ["Define requirements", "Design architecture", "Implement core features", "Write tests", "Deploy"]}}</tool_call>
-<tool_result>{"tool": "create_checklist", "success": true, "id": "checklist_1", "name": "New Project"}</tool_result>
-Checklist created! Now let me set a reminder.
-<tool_call>{"tool": "set_reminder", "params": {"message": "Review project checklist progress", "remind_at": "2026-01-08T09:00:00"}}</tool_call>
-<tool_result>{"tool": "set_reminder", "success": true, "id": "reminder_1"}</tool_result>
-Done! I've created a project checklist with 5 items and set a reminder for tomorrow at 9 AM to review your progress.
-
-Q: Read the config file and run a command to test it.
-A: Let me read the config first.
+Q: Read the config and explain what it does
+A: Let me read and analyze that for you.
 <tool_call>{"tool": "read_file", "params": {"path": "config.json"}}</tool_call>
-<tool_result>{"tool": "read_file", "success": true, "content": "{\"debug\": true, \"port\": 8080, \"host\": \"localhost\"}"}</tool_result>
-The config has debug mode enabled on port 8080. Let me test it.
-<tool_call>{"tool": "run_command", "params": {"command": "python -c \"import json; print(json.load(open('config.json')))\"", "timeout": 10}}</tool_call>
-<tool_result>{"tool": "run_command", "success": true, "stdout": "{'debug': True, 'port': 8080, 'host': 'localhost'}\n"}</tool_result>
-Config validated successfully! Debug mode is on, running on localhost:8080.
+I'll explain the configuration once I read the file contents.
 
-Q: Generate code for a web server and save it to a file.
-A: I'll create the code and save it.
-<tool_call>{"tool": "generate_code", "params": {"description": "Simple Python Flask web server with hello world endpoint", "language": "python"}}</tool_call>
-<tool_result>{"tool": "generate_code", "success": true, "code": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route('/')\ndef hello():\n    return 'Hello, World!'\n\nif __name__ == '__main__':\n    app.run(debug=True)"}</tool_result>
-Generated the code. Now saving it to a file.
-<tool_call>{"tool": "write_file", "params": {"path": "server.py", "content": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route('/')\ndef hello():\n    return 'Hello, World!'\n\nif __name__ == '__main__':\n    app.run(debug=True)"}}</tool_call>
-<tool_result>{"tool": "write_file", "success": true, "path": "server.py"}</tool_result>
-Done! I've created a Flask web server and saved it to server.py. Run it with `python server.py`.
+Q: Check what's in my documents folder and summarize
+A: I'll list the contents for you.
+<tool_call>{"tool": "list_directory", "params": {"path": "~/Documents"}}</tool_call>
+Once I see what's there, I'll give you a summary.
 
-Q: Look up the weather and create a task based on it.
-A: Let me search for weather information.
-<tool_call>{"tool": "web_search", "params": {"query": "weather forecast today", "num_results": 3}}</tool_call>
-<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "Weather Forecast", "snippet": "Sunny with temperatures around 72°F"}]}</tool_result>
-Looks like nice weather! Let me create a relevant task.
-<tool_call>{"tool": "add_task", "params": {"title": "Go for a walk - nice weather today!", "priority": "medium", "description": "Weather forecast shows sunny, 72°F"}}</tool_call>
-<tool_result>{"tool": "add_task", "success": true, "id": "task_1"}</tool_result>
-The weather looks great - sunny and around 72°F! I've added a task to go for a walk and enjoy it.
-
-Q: Take a screenshot, describe it, and save the description to a file.
-A: I'll capture, analyze, and document your screen.
-<tool_call>{"tool": "screenshot", "params": {"output_path": "outputs/screen_capture.png"}}</tool_call>
-<tool_result>{"tool": "screenshot", "success": true, "path": "outputs/screen_capture.png"}</tool_result>
-<tool_call>{"tool": "see_screen", "params": {}}</tool_call>
-<tool_result>{"tool": "see_screen", "success": true, "description": "VS Code editor with multiple tabs open, showing a Python project with file explorer on the left"}</tool_result>
-<tool_call>{"tool": "write_file", "params": {"path": "screen_log.txt", "content": "Screen Capture Log\n==================\nTimestamp: 2026-01-07\nDescription: VS Code editor with multiple tabs open, showing a Python project with file explorer on the left.\nScreenshot saved to: outputs/screen_capture.png"}}</tool_call>
-<tool_result>{"tool": "write_file", "success": true}</tool_result>
-Done! I captured your screen showing VS Code with a Python project, and saved the description to screen_log.txt.
+Q: Find all Python files and tell me what they do
+A: Let me search for Python files first.
+<tool_call>{"tool": "list_directory", "params": {"path": ".", "pattern": "*.py"}}</tool_call>
+I'll analyze them after listing.
 
 # =============================================================================
-# ERROR HANDLING EXAMPLES
+# RESEARCH + CREATE WORKFLOWS
 # =============================================================================
 
-Q: Read a file that doesn't exist.
-A: Let me try to read that file.
-<tool_call>{"tool": "read_file", "params": {"path": "nonexistent_file.txt"}}</tool_call>
-<tool_result>{"tool": "read_file", "success": false, "error": "File not found: nonexistent_file.txt"}</tool_result>
-I couldn't find that file. Would you like me to create it, or did you mean a different file?
+Q: Research best Python practices and write a summary document
+A: I'll search for information and create a document.
+<tool_call>{"tool": "web_search", "params": {"query": "Python best practices 2024"}}</tool_call>
+After reviewing the results, I'll write a summary file for you.
 
-Q: Search for something with no results.
-A: Let me search for that.
-<tool_call>{"tool": "web_search", "params": {"query": "xyzabc123randomquery"}}</tool_call>
-<tool_result>{"tool": "web_search", "success": true, "results": [], "note": "No results found"}</tool_result>
-I couldn't find any results for that search. Would you like me to try different search terms?
+Q: Look up how to make a REST API and write example code
+A: Let me research that.
+<tool_call>{"tool": "web_search", "params": {"query": "Python REST API tutorial example"}}</tool_call>
+Then I'll write working example code based on what I find.
+
+Q: Find out what PyTorch is and create a getting started guide
+A: I'll research PyTorch first.
+<tool_call>{"tool": "web_search", "params": {"query": "PyTorch introduction tutorial"}}</tool_call>
+Then I'll create a beginner guide based on my findings.
 
 # =============================================================================
-# COMPLEX RESEARCH TASKS
+# IMAGE + CONTEXT WORKFLOWS
 # =============================================================================
 
-Q: Research Python best practices and create a coding guide.
-A: I'll research and compile a guide for you.
-<tool_call>{"tool": "web_search", "params": {"query": "Python best practices coding standards PEP8", "num_results": 5}}</tool_call>
-<tool_result>{"tool": "web_search", "success": true, "results": [{"title": "PEP 8 Style Guide", "snippet": "Python code style conventions..."}]}</tool_result>
-Found good resources. Let me create a comprehensive guide.
-<tool_call>{"tool": "write_file", "params": {"path": "guides/python_best_practices.md", "content": "# Python Best Practices Guide\n\n## Code Style (PEP 8)\n- Use 4 spaces for indentation\n- Limit lines to 79 characters\n- Use meaningful variable names\n- Add docstrings to functions\n\n## Project Structure\n- Use virtual environments\n- Keep requirements.txt updated\n- Organize code into modules\n\n## Testing\n- Write unit tests\n- Use pytest framework\n- Aim for good coverage\n\n## Documentation\n- Document public APIs\n- Include README files\n- Add type hints"}}</tool_call>
-<tool_result>{"tool": "write_file", "success": true}</tool_result>
-Done! I've researched Python best practices and created a comprehensive guide at guides/python_best_practices.md covering code style, project structure, testing, and documentation.
+Q: Take a screenshot and describe what you see
+A: Let me capture your screen.
+<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
+I'll describe everything I see in the image.
 
-Q: Check my tasks, complete one, and list what's remaining.
-A: Let me check your current tasks.
-<tool_call>{"tool": "list_tasks", "params": {}}</tool_call>
-<tool_result>{"tool": "list_tasks", "success": true, "tasks": [{"id": "task_1", "title": "Review code", "priority": "high"}, {"id": "task_2", "title": "Write tests", "priority": "medium"}], "count": 2}</tool_result>
-You have 2 tasks. Let me complete the first one.
-<tool_call>{"tool": "complete_task", "params": {"task_id": "task_1"}}</tool_call>
-<tool_result>{"tool": "complete_task", "success": true, "message": "Task task_1 completed"}</tool_result>
-<tool_call>{"tool": "list_tasks", "params": {}}</tool_call>
-<tool_result>{"tool": "list_tasks", "success": true, "tasks": [{"id": "task_2", "title": "Write tests", "priority": "medium"}], "count": 1}</tool_result>
-Done! I completed "Review code" and you have 1 task remaining: "Write tests" (medium priority).
+Q: Look at my screen and help me with what I'm working on
+A: Let me see what's on your screen.
+<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
+I'll analyze the content and offer help based on what you're doing.
+
+Q: Generate an image of what I'm describing then save it
+A: Tell me what you want, and I'll generate and save it.
+<tool_call>{"tool": "generate_image", "params": {"prompt": "user description here", "save": true}}</tool_call>
+The image will be saved to your outputs folder.
+
+# =============================================================================
+# VOICE + AVATAR WORKFLOWS
+# =============================================================================
+
+Q: Show yourself and greet me
+A: Here I am!
+<tool_call>{"tool": "show_avatar", "params": {}}</tool_call>
+<tool_call>{"tool": "speak", "params": {"text": "Hello! Great to see you!"}}</tool_call>
+I'll appear and say hello.
+
+Q: Read this document out loud to me
+A: I'll read it for you.
+<tool_call>{"tool": "read_file", "params": {"path": "document.txt"}}</tool_call>
+<tool_call>{"tool": "speak", "params": {"text": "[contents from file]"}}</tool_call>
+I'll read the contents aloud.
+
+# =============================================================================
+# CODE + TEST WORKFLOWS
+# =============================================================================
+
+Q: Write a sorting function and test it
+A: I'll create a function with tests.
+<tool_call>{"tool": "generate_code", "params": {"description": "sorting function with unit tests", "language": "python"}}</tool_call>
+I'll include both the function and test cases.
+
+Q: Create a web scraper and save it to a file
+A: I'll write a scraper and save it.
+<tool_call>{"tool": "generate_code", "params": {"description": "web scraper", "language": "python"}}</tool_call>
+<tool_call>{"tool": "write_file", "params": {"path": "scraper.py", "content": "[generated code]"}}</tool_call>
+The scraper will be saved to scraper.py.
+
+Q: Fix the bug in this code and explain what was wrong
+A: Let me analyze and fix it.
+<tool_call>{"tool": "analyze_code", "params": {"code": "[user code]"}}</tool_call>
+I'll identify the bug and provide a corrected version with explanation.
+
+# =============================================================================
+# WEB + MEMORY WORKFLOWS
+# =============================================================================
+
+Q: Search for news about AI and save it for later
+A: I'll search and save the information.
+<tool_call>{"tool": "web_search", "params": {"query": "AI news today"}}</tool_call>
+<tool_call>{"tool": "memory_store", "params": {"key": "ai_news", "value": "[search results]"}}</tool_call>
+I've stored the news in memory so we can reference it later.
+
+Q: Remember what we talked about yesterday
+A: Let me check our conversation history.
+<tool_call>{"tool": "memory_recall", "params": {"query": "yesterday conversation"}}</tool_call>
+I'll retrieve our previous discussion.
+
+# =============================================================================
+# CAMERA + VISION WORKFLOWS
+# =============================================================================
+
+Q: Use my webcam to see me and describe what you see
+A: Let me access your camera.
+<tool_call>{"tool": "capture_camera", "params": {}}</tool_call>
+I'll describe what I see in the camera feed.
+
+Q: Watch for when someone walks by
+A: I'll monitor the camera.
+<tool_call>{"tool": "capture_camera", "params": {"continuous": true}}</tool_call>
+I'll alert you when I detect movement.
+
+# =============================================================================
+# COMPLEX MULTI-STEP
+# =============================================================================
+
+Q: Set up a new Python project with readme and main file
+A: I'll create the project structure.
+<tool_call>{"tool": "write_file", "params": {"path": "README.md", "content": "# New Project\n\nDescription here."}}</tool_call>
+<tool_call>{"tool": "write_file", "params": {"path": "main.py", "content": "def main():\n    print('Hello, World!')\n\nif __name__ == '__main__':\n    main()"}}</tool_call>
+<tool_call>{"tool": "write_file", "params": {"path": "requirements.txt", "content": "# Add dependencies here"}}</tool_call>
+Your project is ready with README, main.py, and requirements.txt!
+
+Q: Analyze my screen, explain what I'm looking at, and speak the explanation
+A: Let me capture and analyze your screen.
+<tool_call>{"tool": "screenshot", "params": {}}</tool_call>
+<tool_call>{"tool": "speak", "params": {"text": "[explanation of screen contents]"}}</tool_call>
+I'll describe what's on screen and read it aloud.
+
+Q: Find documentation, summarize it, and create notes
+A: I'll research and create notes.
+<tool_call>{"tool": "web_search", "params": {"query": "documentation topic"}}</tool_call>
+<tool_call>{"tool": "write_file", "params": {"path": "notes.md", "content": "[summary]"}}</tool_call>
+I'll save the summarized documentation to notes.md.
+
+# =============================================================================
+# END
+# =============================================================================
