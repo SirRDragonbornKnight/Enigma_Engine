@@ -299,8 +299,53 @@ class AvatarController:
             y = (height - self.position.height) // 2
             self.move_to(x, y)
         except Exception as e:
-            print(f"[Avatar] Could not detect screen size: {e}")
-            self.move_to(400, 200)
+            print(f"[Avatar] Could not center on screen: {e}")
+    
+    # === AI Control Interface ===
+    
+    def control(self, action: str, value: str = "") -> Dict:
+        """
+        Control avatar from AI tool calls.
+        
+        Actions:
+        - show: Show the avatar overlay on desktop
+        - hide: Hide the avatar overlay
+        - jump: Make the avatar jump
+        - pin: Pin avatar in place (disable physics)
+        - unpin: Unpin avatar (enable physics)
+        - move: Move to position "x,y"
+        - resize: Resize to "pixels" 
+        - orientation: Set view angle "front", "back", "left", "right" or "x,y"
+        
+        Returns:
+            Dict with success status and result/error message
+        """
+        # Write command to a file that the GUI watches
+        import json
+        from pathlib import Path
+        
+        command = {
+            "action": action.lower().strip(),
+            "value": value.strip() if value else "",
+            "timestamp": time.time()
+        }
+        
+        command_path = Path(__file__).parent.parent.parent / "data" / "avatar" / "ai_command.json"
+        command_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            with open(command_path, 'w') as f:
+                json.dump(command, f)
+            
+            return {
+                "success": True,
+                "result": f"Avatar command '{action}' sent" + (f" with value '{value}'" if value else "")
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
     
     # === Speaking ===
     
@@ -428,6 +473,87 @@ class AvatarController:
             "expression": expression,
             "duration": 0.5,
         })
+    
+    def execute_action(self, action: str, params: dict = None) -> dict:
+        """
+        Execute an avatar action (called by AI tool interface).
+        
+        Args:
+            action: Action to perform: 'set_expression', 'speak', 'move', 'animate', 
+                   'set_color', 'wave', 'nod', 'shake_head', 'look_at'
+            params: Parameters for the action
+            
+        Returns:
+            dict with 'success' and 'message' keys
+        """
+        params = params or {}
+        
+        try:
+            if action == "set_expression":
+                expression = params.get("expression", "neutral")
+                self.set_expression(expression)
+                return {"success": True, "message": f"Expression set to {expression}"}
+            
+            elif action == "speak":
+                text = params.get("text", "")
+                self.speak(text)
+                return {"success": True, "message": f"Speaking: {text[:30]}..."}
+            
+            elif action == "move":
+                x = params.get("x", self.position.x)
+                y = params.get("y", self.position.y)
+                self.move_to(x, y)
+                return {"success": True, "message": f"Moving to ({x}, {y})"}
+            
+            elif action == "animate":
+                animation = params.get("animation", "wave")
+                self._animation_queue.append({
+                    "type": animation,
+                    "duration": params.get("duration", 1.0),
+                })
+                return {"success": True, "message": f"Playing animation: {animation}"}
+            
+            elif action == "wave":
+                self._animation_queue.append({"type": "wave", "duration": 1.5})
+                return {"success": True, "message": "Waving!"}
+            
+            elif action == "nod":
+                self._animation_queue.append({"type": "nod", "duration": 0.8})
+                return {"success": True, "message": "Nodding"}
+            
+            elif action == "shake_head":
+                self._animation_queue.append({"type": "shake_head", "duration": 1.0})
+                return {"success": True, "message": "Shaking head"}
+            
+            elif action == "look_at":
+                x = params.get("x", 0)
+                y = params.get("y", 0)
+                self.point_at(x, y)
+                return {"success": True, "message": f"Looking at ({x}, {y})"}
+            
+            elif action == "set_color":
+                color = params.get("color", "#6366f1")
+                self.set_color(color)
+                return {"success": True, "message": f"Color set to {color}"}
+            
+            elif action == "set_scale":
+                scale = params.get("scale", 1.0)
+                self.set_scale(scale)
+                return {"success": True, "message": f"Scale set to {scale}"}
+            
+            elif action == "enable":
+                self.enable()
+                return {"success": True, "message": "Avatar enabled"}
+            
+            elif action == "disable":
+                self.disable()
+                return {"success": True, "message": "Avatar disabled"}
+            
+            else:
+                return {"success": False, "message": f"Unknown action: {action}"}
+                
+        except Exception as e:
+            return {"success": False, "message": f"Error: {str(e)}"}
     
     # === Customization ===
     
@@ -940,3 +1066,17 @@ def disable_avatar() -> None:
 def toggle_avatar() -> bool:
     """Toggle avatar on/off."""
     return get_avatar().toggle()
+
+
+def execute_action(action: str, params: dict = None) -> dict:
+    """
+    Execute an avatar action (module-level function for AI tool interface).
+    
+    Args:
+        action: Action to perform: 'set_expression', 'speak', 'move', 'animate', etc.
+        params: Parameters for the action
+        
+    Returns:
+        dict with 'success' and 'message' keys
+    """
+    return get_avatar().execute_action(action, params)

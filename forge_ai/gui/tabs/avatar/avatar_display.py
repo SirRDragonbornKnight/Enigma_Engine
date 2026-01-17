@@ -107,6 +107,18 @@ class OpenGL3DWidget(QOpenGLWidget):
     
     def __init__(self, parent=None, transparent_bg=False):
         super().__init__(parent)
+        
+        # Enable transparency for desktop overlay
+        if transparent_bg:
+            try:
+                from PyQt5.QtGui import QSurfaceFormat
+                fmt = QSurfaceFormat()
+                fmt.setAlphaBufferSize(8)
+                fmt.setSamples(4)  # Anti-aliasing
+                self.setFormat(fmt)
+            except Exception:
+                pass  # Format not supported
+        
         self.mesh = None
         self.vertices = None
         self.faces = None
@@ -148,6 +160,11 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.model_name = ""
         self._model_path = None
         
+        # Model orientation (user-adjustable, saved per model)
+        self.model_pitch = 0.0  # Rotation around X axis (radians)
+        self.model_yaw = 0.0    # Rotation around Y axis (radians)
+        self.model_roll = 0.0   # Rotation around Z axis (radians)
+        
         self.setMinimumSize(250, 250)
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_OpenHandCursor))
@@ -163,8 +180,22 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.update()
         
         try:
-            # Load with texture resolver for GLTF files
-            scene = trimesh.load(str(path))
+            # Force texture resolver for GLTF files
+            resolver = None
+            model_dir = Path(path).parent
+            
+            # Create a resolver that can find textures in the model directory
+            try:
+                from trimesh.visual.resolvers import FilePathResolver
+                resolver = FilePathResolver(str(model_dir))
+            except ImportError:
+                pass
+            
+            # Load with force='scene' to get materials properly
+            if resolver:
+                scene = trimesh.load(str(path), resolver=resolver, force='scene')
+            else:
+                scene = trimesh.load(str(path), force='scene')
             
             # Collect all meshes with their colors
             all_vertices = []
@@ -218,7 +249,9 @@ class OpenGL3DWidget(QOpenGLWidget):
                 unique_colors = np.unique(self.colors, axis=0)
                 if len(unique_colors) <= 1:
                     print("[Avatar] Colors appear to be uniform - trying texture loading...")
-                    self.colors = self._load_textures_from_files(path, meshes)
+                    loaded_colors = self._load_textures_from_files(path, meshes)
+                    if loaded_colors is not None:
+                        self.colors = loaded_colors
             
             # Center and scale the mesh
             centroid = self.vertices.mean(axis=0)
@@ -231,9 +264,15 @@ class OpenGL3DWidget(QOpenGLWidget):
             self.is_loading = False
             self.reset_view()
             
+            # Try to load saved orientation for this model
+            if not self.load_saved_orientation(path):
+                # No saved orientation - apply auto-orientation as fallback
+                self.apply_auto_orientation()
+            
             # Log info
+            has_real_colors = self.colors is not None and len(np.unique(self.colors, axis=0)) > 1
             print(f"[Avatar] Loaded {Path(path).name}: {len(self.vertices)} vertices, "
-                  f"{len(self.faces)} faces, colors: {'yes' if self.colors is not None else 'no'}")
+                  f"{len(self.faces)} faces, colors: {'yes (varied)' if has_real_colors else 'no/uniform'}")
             
             return True
             
@@ -253,65 +292,89 @@ class OpenGL3DWidget(QOpenGLWidget):
         
         visual = mesh.visual
         
-        # Method 1: Direct vertex colors
+        # Method 1: Direct vertex colors (most reliable)
         if hasattr(visual, 'vertex_colors') and visual.vertex_colors is not None:
             vc = visual.vertex_colors
-            if len(vc) == num_verts and not np.all(vc[:, :3] == vc[0, :3]):
-                return np.array(vc[:, :3] / 255.0, dtype=np.float32)
+            if len(vc) == num_verts:
+                colors = np.array(vc[:, :3] / 255.0, dtype=np.float32)
+                # Check if colors are varied (not all the same)
+                if len(np.unique(colors, axis=0)) > 1:
+                    print(f"[Avatar] Got vertex colors from mesh")
+                    return colors
         
-        # Method 2: Try to_color() to bake textures
+        # Method 2: TextureVisuals - sample from texture using UVs
+        if hasattr(visual, 'kind') and visual.kind == 'texture':
+            try:
+                # Get UV coordinates
+                uv = None
+                if hasattr(visual, 'uv') and visual.uv is not None:
+                    uv = visual.uv
+                
+                # Get the texture image
+                material = getattr(visual, 'material', None)
+                img = None
+                
+                if material:
+                    # Try different attribute names for the texture
+                    for attr in ['baseColorTexture', 'image', 'diffuse']:
+                        tex = getattr(material, attr, None)
+                        if tex is not None:
+                            img = tex
+                            break
+                
+                if img is not None and uv is not None and len(uv) == num_verts:
+                    from PIL import Image
+                    if not isinstance(img, np.ndarray):
+                        img = np.array(img)
+                    
+                    h, w = img.shape[:2]
+                    
+                    # Sample using UV (flip V for OpenGL convention)
+                    u = np.clip(uv[:, 0] % 1.0, 0, 0.9999)
+                    v = np.clip((1.0 - uv[:, 1]) % 1.0, 0, 0.9999)
+                    
+                    px = (u * w).astype(int)
+                    py = (v * h).astype(int)
+                    
+                    if img.ndim == 3 and img.shape[2] >= 3:
+                        colors = img[py, px, :3].astype(np.float32) / 255.0
+                        print(f"[Avatar] Sampled {len(colors)} colors from texture ({w}x{h})")
+                        return colors
+            except Exception as e:
+                print(f"[Avatar] Texture sampling error: {e}")
+        
+        # Method 3: Try trimesh's built-in to_color() conversion
         if hasattr(visual, 'to_color'):
             try:
                 color_visual = visual.to_color()
                 if hasattr(color_visual, 'vertex_colors') and color_visual.vertex_colors is not None:
                     vc = color_visual.vertex_colors
                     if len(vc) == num_verts:
-                        return np.array(vc[:, :3] / 255.0, dtype=np.float32)
-            except Exception:
-                pass
-        
-        # Method 3: Sample from texture image using UVs
-        if hasattr(visual, 'uv') and visual.uv is not None:
-            try:
-                material = getattr(visual, 'material', None)
-                if material:
-                    # Get base color texture
-                    img = None
-                    if hasattr(material, 'baseColorTexture') and material.baseColorTexture is not None:
-                        img = material.baseColorTexture
-                    elif hasattr(material, 'image') and material.image is not None:
-                        img = material.image
-                    
-                    if img is not None:
-                        from PIL import Image
-                        uv = visual.uv
-                        img_array = np.array(img)
-                        h, w = img_array.shape[:2]
-                        
-                        # Handle UV coordinates
-                        u = np.clip(uv[:, 0] % 1.0, 0, 1)
-                        v = np.clip((1 - uv[:, 1]) % 1.0, 0, 1)
-                        
-                        px = (u * (w - 1)).astype(int)
-                        py = (v * (h - 1)).astype(int)
-                        
-                        if img_array.ndim == 3:
-                            if img_array.shape[2] >= 3:
-                                return img_array[py, px, :3].astype(np.float32) / 255.0
-                        else:
-                            gray = img_array[py, px].astype(np.float32) / 255.0
-                            return np.stack([gray, gray, gray], axis=-1)
+                        colors = np.array(vc[:, :3] / 255.0, dtype=np.float32)
+                        if len(np.unique(colors, axis=0)) > 1:
+                            print(f"[Avatar] Got colors via to_color()")
+                            return colors
             except Exception as e:
-                print(f"[Avatar] UV texture sampling failed: {e}")
+                print(f"[Avatar] to_color() failed: {e}")
         
-        # Method 4: Material base color
+        # Method 4: Material base color as fallback
         if hasattr(visual, 'material'):
             material = visual.material
+            color = None
+            
             if hasattr(material, 'main_color') and material.main_color is not None:
                 color = np.array(material.main_color[:3]) / 255.0
-                return np.tile(color, (num_verts, 1)).astype(np.float32)
             elif hasattr(material, 'baseColorFactor') and material.baseColorFactor is not None:
                 color = np.array(material.baseColorFactor[:3])
+                if np.max(color) > 1:
+                    color = color / 255.0
+            elif hasattr(material, 'diffuse') and material.diffuse is not None:
+                color = np.array(material.diffuse[:3])
+                if np.max(color) > 1:
+                    color = color / 255.0
+            
+            if color is not None:
+                print(f"[Avatar] Using material base color: {color}")
                 return np.tile(color, (num_verts, 1)).astype(np.float32)
         
         return default_color
@@ -322,51 +385,126 @@ class OpenGL3DWidget(QOpenGLWidget):
             from PIL import Image
             model_dir = Path(model_path).parent
             
-            # Look for texture directory
+            # Look for texture files in multiple locations
             texture_dirs = [
                 model_dir / "textures",
-                model_dir / "texture",
+                model_dir / "texture", 
+                model_dir / "tex",
                 model_dir,
             ]
+            
+            # Also check numbered subdirectories (common in GLB/GLTF exports)
+            for subdir in model_dir.iterdir():
+                if subdir.is_dir() and subdir.name.isdigit():
+                    texture_dirs.append(subdir)
+            
+            # Also check any immediate subdirectory that might have textures
+            for subdir in model_dir.iterdir():
+                if subdir.is_dir() and subdir.name not in ['textures', 'texture', 'tex']:
+                    texture_dirs.append(subdir)
             
             texture_files = {}
             for tex_dir in texture_dirs:
                 if tex_dir.exists():
                     for f in tex_dir.iterdir():
-                        if f.suffix.lower() in {'.png', '.jpg', '.jpeg'}:
-                            # Prioritize baseColor textures
+                        if f.is_file() and f.suffix.lower() in {'.png', '.jpg', '.jpeg', '.tga', '.bmp'}:
                             name = f.stem.lower()
-                            if 'basecolor' in name or 'diffuse' in name or 'albedo' in name:
-                                texture_files[name] = f
+                            texture_files[name] = f
             
             if not texture_files:
-                print(f"[Avatar] No texture files found in {model_dir}")
+                print(f"[Avatar] No texture files found near {model_path}")
                 return None
             
-            print(f"[Avatar] Found {len(texture_files)} texture files")
+            print(f"[Avatar] Found {len(texture_files)} texture files: {list(texture_files.keys())[:5]}")
             
-            # For now, just load the first baseColor texture and apply it globally
-            # This is a fallback when trimesh fails to apply textures
-            for name, tex_path in texture_files.items():
-                try:
-                    img = Image.open(tex_path).convert('RGB')
-                    # Sample average color from texture
-                    img_small = img.resize((32, 32))
-                    img_array = np.array(img_small) / 255.0
-                    avg_color = img_array.mean(axis=(0, 1))
-                    
-                    print(f"[Avatar] Using texture {tex_path.name}, avg color: {avg_color}")
-                    
-                    # Apply this color to all vertices
-                    return np.tile(avg_color, (len(self.vertices), 1)).astype(np.float32)
-                except Exception as e:
-                    print(f"[Avatar] Failed to load {tex_path}: {e}")
+            # Find the best texture to use
+            tex_img = None
+            tex_name = None
+            
+            # Priority order for texture names
+            priority_patterns = ['basecolor', 'diffuse', 'albedo', 'color', 'body', 'skin', 'face', 'main']
+            
+            for pattern in priority_patterns:
+                for name, tex_path in texture_files.items():
+                    if pattern in name:
+                        try:
+                            tex_img = Image.open(tex_path).convert('RGB')
+                            tex_name = tex_path.name
+                            print(f"[Avatar] Using texture (matched '{pattern}'): {tex_name}")
+                            break
+                        except Exception:
+                            continue
+                if tex_img:
+                    break
+            
+            # If no priority match, use the largest texture file (likely the main one)
+            if tex_img is None:
+                largest_size = 0
+                largest_path = None
+                for name, tex_path in texture_files.items():
+                    try:
+                        size = tex_path.stat().st_size
+                        if size > largest_size:
+                            largest_size = size
+                            largest_path = tex_path
+                    except Exception:
+                        continue
+                
+                if largest_path:
+                    try:
+                        tex_img = Image.open(largest_path).convert('RGB')
+                        tex_name = largest_path.name
+                        print(f"[Avatar] Using largest texture: {tex_name}")
+                    except Exception:
+                        pass
+            
+            if tex_img is None:
+                return None
+            
+            img_array = np.array(tex_img)
+            h, w = img_array.shape[:2]
+            print(f"[Avatar] Texture size: {w}x{h}")
+            
+            # Apply texture to all meshes using their UV coordinates
+            all_colors = []
+            for mesh in meshes:
+                if not hasattr(mesh, 'vertices'):
                     continue
+                    
+                num_verts = len(mesh.vertices)
+                
+                # Check if mesh has UV coordinates
+                if hasattr(mesh, 'visual') and hasattr(mesh.visual, 'uv') and mesh.visual.uv is not None:
+                    uv = mesh.visual.uv
+                    if len(uv) == num_verts:
+                        # Sample texture using UV coordinates
+                        u = np.clip(uv[:, 0] % 1.0, 0, 0.9999)
+                        v = np.clip((1.0 - uv[:, 1]) % 1.0, 0, 0.9999)  # Flip V
+                        
+                        px = (u * w).astype(int)
+                        py = (v * h).astype(int)
+                        
+                        mesh_colors = img_array[py, px, :3].astype(np.float32) / 255.0
+                        all_colors.append(mesh_colors)
+                        continue
+                
+                # Fallback: use average texture color
+                avg_color = img_array.mean(axis=(0, 1))[:3] / 255.0
+                mesh_colors = np.tile(avg_color, (num_verts, 1)).astype(np.float32)
+                all_colors.append(mesh_colors)
+            
+            if all_colors:
+                result = np.vstack(all_colors).astype(np.float32)
+                unique_count = len(np.unique(result, axis=0))
+                print(f"[Avatar] Applied texture colors: {unique_count} unique colors")
+                return result
             
             return None
             
         except Exception as e:
             print(f"[Avatar] Texture file loading failed: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def reset_view(self):
@@ -377,6 +515,107 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.pan_x = 0.0
         self.pan_y = 0.0
         self.update()
+    
+    def auto_orient_model(self) -> tuple[float, float, float]:
+        """Automatically detect and fix model orientation.
+        
+        Returns (pitch, yaw, roll) adjustments in degrees needed to make
+        the model upright. Most character models should be taller than wide.
+        """
+        if self.vertices is None or len(self.vertices) == 0:
+            return (0.0, 0.0, 0.0)
+        
+        try:
+            # Get bounding box dimensions
+            mins = self.vertices.min(axis=0)
+            maxs = self.vertices.max(axis=0)
+            dims = maxs - mins  # [x_size, y_size, z_size]
+            
+            x_size, y_size, z_size = dims[0], dims[1], dims[2]
+            
+            # Find which axis is the "up" axis (should be tallest for humanoids)
+            max_dim = max(x_size, y_size, z_size)
+            
+            # Detect current up axis
+            pitch, yaw, roll = 0.0, 0.0, 0.0
+            
+            # Standard Y-up (most common, no rotation needed)
+            if y_size >= x_size and y_size >= z_size:
+                print(f"[Avatar] Auto-orient: Model appears Y-up (correct), dims={dims}")
+                return (0.0, 0.0, 0.0)
+            
+            # Z-up (Blender, some game engines) - rotate 90° around X
+            if z_size > y_size and z_size > x_size:
+                print(f"[Avatar] Auto-orient: Model appears Z-up, rotating -90° X")
+                pitch = -90.0
+                return (pitch, 0.0, 0.0)
+            
+            # X-up (unusual but possible) - rotate 90° around Z
+            if x_size > y_size and x_size > z_size:
+                print(f"[Avatar] Auto-orient: Model appears X-up, rotating 90° Z")
+                roll = 90.0
+                return (0.0, 0.0, roll)
+            
+            # If model is lying flat (wider than tall), check orientation
+            horizontal_size = max(x_size, z_size)
+            if horizontal_size > y_size * 1.5:
+                # Model might be lying down
+                if z_size > x_size:
+                    print(f"[Avatar] Auto-orient: Model appears lying forward, rotating -90° X")
+                    pitch = -90.0
+                else:
+                    print(f"[Avatar] Auto-orient: Model appears lying sideways, rotating 90° Z")
+                    roll = 90.0
+                return (pitch, 0.0, roll)
+            
+            print(f"[Avatar] Auto-orient: No rotation needed, dims={dims}")
+            return (0.0, 0.0, 0.0)
+            
+        except Exception as e:
+            print(f"[Avatar] Auto-orient error: {e}")
+            return (0.0, 0.0, 0.0)
+    
+    def apply_auto_orientation(self):
+        """Detect and apply automatic orientation correction."""
+        pitch, yaw, roll = self.auto_orient_model()
+        if pitch != 0 or yaw != 0 or roll != 0:
+            self.model_pitch = np.radians(pitch)
+            self.model_yaw = np.radians(yaw)
+            self.model_roll = np.radians(roll)
+            self.update()
+            return True
+        return False
+    
+    def load_saved_orientation(self, model_path: str = None) -> bool:
+        """Load saved orientation for this model from JSON file."""
+        import json
+        import math
+        
+        path = model_path or self._model_path
+        if not path:
+            return False
+        
+        settings_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "model_orientations.json"
+        if not settings_path.exists():
+            return False
+        
+        try:
+            with open(settings_path, 'r') as f:
+                orientations = json.load(f)
+            
+            model_key = Path(path).name
+            if model_key in orientations:
+                data = orientations[model_key]
+                self.model_pitch = math.radians(data.get('pitch', 0))
+                self.model_yaw = math.radians(data.get('yaw', 0))
+                self.model_roll = math.radians(data.get('roll', 0))
+                print(f"[Avatar] Loaded saved orientation for {model_key}: pitch={data.get('pitch', 0)}°, yaw={data.get('yaw', 0)}°, roll={data.get('roll', 0)}°")
+                self.update()
+                return True
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"[Avatar] Could not load orientation: {e}")
+        
+        return False
     
     def reset_all(self):
         """Reset everything including display settings."""
@@ -509,6 +748,12 @@ class OpenGL3DWidget(QOpenGLWidget):
             GL.glTranslatef(self.pan_x, self.pan_y, -self.zoom)
             GL.glRotatef(self.rotation_x, 1, 0, 0)
             GL.glRotatef(self.rotation_y, 0, 1, 0)
+            
+            # Apply model orientation (user-adjustable)
+            import math
+            GL.glRotatef(math.degrees(self.model_pitch), 1, 0, 0)  # Pitch (X axis)
+            GL.glRotatef(math.degrees(self.model_yaw), 0, 1, 0)    # Yaw (Y axis)
+            GL.glRotatef(math.degrees(self.model_roll), 0, 0, 1)   # Roll (Z axis)
             
             if self.is_loading:
                 # Draw loading indicator
@@ -652,11 +897,9 @@ class OpenGL3DWidget(QOpenGLWidget):
                 self.pan_x += dx * 0.005
                 self.pan_y -= dy * 0.005
             else:
-                # Rotate
+                # Rotate - full 360 degree rotation allowed
                 self.rotation_y += dx * 0.5
                 self.rotation_x += dy * 0.5
-                # Clamp vertical rotation
-                self.rotation_x = max(-90, min(90, self.rotation_x))
             
             self.last_pos = event.pos()
             self.update()
@@ -821,7 +1064,7 @@ class AvatarOverlayWindow(QWidget):
         """)
         
         # Expression submenu
-        expr_menu = menu.addMenu("😊 Expression")
+        expr_menu = menu.addMenu("Expression")
         expressions = ["idle", "happy", "sad", "thinking", "surprised", "excited", "angry", "love", "sleeping", "winking"]
         for expr in expressions:
             action = expr_menu.addAction(expr.title())
@@ -830,7 +1073,7 @@ class AvatarOverlayWindow(QWidget):
         menu.addSeparator()
         
         # Size options
-        size_menu = menu.addMenu("📐 Size")
+        size_menu = menu.addMenu("Size")
         for size in [150, 200, 300, 400, 500]:
             action = size_menu.addAction(f"{size}px")
             action.triggered.connect(lambda checked, s=size: self._set_size(s))
@@ -838,17 +1081,17 @@ class AvatarOverlayWindow(QWidget):
         menu.addSeparator()
         
         # Reset position
-        reset_pos = menu.addAction("🏠 Reset Position")
+        reset_pos = menu.addAction("Reset Position")
         reset_pos.triggered.connect(lambda: self.move(100, 100))
         
         # Reset size
-        reset_size = menu.addAction("↩️ Reset Size")
+        reset_size = menu.addAction("Reset Size")
         reset_size.triggered.connect(lambda: self._set_size(300))
         
         menu.addSeparator()
         
         # Close
-        close_action = menu.addAction("❌ Close Avatar")
+        close_action = menu.addAction("Close Avatar")
         close_action.triggered.connect(self._close_avatar)
         
         menu.exec_(a0.globalPos())
@@ -895,13 +1138,12 @@ class AvatarOverlayWindow(QWidget):
 
 
 class Avatar3DOverlayWindow(QWidget):
-    """Transparent 3D overlay window for desktop avatar display.
+    """Simple transparent 3D overlay for desktop avatar display.
     
     Features:
-    - Drag handle at top to move (not the whole window)
-    - 3D model can be rotated/zoomed normally
-    - Circular mask that wraps around the avatar
+    - Drag to move anywhere
     - Right-click menu for options
+    - AI can control position via commands
     """
     
     closed = pyqtSignal()
@@ -912,53 +1154,39 @@ class Avatar3DOverlayWindow(QWidget):
         # Transparent, always-on-top, frameless
         self.setWindowFlags(
             Qt_FramelessWindowHint |
-            Qt_WindowStaysOnTopHint
+            Qt_WindowStaysOnTopHint |
+            Qt_Tool  # Don't show in taskbar
         )
         self.setAttribute(Qt_WA_TranslucentBackground, True)
-        self.setFocusPolicy(Qt.StrongFocus if hasattr(Qt, 'StrongFocus') else 0x0b)
+        self.setFocusPolicy(Qt.NoFocus if hasattr(Qt, 'NoFocus') else 0x00)
         
-        self._size = 300
-        self._drag_handle_height = 24
-        self.setFixedSize(self._size, self._size + self._drag_handle_height)
-        self.move(100, 100)
+        self._size = 250
+        self.setFixedSize(self._size, self._size)
+        
+        # Start at bottom right
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geo = screen.availableGeometry()
+            self.move(screen_geo.right() - self._size - 50, screen_geo.bottom() - self._size - 50)
+        else:
+            self.move(100, 100)
         
         self._drag_pos = None
         self._model_path = None
         self._use_circular_mask = True
+        
+        # AI command watcher
+        self._command_timer = QTimer()
+        self._command_timer.timeout.connect(self._check_ai_commands)
+        self._command_timer.start(500)
+        self._last_command_time = 0
         
         # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         
-        # Drag handle bar at top
-        self._drag_handle = QWidget()
-        self._drag_handle.setFixedHeight(self._drag_handle_height)
-        self._drag_handle.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(99, 102, 241, 180),
-                    stop:0.5 rgba(139, 92, 246, 200),
-                    stop:1 rgba(99, 102, 241, 180));
-                border-radius: 12px;
-                border-bottom-left-radius: 0px;
-                border-bottom-right-radius: 0px;
-            }
-        """)
-        self._drag_handle.setCursor(QCursor(Qt_OpenHandCursor))
-        self._drag_handle.setToolTip("Drag to move • Right-click for menu • Scroll to resize")
-        
-        # Add grip dots to drag handle
-        handle_layout = QHBoxLayout(self._drag_handle)
-        handle_layout.setContentsMargins(0, 0, 0, 0)
-        grip_label = QLabel("⋮⋮⋮")
-        grip_label.setStyleSheet("color: rgba(255,255,255,0.7); font-size: 10px; background: transparent;")
-        grip_label.setAlignment(Qt_AlignCenter)
-        handle_layout.addWidget(grip_label)
-        
-        main_layout.addWidget(self._drag_handle)
-        
-        # Container for the 3D widget with circular mask
+        # Container for the 3D widget
         self._gl_container = QWidget()
         self._gl_container.setFixedSize(self._size, self._size)
         self._gl_container.setStyleSheet("background: transparent;")
@@ -970,10 +1198,7 @@ class Avatar3DOverlayWindow(QWidget):
         if HAS_OPENGL and HAS_TRIMESH:
             self._gl_widget = OpenGL3DWidget(self._gl_container, transparent_bg=True)
             self._gl_widget.setFixedSize(self._size, self._size)
-            self._gl_widget.start_auto_rotate()
             gl_layout.addWidget(self._gl_widget)
-            
-            # Apply circular mask to the GL widget
             self._apply_circular_mask()
         else:
             self._gl_widget = None
@@ -984,23 +1209,23 @@ class Avatar3DOverlayWindow(QWidget):
         
         main_layout.addWidget(self._gl_container)
         
-        # Install event filter on drag handle for dragging
-        self._drag_handle.installEventFilter(self)
+        # Install event filter for dragging
+        if self._gl_widget:
+            self._gl_widget.installEventFilter(self)
         
         self.setMouseTracking(True)
+        self.setCursor(QCursor(Qt_OpenHandCursor))
     
     def _apply_circular_mask(self):
-        """Apply a circular/elliptical mask to wrap around the avatar."""
+        """Apply a circular mask."""
         if not self._use_circular_mask:
             return
         
-        from PyQt5.QtGui import QRegion, QBitmap, QPainterPath
+        from PyQt5.QtGui import QRegion, QPainterPath
         from PyQt5.QtCore import QRectF
         
-        # Create circular region for the GL widget
         path = QPainterPath()
-        # Slightly smaller circle with padding
-        padding = 10
+        padding = 5
         path.addEllipse(QRectF(padding, padding, self._size - padding*2, self._size - padding*2))
         
         region = QRegion(path.toFillPolygon().toPolygon())
@@ -1012,71 +1237,40 @@ class Avatar3DOverlayWindow(QWidget):
         self._model_path = path
         if self._gl_widget:
             result = self._gl_widget.load_model(path)
-            # Re-apply mask after loading
             self._apply_circular_mask()
             return result
         return False
     
     def eventFilter(self, obj, event):
-        """Handle drag events on the drag handle."""
-        if obj == self._drag_handle:
+        """Handle mouse events for dragging."""
+        if obj == self._gl_widget:
             if event.type() == event.MouseButtonPress and event.button() == Qt_LeftButton:
                 self._drag_pos = event.globalPos() - self.pos()
-                self._drag_handle.setCursor(QCursor(Qt_ClosedHandCursor))
+                self.setCursor(QCursor(Qt_ClosedHandCursor))
                 return True
             elif event.type() == event.MouseMove and self._drag_pos is not None:
                 self.move(event.globalPos() - self._drag_pos)
                 return True
-            elif event.type() == event.MouseButtonRelease:
+            elif event.type() == event.MouseButtonRelease and event.button() == Qt_LeftButton:
                 self._drag_pos = None
-                self._drag_handle.setCursor(QCursor(Qt_OpenHandCursor))
+                self.setCursor(QCursor(Qt_OpenHandCursor))
                 return True
         return super().eventFilter(obj, event)
     
     def wheelEvent(self, event):
-        """Scroll on drag handle to resize."""
-        # Only resize if scrolling over drag handle area
-        if event.pos().y() <= self._drag_handle_height:
-            delta = event.angleDelta().y()
-            if delta > 0:
-                self._size = min(600, self._size + 30)
-            else:
-                self._size = max(150, self._size - 30)
-            
-            self.setFixedSize(self._size, self._size + self._drag_handle_height)
-            self._gl_container.setFixedSize(self._size, self._size)
-            if self._gl_widget:
-                self._gl_widget.setFixedSize(self._size, self._size)
-                self._apply_circular_mask()
-            event.accept()
+        """Scroll to resize overlay."""
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self._size = min(500, self._size + 25)
         else:
-            # Pass to GL widget for zoom
-            if self._gl_widget:
-                self._gl_widget.wheelEvent(event)
-    
-    def keyPressEvent(self, event):
-        """ESC to close, R to toggle rotation."""
-        key = event.key()
-        if key == (Qt.Key_Escape if hasattr(Qt, 'Key_Escape') else 0x01000000):
-            self.hide()
-            self.closed.emit()
-        elif key == (Qt.Key_R if hasattr(Qt, 'Key_R') else 0x52):
-            if self._gl_widget:
-                if self._gl_widget.auto_rotate:
-                    self._gl_widget.stop_auto_rotate()
-                else:
-                    self._gl_widget.start_auto_rotate()
-        elif key == (Qt.Key_W if hasattr(Qt, 'Key_W') else 0x57):
-            if self._gl_widget:
-                self._gl_widget.wireframe_mode = not self._gl_widget.wireframe_mode
-                self._gl_widget.update()
-        elif key == (Qt.Key_M if hasattr(Qt, 'Key_M') else 0x4D):
-            # Toggle mask
-            self._use_circular_mask = not self._use_circular_mask
-            if self._use_circular_mask:
-                self._apply_circular_mask()
-            elif self._gl_widget:
-                self._gl_widget.clearMask()
+            self._size = max(100, self._size - 25)
+        
+        self.setFixedSize(self._size, self._size)
+        self._gl_container.setFixedSize(self._size, self._size)
+        if self._gl_widget:
+            self._gl_widget.setFixedSize(self._size, self._size)
+            self._apply_circular_mask()
+        event.accept()
     
     def contextMenuEvent(self, event):
         """Right-click menu."""
@@ -1100,46 +1294,43 @@ class Avatar3DOverlayWindow(QWidget):
             }
         """)
         
-        # Toggle rotation
-        rotate_text = "⏸️ Stop Rotation" if (self._gl_widget and self._gl_widget.auto_rotate) else "🔄 Start Rotation"
-        rotate_action = menu.addAction(f"{rotate_text} (R)")
-        rotate_action.triggered.connect(lambda: self._toggle_rotation())
-        
-        # Toggle wireframe
-        wireframe_action = menu.addAction("🔲 Toggle Wireframe (W)")
+        # Wireframe toggle
+        wireframe_action = menu.addAction("Toggle Wireframe")
         wireframe_action.triggered.connect(lambda: self._toggle_wireframe())
         
-        # Toggle circular mask
-        mask_text = "⬜ Square Mode" if self._use_circular_mask else "⚫ Circular Mode"
-        mask_action = menu.addAction(f"{mask_text} (M)")
+        # Mask toggle
+        mask_text = "Square Mode" if self._use_circular_mask else "Circular Mode"
+        mask_action = menu.addAction(mask_text)
         mask_action.triggered.connect(lambda: self._toggle_mask())
         
         menu.addSeparator()
         
+        # Orientation presets
+        orient_menu = menu.addMenu("View Angle")
+        orient_front = orient_menu.addAction("Front")
+        orient_front.triggered.connect(lambda: self._set_view_angle(0, 0))
+        orient_back = orient_menu.addAction("Back")
+        orient_back.triggered.connect(lambda: self._set_view_angle(0, 180))
+        orient_left = orient_menu.addAction("Left")
+        orient_left.triggered.connect(lambda: self._set_view_angle(0, -90))
+        orient_right = orient_menu.addAction("Right")
+        orient_right.triggered.connect(lambda: self._set_view_angle(0, 90))
+        orient_menu.addSeparator()
+        orient_3q = orient_menu.addAction("3/4 View")
+        orient_3q.triggered.connect(lambda: self._set_view_angle(15, 35))
+        
         # Size options
-        size_menu = menu.addMenu("📐 Size")
-        for size in [200, 300, 400, 500, 600]:
+        size_menu = menu.addMenu("Size")
+        for size in [150, 200, 250, 300, 400]:
             action = size_menu.addAction(f"{size}px")
             action.triggered.connect(lambda checked, s=size: self._set_size(s))
         
         menu.addSeparator()
         
-        # Reset view
-        reset_action = menu.addAction("↩️ Reset View")
-        reset_action.triggered.connect(lambda: self._reset_view())
-        
-        # Close
-        close_action = menu.addAction("❌ Hide Avatar")
+        close_action = menu.addAction("Hide Avatar")
         close_action.triggered.connect(self._close)
         
         menu.exec_(event.globalPos())
-    
-    def _toggle_rotation(self):
-        if self._gl_widget:
-            if self._gl_widget.auto_rotate:
-                self._gl_widget.stop_auto_rotate()
-            else:
-                self._gl_widget.start_auto_rotate()
     
     def _toggle_wireframe(self):
         if self._gl_widget:
@@ -1153,22 +1344,89 @@ class Avatar3DOverlayWindow(QWidget):
         elif self._gl_widget:
             self._gl_widget.clearMask()
     
+    def _set_view_angle(self, rotation_x: float, rotation_y: float):
+        """Set the model view angle."""
+        if self._gl_widget:
+            self._gl_widget.rotation_x = rotation_x
+            self._gl_widget.rotation_y = rotation_y
+            self._gl_widget.update()
+    
     def _set_size(self, size: int):
         self._size = size
-        self.setFixedSize(self._size, self._size + self._drag_handle_height)
+        self.setFixedSize(self._size, self._size)
         self._gl_container.setFixedSize(self._size, self._size)
         if self._gl_widget:
             self._gl_widget.setFixedSize(self._size, self._size)
             self._apply_circular_mask()
     
-    def _reset_view(self):
-        if self._gl_widget:
-            self._gl_widget.reset_view()
-        self._set_size(300)
+    def _check_ai_commands(self):
+        """Check for AI commands and execute them."""
+        import json
+        
+        command_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "ai_command.json"
+        if not command_path.exists():
+            return
+        
+        try:
+            with open(command_path, 'r') as f:
+                cmd = json.load(f)
+            
+            timestamp = cmd.get("timestamp", 0)
+            if timestamp <= self._last_command_time:
+                return
+            
+            self._last_command_time = timestamp
+            action = cmd.get("action", "").lower()
+            value = cmd.get("value", "")
+            
+            if action == "show":
+                self.show()
+            elif action == "hide":
+                self.hide()
+                self.closed.emit()
+            elif action == "move":
+                try:
+                    parts = value.split(",")
+                    if len(parts) >= 2:
+                        x, y = int(parts[0].strip()), int(parts[1].strip())
+                        self.move(x, y)
+                except ValueError:
+                    pass
+            elif action == "resize":
+                try:
+                    size = int(value)
+                    self._set_size(size)
+                except ValueError:
+                    pass
+            elif action == "orientation":
+                value_lower = value.lower()
+                if value_lower == "front":
+                    self._set_view_angle(0, 0)
+                elif value_lower == "back":
+                    self._set_view_angle(0, 180)
+                elif value_lower == "left":
+                    self._set_view_angle(0, -90)
+                elif value_lower == "right":
+                    self._set_view_angle(0, 90)
+                else:
+                    try:
+                        parts = value.split(",")
+                        if len(parts) >= 2:
+                            rx, ry = float(parts[0].strip()), float(parts[1].strip())
+                            self._set_view_angle(rx, ry)
+                    except ValueError:
+                        pass
+        except (json.JSONDecodeError, IOError):
+            pass
     
     def _close(self):
+        self._command_timer.stop()
         self.hide()
         self.closed.emit()
+    
+    def closeEvent(self, event):
+        self._command_timer.stop()
+        super().closeEvent(event)
 
 
 class AvatarPreviewWidget(QFrame):
@@ -1336,26 +1594,7 @@ def create_avatar_subtab(parent):
     viewer_controls = QHBoxLayout()
     viewer_controls.addStretch()
     
-    parent.auto_rotate_btn = QPushButton("🔄 Auto-Rotate")
-    parent.auto_rotate_btn.setCheckable(True)
-    parent.auto_rotate_btn.setToolTip("Toggle auto-rotation")
-    parent.auto_rotate_btn.clicked.connect(lambda: _toggle_auto_rotate(parent))
-    parent.auto_rotate_btn.setVisible(False)
-    parent.auto_rotate_btn.setStyleSheet("""
-        QPushButton {
-            background: #2d2d3d;
-            border: 1px solid #45475a;
-            border-radius: 4px;
-            padding: 4px 8px;
-        }
-        QPushButton:checked {
-            background: #45475a;
-            border-color: #89b4fa;
-        }
-    """)
-    viewer_controls.addWidget(parent.auto_rotate_btn)
-    
-    parent.reset_view_btn = QPushButton("🏠 Reset")
+    parent.reset_view_btn = QPushButton("Reset View")
     parent.reset_view_btn.setToolTip("Reset camera (or double-click)")
     parent.reset_view_btn.clicked.connect(lambda: _reset_view(parent))
     parent.reset_view_btn.setVisible(False)
@@ -1429,46 +1668,6 @@ def create_avatar_subtab(parent):
     builtin_group.setLayout(builtin_layout)
     right_panel.addWidget(builtin_group)
     
-    # === Color Customization ===
-    color_group = QGroupBox("Colors")
-    color_layout = QVBoxLayout()
-    
-    # Color preset combo
-    preset_row = QHBoxLayout()
-    preset_row.addWidget(QLabel("Preset:"))
-    parent.color_preset_combo = QComboBox()
-    parent.color_preset_combo.addItems([
-        "Default", "Warm", "Cool", "Nature", "Sunset", 
-        "Ocean", "Fire", "Dark", "Pastel"
-    ])
-    parent.color_preset_combo.currentTextChanged.connect(
-        lambda preset: _apply_color_preset(parent, preset.lower())
-    )
-    preset_row.addWidget(parent.color_preset_combo, stretch=1)
-    color_layout.addLayout(preset_row)
-    
-    # Individual color pickers
-    color_btn_row = QHBoxLayout()
-    
-    parent.primary_color_btn = QPushButton("Primary")
-    parent.primary_color_btn.setStyleSheet("background: #6366f1; color: white;")
-    parent.primary_color_btn.clicked.connect(lambda: _pick_color(parent, "primary"))
-    color_btn_row.addWidget(parent.primary_color_btn)
-    
-    parent.secondary_color_btn = QPushButton("Secondary")
-    parent.secondary_color_btn.setStyleSheet("background: #8b5cf6; color: white;")
-    parent.secondary_color_btn.clicked.connect(lambda: _pick_color(parent, "secondary"))
-    color_btn_row.addWidget(parent.secondary_color_btn)
-    
-    parent.accent_color_btn = QPushButton("Accent")
-    parent.accent_color_btn.setStyleSheet("background: #10b981; color: white;")
-    parent.accent_color_btn.clicked.connect(lambda: _pick_color(parent, "accent"))
-    color_btn_row.addWidget(parent.accent_color_btn)
-    
-    color_layout.addLayout(color_btn_row)
-    color_group.setLayout(color_layout)
-    right_panel.addWidget(color_group)
-    
     # === Quick Actions ===
     actions_group = QGroupBox("Quick Actions")
     actions_layout = QVBoxLayout()
@@ -1492,46 +1691,127 @@ def create_avatar_subtab(parent):
         viewer_group = QGroupBox("3D Viewer Settings")
         viewer_layout = QVBoxLayout()
         
-        # Wireframe toggle
-        parent.wireframe_checkbox = QCheckBox("Wireframe Mode")
+        # Display options row
+        display_row = QHBoxLayout()
+        parent.wireframe_checkbox = QCheckBox("Wireframe")
         parent.wireframe_checkbox.toggled.connect(lambda c: _set_wireframe(parent, c))
-        viewer_layout.addWidget(parent.wireframe_checkbox)
+        display_row.addWidget(parent.wireframe_checkbox)
         
-        # Show grid toggle
-        parent.show_grid_checkbox = QCheckBox("Show Grid Floor")
+        parent.show_grid_checkbox = QCheckBox("Grid")
         parent.show_grid_checkbox.setChecked(True)
         parent.show_grid_checkbox.toggled.connect(lambda c: _set_show_grid(parent, c))
-        viewer_layout.addWidget(parent.show_grid_checkbox)
+        display_row.addWidget(parent.show_grid_checkbox)
+        display_row.addStretch()
+        viewer_layout.addLayout(display_row)
         
-        # Lighting controls
-        light_row = QHBoxLayout()
-        light_row.addWidget(QLabel("Lighting:"))
-        parent.light_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
-        parent.light_slider.setRange(0, 200)
-        parent.light_slider.setValue(100)
-        parent.light_slider.valueChanged.connect(lambda v: _set_lighting(parent, v / 100.0))
-        light_row.addWidget(parent.light_slider)
-        viewer_layout.addLayout(light_row)
+        # === Orientation Controls ===
+        orient_label = QLabel("Model Orientation (fix sideways models):")
+        orient_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+        viewer_layout.addWidget(orient_label)
         
-        # Ambient strength
-        ambient_row = QHBoxLayout()
-        ambient_row.addWidget(QLabel("Ambient:"))
-        parent.ambient_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
-        parent.ambient_slider.setRange(0, 100)
-        parent.ambient_slider.setValue(15)
-        parent.ambient_slider.valueChanged.connect(lambda v: _set_ambient(parent, v / 100.0))
-        ambient_row.addWidget(parent.ambient_slider)
-        viewer_layout.addLayout(ambient_row)
+        # X rotation (pitch)
+        pitch_row = QHBoxLayout()
+        pitch_row.addWidget(QLabel("Pitch (X):"))
+        parent.pitch_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.pitch_slider.setRange(-180, 180)
+        parent.pitch_slider.setValue(0)
+        parent.pitch_slider.valueChanged.connect(lambda v: _set_model_orientation(parent, 'pitch', v))
+        pitch_row.addWidget(parent.pitch_slider)
+        parent.pitch_label = QLabel("0")
+        parent.pitch_label.setFixedWidth(30)
+        pitch_row.addWidget(parent.pitch_label)
+        viewer_layout.addLayout(pitch_row)
         
-        # Auto-rotate speed
-        speed_row = QHBoxLayout()
-        speed_row.addWidget(QLabel("Rotate Speed:"))
-        parent.rotate_speed_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
-        parent.rotate_speed_slider.setRange(1, 30)
-        parent.rotate_speed_slider.setValue(5)
-        parent.rotate_speed_slider.valueChanged.connect(lambda v: _set_rotate_speed(parent, v / 10.0))
-        speed_row.addWidget(parent.rotate_speed_slider)
-        viewer_layout.addLayout(speed_row)
+        # Y rotation (yaw)
+        yaw_row = QHBoxLayout()
+        yaw_row.addWidget(QLabel("Yaw (Y):"))
+        parent.yaw_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.yaw_slider.setRange(-180, 180)
+        parent.yaw_slider.setValue(0)
+        parent.yaw_slider.valueChanged.connect(lambda v: _set_model_orientation(parent, 'yaw', v))
+        yaw_row.addWidget(parent.yaw_slider)
+        parent.yaw_label = QLabel("0")
+        parent.yaw_label.setFixedWidth(30)
+        yaw_row.addWidget(parent.yaw_label)
+        viewer_layout.addLayout(yaw_row)
+        
+        # Z rotation (roll)
+        roll_row = QHBoxLayout()
+        roll_row.addWidget(QLabel("Roll (Z):"))
+        parent.roll_slider = QSlider(Qt.Horizontal if hasattr(Qt, 'Horizontal') else 0x01)
+        parent.roll_slider.setRange(-180, 180)
+        parent.roll_slider.setValue(0)
+        parent.roll_slider.valueChanged.connect(lambda v: _set_model_orientation(parent, 'roll', v))
+        roll_row.addWidget(parent.roll_slider)
+        parent.roll_label = QLabel("0")
+        parent.roll_label.setFixedWidth(30)
+        roll_row.addWidget(parent.roll_label)
+        viewer_layout.addLayout(roll_row)
+        
+        # Quick fix buttons for common rotations
+        quick_fix_row = QHBoxLayout()
+        rotate_x_90_btn = QPushButton("+90 X")
+        rotate_x_90_btn.setToolTip("Rotate 90 degrees on X axis")
+        rotate_x_90_btn.clicked.connect(lambda: _quick_rotate(parent, 'pitch', 90))
+        quick_fix_row.addWidget(rotate_x_90_btn)
+        
+        rotate_y_90_btn = QPushButton("+90 Y")
+        rotate_y_90_btn.setToolTip("Rotate 90 degrees on Y axis")
+        rotate_y_90_btn.clicked.connect(lambda: _quick_rotate(parent, 'yaw', 90))
+        quick_fix_row.addWidget(rotate_y_90_btn)
+        
+        rotate_z_90_btn = QPushButton("+90 Z")
+        rotate_z_90_btn.setToolTip("Rotate 90 degrees on Z axis")
+        rotate_z_90_btn.clicked.connect(lambda: _quick_rotate(parent, 'roll', 90))
+        quick_fix_row.addWidget(rotate_z_90_btn)
+        
+        reset_orient_btn = QPushButton("Reset")
+        reset_orient_btn.setToolTip("Reset orientation to 0")
+        reset_orient_btn.clicked.connect(lambda: _reset_orientation(parent))
+        quick_fix_row.addWidget(reset_orient_btn)
+        
+        # Auto-orient button
+        auto_orient_btn = QPushButton("🔄 Auto")
+        auto_orient_btn.setToolTip("Automatically detect and fix orientation")
+        auto_orient_btn.clicked.connect(lambda: _auto_orient_model(parent))
+        auto_orient_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
+        quick_fix_row.addWidget(auto_orient_btn)
+        viewer_layout.addLayout(quick_fix_row)
+        
+        # View presets row
+        view_label = QLabel("View Presets:")
+        view_label.setStyleSheet("margin-top: 5px;")
+        viewer_layout.addWidget(view_label)
+        
+        view_row = QHBoxLayout()
+        view_front = QPushButton("Front")
+        view_front.clicked.connect(lambda: _set_camera_view(parent, 0, 0))
+        view_row.addWidget(view_front)
+        
+        view_back = QPushButton("Back")
+        view_back.clicked.connect(lambda: _set_camera_view(parent, 0, 180))
+        view_row.addWidget(view_back)
+        
+        view_left = QPushButton("Left")
+        view_left.clicked.connect(lambda: _set_camera_view(parent, 0, -90))
+        view_row.addWidget(view_left)
+        
+        view_right = QPushButton("Right")
+        view_right.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
+        view_row.addWidget(view_right)
+        
+        view_3q = QPushButton("3/4")
+        view_3q.setToolTip("3/4 view - nice angle for preview")
+        view_3q.clicked.connect(lambda: _set_camera_view(parent, 15, 35))
+        view_row.addWidget(view_3q)
+        viewer_layout.addLayout(view_row)
+        
+        # Save orientation button
+        parent.save_orientation_btn = QPushButton("Save Orientation for This Model")
+        parent.save_orientation_btn.clicked.connect(lambda: _save_model_orientation(parent))
+        parent.save_orientation_btn.setToolTip("Save orientation so it loads automatically next time")
+        parent.save_orientation_btn.setStyleSheet("background: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        viewer_layout.addWidget(parent.save_orientation_btn)
         
         viewer_group.setLayout(viewer_layout)
         right_panel.addWidget(viewer_group)
@@ -1541,19 +1821,19 @@ def create_avatar_subtab(parent):
     reset_layout = QVBoxLayout()
     
     # Reset preview (camera, settings)
-    parent.reset_preview_btn = QPushButton("🔄 Reset Preview")
+    parent.reset_preview_btn = QPushButton("Reset Preview")
     parent.reset_preview_btn.setToolTip("Reset 3D preview camera and settings")
     parent.reset_preview_btn.clicked.connect(lambda: _reset_preview(parent))
     reset_layout.addWidget(parent.reset_preview_btn)
     
     # Reset desktop overlay
-    parent.reset_overlay_btn = QPushButton("🖥️ Reset Desktop Overlay")
+    parent.reset_overlay_btn = QPushButton("Reset Desktop Overlay")
     parent.reset_overlay_btn.setToolTip("Reset desktop avatar position and size")
     parent.reset_overlay_btn.clicked.connect(lambda: _reset_overlay(parent))
     reset_layout.addWidget(parent.reset_overlay_btn)
     
     # Reset all (both preview and overlay)
-    parent.reset_all_btn = QPushButton("↩️ Reset Everything")
+    parent.reset_all_btn = QPushButton("Reset Everything")
     parent.reset_all_btn.setToolTip("Reset all avatar settings to default")
     parent.reset_all_btn.clicked.connect(lambda: _reset_all_avatar(parent))
     parent.reset_all_btn.setStyleSheet("background: #f38ba8; color: #1e1e2e;")
@@ -1818,6 +2098,33 @@ def _apply_ai_customization(parent, setting: str, value: str):
             "accent": "#818cf8"
         }
         _update_sprite_colors(parent)
+    
+    elif setting == "expression":
+        # Set expression (AI can control expressions)
+        _set_expression(parent, value)
+        # Also update overlay if visible
+        if overlay:
+            overlay._change_expression(value) if hasattr(overlay, '_change_expression') else None
+    
+    elif setting == "wave":
+        # Trigger wave animation on overlay
+        if overlay and hasattr(overlay, '_wave'):
+            overlay._wave()
+    
+    elif setting == "nod":
+        # Trigger nod animation
+        pass  # Implement when animation system ready
+    
+    elif setting == "show_overlay":
+        # Show/hide desktop overlay
+        if parse_bool(value):
+            if parent.show_overlay_btn:
+                parent.show_overlay_btn.setChecked(True)
+                _toggle_overlay(parent)
+        else:
+            if parent.show_overlay_btn:
+                parent.show_overlay_btn.setChecked(False)
+                _toggle_overlay(parent)
         
     print(f"[Avatar AI] Applied: {setting} = {value}")
 
@@ -2146,7 +2453,6 @@ def _toggle_3d_render(parent, enabled):
         parent.avatar_preview_2d.setVisible(False)
         parent.avatar_preview_3d.setVisible(True)
         parent.reset_view_btn.setVisible(True)
-        parent.auto_rotate_btn.setVisible(True)
         
         # Load model into 3D viewer if we have a 3D model
         if parent._is_3d_model and parent._current_path:
@@ -2156,23 +2462,12 @@ def _toggle_3d_render(parent, enabled):
         if parent.avatar_preview_3d:
             parent.avatar_preview_3d.setVisible(False)
         parent.reset_view_btn.setVisible(False)
-        parent.auto_rotate_btn.setVisible(False)
-        parent.auto_rotate_btn.setVisible(False)
 
 
 def _reset_view(parent):
     """Reset 3D view."""
     if parent.avatar_preview_3d:
         parent.avatar_preview_3d.reset_view()
-
-
-def _toggle_auto_rotate(parent):
-    """Toggle auto-rotation on 3D preview."""
-    if parent.avatar_preview_3d:
-        if parent.auto_rotate_btn.isChecked():
-            parent.avatar_preview_3d.start_auto_rotate()
-        else:
-            parent.avatar_preview_3d.stop_auto_rotate()
 
 
 def _set_wireframe(parent, enabled: bool):
@@ -2211,6 +2506,175 @@ def _set_rotate_speed(parent, speed: float):
         parent.avatar_preview_3d.auto_rotate_speed = speed
 
 
+def _set_model_orientation(parent, axis: str, value: float):
+    """Set model orientation for a specific axis."""
+    if parent.avatar_preview_3d:
+        # Convert slider value to radians
+        import math
+        radians = math.radians(value)
+        
+        if axis == 'pitch':
+            parent.avatar_preview_3d.model_pitch = radians
+            if hasattr(parent, 'pitch_label'):
+                parent.pitch_label.setText(str(int(value)))
+        elif axis == 'yaw':
+            parent.avatar_preview_3d.model_yaw = radians
+            if hasattr(parent, 'yaw_label'):
+                parent.yaw_label.setText(str(int(value)))
+        elif axis == 'roll':
+            parent.avatar_preview_3d.model_roll = radians
+            if hasattr(parent, 'roll_label'):
+                parent.roll_label.setText(str(int(value)))
+        
+        parent.avatar_preview_3d.update()
+
+
+def _quick_rotate(parent, axis: str, degrees: int):
+    """Quick rotate by specified degrees."""
+    if axis == 'pitch' and hasattr(parent, 'pitch_slider'):
+        current = parent.pitch_slider.value()
+        new_val = (current + degrees) % 360
+        if new_val > 180:
+            new_val -= 360
+        parent.pitch_slider.setValue(new_val)
+    elif axis == 'yaw' and hasattr(parent, 'yaw_slider'):
+        current = parent.yaw_slider.value()
+        new_val = (current + degrees) % 360
+        if new_val > 180:
+            new_val -= 360
+        parent.yaw_slider.setValue(new_val)
+    elif axis == 'roll' and hasattr(parent, 'roll_slider'):
+        current = parent.roll_slider.value()
+        new_val = (current + degrees) % 360
+        if new_val > 180:
+            new_val -= 360
+        parent.roll_slider.setValue(new_val)
+
+
+def _reset_orientation(parent):
+    """Reset all orientation sliders to 0."""
+    if hasattr(parent, 'pitch_slider'):
+        parent.pitch_slider.setValue(0)
+    if hasattr(parent, 'yaw_slider'):
+        parent.yaw_slider.setValue(0)
+    if hasattr(parent, 'roll_slider'):
+        parent.roll_slider.setValue(0)
+
+
+def _set_camera_view(parent, rotation_x: float, rotation_y: float):
+    """Set camera view angle (for View Presets)."""
+    if parent.avatar_preview_3d:
+        parent.avatar_preview_3d.rotation_x = rotation_x
+        parent.avatar_preview_3d.rotation_y = rotation_y
+        parent.avatar_preview_3d.update()
+
+
+def _auto_orient_model(parent):
+    """Automatically detect and fix model orientation."""
+    if not parent.avatar_preview_3d:
+        parent.avatar_status.setText("No model loaded")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    # Use the widget's auto-orient function
+    pitch, yaw, roll = parent.avatar_preview_3d.auto_orient_model()
+    
+    if pitch == 0 and yaw == 0 and roll == 0:
+        parent.avatar_status.setText("Model appears correctly oriented")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        return
+    
+    # Apply the detected orientation
+    if hasattr(parent, 'pitch_slider'):
+        parent.pitch_slider.setValue(int(pitch))
+    if hasattr(parent, 'yaw_slider'):
+        parent.yaw_slider.setValue(int(yaw))
+    if hasattr(parent, 'roll_slider'):
+        parent.roll_slider.setValue(int(roll))
+    
+    parent.avatar_status.setText(f"Auto-oriented: X={pitch}°, Y={yaw}°, Z={roll}°")
+    parent.avatar_status.setStyleSheet("color: #89b4fa;")
+
+
+def _save_model_orientation(parent):
+    """Save model orientation to settings file."""
+    import json
+    from pathlib import Path
+    import math
+    
+    if not parent.avatar_preview_3d:
+        parent.avatar_status.setText("No model loaded")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    # Get current orientation values
+    pitch = getattr(parent.avatar_preview_3d, 'model_pitch', 0.0)
+    yaw = getattr(parent.avatar_preview_3d, 'model_yaw', 0.0)
+    roll = getattr(parent.avatar_preview_3d, 'model_roll', 0.0)
+    
+    # Get current model path for identification
+    model_path = getattr(parent.avatar_preview_3d, '_model_path', None)
+    if not model_path:
+        parent.avatar_status.setText("No model path found")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    # Load or create settings file
+    settings_path = Path("data/avatar/model_orientations.json")
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    orientations = {}
+    if settings_path.exists():
+        try:
+            with open(settings_path, 'r') as f:
+                orientations = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            orientations = {}
+    
+    # Save orientation for this model (use filename as key)
+    model_key = Path(model_path).name
+    orientations[model_key] = {
+        'pitch': math.degrees(pitch),
+        'yaw': math.degrees(yaw),
+        'roll': math.degrees(roll)
+    }
+    
+    # Write back
+    with open(settings_path, 'w') as f:
+        json.dump(orientations, f, indent=2)
+    
+    parent.avatar_status.setText(f"Orientation saved for {model_key}")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+def _load_model_orientation(parent, model_path: str):
+    """Load saved orientation for a model."""
+    import json
+    from pathlib import Path
+    import math
+    
+    settings_path = Path("data/avatar/model_orientations.json")
+    if not settings_path.exists():
+        return None
+    
+    try:
+        with open(settings_path, 'r') as f:
+            orientations = json.load(f)
+        
+        model_key = Path(model_path).name
+        if model_key in orientations:
+            data = orientations[model_key]
+            return {
+                'pitch': math.radians(data.get('pitch', 0)),
+                'yaw': math.radians(data.get('yaw', 0)),
+                'roll': math.radians(data.get('roll', 0))
+            }
+    except (json.JSONDecodeError, IOError):
+        pass
+    
+    return None
+
+
 def _reset_preview(parent):
     """Reset 3D preview to defaults."""
     if parent.avatar_preview_3d:
@@ -2225,10 +2689,6 @@ def _reset_preview(parent):
             parent.light_slider.setValue(100)
         if hasattr(parent, 'ambient_slider'):
             parent.ambient_slider.setValue(15)
-        if hasattr(parent, 'rotate_speed_slider'):
-            parent.rotate_speed_slider.setValue(5)
-        if hasattr(parent, 'auto_rotate_btn'):
-            parent.auto_rotate_btn.setChecked(False)
     
     parent.avatar_status.setText("Preview reset to defaults")
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
@@ -2293,21 +2753,21 @@ def _refresh_list(parent):
         for f in sorted(AVATAR_CONFIG_DIR.glob("*.json")):
             cfg = _load_json(f)
             is_3d = cfg.get("type") == "3d" or "model_path" in cfg
-            icon = "🎮" if is_3d else "🖼️"
-            parent.avatar_combo.addItem(f"{icon} {f.stem}", ("config", str(f)))
+            suffix = " (3D)" if is_3d else ""
+            parent.avatar_combo.addItem(f"{f.stem}{suffix}", ("config", str(f)))
     
     # Direct images
     if AVATAR_IMAGES_DIR.exists():
         for f in sorted(AVATAR_IMAGES_DIR.iterdir()):
             if f.suffix.lower() in IMAGE_EXTENSIONS:
-                parent.avatar_combo.addItem(f"🖼️ {f.name}", ("image", str(f)))
+                parent.avatar_combo.addItem(f.name, ("image", str(f)))
     
     # 3D models - scan direct files AND subdirectories
     if AVATAR_MODELS_DIR.exists():
         # Direct model files
         for f in sorted(AVATAR_MODELS_DIR.iterdir()):
             if f.is_file() and f.suffix.lower() in MODEL_3D_EXTENSIONS:
-                parent.avatar_combo.addItem(f"🎮 {f.name}", ("model", str(f)))
+                parent.avatar_combo.addItem(f"{f.name} (3D)", ("model", str(f)))
         
         # Subdirectories containing models (e.g., glados/, rurune/)
         for subdir in sorted(AVATAR_MODELS_DIR.iterdir()):
@@ -2317,14 +2777,14 @@ def _refresh_list(parent):
                 scene_glb = subdir / "scene.glb"
                 
                 if scene_gltf.exists():
-                    parent.avatar_combo.addItem(f"🎮 {subdir.name}", ("model", str(scene_gltf)))
+                    parent.avatar_combo.addItem(f"{subdir.name} (3D)", ("model", str(scene_gltf)))
                 elif scene_glb.exists():
-                    parent.avatar_combo.addItem(f"🎮 {subdir.name}", ("model", str(scene_glb)))
+                    parent.avatar_combo.addItem(f"{subdir.name} (3D)", ("model", str(scene_glb)))
                 else:
                     # Look for any model file in subdirectory
                     for f in sorted(subdir.glob("*")):
                         if f.suffix.lower() in MODEL_3D_EXTENSIONS:
-                            parent.avatar_combo.addItem(f"🎮 {subdir.name}/{f.name}", ("model", str(f)))
+                            parent.avatar_combo.addItem(f"{subdir.name}/{f.name} (3D)", ("model", str(f)))
                             break  # Only add first model found
     
     # Update status
@@ -2513,14 +2973,32 @@ def _apply_avatar(parent):
     # Load into the backend controller
     if parent._is_3d_model:
         parent._avatar_controller.load_model(str(path))
-        parent.avatar_status.setText(f"✓ Loaded 3D: {path.name}")
+        parent.avatar_status.setText(f"Loaded 3D: {path.name}")
         
         # If 3D rendering is enabled, load into GL widget
         if parent._using_3d_render and parent.avatar_preview_3d:
             parent.avatar_preview_3d.load_model(str(path))
+            
+            # Load saved orientation for this model
+            saved_orientation = _load_model_orientation(parent, str(path))
+            if saved_orientation:
+                parent.avatar_preview_3d.model_pitch = saved_orientation['pitch']
+                parent.avatar_preview_3d.model_yaw = saved_orientation['yaw']
+                parent.avatar_preview_3d.model_roll = saved_orientation['roll']
+                
+                # Update sliders to match
+                import math
+                if hasattr(parent, 'pitch_slider'):
+                    parent.pitch_slider.setValue(int(math.degrees(saved_orientation['pitch'])))
+                if hasattr(parent, 'yaw_slider'):
+                    parent.yaw_slider.setValue(int(math.degrees(saved_orientation['yaw'])))
+                if hasattr(parent, 'roll_slider'):
+                    parent.roll_slider.setValue(int(math.degrees(saved_orientation['roll'])))
+                
+                parent.avatar_preview_3d.update()
     else:
         parent._avatar_controller.appearance.model_path = str(path)
-        parent.avatar_status.setText(f"✓ Loaded: {path.name}")
+        parent.avatar_status.setText(f"Loaded: {path.name}")
     
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
     

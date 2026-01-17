@@ -1186,7 +1186,7 @@ def create_settings_tab(parent):
     
     # Mic test section
     mic_test_row = QHBoxLayout()
-    parent.mic_test_btn = QPushButton("🎤 Test Microphone")
+    parent.mic_test_btn = QPushButton("Test Microphone")
     parent.mic_test_btn.clicked.connect(lambda: _test_microphone(parent))
     mic_test_row.addWidget(parent.mic_test_btn)
     
@@ -1609,7 +1609,7 @@ def create_settings_tab(parent):
     
     reset_buttons = QHBoxLayout()
     
-    reset_window_btn = QPushButton("🔲 Reset Window Position")
+    reset_window_btn = QPushButton("Reset Window Position")
     reset_window_btn.setToolTip("Center window on primary screen")
     reset_window_btn.setStyleSheet("""
         QPushButton {
@@ -2456,7 +2456,7 @@ def _test_microphone(parent):
     # If already testing, stop the test
     if hasattr(parent, '_mic_test_running') and parent._mic_test_running:
         parent._mic_test_stop_requested = True
-        parent.mic_test_btn.setText("🎤 Stopping...")
+        parent.mic_test_btn.setText("Stopping...")
         return
     
     device_index = parent.audio_input_combo.currentData()
@@ -2535,7 +2535,7 @@ def _test_microphone(parent):
                 parent._mic_test_running = False
                 parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
-                parent.mic_test_btn.setText("🎤 Test Microphone")
+                parent.mic_test_btn.setText("Test Microphone")
                 if getattr(parent, '_mic_test_stop_requested', False):
                     parent.mic_status_label.setText("Test stopped")
                     parent.mic_status_label.setStyleSheet("color: #888;")
@@ -2554,7 +2554,7 @@ def _test_microphone(parent):
                 parent._mic_test_running = False
                 parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
-                parent.mic_test_btn.setText("🎤 Test Microphone")
+                parent.mic_test_btn.setText("Test Microphone")
                 if isinstance(e, ImportError):
                     parent.mic_status_label.setText("Install: pip install pyaudio")
                 else:
@@ -2568,7 +2568,7 @@ def _test_microphone(parent):
                 parent._mic_test_running = False
                 parent._mic_test_stop_requested = False
                 parent.mic_test_btn.setEnabled(True)
-                parent.mic_test_btn.setText("🎤 Test Microphone")
+                parent.mic_test_btn.setText("Test Microphone")
                 parent.mic_status_label.setText(f"Error: {str(e)[:30]}")
                 parent.mic_status_label.setStyleSheet("color: #ef4444;")
             from PyQt5.QtCore import QTimer

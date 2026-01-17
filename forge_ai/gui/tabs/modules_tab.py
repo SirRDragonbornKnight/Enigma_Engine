@@ -477,6 +477,13 @@ class ModulesTab(QWidget):
                 self._sync_options_menu(module_id, enabled)
                 self._sync_tab_visibility(module_id, enabled)
                 
+                # Save config to persist changes
+                try:
+                    self.module_manager.save_config()
+                    self._log(f"Config saved")
+                except Exception as save_err:
+                    self._log(f"Warning: Could not save config: {save_err}")
+                
             except Exception as e:
                 self._log(f"ERROR: {str(e)}")
                 return

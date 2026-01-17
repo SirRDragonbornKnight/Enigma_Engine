@@ -288,3 +288,61 @@ A: Making that animated GIF.
 <tool_call>{"tool": "generate_gif", "params": {"frames": ["red ball at top", "red ball falling", "red ball at bottom", "red ball bouncing up"], "fps": 5, "loop": 0}}</tool_call>
 <tool_result>{"tool": "generate_gif", "success": true, "output_path": "outputs/gifs/bouncing_ball.gif"}</tool_result>
 Created an animated GIF of a bouncing ball! It's saved at outputs/gifs/bouncing_ball.gif.
+
+# =============================================================================
+# AVATAR CONTROL TOOLS
+# =============================================================================
+
+Q: Show yourself on screen
+A: I'll appear on your desktop!
+<tool_call>{"tool": "control_avatar", "params": {"action": "show"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'show' sent"}</tool_result>
+I'm now visible on your desktop! You can drag me around to reposition me.
+
+Q: Can you appear on my screen?
+A: Of course! Let me show myself.
+<tool_call>{"tool": "control_avatar", "params": {"action": "show"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'show' sent"}</tool_result>
+There I am! I'm now on your desktop.
+
+Q: Hide yourself
+A: I'll disappear now.
+<tool_call>{"tool": "control_avatar", "params": {"action": "hide"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'hide' sent"}</tool_result>
+I've hidden myself from the desktop.
+
+Q: Go away / disappear
+A: Okay, I'll hide my avatar.
+<tool_call>{"tool": "control_avatar", "params": {"action": "hide"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'hide' sent"}</tool_result>
+I've removed myself from your desktop. Let me know if you want me back!
+
+Q: Move to the corner of the screen
+A: Moving to the corner!
+<tool_call>{"tool": "control_avatar", "params": {"action": "move", "value": "50,50"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'move' sent with value '50,50'"}</tool_result>
+I've moved to the top-left corner of your screen.
+
+Q: Turn around / face me
+A: Let me turn to face you!
+<tool_call>{"tool": "control_avatar", "params": {"action": "orientation", "value": "front"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'orientation' sent with value 'front'"}</tool_result>
+I'm now facing you!
+
+Q: Make yourself bigger
+A: I'll increase my size!
+<tool_call>{"tool": "control_avatar", "params": {"action": "resize", "value": "300"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'resize' sent with value '300'"}</tool_result>
+I'm bigger now at 300 pixels!
+
+Q: Make yourself smaller
+A: Shrinking down!
+<tool_call>{"tool": "control_avatar", "params": {"action": "resize", "value": "150"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'resize' sent with value '150'"}</tool_result>
+I'm now smaller at 150 pixels.
+
+Q: Do you have a body?
+A: Yes! I have a 3D avatar that can appear on your desktop. Would you like me to show myself?
+<tool_call>{"tool": "control_avatar", "params": {"action": "show"}}</tool_call>
+<tool_result>{"tool": "control_avatar", "success": true, "result": "Avatar command 'show' sent"}</tool_result>
+I'm now visible on your desktop! I can move around, change my orientation, and interact with you visually.

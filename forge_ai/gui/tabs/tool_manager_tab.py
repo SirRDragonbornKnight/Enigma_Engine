@@ -39,7 +39,7 @@ class ToolManagerTab(QWidget):
         layout.setSpacing(6)
         
         # Header
-        header = QLabel("🔧 Tool Manager")
+        header = QLabel("Tool Manager")
         header.setFont(QFont("Arial", 14, QFont.Bold))
         layout.addWidget(header)
         
@@ -146,11 +146,11 @@ class ToolManagerTab(QWidget):
         profile_layout = QHBoxLayout(profile_group)
         profile_layout.setContentsMargins(6, 6, 6, 6)
         
-        save_profile_btn = QPushButton("💾 Save")
+        save_profile_btn = QPushButton("Save")
         save_profile_btn.clicked.connect(self._save_profile)
         profile_layout.addWidget(save_profile_btn)
         
-        load_profile_btn = QPushButton("📂 Load")
+        load_profile_btn = QPushButton("Load")
         load_profile_btn.clicked.connect(self._load_profile)
         profile_layout.addWidget(load_profile_btn)
         
@@ -167,13 +167,13 @@ class ToolManagerTab(QWidget):
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(6)
         
-        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self._load_tools)
         bottom_layout.addWidget(refresh_btn)
         
         bottom_layout.addStretch()
         
-        install_deps_btn = QPushButton("📦 Install Dependencies")
+        install_deps_btn = QPushButton("Install Dependencies")
         install_deps_btn.clicked.connect(self._install_dependencies)
         bottom_layout.addWidget(install_deps_btn)
         
@@ -189,7 +189,7 @@ class ToolManagerTab(QWidget):
         
         for category, tools in TOOL_CATEGORIES.items():
             # Create category item
-            cat_item = QTreeWidgetItem([f"📁 {category.upper()}", ""])
+            cat_item = QTreeWidgetItem([category.upper(), ""])
             cat_item.setFlags(cat_item.flags() | Qt.ItemIsTristate | Qt.ItemIsUserCheckable)
             
             cat_enabled = 0
@@ -201,12 +201,12 @@ class ToolManagerTab(QWidget):
                 
                 if self.manager.is_enabled(tool_name):
                     tool_item.setCheckState(0, Qt.Checked)
-                    tool_item.setText(1, "✅ Enabled")
+                    tool_item.setText(1, "Enabled")
                     cat_enabled += 1
                     enabled_count += 1
                 else:
                     tool_item.setCheckState(0, Qt.Unchecked)
-                    tool_item.setText(1, "⬜ Disabled")
+                    tool_item.setText(1, "Disabled")
                 
                 # Color based on dependencies
                 deps = TOOL_DEPENDENCIES.get(tool_name, [])
@@ -239,10 +239,10 @@ class ToolManagerTab(QWidget):
         
         if item.checkState(0) == Qt.Checked:
             self.manager.enable_tool(tool_name)
-            item.setText(1, "✅ Enabled")
+            item.setText(1, "Enabled")
         else:
             self.manager.disable_tool(tool_name)
-            item.setText(1, "⬜ Disabled")
+            item.setText(1, "Disabled")
         
         self._update_stats()
         self._update_dependencies()
@@ -264,7 +264,7 @@ class ToolManagerTab(QWidget):
         html = f"""
         <h3>{tool_name}</h3>
         <p><b>Category:</b> {info.get('category', 'Unknown')}</p>
-        <p><b>Status:</b> {'✅ Enabled' if info.get('enabled') else '⬜ Disabled'}</p>
+        <p><b>Status:</b> {'Enabled' if info.get('enabled') else 'Disabled'}</p>
         <p><b>Dependencies:</b> {', '.join(deps) if deps else 'None (built-in)'}</p>
         """
         

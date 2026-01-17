@@ -348,13 +348,13 @@ class SchedulerTab(QWidget):
             run_btn.clicked.connect(lambda _, t=task: self._run_task(t))
             actions_layout.addWidget(run_btn)
             
-            edit_btn = QPushButton("✏️")
-            edit_btn.setMaximumWidth(30)
+            edit_btn = QPushButton("Edit")
+            edit_btn.setMaximumWidth(40)
             edit_btn.setToolTip("Edit")
             edit_btn.clicked.connect(lambda _, t=task: self._edit_task(t))
             actions_layout.addWidget(edit_btn)
             
-            delete_btn = QPushButton("❌")
+            delete_btn = QPushButton("X")
             delete_btn.setMaximumWidth(30)
             delete_btn.setToolTip("Delete")
             delete_btn.clicked.connect(lambda _, t=task: self._delete_task(t))
@@ -471,16 +471,16 @@ class SchedulerTab(QWidget):
                 import subprocess
                 result = subprocess.run(action, shell=True, capture_output=True, text=True, timeout=30)
                 output = result.stdout or result.stderr or "Completed"
-                status = "✅ Success" if result.returncode == 0 else "❌ Failed"
+                status = "Success" if result.returncode == 0 else "Failed"
             
             elif task_type == "Send Message":
                 # Would integrate with chat here
                 output = f"Message sent: {action[:50]}..."
-                status = "✅ Success"
+                status = "Success"
             
             elif task_type == "Backup Models":
                 output = "Backup not yet implemented"
-                status = "⚠️ Skipped"
+                status = "Skipped"
             
             elif task_type == "Clear Cache":
                 import shutil
@@ -489,15 +489,15 @@ class SchedulerTab(QWidget):
                     shutil.rmtree(cache_dir)
                     cache_dir.mkdir()
                 output = "Cache cleared"
-                status = "✅ Success"
+                status = "Success"
             
             elif task_type == "Export Logs":
                 output = "Log export not yet implemented"
-                status = "⚠️ Skipped"
+                status = "Skipped"
             
             else:
                 output = f"Unknown task type: {task_type}"
-                status = "❌ Failed"
+                status = "Failed"
             
             # Update task
             for t in self.tasks:
@@ -510,7 +510,7 @@ class SchedulerTab(QWidget):
             self._update_history(task["name"], status, output)
             
         except Exception as e:
-            self._update_history(task["name"], "❌ Error", str(e))
+            self._update_history(task["name"], "Error", str(e))
     
     def _add_history(self, task_name: str, status: str):
         """Add entry to history table."""
@@ -549,21 +549,21 @@ class SchedulerTab(QWidget):
         run_action = menu.addAction("▶️ Run Now")
         run_action.triggered.connect(lambda: self._run_task(task))
         
-        edit_action = menu.addAction("✏️ Edit")
+        edit_action = menu.addAction("Edit")
         edit_action.triggered.connect(lambda: self._edit_task(task))
         
         menu.addSeparator()
         
         if task.get("enabled", True):
-            disable_action = menu.addAction("⏸️ Disable")
+            disable_action = menu.addAction("Disable")
             disable_action.triggered.connect(lambda: self._toggle_task(task, False))
         else:
-            enable_action = menu.addAction("▶️ Enable")
+            enable_action = menu.addAction("Enable")
             enable_action.triggered.connect(lambda: self._toggle_task(task, True))
         
         menu.addSeparator()
         
-        delete_action = menu.addAction("❌ Delete")
+        delete_action = menu.addAction("Delete")
         delete_action.triggered.connect(lambda: self._delete_task(task))
         
         menu.exec_(self.tasks_table.viewport().mapToGlobal(pos))

@@ -41,11 +41,37 @@ GENERATE:
 
 CONNECT:
   Search    - Semantic search
-  Avatar    - Visual AI rep
+  Avatar    - Visual AI rep (desktop overlay)
   Game      - Game connections
   Robot     - Robot control
   Vision    - Screen capture
   Camera    - Live camera feed
+
+AVATAR (Desktop Overlay)
+------------------------
+The avatar is a draggable desktop companion:
+
+Controls:
+  - Drag to move around screen
+  - Scroll wheel to resize (100-500px)
+  - Double-click to reset size
+  - Right-click for options menu
+  - ESC to hide
+
+Right-Click Menu:
+  - Style: Switch between Blob and Anime Girl
+  - Expression: Change facial expression
+  - Size: Set specific size (150-500px)
+  - Reset Position: Move to top-left
+  - Change Avatar: Load custom image/model
+  - Close Avatar: Hide from desktop
+
+Supported Avatar Files:
+  - Images: PNG, JPG, GIF, BMP, WEBP
+  - 3D Models: GLB, GLTF, OBJ, FBX, DAE
+
+Add custom avatars to: data/avatar/models/
+The avatar closes automatically when you exit the GUI.
 
 TOOLS:
   Terminal  - Command line

@@ -236,28 +236,32 @@ FIND_ON_SCREEN = ToolDefinition(
 
 CONTROL_AVATAR = ToolDefinition(
     name="control_avatar",
-    description="Control the avatar's expression, animation, or behavior",
+    description="Control the desktop avatar - move it, make it jump, pin it in place, or show/hide it. The avatar is a 3D character that appears on the desktop.",
     category="control",
     module="avatar",
     parameters=[
         ToolParameter(
             name="action",
             type="string",
-            description="Action to perform",
+            description="Action to perform on the avatar",
             required=True,
-            enum=["expression", "animation", "gesture", "speak"],
+            enum=["show", "hide", "jump", "pin", "unpin", "move", "resize", "orientation"],
         ),
         ToolParameter(
             name="value",
             type="string",
-            description="Value for the action (e.g., 'happy', 'wave', 'nod')",
-            required=True,
+            description="Value for the action. For 'move': 'x,y' coordinates. For 'resize': pixel size like '250'. For 'orientation': 'front', 'back', 'left', 'right', or 'x,y' rotation angles.",
+            required=False,
+            default="",
         ),
     ],
     examples=[
-        "Make the avatar smile",
-        "Have the avatar wave",
-        "Set avatar expression to surprised",
+        "Show the avatar on desktop",
+        "Make the avatar jump",
+        "Pin the avatar in place so it doesn't fall",
+        "Move the avatar to position 100,200",
+        "Hide the avatar",
+        "Turn the avatar to face left",
     ],
 )
 

@@ -359,6 +359,202 @@ SPRITE_TEMPLATES = {
     <circle cx="60" cy="105" r="7" fill="{secondary_color}" opacity="0.3"/>
     <circle cx="140" cy="105" r="7" fill="{secondary_color}" opacity="0.3"/>
 </svg>""",
+
+    # ============ ANIME GIRL STYLE ============
+    "anime_idle": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Hair back -->
+    <ellipse cx="100" cy="85" rx="70" ry="75" fill="{primary_color}"/>
+    
+    <!-- Face -->
+    <ellipse cx="100" cy="100" rx="45" ry="50" fill="#ffecd2"/>
+    
+    <!-- Hair front/bangs -->
+    <path d="M 55 70 Q 70 55 100 50 Q 130 55 145 70 L 140 90 Q 120 80 100 85 Q 80 80 60 90 Z" fill="{primary_color}"/>
+    
+    <!-- Side hair -->
+    <path d="M 55 70 Q 45 100 50 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <path d="M 145 70 Q 155 100 150 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    
+    <!-- Big anime eyes -->
+    <ellipse cx="75" cy="100" rx="15" ry="18" fill="white"/>
+    <ellipse cx="125" cy="100" rx="15" ry="18" fill="white"/>
+    <ellipse cx="75" cy="102" rx="12" ry="14" fill="{accent_color}"/>
+    <ellipse cx="125" cy="102" rx="12" ry="14" fill="{accent_color}"/>
+    <circle cx="75" cy="100" r="6" fill="#1e1e2e"/>
+    <circle cx="125" cy="100" r="6" fill="#1e1e2e"/>
+    <!-- Eye highlights -->
+    <circle cx="70" cy="96" r="4" fill="white"/>
+    <circle cx="120" cy="96" r="4" fill="white"/>
+    <circle cx="78" cy="105" r="2" fill="white" opacity="0.6"/>
+    <circle cx="128" cy="105" r="2" fill="white" opacity="0.6"/>
+    
+    <!-- Eyelashes -->
+    <path d="M 60 88 Q 75 85 90 88" stroke="#1e1e2e" stroke-width="2" fill="none"/>
+    <path d="M 110 88 Q 125 85 140 88" stroke="#1e1e2e" stroke-width="2" fill="none"/>
+    
+    <!-- Small nose -->
+    <path d="M 100 110 L 100 115" stroke="#deb887" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Cute mouth -->
+    <path d="M 90 125 Q 100 130 110 125" stroke="#e57373" stroke-width="2" fill="none" stroke-linecap="round"/>
+    
+    <!-- Blush -->
+    <ellipse cx="60" cy="115" rx="10" ry="6" fill="#ffb6c1" opacity="0.5"/>
+    <ellipse cx="140" cy="115" rx="10" ry="6" fill="#ffb6c1" opacity="0.5"/>
+</svg>""",
+
+    "anime_happy": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Hair back -->
+    <ellipse cx="100" cy="85" rx="70" ry="75" fill="{primary_color}"/>
+    
+    <!-- Face -->
+    <ellipse cx="100" cy="100" rx="45" ry="50" fill="#ffecd2"/>
+    
+    <!-- Hair front/bangs -->
+    <path d="M 55 70 Q 70 55 100 50 Q 130 55 145 70 L 140 90 Q 120 80 100 85 Q 80 80 60 90 Z" fill="{primary_color}"/>
+    
+    <!-- Side hair -->
+    <path d="M 55 70 Q 45 100 50 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <path d="M 145 70 Q 155 100 150 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    
+    <!-- Happy closed eyes (^ ^) -->
+    <path d="M 60 100 Q 75 90 90 100" stroke="#1e1e2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M 110 100 Q 125 90 140 100" stroke="#1e1e2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Small nose -->
+    <path d="M 100 110 L 100 115" stroke="#deb887" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Big happy smile -->
+    <path d="M 80 125 Q 100 140 120 125" stroke="#e57373" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Extra blush when happy -->
+    <ellipse cx="55" cy="110" rx="12" ry="7" fill="#ffb6c1" opacity="0.6"/>
+    <ellipse cx="145" cy="110" rx="12" ry="7" fill="#ffb6c1" opacity="0.6"/>
+    
+    <!-- Sparkles -->
+    <text x="30" y="60" font-size="16" fill="{secondary_color}">✦</text>
+    <text x="160" y="70" font-size="12" fill="{secondary_color}">✦</text>
+</svg>""",
+
+    "anime_thinking": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Hair back -->
+    <ellipse cx="100" cy="85" rx="70" ry="75" fill="{primary_color}"/>
+    
+    <!-- Face -->
+    <ellipse cx="100" cy="100" rx="45" ry="50" fill="#ffecd2"/>
+    
+    <!-- Hair front/bangs -->
+    <path d="M 55 70 Q 70 55 100 50 Q 130 55 145 70 L 140 90 Q 120 80 100 85 Q 80 80 60 90 Z" fill="{primary_color}"/>
+    
+    <!-- Side hair -->
+    <path d="M 55 70 Q 45 100 50 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <path d="M 145 70 Q 155 100 150 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    
+    <!-- Thinking eyes - looking up -->
+    <ellipse cx="75" cy="98" rx="15" ry="18" fill="white"/>
+    <ellipse cx="125" cy="98" rx="15" ry="18" fill="white"/>
+    <ellipse cx="75" cy="96" rx="12" ry="14" fill="{accent_color}"/>
+    <ellipse cx="125" cy="96" rx="12" ry="14" fill="{accent_color}"/>
+    <circle cx="75" cy="94" r="6" fill="#1e1e2e"/>
+    <circle cx="125" cy="94" r="6" fill="#1e1e2e"/>
+    <circle cx="70" cy="90" r="4" fill="white"/>
+    <circle cx="120" cy="90" r="4" fill="white"/>
+    
+    <!-- Eyelashes -->
+    <path d="M 60 86 Q 75 83 90 86" stroke="#1e1e2e" stroke-width="2" fill="none"/>
+    <path d="M 110 86 Q 125 83 140 86" stroke="#1e1e2e" stroke-width="2" fill="none"/>
+    
+    <!-- Small nose -->
+    <path d="M 100 110 L 100 115" stroke="#deb887" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Thinking mouth (small o) -->
+    <ellipse cx="100" cy="128" rx="5" ry="4" fill="#e57373"/>
+    
+    <!-- Thought bubble -->
+    <circle cx="155" cy="50" r="5" fill="{secondary_color}" opacity="0.7"/>
+    <circle cx="165" cy="40" r="8" fill="{secondary_color}" opacity="0.7"/>
+    <circle cx="178" cy="28" r="12" fill="{secondary_color}" opacity="0.7"/>
+    
+    <!-- Blush -->
+    <ellipse cx="60" cy="115" rx="10" ry="6" fill="#ffb6c1" opacity="0.4"/>
+    <ellipse cx="140" cy="115" rx="10" ry="6" fill="#ffb6c1" opacity="0.4"/>
+</svg>""",
+
+    "anime_surprised": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Hair back -->
+    <ellipse cx="100" cy="85" rx="70" ry="75" fill="{primary_color}"/>
+    
+    <!-- Face -->
+    <ellipse cx="100" cy="100" rx="45" ry="50" fill="#ffecd2"/>
+    
+    <!-- Hair front/bangs -->
+    <path d="M 55 70 Q 70 55 100 50 Q 130 55 145 70 L 140 90 Q 120 80 100 85 Q 80 80 60 90 Z" fill="{primary_color}"/>
+    
+    <!-- Side hair -->
+    <path d="M 55 70 Q 45 100 50 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <path d="M 145 70 Q 155 100 150 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    
+    <!-- Surprised big eyes -->
+    <ellipse cx="75" cy="100" rx="18" ry="22" fill="white"/>
+    <ellipse cx="125" cy="100" rx="18" ry="22" fill="white"/>
+    <ellipse cx="75" cy="102" rx="14" ry="16" fill="{accent_color}"/>
+    <ellipse cx="125" cy="102" rx="14" ry="16" fill="{accent_color}"/>
+    <circle cx="75" cy="100" r="7" fill="#1e1e2e"/>
+    <circle cx="125" cy="100" r="7" fill="#1e1e2e"/>
+    <circle cx="70" cy="95" r="5" fill="white"/>
+    <circle cx="120" cy="95" r="5" fill="white"/>
+    
+    <!-- Small nose -->
+    <path d="M 100 110 L 100 115" stroke="#deb887" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Surprised mouth (O) -->
+    <ellipse cx="100" cy="130" rx="10" ry="12" fill="#e57373"/>
+    
+    <!-- Blush -->
+    <ellipse cx="55" cy="115" rx="12" ry="7" fill="#ffb6c1" opacity="0.5"/>
+    <ellipse cx="145" cy="115" rx="12" ry="7" fill="#ffb6c1" opacity="0.5"/>
+    
+    <!-- Exclamation -->
+    <text x="160" y="50" font-size="24" fill="{secondary_color}" font-weight="bold">!</text>
+</svg>""",
+
+    "anime_wink": """<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <!-- Hair back -->
+    <ellipse cx="100" cy="85" rx="70" ry="75" fill="{primary_color}"/>
+    
+    <!-- Face -->
+    <ellipse cx="100" cy="100" rx="45" ry="50" fill="#ffecd2"/>
+    
+    <!-- Hair front/bangs -->
+    <path d="M 55 70 Q 70 55 100 50 Q 130 55 145 70 L 140 90 Q 120 80 100 85 Q 80 80 60 90 Z" fill="{primary_color}"/>
+    
+    <!-- Side hair -->
+    <path d="M 55 70 Q 45 100 50 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    <path d="M 145 70 Q 155 100 150 150" stroke="{primary_color}" stroke-width="20" fill="none" stroke-linecap="round"/>
+    
+    <!-- Left eye - winking -->
+    <path d="M 60 100 Q 75 95 90 100" stroke="#1e1e2e" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Right eye - open -->
+    <ellipse cx="125" cy="100" rx="15" ry="18" fill="white"/>
+    <ellipse cx="125" cy="102" rx="12" ry="14" fill="{accent_color}"/>
+    <circle cx="125" cy="100" r="6" fill="#1e1e2e"/>
+    <circle cx="120" cy="96" r="4" fill="white"/>
+    <path d="M 110 88 Q 125 85 140 88" stroke="#1e1e2e" stroke-width="2" fill="none"/>
+    
+    <!-- Small nose -->
+    <path d="M 100 110 L 100 115" stroke="#deb887" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Playful smile -->
+    <path d="M 85 125 Q 100 135 115 125" stroke="#e57373" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- Blush on wink side -->
+    <ellipse cx="55" cy="110" rx="12" ry="7" fill="#ffb6c1" opacity="0.6"/>
+    <ellipse cx="145" cy="115" rx="10" ry="6" fill="#ffb6c1" opacity="0.4"/>
+    
+    <!-- Star -->
+    <text x="35" y="85" font-size="14" fill="{secondary_color}">★</text>
+</svg>""",
 }
 
 

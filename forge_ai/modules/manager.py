@@ -208,7 +208,7 @@ class ModuleManager:
     def __init__(self, config_path: Optional[Path] = None, local_only: bool = True):
         self.modules: Dict[str, Module] = {}
         self.module_classes: Dict[str, type] = {}
-        self.config_path = config_path or Path("forge_modules.json")
+        self.config_path = config_path or Path("data/module_config.json")
         self.hardware_profile: Dict[str, Any] = {}
         self.local_only = local_only  # Default to local-only for privacy
 

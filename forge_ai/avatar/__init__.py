@@ -53,6 +53,7 @@ from .controller import (
     enable_avatar,
     disable_avatar,
     toggle_avatar,
+    execute_action,
 )
 
 from .avatar_identity import (
@@ -108,6 +109,7 @@ __all__ = [
     "enable_avatar",
     "disable_avatar",
     "toggle_avatar",
+    "execute_action",
     
     # Identity & Appearance
     "AIAvatarIdentity",

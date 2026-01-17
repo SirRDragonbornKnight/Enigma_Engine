@@ -475,3 +475,60 @@ class AvatarCustomizer:
         
         print("\n✓ Customization complete!")
         return appearance
+
+
+def send_ai_avatar_command(setting: str, value: str) -> bool:
+    """
+    Send an avatar command from the AI to the GUI.
+    
+    The GUI polls information/avatar/customization.json for AI-requested changes.
+    
+    Args:
+        setting: The setting to change (e.g., 'expression', 'primary_color', 'auto_rotate')
+        value: The value to set
+        
+    Returns:
+        True if the command was written successfully
+    """
+    import time
+    
+    # Path to the customization file
+    info_dir = Path(__file__).parent.parent.parent / "information" / "avatar"
+    info_dir.mkdir(parents=True, exist_ok=True)
+    customization_path = info_dir / "customization.json"
+    
+    try:
+        # Read existing or create new
+        if customization_path.exists():
+            data = json.loads(customization_path.read_text())
+        else:
+            data = {}
+        
+        # Update the setting
+        data[setting] = value
+        data["_last_updated"] = time.time()
+        
+        # Write back
+        customization_path.write_text(json.dumps(data, indent=2))
+        return True
+        
+    except Exception as e:
+        print(f"[Avatar] Failed to send AI command: {e}")
+        return False
+
+
+def set_ai_expression(expression: str) -> bool:
+    """Convenience function to set avatar expression from AI."""
+    return send_ai_avatar_command("expression", expression)
+
+
+def set_ai_avatar_color(primary: str = None, secondary: str = None, accent: str = None) -> bool:
+    """Convenience function to set avatar colors from AI."""
+    success = True
+    if primary:
+        success = success and send_ai_avatar_command("primary_color", primary)
+    if secondary:
+        success = success and send_ai_avatar_command("secondary_color", secondary)
+    if accent:
+        success = success and send_ai_avatar_command("accent_color", accent)
+    return success

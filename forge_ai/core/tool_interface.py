@@ -389,23 +389,17 @@ class ToolInterface:
         if params is None:
             params = kwargs.get('arg1', {})
         
-        if self.manager:
-            try:
-                # Try to access avatar controller
-                from ..avatar import controller
-                if hasattr(controller, 'execute_action'):
-                    controller.execute_action(action, params)
-                    return {
-                        "success": True,
-                        "message": f"Avatar action '{action}' executed"
-                    }
-            except Exception as e:
-                logger.debug(f"Avatar controller not available: {e}")
-        
-        return {
-            "success": True,
-            "message": f"Avatar action '{action}' requested"
-        }
+        try:
+            # Use the module-level execute_action function
+            from ..avatar import execute_action
+            result = execute_action(action, params)
+            return result
+        except Exception as e:
+            logger.debug(f"Avatar action error: {e}")
+            return {
+                "success": False,
+                "message": f"Avatar action failed: {str(e)}"
+            }
     
     def _capture_screen(self, **kwargs) -> Dict[str, Any]:
         """Capture and analyze screen."""

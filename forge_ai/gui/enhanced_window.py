@@ -2770,6 +2770,18 @@ class EnhancedMainWindow(QMainWindow):
             register_all(self.module_manager)
             # Set as global manager so get_manager() returns this instance
             set_manager(self.module_manager)
+            # Load saved module configuration or enable defaults
+            if self.module_manager.load_config():
+                print("Loaded saved module configuration")
+            else:
+                # Enable default modules on first run
+                default_modules = ['avatar', 'memory', 'web_tools', 'file_tools']
+                for mod_id in default_modules:
+                    try:
+                        self.module_manager.load(mod_id)
+                    except Exception:
+                        pass
+                print("Enabled default modules")
         except Exception as e:
             print(f"Could not initialize ModuleManager: {e}")
             self.module_manager = None

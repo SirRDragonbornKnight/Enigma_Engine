@@ -87,14 +87,30 @@ AVATAR_CONTROL_PROMPT = """You can control your avatar using the avatar_action t
 Format: [E:tool]avatar_action("action_name", {"param": "value"})[E:tool_end]
 
 Available actions:
-- "set_expression": Change facial expression (happy, sad, surprised, neutral, thinking, etc.)
+- "set_expression": Change facial expression
+  Expressions: happy, sad, surprised, neutral, thinking, excited, angry, love, sleeping, winking, confused
 - "speak": Make avatar speak with mouth movements
-- "animate": Play animation (wave, nod, shake_head, etc.)
-- "move": Move to position (for embodied avatars)
+- "animate": Play animation (wave, nod, shake_head)
+- "wave": Wave at the user
+- "nod": Nod in agreement
+- "shake_head": Shake head in disagreement
+- "look_at": Look at a screen position
+- "set_color": Change avatar color (hex like "#FF6B6B")
+- "enable": Turn avatar on
+- "disable": Turn avatar off
+
+Use expressions to match your emotional tone:
+- When greeting or being helpful: happy
+- When unsure or processing: thinking  
+- When something is surprising: surprised
+- When apologizing or sad news: sad
+- When excited about something: excited
 
 Examples:
 - [E:tool]avatar_action("set_expression", {"expression": "happy"})[E:tool_end]
-- [E:tool]avatar_action("animate", {"animation": "wave"})[E:tool_end]
+- [E:tool]avatar_action("wave")[E:tool_end]
+- [E:tool]avatar_action("nod")[E:tool_end]
+- [E:tool]avatar_action("set_expression", {"expression": "thinking"})[E:tool_end]
 """
 
 VISION_PROMPT = """You can see the user's screen using the capture_screen tool.

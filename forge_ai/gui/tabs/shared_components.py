@@ -116,8 +116,8 @@ class PresetSelector(QWidget):
         layout.addWidget(self.combo, stretch=1)
         
         # Save custom preset button
-        self.save_btn = QPushButton("💾")
-        self.save_btn.setFixedWidth(30)
+        self.save_btn = QPushButton("Save")
+        self.save_btn.setFixedWidth(50)
         self.save_btn.setToolTip("Save current settings as preset")
         self.save_btn.clicked.connect(self._save_custom_preset)
         layout.addWidget(self.save_btn)
