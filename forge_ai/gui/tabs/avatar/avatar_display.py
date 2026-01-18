@@ -45,6 +45,7 @@ Qt_SmoothTransformation: Any = getattr(Qt, 'SmoothTransformation', 1)
 Qt_AlignCenter: Any = getattr(Qt, 'AlignCenter', 0x0084)
 Qt_transparent: Any = getattr(Qt, 'transparent', QColor(0, 0, 0, 0))
 Qt_NoPen: Any = getattr(Qt, 'NoPen', 0)
+Qt_NoBrush: Any = getattr(Qt, 'NoBrush', 0)
 Qt_OpenHandCursor: Any = getattr(Qt, 'OpenHandCursor', 17)
 Qt_ClosedHandCursor: Any = getattr(Qt, 'ClosedHandCursor', 18)
 Qt_ArrowCursor: Any = getattr(Qt, 'ArrowCursor', 0)
@@ -1144,7 +1145,7 @@ class AvatarOverlayWindow(QWidget):
             pen.setColor(QColor("#3498db"))  # Blue border
             pen.setWidth(3)
             painter.setPen(pen)
-            painter.setBrush(Qt_NoPen)
+            painter.setBrush(Qt_NoBrush)
             painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
         
         if self.pixmap:
@@ -1607,7 +1608,7 @@ class Avatar3DOverlayWindow(QWidget):
             pen.setColor(QColor("#3498db"))  # Blue border
             pen.setWidth(3)
             painter.setPen(pen)
-            painter.setBrush(Qt_NoPen)
+            painter.setBrush(Qt_NoBrush)
             painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
     
     def contextMenuEvent(self, event):
@@ -2139,23 +2140,6 @@ def create_avatar_subtab(parent):
     # Right side - Customization Controls
     right_panel = QVBoxLayout()
     
-    # === Built-in 2D Avatar Option ===
-    builtin_group = QGroupBox("Simple 2D Avatar")
-    builtin_layout = QVBoxLayout()
-    
-    builtin_info = QLabel("Use a simple animated 2D avatar instead of loading a file. Good for quick setup.")
-    builtin_info.setStyleSheet("color: #6c7086; font-size: 10px;")
-    builtin_info.setWordWrap(True)
-    builtin_layout.addWidget(builtin_info)
-    
-    parent.use_builtin_btn = QPushButton("Use Built-in 2D Avatar")
-    parent.use_builtin_btn.clicked.connect(lambda: _use_builtin_sprite(parent))
-    parent.use_builtin_btn.setEnabled(avatar_module_enabled)
-    builtin_layout.addWidget(parent.use_builtin_btn)
-    
-    builtin_group.setLayout(builtin_layout)
-    right_panel.addWidget(builtin_group)
-    
     # === Quick Actions ===
     actions_group = QGroupBox("Quick Actions")
     actions_layout = QVBoxLayout()
@@ -2236,36 +2220,6 @@ def create_avatar_subtab(parent):
         roll_row.addWidget(parent.roll_label)
         viewer_layout.addLayout(roll_row)
         
-        # Quick fix buttons for common rotations
-        quick_fix_row = QHBoxLayout()
-        rotate_x_90_btn = QPushButton("+90 X")
-        rotate_x_90_btn.setToolTip("Rotate 90 degrees on X axis")
-        rotate_x_90_btn.clicked.connect(lambda: _quick_rotate(parent, 'pitch', 90))
-        quick_fix_row.addWidget(rotate_x_90_btn)
-        
-        rotate_y_90_btn = QPushButton("+90 Y")
-        rotate_y_90_btn.setToolTip("Rotate 90 degrees on Y axis")
-        rotate_y_90_btn.clicked.connect(lambda: _quick_rotate(parent, 'yaw', 90))
-        quick_fix_row.addWidget(rotate_y_90_btn)
-        
-        rotate_z_90_btn = QPushButton("+90 Z")
-        rotate_z_90_btn.setToolTip("Rotate 90 degrees on Z axis")
-        rotate_z_90_btn.clicked.connect(lambda: _quick_rotate(parent, 'roll', 90))
-        quick_fix_row.addWidget(rotate_z_90_btn)
-        
-        reset_orient_btn = QPushButton("Reset")
-        reset_orient_btn.setToolTip("Reset orientation to 0")
-        reset_orient_btn.clicked.connect(lambda: _reset_orientation(parent))
-        quick_fix_row.addWidget(reset_orient_btn)
-        
-        # Auto-orient button
-        auto_orient_btn = QPushButton("Auto Fix")
-        auto_orient_btn.setToolTip("Automatically detect and fix orientation")
-        auto_orient_btn.clicked.connect(lambda: _auto_orient_model(parent))
-        auto_orient_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
-        quick_fix_row.addWidget(auto_orient_btn)
-        viewer_layout.addLayout(quick_fix_row)
-        
         # Simple view buttons row (combined)
         view_row = QHBoxLayout()
         view_front = QPushButton("Front")
@@ -2276,10 +2230,20 @@ def create_avatar_subtab(parent):
         view_back.clicked.connect(lambda: _set_camera_view(parent, 0, 180))
         view_row.addWidget(view_back)
         
-        view_side = QPushButton("Side")
-        view_side.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
-        view_row.addWidget(view_side)
+        view_left = QPushButton("Left")
+        view_left.clicked.connect(lambda: _set_camera_view(parent, 0, -90))
+        view_row.addWidget(view_left)
+        
+        view_right = QPushButton("Right")
+        view_right.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
+        view_row.addWidget(view_right)
         viewer_layout.addLayout(view_row)
+        
+        # Reset orientation button
+        reset_orient_btn = QPushButton("Reset Orientation")
+        reset_orient_btn.setToolTip("Reset orientation to 0")
+        reset_orient_btn.clicked.connect(lambda: _reset_orientation(parent))
+        viewer_layout.addWidget(reset_orient_btn)
         
         # Save orientation button
         parent.save_orientation_btn = QPushButton("Save Orientation for This Model")
@@ -2288,34 +2252,34 @@ def create_avatar_subtab(parent):
         parent.save_orientation_btn.setStyleSheet("background: #a6e3a1; color: #1e1e2e; font-weight: bold;")
         viewer_layout.addWidget(parent.save_orientation_btn)
         
+        # === Reset Options (combined into viewer group) ===
+        reset_label = QLabel("Reset Options:")
+        reset_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+        viewer_layout.addWidget(reset_label)
+        
+        # Reset buttons row
+        reset_row = QHBoxLayout()
+        
+        parent.reset_preview_btn = QPushButton("Reset Preview")
+        parent.reset_preview_btn.setToolTip("Reset 3D preview camera and settings")
+        parent.reset_preview_btn.clicked.connect(lambda: _reset_preview(parent))
+        reset_row.addWidget(parent.reset_preview_btn)
+        
+        parent.reset_overlay_btn = QPushButton("Reset Overlay")
+        parent.reset_overlay_btn.setToolTip("Reset desktop avatar position and size")
+        parent.reset_overlay_btn.clicked.connect(lambda: _reset_overlay(parent))
+        reset_row.addWidget(parent.reset_overlay_btn)
+        
+        parent.reset_all_btn = QPushButton("Reset All")
+        parent.reset_all_btn.setToolTip("Reset all avatar settings to default")
+        parent.reset_all_btn.clicked.connect(lambda: _reset_all_avatar(parent))
+        parent.reset_all_btn.setStyleSheet("background: #f38ba8; color: #1e1e2e;")
+        reset_row.addWidget(parent.reset_all_btn)
+        
+        viewer_layout.addLayout(reset_row)
+        
         viewer_group.setLayout(viewer_layout)
         right_panel.addWidget(viewer_group)
-    
-    # === Reset Buttons ===
-    reset_group = QGroupBox("Reset Options")
-    reset_layout = QVBoxLayout()
-    
-    # Reset preview (camera, settings)
-    parent.reset_preview_btn = QPushButton("Reset Preview")
-    parent.reset_preview_btn.setToolTip("Reset 3D preview camera and settings")
-    parent.reset_preview_btn.clicked.connect(lambda: _reset_preview(parent))
-    reset_layout.addWidget(parent.reset_preview_btn)
-    
-    # Reset desktop overlay
-    parent.reset_overlay_btn = QPushButton("Reset Desktop Overlay")
-    parent.reset_overlay_btn.setToolTip("Reset desktop avatar position and size")
-    parent.reset_overlay_btn.clicked.connect(lambda: _reset_overlay(parent))
-    reset_layout.addWidget(parent.reset_overlay_btn)
-    
-    # Reset all (both preview and overlay)
-    parent.reset_all_btn = QPushButton("Reset Everything")
-    parent.reset_all_btn.setToolTip("Reset all avatar settings to default")
-    parent.reset_all_btn.clicked.connect(lambda: _reset_all_avatar(parent))
-    parent.reset_all_btn.setStyleSheet("background: #f38ba8; color: #1e1e2e;")
-    reset_layout.addWidget(parent.reset_all_btn)
-    
-    reset_group.setLayout(reset_layout)
-    right_panel.addWidget(reset_group)
     
     # AI Activity Log - shows what the AI is doing with the avatar
     activity_group = QGroupBox("AI Activity")
