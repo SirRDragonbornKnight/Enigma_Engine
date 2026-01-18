@@ -1170,14 +1170,23 @@ class AvatarOverlayWindow(QWidget):
     def mousePressEvent(self, a0):  # type: ignore
         """Start drag to move."""
         if a0.button() == Qt_LeftButton:
-            self._drag_pos = a0.globalPos() - self.pos()
+            # Use globalPosition for newer PyQt5, fallback to globalPos
+            try:
+                global_pos = a0.globalPosition().toPoint()
+            except AttributeError:
+                global_pos = a0.globalPos()
+            self._drag_pos = global_pos - self.pos()
             self.setCursor(QCursor(Qt_ClosedHandCursor))
         a0.accept()  # Always accept to ensure we get events
             
     def mouseMoveEvent(self, a0):  # type: ignore
         """Drag to move window."""
         if self._drag_pos is not None and a0.buttons() == Qt_LeftButton:
-            self.move(a0.globalPos() - self._drag_pos)
+            try:
+                global_pos = a0.globalPosition().toPoint()
+            except AttributeError:
+                global_pos = a0.globalPos()
+            self.move(global_pos - self._drag_pos)
         a0.accept()
             
     def mouseReleaseEvent(self, a0):  # type: ignore
@@ -1547,13 +1556,21 @@ class Avatar3DOverlayWindow(QWidget):
             # Only allow: press for drag start, move for drag, release for drag end
             if event_type == event.MouseButtonPress:
                 if event.button() == Qt_LeftButton:
-                    self._drag_pos = event.globalPos() - self.pos()
+                    try:
+                        global_pos = event.globalPosition().toPoint()
+                    except AttributeError:
+                        global_pos = event.globalPos()
+                    self._drag_pos = global_pos - self.pos()
                     self.setCursor(QCursor(Qt_ClosedHandCursor))
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseMove:
                 if self._drag_pos is not None:
-                    self.move(event.globalPos() - self._drag_pos)
+                    try:
+                        global_pos = event.globalPosition().toPoint()
+                    except AttributeError:
+                        global_pos = event.globalPos()
+                    self.move(global_pos - self._drag_pos)
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseButtonRelease:
