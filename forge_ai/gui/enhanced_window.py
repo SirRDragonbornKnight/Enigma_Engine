@@ -264,13 +264,13 @@ class GenerationPreviewPopup(QDialog):
         # Header with title and close button
         header = QHBoxLayout()
         
-        title_label = QLabel(f"✨ {title}")
+        title_label = QLabel(f"{title}")
         title_label.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 14px; border: none;")
         header.addWidget(title_label)
         
         header.addStretch()
         
-        close_btn = QPushButton("✕")
+        close_btn = QPushButton("X")
         close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet("""
             QPushButton {
@@ -338,7 +338,7 @@ class GenerationPreviewPopup(QDialog):
             preview_label.setAlignment(Qt.AlignCenter)
             preview_label.setMinimumSize(300, 100)
             preview_label.setStyleSheet("border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4;")
-            preview_label.setText(f"🔊 Audio Generated\n\nClick 'Open' to play")
+            preview_label.setText(f"Audio Generated\n\nClick 'Open' to play")
             container_layout.addWidget(preview_label)
             
         elif self.result_type == "3d" and self.result_path:
@@ -346,7 +346,7 @@ class GenerationPreviewPopup(QDialog):
             preview_label.setAlignment(Qt.AlignCenter)
             preview_label.setMinimumSize(300, 100)
             preview_label.setStyleSheet("border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4;")
-            preview_label.setText(f"🎲 3D Model Generated\n\nClick 'Open' to view")
+            preview_label.setText(f"3D Model Generated\n\nClick 'Open' to view")
             container_layout.addWidget(preview_label)
         else:
             # Generic text
@@ -356,7 +356,7 @@ class GenerationPreviewPopup(QDialog):
             container_layout.addWidget(preview_label)
         
         # Path display
-        path_label = QLabel(f"📁 {self.result_path}")
+        path_label = QLabel(f"Path: {self.result_path}")
         path_label.setStyleSheet("color: #6c7086; font-size: 10px; border: none;")
         path_label.setWordWrap(True)
         container_layout.addWidget(path_label)
@@ -1570,7 +1570,7 @@ class EnhancedMainWindow(QMainWindow):
         # Learning indicator - hide for HF models (can't fine-tune them)
         if hasattr(self, 'learning_indicator'):
             if is_huggingface:
-                self.learning_indicator.setText("📚 Learning: N/A")
+                self.learning_indicator.setText("Learning: N/A")
                 self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
                 self.learning_indicator.setToolTip(
                     "Learning is not available for HuggingFace models.\n\n"
@@ -1586,10 +1586,10 @@ class EnhancedMainWindow(QMainWindow):
                 self.learning_indicator.mousePressEvent = lambda e: _toggle_learning(self)
                 # Restore current state
                 if getattr(self, 'learn_while_chatting', True):
-                    self.learning_indicator.setText("📚 Learning: ON")
+                    self.learning_indicator.setText("Learning: ON")
                     self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
                 else:
-                    self.learning_indicator.setText("📚 Learning: OFF")
+                    self.learning_indicator.setText("Learning: OFF")
                     self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
                 self.learning_indicator.setToolTip(
                     "When Learning is ON, the AI records your conversations and uses them to improve.\n\n"
@@ -1854,11 +1854,47 @@ class EnhancedMainWindow(QMainWindow):
         print(f"[DEBUG] Creating loading dialog...")
         sys.stdout.flush()
         
-        # Create and show loading dialog
-        loading_dialog = ModelLoadingDialog(self.current_model_name, self)
+        # Build list of activated elements to load
+        loading_items = []
+        
+        # Model is always loaded
+        loading_items.append({
+            'name': self.current_model_name,
+            'type': 'model',
+            'icon': '>'
+        })
+        
+        # Check which modules are enabled and will be loaded
+        if self.module_manager:
+            active_modules = self.module_manager.list_loaded()
+            module_icons = {
+                'avatar': '>',
+                'memory': '>',
+                'web_tools': '>',
+                'file_tools': '>',
+                'voice_input': '>',
+                'voice_output': '>',
+                'image_gen_local': '>',
+                'code_gen': '>',
+                'embedding': '>',
+            }
+            for mod_id in active_modules:
+                if mod_id in module_icons:
+                    loading_items.append({
+                        'name': mod_id.replace('_', ' ').title(),
+                        'type': 'module',
+                        'icon': module_icons.get(mod_id, '>')
+                    })
+        
+        # Create and show loading dialog with all items
+        loading_dialog = ModelLoadingDialog(
+            loading_items=loading_items if len(loading_items) > 1 else None,
+            model_name=self.current_model_name if len(loading_items) <= 1 else None,
+            parent=self
+        )
         loading_dialog.show()
-        loading_dialog.raise_()  # Bring to front
-        loading_dialog.activateWindow()  # Make active
+        loading_dialog.raise_()
+        loading_dialog.activateWindow()
         
         print(f"[DEBUG] Dialog shown, processing events...")
         sys.stdout.flush()
@@ -2036,9 +2072,10 @@ class EnhancedMainWindow(QMainWindow):
             loading_dialog.set_status("Ready!", 100)
             QApplication.processEvents()  # Ensure dialog updates
             
-            # Brief pause to show completion
+            # Show completion for a moment so user sees the full bar
             import time
-            time.sleep(0.3)
+            time.sleep(0.8)
+            QApplication.processEvents()
             
             # Show welcome message in chat
             if hasattr(self, 'chat_display'):
@@ -2172,6 +2209,32 @@ class EnhancedMainWindow(QMainWindow):
         self.learn_action.setChecked(True)  # On by default
         self.learn_action.triggered.connect(self._toggle_learning)
         self.learn_while_chatting = True
+        
+        # Add spacer to push Quick Chat button to the right
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        menubar.setCornerWidget(spacer, Qt.TopLeftCorner)
+        
+        # Open Quick Chat button in menu bar (right side)
+        quick_chat_btn = QPushButton("Open Quick Chat")
+        quick_chat_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-size: 11px;
+                font-weight: bold;
+                margin: 2px 8px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        quick_chat_btn.setToolTip("Open the Quick Chat overlay")
+        quick_chat_btn.clicked.connect(self._open_quick_chat)
+        menubar.setCornerWidget(quick_chat_btn, Qt.TopRightCorner)
         
         # Status bar with clickable model selector
         self.model_status_btn = QPushButton(f"Model: {self.current_model_name or 'None'}  v")
@@ -2591,9 +2654,9 @@ class EnhancedMainWindow(QMainWindow):
             self.voice_toggle_btn.blockSignals(True)
             self.voice_toggle_btn.setChecked(self.auto_speak)
             if self.auto_speak:
-                self.voice_toggle_btn.setText("🔊 Voice ON")
+                self.voice_toggle_btn.setText("Voice ON")
             else:
-                self.voice_toggle_btn.setText("🔇 Voice OFF")
+                self.voice_toggle_btn.setText("Voice OFF")
             self.voice_toggle_btn.blockSignals(False)
     
     def _toggle_microphone(self, checked):
@@ -2622,6 +2685,17 @@ class EnhancedMainWindow(QMainWindow):
                     self.microphone_action.setText("Microphone (ON)")
                 else:
                     self.microphone_action.setText("Microphone (OFF)")
+    
+    def _open_quick_chat(self):
+        """Open the Quick Chat overlay."""
+        try:
+            tray = get_system_tray()
+            if tray:
+                tray.show_quick_command()
+            else:
+                QMessageBox.information(self, "Quick Chat", "Quick Chat is not available.\nStart Forge from run.py to enable system tray features.")
+        except Exception as e:
+            print(f"Error opening Quick Chat: {e}")
     
     def _toggle_learning(self, checked):
         """Toggle learn-while-chatting mode."""
@@ -4088,13 +4162,13 @@ class EnhancedMainWindow(QMainWindow):
         if result == QMessageBox.Yes:
             self.chat_display.append(
                 f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #a6e3a1;">'
-                f'<span style="color: #a6e3a1;">✅ Allowed:</span> <code>{tool_name}</code></div>'
+                f'<span style="color: #a6e3a1;">Allowed:</span> <code>{tool_name}</code></div>'
             )
             return True
         else:
             self.chat_display.append(
                 f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #f38ba8;">'
-                f'<span style="color: #f38ba8;">❌ Denied:</span> <code>{tool_name}</code></div>'
+                f'<span style="color: #f38ba8;">Denied:</span> <code>{tool_name}</code></div>'
             )
             return False
     
@@ -4117,13 +4191,13 @@ class EnhancedMainWindow(QMainWindow):
                 result_text = str(result.get('result', 'Done'))[:200]
                 self.chat_display.append(
                     f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #94e2d5;">'
-                    f'<span style="color: #94e2d5;">🔧 {tool_name}:</span> {result_text}</div>'
+                    f'<span style="color: #94e2d5;">{tool_name}:</span> {result_text}</div>'
                 )
             else:
                 error = result.get('error', 'Unknown error')
                 self.chat_display.append(
                     f'<div style="background-color: #313244; padding: 6px; margin: 2px 0; border-radius: 4px; border-left: 3px solid #f38ba8;">'
-                    f'<span style="color: #f38ba8;">⚠️ {tool_name} failed:</span> {error}</div>'
+                    f'<span style="color: #f38ba8;">{tool_name} failed:</span> {error}</div>'
                 )
             
             return result
@@ -4238,9 +4312,9 @@ class EnhancedMainWindow(QMainWindow):
                 f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
                 f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
                 f'<span style="color: #6c7086; font-size: 11px;">Rate this response: </span>'
-                f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">👍 Good</a>'
-                f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">👎 Bad</a>'
-                f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">✏️ Critique</a>'
+                f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">Good</a>'
+                f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">Bad</a>'
+                f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">Critique</a>'
                 f'</div></div>'
             )
         self.last_response = response
@@ -4477,12 +4551,12 @@ Be friendly, concise, and proactive in helping users accomplish their goals."""
         """Detect emotion/expression from text content."""
         # Emotion keywords mapped to expressions
         emotion_patterns = {
-            'happy': ['happy', 'glad', 'joy', 'excited', 'great', 'wonderful', 'yay', '😊', '😄', 'haha', 'lol', ':)', 'awesome', 'fantastic', 'love it'],
-            'sad': ['sad', 'sorry', 'unfortunately', 'regret', 'miss', 'disappointed', '😢', '😔', ':(', 'apolog'],
-            'thinking': ['hmm', 'let me think', 'considering', 'perhaps', 'maybe', 'not sure', 'wondering', '🤔', 'interesting question'],
-            'surprised': ['wow', 'amazing', 'incredible', 'unbelievable', 'really?', 'no way', '😮', '😲', 'whoa', 'oh!'],
-            'angry': ['angry', 'frustrated', 'annoyed', 'upset', '😠', '😤', 'unacceptable'],
-            'confused': ['confused', "don't understand", 'unclear', 'what do you mean', '🤨', 'huh?', 'sorry?'],
+            'happy': ['happy', 'glad', 'joy', 'excited', 'great', 'wonderful', 'yay', 'haha', 'lol', ':)', 'awesome', 'fantastic', 'love it'],
+            'sad': ['sad', 'sorry', 'unfortunately', 'regret', 'miss', 'disappointed', ':(', 'apolog'],
+            'thinking': ['hmm', 'let me think', 'considering', 'perhaps', 'maybe', 'not sure', 'wondering', 'interesting question'],
+            'surprised': ['wow', 'amazing', 'incredible', 'unbelievable', 'really?', 'no way', 'whoa', 'oh!'],
+            'angry': ['angry', 'frustrated', 'annoyed', 'upset', 'unacceptable'],
+            'confused': ['confused', "don't understand", 'unclear', 'what do you mean', 'huh?', 'sorry?'],
             'neutral': ['okay', 'alright', 'sure', 'understood', 'i see', 'got it'],
         }
         
@@ -4593,14 +4667,14 @@ Be friendly, concise, and proactive in helping users accomplish their goals."""
     def _show_command_help(self):
         """Show available chat commands."""
         help_text = """
-<b style='color:#89b4fa;'>💡 Natural Language Generation:</b><br>
+<b style='color:#89b4fa;'>Natural Language Generation:</b><br>
 Just ask naturally! The AI understands requests like:<br>
-• "Generate an image of a sunset"<br>
-• "Create a picture of a cat"<br>
-• "Write code for a web scraper"<br>
-• "Make a 3D model of a chair"<br>
+- "Generate an image of a sunset"<br>
+- "Create a picture of a cat"<br>
+- "Write code for a web scraper"<br>
+- "Make a 3D model of a chair"<br>
 <br>
-<b style='color:#89b4fa;'>🎨 Generation Commands:</b><br>
+<b style='color:#89b4fa;'>Generation Commands:</b><br>
 <b>/image &lt;prompt&gt;</b> - Generate an image<br>
 <b>/video &lt;prompt&gt;</b> - Generate a video<br>
 <b>/gif &lt;prompt&gt;</b> - Generate an animated GIF<br>
@@ -4609,7 +4683,7 @@ Just ask naturally! The AI understands requests like:<br>
 <b>/3d &lt;prompt&gt;</b> - Generate 3D model<br>
 <b>/embed &lt;text&gt;</b> - Generate embeddings<br>
 <br>
-<b style='color:#89b4fa;'>📂 Navigation Commands:</b><br>
+<b style='color:#89b4fa;'>Navigation Commands:</b><br>
 <b>/chat</b> - Go to Chat tab<br>
 <b>/train</b> - Go to Training tab<br>
 <b>/settings</b> - Go to Settings<br>
@@ -4622,12 +4696,12 @@ Just ask naturally! The AI understands requests like:<br>
 <b>/camera</b> - Go to Camera<br>
 <b>/terminal</b> - Go to Terminal<br>
 <br>
-<b style='color:#89b4fa;'>🔧 Utility Commands:</b><br>
+<b style='color:#89b4fa;'>Utility Commands:</b><br>
 <b>/clear</b> - Clear chat history<br>
 <b>/new</b> - Start a new conversation<br>
 <b>/help</b> - Show this help<br>
 <br>
-<b style='color:#f9e2af;'>📚 Learning Mode:</b><br>
+<b style='color:#f9e2af;'>Learning Mode:</b><br>
 When ON, the AI saves your conversations to improve over time.<br>
 Click the "Learning: ON/OFF" indicator to toggle.<br>
 <i>(Only works with local Forge models, not HuggingFace models)</i>
@@ -5239,12 +5313,13 @@ What would you like to do?""")
                         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
                         
                         # Custom buttons with clear wording
-                        minichat_btn = msg.addButton("Close && Open Quick Chat", QMessageBox.AcceptRole)
+                        quickchat_btn = msg.addButton("Open Quick Chat", QMessageBox.AcceptRole)
+                        close_btn = msg.addButton("Close", QMessageBox.AcceptRole)
                         exit_btn = msg.addButton("Quit Forge", QMessageBox.DestructiveRole)
                         kill_btn = msg.addButton("Force Quit All", QMessageBox.DestructiveRole)
                         cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
                         
-                        msg.setDefaultButton(minichat_btn)
+                        msg.setDefaultButton(quickchat_btn)
                         
                         # Process events to ensure dialog is responsive
                         QApplication.processEvents()
@@ -5253,11 +5328,15 @@ What would you like to do?""")
                         
                         clicked = msg.clickedButton()
                         
-                        if clicked == minichat_btn:
+                        if clicked == quickchat_btn:
                             # Open Quick Chat (Quick Command Overlay)
                             event.ignore()
                             window.hide()
                             _system_tray.show_quick_command()
+                        elif clicked == close_btn:
+                            # Just close the main window to tray
+                            event.ignore()
+                            window.hide()
                         elif clicked == exit_btn:
                             # Exit completely
                             event.accept()

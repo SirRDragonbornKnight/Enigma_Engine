@@ -244,15 +244,15 @@ class VoiceCloneTab(QWidget):
         
         # Tab 1: Clone from Audio
         clone_tab = self._create_clone_tab()
-        tabs.addTab(clone_tab, "🎤 Clone from Audio")
+        tabs.addTab(clone_tab, "Clone from Audio")
         
         # Tab 2: AI Generate Voice
         ai_tab = self._create_ai_generation_tab()
-        tabs.addTab(ai_tab, "🤖 AI Generate Voice")
+        tabs.addTab(ai_tab, "AI Generate Voice")
         
         # Tab 3: Voice Profiles
         profiles_tab = self._create_profiles_tab()
-        tabs.addTab(profiles_tab, "📋 Voice Profiles")
+        tabs.addTab(profiles_tab, "Voice Profiles")
         
         layout.addWidget(tabs)
         
@@ -299,15 +299,15 @@ class VoiceCloneTab(QWidget):
         samples_layout.addWidget(self.samples_list)
         
         btn_layout = QHBoxLayout()
-        add_btn = QPushButton("➕ Add Audio Files")
+        add_btn = QPushButton("+ Add Audio Files")
         add_btn.clicked.connect(self._on_add_samples)
         btn_layout.addWidget(add_btn)
         
-        remove_btn = QPushButton("🗑️ Remove Selected")
+        remove_btn = QPushButton("Remove Selected")
         remove_btn.clicked.connect(self._on_remove_sample)
         btn_layout.addWidget(remove_btn)
         
-        analyze_btn = QPushButton("🔍 Analyze")
+        analyze_btn = QPushButton("Analyze")
         analyze_btn.clicked.connect(self._on_analyze_sample)
         btn_layout.addWidget(analyze_btn)
         
@@ -440,19 +440,19 @@ class VoiceCloneTab(QWidget):
         
         btn_layout = QHBoxLayout()
         
-        preview_btn = QPushButton("▶️ Preview")
+        preview_btn = QPushButton("Preview")
         preview_btn.clicked.connect(self._on_preview_voice)
         btn_layout.addWidget(preview_btn)
         
-        apply_btn = QPushButton("✅ Use for Avatar")
+        apply_btn = QPushButton("Use for Avatar")
         apply_btn.clicked.connect(self._on_apply_to_avatar)
         btn_layout.addWidget(apply_btn)
         
-        delete_btn = QPushButton("🗑️ Delete")
+        delete_btn = QPushButton("Delete")
         delete_btn.clicked.connect(self._on_delete_profile)
         btn_layout.addWidget(delete_btn)
         
-        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self._load_existing_profiles)
         btn_layout.addWidget(refresh_btn)
         
@@ -500,7 +500,7 @@ class VoiceCloneTab(QWidget):
         
         details_layout.addLayout(adjust_layout)
         
-        save_changes_btn = QPushButton("💾 Save Changes")
+        save_changes_btn = QPushButton("Save Changes")
         save_changes_btn.clicked.connect(self._on_save_profile_changes)
         details_layout.addWidget(save_changes_btn)
         
@@ -578,11 +578,11 @@ class VoiceCloneTab(QWidget):
             analysis += f"  Sample Rate: {features.get('sample_rate', 0)} Hz\n"
             
             if issues:
-                analysis += f"\n⚠️ Issues:\n"
+                analysis += f"\nIssues:\n"
                 for issue in issues:
-                    analysis += f"  • {issue}\n"
+                    analysis += f"  - {issue}\n"
             else:
-                analysis += "\n✅ Audio quality looks good!"
+                analysis += "\nAudio quality looks good!"
             
             self.analysis_label.setText(analysis)
     
@@ -618,7 +618,7 @@ class VoiceCloneTab(QWidget):
         if result.get("success"):
             profile = result.get("profile")
             self.current_profile = profile
-            self.status_label.setText(f"✅ Voice '{result.get('name')}' created successfully!")
+            self.status_label.setText(f"Voice '{result.get('name')}' created successfully!")
             self._load_existing_profiles()
             QMessageBox.information(self, "Success", f"Voice profile '{result.get('name')}' created!")
     
@@ -658,7 +658,7 @@ class VoiceCloneTab(QWidget):
         if result.get("success"):
             profile = result.get("profile")
             self.current_profile = profile
-            self.status_label.setText(f"✅ AI voice '{result.get('name')}' generated!")
+            self.status_label.setText(f"AI voice '{result.get('name')}' generated!")
             self._load_existing_profiles()
             QMessageBox.information(
                 self, "Success", 
@@ -732,7 +732,7 @@ class VoiceCloneTab(QWidget):
         self.current_profile.volume = self.volume_slider.value() / 100
         
         self.current_profile.save()
-        self.status_label.setText(f"✅ Profile '{self.current_profile.name}' saved!")
+        self.status_label.setText(f"Profile '{self.current_profile.name}' saved!")
     
     def _on_preview_voice(self):
         """Preview the selected voice."""
@@ -762,7 +762,7 @@ class VoiceCloneTab(QWidget):
             avatar = self.main_window.avatar
             if avatar:
                 avatar.voice_profile = self.current_profile
-                self.status_label.setText(f"✅ Applied '{self.current_profile.name}' to avatar!")
+                self.status_label.setText(f"Applied '{self.current_profile.name}' to avatar!")
                 QMessageBox.information(self, "Applied", f"Voice '{self.current_profile.name}' applied to avatar!")
                 return
         
@@ -803,7 +803,7 @@ class VoiceCloneTab(QWidget):
     def _on_error(self, error):
         """Handle errors."""
         self.progress_bar.setVisible(False)
-        self.status_label.setText(f"❌ Error: {error}")
+        self.status_label.setText(f"Error: {error}")
         QMessageBox.warning(self, "Error", error)
 
 

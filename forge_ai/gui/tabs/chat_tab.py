@@ -92,10 +92,10 @@ def create_chat_tab(parent):
     parent.chat_display.setPlaceholderText(
         "Start chatting with your AI...\n\n"
         "Tips:\n"
-        "• Just ask naturally - 'Generate an image of a sunset'\n"
-        "• The AI auto-detects what you want to create\n"
-        "• Rate responses with 👍👎 to help the AI learn\n"
-        "• Click ✏️ Critique to give detailed feedback"
+        "- Just ask naturally - 'Generate an image of a sunset'\n"
+        "- The AI auto-detects what you want to create\n"
+        "- Rate responses to help the AI learn\n"
+        "- Click Critique to give detailed feedback"
     )
     parent.chat_display.setStyleSheet("""
         QTextEdit {
@@ -119,7 +119,7 @@ def create_chat_tab(parent):
     thinking_layout = QHBoxLayout(parent.thinking_frame)
     thinking_layout.setContentsMargins(8, 4, 8, 4)
     
-    parent.thinking_label = QLabel("🤔 Thinking...")
+    parent.thinking_label = QLabel("Thinking...")
     parent.thinking_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
     thinking_layout.addWidget(parent.thinking_label)
     
@@ -239,7 +239,7 @@ def create_chat_tab(parent):
     input_layout.addWidget(parent.rec_btn)
     
     # Speak Last button (for TTS on demand)
-    parent.btn_speak = QPushButton("🔊")
+    parent.btn_speak = QPushButton("TTS")
     parent.btn_speak.setToolTip("Speak last AI response")
     parent.btn_speak.setFixedSize(40, 40)
     parent.btn_speak.setStyleSheet("""
@@ -270,7 +270,7 @@ def create_chat_tab(parent):
     bottom_layout.addStretch()
     
     # Learning indicator with detailed tooltip
-    parent.learning_indicator = QLabel("📚 Learning: ON")
+    parent.learning_indicator = QLabel("Learning: ON")
     parent.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
     parent.learning_indicator.setToolTip(
         "When Learning is ON, the AI records your conversations and uses them to improve.\n\n"
@@ -340,9 +340,9 @@ def _toggle_voice_output(parent):
     
     # Show status
     if parent.auto_speak:
-        parent.chat_status.setText("🔊 Voice output ON - AI will speak responses aloud")
+        parent.chat_status.setText("Voice output ON - AI will speak responses aloud")
     else:
-        parent.chat_status.setText("🔇 Voice output OFF")
+        parent.chat_status.setText("Voice output OFF")
 
 
 def _update_voice_button_state(parent):
@@ -367,7 +367,7 @@ def _toggle_voice_input(parent):
     
     if is_listening:
         parent.rec_btn.setToolTip("Listening... (click to stop)")
-        parent.chat_status.setText("🎤 Listening...")
+        parent.chat_status.setText("Listening...")
         
         # Try to start voice recognition
         try:
@@ -417,7 +417,7 @@ def _voice_input_done(parent):
     """Called when voice input completes successfully."""
     parent.rec_btn.setChecked(False)
     parent.rec_btn.setToolTip("Record - Click to speak")
-    parent.chat_status.setText("✓ Voice captured - press Enter to send")
+    parent.chat_status.setText("Voice captured - press Enter to send")
     parent._voice_thread = None
     parent.chat_input.setFocus()
 
@@ -436,11 +436,11 @@ def _toggle_learning(parent):
     parent.learn_while_chatting = not current
     
     if parent.learn_while_chatting:
-        parent.learning_indicator.setText("📚 Learning: ON")
+        parent.learning_indicator.setText("Learning: ON")
         parent.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
         parent.chat_status.setText("Learning enabled - AI will learn from conversations")
     else:
-        parent.learning_indicator.setText("📚 Learning: OFF")
+        parent.learning_indicator.setText("Learning: OFF")
         parent.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
         parent.chat_status.setText("Learning disabled - conversations won't be saved for training")
     
@@ -534,7 +534,7 @@ def _handle_feedback_link(parent, url):
         response_data = parent._response_history.get(int(response_id))
     
     if feedback_type == 'good':
-        parent.chat_status.setText("👍 Thanks for the positive feedback!")
+        parent.chat_status.setText("Thanks for the positive feedback!")
         # Save good example with high quality score
         if hasattr(parent, 'brain') and parent.brain and response_data:
             parent.brain.record_interaction(
@@ -542,10 +542,10 @@ def _handle_feedback_link(parent, url):
                 response_data['ai_response'],
                 quality=1.0  # High quality
             )
-            parent.chat_status.setText("👍 Feedback saved - AI will learn from this good example!")
+            parent.chat_status.setText("Feedback saved - AI will learn from this good example!")
     
     elif feedback_type == 'bad':
-        parent.chat_status.setText("👎 Sorry about that. What went wrong?")
+        parent.chat_status.setText("Sorry about that. What went wrong?")
         # Ask for quick reason
         reason, ok = QInputDialog.getItem(
             parent,
@@ -555,7 +555,7 @@ def _handle_feedback_link(parent, url):
             0, False
         )
         if ok and reason:
-            parent.chat_status.setText(f"👎 Feedback noted: {reason}")
+            parent.chat_status.setText(f"Feedback noted: {reason}")
             # Don't save this as training data (or save with low quality)
             if hasattr(parent, 'brain') and parent.brain and response_data:
                 # Record with low quality so it's deprioritized
@@ -575,7 +575,7 @@ def _show_critique_dialog(parent, response_id, response_data):
     from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QComboBox
     
     dialog = QDialog(parent)
-    dialog.setWindowTitle("✏️ Critique Response")
+    dialog.setWindowTitle("Critique Response")
     dialog.setMinimumWidth(500)
     dialog.setStyleSheet(parent.styleSheet())
     
@@ -639,12 +639,12 @@ def _show_critique_dialog(parent, response_id, response_data):
                     correction,
                     quality=1.0
                 )
-                parent.chat_status.setText(f"✏️ Correction saved! AI will learn the better response.")
+                parent.chat_status.setText(f"Correction saved! AI will learn the better response.")
             
             # Show in chat
             parent.chat_display.append(
                 f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
-                f'<b style="color: #89b4fa;">📝 Correction saved ({issue}):</b><br>'
+                f'<b style="color: #89b4fa;">Correction saved ({issue}):</b><br>'
                 f'<i style="color: #a6e3a1;">Better response:</i> {correction[:200]}...</div>'
             )
         

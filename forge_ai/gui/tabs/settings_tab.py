@@ -176,7 +176,7 @@ def _robot_estop(parent):
         controller = get_mode_controller()
         controller.emergency_stop("User pressed E-STOP button")
         
-        parent.robot_status_label.setText("Robot: ⚠️ E-STOP ACTIVE ⚠️")
+        parent.robot_status_label.setText("Robot: E-STOP ACTIVE")
         parent.robot_status_label.setStyleSheet("color: #ef4444; font-weight: bold;")
         parent.robot_mode_combo.setCurrentIndex(0)  # Set to disabled
         
@@ -472,7 +472,7 @@ def _toggle_cloud_mode(parent, state):
             api_key = os.environ.get(key_map.get(provider, ''), '')
             
             if not api_key:
-                parent.cloud_status_label.setText(f"⚠️ Set {provider.upper()} API key below first!")
+                parent.cloud_status_label.setText(f"Set {provider.upper()} API key below first!")
                 parent.cloud_status_label.setStyleSheet("color: #f59e0b;")
                 return
         
@@ -500,9 +500,9 @@ def _toggle_cloud_mode(parent, state):
                 if success:
                     model_name = parent.cloud_model_combo.currentText()
                     if provider == 'ollama':
-                        parent.cloud_status_label.setText(f"✓ Ollama active: {model_name}")
+                        parent.cloud_status_label.setText(f"Ollama active: {model_name}")
                     else:
-                        parent.cloud_status_label.setText(f"✓ Cloud AI active: {model_name}")
+                        parent.cloud_status_label.setText(f"Cloud AI active: {model_name}")
                     parent.cloud_status_label.setStyleSheet("color: #22c55e;")
                 else:
                     if provider == 'ollama':
@@ -514,7 +514,7 @@ def _toggle_cloud_mode(parent, state):
                         parent.cloud_status_label.setText(f"✗ Failed: {msg}")
                     parent.cloud_status_label.setStyleSheet("color: #ef4444;")
             else:
-                parent.cloud_status_label.setText("✓ API mode enabled (apply on restart)")
+                parent.cloud_status_label.setText("API mode enabled (apply on restart)")
                 parent.cloud_status_label.setStyleSheet("color: #22c55e;")
         except Exception as e:
             parent.cloud_status_label.setText(f"Error: {e}")
@@ -1645,7 +1645,7 @@ def create_settings_tab(parent):
     reset_ontop_btn.clicked.connect(lambda: _disable_always_on_top(parent))
     reset_buttons.addWidget(reset_ontop_btn)
     
-    reset_all_btn = QPushButton("⚠️ Reset All Settings")
+    reset_all_btn = QPushButton("Reset All Settings")
     reset_all_btn.setStyleSheet("""
         QPushButton {
             background: #dc2626;
@@ -2540,10 +2540,10 @@ def _test_microphone(parent):
                     parent.mic_status_label.setText("Test stopped")
                     parent.mic_status_label.setStyleSheet("color: #888;")
                 elif max_level > 10:
-                    parent.mic_status_label.setText(f"✓ Working (peak: {max_level}%)")
+                    parent.mic_status_label.setText(f"Working (peak: {max_level}%)")
                     parent.mic_status_label.setStyleSheet("color: #22c55e;")
                 else:
-                    parent.mic_status_label.setText("⚠ Low/no signal detected")
+                    parent.mic_status_label.setText("Low/no signal detected")
                     parent.mic_status_label.setStyleSheet("color: #f59e0b;")
             
             from PyQt5.QtCore import QTimer

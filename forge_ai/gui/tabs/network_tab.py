@@ -142,11 +142,11 @@ class NetworkTab(QWidget):
         self.port_input.setValue(8765)
         controls_layout.addWidget(self.port_input)
         
-        self.start_server_btn = QPushButton("▶️ Start Server")
+        self.start_server_btn = QPushButton("Start Server")
         self.start_server_btn.clicked.connect(self._toggle_server)
         controls_layout.addWidget(self.start_server_btn)
         
-        self.copy_url_btn = QPushButton("📋 Copy URL")
+        self.copy_url_btn = QPushButton("Copy URL")
         self.copy_url_btn.clicked.connect(self._copy_server_url)
         controls_layout.addWidget(self.copy_url_btn)
         
@@ -211,15 +211,15 @@ class NetworkTab(QWidget):
         # Quick actions
         actions_layout = QHBoxLayout()
         
-        sync_models_btn = QPushButton("📦 Sync Models")
+        sync_models_btn = QPushButton("Sync Models")
         sync_models_btn.clicked.connect(self._sync_models)
         actions_layout.addWidget(sync_models_btn)
         
-        sync_settings_btn = QPushButton("⚙️ Sync Settings")
+        sync_settings_btn = QPushButton("Sync Settings")
         sync_settings_btn.clicked.connect(self._sync_settings)
         actions_layout.addWidget(sync_settings_btn)
         
-        remote_chat_btn = QPushButton("💬 Remote Chat")
+        remote_chat_btn = QPushButton("Remote Chat")
         remote_chat_btn.clicked.connect(self._remote_chat)
         actions_layout.addWidget(remote_chat_btn)
         
@@ -302,7 +302,7 @@ class NetworkTab(QWidget):
             # For now, just update status (actual server would be started here)
             self.server_status.setText(f"● Running on port {port}")
             self.server_status.setStyleSheet("color: #4caf50; font-weight: bold;")
-            self.start_server_btn.setText("⏹️ Stop Server")
+            self.start_server_btn.setText("Stop Server")
             
             self._log(f"Server started at http://{self._get_local_ip()}:{port}")
             self.api_process = True  # Placeholder
@@ -315,9 +315,9 @@ class NetworkTab(QWidget):
         """Stop the API server."""
         self._log("Stopping API server...")
         
-        self.server_status.setText("● Stopped")
+        self.server_status.setText("Stopped")
         self.server_status.setStyleSheet("color: #f44336; font-weight: bold;")
-        self.start_server_btn.setText("▶️ Start Server")
+        self.start_server_btn.setText("Start Server")
         
         self.api_process = None
         self._log("Server stopped")
@@ -338,7 +338,7 @@ class NetworkTab(QWidget):
             self.scanner.stop()
             return
         
-        self.scan_btn.setText("⏹️ Stop Scan")
+        self.scan_btn.setText("Stop Scan")
         self.scan_progress.setVisible(True)
         self.scan_progress.setRange(0, 0)  # Indeterminate
         
@@ -374,9 +374,9 @@ class NetworkTab(QWidget):
         self.devices_table.setItem(row, 0, QTableWidgetItem(device.get("ip", "")))
         self.devices_table.setItem(row, 1, QTableWidgetItem(str(device.get("port", 8765))))
         
-        status = "🟢 Online" if device.get("status") == "online" else "⚪ Unknown"
+        status = "Online" if device.get("status") == "online" else "Unknown"
         if device.get("is_self"):
-            status = "🔵 This Device"
+            status = "This Device"
         status_item = QTableWidgetItem(status)
         self.devices_table.setItem(row, 2, status_item)
         
@@ -447,13 +447,13 @@ class NetworkTab(QWidget):
             
             with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status == 200:
-                    self._log(f"✅ Connected to {url}")
+                    self._log(f"Connected to {url}")
                     QMessageBox.information(self, "Connected", f"Successfully connected to {url}")
                 else:
-                    self._log(f"⚠️ Connection returned status {response.status}")
+                    self._log(f"Connection returned status {response.status}")
         
         except Exception as e:
-            self._log(f"❌ Connection failed: {e}")
+            self._log(f"Connection failed: {e}")
             QMessageBox.warning(self, "Connection Failed", f"Could not connect to {url}\n\n{e}")
     
     def _sync_models(self):

@@ -197,15 +197,15 @@ class AlertBanner(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 6, 10, 6)
         
-        icons = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}
-        icon_label = QLabel(icons.get(level, "⚠️"))
+        icons = {"info": "i", "warning": "!", "critical": "!!"}
+        icon_label = QLabel(icons.get(level, "!"))
         layout.addWidget(icon_label)
         
         msg_label = QLabel(message)
         msg_label.setStyleSheet(f"color: {fg}; font-weight: bold; font-size: 11px;")
         layout.addWidget(msg_label, stretch=1)
         
-        dismiss_btn = QPushButton("✕")
+        dismiss_btn = QPushButton("X")
         dismiss_btn.setFixedSize(20, 20)
         dismiss_btn.setStyleSheet(f"""
             QPushButton {{
@@ -290,7 +290,7 @@ class StatusCard(QFrame):
 class ActivityItem(QFrame):
     """A single activity log item."""
     
-    def __init__(self, message: str, timestamp: str, icon: str = "📝", parent=None):
+    def __init__(self, message: str, timestamp: str, icon: str = ">", parent=None):
         super().__init__(parent)
         self.setStyleSheet("""
             QFrame {
@@ -363,13 +363,13 @@ class DashboardTab(QWidget):
         header_layout.addStretch()
         
         # Uptime
-        self.uptime_label = QLabel("⏱️ --")
-        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 10px;")
+        self.uptime_label = QLabel("Up: --")
+        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 10px;"))
         header_layout.addWidget(self.uptime_label)
         
         header_layout.addSpacing(15)
         
-        refresh_btn = QuickActionButton("Refresh", "🔄", "#a6e3a1")
+        refresh_btn = QuickActionButton("Refresh", "R", "#a6e3a1")
         refresh_btn.clicked.connect(self._refresh_all)
         header_layout.addWidget(refresh_btn)
         
@@ -392,19 +392,19 @@ class DashboardTab(QWidget):
         info_layout = QHBoxLayout(info_banner)
         info_layout.setContentsMargins(12, 8, 12, 8)
         
-        self.hostname_label = QLabel(f"🖥️ {platform.node()}")
+        self.hostname_label = QLabel(f"Host: {platform.node()}")
         self.hostname_label.setStyleSheet("color: #89b4fa; font-size: 11px; font-weight: bold;")
         info_layout.addWidget(self.hostname_label)
         
         info_layout.addSpacing(20)
         
-        self.os_label = QLabel(f"🐧 {platform.system()} {platform.release()[:20]}")
+        self.os_label = QLabel(f"OS: {platform.system()} {platform.release()[:20]}")
         self.os_label.setStyleSheet("color: #a6e3a1; font-size: 10px;")
         info_layout.addWidget(self.os_label)
         
         info_layout.addSpacing(20)
         
-        self.python_label = QLabel(f"🐍 Python {platform.python_version()}")
+        self.python_label = QLabel(f"Python {platform.python_version()}")
         self.python_label.setStyleSheet("color: #f9e2af; font-size: 10px;")
         info_layout.addWidget(self.python_label)
         
@@ -462,35 +462,35 @@ class DashboardTab(QWidget):
         details_layout.setSpacing(8)
         
         # Row 0: CPU
-        details_layout.addWidget(QLabel("💻"), 0, 0)
+        details_layout.addWidget(QLabel("CPU:"), 0, 0)
         self.cpu_cores_label = self._detail_label("Cores: --")
         details_layout.addWidget(self.cpu_cores_label, 0, 1)
         self.cpu_freq_label = self._detail_label("Freq: --")
         details_layout.addWidget(self.cpu_freq_label, 0, 2)
         
         # Row 1: RAM
-        details_layout.addWidget(QLabel("🧠"), 1, 0)
+        details_layout.addWidget(QLabel("RAM:"), 1, 0)
         self.ram_used_label = self._detail_label("Used: --")
         details_layout.addWidget(self.ram_used_label, 1, 1)
         self.ram_total_label = self._detail_label("Total: --")
         details_layout.addWidget(self.ram_total_label, 1, 2)
         
         # Row 2: Disk
-        details_layout.addWidget(QLabel("💾"), 2, 0)
+        details_layout.addWidget(QLabel("Disk:"), 2, 0)
         self.disk_used_label = self._detail_label("Used: --")
         details_layout.addWidget(self.disk_used_label, 2, 1)
         self.disk_total_label = self._detail_label("Total: --")
         details_layout.addWidget(self.disk_total_label, 2, 2)
         
         # Row 3: Network
-        details_layout.addWidget(QLabel("🌐"), 3, 0)
+        details_layout.addWidget(QLabel("Net:"), 3, 0)
         self.net_sent_label = self._detail_label("Sent: --")
         details_layout.addWidget(self.net_sent_label, 3, 1)
         self.net_recv_label = self._detail_label("Recv: --")
         details_layout.addWidget(self.net_recv_label, 3, 2)
         
         # Row 4: Temperature
-        details_layout.addWidget(QLabel("🌡️"), 4, 0)
+        details_layout.addWidget(QLabel("Temp:"), 4, 0)
         self.temp_label = self._detail_label("Temp: --")
         details_layout.addWidget(self.temp_label, 4, 1, 1, 2)
         
@@ -604,7 +604,7 @@ class DashboardTab(QWidget):
             uptime = datetime.now() - boot_time
             hours, remainder = divmod(int(uptime.total_seconds()), 3600)
             minutes, _ = divmod(remainder, 60)
-            self.uptime_label.setText(f"⏱️ Up {hours}h {minutes}m")
+            self.uptime_label.setText(f"Up {hours}h {minutes}m")
         except:
             pass
     
@@ -754,12 +754,12 @@ class DashboardTab(QWidget):
                 loaded_modules = mm.list_loaded() if hasattr(mm, 'list_loaded') else []
                 
                 status_map = {
-                    "Model": ('model', "Loaded ✓", "Not loaded"),
-                    "Tokenizer": ('tokenizer', "Loaded ✓", "Not loaded"),
-                    "Memory": ('memory', "Active ✓", "Inactive"),
-                    "API Server": ('api_server', "Running ✓", "Stopped"),
-                    "Voice Input": ('voice_input', "Active ✓", "Inactive"),
-                    "Voice Output": ('voice_output', "Active ✓", "Inactive"),
+                    "Model": ('model', "Loaded", "Not loaded"),
+                    "Tokenizer": ('tokenizer', "Loaded", "Not loaded"),
+                    "Memory": ('memory', "Active", "Inactive"),
+                    "API Server": ('api_server', "Running", "Stopped"),
+                    "Voice Input": ('voice_input', "Active", "Inactive"),
+                    "Voice Output": ('voice_output', "Active", "Inactive"),
                 }
                 
                 for card_name, (module_id, loaded_status, unloaded_status) in status_map.items():
@@ -770,12 +770,12 @@ class DashboardTab(QWidget):
                             self.status_cards[card_name].set_status(unloaded_status, "#6c7086")
             else:
                 if hasattr(self.parent_window, 'engine') and self.parent_window.engine:
-                    self.status_cards["Model"].set_status("Loaded ✓", "#a6e3a1")
+                    self.status_cards["Model"].set_status("Loaded", "#a6e3a1")
                 
         except Exception as e:
             pass  # Silently handle errors
     
-    def _add_activity(self, message: str, icon: str = "📝"):
+    def _add_activity(self, message: str, icon: str = ">"):
         """Add an activity item to the feed."""
         timestamp = datetime.now().strftime("%H:%M")
         item = ActivityItem(message, timestamp, icon)
@@ -791,11 +791,11 @@ class DashboardTab(QWidget):
     def _refresh_all(self):
         """Manually refresh all stats."""
         self._update_stats()
-        self._add_activity("Manual refresh", "🔄")
+        self._add_activity("Manual refresh", ">")
     
     def _on_card_clicked(self, title: str):
         """Handle status card click."""
-        self._add_activity(f"Clicked: {title}", "👆")
+        self._add_activity(f"Clicked: {title}", ">")
         
         if self.parent_window and hasattr(self.parent_window, 'switch_to_tab'):
             tab_map = {
@@ -809,7 +809,7 @@ class DashboardTab(QWidget):
             if title in tab_map:
                 self.parent_window.switch_to_tab(tab_map[title])
     
-    def log_activity(self, message: str, icon: str = "📝"):
+    def log_activity(self, message: str, icon: str = ">"):
         """Public method to log activity from other parts of the app."""
         self._add_activity(message, icon)
 

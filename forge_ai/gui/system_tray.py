@@ -500,7 +500,7 @@ class QuickCommandOverlay(QWidget):
         header_layout.addWidget(new_chat_btn)
         
         # Close button - hides to tray (like main GUI)
-        self.close_btn = QPushButton("✕")
+        self.close_btn = QPushButton("X")
         self.close_btn.setFixedSize(24, 24)
         self.close_btn.setToolTip("Hide to tray (right-click for more options)")
         self.close_btn.setStyleSheet("""
@@ -937,9 +937,9 @@ class QuickCommandOverlay(QWidget):
             if hasattr(main_window, 'voice_toggle_btn'):
                 main_window.voice_toggle_btn.setChecked(is_on)
                 if is_on:
-                    main_window.voice_toggle_btn.setText("🔊 Voice ON")
+                    main_window.voice_toggle_btn.setText("Voice ON")
                 else:
-                    main_window.voice_toggle_btn.setText("🔇 Voice OFF")
+                    main_window.voice_toggle_btn.setText("Voice OFF")
     
     def _speak_last_response(self):
         """Speak the last AI response."""
@@ -1237,6 +1237,9 @@ class ForgeSystemTray(QObject):
     
     show_gui_requested = pyqtSignal()
     
+    # Disable Windows notification balloons (set to True to re-enable)
+    ENABLE_NOTIFICATIONS = False
+    
     def __init__(self, app, main_window=None):
         super().__init__()
         self.app = app
@@ -1293,6 +1296,26 @@ class ForgeSystemTray(QObject):
         
         # Show tray icon
         self.tray_icon.show()
+        
+        # Override showMessage to respect notification setting
+        self._original_showMessage = self.tray_icon.showMessage
+        self.tray_icon.showMessage = self._filtered_showMessage
+    
+    def _filtered_showMessage(self, title: str, message: str, icon_type=None, duration: int = 3000):
+        """Show a notification balloon only if enabled."""
+        if not self.ENABLE_NOTIFICATIONS:
+            return
+        if icon_type is None:
+            icon_type = QSystemTrayIcon.Information
+        self._original_showMessage(title, message, icon_type, duration)
+    
+    def _show_notification(self, title: str, message: str, icon_type=None, duration: int = 3000):
+        """Show a notification balloon if enabled."""
+        if not self.ENABLE_NOTIFICATIONS:
+            return
+        if icon_type is None:
+            icon_type = QSystemTrayIcon.Information
+        self._original_showMessage(title, message, icon_type, duration)
     
     def _setup_global_hotkeys(self):
         """Setup global hotkeys for showing GUI."""
@@ -1357,7 +1380,7 @@ class ForgeSystemTray(QObject):
         header_layout.addStretch()
         
         # X close button on right
-        close_btn = QPushButton("✕")
+        close_btn = QPushButton("X")
         close_btn.setFixedSize(20, 20)
         close_btn.setToolTip("Exit Forge completely")
         close_btn.setStyleSheet("""

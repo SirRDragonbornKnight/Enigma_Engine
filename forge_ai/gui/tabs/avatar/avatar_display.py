@@ -2256,18 +2256,14 @@ def create_avatar_subtab(parent):
         quick_fix_row.addWidget(reset_orient_btn)
         
         # Auto-orient button
-        auto_orient_btn = QPushButton("🔄 Auto")
+        auto_orient_btn = QPushButton("Auto Fix")
         auto_orient_btn.setToolTip("Automatically detect and fix orientation")
         auto_orient_btn.clicked.connect(lambda: _auto_orient_model(parent))
         auto_orient_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
         quick_fix_row.addWidget(auto_orient_btn)
         viewer_layout.addLayout(quick_fix_row)
         
-        # View presets row
-        view_label = QLabel("View Presets:")
-        view_label.setStyleSheet("margin-top: 5px;")
-        viewer_layout.addWidget(view_label)
-        
+        # Simple view buttons row (combined)
         view_row = QHBoxLayout()
         view_front = QPushButton("Front")
         view_front.clicked.connect(lambda: _set_camera_view(parent, 0, 0))
@@ -2277,18 +2273,9 @@ def create_avatar_subtab(parent):
         view_back.clicked.connect(lambda: _set_camera_view(parent, 0, 180))
         view_row.addWidget(view_back)
         
-        view_left = QPushButton("Left")
-        view_left.clicked.connect(lambda: _set_camera_view(parent, 0, -90))
-        view_row.addWidget(view_left)
-        
-        view_right = QPushButton("Right")
-        view_right.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
-        view_row.addWidget(view_right)
-        
-        view_3q = QPushButton("3/4")
-        view_3q.setToolTip("3/4 view - nice angle for preview")
-        view_3q.clicked.connect(lambda: _set_camera_view(parent, 15, 35))
-        view_row.addWidget(view_3q)
+        view_side = QPushButton("Side")
+        view_side.clicked.connect(lambda: _set_camera_view(parent, 0, 90))
+        view_row.addWidget(view_side)
         viewer_layout.addLayout(view_row)
         
         # Save orientation button
@@ -2416,24 +2403,39 @@ def _restore_avatar_settings(parent):
         if hasattr(parent, 'avatar_resize_checkbox'):
             parent.avatar_resize_checkbox.setChecked(parent._avatar_resize_enabled)
         
-        # Restore last avatar selection
+        # Restore last avatar selection (always restore the selection)
         last_avatar_index = settings.get("last_avatar_index", 0)
         last_avatar_path = settings.get("last_avatar_path", "")
+        selection_restored = False
         
-        if last_avatar_index > 0 and last_avatar_index < parent.avatar_combo.count():
-            parent.avatar_combo.setCurrentIndex(last_avatar_index)
-            parent.avatar_status.setText(f"Restored last avatar selection")
-            parent.avatar_status.setStyleSheet("color: #89b4fa;")
-        elif last_avatar_path:
-            # Try to find by path
+        # First try to restore by path (more reliable)
+        if last_avatar_path:
             for i in range(parent.avatar_combo.count()):
                 data = parent.avatar_combo.itemData(i)
-                if data and len(data) > 1 and data[1] == last_avatar_path:
+                if data and len(data) > 1 and str(data[1]) == last_avatar_path:
+                    parent.avatar_combo.blockSignals(True)
                     parent.avatar_combo.setCurrentIndex(i)
+                    parent.avatar_combo.blockSignals(False)
+                    selection_restored = True
                     break
         
+        # Fallback to index if path didn't work
+        if not selection_restored and last_avatar_index > 0 and last_avatar_index < parent.avatar_combo.count():
+            parent.avatar_combo.blockSignals(True)
+            parent.avatar_combo.setCurrentIndex(last_avatar_index)
+            parent.avatar_combo.blockSignals(False)
+            selection_restored = True
+        
+        if selection_restored:
+            parent.avatar_status.setText("Restored last avatar")
+            parent.avatar_status.setStyleSheet("color: #89b4fa;")
+            # Store the path for later
+            data = parent.avatar_combo.currentData()
+            if data and len(data) > 1:
+                parent._current_path = data[1]
+        
         # Auto-load avatar if setting is enabled
-        if parent._avatar_auto_load and (last_avatar_index > 0 or last_avatar_path):
+        if parent._avatar_auto_load and selection_restored:
             parent._avatar_auto_loaded = True
             # Apply the avatar after a brief delay (let UI settle)
             QTimer.singleShot(500, lambda: _apply_avatar(parent))
