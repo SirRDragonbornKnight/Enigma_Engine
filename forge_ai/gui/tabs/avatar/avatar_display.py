@@ -1082,8 +1082,9 @@ class AvatarOverlayWindow(QWidget):
     Features:
     - Drag anywhere to move
     - Right-click for menu (expressions, size, close)
-    - Scroll wheel to resize
+    - Scroll wheel to resize (when enabled)
     - Always on top of other windows
+    - Blue border shows when resize mode is ON
     """
     
     closed = pyqtSignal()
@@ -1111,6 +1112,7 @@ class AvatarOverlayWindow(QWidget):
         self.pixmap = None
         self._original_pixmap = None
         self._drag_pos = None
+        self._resize_enabled = False  # Default OFF - scroll wheel resize disabled
         
         # Enable mouse tracking for visual cursor feedback
         self.setMouseTracking(True)
@@ -1131,10 +1133,19 @@ class AvatarOverlayWindow(QWidget):
         self.update()
         
     def paintEvent(self, a0):
-        """Draw avatar with subtle shadow."""
+        """Draw avatar with subtle shadow, and border when resize is enabled."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        
+        # Draw resize border when resize mode is ON
+        if getattr(self, '_resize_enabled', False):
+            pen = painter.pen()
+            pen.setColor(QColor("#3498db"))  # Blue border
+            pen.setWidth(3)
+            painter.setPen(pen)
+            painter.setBrush(Qt_NoPen)
+            painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
         
         if self.pixmap:
             x = (self.width() - self.pixmap.width()) // 2
@@ -1181,7 +1192,11 @@ class AvatarOverlayWindow(QWidget):
             self.closed.emit()
         
     def wheelEvent(self, a0):  # type: ignore
-        """Scroll to resize."""
+        """Scroll to resize (only when resize mode is enabled)."""
+        if not getattr(self, '_resize_enabled', False):
+            a0.ignore()
+            return
+            
         delta = a0.angleDelta().y()
         if delta > 0:
             self._size = min(500, self._size + 20)
@@ -1231,8 +1246,8 @@ class AvatarOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # Resize toggle
-        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', True) else "Enable Resize"
+        # Resize toggle - default is OFF, so show "Enable Resize" first
+        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', False) else "Enable Resize"
         resize_action = menu.addAction(resize_text)
         resize_action.triggered.connect(self._toggle_resize)
         
@@ -1256,24 +1271,9 @@ class AvatarOverlayWindow(QWidget):
             pass
     
     def _toggle_resize(self):
-        """Toggle resize mode."""
-        self._resize_enabled = not getattr(self, '_resize_enabled', True)
-    
-    def wheelEvent(self, a0):  # type: ignore
-        """Scroll to resize (if enabled)."""
-        if not getattr(self, '_resize_enabled', True):
-            a0.ignore()
-            return
-            
-        delta = a0.angleDelta().y()
-        if delta > 0:
-            self._size = min(500, self._size + 20)
-        else:
-            self._size = max(100, self._size - 20)
-        
-        self.setFixedSize(self._size, self._size)
-        self._update_scaled_pixmap()
-        a0.accept()
+        """Toggle resize mode and update border visibility."""
+        self._resize_enabled = not getattr(self, '_resize_enabled', False)
+        self.update()  # Repaint to show/hide border
     
     def _close_avatar(self):
         """Close the avatar."""
@@ -1300,6 +1300,7 @@ class Avatar3DOverlayWindow(QWidget):
     - Adaptive animation system that works with ANY model
     - AI can control: position, size, emotion, speaking, gestures
     - Lip sync (adapts to model capabilities)
+    - Blue border shows when resize mode is ON
     """
     
     closed = pyqtSignal()
@@ -1318,6 +1319,7 @@ class Avatar3DOverlayWindow(QWidget):
         
         self._size = 250
         self.setFixedSize(self._size, self._size)
+        self._resize_enabled = False  # Default OFF - scroll wheel resize disabled
         
         # Start at bottom right
         screen = QApplication.primaryScreen()
@@ -1577,7 +1579,11 @@ class Avatar3DOverlayWindow(QWidget):
         return super().eventFilter(obj, event)
     
     def wheelEvent(self, event):
-        """Scroll to resize overlay."""
+        """Scroll to resize overlay (only when resize mode is enabled)."""
+        if not getattr(self, '_resize_enabled', False):
+            event.ignore()
+            return
+            
         delta = event.angleDelta().y()
         if delta > 0:
             self._size = min(500, self._size + 25)
@@ -1590,6 +1596,19 @@ class Avatar3DOverlayWindow(QWidget):
             self._gl_widget.setFixedSize(self._size, self._size)
             self._apply_circular_mask()
         event.accept()
+    
+    def paintEvent(self, event):
+        """Draw border when resize mode is enabled."""
+        super().paintEvent(event)
+        if getattr(self, '_resize_enabled', False):
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            pen = painter.pen()
+            pen.setColor(QColor("#3498db"))  # Blue border
+            pen.setWidth(3)
+            painter.setPen(pen)
+            painter.setBrush(Qt_NoPen)
+            painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
     
     def contextMenuEvent(self, event):
         """Right-click menu."""
@@ -1630,8 +1649,8 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # Resize toggle
-        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', True) else "Enable Resize"
+        # Resize toggle - default is OFF
+        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', False) else "Enable Resize"
         resize_action = menu.addAction(resize_text)
         resize_action.triggered.connect(self._toggle_resize)
         
@@ -1655,27 +1674,9 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _toggle_resize(self):
-        """Toggle resize mode."""
-        self._resize_enabled = not getattr(self, '_resize_enabled', True)
-    
-    def wheelEvent(self, event):
-        """Scroll to resize overlay (if enabled)."""
-        if not getattr(self, '_resize_enabled', True):
-            event.ignore()
-            return
-            
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self._size = min(500, self._size + 25)
-        else:
-            self._size = max(100, self._size - 25)
-        
-        self.setFixedSize(self._size, self._size)
-        self._gl_container.setFixedSize(self._size, self._size)
-        if self._gl_widget:
-            self._gl_widget.setFixedSize(self._size, self._size)
-            self._apply_circular_mask()
-        event.accept()
+        """Toggle resize mode and update border visibility."""
+        self._resize_enabled = not getattr(self, '_resize_enabled', False)
+        self.update()  # Repaint to show/hide border
     
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
