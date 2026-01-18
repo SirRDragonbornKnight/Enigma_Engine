@@ -99,6 +99,27 @@ from .adaptive_animator import (
     AnimationState,
 )
 
+# AI-controlled animation systems (Cortana/JARVIS style)
+# 2D Animation (GIF, sprite sheets, image sequences)
+from .animation_system import (
+    AvatarAnimator,
+    AIAvatarController,
+    AnimationState as AnimationState2D,
+    Animation,
+)
+
+# 3D Animation (real-time skeletal animation with Panda3D)
+try:
+    from .animation_3d import (
+        Avatar3DAnimator,
+        AI3DAvatarController,
+        Animation3DState,
+        create_3d_avatar,
+    )
+    HAS_3D_ANIMATION = True
+except ImportError:
+    HAS_3D_ANIMATION = False
+
 # Speech synchronization (voice + lip sync)
 from .speech_sync import (
     SpeechSync,

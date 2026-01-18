@@ -73,6 +73,12 @@ opencv-python>=4.5.0
 # point-e>=0.0.1  # Point-E alternative
 trimesh>=3.20.0  # For 3D mesh manipulation and viewing
 
+# === 3D AVATAR ANIMATION (Optional) ===
+# For real-time 3D skeletal animation (Cortana/JARVIS style):
+# panda3d>=1.10.0  # 3D engine with skeletal animation
+# panda3d-gltf>=1.0.0  # glTF/GLB model support for Panda3D
+# Install both with: pip install panda3d panda3d-gltf
+
 # === GGUF MODELS (Optional) ===
 # For loading llama.cpp compatible models:
 # llama-cpp-python>=0.2.0
