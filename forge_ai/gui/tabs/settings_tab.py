@@ -689,33 +689,6 @@ def _toggle_mini_chat_on_top(parent, state):
         main_window.mini_chat.set_always_on_top(on_top)
 
 
-def _toggle_gui_over_quick_chat(parent, state):
-    """Toggle GUI-over-Quick-Chat behavior and save setting."""
-    import json
-    from pathlib import Path
-    from ...config import CONFIG
-    
-    enabled = state == Checked
-    
-    # Save to gui_settings.json
-    try:
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
-        settings = {}
-        if settings_path.exists():
-            with open(settings_path, 'r') as f:
-                settings = json.load(f)
-        settings["gui_over_quick_chat"] = enabled
-        with open(settings_path, 'w') as f:
-            json.dump(settings, f, indent=2)
-    except Exception as e:
-        print(f"Could not save GUI-over-Quick-Chat setting: {e}")
-    
-    # Update main window attribute for focus handling
-    main_window = parent.window()
-    if main_window:
-        main_window._gui_over_quick_chat = enabled
-
-
 def _save_chat_names(parent):
     """Save chat display names to settings."""
     import json
@@ -1149,18 +1122,6 @@ def create_settings_tab(parent):
         lambda state: _toggle_mini_chat_on_top(parent, state)
     )
     display_layout.addWidget(parent.mini_chat_on_top_check)
-    
-    # GUI over Quick Chat checkbox
-    parent.gui_over_quick_chat_check = QCheckBox("GUI Above Quick Chat When Focused")
-    parent.gui_over_quick_chat_check.setToolTip(
-        "When enabled, focusing the main GUI will temporarily bring it above Quick Chat.\n"
-        "Quick Chat will return to top when you click on it."
-    )
-    parent.gui_over_quick_chat_check.setChecked(True)  # Default to enabled
-    parent.gui_over_quick_chat_check.stateChanged.connect(
-        lambda state: _toggle_gui_over_quick_chat(parent, state)
-    )
-    display_layout.addWidget(parent.gui_over_quick_chat_check)
     
     # Monitor selection row
     monitor_row = QHBoxLayout()

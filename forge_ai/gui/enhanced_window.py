@@ -1394,9 +1394,6 @@ class EnhancedMainWindow(QMainWindow):
         # Initialize display names
         self.user_display_name = self._gui_settings.get("user_display_name", "You")
         
-        # Initialize GUI-over-Quick-Chat setting (default: enabled)
-        self._gui_over_quick_chat = self._gui_settings.get("gui_over_quick_chat", True)
-        
         # Initialize shared chat sync (single engine for main + quick chat)
         # Reset any pre-existing instance created before QApplication
         from .chat_sync import ChatSync
@@ -1713,43 +1710,6 @@ class EnhancedMainWindow(QMainWindow):
                 print(f"Error closing avatar overlay: {e}")
         
         event.accept()
-    
-    def event(self, event):
-        """Handle window events for GUI-over-Quick-Chat behavior."""
-        from PyQt5.QtCore import QEvent
-        if event.type() == QEvent.WindowActivate:
-            self._on_window_activated()
-        return super().event(event)
-    
-    def _on_window_activated(self):
-        """Handle when main window gains focus - bring GUI above Quick Chat if enabled."""
-        # Check if GUI-over-Quick-Chat feature is enabled
-        if not getattr(self, '_gui_over_quick_chat', True):
-            return
-        
-        # Find the system tray's Quick Chat overlay
-        quick_chat = None
-        try:
-            from .chat_sync import ChatSync
-            quick_chat = ChatSync.instance()._quick_chat
-        except Exception:
-            pass
-        
-        if not quick_chat:
-            return
-        
-        # If Quick Chat is visible and always-on-top, temporarily disable its on-top
-        from PyQt5.QtCore import Qt
-        if quick_chat.isVisible():
-            current_flags = quick_chat.windowFlags()
-            if current_flags & Qt.WindowStaysOnTopHint:
-                # Temporarily disable always-on-top for Quick Chat
-                quick_chat.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
-                quick_chat.show()  # Required after changing flags
-                
-                # Re-enable after a short delay when user clicks Quick Chat
-                # The Quick Chat's focusInEvent will restore it
-                quick_chat._temp_on_top_disabled = True
     
     def keyPressEvent(self, event):
         """Handle key press events - Escape stops all generations."""

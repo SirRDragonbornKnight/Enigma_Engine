@@ -778,27 +778,6 @@ class QuickCommandOverlay(QWidget):
         if self.isVisible():
             self.show()
     
-    def event(self, evt):
-        """Handle window events for restoring always-on-top when focused."""
-        from PyQt5.QtCore import QEvent
-        if evt.type() == QEvent.WindowActivate:
-            self._on_window_activated()
-        return super().event(evt)
-    
-    def _on_window_activated(self):
-        """Handle when Quick Chat gains focus - restore always-on-top if temporarily disabled."""
-        # Check if always-on-top was temporarily disabled by main GUI focus
-        if getattr(self, '_temp_on_top_disabled', False):
-            self._temp_on_top_disabled = False
-            
-            # Check if user wants always-on-top
-            settings = self._load_mini_chat_settings()
-            if settings.get("mini_chat_always_on_top", True):
-                current_flags = self.windowFlags()
-                if not (current_flags & Qt.WindowStaysOnTopHint):
-                    self.setWindowFlags(current_flags | Qt.WindowStaysOnTopHint)
-                    self.show()  # Required after changing flags
-    
     def _update_responding_indicator(self):
         """Update status text only - no chat spam."""
         self._responding_dots = (self._responding_dots + 1) % 4
