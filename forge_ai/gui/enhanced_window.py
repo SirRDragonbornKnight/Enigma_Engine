@@ -2210,6 +2210,15 @@ class EnhancedMainWindow(QMainWindow):
         self.learn_action.triggered.connect(self._toggle_learning)
         self.learn_while_chatting = True
         
+        options_menu.addSeparator()
+        
+        # Companion Mode - AI watches screen and comments
+        self.companion_action = options_menu.addAction("Companion Mode (OFF)")
+        self.companion_action.setCheckable(True)
+        self.companion_action.setChecked(False)
+        self.companion_action.triggered.connect(self._toggle_companion_mode)
+        self._companion = None
+        
         # Add spacer to push Quick Chat button to the right
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -2733,6 +2742,69 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'brain') and self.brain:
             self.brain.auto_learn = checked
     
+    def _toggle_companion_mode(self, checked):
+        """Toggle Companion Mode - AI watches screen and comments."""
+        try:
+            from forge_ai.companion import get_companion
+            
+            if checked:
+                self._companion = get_companion()
+                
+                # Connect companion to chat
+                def send_companion_message(msg):
+                    """Send companion message to chat display."""
+                    if hasattr(self, 'chat_display'):
+                        # Format as AI message
+                        self.chat_display.append(
+                            f'<div style="margin: 8px 0; padding: 8px; background: #2d3748; border-radius: 8px;">'
+                            f'<b style="color: #81a1c1;">Forge (observing):</b> '
+                            f'<span style="color: #d8dee9;">{msg}</span></div>'
+                        )
+                        self.chat_display.verticalScrollBar().setValue(
+                            self.chat_display.verticalScrollBar().maximum()
+                        )
+                
+                self._companion.connect_chat(send_companion_message)
+                
+                # Connect to avatar if available
+                if hasattr(self, '_avatar_overlay') and self._avatar_overlay:
+                    def avatar_command(action, value):
+                        from forge_ai.tools.avatar_tools import _send_avatar_command
+                        _send_avatar_command(action, str(value) if value else "")
+                    self._companion.connect_avatar(avatar_command)
+                
+                # Connect to voice if auto-speak is on
+                if self.auto_speak:
+                    def speak_text(text):
+                        try:
+                            from forge_ai.voice import get_voice
+                            voice = get_voice()
+                            if voice:
+                                voice.speak(text)
+                        except Exception:
+                            pass
+                    self._companion.connect_voice(speak_text)
+                
+                self._companion.start()
+                self.companion_action.setText("Companion Mode (ON)")
+                
+                # Show status
+                if hasattr(self, 'chat_status'):
+                    self.chat_status.setText("Companion Mode Active")
+            else:
+                if self._companion:
+                    self._companion.stop()
+                    self._companion = None
+                self.companion_action.setText("Companion Mode (OFF)")
+                
+                if hasattr(self, 'chat_status'):
+                    self.chat_status.setText("Ready")
+                    
+        except Exception as e:
+            print(f"Error toggling companion mode: {e}")
+            self.companion_action.setChecked(False)
+            QMessageBox.warning(self, "Companion Mode", f"Could not start Companion Mode:\n{e}")
+
     def _set_zoom(self, value: int):
         """Set zoom to a specific value."""
         self._current_zoom = value
@@ -3799,6 +3871,10 @@ class EnhancedMainWindow(QMainWindow):
         text = self.chat_input.text().strip()
         if not text:
             return
+        
+        # Notify companion that user is chatting
+        if hasattr(self, '_companion') and self._companion and self._companion.is_running:
+            self._companion.notify_user_message(text)
         
         # Handle chat commands (e.g., /image, /video, /code, /audio, /help)
         if text.startswith('/'):
@@ -5291,69 +5367,17 @@ def run_app(minimize_to_tray: bool = True):
             
             _system_tray.show_gui_requested.connect(show_both)
             
-            # Override close event to show options dialog
+            # Override close event to hide to tray directly
             if minimize_to_tray:
                 original_close = window.closeEvent
                 
                 def close_to_tray(event):
                     if _system_tray and _system_tray.tray_icon.isVisible():
-                        # Process pending events first to ensure UI responsiveness
-                        QApplication.processEvents()
-                        
-                        # Show dialog asking what to do
-                        from PyQt5.QtWidgets import QMessageBox
-                        
-                        msg = QMessageBox(window)
-                        msg.setWindowTitle("Close Forge")
-                        msg.setText(f"""<b>Close {window.current_model_name or 'Forge'}?</b><br><br>
-What would you like to do?""")
-                        msg.setIcon(QMessageBox.Question)
-                        
-                        # Make dialog stay on top and be responsive
-                        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-                        
-                        # Custom buttons with clear wording
-                        quickchat_btn = msg.addButton("Open Quick Chat", QMessageBox.AcceptRole)
-                        close_btn = msg.addButton("Close", QMessageBox.AcceptRole)
-                        exit_btn = msg.addButton("Quit Forge", QMessageBox.DestructiveRole)
-                        kill_btn = msg.addButton("Force Quit All", QMessageBox.DestructiveRole)
-                        cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
-                        
-                        msg.setDefaultButton(quickchat_btn)
-                        
-                        # Process events to ensure dialog is responsive
-                        QApplication.processEvents()
-                        
-                        msg.exec_()
-                        
-                        clicked = msg.clickedButton()
-                        
-                        if clicked == quickchat_btn:
-                            # Open Quick Chat (Quick Command Overlay)
-                            event.ignore()
-                            window.hide()
-                            _system_tray.show_quick_command()
-                        elif clicked == close_btn:
-                            # Just close the main window to tray
-                            event.ignore()
-                            window.hide()
-                        elif clicked == exit_btn:
-                            # Exit completely
-                            event.accept()
-                            window._save_gui_settings()
-                            _system_tray.tray_icon.hide()
-                            QApplication.quit()
-                        elif clicked == kill_btn:
-                            # Kill all instances and exit
-                            from .system_tray import kill_other_forge_ai_instances
-                            kill_other_forge_ai_instances()
-                            event.accept()
-                            window._save_gui_settings()
-                            _system_tray.tray_icon.hide()
-                            QApplication.quit()
-                        else:
-                            # Cancel - do nothing
-                            event.ignore()
+                        # Hide to tray directly (no dialog)
+                        event.ignore()
+                        window.hide()
+                        # Show Quick Chat so user still has access
+                        _system_tray.show_quick_command()
                     else:
                         original_close(event)
                 

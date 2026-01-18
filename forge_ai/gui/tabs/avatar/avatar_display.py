@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QFileDialog, QComboBox, QCheckBox, QFrame, QSizePolicy,
     QApplication, QOpenGLWidget, QMessageBox, QGroupBox,
-    QSlider, QColorDialog, QGridLayout, QScrollArea
+    QSlider, QColorDialog, QGridLayout, QScrollArea, QTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent
@@ -89,6 +89,30 @@ ALL_AVATAR_EXTENSIONS = IMAGE_EXTENSIONS | MODEL_3D_EXTENSIONS
 AVATAR_CONFIG_DIR = Path(CONFIG["data_dir"]) / "avatar"
 AVATAR_MODELS_DIR = AVATAR_CONFIG_DIR / "models"
 AVATAR_IMAGES_DIR = AVATAR_CONFIG_DIR / "images"
+
+# Activity log file for AI avatar commands
+AVATAR_ACTIVITY_LOG = AVATAR_CONFIG_DIR / "activity_log.txt"
+
+
+def _log_avatar_activity(action: str, value: str = ""):
+    """Log an avatar command to the activity log file."""
+    from datetime import datetime
+    try:
+        AVATAR_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        log_line = f"[{timestamp}] {action}"
+        if value:
+            log_line += f": {value}"
+        log_line += "\n"
+        
+        # Append to log file (keep last 50 lines)
+        lines = []
+        if AVATAR_ACTIVITY_LOG.exists():
+            lines = AVATAR_ACTIVITY_LOG.read_text().splitlines()[-49:]
+        lines.append(log_line.strip())
+        AVATAR_ACTIVITY_LOG.write_text("\n".join(lines))
+    except Exception:
+        pass
 
 
 class OpenGL3DWidget(QOpenGLWidget):
@@ -1170,7 +1194,7 @@ class AvatarOverlayWindow(QWidget):
         
     def contextMenuEvent(self, a0):  # type: ignore
         """Right-click to show options menu."""
-        from PyQt5.QtWidgets import QMenu, QAction
+        from PyQt5.QtWidgets import QMenu
         
         menu = QMenu(self)
         menu.setStyleSheet("""
@@ -1190,78 +1214,81 @@ class AvatarOverlayWindow(QWidget):
             }
         """)
         
-        # Expression submenu
-        expr_menu = menu.addMenu("Expression")
-        expressions = ["idle", "happy", "sad", "thinking", "surprised", "excited", "angry", "love", "sleeping", "winking"]
-        for expr in expressions:
-            action = expr_menu.addAction(expr.title())
-            action.triggered.connect(lambda checked, e=expr: self._change_expression(e))
+        # Atlas-style gestures (Portal 2) - sends to AI
+        gestures_menu = menu.addMenu("Gestures")
+        gesture_actions = [
+            ("Wave", "wave"),
+            ("High Five", "highfive"),
+            ("Hug", "hug"),
+            ("Dance", "dance"),
+            ("Laugh", "laugh"),
+            ("Tease", "tease"),
+            ("Rock Paper Scissors", "rps"),
+        ]
+        for label, gesture in gesture_actions:
+            action = gestures_menu.addAction(label)
+            action.triggered.connect(lambda checked, g=gesture: self._request_gesture(g))
         
         menu.addSeparator()
         
-        # Size options
-        size_menu = menu.addMenu("Size")
-        for size in [150, 200, 300, 400, 500]:
-            action = size_menu.addAction(f"{size}px")
-            action.triggered.connect(lambda checked, s=size: self._set_size(s))
-        
-        menu.addSeparator()
-        
-        # Reset position
-        reset_pos = menu.addAction("Reset Position")
-        reset_pos.triggered.connect(lambda: self.move(100, 100))
-        
-        # Reset size
-        reset_size = menu.addAction("Reset Size")
-        reset_size.triggered.connect(lambda: self._set_size(300))
+        # Resize toggle
+        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', True) else "Enable Resize"
+        resize_action = menu.addAction(resize_text)
+        resize_action.triggered.connect(self._toggle_resize)
         
         menu.addSeparator()
         
         # Close
-        close_action = menu.addAction("Close Avatar")
+        close_action = menu.addAction("Hide Avatar")
         close_action.triggered.connect(self._close_avatar)
         
         menu.exec_(a0.globalPos())
-        
-    def _change_expression(self, expression: str):
-        """Change avatar expression."""
+    
+    def _request_gesture(self, gesture: str):
+        """Request a gesture from the AI - AI decides how to react."""
+        # Send gesture request to AI via conversation system
         try:
-            svg_data = generate_sprite(
-                expression,
-                "#6366f1",  # Default colors
-                "#8b5cf6",
-                "#10b981"
-            )
-            # Convert SVG to pixmap
-            if HAS_SVG and QSvgRenderer is not None:
-                renderer = QSvgRenderer(QByteArray(svg_data.encode('utf-8')))
-                pixmap = QPixmap(280, 280)
-                pixmap.fill(QColor(0, 0, 0, 0))
-                painter = QPainter(pixmap)
-                renderer.render(painter)
-                painter.end()
-                self.set_avatar(pixmap)
-            else:
-                print("SVG support not available")
-        except Exception as e:
-            print(f"Error changing expression: {e}")
+            from ....memory import ConversationManager
+            conv = ConversationManager()
+            # Add as a system message so AI knows user requested this
+            conv.add_message("system", f"[User requested gesture: {gesture}]")
+        except Exception:
+            pass
+    
+    def _toggle_resize(self):
+        """Toggle resize mode."""
+        self._resize_enabled = not getattr(self, '_resize_enabled', True)
+    
+    def wheelEvent(self, a0):  # type: ignore
+        """Scroll to resize (if enabled)."""
+        if not getattr(self, '_resize_enabled', True):
+            a0.ignore()
+            return
             
-    def _set_size(self, size: int):
-        """Set avatar size."""
-        self._size = size
+        delta = a0.angleDelta().y()
+        if delta > 0:
+            self._size = min(500, self._size + 20)
+        else:
+            self._size = max(100, self._size - 20)
+        
         self.setFixedSize(self._size, self._size)
         self._update_scaled_pixmap()
-        
+        a0.accept()
+    
     def _close_avatar(self):
         """Close the avatar."""
         self.hide()
         self.closed.emit()
-        
+    
     def mouseDoubleClickEvent(self, a0):  # type: ignore
-        """Double-click to reset size."""
-        self._size = 300
-        self.setFixedSize(self._size, self._size)
-        self._update_scaled_pixmap()
+        """Double-click to reset position to center of screen."""
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geo = screen.availableGeometry()
+            self.move(
+                screen_geo.center().x() - self._size // 2,
+                screen_geo.center().y() - self._size // 2
+            )
 
 
 class Avatar3DOverlayWindow(QWidget):
@@ -1586,102 +1613,74 @@ class Avatar3DOverlayWindow(QWidget):
             }
         """)
         
-        # Idle animation toggle
-        idle_text = "⏸ Pause Animation" if self._idle_animation_enabled else "▶ Resume Animation"
-        idle_action = menu.addAction(idle_text)
-        idle_action.triggered.connect(lambda: self.set_idle_animation(not self._idle_animation_enabled))
-        
-        # Animation speed submenu
-        anim_menu = menu.addMenu("Animation Speed")
-        for name, speed in [("Slow", 0.02), ("Normal", 0.05), ("Fast", 0.1), ("Energetic", 0.15)]:
-            action = anim_menu.addAction(name)
-            action.triggered.connect(lambda checked, s=speed: self._set_animation_speed(s))
-        
-        menu.addSeparator()
-        
-        # Wireframe toggle
-        wireframe_action = menu.addAction("Toggle Wireframe")
-        wireframe_action.triggered.connect(lambda: self._toggle_wireframe())
-        
-        # Mask toggle
-        mask_text = "Square Mode" if self._use_circular_mask else "Circular Mode"
-        mask_action = menu.addAction(mask_text)
-        mask_action.triggered.connect(lambda: self._toggle_mask())
+        # Atlas-style gestures (Portal 2) - sends to AI
+        gestures_menu = menu.addMenu("Gestures")
+        gesture_actions = [
+            ("Wave", "wave"),
+            ("High Five", "highfive"),
+            ("Hug", "hug"),
+            ("Dance", "dance"),
+            ("Laugh", "laugh"),
+            ("Tease", "tease"),
+            ("Rock Paper Scissors", "rps"),
+        ]
+        for label, gesture in gesture_actions:
+            action = gestures_menu.addAction(label)
+            action.triggered.connect(lambda checked, g=gesture: self._request_gesture(g))
         
         menu.addSeparator()
         
-        # Orientation presets
-        orient_menu = menu.addMenu("View Angle")
-        orient_front = orient_menu.addAction("Front")
-        orient_front.triggered.connect(lambda: self._set_view_angle(0, 0))
-        orient_back = orient_menu.addAction("Back")
-        orient_back.triggered.connect(lambda: self._set_view_angle(0, 180))
-        orient_left = orient_menu.addAction("Left")
-        orient_left.triggered.connect(lambda: self._set_view_angle(0, -90))
-        orient_right = orient_menu.addAction("Right")
-        orient_right.triggered.connect(lambda: self._set_view_angle(0, 90))
-        orient_menu.addSeparator()
-        orient_3q = orient_menu.addAction("3/4 View")
-        orient_3q.triggered.connect(lambda: self._set_view_angle(15, 35))
-        
-        # Size options
-        size_menu = menu.addMenu("Size")
-        for size in [150, 200, 250, 300, 400]:
-            action = size_menu.addAction(f"{size}px")
-            action.triggered.connect(lambda checked, s=size: self._set_size(s))
+        # Resize toggle
+        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', True) else "Enable Resize"
+        resize_action = menu.addAction(resize_text)
+        resize_action.triggered.connect(self._toggle_resize)
         
         menu.addSeparator()
         
-        # Model info
-        if self._model_info.get('vertices', 0) > 0:
-            info_action = menu.addAction(f"ℹ Model: {self._model_info['vertices']} vertices")
-            info_action.setEnabled(False)  # Just for display
-        
-        menu.addSeparator()
-        
+        # Hide avatar
         close_action = menu.addAction("Hide Avatar")
         close_action.triggered.connect(self._close)
         
         menu.exec_(event.globalPos())
     
-    def _set_animation_speed(self, speed: float):
-        """Set the idle animation speed."""
-        self._idle_speed = speed
+    def _request_gesture(self, gesture: str):
+        """Request a gesture from the AI - AI decides how to react."""
+        # Send gesture request to AI via conversation system
+        try:
+            from ....memory import ConversationManager
+            conv = ConversationManager()
+            # Add as a system message so AI knows user requested this
+            conv.add_message("system", f"[User requested gesture: {gesture}]")
+        except Exception:
+            pass
+    
+    def _toggle_resize(self):
+        """Toggle resize mode."""
+        self._resize_enabled = not getattr(self, '_resize_enabled', True)
+    
+    def wheelEvent(self, event):
+        """Scroll to resize overlay (if enabled)."""
+        if not getattr(self, '_resize_enabled', True):
+            event.ignore()
+            return
+            
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self._size = min(500, self._size + 25)
+        else:
+            self._size = max(100, self._size - 25)
         
-        menu.exec_(event.globalPos())
-    
-    def _toggle_wireframe(self):
-        if self._gl_widget:
-            self._gl_widget.wireframe_mode = not self._gl_widget.wireframe_mode
-            self._gl_widget.update()
-    
-    def _toggle_mask(self):
-        self._use_circular_mask = not self._use_circular_mask
-        if self._use_circular_mask:
-            self._apply_circular_mask()
-        elif self._gl_widget:
-            self._gl_widget.clearMask()
-    
-    def _set_view_angle(self, rotation_x: float, rotation_y: float):
-        """Set the model view angle and update base for animation."""
-        if self._gl_widget:
-            self._gl_widget.rotation_x = rotation_x
-            self._gl_widget.rotation_y = rotation_y
-            # Update base rotation so animation sways around new angle
-            self._base_rotation_y = rotation_y
-            self._gl_widget.update()
-    
-    def _set_size(self, size: int):
-        self._size = size
         self.setFixedSize(self._size, self._size)
         self._gl_container.setFixedSize(self._size, self._size)
         if self._gl_widget:
             self._gl_widget.setFixedSize(self._size, self._size)
             self._apply_circular_mask()
+        event.accept()
     
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
         import json
+        from datetime import datetime
         
         command_path = Path(__file__).parent.parent.parent.parent.parent / "data" / "avatar" / "ai_command.json"
         if not command_path.exists():
@@ -1698,6 +1697,9 @@ class Avatar3DOverlayWindow(QWidget):
             self._last_command_time = timestamp
             action = cmd.get("action", "").lower()
             value = cmd.get("value", "")
+            
+            # Log the command to shared activity log
+            _log_avatar_activity(action, value)
             
             if action == "show":
                 self.show()
@@ -2109,8 +2111,8 @@ def create_avatar_subtab(parent):
     
     btn_refresh = QPushButton("🔄 Refresh")
     btn_refresh.setMinimumWidth(80)
-    btn_refresh.setToolTip("Refresh avatar list")
-    btn_refresh.clicked.connect(lambda: _refresh_list(parent))
+    btn_refresh.setToolTip("Refresh selected avatar and list")
+    btn_refresh.clicked.connect(lambda: _refresh_avatar(parent))
     select_row.addWidget(btn_refresh)
     left_panel.addLayout(select_row)
     
@@ -2314,10 +2316,37 @@ def create_avatar_subtab(parent):
     reset_group.setLayout(reset_layout)
     right_panel.addWidget(reset_group)
     
+    # AI Activity Log - shows what the AI is doing with the avatar
+    activity_group = QGroupBox("AI Activity")
+    activity_layout = QVBoxLayout()
+    
+    parent.avatar_activity_log = QTextEdit()
+    parent.avatar_activity_log.setReadOnly(True)
+    parent.avatar_activity_log.setMaximumHeight(100)
+    parent.avatar_activity_log.setStyleSheet("""
+        QTextEdit {
+            background: #1e1e2e;
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #a6e3a1;
+        }
+    """)
+    parent.avatar_activity_log.setPlaceholderText("AI avatar commands will appear here...")
+    activity_layout.addWidget(parent.avatar_activity_log)
+    
+    clear_log_btn = QPushButton("Clear Log")
+    clear_log_btn.clicked.connect(lambda: parent.avatar_activity_log.clear())
+    activity_layout.addWidget(clear_log_btn)
+    
+    activity_group.setLayout(activity_layout)
+    right_panel.addWidget(activity_group)
+    
     right_panel.addStretch()
     
     # Info
-    info = QLabel("Desktop avatar: Drag to move • Scroll to resize • Right-click to hide • Double-click to reset size")
+    info = QLabel("Desktop avatar: Drag window to move • Right-click for gestures • Double-click to center")
     info.setStyleSheet("color: #6c7086; font-size: 10px;")
     info.setWordWrap(True)
     right_panel.addWidget(info)
@@ -2372,6 +2401,12 @@ def create_avatar_subtab(parent):
     parent._ai_customize_watcher.timeout.connect(lambda: _poll_ai_customizations(parent))
     parent._ai_customize_watcher.start(1000)  # Check every 1 second
     parent._last_ai_customize_time = 0.0
+    
+    # Set up AI activity log polling
+    parent._activity_log_watcher = QTimer()
+    parent._activity_log_watcher.timeout.connect(lambda: _update_activity_log(parent))
+    parent._activity_log_watcher.start(500)  # Check every 0.5 seconds
+    parent._last_activity_log_content = ""
     
     # Show default sprite on initialization (unless auto-loading)
     if not getattr(parent, '_avatar_auto_loaded', False):
@@ -2541,6 +2576,28 @@ def _check_for_new_files(parent):
             parent.avatar_status.setStyleSheet("color: #a6e3a1;")
     except Exception:
         pass  # Silently ignore errors in background check
+
+
+def _update_activity_log(parent):
+    """Update the activity log display with any new AI commands."""
+    try:
+        if not hasattr(parent, 'avatar_activity_log'):
+            return
+        
+        if not AVATAR_ACTIVITY_LOG.exists():
+            return
+        
+        content = AVATAR_ACTIVITY_LOG.read_text()
+        
+        # Only update if content changed
+        if content != parent._last_activity_log_content:
+            parent._last_activity_log_content = content
+            parent.avatar_activity_log.setPlainText(content)
+            # Scroll to bottom
+            scrollbar = parent.avatar_activity_log.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+    except Exception:
+        pass
 
 
 def _poll_ai_customizations(parent):
@@ -3007,7 +3064,7 @@ def _toggle_overlay(parent):
                 parent._overlay_3d.show()
                 parent._overlay_3d.raise_()
                 parent.show_overlay_btn.setText("⏹ Stop")
-                parent.avatar_status.setText("3D avatar on desktop! Drag to move, right-click for menu.")
+                parent.avatar_status.setText("3D avatar on desktop! Drag window to move, right-click for gestures.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
                 parent.show_overlay_btn.setChecked(False)
@@ -3031,7 +3088,7 @@ def _toggle_overlay(parent):
                 parent._overlay.show()
                 parent._overlay.raise_()
                 parent.show_overlay_btn.setText("⏹ Stop")
-                parent.avatar_status.setText("Avatar on desktop! Drag to move, scroll to resize, right-click for menu.")
+                parent.avatar_status.setText("Avatar on desktop! Drag window to move, right-click for gestures.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
                 parent.show_overlay_btn.setChecked(False)
@@ -3349,6 +3406,33 @@ def _reset_all_avatar(parent):
     parent.current_expression = "neutral"
     
     parent.avatar_status.setText("All avatar settings reset to defaults")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+def _refresh_avatar(parent):
+    """Refresh the selected avatar (reload from file) and update the list."""
+    # Remember current selection
+    current_data = parent.avatar_combo.currentData()
+    current_index = parent.avatar_combo.currentIndex()
+    
+    # Refresh the list
+    _refresh_list(parent)
+    
+    # Restore selection if it still exists
+    if current_data:
+        file_type, path_str = current_data
+        for i in range(parent.avatar_combo.count()):
+            data = parent.avatar_combo.itemData(i)
+            if data and data[1] == path_str:
+                parent.avatar_combo.setCurrentIndex(i)
+                # Trigger reload of the avatar
+                _on_avatar_selected(parent)
+                parent.avatar_status.setText(f"Refreshed: {Path(path_str).name}")
+                parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                return
+    
+    # If no selection or selection not found, just show list refreshed
+    parent.avatar_status.setText("Avatar list refreshed")
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
 
 

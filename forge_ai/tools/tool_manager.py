@@ -144,6 +144,18 @@ TOOL_CATEGORIES = {
         "browser_media_stop", "browser_media_volume", "browser_media_info",
         "browser_tab_list", "browser_focus",
     ],
+    
+    # Avatar control tools - AI controls the desktop avatar
+    "avatar": [
+        "control_avatar", "customize_avatar", "avatar_gesture", "avatar_emotion",
+    ],
+    
+    # Self-modification tools - AI customizes itself
+    "self": [
+        "set_personality", "set_avatar_preference", "set_voice_preference",
+        "set_companion_behavior", "set_preference", "get_self_config",
+        "remember_fact", "recall_facts",
+    ],
 }
 
 # Tool dependencies (Python packages required)
@@ -212,7 +224,7 @@ PRESETS = {
     },
     "standard": {
         "description": "Standard tools for desktop use",
-        "categories": ["core", "assistant", "knowledge", "productivity"],
+        "categories": ["core", "assistant", "knowledge", "productivity", "avatar", "self"],
         "extra_tools": [],
     },
     "full": {
@@ -243,7 +255,7 @@ PRESETS = {
     },
     "assistant": {
         "description": "Personal assistant mode",
-        "categories": ["core", "assistant", "knowledge", "communication"],
+        "categories": ["core", "assistant", "knowledge", "communication", "avatar"],
         "extra_tools": ["schedule_task", "set_reminder"],
     },
     "gaming": {

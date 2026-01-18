@@ -499,10 +499,10 @@ class QuickCommandOverlay(QWidget):
         new_chat_btn.clicked.connect(self._new_chat)
         header_layout.addWidget(new_chat_btn)
         
-        # Close button - hides to tray (like main GUI)
+        # Close button - shows close dialog
         self.close_btn = QPushButton("X")
         self.close_btn.setFixedSize(24, 24)
-        self.close_btn.setToolTip("Hide to tray (right-click for more options)")
+        self.close_btn.setToolTip("Close Forge")
         self.close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -518,9 +518,7 @@ class QuickCommandOverlay(QWidget):
                 color: white;
             }
         """)
-        self.close_btn.clicked.connect(self._close_overlay)  # Direct close like main GUI
-        self.close_btn.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.close_btn.customContextMenuRequested.connect(self._show_close_menu)
+        self.close_btn.clicked.connect(self._show_close_dialog)  # X button shows dialog
         header_layout.addWidget(self.close_btn)
         
         frame_layout.addWidget(self._header_widget)
@@ -802,54 +800,39 @@ class QuickCommandOverlay(QWidget):
         html = re.sub(r'<div id="thinking"[^>]*>.*?</div>', '', html, flags=re.IGNORECASE | re.DOTALL)
         self.response_area.setHtml(html)
     
-    def _show_close_menu(self, pos=None):
-        """Show menu with close options (right-click context menu)."""
-        from PyQt5.QtWidgets import QMenu
-        
-        menu = QMenu(self)
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2a2a2a;
-                border: 1px solid #444;
-                border-radius: 4px;
-                padding: 4px;
-            }
-            QMenu::item {
-                color: #ccc;
-                padding: 6px 20px;
-                border-radius: 2px;
-            }
-            QMenu::item:selected {
-                background-color: #3498db;
-                color: white;
-            }
-        """)
-        
-        # Open GUI option
-        gui_action = menu.addAction("Open Full GUI")
-        gui_action.triggered.connect(self._open_gui)
-        
-        # Hide to tray option
-        hide_action = menu.addAction("Hide to Tray")
-        hide_action.triggered.connect(self._close_overlay)
-        
-        menu.addSeparator()
-        
-        # Quit option
-        quit_action = menu.addAction("Quit Forge")
-        quit_action.triggered.connect(self._quit_app)
-        
-        # Show menu at cursor position or button position
-        if pos:
-            menu.exec_(self.close_btn.mapToGlobal(pos))
-        else:
-            menu.exec_(self.close_btn.mapToGlobal(self.close_btn.rect().bottomLeft()))
-    
     def _quit_app(self):
         """Quit the entire application."""
         from PyQt5.QtWidgets import QApplication
         self.hide()
         QApplication.quit()
+    
+    def _show_close_dialog(self):
+        """Show dialog with close options."""
+        from PyQt5.QtWidgets import QMessageBox, QApplication
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Close Forge")
+        msg.setText("What would you like to do?")
+        msg.setIcon(QMessageBox.Question)
+        
+        # Custom buttons
+        hide_btn = msg.addButton("Hide to Tray", QMessageBox.AcceptRole)
+        gui_btn = msg.addButton("Open Full GUI", QMessageBox.AcceptRole)
+        quit_btn = msg.addButton("Quit Forge", QMessageBox.DestructiveRole)
+        cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
+        
+        msg.setDefaultButton(hide_btn)
+        msg.exec_()
+        
+        clicked = msg.clickedButton()
+        
+        if clicked == hide_btn:
+            self._close_overlay()
+        elif clicked == gui_btn:
+            self._open_gui()
+        elif clicked == quit_btn:
+            self._quit_app()
+        # Cancel does nothing
     
     def _open_gui(self):
         """Open the full GUI (keeps Quick Chat open)."""
@@ -1109,10 +1092,10 @@ class QuickCommandOverlay(QWidget):
             super().keyPressEvent(event)
     
     def closeEvent(self, event):
-        """Handle window close (Alt+F4)."""
-        # Alt+F4 will trigger this - exit the entire app
-        from PyQt5.QtWidgets import QApplication
-        QApplication.quit()
+        """Handle window close (Alt+F4) - hide to tray instead of quitting."""
+        # Alt+F4 hides to tray, use X button or menu to quit
+        self._close_overlay()
+        event.ignore()  # Don't actually close the window
     
     # === Header drag handlers ===
     def _header_mouse_press(self, event):

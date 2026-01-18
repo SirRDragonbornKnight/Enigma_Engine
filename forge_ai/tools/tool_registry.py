@@ -112,6 +112,14 @@ class ToolRegistry:
                                     BrowserTabListTool, BrowserFocusTool)
         from .data_tools import (CSVAnalyzeTool, CSVQueryTool, PlotChartTool, JSONQueryTool,
                                  SQLQueryTool, SQLExecuteTool, DataConvertTool)
+        # Avatar tools - AI can control and customize the desktop avatar
+        from .avatar_tools import (AvatarControlTool, AvatarCustomizeTool, 
+                                   AvatarGestureTool, AvatarEmotionTool)
+        # Self-modification tools - AI can customize itself
+        from .self_tools import (SetPersonalityTool, SetAvatarPreferenceTool,
+                                 SetVoicePreferenceTool, SetCompanionBehaviorTool,
+                                 SetPreferenceTool, GetSelfConfigTool,
+                                 RememberFactTool, RecallFactsTool)
         # Gaming tools removed - AI can roleplay, tell stories, and play games natively
         # Keep only DnD dice roller since it needs true randomness
         from .gaming_tools import DnDRollTool
@@ -218,6 +226,20 @@ class ToolRegistry:
             BrowserMediaInfoTool(),
             BrowserTabListTool(),
             BrowserFocusTool(),
+            # Avatar Control - AI controls the desktop avatar
+            AvatarControlTool(),
+            AvatarCustomizeTool(),
+            AvatarGestureTool(),
+            AvatarEmotionTool(),
+            # Self-Modification - AI customizes itself
+            SetPersonalityTool(),
+            SetAvatarPreferenceTool(),
+            SetVoicePreferenceTool(),
+            SetCompanionBehaviorTool(),
+            SetPreferenceTool(),
+            GetSelfConfigTool(),
+            RememberFactTool(),
+            RecallFactsTool(),
         ]
         
         for tool in builtin:
