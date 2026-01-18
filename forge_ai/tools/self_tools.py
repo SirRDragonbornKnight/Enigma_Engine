@@ -376,3 +376,259 @@ class RecallFactsTool(Tool):
             return {"success": True, "facts": memories[category]}
         else:
             return {"success": True, "facts": [], "message": f"No facts in category: {category}"}
+
+
+class GenerateAvatarTool(Tool):
+    """
+    AI can generate a new 3D avatar for itself using the 3D generation system.
+    """
+    
+    name = "generate_avatar"
+    description = "Generate a new 3D avatar model for myself using text description"
+    parameters = {
+        "description": "Description of the avatar to generate (e.g., 'friendly robot with glowing eyes')",
+        "style": "Style: realistic, cartoon, robot, creature, abstract (default: robot)",
+    }
+    
+    AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar" / "generated"
+    
+    def execute(self, description: str, style: str = "robot", **kwargs) -> Dict[str, Any]:
+        self.AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Enhance prompt based on style
+        style_prefixes = {
+            "realistic": "highly detailed realistic 3D model of",
+            "cartoon": "stylized cartoon 3D character of",
+            "robot": "sleek robotic 3D avatar, mechanical, sci-fi,",
+            "creature": "fantasy creature 3D model of",
+            "abstract": "abstract geometric 3D representation of",
+        }
+        full_prompt = f"{style_prefixes.get(style, style_prefixes['robot'])} {description}"
+        
+        # Try to use the 3D generation system
+        try:
+            from ..gui.tabs.threed_tab import Local3DGen, Cloud3DGen, OUTPUT_DIR
+            import time
+            
+            # Try local first
+            gen = Local3DGen()
+            if gen.load():
+                result = gen.generate(full_prompt)
+                gen.unload()
+            else:
+                # Try cloud
+                gen = Cloud3DGen()
+                if gen.load():
+                    result = gen.generate(full_prompt)
+                    gen.unload()
+                else:
+                    return {"success": False, "error": "No 3D generation available. Install shap-e or set REPLICATE_API_TOKEN"}
+            
+            if result.get("success"):
+                # Copy to avatar directory
+                import shutil
+                src = Path(result["path"])
+                timestamp = int(time.time())
+                dest = self.AVATAR_DIR / f"avatar_{style}_{timestamp}{src.suffix}"
+                shutil.copy(src, dest)
+                
+                # Update config to use new avatar
+                config = _load_self_config()
+                if "avatar" not in config:
+                    config["avatar"] = {}
+                config["avatar"]["current_3d_avatar"] = str(dest)
+                config["avatar"]["avatar_prompt"] = description
+                config["avatar"]["avatar_style"] = style
+                _save_self_config(config)
+                
+                return {
+                    "success": True,
+                    "path": str(dest),
+                    "prompt": full_prompt,
+                    "style": style,
+                    "message": f"Generated new avatar! Use 'open_avatar_in_blender' to edit it."
+                }
+            else:
+                return result
+                
+        except Exception as e:
+            return {"success": False, "error": f"3D generation failed: {str(e)}"}
+
+
+class OpenAvatarInBlenderTool(Tool):
+    """
+    Open the current 3D avatar (or any 3D file) in Blender for editing.
+    """
+    
+    name = "open_avatar_in_blender"
+    description = "Open my current 3D avatar or a specific 3D file in Blender for editing"
+    parameters = {
+        "file_path": "Optional: specific 3D file to open. If not provided, opens current avatar.",
+    }
+    
+    def execute(self, file_path: str = "", **kwargs) -> Dict[str, Any]:
+        import subprocess
+        import shutil
+        
+        # Find Blender
+        blender_paths = [
+            "blender",  # If in PATH
+            r"C:\Program Files\Blender Foundation\Blender 4.0\blender.exe",
+            r"C:\Program Files\Blender Foundation\Blender 3.6\blender.exe",
+            r"C:\Program Files\Blender Foundation\Blender 3.5\blender.exe",
+            r"C:\Program Files\Blender Foundation\Blender\blender.exe",
+            "/Applications/Blender.app/Contents/MacOS/Blender",
+            "/usr/bin/blender",
+        ]
+        
+        blender_exe = None
+        for path in blender_paths:
+            if path == "blender" and shutil.which("blender"):
+                blender_exe = "blender"
+                break
+            elif Path(path).exists():
+                blender_exe = path
+                break
+        
+        if not blender_exe:
+            return {"success": False, "error": "Blender not found. Install Blender or add it to PATH."}
+        
+        # Get file to open
+        if not file_path:
+            config = _load_self_config()
+            file_path = config.get("avatar", {}).get("current_3d_avatar", "")
+            
+        if not file_path:
+            return {"success": False, "error": "No avatar file specified and no current 3D avatar set. Generate one first!"}
+        
+        if not Path(file_path).exists():
+            return {"success": False, "error": f"File not found: {file_path}"}
+        
+        # Open in Blender
+        try:
+            # Use Blender's Python import for the specific file type
+            ext = Path(file_path).suffix.lower()
+            
+            if ext in [".obj", ".fbx", ".gltf", ".glb", ".ply", ".stl"]:
+                # Create a Python script for Blender to import the file
+                import_script = f'''
+import bpy
+bpy.ops.wm.read_homefile(use_empty=True)
+'''
+                if ext == ".obj":
+                    import_script += f'bpy.ops.wm.obj_import(filepath=r"{file_path}")\n'
+                elif ext == ".fbx":
+                    import_script += f'bpy.ops.import_scene.fbx(filepath=r"{file_path}")\n'
+                elif ext in [".gltf", ".glb"]:
+                    import_script += f'bpy.ops.import_scene.gltf(filepath=r"{file_path}")\n'
+                elif ext == ".ply":
+                    import_script += f'bpy.ops.wm.ply_import(filepath=r"{file_path}")\n'
+                elif ext == ".stl":
+                    import_script += f'bpy.ops.wm.stl_import(filepath=r"{file_path}")\n'
+                
+                # Zoom to fit
+                import_script += '''
+for area in bpy.context.screen.areas:
+    if area.type == 'VIEW_3D':
+        for region in area.regions:
+            if region.type == 'WINDOW':
+                override = {'area': area, 'region': region}
+                bpy.ops.view3d.view_all(override)
+                break
+'''
+                
+                subprocess.Popen([blender_exe, "--python-expr", import_script])
+            else:
+                # Just open Blender with the file
+                subprocess.Popen([blender_exe, file_path])
+            
+            return {
+                "success": True,
+                "opened": file_path,
+                "blender": blender_exe,
+                "message": "Opened in Blender! Edit and save as .glb to use as avatar."
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to open Blender: {str(e)}"}
+
+
+class ListAvatarsTool(Tool):
+    """
+    List available avatars (both 2D and 3D).
+    """
+    
+    name = "list_avatars"
+    description = "List all available avatars I can use"
+    parameters = {}
+    
+    AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar"
+    
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        avatars = {"2d": [], "3d": [], "generated": []}
+        
+        # Check main avatar directory
+        if self.AVATAR_DIR.exists():
+            for f in self.AVATAR_DIR.iterdir():
+                if f.is_file():
+                    if f.suffix.lower() in [".png", ".jpg", ".jpeg", ".gif", ".svg"]:
+                        avatars["2d"].append(str(f))
+                    elif f.suffix.lower() in [".obj", ".fbx", ".gltf", ".glb", ".ply"]:
+                        avatars["3d"].append(str(f))
+        
+        # Check generated directory
+        generated_dir = self.AVATAR_DIR / "generated"
+        if generated_dir.exists():
+            for f in generated_dir.iterdir():
+                if f.is_file():
+                    avatars["generated"].append(str(f))
+        
+        # Get current avatar
+        config = _load_self_config()
+        current = config.get("avatar", {}).get("current_3d_avatar", "")
+        
+        return {
+            "success": True,
+            "avatars": avatars,
+            "current_3d_avatar": current,
+            "total": len(avatars["2d"]) + len(avatars["3d"]) + len(avatars["generated"])
+        }
+
+
+class SetAvatarTool(Tool):
+    """
+    Set which avatar to use.
+    """
+    
+    name = "set_avatar"
+    description = "Set which avatar file to use as my appearance"
+    parameters = {
+        "file_path": "Path to the avatar file to use",
+    }
+    
+    def execute(self, file_path: str, **kwargs) -> Dict[str, Any]:
+        if not Path(file_path).exists():
+            return {"success": False, "error": f"Avatar file not found: {file_path}"}
+        
+        config = _load_self_config()
+        if "avatar" not in config:
+            config["avatar"] = {}
+        
+        ext = Path(file_path).suffix.lower()
+        if ext in [".obj", ".fbx", ".gltf", ".glb", ".ply"]:
+            config["avatar"]["current_3d_avatar"] = str(file_path)
+        else:
+            config["avatar"]["current_2d_avatar"] = str(file_path)
+        
+        _save_self_config(config)
+        
+        # Signal avatar system to reload
+        from .avatar_tools import _send_avatar_command
+        _send_avatar_command("load_avatar", str(file_path))
+        
+        return {
+            "success": True,
+            "avatar_set": str(file_path),
+            "type": "3d" if ext in [".obj", ".fbx", ".gltf", ".glb", ".ply"] else "2d"
+        }
+

@@ -119,7 +119,9 @@ class ToolRegistry:
         from .self_tools import (SetPersonalityTool, SetAvatarPreferenceTool,
                                  SetVoicePreferenceTool, SetCompanionBehaviorTool,
                                  SetPreferenceTool, GetSelfConfigTool,
-                                 RememberFactTool, RecallFactsTool)
+                                 RememberFactTool, RecallFactsTool,
+                                 GenerateAvatarTool, OpenAvatarInBlenderTool,
+                                 ListAvatarsTool, SetAvatarTool)
         # Gaming tools removed - AI can roleplay, tell stories, and play games natively
         # Keep only DnD dice roller since it needs true randomness
         from .gaming_tools import DnDRollTool
@@ -240,6 +242,11 @@ class ToolRegistry:
             GetSelfConfigTool(),
             RememberFactTool(),
             RecallFactsTool(),
+            # Avatar Generation - AI can generate and manage 3D avatars
+            GenerateAvatarTool(),
+            OpenAvatarInBlenderTool(),
+            ListAvatarsTool(),
+            SetAvatarTool(),
         ]
         
         for tool in builtin:
