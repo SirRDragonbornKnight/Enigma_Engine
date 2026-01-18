@@ -576,7 +576,12 @@ class HuggingFaceModel:
             messages.append({"role": "system", "content": system_prompt})
         elif "instruct" in self.model_id.lower() or "chat" in self.model_id.lower():
             # Default system prompt for instruct/chat models (only if none provided)
-            messages.append({"role": "system", "content": "You are a helpful AI assistant. Respond directly and concisely."})
+            # Be explicit about conversational behavior to avoid code generation
+            messages.append({"role": "system", "content": 
+                "You are a friendly, helpful AI assistant. Have a natural conversation with the user. "
+                "Respond in plain English sentences. Do not write code unless specifically asked. "
+                "Keep responses concise and conversational."
+            })
         
         if history:
             messages.extend(history)

@@ -9,5 +9,6 @@
   "last_tab": 0,
   "always_on_top": false,
   "monitor_index": 0,
-  "user_display_name": "User"
+  "user_display_name": "User",
+  "mini_chat_always_on_top": true
 }

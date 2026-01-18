@@ -164,7 +164,8 @@ class ModelRegistry:
         size: str = "tiny",
         vocab_size: int = 32000,
         description: str = "",
-        custom_config: Optional[Dict] = None
+        custom_config: Optional[Dict] = None,
+        base_model: Optional[str] = None
     ) -> Forge:
         """
         Create a new named model.
@@ -175,10 +176,13 @@ class ModelRegistry:
             vocab_size: Vocabulary size for tokenizer
             description: Optional description of this model's purpose
             custom_config: Override preset with custom dim/depth/heads
+            base_model: Optional name of existing model to use as base (transfer learning)
 
         Returns:
             Initialized (untrained) model
         """
+        import shutil
+        
         # Validate name
         name = name.lower().strip().replace(" ", "_")
         if name in self.registry["models"]:
@@ -310,6 +314,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 "training": str(training_data_file),
                 "instructions": str(instructions_file),
             },
+            "base_model": base_model,  # Track lineage
         }
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
@@ -322,13 +327,54 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             "created": metadata["created"],
             "has_weights": False,
             "data_dir": str(model_dir / "data"),
+            "base_model": base_model,
         }
+        
+        # If base model specified, copy its weights
+        if base_model:
+            base_info = self.registry["models"].get(base_model)
+            if base_info and base_info.get("has_weights"):
+                base_dir = Path(base_info["path"])
+                base_checkpoints = base_dir / "checkpoints"
+                
+                # Find the latest checkpoint from base
+                if base_checkpoints.exists():
+                    checkpoint_files = list(base_checkpoints.glob("*.pt"))
+                    if checkpoint_files:
+                        # Copy the latest checkpoint
+                        latest = max(checkpoint_files, key=lambda p: p.stat().st_mtime)
+                        dest_checkpoint = model_dir / "checkpoints" / "base_weights.pt"
+                        shutil.copy2(latest, dest_checkpoint)
+                        
+                        # Mark as having weights
+                        self.registry["models"][name]["has_weights"] = True
+                        
+                        print(f"[SYSTEM] [OK] Copied weights from base model '{base_model}'")
+                        print(f"[SYSTEM]   Base checkpoint: {latest.name}")
+                        
+                        # Also copy training data if exists
+                        base_training = base_dir / "data" / "training.txt"
+                        if base_training.exists():
+                            # Append base training data to new model's training file
+                            base_content = base_training.read_text()
+                            current_content = training_data_file.read_text()
+                            training_data_file.write_text(
+                                current_content + 
+                                f"\n\n# === Inherited from base model: {base_model} ===\n\n" +
+                                base_content
+                            )
+                            print(f"[SYSTEM]   Inherited training data from base model")
+            else:
+                print(f"[SYSTEM] [!] Base model '{base_model}' has no trained weights - starting fresh")
+        
         self._save_registry()
 
         print(f"[SYSTEM] [OK] Created model '{name}' ({size})")
         print(f"[SYSTEM]   Parameters: {metadata['estimated_parameters']:,}")
         print(f"[SYSTEM]   Location: {model_dir}")
         print(f"[SYSTEM]   Training data: {training_data_file}")
+        if base_model:
+            print(f"[SYSTEM]   Base model: {base_model}")
 
         # Return None instead of instantiating model - saves memory
         # Model will be created lazily when load_model() is called

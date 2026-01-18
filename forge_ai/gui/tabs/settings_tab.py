@@ -393,11 +393,15 @@ def _get_lockable_widgets(parent):
     return widgets
 
 
-def _populate_monitors(parent):
+def _populate_monitors(parent, preserve_selection=False):
     """Populate the monitor dropdown with available displays."""
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtGui import QGuiApplication
     
+    # Remember current selection if we should preserve it
+    previous_index = parent.monitor_combo.currentIndex() if preserve_selection else -1
+    
+    parent.monitor_combo.blockSignals(True)  # Prevent triggering move while populating
     parent.monitor_combo.clear()
     screens = QGuiApplication.screens()
     
@@ -412,16 +416,22 @@ def _populate_monitors(parent):
             i
         )
     
-    # Select current monitor
-    main_window = parent.window()
-    if main_window:
-        current_screen = QGuiApplication.screenAt(main_window.geometry().center())
-        if current_screen:
-            try:
-                idx = screens.index(current_screen)
-                parent.monitor_combo.setCurrentIndex(idx)
-            except ValueError:
-                pass
+    # Restore previous selection if preserving, or select current monitor
+    if preserve_selection and 0 <= previous_index < len(screens):
+        parent.monitor_combo.setCurrentIndex(previous_index)
+    else:
+        # Select current monitor
+        main_window = parent.window()
+        if main_window:
+            current_screen = QGuiApplication.screenAt(main_window.geometry().center())
+            if current_screen:
+                try:
+                    idx = screens.index(current_screen)
+                    parent.monitor_combo.setCurrentIndex(idx)
+                except ValueError:
+                    pass
+    
+    parent.monitor_combo.blockSignals(False)
 
 
 def _move_to_monitor(parent, monitor_index):
@@ -1136,7 +1146,7 @@ def create_settings_tab(parent):
     
     refresh_monitors_btn = QPushButton("Refresh")
     refresh_monitors_btn.setMaximumWidth(70)
-    refresh_monitors_btn.clicked.connect(lambda: _populate_monitors(parent))
+    refresh_monitors_btn.clicked.connect(lambda: _populate_monitors(parent, preserve_selection=True))
     monitor_row.addWidget(refresh_monitors_btn)
     
     monitor_row.addStretch()

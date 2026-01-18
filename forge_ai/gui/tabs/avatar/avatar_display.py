@@ -2478,21 +2478,15 @@ def _toggle_resize_enabled(parent, enabled: bool):
     """Toggle manual resize for avatar popup."""
     parent._avatar_resize_enabled = enabled
     
-    # Update 2D overlay if it exists
+    # Update 2D overlay if it exists - set _resize_enabled directly
     if parent._overlay:
-        if enabled:
-            # Enable scroll-to-resize
-            parent._overlay.wheelEvent = lambda e: _overlay_wheel_resize(parent._overlay, e)
-        else:
-            # Disable scroll-to-resize (no-op)
-            parent._overlay.wheelEvent = lambda e: e.accept()
+        parent._overlay._resize_enabled = enabled
+        parent._overlay.update()  # Trigger repaint to show/hide border
     
-    # Update 3D overlay if it exists
+    # Update 3D overlay if it exists - set _resize_enabled directly
     if parent._overlay_3d:
-        if enabled:
-            parent._overlay_3d.wheelEvent = lambda e: _overlay_3d_wheel_resize(parent._overlay_3d, e)
-        else:
-            parent._overlay_3d.wheelEvent = lambda e: e.accept()
+        parent._overlay_3d._resize_enabled = enabled
+        parent._overlay_3d.update()  # Trigger repaint to show/hide border
     
     if enabled:
         parent.avatar_status.setText("Popup resize enabled (scroll to resize)")
@@ -3040,6 +3034,9 @@ def _toggle_overlay(parent):
                 parent._overlay_3d = Avatar3DOverlayWindow()
                 parent._overlay_3d.closed.connect(lambda: _on_overlay_closed(parent))
             
+            # Sync resize enabled state to overlay
+            parent._overlay_3d._resize_enabled = getattr(parent, '_avatar_resize_enabled', True)
+            
             # Load the model into 3D overlay
             if parent._current_path:
                 parent._overlay_3d.load_model(str(parent._current_path))
@@ -3057,6 +3054,9 @@ def _toggle_overlay(parent):
             if parent._overlay is None:
                 parent._overlay = AvatarOverlayWindow()
                 parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
+            
+            # Sync resize enabled state to overlay
+            parent._overlay._resize_enabled = getattr(parent, '_avatar_resize_enabled', True)
             
             # Get current pixmap, or generate default if none
             pixmap = parent.avatar_preview_2d.original_pixmap

@@ -186,7 +186,10 @@ class AIGenerationWorker(QThread):
                 'torch.tensor', 'np.array', 'def test_', 'assert ', 'import torch',
                 'class Test', 'self.setup', '.to(device)', 'cudnn.enabled',
                 'torch.randn', 'torch.zeros', 'return Tensor', '# Convert',
-                'dtype=torch.float', 'skip_special_tokens'
+                'dtype=torch.float', 'skip_special_tokens', "'cuda:0'", "'cuda:1'",
+                '.to("cuda', 'tensor([[', 'Output:', '# Output:', 'tensors.shape',
+                '.expand(', '```python', 'import torch', 'broadcasting dimension',
+                'tensor(tensor(', '.size() ==', 'expanded_matrix'
             ]
             
             is_garbage = False
@@ -203,9 +206,12 @@ class AIGenerationWorker(QThread):
             
             if is_garbage:
                 response = (
-                    "⚠️ I encountered an issue generating a proper response. "
-                    "This can happen when the model tokenizer has a mismatch. "
-                    "Try restarting the application or switching models."
+                    "⚠️ The model generated code/technical text instead of a response.\n\n"
+                    "This can happen with small models like Qwen2-0.5B when asked simple questions.\n"
+                    "Try:\n"
+                    "• Using a larger model (tinyllama_chat, phi2, or qwen2_1.5b_instruct)\n"
+                    "• Being more specific in your question\n"
+                    "• Training your own Forge model with conversational data"
                 )
             
             elapsed = time.time() - self._start_time
@@ -1043,7 +1049,7 @@ class SetupWizard(QWizard):
         self.registry = registry
         self.setWindowTitle("Forge Setup Wizard")
         self.setWizardStyle(QWizard.ModernStyle)
-        self.resize(600, 450)
+        self.resize(600, 500)
         
         # Detect hardware BEFORE creating pages
         self.hw_profile = self._detect_hardware()
@@ -1051,11 +1057,13 @@ class SetupWizard(QWizard):
         # Add pages
         self.addPage(self._create_welcome_page())
         self.addPage(self._create_name_page())
+        self.addPage(self._create_base_model_page())  # NEW: Base model selection
         self.addPage(self._create_size_page())
         self.addPage(self._create_confirm_page())
         
         self.model_name = None
         self.model_size = self.hw_profile.get("recommended", "tiny")
+        self.base_model = None  # NEW: Track base model
     
     def _detect_hardware(self) -> dict:
         """Detect hardware capabilities for model size recommendations."""
@@ -1197,6 +1205,74 @@ class SetupWizard(QWizard):
             self.name_status.setText("[OK] Name available")
             self.name_status.setStyleSheet("color: green")
     
+    def _create_base_model_page(self):
+        """Page to optionally select an existing model as base for transfer learning."""
+        page = QWizardPage()
+        page.setTitle("Base Model (Optional)")
+        page.setSubTitle("Start from an existing model's knowledge, or begin fresh")
+        
+        layout = QVBoxLayout()
+        
+        # Option group
+        self.base_model_group = QButtonGroup(page)
+        
+        # Fresh start option
+        self.fresh_start_radio = QRadioButton("Start Fresh (no base model)")
+        self.fresh_start_radio.setChecked(True)
+        self.base_model_group.addButton(self.fresh_start_radio, 0)
+        layout.addWidget(self.fresh_start_radio)
+        
+        # Use base model option
+        self.use_base_radio = QRadioButton("Use existing model as base:")
+        self.base_model_group.addButton(self.use_base_radio, 1)
+        layout.addWidget(self.use_base_radio)
+        
+        # Model list
+        self.base_model_list = QListWidget()
+        self.base_model_list.setEnabled(False)
+        self.base_model_list.setMinimumHeight(150)
+        
+        # Populate with existing models that have weights
+        models = self.registry.registry.get("models", {})
+        for name, info in models.items():
+            model_path = Path(self.registry.models_dir) / name / "checkpoints"
+            has_weights = model_path.exists() and any(model_path.glob("*.pt"))
+            
+            if has_weights:
+                # Get additional info
+                size = info.get("size", "unknown")
+                epochs = info.get("epochs_trained", 0)
+                item_text = f"{name} ({size}, {epochs} epochs trained)"
+                item = QListWidgetItem(item_text)
+                item.setData(Qt.UserRole, name)  # Store actual name
+                self.base_model_list.addItem(item)
+        
+        if self.base_model_list.count() == 0:
+            item = QListWidgetItem("(No trained models available)")
+            item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
+            self.base_model_list.addItem(item)
+            self.use_base_radio.setEnabled(False)
+        
+        layout.addWidget(self.base_model_list)
+        
+        # Connect radio buttons to enable/disable list
+        self.use_base_radio.toggled.connect(self.base_model_list.setEnabled)
+        self.use_base_radio.toggled.connect(lambda checked: 
+            self.base_model_list.setCurrentRow(0) if checked and self.base_model_list.count() > 0 else None)
+        
+        # Info label
+        info_label = QLabel(
+            "💡 Using a base model copies its trained weights and training data,\n"
+            "giving your new model a head start. Great for specialization!"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: gray; font-style: italic; margin-top: 10px;")
+        layout.addWidget(info_label)
+        
+        layout.addStretch()
+        page.setLayout(layout)
+        return page
+    
     def _create_size_page(self):
         page = QWizardPage()
         page.setTitle("Choose Model Size")
@@ -1281,11 +1357,17 @@ class SetupWizard(QWizard):
     
     def initializePage(self, page_id):
         """Called when a page is shown."""
-        if page_id == 3:  # Confirm page
+        if page_id == 4:  # Confirm page (was 3 before base model page added)
             name = self.name_input.text().lower().strip().replace(" ", "_")
             
             checked = self.size_group.checkedButton()
             size = checked.size_id if checked else "small"
+            
+            # Get base model selection
+            if self.use_base_radio.isChecked() and self.base_model_list.currentItem():
+                self.base_model = self.base_model_list.currentItem().data(Qt.UserRole)
+            else:
+                self.base_model = None
             
             # MODEL_PRESETS contains ForgeConfig objects, not dicts
             config = MODEL_PRESETS.get(size)
@@ -1305,11 +1387,15 @@ class SetupWizard(QWizard):
             }
             min_vram = vram_estimates.get(size, '?')
             
+            # Base model display
+            base_display = self.base_model if self.base_model else "<i>None (fresh start)</i>"
+            
             self.confirm_label.setText(f"""
             <h3>Ready to Create Your AI</h3>
             <table>
                 <tr><td><b>Name:</b></td><td>{name}</td></tr>
                 <tr><td><b>Size:</b></td><td>{size}</td></tr>
+                <tr><td><b>Base Model:</b></td><td>{base_display}</td></tr>
                 <tr><td><b>Dimensions:</b></td><td>{dim}</td></tr>
                 <tr><td><b>Layers:</b></td><td>{layers}</td></tr>
                 <tr><td><b>Min VRAM:</b></td><td>{min_vram} GB</td></tr>
@@ -1327,6 +1413,7 @@ class SetupWizard(QWizard):
         return {
             "name": self.model_name,
             "size": self.model_size,
+            "base_model": self.base_model,
         }
 
 
@@ -1653,6 +1740,7 @@ class EnhancedMainWindow(QMainWindow):
                 "window_y": self.y(),
                 "auto_speak": getattr(self, 'auto_speak', False),
                 "microphone_enabled": getattr(self, 'microphone_enabled', False),
+                "user_display_name": getattr(self, 'user_display_name', 'You'),
             }
             
             # Save current tab index if content_stack exists
@@ -1676,6 +1764,14 @@ class EnhancedMainWindow(QMainWindow):
                 settings["last_avatar_path"] = str(self._current_path)
             settings["avatar_auto_load"] = getattr(self, '_avatar_auto_load', False)
             settings["avatar_resize_enabled"] = getattr(self, '_avatar_resize_enabled', True)
+            
+            # Save chat zoom level
+            if hasattr(self, 'chat_display'):
+                font = self.chat_display.font()
+                settings["chat_zoom"] = font.pointSize()
+            
+            # Save learn while chatting preference
+            settings["learn_while_chatting"] = getattr(self, 'learn_while_chatting', True)
             
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
@@ -1784,7 +1880,8 @@ class EnhancedMainWindow(QMainWindow):
                     result["name"],
                     size=result["size"],
                     vocab_size=32000,
-                    description="Created via setup wizard"
+                    description="Created via setup wizard",
+                    base_model=result.get("base_model")
                 )
                 self.current_model_name = result["name"]
                 self._load_current_model()
@@ -2558,6 +2655,16 @@ class EnhancedMainWindow(QMainWindow):
         if settings.get("microphone_enabled", False):
             self.microphone_action.setChecked(True)
             self._toggle_microphone(True)
+        
+        # Restore chat zoom
+        chat_zoom = settings.get("chat_zoom")
+        if chat_zoom and hasattr(self, 'chat_display'):
+            font = self.chat_display.font()
+            font.setPointSize(chat_zoom)
+            self.chat_display.setFont(font)
+        
+        # Restore learn while chatting preference
+        self.learn_while_chatting = settings.get("learn_while_chatting", True)
         
         # ALWAYS start on Chat tab - ignore saved last_tab setting
         # This ensures predictable behavior when opening the GUI
@@ -4911,9 +5018,15 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         if wizard.exec_() == QWizard.Accepted:
             result = wizard.get_result()
             try:
-                self.registry.create_model(result["name"], size=result["size"], vocab_size=32000)
+                self.registry.create_model(
+                    result["name"], 
+                    size=result["size"], 
+                    vocab_size=32000,
+                    base_model=result.get("base_model")
+                )
                 self._refresh_models_list()
-                QMessageBox.information(self, "Success", f"Created model '{result['name']}'")
+                base_msg = f" (based on {result['base_model']})" if result.get("base_model") else ""
+                QMessageBox.information(self, "Success", f"Created model '{result['name']}'{base_msg}")
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
     
