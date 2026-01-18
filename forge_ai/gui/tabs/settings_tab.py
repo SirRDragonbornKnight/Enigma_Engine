@@ -230,24 +230,31 @@ def _toggle_game_detection(parent, state):
         if enabled:
             router.start_detection(interval=5.0)
             router.on_game_detected(lambda game: _on_game_detected(parent, game))
-            parent.game_combo.setEnabled(False)
-            parent.game_status_label.setText("Watching for games...")
-            parent.game_status_label.setStyleSheet("color: #3b82f6;")
+            if hasattr(parent, 'game_combo'):
+                parent.game_combo.setEnabled(False)
+            if hasattr(parent, 'game_status_label'):
+                parent.game_status_label.setText("Watching for games...")
+                parent.game_status_label.setStyleSheet("color: #3b82f6;")
         else:
             router.stop_detection()
-            parent.game_combo.setEnabled(True)
-            parent.game_status_label.setText("Auto-detection disabled")
-            parent.game_status_label.setStyleSheet("color: #888;")
+            if hasattr(parent, 'game_combo'):
+                parent.game_combo.setEnabled(True)
+            if hasattr(parent, 'game_status_label'):
+                parent.game_status_label.setText("Auto-detection disabled")
+                parent.game_status_label.setStyleSheet("color: #888;")
     except ImportError:
-        parent.auto_game_check.setChecked(False)
+        if hasattr(parent, 'auto_game_check'):
+            parent.auto_game_check.setChecked(False)
         QMessageBox.information(
             parent, "psutil Required",
             "Game detection requires psutil. Install with:\npip install psutil"
         )
     except Exception as e:
-        parent.auto_game_check.setChecked(False)
-        parent.game_status_label.setText(f"Detection error: {e}")
-        parent.game_status_label.setStyleSheet("color: #ef4444;")
+        if hasattr(parent, 'auto_game_check'):
+            parent.auto_game_check.setChecked(False)
+        if hasattr(parent, 'game_status_label'):
+            parent.game_status_label.setText(f"Detection error: {e}")
+            parent.game_status_label.setStyleSheet("color: #ef4444;")
 
 
 def _on_game_detected(parent, game_id: str):
@@ -258,22 +265,27 @@ def _on_game_detected(parent, game_id: str):
         config = router.get_game(game_id)
         
         if config:
-            parent.game_status_label.setText(f"🎮 Detected: {config.name}")
-            parent.game_status_label.setStyleSheet("color: #22c55e; font-weight: bold;")
+            if hasattr(parent, 'game_status_label'):
+                parent.game_status_label.setText(f"🎮 Detected: {config.name}")
+                parent.game_status_label.setStyleSheet("color: #22c55e; font-weight: bold;")
             
             # Update combo without triggering change
-            parent.game_combo.blockSignals(True)
-            for i in range(parent.game_combo.count()):
-                if parent.game_combo.itemData(i) == game_id:
-                    parent.game_combo.setCurrentIndex(i)
-                    break
-            parent.game_combo.blockSignals(False)
+            if hasattr(parent, 'game_combo'):
+                parent.game_combo.blockSignals(True)
+                for i in range(parent.game_combo.count()):
+                    if parent.game_combo.itemData(i) == game_id:
+                        parent.game_combo.setCurrentIndex(i)
+                        break
+                parent.game_combo.blockSignals(False)
     except Exception:
         pass
 
 
 def _change_active_game(parent):
     """Manually change active game."""
+    if not hasattr(parent, 'game_combo'):
+        return
+    
     game_id = parent.game_combo.currentData()
     
     if game_id == "custom":
@@ -292,17 +304,19 @@ def _change_active_game(parent):
         
         if game_id == "none":
             router.set_active_game(None)
-            parent.game_status_label.setText("No game active - using default AI")
-            parent.game_status_label.setStyleSheet("color: #888;")
+            if hasattr(parent, 'game_status_label'):
+                parent.game_status_label.setText("No game active - using default AI")
+                parent.game_status_label.setStyleSheet("color: #888;")
         else:
             router.set_active_game(game_id)
             config = router.get_game(game_id)
-            if config:
+            if config and hasattr(parent, 'game_status_label'):
                 parent.game_status_label.setText(f"🎮 Active: {config.name}")
                 parent.game_status_label.setStyleSheet("color: #22c55e;")
     except Exception as e:
-        parent.game_status_label.setText(f"Error: {e}")
-        parent.game_status_label.setStyleSheet("color: #ef4444;")
+        if hasattr(parent, 'game_status_label'):
+            parent.game_status_label.setText(f"Error: {e}")
+            parent.game_status_label.setStyleSheet("color: #ef4444;")
 
 
 def _toggle_ai_lock(parent, state):
@@ -398,8 +412,15 @@ def _populate_monitors(parent, preserve_selection=False):
     from PyQt5.QtWidgets import QApplication
     from PyQt5.QtGui import QGuiApplication
     
-    # Remember current selection if we should preserve it
-    previous_index = parent.monitor_combo.currentIndex() if preserve_selection else -1
+    # Remember current selection by screen identifier (more robust than index)
+    previous_screen_name = None
+    previous_index = -1
+    if preserve_selection and parent.monitor_combo.count() > 0:
+        previous_index = parent.monitor_combo.currentIndex()
+        # Also try to remember by screen name in case order changes
+        screens_before = QGuiApplication.screens()
+        if 0 <= previous_index < len(screens_before):
+            previous_screen_name = screens_before[previous_index].name()
     
     parent.monitor_combo.blockSignals(True)  # Prevent triggering move while populating
     parent.monitor_combo.clear()
@@ -416,11 +437,23 @@ def _populate_monitors(parent, preserve_selection=False):
             i
         )
     
-    # Restore previous selection if preserving, or select current monitor
-    if preserve_selection and 0 <= previous_index < len(screens):
-        parent.monitor_combo.setCurrentIndex(previous_index)
-    else:
-        # Select current monitor
+    # Restore previous selection - try by screen name first, then by index
+    restored = False
+    if preserve_selection:
+        # First try to match by screen name (handles reordering)
+        if previous_screen_name:
+            for i, screen in enumerate(screens):
+                if screen.name() == previous_screen_name:
+                    parent.monitor_combo.setCurrentIndex(i)
+                    restored = True
+                    break
+        # Fall back to index if name match failed
+        if not restored and 0 <= previous_index < len(screens):
+            parent.monitor_combo.setCurrentIndex(previous_index)
+            restored = True
+    
+    if not restored:
+        # Select current monitor based on where window actually is
         main_window = parent.window()
         if main_window:
             current_screen = QGuiApplication.screenAt(main_window.geometry().center())

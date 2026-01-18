@@ -121,8 +121,7 @@ class ForgeTokenizer:
             
             # Modern conversation tokens
             "[E:user]": 8,
-            "[E:forge]": 9,  # The AI's name, not generic "bot" (keeping enigma token for compatibility)
-            "[E:enigma]": 9,  # Legacy alias, same token ID
+            "[E:forge]": 9,  # The AI's name, not generic "bot"
             "[E:assistant]": 10,
             "[E:system]": 11,
             

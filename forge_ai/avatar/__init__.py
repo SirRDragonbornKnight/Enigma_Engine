@@ -2,6 +2,31 @@
 """
 ForgeAI Avatar System
 
+Provides a controllable avatar with AI-driven animations like Cortana or JARVIS.
+
+Animation System:
+    from forge_ai.avatar.animation_system import AvatarAnimator, AIAvatarController, AnimationState
+    
+    # Create animator and load animations (GIF, sprite sheet, or image sequence)
+    animator = AvatarAnimator()
+    animator.load_animation("idle", "data/avatar/animations/idle.gif")
+    animator.load_animation("talking", "data/avatar/animations/talking.gif")
+    animator.load_animation("wave", "data/avatar/animations/wave.gif", loop=False)
+    
+    # Map states to animations
+    animator.map_state_to_animation(AnimationState.IDLE, "idle")
+    animator.map_state_to_animation(AnimationState.TALKING, "talking")
+    
+    # Connect to display
+    animator.frame_changed.connect(my_display.set_pixmap)
+    
+    # AI controls via controller
+    controller = AIAvatarController(animator)
+    controller.start_talking()  # When AI speaks
+    controller.stop_talking()   # When done
+    controller.set_emotion("happy")  # Based on response
+    controller.gesture("wave")  # One-shot gesture
+
 Provides a controllable avatar that can:
   - Display on screen (on/off toggle, default OFF)
   - Move around the desktop

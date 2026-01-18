@@ -364,7 +364,7 @@ class DashboardTab(QWidget):
         
         # Uptime
         self.uptime_label = QLabel("Up: --")
-        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 10px;"))
+        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 10px;")
         header_layout.addWidget(self.uptime_label)
         
         header_layout.addSpacing(15)

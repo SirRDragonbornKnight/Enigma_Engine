@@ -44,7 +44,13 @@ if errorlevel 1 (
 
 :: Launch ForgeAI GUI
 echo [INFO] Launching ForgeAI...
-python run.py --gui
+
+:: Try pythonw first (no terminal window) - if it fails, fall back to python
+pythonw run.py --gui 2>nul
+if errorlevel 1 (
+    :: pythonw failed or not available, use regular python
+    python run.py --gui
+)
 
 :: If we get here, the app closed
 if errorlevel 1 (

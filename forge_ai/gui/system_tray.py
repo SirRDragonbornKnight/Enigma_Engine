@@ -1184,10 +1184,22 @@ class QuickCommandOverlay(QWidget):
         self._center_on_screen()
     
     def _center_on_screen(self):
-        """Center the overlay near the top of the screen."""
-        screen = QApplication.primaryScreen().geometry()
-        x = (screen.width() - self.width()) // 2
-        y = screen.height() // 4  # Upper third of screen
+        """Center the overlay near the top of the screen where the main window is."""
+        # Try to get the screen where the main window is located
+        target_screen = None
+        main_window = self._get_main_window()
+        
+        if main_window and main_window.isVisible():
+            from PyQt5.QtGui import QGuiApplication
+            target_screen = QGuiApplication.screenAt(main_window.geometry().center())
+        
+        # Fall back to primary screen if main window not available
+        if target_screen is None:
+            target_screen = QApplication.primaryScreen()
+        
+        screen_geo = target_screen.geometry()
+        x = screen_geo.x() + (screen_geo.width() - self.width()) // 2
+        y = screen_geo.y() + screen_geo.height() // 4  # Upper third of screen
         self.move(x, y)
     
     def keyPressEvent(self, event):

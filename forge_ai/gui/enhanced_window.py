@@ -18,9 +18,13 @@ Features:
 """
 import sys
 import json
+import logging
 import shutil
 from pathlib import Path
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
@@ -1763,7 +1767,13 @@ class EnhancedMainWindow(QMainWindow):
             if hasattr(self, '_current_path') and self._current_path:
                 settings["last_avatar_path"] = str(self._current_path)
             settings["avatar_auto_load"] = getattr(self, '_avatar_auto_load', False)
-            settings["avatar_resize_enabled"] = getattr(self, '_avatar_resize_enabled', True)
+            settings["avatar_resize_enabled"] = getattr(self, '_avatar_resize_enabled', False)  # Default OFF
+            
+            # Save avatar overlay size if it exists
+            if hasattr(self, '_overlay') and self._overlay:
+                settings["avatar_overlay_size"] = getattr(self._overlay, '_size', 300)
+            if hasattr(self, '_overlay_3d') and self._overlay_3d:
+                settings["avatar_overlay_3d_size"] = getattr(self._overlay_3d, '_size', 250)
             
             # Save chat zoom level
             if hasattr(self, 'chat_display'):

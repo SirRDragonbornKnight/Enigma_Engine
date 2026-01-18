@@ -577,10 +577,55 @@ class ModulesTab(QWidget):
             item.setVisible(cat_match and search_match)
     
     def _enable_all_visible(self):
-        """Enable all visible modules."""
-        for item in self.module_items.values():
+        """Enable all visible modules with progress feedback."""
+        # Collect modules to enable
+        to_enable = []
+        for mod_id, item in self.module_items.items():
             if item.isVisible() and not item.is_loaded:
+                to_enable.append(mod_id)
+        
+        if not to_enable:
+            self._log("No modules to enable")
+            return
+        
+        # Warn user this may take a while
+        reply = QMessageBox.question(
+            self, "Enable All Modules",
+            f"This will load {len(to_enable)} modules.\n"
+            "Some modules (image gen, 3D gen) may take 10-30 seconds each.\n"
+            "The UI may freeze during loading.\n\n"
+            "Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        self._log(f"Enabling {len(to_enable)} modules...")
+        
+        # Use a list to track progress through modules
+        self._enable_queue = to_enable.copy()
+        self._enable_next_module()
+    
+    def _enable_next_module(self):
+        """Enable the next module in the queue."""
+        if not hasattr(self, '_enable_queue') or not self._enable_queue:
+            self._log("All modules enabled")
+            return
+        
+        mod_id = self._enable_queue.pop(0)
+        if mod_id in self.module_items:
+            item = self.module_items[mod_id]
+            if not item.is_loaded:
+                self._log(f"Enabling {mod_id}... ({len(self._enable_queue)} remaining)")
+                # Process events so the log updates
+                from PyQt5.QtWidgets import QApplication
+                QApplication.processEvents()
                 item.toggle.setChecked(True)
+        
+        # Schedule next module with a small delay to allow UI to update
+        if self._enable_queue:
+            QTimer.singleShot(100, self._enable_next_module)
     
     def _disable_all_visible(self):
         """Disable all visible modules."""

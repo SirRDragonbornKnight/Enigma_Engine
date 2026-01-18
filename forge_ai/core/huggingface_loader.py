@@ -610,18 +610,39 @@ class HuggingFaceModel:
         # Final string validation
         prompt = str(prompt) if prompt else ""
         
-        # Model-specific stop strings
-        stop_strings = ["User:", "Human:", "\n\nUser", "\n\nHuman", "</s>", "[/INST]"]
+        # Model-specific stop strings for different chat formats
+        # Include common formats: Zephyr/TinyLlama (<|user|>), Llama ([INST]), generic (User:, Human:)
+        stop_strings = [
+            "User:", "Human:", "\n\nUser", "\n\nHuman",  # Generic format
+            "</s>", "[/INST]",  # Llama/Mistral format
+            "<|user|>", "<|system|>", "<|end|>",  # Zephyr/TinyLlama format
+            "\n<|", "```\n\n",  # Common continuation signals
+        ]
+        
+        # Generate with slightly higher repetition penalty for small models
+        is_small_model = any(x in self.model_id.lower() for x in ["tiny", "small", "mini", "1b", "1.1b"])
+        rep_penalty = 1.2 if is_small_model else 1.1
         
         # Generate
         response = self.generate(
             prompt,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
+            repetition_penalty=rep_penalty,
             stop_strings=stop_strings,
         )
         
-        return response.strip()
+        # Additional cleanup for small models that might include artifacts
+        response = response.strip()
+        
+        # Remove any trailing incomplete code blocks or markdown artifacts
+        if "```" in response and response.count("```") % 2 == 1:
+            # Incomplete code block - truncate at the opening
+            last_open = response.rfind("```")
+            if last_open > 0:
+                response = response[:last_open].strip()
+        
+        return response
     
     def _format_chat_simple(self, messages: List[Dict[str, str]]) -> str:
         """Simple chat formatting for models without chat templates."""

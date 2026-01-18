@@ -328,7 +328,9 @@ class MotionTracker:
     
     def __del__(self):
         """Cleanup on deletion."""
-        self.stop()
+        # Check if is_running exists (may not if __init__ failed)
+        if hasattr(self, 'is_running') and self.is_running:
+            self.stop()
 
 
 def test_motion_tracking():

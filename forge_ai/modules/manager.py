@@ -192,6 +192,15 @@ class Module:
         """
         return self._instance
 
+    def is_loaded(self) -> bool:
+        """
+        Check if the module is loaded.
+
+        Returns:
+            True if module is in LOADED or ACTIVE state
+        """
+        return self.state in (ModuleState.LOADED, ModuleState.ACTIVE)
+
 
 class ModuleManager:
     """

@@ -51,6 +51,7 @@ Qt_ClosedHandCursor: Any = getattr(Qt, 'ClosedHandCursor', 18)
 Qt_ArrowCursor: Any = getattr(Qt, 'ArrowCursor', 0)
 import json
 import os
+import time
 
 from ....config import CONFIG
 from ....avatar import get_avatar, AvatarState
@@ -1113,16 +1114,45 @@ class AvatarOverlayWindow(QWidget):
         self.pixmap = None
         self._original_pixmap = None
         self._drag_pos = None
-        self._resize_enabled = False  # Default OFF - scroll wheel resize disabled
+        self._resize_enabled = False  # Default OFF - user must enable via right-click
         
-        # Enable mouse tracking for visual cursor feedback
+        # Resize state for edge-drag resizing
+        self._resize_edge = None  # Which edge is being dragged
+        self._resize_start_pos = None
+        self._resize_start_size = None
+        self._edge_margin = 10  # Pixels from edge to trigger resize
+        
+        # Enable mouse tracking for resize cursor feedback
         self.setMouseTracking(True)
-        self.setCursor(QCursor(Qt_OpenHandCursor))
+        self.setCursor(QCursor(Qt_ArrowCursor))
         
     def set_avatar(self, pixmap: QPixmap):
         """Set avatar image."""
         self._original_pixmap = pixmap
         self._update_scaled_pixmap()
+    
+    def _get_edge_at_pos(self, pos):
+        """Get which edge the mouse is near (for resize cursor)."""
+        if not getattr(self, '_resize_enabled', False):
+            return None
+        
+        margin = self._edge_margin
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        
+        edges = []
+        if x < margin:
+            edges.append('left')
+        elif x > w - margin:
+            edges.append('right')
+        if y < margin:
+            edges.append('top')
+        elif y > h - margin:
+            edges.append('bottom')
+        
+        if edges:
+            return '-'.join(edges)
+        return None
         
     def _update_scaled_pixmap(self):
         """Update scaled pixmap to match current size."""
@@ -1168,31 +1198,88 @@ class AvatarOverlayWindow(QWidget):
             painter.drawText(self.rect(), Qt_AlignCenter, "?")
         
     def mousePressEvent(self, a0):  # type: ignore
-        """Start drag to move."""
+        """Start drag to move or resize."""
         if a0.button() == Qt_LeftButton:
-            # Use globalPosition for newer PyQt5, fallback to globalPos
             try:
                 global_pos = a0.globalPosition().toPoint()
+                local_pos = a0.position().toPoint()
             except AttributeError:
                 global_pos = a0.globalPos()
-            self._drag_pos = global_pos - self.pos()
-            self.setCursor(QCursor(Qt_ClosedHandCursor))
-        a0.accept()  # Always accept to ensure we get events
+                local_pos = a0.pos()
+            
+            # Check if we're on an edge (for resize)
+            edge = self._get_edge_at_pos(local_pos)
+            if edge:
+                self._resize_edge = edge
+                self._resize_start_pos = global_pos
+                self._resize_start_size = self._size
+                self._resize_start_geo = self.geometry()
+            else:
+                # Normal drag
+                self._drag_pos = global_pos - self.pos()
+                self.setCursor(QCursor(Qt_ClosedHandCursor))
+        a0.accept()
             
     def mouseMoveEvent(self, a0):  # type: ignore
-        """Drag to move window."""
+        """Handle drag to move or resize."""
+        try:
+            global_pos = a0.globalPosition().toPoint()
+            local_pos = a0.position().toPoint()
+        except AttributeError:
+            global_pos = a0.globalPos()
+            local_pos = a0.pos()
+        
+        # If resizing
+        if self._resize_edge and a0.buttons() == Qt_LeftButton:
+            delta = global_pos - self._resize_start_pos
+            new_size = self._resize_start_size
+            new_geo = self._resize_start_geo
+            
+            if 'right' in self._resize_edge or 'bottom' in self._resize_edge:
+                # Resize from right/bottom - increase size
+                change = max(delta.x(), delta.y())
+                new_size = max(100, min(500, self._resize_start_size + change))
+            elif 'left' in self._resize_edge or 'top' in self._resize_edge:
+                # Resize from left/top - decrease size and move
+                change = max(-delta.x(), -delta.y())
+                new_size = max(100, min(500, self._resize_start_size + change))
+                # Adjust position to keep bottom-right corner fixed
+                size_diff = new_size - self._resize_start_size
+                self.move(new_geo.x() - size_diff, new_geo.y() - size_diff)
+            
+            self._size = new_size
+            self.setFixedSize(self._size, self._size)
+            self._update_scaled_pixmap()
+            a0.accept()
+            return
+        
+        # If dragging
         if self._drag_pos is not None and a0.buttons() == Qt_LeftButton:
-            try:
-                global_pos = a0.globalPosition().toPoint()
-            except AttributeError:
-                global_pos = a0.globalPos()
             self.move(global_pos - self._drag_pos)
+            a0.accept()
+            return
+        
+        # Update cursor based on position (only when resize enabled)
+        edge = self._get_edge_at_pos(local_pos)
+        if edge:
+            # Set resize cursor
+            if 'left' in edge or 'right' in edge:
+                self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
+            if 'top' in edge or 'bottom' in edge:
+                self.setCursor(QCursor(Qt.SizeVerCursor if hasattr(Qt, 'SizeVerCursor') else 0))
+            if ('top' in edge and 'left' in edge) or ('bottom' in edge and 'right' in edge):
+                self.setCursor(QCursor(Qt.SizeFDiagCursor if hasattr(Qt, 'SizeFDiagCursor') else 0))
+            if ('top' in edge and 'right' in edge) or ('bottom' in edge and 'left' in edge):
+                self.setCursor(QCursor(Qt.SizeBDiagCursor if hasattr(Qt, 'SizeBDiagCursor') else 0))
+        else:
+            self.setCursor(QCursor(Qt_ArrowCursor))
         a0.accept()
             
     def mouseReleaseEvent(self, a0):  # type: ignore
-        """End drag."""
+        """End drag or resize."""
         self._drag_pos = None
-        self.setCursor(QCursor(Qt_OpenHandCursor))
+        self._resize_edge = None
+        self.setCursor(QCursor(Qt_ArrowCursor))
         a0.accept()
         
     def keyPressEvent(self, a0):  # type: ignore
@@ -1329,7 +1416,7 @@ class Avatar3DOverlayWindow(QWidget):
         
         self._size = 250
         self.setFixedSize(self._size, self._size)
-        self._resize_enabled = False  # Default OFF - scroll wheel resize disabled
+        self._resize_enabled = False  # Default OFF - user must enable via right-click
         
         # Start at bottom right
         screen = QApplication.primaryScreen()
@@ -2030,7 +2117,7 @@ def create_avatar_subtab(parent):
     parent.avatar_enabled_checkbox.toggled.connect(lambda c: _toggle_avatar(parent, c))
     top_row.addWidget(parent.avatar_enabled_checkbox)
     
-    parent.show_overlay_btn = QPushButton("▶ Run")
+    parent.show_overlay_btn = QPushButton("Run")
     parent.show_overlay_btn.setCheckable(True)
     parent.show_overlay_btn.setStyleSheet("""
         QPushButton {
@@ -2065,8 +2152,8 @@ def create_avatar_subtab(parent):
     settings_row.addWidget(parent.avatar_auto_load_checkbox)
     
     parent.avatar_resize_checkbox = QCheckBox("Allow popup resize")
-    parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window")
-    parent.avatar_resize_checkbox.setChecked(True)  # Default on
+    parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window (scroll to resize)")
+    parent.avatar_resize_checkbox.setChecked(False)  # Default OFF - less intrusive
     parent.avatar_resize_checkbox.toggled.connect(lambda c: _toggle_resize_enabled(parent, c))
     settings_row.addWidget(parent.avatar_resize_checkbox)
     
@@ -2128,7 +2215,7 @@ def create_avatar_subtab(parent):
     parent.avatar_combo.currentIndexChanged.connect(lambda: _on_avatar_selected(parent))
     select_row.addWidget(parent.avatar_combo, stretch=1)
     
-    btn_refresh = QPushButton("🔄 Refresh")
+    btn_refresh = QPushButton("Refresh")
     btn_refresh.setMinimumWidth(80)
     btn_refresh.setToolTip("Refresh selected avatar and list")
     btn_refresh.clicked.connect(lambda: _refresh_avatar(parent))
@@ -2415,10 +2502,14 @@ def _restore_avatar_settings(parent):
         if hasattr(parent, 'avatar_auto_load_checkbox'):
             parent.avatar_auto_load_checkbox.setChecked(parent._avatar_auto_load)
         
-        # Restore resize enabled setting
-        parent._avatar_resize_enabled = settings.get("avatar_resize_enabled", True)
+        # Restore resize enabled setting (default OFF now)
+        parent._avatar_resize_enabled = settings.get("avatar_resize_enabled", False)
         if hasattr(parent, 'avatar_resize_checkbox'):
             parent.avatar_resize_checkbox.setChecked(parent._avatar_resize_enabled)
+        
+        # Restore saved overlay sizes for later use when overlay is created
+        parent._saved_overlay_size = settings.get("avatar_overlay_size", 300)
+        parent._saved_overlay_3d_size = settings.get("avatar_overlay_3d_size", 250)
         
         # Restore last avatar selection (always restore the selection)
         last_avatar_index = settings.get("last_avatar_index", 0)
@@ -2863,57 +2954,6 @@ def _set_expression(parent, expression: str):
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
 
 
-def _apply_color_preset(parent, preset: str):
-    """Apply a color preset."""
-    presets = {
-        "default": {"primary": "#6366f1", "secondary": "#8b5cf6", "accent": "#10b981"},
-        "warm": {"primary": "#f59e0b", "secondary": "#ef4444", "accent": "#fbbf24"},
-        "cool": {"primary": "#3b82f6", "secondary": "#06b6d4", "accent": "#8b5cf6"},
-        "nature": {"primary": "#10b981", "secondary": "#22c55e", "accent": "#84cc16"},
-        "sunset": {"primary": "#f59e0b", "secondary": "#ec4899", "accent": "#8b5cf6"},
-        "ocean": {"primary": "#06b6d4", "secondary": "#0ea5e9", "accent": "#3b82f6"},
-        "fire": {"primary": "#ef4444", "secondary": "#f59e0b", "accent": "#fbbf24"},
-        "dark": {"primary": "#1e293b", "secondary": "#475569", "accent": "#64748b"},
-        "pastel": {"primary": "#a78bfa", "secondary": "#f0abfc", "accent": "#fbcfe8"},
-    }
-    
-    if preset in presets:
-        colors = presets[preset]
-        parent._current_colors = colors.copy()
-        
-        # Update color buttons
-        parent.primary_color_btn.setStyleSheet(f"background: {colors['primary']}; color: white;")
-        parent.secondary_color_btn.setStyleSheet(f"background: {colors['secondary']}; color: white;")
-        parent.accent_color_btn.setStyleSheet(f"background: {colors['accent']}; color: white;")
-        
-        # Update preview
-        if parent._using_builtin_sprite:
-            _set_expression(parent, parent.current_expression)
-
-
-def _pick_color(parent, color_type: str):
-    """Open color picker for specified color type."""
-    current = parent._current_colors.get(color_type, "#ffffff")
-    color = QColorDialog.getColor(QColor(current), parent, f"Pick {color_type.title()} Color")
-    
-    if color.isValid():
-        hex_color = color.name()
-        parent._current_colors[color_type] = hex_color
-        
-        # Update button style
-        btn_map = {
-            "primary": parent.primary_color_btn,
-            "secondary": parent.secondary_color_btn,
-            "accent": parent.accent_color_btn
-        }
-        if color_type in btn_map:
-            btn_map[color_type].setStyleSheet(f"background: {hex_color}; color: white;")
-        
-        # Update preview
-        if parent._using_builtin_sprite:
-            _set_expression(parent, parent.current_expression)
-
-
 def _use_builtin_sprite(parent):
     """Switch to built-in sprite system."""
     parent._using_builtin_sprite = True
@@ -2930,39 +2970,6 @@ def _use_builtin_sprite(parent):
     
     parent.avatar_status.setText("Using built-in sprite")
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
-
-
-def _auto_design_avatar(parent):
-    """Let AI auto-design avatar based on personality."""
-    try:
-        appearance = parent._avatar_controller.auto_design()
-        
-        if appearance:
-            # Update colors
-            parent._current_colors = {
-                "primary": appearance.primary_color,
-                "secondary": appearance.secondary_color,
-                "accent": appearance.accent_color
-            }
-            
-            # Update UI
-            parent.primary_color_btn.setStyleSheet(f"background: {appearance.primary_color}; color: white;")
-            parent.secondary_color_btn.setStyleSheet(f"background: {appearance.secondary_color}; color: white;")
-            parent.accent_color_btn.setStyleSheet(f"background: {appearance.accent_color}; color: white;")
-            
-            # Use built-in sprite with AI colors
-            parent._using_builtin_sprite = True
-            _set_expression(parent, appearance.default_expression)
-            
-            explanation = parent._avatar_controller.explain_appearance()
-            parent.avatar_status.setText(f"AI designed: {explanation[:50]}...")
-            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
-        else:
-            parent.avatar_status.setText("Link personality first (in Training tab)")
-            parent.avatar_status.setStyleSheet("color: #fab387;")
-    except Exception as e:
-        parent.avatar_status.setText(f"Auto-design failed: {str(e)[:30]}")
-        parent.avatar_status.setStyleSheet("color: #f38ba8;")
 
 
 def _export_sprite(parent):
@@ -3033,9 +3040,13 @@ def _toggle_overlay(parent):
             if parent._overlay_3d is None:
                 parent._overlay_3d = Avatar3DOverlayWindow()
                 parent._overlay_3d.closed.connect(lambda: _on_overlay_closed(parent))
+                # Apply saved size
+                saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
+                parent._overlay_3d._size = saved_size
+                parent._overlay_3d.setFixedSize(saved_size, saved_size)
             
-            # Sync resize enabled state to overlay
-            parent._overlay_3d._resize_enabled = getattr(parent, '_avatar_resize_enabled', True)
+            # Sync resize enabled state to overlay (default OFF)
+            parent._overlay_3d._resize_enabled = getattr(parent, '_avatar_resize_enabled', False)
             
             # Load the model into 3D overlay
             if parent._current_path:
@@ -3054,15 +3065,22 @@ def _toggle_overlay(parent):
             if parent._overlay is None:
                 parent._overlay = AvatarOverlayWindow()
                 parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
+                # Apply saved size
+                saved_size = getattr(parent, '_saved_overlay_size', 300)
+                parent._overlay._size = saved_size
+                parent._overlay.setFixedSize(saved_size, saved_size)
             
-            # Sync resize enabled state to overlay
-            parent._overlay._resize_enabled = getattr(parent, '_avatar_resize_enabled', True)
+            # Sync resize enabled state to overlay (default OFF)
+            parent._overlay._resize_enabled = getattr(parent, '_avatar_resize_enabled', False)
             
-            # Get current pixmap, or generate default if none
+            # Only show avatar if one is selected - don't show default/test sprite
             pixmap = parent.avatar_preview_2d.original_pixmap
-            if not pixmap:
-                _show_default_preview(parent)
-                pixmap = parent.avatar_preview_2d.original_pixmap
+            if not pixmap or getattr(parent, '_using_builtin_sprite', True):
+                # No real avatar loaded - require user to select one
+                parent.show_overlay_btn.setChecked(False)
+                parent.avatar_status.setText("Select an avatar first! Use 'Load Avatar' or pick from dropdown.")
+                parent.avatar_status.setStyleSheet("color: #fab387;")
+                return
             
             if pixmap:
                 scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
@@ -3070,7 +3088,7 @@ def _toggle_overlay(parent):
                 parent._overlay.show()
                 parent._overlay.raise_()
                 parent.show_overlay_btn.setText("⏹ Stop")
-                parent.avatar_status.setText("Avatar on desktop! Drag window to move, right-click for gestures.")
+                parent.avatar_status.setText("Avatar on desktop! Drag to move, right-click for gestures.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
                 parent.show_overlay_btn.setChecked(False)
@@ -3687,7 +3705,8 @@ def _apply_avatar(parent):
                 
                 parent.avatar_preview_3d.update()
     else:
-        parent._avatar_controller.appearance.model_path = str(path)
+        # Set the model path in the controller's config (not appearance which doesn't exist)
+        parent._avatar_controller.config.model_path = str(path)
         parent.avatar_status.setText(f"Loaded: {path.name}")
     
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")

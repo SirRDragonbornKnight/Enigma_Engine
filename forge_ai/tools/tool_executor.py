@@ -259,6 +259,19 @@ class ToolExecutor:
         
         return True, None, validated
     
+    def execute(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a tool with given parameters. Alias for execute_tool().
+        
+        Args:
+            tool_name: Name of the tool to execute
+            params: Parameters for the tool
+            
+        Returns:
+            Result dictionary with 'success', 'result', and optionally 'error'
+        """
+        return self.execute_tool(tool_name, params)
+
     def execute_tool(self, tool_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a tool with given parameters.

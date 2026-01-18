@@ -3,13 +3,13 @@
 try:
     from forge_ai.gui.tabs.avatar.avatar_display import (
         create_avatar_subtab,
-        _use_builtin_avatar,
+        _use_builtin_sprite,
         _show_default_preview,
         AvatarOverlayWindow
     )
     print("✓ All imports successful!")
     print("  - create_avatar_subtab")
-    print("  - _use_builtin_avatar")
+    print("  - _use_builtin_sprite")
     print("  - _show_default_preview")
     print("  - AvatarOverlayWindow")
 except Exception as e:

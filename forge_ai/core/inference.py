@@ -62,6 +62,56 @@ class ForgeEngine:
     - Chat-style conversation interface
     """
 
+    @classmethod
+    def from_model(
+        cls,
+        model: Any,
+        tokenizer: Any,
+        device: Optional[str] = None,
+        use_half: bool = False
+    ) -> "ForgeEngine":
+        """
+        Create engine directly from model and tokenizer objects.
+        
+        Args:
+            model: A Forge model instance
+            tokenizer: A tokenizer instance
+            device: Device to use ("cuda", "cpu", or auto-detected)
+            use_half: Use FP16 for faster inference (GPU only)
+            
+        Returns:
+            ForgeEngine instance ready for generation
+        """
+        import torch
+        
+        # Create instance without calling __init__
+        engine = object.__new__(cls)
+        
+        # Initialize required attributes
+        engine._generation_lock = threading.Lock()
+        engine.device = torch.device(device) if device else (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+        engine.use_half = use_half and engine.device.type == "cuda"
+        engine.enable_tools = False
+        engine.module_manager = None
+        engine.use_routing = False
+        engine.use_offloading = False
+        engine._tool_executor = None
+        engine._tool_router = None
+        
+        # Set model and tokenizer directly
+        engine.tokenizer = tokenizer
+        engine.model = model
+        
+        # Move to device
+        engine.model.to(engine.device)
+        if engine.use_half:
+            engine.model.half()
+        engine.model.eval()
+        
+        return engine
+
     def __init__(
         self,
         model_path: Optional[Union[str, Path]] = None,
@@ -473,6 +523,25 @@ class ForgeEngine:
                 lock.release()
         
         return text
+
+    def stream(
+        self,
+        prompt: str,
+        max_tokens: int = 100,
+        **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Stream generated tokens. Alias for stream_generate().
+        
+        Args:
+            prompt: Input text to continue
+            max_tokens: Maximum tokens to generate (alias for max_gen)
+            **kwargs: Additional generation parameters
+            
+        Yields:
+            Each newly generated token as it's produced
+        """
+        return self.stream_generate(prompt, max_gen=max_tokens, **kwargs)
     
     def _needs_ai_creativity(self, prompt: str) -> bool:
         """

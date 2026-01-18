@@ -677,13 +677,13 @@ Forge = Forge
 # Factory Functions
 # =============================================================================
 
-def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Forge:
+def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs) -> Forge:
     """
     Create an Forge model from a preset configuration.
 
     Args:
         size: Model size preset (tiny, small, medium, large, xl, etc.)
-        vocab_size: Size of vocabulary (must be > 0)
+        vocab_size: Size of vocabulary. If None, auto-detects from default tokenizer.
         **kwargs: Additional config overrides (unknown keys are logged and ignored)
 
     Returns:
@@ -701,6 +701,17 @@ def create_model(size: str = 'small', vocab_size: int = 8000, **kwargs) -> Forge
     # Validate inputs
     if not isinstance(size, str):
         raise TypeError(f"size must be a string, got {type(size).__name__}")
+
+    # Auto-detect vocab size from tokenizer if not specified
+    if vocab_size is None:
+        try:
+            from .tokenizer import get_tokenizer
+            tok = get_tokenizer()
+            vocab_size = tok.vocab_size
+            logger.info(f"Auto-detected vocab_size={vocab_size} from tokenizer")
+        except Exception as e:
+            logger.warning(f"Could not auto-detect vocab_size: {e}, using default 8000")
+            vocab_size = 8000
 
     if not isinstance(vocab_size, int) or vocab_size <= 0:
         raise ValueError(f"vocab_size must be a positive integer, got {vocab_size}")
