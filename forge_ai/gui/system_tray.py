@@ -384,6 +384,10 @@ class HelpWindow(QWidget):
         self.content.setPlainText(text)
 
 
+# Track all Quick Chat instances for communication
+_quick_chat_instances = []
+
+
 class QuickCommandOverlay(QWidget):
     """
     A floating overlay for quick commands.
@@ -395,12 +399,39 @@ class QuickCommandOverlay(QWidget):
     - ESC opens full GUI instead of just closing
     - Alt+F4 closes the entire app
     - Expand button to make it larger
+    - Multiple instances can communicate
     """
     
     command_submitted = pyqtSignal(str)
     close_requested = pyqtSignal()
     open_gui_requested = pyqtSignal()  # New signal for ESC to open GUI
     stop_requested = pyqtSignal()  # Signal to stop generation
+    instance_message = pyqtSignal(str, str)  # For inter-instance communication (sender_id, message)
+    
+    @classmethod
+    def get_all_instances(cls):
+        """Get all active Quick Chat instances."""
+        global _quick_chat_instances
+        # Clean up dead references
+        _quick_chat_instances = [w for w in _quick_chat_instances if w is not None and not w.isHidden()]
+        return _quick_chat_instances
+    
+    @classmethod
+    def broadcast_message(cls, sender_id: str, message: str):
+        """Send a message to all other Quick Chat instances."""
+        for instance in cls.get_all_instances():
+            if instance._instance_id != sender_id:
+                instance.instance_message.emit(sender_id, message)
+    
+    @classmethod
+    def close_all_instances(cls):
+        """Close all Quick Chat instances."""
+        from PyQt5.QtWidgets import QApplication
+        instances = cls.get_all_instances()
+        for instance in instances:
+            instance.hide()
+        # Also quit the app
+        QApplication.quit()
     
     def __init__(self, parent=None):
         # Initialize size attributes BEFORE calling parent __init__
@@ -417,6 +448,15 @@ class QuickCommandOverlay(QWidget):
         self._last_response = None  # Store last response for speak-last
         
         super().__init__(parent)
+        
+        # Generate unique instance ID and register
+        import uuid
+        self._instance_id = str(uuid.uuid4())[:8]
+        global _quick_chat_instances
+        _quick_chat_instances.append(self)
+        
+        # Connect inter-instance messaging
+        self.instance_message.connect(self._on_instance_message)
         
         # Load settings for always-on-top
         always_on_top = self._load_mini_chat_settings().get("mini_chat_always_on_top", True)
@@ -806,33 +846,100 @@ class QuickCommandOverlay(QWidget):
         self.hide()
         QApplication.quit()
     
+    def _on_instance_message(self, sender_id: str, message: str):
+        """Handle message from another Quick Chat instance."""
+        # Display system message about inter-instance communication
+        self.response_area.append(
+            f"<div style='color: #9b59b6; padding: 4px; font-style: italic;'>"
+            f"[From window {sender_id}]: {message}</div>"
+        )
+    
     def _show_close_dialog(self):
-        """Show dialog with close options."""
-        from PyQt5.QtWidgets import QMessageBox, QApplication
+        """Show styled dialog with close options."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
         
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Close Forge")
-        msg.setText("What would you like to do?")
-        msg.setIcon(QMessageBox.Question)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Close Forge")
+        dialog.setFixedSize(280, 140)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+                border: 2px solid #3498db;
+                border-radius: 10px;
+            }
+            QLabel {
+                color: #ecf0f1;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 5px;
+                font-size: 12px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton#quitBtn {
+                background-color: #e74c3c;
+            }
+            QPushButton#quitBtn:hover {
+                background-color: #c0392b;
+            }
+            QPushButton#closeAllBtn {
+                background-color: #9b59b6;
+            }
+            QPushButton#closeAllBtn:hover {
+                background-color: #8e44ad;
+            }
+            QPushButton#cancelBtn {
+                background-color: #7f8c8d;
+            }
+            QPushButton#cancelBtn:hover {
+                background-color: #95a5a6;
+            }
+        """)
         
-        # Custom buttons
-        hide_btn = msg.addButton("Hide to Tray", QMessageBox.AcceptRole)
-        gui_btn = msg.addButton("Open Full GUI", QMessageBox.AcceptRole)
-        quit_btn = msg.addButton("Quit Forge", QMessageBox.DestructiveRole)
-        cancel_btn = msg.addButton("Cancel", QMessageBox.RejectRole)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
         
-        msg.setDefaultButton(hide_btn)
-        msg.exec_()
+        # Title
+        title = QLabel("Close Forge?")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
         
-        clicked = msg.clickedButton()
+        # Count instances
+        instance_count = len(QuickCommandOverlay.get_all_instances())
         
-        if clicked == hide_btn:
-            self._close_overlay()
-        elif clicked == gui_btn:
-            self._open_gui()
-        elif clicked == quit_btn:
-            self._quit_app()
-        # Cancel does nothing
+        # Buttons row
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
+        
+        quit_btn = QPushButton("Quit")
+        quit_btn.setObjectName("quitBtn")
+        quit_btn.clicked.connect(lambda: (dialog.accept(), self._quit_app()))
+        btn_layout.addWidget(quit_btn)
+        
+        # Show Close All only if multiple instances
+        if instance_count > 1:
+            close_all_btn = QPushButton(f"Close All ({instance_count})")
+            close_all_btn.setObjectName("closeAllBtn")
+            close_all_btn.clicked.connect(lambda: (dialog.accept(), QuickCommandOverlay.close_all_instances()))
+            btn_layout.addWidget(close_all_btn)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("cancelBtn")
+        cancel_btn.clicked.connect(dialog.reject)
+        btn_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        dialog.exec_()
     
     def _open_gui(self):
         """Open the full GUI (keeps Quick Chat open)."""
@@ -855,6 +962,14 @@ class QuickCommandOverlay(QWidget):
         except Exception:
             pass
         return None
+    
+    def send_to_other_windows(self, message: str):
+        """Send a message to all other Quick Chat windows."""
+        QuickCommandOverlay.broadcast_message(self._instance_id, message)
+    
+    def get_instance_count(self) -> int:
+        """Get number of active Quick Chat instances."""
+        return len(QuickCommandOverlay.get_all_instances())
     
     def _new_chat(self):
         """Clear the chat and start fresh."""
