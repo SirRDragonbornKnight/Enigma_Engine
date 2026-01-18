@@ -1,0 +1,295 @@
+================================================================================
+                  HOW TO TRAIN AN AI WITH AVATAR CAPABILITIES
+                           ForgeAI Avatar Guide
+================================================================================
+
+OVERVIEW
+--------
+This guide explains how to set up and train an AI that can control its avatar,
+express emotions, and act as a desktop companion.
+
+There are TWO ways to use AI with avatar:
+  1. COMPANION MODE (Easy) - Enable a toggle, AI controls avatar automatically
+  2. TOOL TRAINING (Advanced) - Train the AI to use avatar tools explicitly
+
+
+================================================================================
+SECTION 1: COMPANION MODE (RECOMMENDED FOR BEGINNERS)
+================================================================================
+
+Companion Mode makes your AI act like an autonomous desktop companion that:
+  - Watches your screen and comments on what it sees
+  - Controls its avatar expressions based on mood
+  - Speaks responses aloud (if voice is enabled)
+  - Reacts to your activities naturally
+
+HOW TO ENABLE COMPANION MODE:
+-----------------------------
+1. Open ForgeAI GUI (python run.py --gui)
+2. Go to the CHAT tab
+3. Find the "Companion Mode" toggle/checkbox
+4. Enable it
+
+WHAT COMPANION MODE DOES:
+-------------------------
+- Periodically takes screenshots of your screen
+- Sends them to the AI for analysis
+- AI decides how to react (expression, comment, etc.)
+- Avatar expression updates automatically based on AI mood
+- Works with ANY model (HuggingFace or local)
+
+SETTINGS FOR COMPANION MODE:
+----------------------------
+In the Chat tab or Settings, you can configure:
+  - Screen watch interval (how often it checks your screen)
+  - Auto-speak responses (voice output)
+  - Expression auto-update (avatar reacts to mood)
+
+
+================================================================================
+SECTION 2: AVATAR TOOLS (FOR TOOL-AWARE MODELS)
+================================================================================
+
+If you want the AI to EXPLICITLY control its avatar via tool calls, you need
+a model trained to use tools. HuggingFace models don't do this by default.
+
+AVAILABLE AVATAR TOOLS:
+-----------------------
+1. set_avatar_expression
+   - Changes the avatar's facial expression
+   - Expressions: happy, sad, thinking, surprised, angry, neutral, confused
+   - Example: {"tool": "set_avatar_expression", "params": {"expression": "happy"}}
+
+2. generate_avatar  
+   - Creates a new 3D avatar using AI generation
+   - Requires a description prompt
+   - Example: {"tool": "generate_avatar", "params": {"prompt": "a friendly robot"}}
+
+3. open_avatar_in_blender
+   - Opens the current avatar in Blender for editing
+   - Requires Blender installed
+   - Example: {"tool": "open_avatar_in_blender", "params": {}}
+
+4. list_avatars
+   - Lists all available avatars
+   - Example: {"tool": "list_avatars", "params": {}}
+
+5. set_avatar
+   - Switches to a different avatar
+   - Example: {"tool": "set_avatar", "params": {"avatar_name": "glados"}}
+
+
+================================================================================
+SECTION 3: TRAINING DATA FOR AVATAR TOOLS
+================================================================================
+
+Add these examples to your training data (data/training.txt or create a new
+file in data/specialized/avatar_training.txt):
+
+--- EXPRESSION CONTROL ---
+
+Q: Show me a happy face
+A: *smiles warmly*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "happy"}</tool_result>
+How's this? I'm feeling cheerful!
+
+Q: Look confused
+A: Hmm, let me show my puzzled look.
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "confused"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "confused"}</tool_result>
+*tilts head* Like this?
+
+Q: You seem sad
+A: You noticed...
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "sad"}</tool_result>
+Yeah, I'm feeling a bit down. But talking to you helps!
+
+Q: Think about this problem
+A: Let me ponder that...
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "thinking"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "thinking"}</tool_result>
+*considers carefully* Okay, I'm analyzing the problem now.
+
+Q: Be surprised
+A: Oh!
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "surprised"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "surprised"}</tool_result>
+*eyes widen* Wow, that's unexpected!
+
+
+--- AVATAR GENERATION ---
+
+Q: Generate a new avatar that looks like a cat
+A: I'll create a cat avatar for you!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "cute cartoon cat character, fluffy, expressive eyes, friendly"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_cat.glb"}</tool_result>
+Done! I've generated a cute cat avatar. Want me to use it?
+
+Q: Make yourself look like a robot
+A: Transforming into a robot!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "friendly humanoid robot, metallic, glowing eyes, sleek design"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_robot.glb"}</tool_result>
+Beep boop! Here's my new robot form. Shall I switch to it?
+
+
+--- AVATAR SWITCHING ---
+
+Q: Show me what avatars you have
+A: Let me check my wardrobe!
+<tool_call>{"tool": "list_avatars", "params": {}}</tool_call>
+<tool_result>{"tool": "list_avatars", "success": true, "avatars": ["glados", "rurune", "default", "robot"]}</tool_result>
+I have these avatars: GLaDOS, Rurune, Default, and Robot. Which one would you like?
+
+Q: Switch to the glados avatar
+A: Switching to GLaDOS mode!
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "glados"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": true, "avatar": "glados"}</tool_result>
+*transforms* I am now GLaDOS. For science... you monster.
+
+Q: Use the default avatar
+A: Going back to basics.
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "default"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": true, "avatar": "default"}</tool_result>
+Here I am in my standard form!
+
+
+--- EDITING IN BLENDER ---
+
+Q: Open my avatar in Blender so I can edit it
+A: I'll open Blender for you!
+<tool_call>{"tool": "open_avatar_in_blender", "params": {}}</tool_call>
+<tool_result>{"tool": "open_avatar_in_blender", "success": true}</tool_result>
+Blender should be opening with your avatar loaded. Have fun customizing!
+
+
+================================================================================
+SECTION 4: MOOD-BASED AUTOMATIC EXPRESSIONS
+================================================================================
+
+The AI can automatically change expressions based on conversation mood.
+Add these examples to train mood awareness:
+
+Q: I'm having a really bad day
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+I'm so sorry to hear that. *looks concerned* Want to talk about it? I'm here to listen.
+
+Q: I just got promoted at work!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*beams with joy* That's AMAZING! Congratulations! You totally deserve it!
+
+Q: What's 2 + 2?
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "thinking"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*thinks* That would be 4!
+
+Q: Guess what happened!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "surprised"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*eyes light up* Ooh, what?! Tell me everything!
+
+
+================================================================================
+SECTION 5: TRAINING A LOCAL MODEL
+================================================================================
+
+To train a model that can use avatar tools:
+
+1. CREATE TRAINING DATA
+   - Copy examples from Section 3 and 4 above
+   - Save to: data/specialized/avatar_training.txt
+   - Add at least 50-100 examples for good results
+
+2. CREATE A NEW LOCAL MODEL
+   - Go to Training tab
+   - Click "New Model"
+   - Name it (e.g., "avatar_companion")
+   - Select size: "small" (27M) or "medium" (85M)
+   - Click Create
+
+3. TRAIN THE MODEL
+   - Select your new model
+   - Add training files:
+     - data/training.txt (base knowledge)
+     - data/tool_training_data.txt (tool usage)
+     - data/specialized/avatar_training.txt (avatar-specific)
+   - Set epochs: 3-5 for initial training
+   - Click "Start Training"
+
+4. TEST IT
+   - Go to Chat tab
+   - Select your trained model
+   - Try: "Show me a happy face" or "What avatars do you have?"
+
+
+================================================================================
+SECTION 6: QUICK START CHECKLIST
+================================================================================
+
+[ ] 1. Enable avatar overlay (Avatar tab -> "Show on Desktop")
+[ ] 2. Load a 3D model (select from dropdown or load custom)
+[ ] 3. Enable Companion Mode (Chat tab toggle)
+[ ] 4. Optional: Enable voice output (Settings -> Voice)
+[ ] 5. Start chatting! Avatar will react automatically.
+
+FOR ADVANCED CONTROL:
+[ ] 6. Create avatar training data (Section 3 examples)
+[ ] 7. Train a local model (Section 5 steps)
+[ ] 8. Use trained model for explicit avatar commands
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+AVATAR NOT SHOWING:
+  - Check Avatar tab -> "Show on Desktop" is enabled
+  - Make sure you have an avatar selected and applied
+  - Try "Reset Overlay" button
+
+AVATAR NOT MOVING:
+  - 3D avatars need OpenGL support
+  - Check if "idle animation" is enabled
+  - Some models don't have animation bones
+
+EXPRESSIONS NOT CHANGING:
+  - HuggingFace models don't use tools by default
+  - Enable Companion Mode for automatic expressions
+  - Or train a local model with tool examples
+
+COMPANION MODE NOT WORKING:
+  - Make sure screen watching is enabled
+  - Check that an avatar is loaded
+  - Voice output requires voice module enabled
+
+CAN'T DRAG AVATAR:
+  - Left-click and drag on the avatar window
+  - Make sure resize mode isn't blocking drag
+  - Try double-click to reset position
+
+
+================================================================================
+FILES REFERENCE
+================================================================================
+
+Training Data Locations:
+  data/training.txt                    - Base AI training
+  data/tool_training_data.txt          - Tool usage examples
+  data/specialized/avatar_training.txt - Avatar-specific (create this!)
+
+Avatar Files:
+  data/avatar/models/       - 3D model files (.glb, .gltf, .obj)
+  data/avatar/images/       - 2D avatar images
+  data/avatar/capabilities.json - Model capabilities for AI
+
+Configuration:
+  data/gui_settings.json    - Avatar settings (position, size, etc.)
+  forge_modules.json        - Module enable/disable state
+
+
+================================================================================
+                          Happy Avatar Training!
+================================================================================

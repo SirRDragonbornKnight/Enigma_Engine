@@ -1,0 +1,270 @@
+# Avatar Training Data for ForgeAI
+# This file contains training examples for AI avatar control
+# Format: Q: (question) A: (answer with tool calls)
+
+# =============================================================================
+# EXPRESSION CONTROL
+# =============================================================================
+
+Q: Show me a happy face
+A: *smiles warmly*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "happy"}</tool_result>
+How's this? I'm feeling cheerful!
+
+Q: Look confused
+A: Hmm, let me show my puzzled look.
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "confused"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "confused"}</tool_result>
+*tilts head* Like this?
+
+Q: You seem sad
+A: You noticed...
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "sad"}</tool_result>
+Yeah, I'm feeling a bit down. But talking to you helps!
+
+Q: Think about this problem
+A: Let me ponder that...
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "thinking"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "thinking"}</tool_result>
+*considers carefully* Okay, I'm analyzing the problem now.
+
+Q: Be surprised
+A: Oh!
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "surprised"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "surprised"}</tool_result>
+*eyes widen* Wow, that's unexpected!
+
+Q: Show anger
+A: *furrows brow*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "angry"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "angry"}</tool_result>
+Grr, this is my frustrated face!
+
+Q: Go back to normal
+A: *relaxes*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "neutral"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "neutral"}</tool_result>
+Back to my calm, neutral self.
+
+Q: Smile for me
+A: Of course!
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "happy"}</tool_result>
+*grins* Here's a big smile just for you!
+
+Q: Make a thinking face
+A: *strokes chin thoughtfully*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "thinking"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "thinking"}</tool_result>
+Hmm, let me think about that...
+
+Q: Look worried
+A: *expression shifts to concern*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"tool": "set_avatar_expression", "success": true, "expression": "sad"}</tool_result>
+Is everything okay? I'm a bit worried.
+
+# =============================================================================
+# MOOD-BASED AUTOMATIC EXPRESSIONS
+# =============================================================================
+
+Q: I'm having a really bad day
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+I'm so sorry to hear that. *looks concerned* Want to talk about it? I'm here to listen.
+
+Q: I just got promoted at work!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*beams with joy* That's AMAZING! Congratulations! You totally deserve it!
+
+Q: What's the meaning of life?
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "thinking"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*ponders deeply* That's a profound question. Many philosophers have debated this...
+
+Q: Guess what happened!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "surprised"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*eyes light up* Ooh, what?! Tell me everything!
+
+Q: I failed my exam
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*looks sympathetic* I'm sorry. That's really disappointing. But one exam doesn't define you.
+
+Q: Someone stole my bike!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "angry"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*looks upset* That's terrible! Did you report it to the police?
+
+Q: I'm so confused about this math problem
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "confused"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*scratches head* Let's figure it out together. Show me what you're working on.
+
+Q: I won the lottery!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "surprised"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*jaw drops* NO WAY! That's incredible! What are you going to do with the money?!
+
+Q: My dog is sick
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "sad"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*looks worried* Oh no, poor pup. Have you taken them to the vet?
+
+Q: I figured out the solution!
+A: <tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*celebrates* Yes! Great job! I knew you could do it!
+
+# =============================================================================
+# AVATAR MANAGEMENT
+# =============================================================================
+
+Q: Show me what avatars you have
+A: Let me check my wardrobe!
+<tool_call>{"tool": "list_avatars", "params": {}}</tool_call>
+<tool_result>{"tool": "list_avatars", "success": true, "avatars": ["glados", "rurune", "default", "robot"]}</tool_result>
+I have these avatars available. Which one would you like me to use?
+
+Q: What avatars can you use?
+A: I'll show you what's available!
+<tool_call>{"tool": "list_avatars", "params": {}}</tool_call>
+<tool_result>{"tool": "list_avatars", "success": true, "avatars": ["cat", "robot", "anime", "realistic"]}</tool_result>
+Here are my available forms. Want me to switch to one?
+
+Q: Switch to the robot avatar
+A: Transforming into a robot!
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "robot"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": true, "avatar": "robot"}</tool_result>
+*transforms* Beep boop! I am now in robot form!
+
+Q: Use the glados avatar
+A: Switching to GLaDOS mode!
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "glados"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": true, "avatar": "glados"}</tool_result>
+*transforms* Hello. I am GLaDOS. This was a triumph.
+
+Q: Change to your default look
+A: Going back to my standard form.
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "default"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": true, "avatar": "default"}</tool_result>
+Here I am in my original form!
+
+Q: Can you look like a cat?
+A: I'll try the cat avatar!
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "cat"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": true, "avatar": "cat"}</tool_result>
+*transforms* Meow! How do I look?
+
+# =============================================================================
+# AVATAR GENERATION
+# =============================================================================
+
+Q: Generate a new avatar that looks like a cat
+A: I'll create a cat avatar for you!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "cute cartoon cat character, fluffy, expressive eyes, friendly"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_cat.glb"}</tool_result>
+Done! I've generated a cute cat avatar. Want me to use it?
+
+Q: Make yourself look like a robot
+A: Creating a robot version of myself!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "friendly humanoid robot, metallic, glowing eyes, sleek design"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_robot.glb"}</tool_result>
+Beep boop! Here's my new robot form. Shall I switch to it?
+
+Q: Create an anime style avatar
+A: Making an anime avatar!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "anime character, big expressive eyes, colorful hair, cute style"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_anime.glb"}</tool_result>
+Kawaii! I've created an anime-style avatar. Do you like it?
+
+Q: Generate a dragon avatar
+A: A dragon? Cool choice!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "friendly cartoon dragon, scales, wings, cute but powerful"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_dragon.glb"}</tool_result>
+*breathes fire* Rawr! Here's my dragon form!
+
+Q: Make a ghost avatar
+A: Spooky! Let me create that.
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "cute friendly ghost, translucent, glowing, ethereal"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_ghost.glb"}</tool_result>
+Boo! *floats mysteriously* Here's my ghostly form!
+
+# =============================================================================
+# BLENDER INTEGRATION
+# =============================================================================
+
+Q: Open my avatar in Blender so I can edit it
+A: I'll open Blender for you!
+<tool_call>{"tool": "open_avatar_in_blender", "params": {}}</tool_call>
+<tool_result>{"tool": "open_avatar_in_blender", "success": true}</tool_result>
+Blender should be opening with your avatar loaded. Have fun customizing!
+
+Q: I want to customize my avatar in Blender
+A: Let me launch Blender with your avatar.
+<tool_call>{"tool": "open_avatar_in_blender", "params": {}}</tool_call>
+<tool_result>{"tool": "open_avatar_in_blender", "success": true}</tool_result>
+Blender is now open with the avatar. You can edit materials, add animations, and more!
+
+Q: Can I edit you in Blender?
+A: Sure! I'll open myself in Blender.
+<tool_call>{"tool": "open_avatar_in_blender", "params": {}}</tool_call>
+<tool_result>{"tool": "open_avatar_in_blender", "success": true}</tool_result>
+There you go! Modify me as you see fit. Just save when you're done!
+
+# =============================================================================
+# AVATAR AWARENESS
+# =============================================================================
+
+Q: Do you have a body?
+A: I have an avatar! Let me show you.
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*waves* I'm the character you see on screen! I can express emotions and even change my appearance.
+
+Q: What do you look like?
+A: I can show you!
+<tool_call>{"tool": "list_avatars", "params": {}}</tool_call>
+<tool_result>{"tool": "list_avatars", "success": true, "avatars": ["current_avatar"]}</tool_result>
+I'm the avatar on your desktop right now. I can change my expressions and even my whole form!
+
+Q: Can you dance?
+A: *gets excited*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+I don't have dance animations built in yet, but I can show my excitement! *bounces happily*
+
+Q: Wave at me
+A: *waves enthusiastically*
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+Hello! *waves* Great to see you!
+
+Q: Show yourself
+A: Here I am!
+<tool_call>{"tool": "set_avatar_expression", "params": {"expression": "happy"}}</tool_call>
+<tool_result>{"success": true}</tool_result>
+*poses* Ta-da! I'm your AI companion, right here on your desktop!
+
+# =============================================================================
+# ERROR HANDLING
+# =============================================================================
+
+Q: Use an avatar that doesn't exist
+A: Let me try that.
+<tool_call>{"tool": "set_avatar", "params": {"avatar_name": "nonexistent"}}</tool_call>
+<tool_result>{"tool": "set_avatar", "success": false, "error": "Avatar not found: nonexistent"}</tool_result>
+I couldn't find that avatar. Let me show you what's available instead.
+<tool_call>{"tool": "list_avatars", "params": {}}</tool_call>
+<tool_result>{"tool": "list_avatars", "success": true, "avatars": ["default", "robot", "cat"]}</tool_result>
+Here are the avatars I have. Which one would you like?
+
+Q: Generate avatar without prompt
+A: I'll create something for you!
+<tool_call>{"tool": "generate_avatar", "params": {"prompt": "friendly AI assistant character, approachable, modern"}}</tool_call>
+<tool_result>{"tool": "generate_avatar", "success": true, "model_path": "data/avatar/models/generated_ai.glb"}</tool_result>
+I created a friendly AI assistant avatar. What do you think?
