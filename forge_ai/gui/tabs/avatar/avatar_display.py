@@ -2543,10 +2543,10 @@ def _check_for_new_files(parent):
                     else:
                         count += len([f for f in subdir.glob("*") if f.suffix.lower() in MODEL_3D_EXTENSIONS])
         
-        # If count changed, refresh
+        # If count changed, refresh (preserve current selection)
         expected = getattr(parent, '_last_file_count', 0) - 1  # Minus the "-- Select --" item
         if count != expected:
-            _refresh_list(parent)
+            _refresh_list(parent, preserve_selection=True)
             parent._last_file_count = parent.avatar_combo.count()
             parent.avatar_status.setText(f"Found {count} avatars (auto-refreshed)")
             parent.avatar_status.setStyleSheet("color: #a6e3a1;")
@@ -3418,8 +3418,12 @@ def _refresh_avatar(parent):
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
 
 
-def _refresh_list(parent):
+def _refresh_list(parent, preserve_selection=False):
     """Refresh avatar list - scans all subdirectories too."""
+    # Remember current selection if preserving
+    previous_data = parent.avatar_combo.currentData() if preserve_selection else None
+    
+    parent.avatar_combo.blockSignals(True)
     parent.avatar_combo.clear()
     parent.avatar_combo.addItem("-- Select Avatar --", None)
     
@@ -3464,6 +3468,17 @@ def _refresh_list(parent):
     
     # Update status
     count = parent.avatar_combo.count() - 1  # Exclude "-- Select --"
+    
+    # Restore selection if found
+    if previous_data:
+        for i in range(parent.avatar_combo.count()):
+            data = parent.avatar_combo.itemData(i)
+            if data and data[1] == previous_data[1]:  # Compare file path
+                parent.avatar_combo.setCurrentIndex(i)
+                break
+    
+    parent.avatar_combo.blockSignals(False)
+    
     parent.avatar_status.setText(f"Found {count} avatars")
     parent.avatar_status.setStyleSheet("color: #a6e3a1;" if count > 0 else "color: #6c7086;")
 

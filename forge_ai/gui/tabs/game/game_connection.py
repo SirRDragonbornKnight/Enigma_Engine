@@ -114,7 +114,7 @@ def create_game_subtab(parent):
     config_row.addWidget(parent.game_config_combo, stretch=1)
     btn_refresh = QPushButton("Refresh")
     btn_refresh.setMaximumWidth(60)
-    btn_refresh.clicked.connect(lambda: _refresh_game_configs(parent))
+    btn_refresh.clicked.connect(lambda: _refresh_game_configs(parent, preserve_selection=True))
     config_row.addWidget(btn_refresh)
     btn_new = QPushButton("New")
     btn_new.setMaximumWidth(40)
@@ -184,14 +184,27 @@ def load_game_configs() -> list:
     return configs
 
 
-def _refresh_game_configs(parent):
+def _refresh_game_configs(parent, preserve_selection=False):
     """Refresh the list of available game configs."""
+    # Remember current selection if preserving
+    previous_data = parent.game_config_combo.currentData() if preserve_selection else None
+    
+    parent.game_config_combo.blockSignals(True)
     parent.game_config_combo.clear()
     parent.game_config_combo.addItem("-- Select Config File --", None)
     
     if GAME_CONFIG_DIR.exists():
         for config_file in sorted(GAME_CONFIG_DIR.glob("*.json")):
             parent.game_config_combo.addItem(config_file.stem, str(config_file))
+    
+    # Restore selection if found
+    if previous_data:
+        for i in range(parent.game_config_combo.count()):
+            if parent.game_config_combo.itemData(i) == previous_data:
+                parent.game_config_combo.setCurrentIndex(i)
+                break
+    
+    parent.game_config_combo.blockSignals(False)
 
 
 def _on_game_config_changed(parent, index):

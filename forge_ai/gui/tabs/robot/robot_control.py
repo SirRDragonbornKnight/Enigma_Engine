@@ -65,7 +65,7 @@ def create_robot_subtab(parent):
     config_row.addWidget(parent.robot_config_combo, stretch=1)
     btn_refresh = QPushButton("Refresh")
     btn_refresh.setMaximumWidth(60)
-    btn_refresh.clicked.connect(lambda: _refresh_robot_configs(parent))
+    btn_refresh.clicked.connect(lambda: _refresh_robot_configs(parent, preserve_selection=True))
     config_row.addWidget(btn_refresh)
     btn_new = QPushButton("New")
     btn_new.setMaximumWidth(40)
@@ -159,14 +159,27 @@ def load_robot_configs() -> list:
     return configs
 
 
-def _refresh_robot_configs(parent):
+def _refresh_robot_configs(parent, preserve_selection=False):
     """Refresh the list of available robot configs."""
+    # Remember current selection if preserving
+    previous_data = parent.robot_config_combo.currentData() if preserve_selection else None
+    
+    parent.robot_config_combo.blockSignals(True)
     parent.robot_config_combo.clear()
     parent.robot_config_combo.addItem("-- Select Config File --", None)
     
     if ROBOT_CONFIG_DIR.exists():
         for config_file in sorted(ROBOT_CONFIG_DIR.glob("*.json")):
             parent.robot_config_combo.addItem(config_file.stem, str(config_file))
+    
+    # Restore selection if found
+    if previous_data:
+        for i in range(parent.robot_config_combo.count()):
+            if parent.robot_config_combo.itemData(i) == previous_data:
+                parent.robot_config_combo.setCurrentIndex(i)
+                break
+    
+    parent.robot_config_combo.blockSignals(False)
 
 
 def _on_robot_config_changed(parent, index):
