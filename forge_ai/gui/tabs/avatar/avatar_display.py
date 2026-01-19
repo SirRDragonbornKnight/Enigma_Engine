@@ -2540,6 +2540,18 @@ def create_avatar_subtab(parent):
     parent._activity_log_watcher.start(500)  # Check every 0.5 seconds
     parent._last_activity_log_content = ""
     
+    # Register for expression change callbacks from AI chat
+    def _on_expression_change(old_expr, new_expr):
+        """Called when AI chat triggers an expression change."""
+        try:
+            # Update expression on overlay if it's showing (from_callback=True prevents loop)
+            _set_expression(parent, new_expr, from_callback=True)
+        except Exception:
+            pass
+    
+    avatar.on("expression", _on_expression_change)
+    parent._expression_callback = _on_expression_change  # Keep reference
+    
     # Show default sprite on initialization (unless auto-loading)
     if not getattr(parent, '_avatar_auto_loaded', False):
         parent._using_builtin_sprite = True
@@ -2989,12 +3001,21 @@ def _test_random_expression(parent):
                 parent._overlay.set_avatar(scaled)
 
 
-def _set_expression(parent, expression: str):
-    """Set avatar expression and update preview."""
+def _set_expression(parent, expression: str, from_callback: bool = False):
+    """Set avatar expression and update preview.
+    
+    Args:
+        parent: The avatar display widget
+        expression: Expression name (neutral, happy, sad, etc.)
+        from_callback: If True, don't call controller again (prevents loop)
+    """
     parent.current_expression = expression
     if hasattr(parent, 'expression_label'):
         parent.expression_label.setText(f"Current: {expression}")
-    parent._avatar_controller.set_expression(expression)
+    
+    # Only notify controller if this wasn't triggered by controller callback
+    if not from_callback:
+        parent._avatar_controller.set_expression(expression)
     
     # Update preview with new expression sprite
     if parent._using_builtin_sprite or not parent._current_path:
@@ -3012,6 +3033,53 @@ def _set_expression(parent, expression: str):
             if pixmap:
                 scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
                 parent._overlay.set_avatar(scaled)
+    else:
+        # Using custom avatar - try to find expression-specific image
+        _update_avatar_for_expression(parent, expression)
+    
+    parent.avatar_status.setText(f"Expression: {expression}")
+    parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+
+
+def _update_avatar_for_expression(parent, expression: str):
+    """Update custom avatar to show specific expression if available."""
+    if not parent._current_path:
+        return
+    
+    from pathlib import Path
+    base_path = Path(parent._current_path)
+    
+    # Check for expression-specific image in same folder or emotions subfolder
+    search_paths = []
+    if base_path.is_file():
+        folder = base_path.parent
+        search_paths = [
+            folder / f"{expression}.png",
+            folder / "emotions" / f"{expression}.png",
+            folder / f"{expression}.jpg",
+            folder / f"{expression}.gif",
+        ]
+    elif base_path.is_dir():
+        search_paths = [
+            base_path / f"{expression}.png",
+            base_path / "emotions" / f"{expression}.png",
+            base_path / f"{expression}.jpg",
+        ]
+    
+    # Try to find expression image
+    for expr_path in search_paths:
+        if expr_path.exists():
+            pixmap = QPixmap(str(expr_path))
+            if not pixmap.isNull():
+                parent.avatar_preview_2d.set_avatar(pixmap)
+                
+                # Update overlay
+                if parent._overlay and parent._overlay.isVisible():
+                    scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
+                    parent._overlay.set_avatar(scaled)
+                return
+    
+    # No expression-specific image found - keep current
     
     parent.avatar_status.setText(f"Expression: {expression}")
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")

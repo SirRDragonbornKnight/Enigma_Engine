@@ -109,7 +109,11 @@ class AvatarController:
             "move": [],
             "speak": [],
             "interact": [],
+            "expression": [],  # Called when expression changes
         }
+        
+        # Current expression state
+        self._current_expression: str = "neutral"
         
         # Animation queue
         self._animation_queue: List[Dict] = []
@@ -529,14 +533,24 @@ class AvatarController:
         Args:
             expression: One of: neutral, happy, sad, surprised, thinking, confused
         """
-        if not self.is_enabled:
-            return
+        # Update current expression (always track, even when disabled)
+        old_expression = getattr(self, '_current_expression', 'neutral')
+        self._current_expression = expression
         
-        self._animation_queue.append({
-            "type": "expression",
-            "expression": expression,
-            "duration": 0.5,
-        })
+        # Notify listeners immediately (for GUI updates) - works even when disabled
+        for cb in self._callbacks.get("expression", []):
+            try:
+                cb(old_expression, expression)
+            except Exception as e:
+                print(f"[Avatar] Expression callback error: {e}")
+        
+        # Only queue animation if fully enabled
+        if self.is_enabled:
+            self._animation_queue.append({
+                "type": "expression",
+                "expression": expression,
+                "duration": 0.5,
+            })
     
     def execute_action(self, action: str, params: dict = None) -> dict:
         """
@@ -806,6 +820,10 @@ class AvatarController:
         """
         if event in self._callbacks:
             self._callbacks[event].append(callback)
+    
+    def get_expression(self) -> str:
+        """Get current expression."""
+        return getattr(self, '_current_expression', 'neutral')
     
     # === Serialization ===
     
