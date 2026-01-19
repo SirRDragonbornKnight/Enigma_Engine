@@ -1277,10 +1277,29 @@ class AvatarOverlayWindow(QWidget):
             
     def mouseReleaseEvent(self, a0):  # type: ignore
         """End drag or resize."""
+        # Save position if we were dragging
+        if self._drag_pos is not None:
+            try:
+                from ....avatar.persistence import save_position
+                pos = self.pos()
+                save_position(pos.x(), pos.y())
+            except Exception:
+                pass
         self._drag_pos = None
         self._resize_edge = None
         self.setCursor(QCursor(Qt_ArrowCursor))
         a0.accept()
+    
+    def showEvent(self, a0):
+        """Restore saved position when shown."""
+        super().showEvent(a0)
+        try:
+            from ....avatar.persistence import load_position
+            x, y = load_position()
+            if x is not None and y is not None:
+                self.move(x, y)
+        except Exception:
+            pass
         
     def keyPressEvent(self, a0):  # type: ignore
         """ESC to close."""
@@ -1662,6 +1681,14 @@ class Avatar3DOverlayWindow(QWidget):
                 
             elif event_type == event.MouseButtonRelease:
                 if event.button() == Qt_LeftButton:
+                    # Save position when drag ends
+                    if self._drag_pos is not None:
+                        try:
+                            from ....avatar.persistence import save_position
+                            pos = self.pos()
+                            save_position(pos.x(), pos.y())
+                        except Exception:
+                            pass
                     self._drag_pos = None
                     self.setCursor(QCursor(Qt_OpenHandCursor))
                 return True  # Block event from reaching GL widget
@@ -1682,6 +1709,17 @@ class Avatar3DOverlayWindow(QWidget):
                 return False
                 
         return super().eventFilter(obj, event)
+    
+    def showEvent(self, a0):
+        """Restore saved position when shown."""
+        super().showEvent(a0)
+        try:
+            from ....avatar.persistence import load_position
+            x, y = load_position()
+            if x is not None and y is not None:
+                self.move(x, y)
+        except Exception:
+            pass
     
     def wheelEvent(self, event):
         """Scroll to resize overlay (only when resize mode is enabled)."""
@@ -2261,6 +2299,31 @@ def create_avatar_subtab(parent):
     
     actions_group.setLayout(actions_layout)
     right_panel.addWidget(actions_group)
+    
+    # === Avatar Gallery ===
+    gallery_group = QGroupBox("Avatar Gallery")
+    gallery_layout = QVBoxLayout()
+    
+    # Browse avatars button
+    parent.browse_avatars_btn = QPushButton("Browse Avatars...")
+    parent.browse_avatars_btn.setToolTip("Browse and select from installed avatars")
+    parent.browse_avatars_btn.clicked.connect(lambda: _browse_avatars(parent))
+    gallery_layout.addWidget(parent.browse_avatars_btn)
+    
+    # Import avatar button
+    parent.import_avatar_btn = QPushButton("Import Avatar...")
+    parent.import_avatar_btn.setToolTip("Import a new avatar from files or .forgeavatar bundle")
+    parent.import_avatar_btn.clicked.connect(lambda: _import_avatar(parent))
+    gallery_layout.addWidget(parent.import_avatar_btn)
+    
+    # Generate samples button
+    parent.generate_samples_btn = QPushButton("Generate Samples")
+    parent.generate_samples_btn.setToolTip("Generate sample avatars to get started")
+    parent.generate_samples_btn.clicked.connect(lambda: _generate_sample_avatars(parent))
+    gallery_layout.addWidget(parent.generate_samples_btn)
+    
+    gallery_group.setLayout(gallery_layout)
+    right_panel.addWidget(gallery_group)
     
     # === 3D Viewer Settings (Sketchfab-style) ===
     if HAS_OPENGL and HAS_TRIMESH:
@@ -3775,3 +3838,103 @@ def set_avatar_expression(parent, expression: str):
 def load_avatar_config(config_path: Path) -> dict:
     """Load avatar config (compatibility)."""
     return _load_json(config_path)
+
+
+# ============================================================================
+# Avatar Gallery / Import Functions
+# ============================================================================
+
+def _browse_avatars(parent):
+    """Open the avatar picker dialog."""
+    try:
+        from ....avatar.avatar_dialogs import AvatarPickerDialog
+        
+        picker = AvatarPickerDialog(parent)
+        picker.avatar_selected.connect(lambda info: _apply_selected_avatar(parent, info))
+        picker.exec_()
+    except ImportError as e:
+        parent.avatar_status.setText(f"Gallery not available: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+    except Exception as e:
+        parent.avatar_status.setText(f"Error: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _import_avatar(parent):
+    """Open the avatar import wizard."""
+    try:
+        from ....avatar.avatar_dialogs import AvatarImportWizard
+        
+        wizard = AvatarImportWizard(parent)
+        if wizard.exec_():
+            parent.avatar_status.setText("Avatar imported successfully!")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+            # Refresh combo box
+            _refresh_avatar(parent)
+    except ImportError as e:
+        parent.avatar_status.setText(f"Import wizard not available: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+    except Exception as e:
+        parent.avatar_status.setText(f"Error: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _generate_sample_avatars(parent):
+    """Generate sample avatars."""
+    try:
+        from ....avatar.sample_avatars import generate_sample_avatars
+        
+        parent.avatar_status.setText("Generating samples...")
+        parent.avatar_status.setStyleSheet("color: #89dceb;")
+        QApplication.processEvents()
+        
+        avatars = generate_sample_avatars()
+        
+        parent.avatar_status.setText(f"Generated {len(avatars)} sample avatars!")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        
+        # Refresh combo
+        _refresh_avatar(parent)
+        
+    except ImportError as e:
+        parent.avatar_status.setText(f"Sample generator not available: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+    except Exception as e:
+        parent.avatar_status.setText(f"Error generating: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _apply_selected_avatar(parent, avatar_info: dict):
+    """Apply an avatar from the picker."""
+    path = Path(avatar_info.get("path", ""))
+    if not path.exists():
+        parent.avatar_status.setText("Avatar path not found")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    # Check for neutral/default expression
+    for img_name in ["neutral.png", "base.png", "default.png"]:
+        img_path = path / img_name
+        if img_path.exists():
+            parent._current_path = img_path
+            parent._is_3d_model = False
+            _preview_image(parent, img_path)
+            _apply_avatar(parent)
+            parent.avatar_status.setText(f"Loaded: {avatar_info.get('name', path.name)}")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+            return
+    
+    # Check for any image
+    for ext in IMAGE_EXTENSIONS:
+        for img_path in path.glob(f"*{ext}"):
+            parent._current_path = img_path
+            parent._is_3d_model = False
+            _preview_image(parent, img_path)
+            _apply_avatar(parent)
+            parent.avatar_status.setText(f"Loaded: {avatar_info.get('name', path.name)}")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+            return
+    
+    parent.avatar_status.setText("No image found in avatar")
+    parent.avatar_status.setStyleSheet("color: #fab387;")
+

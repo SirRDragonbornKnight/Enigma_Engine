@@ -206,6 +206,41 @@ from .blender_bridge import (
     save_blender_addon,
 )
 
+# Avatar Bundle System
+from .avatar_bundle import (
+    AvatarBundle,
+    AvatarManifest,
+    AvatarBundleCreator,
+    install_avatar_bundle,
+    list_installed_avatars,
+)
+
+# Sample Avatars
+from .sample_avatars import (
+    SampleAvatarGenerator,
+    generate_sample_avatars,
+)
+
+# Persistence
+from .persistence import (
+    AvatarSettings,
+    AvatarPersistence,
+    get_persistence,
+    save_position,
+    load_position,
+    save_avatar_settings,
+    load_avatar_settings,
+)
+
+# Template Generator
+from .template_generator import (
+    SpriteTemplateGenerator,
+    TemplateConfig,
+    generate_template,
+    STANDARD_EMOTIONS,
+    EXTENDED_EMOTIONS,
+)
+
 __all__ = [
     # Controller
     "AvatarController",
@@ -283,4 +318,31 @@ __all__ = [
     "BlenderModelInfo",
     "get_blender_bridge",
     "save_blender_addon",
+    
+    # Avatar Bundle System
+    "AvatarBundle",
+    "AvatarManifest",
+    "AvatarBundleCreator",
+    "install_avatar_bundle",
+    "list_installed_avatars",
+    
+    # Sample Avatars
+    "SampleAvatarGenerator",
+    "generate_sample_avatars",
+    
+    # Persistence
+    "AvatarSettings",
+    "AvatarPersistence",
+    "get_persistence",
+    "save_position",
+    "load_position",
+    "save_avatar_settings",
+    "load_avatar_settings",
+    
+    # Template Generator
+    "SpriteTemplateGenerator",
+    "TemplateConfig",
+    "generate_template",
+    "STANDARD_EMOTIONS",
+    "EXTENDED_EMOTIONS",
 ]
