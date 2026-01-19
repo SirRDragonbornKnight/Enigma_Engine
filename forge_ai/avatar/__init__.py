@@ -122,6 +122,25 @@ Avatar3DAnimator = NativeAvatar3D
 AI3DAvatarController = AI3DController
 HAS_3D_ANIMATION = True
 
+# Unified Avatar System (combines all modes)
+# - PNG_BOUNCE: DougDoug style simple PNG with bounce
+# - ANIMATED_2D: Desktop Mate style GIF/sprite animations
+# - SKELETAL_3D: Cortana style 3D skeletal animation
+from .unified_avatar import (
+    UnifiedAvatar,
+    AvatarMode,
+    AvatarType,
+    AvatarConfig,
+    EmotionMapping,
+    PNGBounceWidget,
+    # Convenience functions
+    create_png_avatar,
+    create_2d_avatar,
+    create_3d_avatar,
+    create_animal_avatar,
+    create_robot_avatar,
+)
+
 # Speech synchronization (voice + lip sync)
 from .speech_sync import (
     SpeechSync,
