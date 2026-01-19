@@ -141,6 +141,16 @@ from .unified_avatar import (
     create_robot_avatar,
 )
 
+# AI-Avatar Bridge (AI controls avatar during chat)
+from .ai_bridge import (
+    AIAvatarBridge,
+    AvatarChatIntegration,
+    EmotionKeywords,
+    GestureKeywords,
+    create_avatar_bridge,
+    integrate_avatar_with_chat,
+)
+
 # Speech synchronization (voice + lip sync)
 from .speech_sync import (
     SpeechSync,
