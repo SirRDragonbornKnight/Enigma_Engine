@@ -108,17 +108,19 @@ from .animation_system import (
     Animation,
 )
 
-# 3D Animation (real-time skeletal animation with Panda3D)
-try:
-    from .animation_3d import (
-        Avatar3DAnimator,
-        AI3DAvatarController,
-        Animation3DState,
-        create_3d_avatar,
-    )
-    HAS_3D_ANIMATION = True
-except ImportError:
-    HAS_3D_ANIMATION = False
+# 3D Animation (real-time skeletal animation - NO EXTERNAL DEPENDENCIES)
+# Uses only PyQt5's built-in OpenGL support
+from .animation_3d_native import (
+    NativeAvatar3D,
+    AI3DController,
+    Animation3DState,
+    Avatar3DWidget,
+    GLTFLoader,
+)
+# Aliases for compatibility
+Avatar3DAnimator = NativeAvatar3D
+AI3DAvatarController = AI3DController
+HAS_3D_ANIMATION = True
 
 # Speech synchronization (voice + lip sync)
 from .speech_sync import (

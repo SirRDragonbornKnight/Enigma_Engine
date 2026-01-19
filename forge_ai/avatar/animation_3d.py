@@ -184,6 +184,7 @@ class Avatar3DAnimator:
             load-display pandagl
             framebuffer-alpha true
             background-color 0 0 0 0
+            want-pstats false
         """)
         
         # Try to load glTF support
@@ -196,6 +197,11 @@ class Avatar3DAnimator:
         # Create ShowBase
         self._base = ShowBase()
         self._base.disableMouse()
+        
+        # Disable signal handling (doesn't work in threads)
+        self._base.taskMgr.setupTaskChain('default', numThreads=0, tickClock=False,
+                                           threadPriority=None, frameBudget=-1,
+                                           frameSync=False, timeslicePriority=False)
         
         # Create offscreen buffer for rendering
         fb_props = FrameBufferProperties()
@@ -236,11 +242,14 @@ class Avatar3DAnimator:
         self._base.taskMgr.add(self._process_commands_task, "process_commands")
         self._base.taskMgr.add(self._capture_frame_task, "capture_frame")
         
-        # Run Panda3D loop
+        # Run Panda3D loop manually to avoid signal handler issues in threads
         try:
-            self._base.run()
-        except SystemExit:
-            pass
+            while self._running:
+                self._base.taskMgr.step()
+                self._base.graphicsEngine.renderFrame()
+        except (SystemExit, Exception) as e:
+            if self._running:
+                print(f"[3D Animator] Loop error: {e}")
     
     def _setup_lighting(self):
         """Set up default lighting."""
