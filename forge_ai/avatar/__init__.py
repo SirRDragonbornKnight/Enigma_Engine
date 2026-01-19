@@ -142,13 +142,25 @@ from .unified_avatar import (
 )
 
 # AI-Avatar Bridge (AI controls avatar during chat)
+# Two control modes:
+# 1. AUTOMATIC: Detects emotions from text via keyword matching
+# 2. EXPLICIT: AI uses [emotion:happy], [gesture:wave], etc. commands
 from .ai_bridge import (
     AIAvatarBridge,
     AvatarChatIntegration,
     EmotionKeywords,
     GestureKeywords,
+    # Explicit command system
+    AvatarCommand,
+    ExplicitCommands,
+    parse_explicit_commands,
+    get_command_reference,
+    # Convenience functions
     create_avatar_bridge,
     integrate_avatar_with_chat,
+    get_avatar_command_prompt,
+    process_ai_response,
+    list_avatar_commands,
 )
 
 # Speech synchronization (voice + lip sync)
@@ -220,6 +232,21 @@ __all__ = [
     "ModelCapabilities", 
     "AnimationStrategy",
     "AnimationState",
+    
+    # AI-Avatar Bridge
+    "AIAvatarBridge",
+    "AvatarChatIntegration",
+    "EmotionKeywords",
+    "GestureKeywords",
+    "AvatarCommand",
+    "ExplicitCommands",
+    "parse_explicit_commands",
+    "get_command_reference",
+    "create_avatar_bridge",
+    "integrate_avatar_with_chat",
+    "get_avatar_command_prompt",
+    "process_ai_response",
+    "list_avatar_commands",
     
     # Speech Sync (voice + avatar)
     "SpeechSync",

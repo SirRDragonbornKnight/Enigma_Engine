@@ -157,6 +157,36 @@ class AvatarDemo(QMainWindow):
         
         chat_layout.addLayout(test_layout)
         
+        # Explicit command test buttons (AI intentionally controls avatar)
+        explicit_layout = QHBoxLayout()
+        explicit_layout.addWidget(QLabel("Explicit AI Commands:"))
+        
+        btn_explicit_greet = QPushButton("Wave + Happy")
+        btn_explicit_greet.clicked.connect(lambda: self._simulate_response(
+            "[emotion:happy][gesture:wave] Hello! Great to see you!"
+        ))
+        explicit_layout.addWidget(btn_explicit_greet)
+        
+        btn_explicit_think = QPushButton("Think + Nod")
+        btn_explicit_think.clicked.connect(lambda: self._simulate_response(
+            "[emotion:thinking][gesture:nod][action:think] Let me consider that carefully..."
+        ))
+        explicit_layout.addWidget(btn_explicit_think)
+        
+        btn_explicit_excited = QPushButton("Excited + Clap")
+        btn_explicit_excited.clicked.connect(lambda: self._simulate_response(
+            "[emotion:excited][gesture:clap] That's fantastic news! Congratulations!"
+        ))
+        explicit_layout.addWidget(btn_explicit_excited)
+        
+        btn_explicit_shrug = QPushButton("Confused + Shrug")
+        btn_explicit_shrug.clicked.connect(lambda: self._simulate_response(
+            "[emotion:confused][gesture:shrug] Hmm, I'm not entirely sure about that..."
+        ))
+        explicit_layout.addWidget(btn_explicit_shrug)
+        
+        chat_layout.addLayout(explicit_layout)
+        
         layout.addWidget(chat_group)
     
     def _create_test_avatar(self):
@@ -266,9 +296,10 @@ class AvatarDemo(QMainWindow):
         self.bridge.on_response_start()
         self.status_label.setText("Status: Talking")
         
-        # Stream response character by character
+        # Stream response - but commands get stripped by the bridge
         self._stream_index = 0
         self._stream_response = response
+        self._stream_buffer = ""
         self._stream_timer = QTimer()
         self._stream_timer.timeout.connect(self._stream_next_char)
         self._stream_timer.start(30)  # 30ms per character
@@ -277,20 +308,33 @@ class AvatarDemo(QMainWindow):
         """Stream next character of response."""
         if self._stream_index < len(self._stream_response):
             char = self._stream_response[self._stream_index]
+            self._stream_index += 1
             
-            # Add to display
-            cursor = self.chat_display.textCursor()
-            cursor.movePosition(cursor.End)
-            cursor.insertText(char)
-            self.chat_display.setTextCursor(cursor)
+            # Buffer characters to handle commands spanning multiple chars
+            self._stream_buffer += char
             
-            # Send to bridge for analysis
-            self.bridge.on_response_chunk(char)
+            # Check if we have a complete command or regular text
+            # Send to bridge - it returns cleaned text
+            cleaned = self.bridge.on_response_chunk(self._stream_buffer)
+            
+            # If cleaned text returned, display it
+            if cleaned.strip():
+                cursor = self.chat_display.textCursor()
+                cursor.movePosition(cursor.End)
+                cursor.insertText(cleaned)
+                self.chat_display.setTextCursor(cursor)
+            
+            # Clear buffer after processing
+            self._stream_buffer = ""
             
             # Update emotion label
             self.emotion_label.setText(f"Emotion: {self.bridge._last_emotion}")
             
-            self._stream_index += 1
+            # Show any explicit commands that were executed
+            cmds = self.bridge.get_commands_for_response()
+            if cmds:
+                cmd_str = ", ".join(f"{c.command_type}:{c.value}" for c in cmds[-3:])
+                self.status_label.setText(f"Commands: {cmd_str}")
         else:
             # Done streaming
             self._stream_timer.stop()
