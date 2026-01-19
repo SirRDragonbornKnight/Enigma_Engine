@@ -1,15 +1,37 @@
 #!/usr/bin/env python3
 """
-ForgeAI - Main Entry Point
+================================================================================
+🚀 ForgeAI - MAIN ENTRY POINT
+================================================================================
 
-Run your AI with one of these commands:
-    python run.py --gui     # GUI interface (recommended)
-    python run.py --train   # Train from command line
-    python run.py --run     # CLI chat interface
-    python run.py --serve   # Start API server
-    python run.py --build   # Build a new model from scratch
+This is where EVERYTHING begins! Like the front door to a castle.
+Your journey through ForgeAI starts here.
 
-For first-time users, start with --gui
+📍 FILE: run.py
+🏷️ TYPE: Application Entry Point
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  COMMAND OPTIONS:                                                           │
+│                                                                             │
+│    python run.py --gui     → Opens graphical interface (RECOMMENDED!)      │
+│    python run.py --train   → Train your AI model                           │
+│    python run.py --run     → Chat in terminal (CLI)                        │
+│    python run.py --serve   → Start REST API server                         │
+│    python run.py --build   → Build new model from scratch                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🔗 CONNECTED FILES:
+    --train  → forge_ai/core/training.py      (Trainer, train_model)
+    --run    → forge_ai/core/inference.py     (ForgeEngine)
+    --gui    → forge_ai/gui/enhanced_window.py (EnhancedMainWindow)
+    --serve  → forge_ai/comms/api_server.py   (Flask REST API)
+
+📖 SEE ALSO:
+    • CODE_ADVENTURE_TOUR.txt  - Full guided tour of the codebase
+    • QUICK_FILE_LOCATOR.txt   - Fast file finder
+    • docs/CODE_TOUR.md        - Detailed documentation
+
+For first-time users, start with: python run.py --gui
 """
 
 import argparse

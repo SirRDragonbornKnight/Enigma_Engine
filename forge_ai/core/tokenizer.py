@@ -1,29 +1,62 @@
 """
-Forge Tokenizer - Unified Interface
-=====================================
+================================================================================
+🔤 FORGE TOKENIZER - TEXT ↔ NUMBERS CONVERTER
+================================================================================
 
-Provides a unified interface for all tokenizer types with automatic selection
-of the best available tokenizer for the task.
+The TRANSLATOR between human text and numbers the AI understands!
+Converts sentences into sequences of integers for the neural network.
 
-Tokenizer Hierarchy (best to worst):
-1. AdvancedBPETokenizer - Byte-level BPE, handles any input, learns from data
-2. CharacterTokenizer - Full character coverage with dictionary
-3. SimpleTokenizer - Basic character + common words (no dependencies)
+📍 FILE: forge_ai/core/tokenizer.py
+🏷️ TYPE: Text Tokenization
+🎯 MAIN FUNCTION: get_tokenizer()
+🎯 MAIN CLASSES: SimpleTokenizer, TiktokenWrapper, AdvancedBPETokenizer
 
-Usage:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TOKENIZATION FLOW:                                                         │
+│                                                                             │
+│  "Hello world!" → [Tokenizer] → [15496, 995, 0]                            │
+│                                                                             │
+│  [15496, 995, 0] → [Tokenizer] → "Hello world!"                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📊 TOKENIZER HIERARCHY (best to worst):
+    1. AdvancedBPETokenizer - Byte-level BPE, handles any input, learns from data
+    2. CharacterTokenizer  - Full character coverage with dictionary
+    3. SimpleTokenizer     - Basic character + common words (NO dependencies!)
+
+🏷️ SPECIAL TOKENS:
+    • <pad> - Padding (ID: 0)
+    • <s>   - Start of sequence (ID: 1)
+    • </s>  - End of sequence (ID: 2)
+    • <unk> - Unknown token (ID: 3)
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/vocab_model/ (vocabulary files)
+    ← USED BY:   forge_ai/core/model.py (needs vocab_size)
+    ← USED BY:   forge_ai/core/inference.py (encode/decode text)
+    ← USED BY:   forge_ai/core/training.py (prepare training data)
+
+📖 USAGE:
     from forge_ai.core.tokenizer import get_tokenizer
-
+    
     # Auto-select best available
     tokenizer = get_tokenizer()
-
+    
     # Or specify type
     tokenizer = get_tokenizer("bpe")      # Advanced BPE
     tokenizer = get_tokenizer("char")     # Character-level
     tokenizer = get_tokenizer("simple")   # Simple fallback
-
-    # Use it
+    
+    # Encode/Decode
     ids = tokenizer.encode("Hello world")
     text = tokenizer.decode(ids)
+
+📁 VOCAB LOCATION: forge_ai/vocab_model/
+
+📖 SEE ALSO:
+    • forge_ai/core/bpe_tokenizer.py      - BPE implementation
+    • forge_ai/core/char_tokenizer.py     - Character tokenizer
+    • forge_ai/core/advanced_tokenizer.py - Advanced tokenizer
 """
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
@@ -37,37 +70,71 @@ VOCAB_DIR = Path(__file__).resolve().parent.parent / "vocab_model"
 
 
 # =============================================================================
-# Simple Tokenizer (always available, no dependencies)
+# 🔤 SIMPLE TOKENIZER - Always Works, No Dependencies!
 # =============================================================================
+# This is the FALLBACK tokenizer that works without any external libraries.
+# It's simple but reliable - perfect for bootstrapping or when tiktoken fails.
 
 class SimpleTokenizer:
     """
     Lightweight character-level tokenizer.
-
-    Works without any external dependencies.
-    Good for bootstrapping and fallback.
+    
+    📖 WHAT THIS DOES:
+    Converts text to numbers and back. Simple and reliable!
+    
+    📐 HOW IT WORKS:
+    1. Has a vocabulary: {"a": 0, "b": 1, "the": 50, ...}
+    2. encode(): Split text into tokens, look up their IDs
+    3. decode(): Look up IDs to get tokens, join them together
+    
+    💡 TOKENIZATION STRATEGY:
+    - First tries to match whole WORDS (like "the", "hello")
+    - Falls back to individual CHARACTERS if word not in vocab
+    - This is a hybrid word+char approach
+    
+    📐 EXAMPLE:
+        >>> tok = SimpleTokenizer()
+        >>> tok.encode("hello world")
+        [1, 145, 32, 119, 111, 114, 108, 100, 2]
+        #  ↑ <s>  "hello"  space + characters   ↑ </s>
+    
+    🔗 CONNECTS TO:
+      ← Used by get_tokenizer() as fallback
+      ← Used when no trained tokenizer is available
     """
 
     def __init__(self, vocab_file: Optional[Path] = None):
-        self.pad_token = "<pad>"
-        self.eos_token = "</s>"
-        self.unk_token = "<unk>"
-        self.bos_token = "<s>"
+        """
+        Initialize tokenizer.
+        
+        Args:
+            vocab_file: Optional path to saved vocabulary JSON
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # SPECIAL TOKENS: Reserved tokens with fixed IDs
+        # ─────────────────────────────────────────────────────────────────────
+        self.pad_token = "<pad>"   # Padding for batching
+        self.eos_token = "</s>"    # End of sequence
+        self.unk_token = "<unk>"   # Unknown token (fallback)
+        self.bos_token = "<s>"     # Beginning of sequence
 
-        # Special token IDs (fixed)
+        # Special token IDs (MUST be fixed for model compatibility)
         self.special_tokens = {
-            "<pad>": 0,
-            "<s>": 1,
-            "</s>": 2,
-            "<unk>": 3,
+            "<pad>": 0,   # Padding - used to make sequences same length
+            "<s>": 1,     # Start - marks beginning of text
+            "</s>": 2,    # End - marks end of text
+            "<unk>": 3,   # Unknown - used for characters not in vocab
         }
 
+        # Convenient ID lookups
         self.pad_token_id = 0
         self.bos_token_id = 1
         self.eos_token_id = 2
         self.unk_token_id = 3
 
-        # Load or create vocabulary
+        # ─────────────────────────────────────────────────────────────────────
+        # LOAD OR CREATE VOCABULARY
+        # ─────────────────────────────────────────────────────────────────────
         if vocab_file and Path(vocab_file).exists():
             self._load_vocab(vocab_file)
         else:
@@ -76,11 +143,22 @@ class SimpleTokenizer:
         self.vocab_size = len(self.token_to_id)
 
     def _create_default_vocab(self):
-        """Create a basic character + common word vocabulary."""
+        """
+        Create a basic character + common word vocabulary.
+        
+        📖 VOCABULARY STRUCTURE:
+        IDs 0-3: Special tokens (<pad>, <s>, </s>, <unk>)
+        IDs 4-98: Printable ASCII characters (space, a-z, A-Z, 0-9, etc.)
+        IDs 99+: Common English words for efficiency
+        """
+        # Start with special tokens
         self.token_to_id = dict(self.special_tokens)
         self.id_to_token = {v: k for k, v in self.special_tokens.items()}
 
-        # Add printable ASCII characters
+        # ─────────────────────────────────────────────────────────────────────
+        # ADD ASCII CHARACTERS (codes 32-126)
+        # ─────────────────────────────────────────────────────────────────────
+        # This gives us: space, !"#$%&'()*+,-./ 0-9 :;<=>?@ A-Z [\]^_` a-z {|}~
         for c in range(32, 127):
             token = chr(c)
             if token not in self.token_to_id:
@@ -88,7 +166,11 @@ class SimpleTokenizer:
                 self.token_to_id[token] = idx
                 self.id_to_token[idx] = token
 
-        # Add common words/subwords for better efficiency
+        # ─────────────────────────────────────────────────────────────────────
+        # ADD COMMON WORDS (for efficiency)
+        # ─────────────────────────────────────────────────────────────────────
+        # Without these, "the" would be 3 tokens: "t", "h", "e"
+        # With these, "the" is 1 token - 3x more efficient!
         common = [
             "the", "is", "a", "to", "of", "and", "in", "that", "it",
             "for", "you", "was", "with", "on", "are", "be", "have",
@@ -113,63 +195,106 @@ class SimpleTokenizer:
                 self.id_to_token[idx] = word
 
     def _load_vocab(self, vocab_file: Path):
-        """Load vocabulary from file."""
+        """Load vocabulary from JSON file."""
         with open(vocab_file, 'r', encoding='utf-8') as f:
             self.token_to_id = json.load(f)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
 
     def save_vocab(self, vocab_file: Path):
-        """Save vocabulary to file."""
+        """Save vocabulary to JSON file."""
         Path(vocab_file).parent.mkdir(parents=True, exist_ok=True)
         with open(vocab_file, 'w', encoding='utf-8') as f:
             json.dump(self.token_to_id, f, ensure_ascii=False, indent=2)
 
     def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
-        """Encode text to token IDs."""
+        """
+        Encode text to token IDs.
+        
+        📖 ENCODING PROCESS:
+        1. Add <s> (start token) if requested
+        2. Split text into words
+        3. For each word:
+           - If word in vocab → use word token
+           - Else → use character tokens
+        4. Add spaces between words
+        5. Add </s> (end token) if requested
+        
+        Args:
+            text: Input string to encode
+            add_special_tokens: Whether to add <s> and </s>
+        
+        Returns:
+            List of token IDs
+        """
         ids = []
 
+        # Start with beginning-of-sequence token
         if add_special_tokens:
             ids.append(self.bos_token_id)
 
-        # Tokenize: try words first, then characters
+        # ─────────────────────────────────────────────────────────────────────
+        # TOKENIZE: Try words first, fall back to characters
+        # ─────────────────────────────────────────────────────────────────────
         words = text.split()
         for i, word in enumerate(words):
             if word in self.token_to_id:
+                # Word is in vocabulary - use single token
                 ids.append(self.token_to_id[word])
             else:
-                # Fall back to character-level
+                # Word not in vocab - tokenize character by character
                 for char in word:
                     if char in self.token_to_id:
                         ids.append(self.token_to_id[char])
                     else:
+                        # Character not in vocab - use unknown token
                         ids.append(self.unk_token_id)
 
-            # Add space token between words
+            # Add space token between words (not after last word)
             if i < len(words) - 1 and " " in self.token_to_id:
                 ids.append(self.token_to_id[" "])
 
+        # End with end-of-sequence token
         if add_special_tokens:
             ids.append(self.eos_token_id)
 
         return ids
 
     def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
-        """Decode token IDs to text."""
+        """
+        Decode token IDs to text.
+        
+        📖 DECODING PROCESS:
+        1. Look up each ID in id_to_token dictionary
+        2. Skip special tokens if requested
+        3. Join tokens intelligently (handle spaces)
+        
+        Args:
+            ids: List of token IDs
+            skip_special_tokens: Whether to skip <s>, </s>, <pad>, <unk>
+        
+        Returns:
+            Decoded text string
+        """
         tokens = []
 
         for idx in ids:
             if idx in self.id_to_token:
                 token = self.id_to_token[idx]
+                # Skip special tokens if requested
                 if skip_special_tokens and token in self.special_tokens:
                     continue
                 tokens.append(token)
 
-        # Join tokens intelligently
+        # ─────────────────────────────────────────────────────────────────────
+        # JOIN TOKENS INTELLIGENTLY
+        # ─────────────────────────────────────────────────────────────────────
+        # We need to add spaces between WORDS but not between CHARACTERS
         result = []
         for i, token in enumerate(tokens):
             if token == " ":
                 result.append(" ")
             elif len(token) == 1:
+                # Single character - don't add extra space
                 result.append(token)
             else:
                 # Word token - add space before if needed
@@ -188,15 +313,36 @@ class SimpleTokenizer:
         max_length: Optional[int] = None,
         add_special_tokens: bool = True
     ) -> Dict[str, Any]:
-        """Tokenize text (HuggingFace-compatible interface)."""
+        """
+        Tokenize text (HuggingFace-compatible interface).
+        
+        📖 WHAT THIS DOES:
+        Same as encode(), but returns a dictionary and optionally
+        handles padding, truncation, and tensor conversion.
+        This makes the tokenizer work like HuggingFace tokenizers!
+        
+        Args:
+            text: Input text to tokenize
+            return_tensors: "pt" for PyTorch tensors, None for lists
+            padding: Pad to max_length
+            truncation: Truncate to max_length
+            max_length: Maximum sequence length
+            add_special_tokens: Add <s> and </s>
+        
+        Returns:
+            Dictionary with 'input_ids' key
+        """
         ids = self.encode(text, add_special_tokens=add_special_tokens)
 
+        # Truncate if too long
         if truncation and max_length and len(ids) > max_length:
             ids = ids[:max_length]
 
+        # Pad if too short
         if padding and max_length and len(ids) < max_length:
             ids = ids + [self.pad_token_id] * (max_length - len(ids))
 
+        # Convert to PyTorch tensor if requested
         if return_tensors == "pt":
             import torch
             return {"input_ids": torch.tensor([ids])}
@@ -204,9 +350,11 @@ class SimpleTokenizer:
         return {"input_ids": ids}
 
     def __len__(self) -> int:
+        """Return vocabulary size."""
         return self.vocab_size
 
     def get_vocab(self) -> Dict[str, int]:
+        """Return copy of vocabulary dictionary."""
         return self.token_to_id.copy()
 
 

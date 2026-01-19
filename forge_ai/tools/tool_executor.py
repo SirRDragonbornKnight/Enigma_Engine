@@ -1,13 +1,62 @@
 """
-Tool Executor for ForgeAI
-============================
+================================================================================
+🔧 TOOL EXECUTOR - THE ACTION WORKSHOP
+================================================================================
 
-Executes tool calls from the AI by:
-1. Parsing tool call JSON from AI output
-2. Validating parameters
-3. Executing the appropriate tool/module
-4. Returning structured results
-5. Handling errors gracefully
+The safe executor that runs AI tool calls! Parses AI requests, validates them,
+executes tools with timeouts, and returns structured results.
+
+📍 FILE: forge_ai/tools/tool_executor.py
+🏷️ TYPE: Tool Execution Engine
+🎯 MAIN CLASS: ToolExecutor
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EXECUTION FLOW:                                                            │
+│                                                                             │
+│  AI OUTPUT: "I'll search the web for that."                                │
+│            {"tool": "web_search", "query": "AI news"}                       │
+│                          │                                                  │
+│                          ▼                                                  │
+│              ┌───────────────────┐                                         │
+│              │   TOOL EXECUTOR   │                                         │
+│              ├───────────────────┤                                         │
+│              │ 1. Parse JSON     │                                         │
+│              │ 2. Validate params│                                         │
+│              │ 3. Check security │                                         │
+│              │ 4. Execute tool   │                                         │
+│              │ 5. Return result  │                                         │
+│              └───────────────────┘                                         │
+│                          │                                                  │
+│                          ▼                                                  │
+│  RESULT: Search results about AI news...                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🛡️ SECURITY FEATURES:
+    • Timeout protection (operations can't hang forever)
+    • Path blocking (AI can't access sensitive files)
+    • Parameter validation before execution
+    • Sandboxed execution environment
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/tools/tool_definitions.py (get_tool_definition)
+    → USES:      forge_ai/tools/vision.py, web_tools.py, file_tools.py...
+    → USES:      forge_ai/utils/security.py (path blocking)
+    ← USED BY:   forge_ai/core/tool_router.py (dispatches here)
+    ← USED BY:   forge_ai/core/inference.py (enable_tools mode)
+
+📖 AVAILABLE TOOLS (in forge_ai/tools/):
+    • vision.py        - Screen capture, image analysis
+    • web_tools.py     - Web search, fetch pages
+    • file_tools.py    - Read/write/list files
+    • browser_tools.py - Browser automation
+    • document_tools.py - PDF, DOCX, EPUB reading
+    • robot_tools.py   - Robot hardware control
+    • game_router.py   - Game AI routing
+
+📖 SEE ALSO:
+    • forge_ai/tools/tool_definitions.py - Define new tools
+    • forge_ai/tools/tool_registry.py    - Tool registration
+    • forge_ai/core/tool_router.py       - Routes requests here
 """
 
 import json

@@ -1,20 +1,69 @@
 """
-Enhanced PyQt5 GUI for Forge with Setup Wizard
+================================================================================
+🖥️ ENHANCED MAIN WINDOW - THE GUI CASTLE
+================================================================================
 
-Features:
-  - First-run setup wizard to create/name your AI
-  - Model selection and management
-  - Backup before risky operations
-  - Grow/shrink models with confirmation
-  - Chat, Training, Voice integration
-  - Dark/Light/Shadow/Midnight mode toggle
-  - Avatar control panel
-  - Screen vision preview with camera support
-  - Training data editor
-  - Per-AI conversation history
-  - Multi-AI support (run multiple models)
-  - Image upload in chat/vision tabs
-  - Selectable (read-only) text throughout
+This is the BIG main application window! The graphical kingdom where users
+interact with ForgeAI through beautiful tabs, buttons, and visualizations.
+
+📍 FILE: forge_ai/gui/enhanced_window.py
+🏷️ TYPE: Main GUI Application (PyQt5)
+🎯 MAIN CLASSES: EnhancedMainWindow, AIGenerationWorker
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  WINDOW LAYOUT:                                                             │
+│                                                                             │
+│  ╔═══════════════════════════════════════════════════════════════╗          │
+│  ║  ForgeAI - Your Model Name                      [-][□][X]║          │
+│  ╠═══════════════════════════════════════════════════════════════╣          │
+│  ║ [💬Chat][🎨Image][💻Code][🎬Video][🔊Audio][🎲3D][⚙️]... ║          │
+│  ╠═══════════════════════════════════════════════════════════════╣          │
+│  ║                                                               ║          │
+│  ║                    Tab Content Area                           ║          │
+│  ║                                                               ║          │
+│  ╠═══════════════════════════════════════════════════════════════╣          │
+│  ║  [Status: Model loaded | GPU: Available | Theme: Dark]        ║          │
+│  ╚═══════════════════════════════════════════════════════════════╝          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+⚡ FEATURES:
+    • First-run setup wizard
+    • Model selection and management
+    • All generation tabs (Chat, Image, Code, Video, Audio, 3D)
+    • Dark/Light/Shadow/Midnight themes
+    • Avatar control panel
+    • Training interface
+    • Per-AI conversation history
+    • Background AI worker threads (keeps GUI responsive)
+
+💬 AIGenerationWorker CLASS:
+    Runs AI generation in background thread to keep GUI responsive.
+    Signals: finished, error, thinking, stopped
+
+🔗 CONNECTED FILES:
+    → LOADS:     forge_ai/gui/tabs/*.py (all tab panels)
+    → USES:      forge_ai/core/inference.py (AI responses)
+    → USES:      forge_ai/memory/manager.py (save conversations)
+    → USES:      forge_ai/avatar/controller.py (avatar control)
+    → USES:      forge_ai/voice/ (TTS/STT)
+    ← USED BY:   run.py --gui (entry point)
+
+📖 TABS INCLUDED:
+    • forge_ai/gui/tabs/chat_tab.py      - 💬 Chat
+    • forge_ai/gui/tabs/image_tab.py     - 🎨 Images
+    • forge_ai/gui/tabs/code_tab.py      - 💻 Code
+    • forge_ai/gui/tabs/video_tab.py     - 🎬 Video
+    • forge_ai/gui/tabs/audio_tab.py     - 🔊 Audio
+    • forge_ai/gui/tabs/threed_tab.py    - 🎲 3D Models
+    • forge_ai/gui/tabs/training_tab.py  - 📚 Training
+    • forge_ai/gui/tabs/modules_tab.py   - ⚙️ Modules
+    • forge_ai/gui/tabs/avatar_tab.py    - 🤖 Avatar
+    • forge_ai/gui/tabs/settings_tab.py  - 🔧 Settings
+
+📖 SEE ALSO:
+    • forge_ai/gui/styles.py       - Theme CSS styles
+    • forge_ai/gui/theme_system.py - Theme management
+    • data/gui_settings.json       - Saved GUI preferences
 """
 import sys
 import json
@@ -1428,10 +1477,70 @@ from .dialogs.loading import ModelLoadingDialog
 from .dialogs.model_manager import ModelManagerDialog
 
 
+# =============================================================================
+# 🏰 ENHANCED MAIN WINDOW - THE GRAND CASTLE
+# =============================================================================
+# This is THE main application window - everything lives here!
+
 class EnhancedMainWindow(QMainWindow):
-    """Enhanced main window with setup wizard and model management."""
+    """
+    Enhanced main window with setup wizard and model management.
+    
+    📖 WHAT THIS IS:
+    The main application window that contains all of ForgeAI's GUI.
+    It's like a castle with many rooms (tabs) for different features.
+    
+    📐 WINDOW STRUCTURE:
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │  Title Bar: "ForgeAI - [Model Name]"                    [-][□][X] │
+    ├─────────────────────────────────────────────────────────────────────┤
+    │  Tabs: [💬Chat][🎨Image][💻Code][🎬Video][🔊Audio][🎲3D][⚙️...]   │
+    ├─────────────────────────────────────────────────────────────────────┤
+    │                                                                     │
+    │                      Main Content Area                              │
+    │                   (Tab contents appear here)                        │
+    │                                                                     │
+    ├─────────────────────────────────────────────────────────────────────┤
+    │  Status Bar: [Model: X | GPU: ✓ | Theme: Dark]                     │
+    └─────────────────────────────────────────────────────────────────────┘
+    
+    📐 KEY ATTRIBUTES:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ registry         │ ModelRegistry - manages saved models           │
+    │ current_model    │ Name of the currently loaded model             │
+    │ engine           │ ForgeEngine - the inference engine             │
+    │ module_manager   │ ModuleManager - controls loaded modules        │
+    │ chat_messages    │ List of conversation messages                  │
+    │ _is_hf_model     │ True if using HuggingFace model (no training!) │
+    │ _gui_settings    │ Saved preferences (theme, last model, etc.)    │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    📐 LIFECYCLE:
+    1. __init__ - Set up window, load settings
+    2. _build_ui - Create all tabs and widgets
+    3. _run_setup_wizard - First-time setup (if no models)
+    4. _load_model - Load the selected AI model
+    5. User interacts with tabs...
+    6. closeEvent - Save settings and cleanup
+    
+    🔗 CONNECTED TO:
+    - forge_ai/gui/tabs/*.py - All the tab panels
+    - forge_ai/core/inference.py - ForgeEngine for AI responses
+    - forge_ai/memory/manager.py - Conversation storage
+    - forge_ai/modules/ - Module system integration
+    """
     
     def __init__(self):
+        """
+        Initialize the main window.
+        
+        📖 WHAT HAPPENS:
+        1. Set window properties (title, size, icon)
+        2. Initialize ModelRegistry for model management
+        3. Initialize ModuleManager for feature modules
+        4. Build the UI (tabs, buttons, etc.)
+        5. Either show setup wizard (first run) or model selector
+        """
         super().__init__()
         self.setWindowTitle("ForgeAI")
         # Allow window to resize freely (no fixed constraints)
@@ -1444,7 +1553,10 @@ class EnhancedMainWindow(QMainWindow):
         # Setup keyboard shortcuts for emergency close
         self._setup_shortcuts()
         
-        # Initialize registry
+        # ─────────────────────────────────────────────────────────────────
+        # Initialize the Model Registry
+        # This tracks all saved models (local and HuggingFace)
+        # ─────────────────────────────────────────────────────────────────
         self.registry = ModelRegistry()
         self.current_model_name = None
         self.engine = None
@@ -1452,13 +1564,17 @@ class EnhancedMainWindow(QMainWindow):
         # Load GUI settings (last model, window size, etc.)
         self._gui_settings = self._load_gui_settings()
         
-        # Initialize module manager and register all built-in modules
+        # ─────────────────────────────────────────────────────────────────
+        # Initialize the Module Manager
+        # This controls which features (modules) are active
+        # ─────────────────────────────────────────────────────────────────
         try:
             from forge_ai.modules import ModuleManager, register_all, set_manager
             self.module_manager = ModuleManager()
-            register_all(self.module_manager)
+            register_all(self.module_manager)  # Register all built-in modules
             # Set as global manager so get_manager() returns this instance
             set_manager(self.module_manager)
+            
             # Load saved module configuration or enable defaults
             if self.module_manager.load_config():
                 print("Loaded saved module configuration")
@@ -1475,39 +1591,49 @@ class EnhancedMainWindow(QMainWindow):
             print(f"Could not initialize ModuleManager: {e}")
             self.module_manager = None
         
-        # Initialize toggle states
-        self.auto_speak = False
-        self.microphone_enabled = False
+        # ─────────────────────────────────────────────────────────────────
+        # Initialize state variables
+        # ─────────────────────────────────────────────────────────────────
+        self.auto_speak = False          # Auto-speak responses?
+        self.microphone_enabled = False  # Voice input enabled?
+        self.chat_messages = []          # Conversation history
         
-        # Initialize chat state
-        self.chat_messages = []
-        
-        # Initialize display names
+        # Display names
         self.user_display_name = self._gui_settings.get("user_display_name", "You")
         
-        # Initialize shared chat sync (single engine for main + quick chat)
-        # Reset any pre-existing instance created before QApplication
+        # ─────────────────────────────────────────────────────────────────
+        # Initialize Chat Sync
+        # This allows the quick chat overlay to share the same engine
+        # ─────────────────────────────────────────────────────────────────
         from .chat_sync import ChatSync
         ChatSync.reset_instance()  # Ensure fresh instance with QApplication
         self._chat_sync = ChatSync.instance()
         self._chat_sync.set_main_window(self)
         self._chat_sync.set_user_name(self.user_display_name)
+        
+        # Connect signals so main window updates when quick chat generates
         self._chat_sync.generation_started.connect(self._on_chat_sync_started)
         self._chat_sync.generation_finished.connect(self._on_chat_sync_finished)
         self._chat_sync.generation_stopped.connect(self._on_chat_sync_stopped)
         
-        # Training lock to prevent concurrent training
-        self._is_training = False
-        self._stop_training = False
+        # Training state
+        self._is_training = False   # True while training is running
+        self._stop_training = False # Set to True to stop training
         
-        # Track if current model is HuggingFace (for feature restrictions)
+        # Track if current model is HuggingFace (can't train these!)
         self._is_hf_model = False
         
-        # Build UI first (before model load so user sees the window immediately)
+        # ─────────────────────────────────────────────────────────────────
+        # Build the UI
+        # This creates all tabs, buttons, and widgets
+        # ─────────────────────────────────────────────────────────────────
         self._build_ui()
         
-        # Check if first run (no models) - this needs to be synchronous
+        # ─────────────────────────────────────────────────────────────────
+        # First-run check or model selection
+        # ─────────────────────────────────────────────────────────────────
         if not self.registry.registry.get("models"):
+            # No models exist - show setup wizard
             self._run_setup_wizard()
         else:
             # Defer model loading to after GUI is shown
@@ -2241,10 +2367,53 @@ class EnhancedMainWindow(QMainWindow):
             loading_dialog.close()
     
     def _build_ui(self):
-        """Build the main UI."""
+        """
+        Build the main UI.
+        
+        📖 WHAT THIS DOES:
+        Creates all the visual elements of the main window:
+        - Menu bar (File, Options, Help)
+        - Tab widget with all feature tabs
+        - Status bar at the bottom
+        
+        📐 UI STRUCTURE CREATED:
+        ┌─────────────────────────────────────────────────────────────────┐
+        │  [File][Options]              [Open Quick Chat]                │
+        ├─────────────────────────────────────────────────────────────────┤
+        │  [Chat][Image][Code][Video][Audio][3D][Train][Modules][...]    │
+        ├─────────────────────────────────────────────────────────────────┤
+        │                                                                 │
+        │           QStackedWidget (shows current tab content)            │
+        │                                                                 │
+        ├─────────────────────────────────────────────────────────────────┤
+        │  Model: xxx | GPU: ✓ |                                        │
+        └─────────────────────────────────────────────────────────────────┘
+        
+        📐 MENUS CREATED:
+        - File: New Model, Open Model, Backup, Exit
+        - Options: Theme, Zoom, Avatar, Auto-Speak, Microphone, Learning
+        
+        📐 TABS CREATED (in order):
+        1. Chat      - Main conversation interface
+        2. Image     - Stable Diffusion / DALL-E
+        3. Code      - Code generation
+        4. Video     - Video generation
+        5. Audio     - TTS / music
+        6. GIF       - Animated GIFs
+        7. 3D        - 3D model generation
+        8. Vision    - Image analysis
+        9. Embeddings- Vector embeddings
+        10. Camera   - Webcam capture
+        11. Train    - Model training
+        12. Modules  - Module management
+        13. Settings - Configuration
+        """
+        # ─────────────────────────────────────────────────────────────────
         # Menu bar
+        # ─────────────────────────────────────────────────────────────────
         menubar = self.menuBar()
         
+        # File menu
         file_menu = menubar.addMenu("File")
         file_menu.addAction("New Model...", self._on_new_model)
         file_menu.addAction("Open Model...", self._on_open_model)
@@ -2256,14 +2425,16 @@ class EnhancedMainWindow(QMainWindow):
         # Options menu with toggles
         options_menu = menubar.addMenu("Options")
         
+        # ─────────────────────────────────────────────────────────────────
         # Theme submenu with all 4 themes
+        # ─────────────────────────────────────────────────────────────────
         theme_menu = options_menu.addMenu("Theme")
         self.theme_group = QActionGroup(self)
-        self.theme_group.setExclusive(True)
+        self.theme_group.setExclusive(True)  # Only one theme at a time
         
         theme_dark = theme_menu.addAction("Dark (Catppuccin)")
         theme_dark.setCheckable(True)
-        theme_dark.setChecked(True)
+        theme_dark.setChecked(True)  # Default theme
         theme_dark.triggered.connect(lambda: self._set_theme("dark"))
         self.theme_group.addAction(theme_dark)
         
@@ -2291,6 +2462,9 @@ class EnhancedMainWindow(QMainWindow):
         
         options_menu.addSeparator()
         
+        # ─────────────────────────────────────────────────────────────────
+        # Feature toggles
+        # ─────────────────────────────────────────────────────────────────
         self.avatar_action = options_menu.addAction("Avatar (OFF)")
         self.avatar_action.setCheckable(True)
         self.avatar_action.setChecked(False)
@@ -2310,7 +2484,7 @@ class EnhancedMainWindow(QMainWindow):
         
         options_menu.addSeparator()
         
-        # Learn while chatting toggle
+        # Learn while chatting - enables continuous learning from conversations
         self.learn_action = options_menu.addAction("Learn While Chatting (ON)")
         self.learn_action.setCheckable(True)
         self.learn_action.setChecked(True)  # On by default
@@ -2326,6 +2500,9 @@ class EnhancedMainWindow(QMainWindow):
         self.companion_action.triggered.connect(self._toggle_companion_mode)
         self._companion = None
         
+        # ─────────────────────────────────────────────────────────────────
+        # Quick Chat button (top right of menu bar)
+        # ─────────────────────────────────────────────────────────────────
         # Add spacer to push Quick Chat button to the right
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -2352,7 +2529,10 @@ class EnhancedMainWindow(QMainWindow):
         quick_chat_btn.clicked.connect(self._open_quick_chat)
         menubar.setCornerWidget(quick_chat_btn, Qt.TopRightCorner)
         
-        # Status bar with clickable model selector
+        # ─────────────────────────────────────────────────────────────────
+        # Status bar (bottom of window)
+        # Shows current model and status
+        # ─────────────────────────────────────────────────────────────────
         self.model_status_btn = QPushButton(f"Model: {self.current_model_name or 'None'}  v")
         self.model_status_btn.setFlat(True)
         self.model_status_btn.setCursor(Qt.PointingHandCursor)

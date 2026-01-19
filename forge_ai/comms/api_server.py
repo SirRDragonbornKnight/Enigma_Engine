@@ -1,20 +1,45 @@
 """
-Simple REST API Server
+================================================================================
+🌐 REST API SERVER - NETWORK GATEWAY
+================================================================================
 
-Minimal Flask API for programmatic access to Forge.
-Use this for scripts, automation, and lightweight integrations.
+Minimal Flask API for programmatic access to Forge. Use this for scripts,
+automation, and integrations with external systems.
 
-For full web interface with WebSocket support, use web_server.py instead.
+📍 FILE: forge_ai/comms/api_server.py
+🏷️ TYPE: REST API Server (Flask)
+🎯 MAIN FUNCTIONS: create_app(), create_api_server()
 
-Endpoints:
-  GET  /health    - Health check
-  GET  /info      - Server info
-  POST /generate  - Generate response (prompt, max_gen, temperature)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  API ENDPOINTS:                                                             │
+│                                                                             │
+│  GET  /health    → {"ok": true}         (Health check)                     │
+│  GET  /info      → Server information                                      │
+│  POST /generate  → Generate AI response                                    │
+│       Body: {"prompt": "...", "max_gen": 50, "temperature": 1.0}           │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-Usage:
-  python -m forge_ai.comms.api_server
-  # or
-  python run.py --serve
+🚀 HOW TO START:
+    python run.py --serve
+    # OR
+    python -m forge_ai.comms.api_server
+    
+    Then access: http://localhost:5000
+
+📝 EXAMPLE REQUEST:
+    curl -X POST http://localhost:5000/generate \
+         -H "Content-Type: application/json" \
+         -d '{"prompt": "Hello, AI!", "max_gen": 50}'
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/core/inference.py (ForgeEngine for generation)
+    ← USED BY:   run.py --serve (entry point)
+    📄 ALTERNATIVE: forge_ai/comms/web_server.py (full web UI + WebSocket)
+
+📖 SEE ALSO:
+    • forge_ai/comms/network.py       - Multi-device networking
+    • forge_ai/comms/remote_client.py - Connect to remote servers
+    • forge_ai/comms/mobile_api.py    - Mobile app API
 """
 from flask import Flask, request, jsonify
 from flask_cors import CORS

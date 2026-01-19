@@ -1,20 +1,65 @@
 """
-Avatar System for Forge
+================================================================================
+🤖 AVATAR CONTROLLER - YOUR AI PET COMPANION
+================================================================================
 
-A controllable 3D avatar that can:
-  - Display on screen with customizable appearance
-  - Move around the desktop
-  - Animate expressions and gestures
-  - "Interact" with windows/files (visual effects)
-  - Be turned on/off
+A controllable visual avatar that lives on your desktop! Can move around,
+express emotions, "interact" with windows, and speak with lip sync.
 
-DEFAULT STATE: OFF (requires explicit enable)
+📍 FILE: forge_ai/avatar/controller.py
+🏷️ TYPE: Avatar Display & Control
+🎯 MAIN CLASSES: AvatarController, AvatarState, AvatarPosition
+🎯 MAIN FUNCTION: get_avatar()
 
-The avatar system is designed to be modular:
-  - AvatarController: Main interface (on/off, commands)
-  - AvatarRenderer: Handles display (can swap backends)
-  - AvatarAnimator: Handles movements and expressions
-  - ScreenInteractor: Visual effects for "touching" windows
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  AVATAR CAPABILITIES:                                                       │
+│                                                                             │
+│  🖥️ Display on screen with customizable appearance                        │
+│  🚶 Move around the desktop                                                 │
+│  😊 Animate expressions and gestures                                        │
+│  👆 "Interact" with windows/files (visual effects)                         │
+│  🗣️ Speak with lip sync                                                    │
+│  🔄 Turn on/off as needed                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+⚠️ DEFAULT STATE: OFF (requires explicit enable())
+
+🎭 AVATAR STATES (AvatarState enum):
+    • OFF         - Not displayed
+    • IDLE        - Standing/waiting
+    • SPEAKING    - Talking with lip sync
+    • THINKING    - Processing animation
+    • MOVING      - Walking/transitioning
+    • INTERACTING - "Touching" windows
+
+🏗️ MODULAR ARCHITECTURE:
+    • AvatarController - Main interface (on/off, commands)
+    • AvatarRenderer   - Handles display (can swap backends)
+    • AvatarAnimator   - Handles movements and expressions
+    • ScreenInteractor - Visual effects for "touching" windows
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/avatar/animation_system.py (movement)
+    → USES:      forge_ai/avatar/lip_sync.py (speech sync)
+    → USES:      forge_ai/voice/voice_generator.py (speech)
+    ← USED BY:   forge_ai/avatar/autonomous.py (self-acting avatar)
+    ← USED BY:   forge_ai/gui/tabs/avatar_tab.py (GUI controls)
+
+📖 USAGE:
+    from forge_ai.avatar import get_avatar
+    
+    avatar = get_avatar()
+    avatar.enable()                    # Turn on
+    avatar.move_to(500, 300)           # Move to position
+    avatar.set_expression("happy")     # Change expression
+    avatar.speak("Hello!")             # Speak with lip sync
+    avatar.disable()                   # Turn off
+
+📖 SEE ALSO:
+    • forge_ai/avatar/autonomous.py      - Make avatar act on its own
+    • forge_ai/avatar/desktop_pet.py     - Desktop overlay window
+    • forge_ai/avatar/customizer.py      - Customize appearance
+    • docs/AVATAR_SYSTEM_GUIDE.md        - Full avatar documentation
 """
 
 import ctypes

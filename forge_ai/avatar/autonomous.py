@@ -1,19 +1,43 @@
 """
-Autonomous Avatar Behavior
+================================================================================
+🤖 AUTONOMOUS AVATAR - SELF-ACTING COMPANION
+================================================================================
 
-Makes the avatar react to the screen, do things on its own,
-express curiosity, and behave naturally without explicit commands.
+Makes the avatar react to the screen, do things on its own, express curiosity,
+and behave naturally WITHOUT explicit commands! Your AI pet comes to life!
 
-Features:
-- Screen watching: React to what's on screen
-- Idle behaviors: Random movements, expressions, gestures
-- Curiosity: "Look at" interesting things on screen
-- Mood system: Gradual mood changes based on what it sees
-- Memory: Remember what it's seen/done
-- Context awareness: React to user activity
-- Time-based behaviors: Different behaviors at different times
+📍 FILE: forge_ai/avatar/autonomous.py
+🏷️ TYPE: Autonomous Behavior System
+🎯 MAIN CLASSES: AutonomousAvatar, AutonomousConfig, AvatarMood
 
-Usage:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  AUTONOMOUS BEHAVIORS:                                                      │
+│                                                                             │
+│  🖥️ Screen Watching  - React to what's on screen                          │
+│  💤 Idle Animations  - Random movements when bored                         │
+│  👁️ Curiosity        - "Look at" interesting things                         │
+│  😊 Mood System      - Happy, bored, excited, sleepy...                     │
+│  🧠 Memory           - Remember what it's seen                              │
+│  ⏰ Time Awareness   - Sleepy at night, energetic during day               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🎭 MOOD STATES (AvatarMood enum):
+    • NEUTRAL, HAPPY, CURIOUS, BORED
+    • EXCITED, SLEEPY, FOCUSED, PLAYFUL, THOUGHTFUL
+
+⏱️ TIMING CONFIG (AutonomousConfig):
+    • action_interval: 3-15 seconds between actions
+    • screen_scan_interval: 5 seconds
+    • get_bored_after: 300 seconds of no activity
+    • sleepy_hours: [22, 23, 0, 1, 2, 3, 4, 5]
+    • energetic_hours: [9, 10, 11, 14, 15, 16]
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/avatar/controller.py (AvatarController)
+    → USES:      forge_ai/tools/vision.py (screen capture)
+    ← USED BY:   forge_ai/gui/tabs/avatar_tab.py (GUI controls)
+
+📖 USAGE:
     from forge_ai.avatar import get_avatar
     from forge_ai.avatar.autonomous import AutonomousAvatar
     
@@ -21,8 +45,14 @@ Usage:
     avatar.enable()
     
     autonomous = AutonomousAvatar(avatar)
-    autonomous.start()  # Avatar starts doing things on its own
+    autonomous.start()  # Avatar starts doing things on its own!
     autonomous.stop()   # Back to manual control
+
+📖 SEE ALSO:
+    • forge_ai/avatar/controller.py      - Manual avatar control
+    • forge_ai/avatar/desktop_pet.py     - Desktop overlay window
+    • forge_ai/avatar/animation_system.py - Movement animations
+    • forge_ai/avatar/lip_sync.py        - Sync mouth to speech
 """
 
 import random

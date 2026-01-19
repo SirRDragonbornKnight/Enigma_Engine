@@ -1,9 +1,54 @@
 """
-ForgeAI Module Registry
-======================
+================================================================================
+📦 MODULE REGISTRY - THE CATALOG OF ALL MODULES
+================================================================================
 
-Central registry of all available modules.
-Auto-discovers and registers built-in modules.
+Central registry where ALL available modules are defined! This is the "catalog"
+that tells ModuleManager what modules exist and how to load them.
+
+📍 FILE: forge_ai/modules/registry.py
+🏷️ TYPE: Module Definitions & Registration
+🎯 MAIN CLASSES: ModelModule, TokenizerModule, ImageGenLocalModule, etc.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  AVAILABLE MODULES:                                                         │
+│                                                                             │
+│  🧠 CORE:                                                                    │
+│     • ModelModule       - Forge transformer (forge_ai/core/model.py)       │
+│     • TokenizerModule   - Text tokenizer (forge_ai/core/tokenizer.py)      │
+│     • InferenceModule   - Text generation (forge_ai/core/inference.py)     │
+│                                                                             │
+│  🎨 GENERATION (LOCAL vs API - pick one!):                                  │
+│     • ImageGenLocalModule  / ImageGenAPIModule                              │
+│     • CodeGenLocalModule   / CodeGenAPIModule                               │
+│     • VideoGenLocalModule  / VideoGenAPIModule                              │
+│     • AudioGenLocalModule  / AudioGenAPIModule                              │
+│     • ThreeDGenLocalModule / ThreeDGenAPIModule                             │
+│                                                                             │
+│  💾 MEMORY:                                                                  │
+│     • MemoryModule      - Conversation storage                              │
+│     • EmbeddingModule   - Vector embeddings                                 │
+│                                                                             │
+│  🌐 NETWORK:                                                                 │
+│     • APIServerModule   - REST API                                          │
+│     • NetworkModule     - Multi-device                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+⚠️ MODULE CONFLICTS:
+    ✗ image_gen_local + image_gen_api   (same capability)
+    ✗ code_gen_local + code_gen_api     (same capability)
+    ✗ video_gen_local + video_gen_api   (same capability)
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/modules/manager.py (Module base class)
+    → WRAPS:     forge_ai/core/*.py (core modules)
+    → WRAPS:     forge_ai/gui/tabs/*.py (generation tabs)
+    ← USED BY:   forge_ai/modules/manager.py (discovers modules)
+
+📖 SEE ALSO:
+    • forge_ai/modules/manager.py       - Loads/unloads modules
+    • forge_ai/gui/tabs/modules_tab.py  - GUI for toggling
+    • docs/MODULE_GUIDE.md              - Module documentation
 """
 
 from functools import lru_cache
@@ -17,11 +62,32 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Built-in Module Definitions
+# 🧠 CORE MODULE DEFINITIONS
 # =============================================================================
+# These are the essential modules that power the AI:
+# - ModelModule: The neural network brain
+# - TokenizerModule: Text → numbers converter
+# - TrainingModule: Learn from data
+# - InferenceModule: Generate responses
 
 class ModelModule(Module):
-    """Core transformer model module."""
+    """
+    Core transformer model module.
+    
+    📖 WHAT THIS IS:
+    The "brain" of ForgeAI - a transformer neural network that understands
+    and generates text. This wraps the Forge model from core/model.py.
+    
+    📐 CONFIGURATION OPTIONS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ size        │ nano, micro, tiny, small, medium, large, xl, titan  │
+    │ vocab_size  │ Number of tokens (1000-500000, default 8000)        │
+    │ device      │ auto, cuda, cpu, mps                                │
+    │ dtype       │ float32, float16, bfloat16                          │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/core/model.py → Forge class
+    """
 
     INFO = ModuleInfo(
         id="model",
@@ -29,23 +95,23 @@ class ModelModule(Module):
         description="Core transformer language model with RoPE, RMSNorm, SwiGLU, GQA",
         category=ModuleCategory.CORE,
         version="2.0.0",
-        requires=[],
+        requires=[],  # No dependencies - this is the foundation!
         provides=[
-            "language_model",
-            "model_embeddings"],
+            "language_model",      # Provides language understanding
+            "model_embeddings"],   # Provides word vectors
         config_schema={
             "size": {
                 "type": "choice",
                 "options": [
-                    "nano",
-                    "micro",
-                    "tiny",
-                    "small",
-                    "medium",
-                    "large",
-                    "xl",
-                    "xxl",
-                    "titan"],
+                    "nano",     # ~1M params - Raspberry Pi
+                    "micro",    # ~2M params - Light devices
+                    "tiny",     # ~5M params - Entry level
+                    "small",    # ~27M params - Desktop default
+                    "medium",   # ~85M params - Good balance
+                    "large",    # ~300M params - Quality focus
+                    "xl",       # ~1B params - Powerful
+                    "xxl",      # ~3B params - Very powerful
+                    "titan"],   # ~7B+ params - Datacenter
                 "default": "small"},
             "vocab_size": {
                 "type": "int",
@@ -55,32 +121,48 @@ class ModelModule(Module):
             "device": {
                 "type": "choice",
                 "options": [
-                    "auto",
-                    "cuda",
-                    "cpu",
-                    "mps"],
+                    "auto",   # Auto-detect best
+                    "cuda",   # NVIDIA GPU
+                    "cpu",    # CPU (slow but works everywhere)
+                    "mps"],   # Apple Silicon GPU
                 "default": "auto"},
             "dtype": {
                 "type": "choice",
                 "options": [
-                    "float32",
-                    "float16",
-                    "bfloat16"],
+                    "float32",   # Full precision (most compatible)
+                    "float16",   # Half precision (faster, less VRAM)
+                    "bfloat16"], # Brain float (best for training)
                 "default": "float32"},
         },
-        min_ram_mb=512,
+        min_ram_mb=512,  # Minimum 512MB RAM required
     )
 
     def load(self) -> bool:
+        """
+        Load the Forge model into memory.
+        
+        📖 WHAT HAPPENS:
+        1. Import the model factory from core/model.py
+        2. Create a model of the specified size
+        3. Store it in self._instance for later use
+        """
         from forge_ai.core.model import create_model
 
         size = self.config.get('size', 'small')
         vocab_size = self.config.get('vocab_size', 8000)
 
+        # Create the model - this allocates the neural network weights
         self._instance = create_model(size, vocab_size=vocab_size)
         return self._instance is not None
 
     def unload(self) -> bool:
+        """
+        Unload the model and free memory.
+        
+        📖 WHY THIS MATTERS:
+        Models can use gigabytes of memory. When unloading,
+        we delete the reference so Python can garbage collect it.
+        """
         if self._instance is not None:
             del self._instance
             self._instance = None
@@ -88,7 +170,23 @@ class ModelModule(Module):
 
 
 class TokenizerModule(Module):
-    """Tokenizer module - converts text to/from tokens."""
+    """
+    Tokenizer module - converts text to/from tokens.
+    
+    📖 WHAT THIS DOES:
+    AI models don't understand text directly - they work with numbers.
+    The tokenizer converts:
+      "Hello world" → [15496, 995]  (encode)
+      [15496, 995] → "Hello world"  (decode)
+    
+    📐 TOKENIZER TYPES:
+    - auto: Best available (tries BPE first)
+    - bpe: Byte-Pair Encoding (like GPT)
+    - character: One token per character
+    - simple: Whitespace-based splitting
+    
+    🔗 WRAPS: forge_ai/core/tokenizer.py
+    """
 
     INFO = ModuleInfo(
         id="tokenizer",
@@ -98,16 +196,16 @@ class TokenizerModule(Module):
         version="2.0.0",
         requires=[],
         provides=[
-            "tokenization",
-            "vocabulary"],
+            "tokenization",  # Can convert text ↔ tokens
+            "vocabulary"],   # Has a word list
         config_schema={
             "type": {
                 "type": "choice",
                 "options": [
-                    "auto",
-                    "bpe",
-                    "character",
-                    "simple"],
+                    "auto",       # Auto-detect best
+                    "bpe",        # Byte-Pair Encoding
+                    "character",  # Character-level
+                    "simple"],    # Whitespace split
                 "default": "auto"},
             "vocab_size": {
                 "type": "int",
@@ -118,6 +216,7 @@ class TokenizerModule(Module):
     )
 
     def load(self) -> bool:
+        """Load the tokenizer."""
         from forge_ai.core.tokenizer import get_tokenizer
 
         tok_type = self.config.get('type', 'auto')
@@ -126,7 +225,29 @@ class TokenizerModule(Module):
 
 
 class TrainingModule(Module):
-    """Training module - trains models on data."""
+    """
+    Training module - trains models on data.
+    
+    📖 WHAT THIS DOES:
+    Takes text data and teaches the model to predict the next word.
+    Over many iterations, the model learns patterns in language.
+    
+    📐 TRAINING FEATURES:
+    - AMP: Automatic Mixed Precision (faster training)
+    - Gradient Accumulation: Train larger batches on limited VRAM
+    - Distributed: Train across multiple GPUs
+    
+    📐 KEY PARAMETERS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ learning_rate  │ How fast to learn (1e-6 to 0.1, default 3e-4)    │
+    │ batch_size     │ Examples per step (1-256, default 8)              │
+    │ epochs         │ Times through data (1-10000, default 30)          │
+    │ use_amp        │ Mixed precision? (default True)                   │
+    │ gradient_accumulation │ Steps before update (1-64, default 4)     │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/core/training.py → Trainer class
+    """
 
     INFO = ModuleInfo(
         id="training",
@@ -135,12 +256,12 @@ class TrainingModule(Module):
         category=ModuleCategory.CORE,
         version="2.0.0",
         requires=[
-            "model",
-            "tokenizer"],
+            "model",      # Need a model to train!
+            "tokenizer"], # Need tokenizer to process text
         provides=[
-            "model_training",
-            "fine_tuning"],
-        supports_distributed=True,
+            "model_training",   # Can train models
+            "fine_tuning"],     # Can fine-tune existing models
+        supports_distributed=True,  # Can use multiple GPUs
         config_schema={
             "learning_rate": {
                 "type": "float",
@@ -182,7 +303,28 @@ class TrainingModule(Module):
 
 
 class InferenceModule(Module):
-    """Inference module - generates text from models."""
+    """
+    Inference module - generates text from models.
+    
+    📖 WHAT THIS DOES:
+    Takes a trained model and generates text from it.
+    This is the "thinking" part - you give it a prompt, it gives you a response.
+    
+    📐 KEY PARAMETERS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ max_length   │ Maximum tokens to generate (1-32768, default 2048) │
+    │ temperature  │ Randomness (0=deterministic, 2=chaos, default 0.8) │
+    │ top_k        │ Consider only top K tokens (0-1000, default 50)    │
+    │ top_p        │ Nucleus sampling (0-1, default 0.9)                │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    📐 SAMPLING STRATEGY GUIDE:
+    - Creative writing: temperature=1.0, top_p=0.95
+    - Code generation: temperature=0.3, top_k=40
+    - Factual answers: temperature=0.1, top_p=0.8
+    
+    🔗 WRAPS: forge_ai/core/inference.py → ForgeEngine class
+    """
 
     INFO = ModuleInfo(
         id="inference",
@@ -190,8 +332,11 @@ class InferenceModule(Module):
         description="High-performance text generation with streaming, batching, chat",
         category=ModuleCategory.CORE,
         version="2.0.0",
-        requires=["model", "tokenizer"],
-        provides=["text_generation", "streaming", "chat"],
+        requires=["model", "tokenizer"],  # Needs model to run and tokenizer to decode
+        provides=[
+            "text_generation",  # Can generate text
+            "streaming",        # Can stream output token by token
+            "chat"],            # Can have conversations
         config_schema={
             "max_length": {"type": "int", "min": 1, "max": 32768, "default": 2048},
             "temperature": {"type": "float", "min": 0.0, "max": 2.0, "default": 0.8},
@@ -201,22 +346,48 @@ class InferenceModule(Module):
     )
 
     def load(self) -> bool:
+        """Load the ForgeEngine class for local inference."""
         from forge_ai.core.inference import ForgeEngine
         self._engine_class = ForgeEngine
         return True
 
 
+# =============================================================================
+# ☁️ CLOUD/API MODULES
+# =============================================================================
+# These modules use external APIs instead of local models.
+# Great for:
+# - Raspberry Pi (not enough power for local models)
+# - Access to powerful models (GPT-4, Claude)
+# - No training required
+
 class ChatAPIModule(Module):
-    """Cloud/API chat via OpenAI, Anthropic, Ollama, or other providers.
+    """
+    Cloud/API chat via OpenAI, Anthropic, Ollama, or other providers.
     
-    This module provides cloud or API-based chat, allowing you to use powerful
-    AI models (GPT-4, Claude, Llama via Ollama, etc.) without training your own.
-    Perfect for Raspberry Pi or low-power devices.
+    📖 WHAT THIS DOES:
+    Instead of running a model locally, this sends your prompts to
+    cloud APIs and gets responses back. Perfect for:
+    - Low-power devices (Raspberry Pi)
+    - Access to powerful models (GPT-4, Claude)
+    - No training or GPU needed
     
-    FREE OPTIONS:
-    - Ollama: Run Llama, Mistral locally (FREE, no API key needed)
-    - Google Gemini: Has a free tier
-    - GitHub Copilot: If you have Copilot subscription
+    📐 PROVIDER OPTIONS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ ollama    │ FREE! Run Llama/Mistral locally, no API key needed    │
+    │ openai    │ GPT-4, GPT-3.5 (paid, needs API key)                  │
+    │ anthropic │ Claude models (paid, needs API key)                   │
+    │ google    │ Gemini (free tier available)                          │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    📐 OLLAMA MODELS (FREE):
+    - llama3.2:1b - Fastest, works on 4GB RAM
+    - llama3.2:3b - Good balance
+    - mistral:7b - Quality responses
+    - phi3:mini - Microsoft's small model
+    - gemma2:2b - Google's efficient model
+    
+    ⚠️ CONFLICTS: Can't use with local inference module
     """
 
     INFO = ModuleInfo(
@@ -405,7 +576,24 @@ class ChatAPIModule(Module):
 
 
 class GGUFLoaderModule(Module):
-    """GGUF model loader module - load llama.cpp compatible models."""
+    """
+    GGUF model loader module - load llama.cpp compatible models.
+    
+    📖 WHAT THIS IS:
+    GGUF is a format for quantized models that run efficiently on CPUs.
+    This lets you run Llama, Mistral, etc. without a GPU!
+    
+    📐 CONFIGURATION:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ model_path    │ Path to .gguf file                                │
+    │ n_ctx         │ Context window (512-32768, default 2048)          │
+    │ n_gpu_layers  │ GPU layers (0=CPU only, higher=more GPU)          │
+    │ n_threads     │ CPU threads (1-32, default 4)                     │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    ⚠️ CONFLICTS: Can't use with model or inference modules
+    🔗 WRAPS: forge_ai/core/gguf_loader.py → GGUFModel class
+    """
 
     INFO = ModuleInfo(
         id="gguf_loader",
@@ -425,6 +613,14 @@ class GGUFLoaderModule(Module):
     )
 
     def load(self) -> bool:
+        """
+        Load a GGUF model into memory.
+        
+        📖 HOW IT WORKS:
+        1. Get the path to the .gguf file from config
+        2. Create a GGUFModel wrapper
+        3. Load the model (may take time for large models)
+        """
         try:
             from forge_ai.core.gguf_loader import GGUFModel
             model_path = self.config.get('model_path', '')
@@ -432,6 +628,7 @@ class GGUFLoaderModule(Module):
                 logger.warning("No GGUF model path specified")
                 return False
             
+            # Create and load the GGUF model wrapper
             self._instance = GGUFModel(
                 model_path=model_path,
                 n_ctx=self.config.get('n_ctx', 2048),
@@ -444,14 +641,37 @@ class GGUFLoaderModule(Module):
             return False
 
     def unload(self) -> bool:
+        """Unload the GGUF model and free memory."""
         if self._instance:
             self._instance.unload()
             self._instance = None
         return True
 
 
+# =============================================================================
+# 💾 MEMORY MODULES
+# =============================================================================
+# These modules handle storing and retrieving information.
+
 class MemoryModule(Module):
-    """Memory module - conversation and knowledge storage."""
+    """
+    Memory module - conversation and knowledge storage.
+    
+    📖 WHAT THIS DOES:
+    Stores chat history so the AI remembers previous conversations.
+    Can use different backends:
+    - JSON: Simple file storage (good for small datasets)
+    - SQLite: Database (good for large histories)
+    - Vector: Semantic search (find similar conversations)
+    
+    📐 CONFIGURATION:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ backend           │ json, sqlite, or vector                       │
+    │ max_conversations │ How many to keep (default 1000)               │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/memory/manager.py → ConversationManager class
+    """
 
     INFO = ModuleInfo(
         id="memory",
@@ -460,8 +680,11 @@ class MemoryModule(Module):
         category=ModuleCategory.MEMORY,
         version="1.0.0",
         requires=[],
-        optional=["model"],  # For embeddings
-        provides=["conversation_storage", "vector_search", "knowledge_base"],
+        optional=["model"],  # For generating embeddings
+        provides=[
+            "conversation_storage",  # Can save/load conversations
+            "vector_search",         # Can search by similarity
+            "knowledge_base"],       # Can store facts
         config_schema={
             "backend": {"type": "choice", "options": ["json", "sqlite", "vector"], "default": "json"},
             "max_conversations": {"type": "int", "min": 1, "max": 100000, "default": 1000},
@@ -469,13 +692,34 @@ class MemoryModule(Module):
     )
 
     def load(self) -> bool:
+        """Load the conversation manager."""
         from forge_ai.memory.manager import ConversationManager
         self._instance = ConversationManager()
         return True
 
 
+# =============================================================================
+# 🎤 PERCEPTION MODULES (Input)
+# =============================================================================
+# These modules handle input from the real world.
+
 class VoiceInputModule(Module):
-    """Voice input module - speech to text."""
+    """
+    Voice input module - speech to text.
+    
+    📖 WHAT THIS DOES:
+    Listens to your microphone and converts speech to text.
+    This lets you talk to the AI instead of typing!
+    
+    📐 ENGINE OPTIONS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ system  │ Uses your OS's built-in speech recognition              │
+    │ whisper │ OpenAI's Whisper (very accurate, needs GPU)             │
+    │ vosk    │ Offline recognition (works without internet)            │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/voice/stt_simple.py
+    """
 
     INFO = ModuleInfo(
         id="voice_input",
@@ -485,15 +729,15 @@ class VoiceInputModule(Module):
         version="1.0.0",
         requires=[],
         provides=[
-            "speech_recognition",
-            "voice_commands"],
+            "speech_recognition",  # Can convert speech to text
+            "voice_commands"],     # Can understand voice commands
         config_schema={
             "engine": {
                 "type": "choice",
                 "options": [
-                    "system",
-                    "whisper",
-                    "vosk"],
+                    "system",   # OS built-in
+                    "whisper",  # OpenAI Whisper
+                    "vosk"],    # Offline
                 "default": "system"},
             "language": {
                 "type": "string",
@@ -502,8 +746,15 @@ class VoiceInputModule(Module):
     )
 
     def load(self) -> bool:
+        """
+        Load the speech-to-text system.
+        
+        📖 HOW IT WORKS:
+        Wraps the STT functions in a simple class that has a listen() method.
+        """
         try:
             from forge_ai.voice.stt_simple import transcribe_from_mic, transcribe_from_file
+            
             # Wrap functions in a simple class for consistency
             class STTWrapper:
                 def __init__(self):
@@ -511,6 +762,7 @@ class VoiceInputModule(Module):
                     self.transcribe_from_file = transcribe_from_file
                 
                 def listen(self, timeout=8):
+                    """Listen for speech and return text."""
                     return transcribe_from_mic(timeout)
             
             self._instance = STTWrapper()
@@ -520,8 +772,24 @@ class VoiceInputModule(Module):
             return False
 
 
+# =============================================================================
+# 🔊 OUTPUT MODULES
+# =============================================================================
+
 class VoiceOutputModule(Module):
-    """Voice output module - text to speech."""
+    """
+    Voice output module - text to speech.
+    
+    📖 WHAT THIS DOES:
+    Converts text to spoken audio so the AI can talk back to you!
+    
+    📐 ENGINE OPTIONS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ pyttsx3    │ Offline TTS (works without internet, robotic voice)  │
+    │ elevenlabs │ Cloud TTS (very natural, paid API)                   │
+    │ coqui      │ Local neural TTS (good quality, needs GPU)           │
+    └────────────────────────────────────────────────────────────────────┘
+    """
 
     INFO = ModuleInfo(
         id="voice_output",
@@ -574,7 +842,23 @@ class VoiceOutputModule(Module):
 
 
 class VisionModule(Module):
-    """Vision module - image processing and analysis."""
+    """
+    Vision module - image processing and analysis.
+    
+    📖 WHAT THIS DOES:
+    Gives the AI "eyes" to see and understand images. Can:
+    - Capture from webcam/screen
+    - Read text in images (OCR)
+    - Detect objects in images
+    
+    📐 CONFIGURATION:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ camera_id  │ Which camera to use (0 = default webcam)             │
+    │ resolution │ 480p, 720p, or 1080p                                 │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/tools/vision.py → ScreenVision class
+    """
 
     INFO = ModuleInfo(
         id="vision",
@@ -583,11 +867,11 @@ class VisionModule(Module):
         category=ModuleCategory.PERCEPTION,
         version="1.0.0",
         requires=[],
-        optional=["model"],
+        optional=["model"],  # Model can help with image understanding
         provides=[
-            "image_capture",
-            "ocr",
-            "object_detection"],
+            "image_capture",     # Can grab images
+            "ocr",               # Can read text in images
+            "object_detection"], # Can find objects
         config_schema={
             "camera_id": {
                 "type": "int",
@@ -597,14 +881,15 @@ class VisionModule(Module):
             "resolution": {
                 "type": "choice",
                 "options": [
-                        "480p",
-                        "720p",
-                        "1080p"],
+                        "480p",    # 640x480 - Fast
+                        "720p",    # 1280x720 - Balanced
+                        "1080p"],  # 1920x1080 - Quality
                 "default": "720p"},
         },
     )
 
     def load(self) -> bool:
+        """Load the vision system."""
         try:
             from forge_ai.tools.vision import ScreenVision
             self._instance = ScreenVision()
@@ -615,7 +900,20 @@ class VisionModule(Module):
 
 
 class AvatarModule(Module):
-    """Avatar module - visual AI representation."""
+    """
+    Avatar module - visual AI representation.
+    
+    📖 WHAT THIS DOES:
+    Gives the AI a face! Can display emotions, lip-sync with speech,
+    and show animations. Makes the AI feel more human.
+    
+    📐 STYLES:
+    - 2d: Simple 2D character image
+    - 3d: 3D rendered character
+    - animated: Full animation with expressions
+    
+    🔗 WRAPS: forge_ai/avatar/controller.py → AvatarController class
+    """
 
     INFO = ModuleInfo(
         id="avatar",
@@ -624,8 +922,11 @@ class AvatarModule(Module):
         category=ModuleCategory.OUTPUT,
         version="1.0.0",
         requires=[],
-        optional=["voice_output"],
-        provides=["visual_avatar", "expressions", "lip_sync"],
+        optional=["voice_output"],  # Can lip-sync with voice
+        provides=[
+            "visual_avatar",  # Can show a character
+            "expressions",    # Can show emotions
+            "lip_sync"],      # Can move lips with speech
         config_schema={
             "style": {"type": "choice", "options": ["2d", "3d", "animated"], "default": "2d"},
             "character": {"type": "string", "default": "default"},
@@ -633,6 +934,7 @@ class AvatarModule(Module):
     )
 
     def load(self) -> bool:
+        """Load the avatar controller."""
         try:
             from forge_ai.avatar.controller import AvatarController
             self._instance = AvatarController()
@@ -642,8 +944,23 @@ class AvatarModule(Module):
             return False
 
 
+# =============================================================================
+# 🔧 TOOL MODULES
+# =============================================================================
+# These modules let the AI interact with the outside world.
+
 class WebToolsModule(Module):
-    """Web tools module - internet access."""
+    """
+    Web tools module - internet access.
+    
+    📖 WHAT THIS DOES:
+    Lets the AI search the web, fetch web pages, and call APIs.
+    This is how the AI can get up-to-date information!
+    
+    ⚠️ SECURITY: Has safety limits on URLs and timeout
+    
+    🔗 WRAPS: forge_ai/tools/web_tools.py → WebTools class
+    """
 
     INFO = ModuleInfo(
         id="web_tools",
@@ -652,24 +969,38 @@ class WebToolsModule(Module):
         category=ModuleCategory.TOOLS,
         version="1.0.0",
         requires=[],
-        provides=["web_search", "url_fetch", "api_access"],
+        provides=[
+            "web_search",   # Can search the web
+            "url_fetch",    # Can download web pages
+            "api_access"],  # Can call REST APIs
         config_schema={
-            "allow_external": {"type": "bool", "default": True},
-            "timeout": {"type": "int", "min": 1, "max": 300, "default": 30},
+            "allow_external": {"type": "bool", "default": True},  # Allow internet access?
+            "timeout": {"type": "int", "min": 1, "max": 300, "default": 30},  # Timeout in seconds
         },
     )
 
     def load(self) -> bool:
+        """Load web tools."""
         try:
             from forge_ai.tools.web_tools import WebTools
             self._instance = WebTools()
             return True
         except Exception:
-            return True  # Optional, don't fail
+            return True  # Optional module - don't fail if unavailable
 
 
 class FileToolsModule(Module):
-    """File tools module - file system access."""
+    """
+    File tools module - file system access.
+    
+    📖 WHAT THIS DOES:
+    Lets the AI read and write files on your computer.
+    
+    ⚠️ SECURITY: Has a blocked paths list to prevent access to sensitive files
+    (see forge_ai/utils/security.py)
+    
+    🔗 WRAPS: forge_ai/tools/file_tools.py
+    """
 
     INFO = ModuleInfo(
         id="file_tools",
@@ -678,7 +1009,10 @@ class FileToolsModule(Module):
         category=ModuleCategory.TOOLS,
         version="1.0.0",
         requires=[],
-        provides=["file_read", "file_write", "file_search"],
+        provides=[
+            "file_read",    # Can read file contents
+            "file_write",   # Can write to files
+            "file_search"], # Can search for files
         config_schema={
             "allowed_paths": {"type": "list", "default": []},
             "max_file_size_mb": {"type": "int", "min": 1, "max": 1000, "default": 100},
@@ -695,7 +1029,24 @@ class FileToolsModule(Module):
 
 
 class ToolRouterModule(Module):
-    """Tool router module - specialized model routing."""
+    """
+    Tool router module - specialized model routing.
+    
+    📖 WHAT THIS DOES:
+    Routes different types of requests to specialized models:
+    - Intent classification: "What does the user want?"
+    - Vision: "What's in this image?"
+    - Code: "Write me Python code"
+    
+    📐 HOW ROUTING WORKS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ User Request → Router Model → "code" intent → Code Model          │
+    │                            → "chat" intent → Chat Model           │
+    │                            → "vision" intent → Vision Model       │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/core/tool_router.py → ToolRouter class
+    """
 
     INFO = ModuleInfo(
         id="tool_router",
@@ -704,8 +1055,11 @@ class ToolRouterModule(Module):
         category=ModuleCategory.TOOLS,
         version="1.0.0",
         requires=["tokenizer"],
-        optional=["model"],
-        provides=["intent_classification", "specialized_routing", "model_routing"],
+        optional=["model"],  # Uses model if available
+        provides=[
+            "intent_classification",   # Can classify what user wants
+            "specialized_routing",     # Can route to right model
+            "model_routing"],          # Can manage multiple models
         config_schema={
             "use_specialized": {
                 "type": "bool",
@@ -731,6 +1085,7 @@ class ToolRouterModule(Module):
     )
 
     def load(self) -> bool:
+        """Load the tool router with specialized model support."""
         try:
             from forge_ai.core.tool_router import get_router
             use_specialized = self.config.get('use_specialized', True)
@@ -742,8 +1097,9 @@ class ToolRouterModule(Module):
             return False
 
     def unload(self) -> bool:
+        """Unload and clear cached models."""
         if self._instance is not None:
-            # Clear any cached models
+            # Clear any cached models to free memory
             if hasattr(self._instance, '_specialized_models'):
                 self._instance._specialized_models.clear()
             if hasattr(self._instance, '_model_cache'):
@@ -752,8 +1108,26 @@ class ToolRouterModule(Module):
         return True
 
 
+# =============================================================================
+# 🌐 INTERFACE MODULES
+# =============================================================================
+# These modules provide ways to interact with the AI.
+
 class APIServerModule(Module):
-    """API server module - REST API interface."""
+    """
+    API server module - REST API interface.
+    
+    📖 WHAT THIS DOES:
+    Creates a REST API so other programs can talk to ForgeAI.
+    Great for building apps, bots, or integrating with other tools.
+    
+    📐 ENDPOINTS (when running):
+    - POST /chat - Send a message, get a response
+    - GET /health - Check if server is running
+    - POST /generate - Generate text from prompt
+    
+    🔗 WRAPS: forge_ai/comms/api_server.py → create_app()
+    """
 
     INFO = ModuleInfo(
         id="api_server",
@@ -761,23 +1135,44 @@ class APIServerModule(Module):
         description="REST API for remote access and integrations",
         category=ModuleCategory.INTERFACE,
         version="1.0.0",
-        requires=["inference"],
-        provides=["rest_api", "remote_access"],
+        requires=["inference"],  # Need inference to generate responses
+        provides=[
+            "rest_api",       # Provides REST endpoints
+            "remote_access"], # Enables remote use
         config_schema={
-            "host": {"type": "string", "default": "127.0.0.1"},
+            "host": {"type": "string", "default": "127.0.0.1"},  # localhost by default (safe)
             "port": {"type": "int", "min": 1, "max": 65535, "default": 5000},
-            "auth_enabled": {"type": "bool", "default": False},
+            "auth_enabled": {"type": "bool", "default": False},  # Enable API auth?
         },
     )
 
     def load(self) -> bool:
+        """Load the API server factory."""
         from forge_ai.comms.api_server import create_app
         self._app_factory = create_app
         return True
 
 
 class NetworkModule(Module):
-    """Network module - multi-device communication."""
+    """
+    Network module - multi-device communication.
+    
+    📖 WHAT THIS DOES:
+    Lets multiple computers work together! You can:
+    - Split inference across devices
+    - Share models between machines
+    - Run the brain on a server, UI on a tablet
+    
+    📐 NETWORK ROLES:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ standalone │ Solo mode, no networking                             │
+    │ server     │ Central hub that coordinates others                  │
+    │ client     │ Connects to a server                                 │
+    │ peer       │ Equal partner in a mesh network                      │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/comms/network.py → ForgeNode class
+    """
 
     INFO = ModuleInfo(
         id="network",
@@ -787,29 +1182,30 @@ class NetworkModule(Module):
         version="1.0.0",
         requires=[],
         optional=[
-            "model",
-            "inference"],
+            "model",      # Can share models
+            "inference"], # Can distribute inference
         provides=[
-            "multi_device",
-            "distributed_inference",
-            "model_sync"],
+            "multi_device",           # Multiple computers can work together
+            "distributed_inference",  # Split work across machines
+            "model_sync"],            # Keep models in sync
         supports_distributed=True,
         config_schema={
             "role": {
                 "type": "choice",
                 "options": [
-                        "standalone",
-                        "server",
-                        "client",
-                        "peer"],
+                        "standalone",  # No networking
+                        "server",      # Central coordinator
+                        "client",      # Connect to server
+                        "peer"],       # Mesh network
                 "default": "standalone"},
             "discovery": {
                 "type": "bool",
-                "default": True},
+                "default": True},  # Auto-discover other nodes?
         },
     )
 
     def load(self) -> bool:
+        """Load the network node."""
         try:
             from forge_ai.comms.network import ForgeNode
             self._instance = ForgeNode()
@@ -819,7 +1215,20 @@ class NetworkModule(Module):
 
 
 class GUIModule(Module):
-    """GUI module - graphical interface."""
+    """
+    GUI module - graphical interface.
+    
+    📖 WHAT THIS DOES:
+    Provides the main graphical interface using PyQt5.
+    Has tabs for chat, training, modules, and all the generation features.
+    
+    📐 THEMES:
+    - dark: Easy on the eyes (default)
+    - light: Bright mode
+    - system: Match your OS settings
+    
+    🔗 WRAPS: forge_ai/gui/enhanced_window.py → EnhancedMainWindow
+    """
 
     INFO = ModuleInfo(
         id="gui",
@@ -829,70 +1238,102 @@ class GUIModule(Module):
         version="2.0.0",
         requires=[],
         optional=[
-            "model",
-            "tokenizer",
-            "inference",
-            "training",
-            "memory",
-            "voice_input",
-            "voice_output",
-            "vision",
-            "avatar"],
+            "model",        # For chat
+            "tokenizer",    # For chat
+            "inference",    # For text generation
+            "training",     # For training tab
+            "memory",       # For conversation history
+            "voice_input",  # For voice commands
+            "voice_output", # For spoken responses
+            "vision",       # For vision tab
+            "avatar"],      # For avatar display
         provides=[
-            "graphical_interface",
-            "chat_ui",
-            "training_ui",
-            "module_management"],
+            "graphical_interface",  # Main window
+            "chat_ui",              # Chat interface
+            "training_ui",          # Training controls
+            "module_management"],   # Module toggle UI
         config_schema={
             "theme": {
                 "type": "choice",
                 "options": [
-                        "dark",
-                        "light",
-                        "system"],
+                        "dark",    # Dark mode
+                        "light",   # Light mode
+                        "system"], # Match OS
                 "default": "dark"},
             "window_size": {
                 "type": "choice",
                 "options": [
-                    "small",
-                    "medium",
-                    "large",
-                    "fullscreen"],
+                    "small",       # 800x600
+                    "medium",      # 1200x800
+                    "large",       # 1600x900
+                    "fullscreen"], # Full screen
                 "default": "medium"},
         },
     )
 
     def load(self) -> bool:
-        # GUI is loaded on demand
+        """GUI is loaded on demand when window is created."""
         return True
 
 
 # =============================================================================
-# AI Generation Modules (Addons integrated into module system)
+# 🎨 GENERATION MODULES
 # =============================================================================
+# These modules generate content (images, code, video, audio, 3D, etc.)
+# Each capability has LOCAL and API variants that CONFLICT with each other
+# (you can only use one at a time - they both provide the same capability)
 
 class GenerationModule(Module):
-    """Base class for generation modules that wrap addons."""
+    """
+    Base class for generation modules.
+    
+    📖 PATTERN:
+    All generation modules follow this pattern:
+    1. Wrap an "addon" from the GUI tabs
+    2. load() creates and loads the addon
+    3. generate() calls the addon's generate method
+    4. unload() cleans up the addon
+    
+    📐 LOCAL vs API:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ LOCAL modules: Run on your GPU, no internet needed, free          │
+    │ API modules: Run in the cloud, need internet + API key, paid      │
+    │                                                                    │
+    │ ⚠️ LOCAL and API versions CONFLICT - can only load ONE at a time  │
+    └────────────────────────────────────────────────────────────────────┘
+    """
 
     def __init__(self, manager, config=None):
         super().__init__(manager, config)
-        self._addon = None
+        self._addon = None  # The wrapped addon from GUI tabs
 
     def unload(self) -> bool:
+        """Unload the wrapped addon."""
         if self._addon:
             self._addon.unload()
             self._addon = None
         return True
 
     def generate(self, prompt: str, **kwargs):
-        """Generate content using the wrapped addon."""
+        """
+        Generate content using the wrapped addon.
+        
+        Args:
+            prompt: What to generate (text description)
+            **kwargs: Additional options passed to the addon
+            
+        Returns:
+            dict with 'success' and either 'result' or 'error'
+        """
         if not self._addon or not self._addon.is_loaded:
             raise RuntimeError(f"Module not loaded")
+        
         # Ensure prompt is a string (CLIP tokenizer requires str type)
         if prompt is not None:
             prompt = str(prompt).strip()
         if not prompt:
             return {"success": False, "error": "Prompt cannot be empty"}
+        
         return self._addon.generate(prompt, **kwargs)
 
     def get_interface(self):
@@ -900,8 +1341,28 @@ class GenerationModule(Module):
         return self._addon
 
 
+# -----------------------------------------------------------------------------
+# 🖼️ IMAGE GENERATION
+# -----------------------------------------------------------------------------
+
 class ImageGenLocalModule(GenerationModule):
-    """Local image generation with Stable Diffusion."""
+    """
+    Local image generation with Stable Diffusion.
+    
+    📖 WHAT THIS DOES:
+    Generates images from text prompts using Stable Diffusion running
+    locally on your GPU. No internet needed, completely free!
+    
+    📐 MODELS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ sd-2.1      │ Stable Diffusion 2.1 (6GB VRAM)                     │
+    │ sdxl        │ Stable Diffusion XL (8GB VRAM, higher quality)      │
+    │ sdxl-turbo  │ Fast version of SDXL (4 steps instead of 30)        │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    ⚠️ CONFLICTS: image_gen_api (can only use one image generator)
+    🔗 WRAPS: forge_ai/gui/tabs/image_tab.py → StableDiffusionLocal
+    """
 
     INFO = ModuleInfo(
         id="image_gen_local",
@@ -910,26 +1371,27 @@ class ImageGenLocalModule(GenerationModule):
         category=ModuleCategory.GENERATION,
         version="1.0.0",
         requires=[],
-        provides=["image_generation"],
-        min_vram_mb=6000,
-        requires_gpu=True,
+        provides=["image_generation"],  # Both local and API provide this
+        min_vram_mb=6000,  # Need at least 6GB VRAM
+        requires_gpu=True,  # GPU required!
         config_schema={
             "model": {
                 "type": "choice",
                 "options": [
-                    "sd-2.1",
-                    "sdxl",
-                    "sdxl-turbo"],
+                    "sd-2.1",      # Smaller, works on 6GB
+                    "sdxl",        # Better quality, needs 8GB
+                    "sdxl-turbo"], # Fast but lower quality
                 "default": "sd-2.1"},
             "steps": {
                 "type": "int",
                 "min": 1,
                 "max": 100,
-                "default": 30},
+                "default": 30},  # More steps = better quality but slower
         },
     )
 
     def load(self) -> bool:
+        """Load the Stable Diffusion model."""
         try:
             from forge_ai.gui.tabs.image_tab import StableDiffusionLocal
             self._addon = StableDiffusionLocal()
@@ -940,7 +1402,22 @@ class ImageGenLocalModule(GenerationModule):
 
 
 class ImageGenAPIModule(GenerationModule):
-    """Cloud image generation via APIs."""
+    """
+    Cloud image generation via APIs.
+    
+    📖 WHAT THIS DOES:
+    Generates images using cloud APIs (DALL-E, Replicate).
+    Great if you don't have a GPU!
+    
+    📐 PROVIDERS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ openai    │ DALL-E 3 (best quality, $0.04/image)                  │
+    │ replicate │ SDXL, Flux, etc (many models, usage-based pricing)    │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    ⚠️ CONFLICTS: image_gen_local (can only use one image generator)
+    🔗 WRAPS: forge_ai/gui/tabs/image_tab.py → OpenAIImage, ReplicateImage
+    """
 
     INFO = ModuleInfo(
         id="image_gen_api",
@@ -949,8 +1426,8 @@ class ImageGenAPIModule(GenerationModule):
         category=ModuleCategory.GENERATION,
         version="1.0.0",
         requires=[],
-        provides=["image_generation"],
-        is_cloud_service=True,
+        provides=["image_generation"],  # Same capability as local
+        is_cloud_service=True,  # Uses cloud APIs
         config_schema={
             "provider": {
                 "type": "choice",
@@ -982,8 +1459,22 @@ class ImageGenAPIModule(GenerationModule):
             return False
 
 
+# -----------------------------------------------------------------------------
+# 💻 CODE GENERATION
+# -----------------------------------------------------------------------------
+
 class CodeGenLocalModule(GenerationModule):
-    """Local code generation using Forge model."""
+    """
+    Local code generation using Forge model.
+    
+    📖 WHAT THIS DOES:
+    Generates code using your locally trained Forge model.
+    Completely free and private - your code never leaves your machine!
+    
+    📐 TIP: Lower temperature (0.1-0.3) gives more predictable code
+    
+    🔗 WRAPS: forge_ai/gui/tabs/code_tab.py → ForgeCode
+    """
 
     INFO = ModuleInfo(
         id="code_gen_local",
@@ -991,7 +1482,7 @@ class CodeGenLocalModule(GenerationModule):
         description="Generate code using your trained Forge model. Free and private.",
         category=ModuleCategory.GENERATION,
         version="1.0.0",
-        requires=["model", "tokenizer", "inference"],
+        requires=["model", "tokenizer", "inference"],  # Needs the full local stack
         provides=["code_generation"],
         config_schema={
             "model_name": {"type": "string", "default": "sacrifice"},
@@ -1000,6 +1491,7 @@ class CodeGenLocalModule(GenerationModule):
     )
 
     def load(self) -> bool:
+        """Load the local code generation model."""
         try:
             from forge_ai.gui.tabs.code_tab import ForgeCode
             self._addon = ForgeCode(model_name=self.config.get('model_name', 'sacrifice'))
@@ -1010,7 +1502,22 @@ class CodeGenLocalModule(GenerationModule):
 
 
 class CodeGenAPIModule(GenerationModule):
-    """Cloud code generation via OpenAI."""
+    """
+    Cloud code generation via OpenAI.
+    
+    📖 WHAT THIS DOES:
+    Uses OpenAI's GPT-4 to generate code. Very high quality,
+    but requires an API key and costs money per request.
+    
+    📐 MODELS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ gpt-4        │ Best quality, most expensive                       │
+    │ gpt-4-turbo  │ Faster, still very good                            │
+    │ gpt-3.5-turbo│ Cheapest, good for simple code                     │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/gui/tabs/code_tab.py → OpenAICode
+    """
 
     INFO = ModuleInfo(
         id="code_gen_api",
@@ -1025,9 +1532,9 @@ class CodeGenAPIModule(GenerationModule):
             "model": {
                 "type": "choice",
                 "options": [
-                    "gpt-4",
-                    "gpt-4-turbo",
-                    "gpt-3.5-turbo"],
+                    "gpt-4",         # Best
+                    "gpt-4-turbo",   # Fast + good
+                    "gpt-3.5-turbo"],# Cheap
                 "default": "gpt-4"},
             "api_key": {
                 "type": "secret",
@@ -1036,6 +1543,7 @@ class CodeGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
+        """Load the OpenAI code generation client."""
         try:
             from forge_ai.gui.tabs.code_tab import OpenAICode
             self._addon = OpenAICode(
@@ -1049,8 +1557,26 @@ class CodeGenAPIModule(GenerationModule):
             return False
 
 
+# -----------------------------------------------------------------------------
+# 🎬 VIDEO GENERATION
+# -----------------------------------------------------------------------------
+
 class VideoGenLocalModule(GenerationModule):
-    """Local video generation with AnimateDiff."""
+    """
+    Local video generation with AnimateDiff.
+    
+    📖 WHAT THIS DOES:
+    Generates short video clips from text prompts using AnimateDiff.
+    Needs a powerful GPU (12GB+ VRAM recommended).
+    
+    📐 SETTINGS:
+    - fps: Frames per second (4-30)
+    - duration: Length in seconds (1-10)
+    
+    ⚠️ RESOURCE INTENSIVE: Uses lots of VRAM and takes time!
+    
+    🔗 WRAPS: forge_ai/gui/tabs/video_tab.py → LocalVideo
+    """
 
     INFO = ModuleInfo(
         id="video_gen_local",
@@ -1060,7 +1586,7 @@ class VideoGenLocalModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["video_generation"],
-        min_vram_mb=12000,
+        min_vram_mb=12000,  # Need 12GB VRAM minimum
         requires_gpu=True,
         config_schema={
             "fps": {"type": "int", "min": 4, "max": 30, "default": 8},
@@ -1069,6 +1595,7 @@ class VideoGenLocalModule(GenerationModule):
     )
 
     def load(self) -> bool:
+        """Load the AnimateDiff video generator."""
         try:
             from forge_ai.gui.tabs.video_tab import LocalVideo
             self._addon = LocalVideo()
@@ -1079,7 +1606,15 @@ class VideoGenLocalModule(GenerationModule):
 
 
 class VideoGenAPIModule(GenerationModule):
-    """Cloud video generation via Replicate."""
+    """
+    Cloud video generation via Replicate.
+    
+    📖 WHAT THIS DOES:
+    Generates videos using cloud APIs (Zeroscope, etc).
+    Good option if you don't have a powerful GPU.
+    
+    🔗 WRAPS: forge_ai/gui/tabs/video_tab.py → ReplicateVideo
+    """
 
     INFO = ModuleInfo(
         id="video_gen_api",
@@ -1097,6 +1632,7 @@ class VideoGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
+        """Load the Replicate video client."""
         try:
             from forge_ai.gui.tabs.video_tab import ReplicateVideo
             self._addon = ReplicateVideo(api_key=self.config.get('api_key'))
@@ -1106,8 +1642,26 @@ class VideoGenAPIModule(GenerationModule):
             return False
 
 
+# -----------------------------------------------------------------------------
+# 🔊 AUDIO GENERATION
+# -----------------------------------------------------------------------------
+
 class AudioGenLocalModule(GenerationModule):
-    """Local audio/TTS generation."""
+    """
+    Local audio/TTS generation.
+    
+    📖 WHAT THIS DOES:
+    Converts text to spoken audio using local engines.
+    Works offline, completely free!
+    
+    📐 ENGINES:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ pyttsx3  │ Offline, robotic voice, very fast                      │
+    │ edge-tts │ Microsoft Edge voices (needs internet for first use)   │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/gui/tabs/audio_tab.py → LocalTTS
+    """
 
     INFO = ModuleInfo(
         id="audio_gen_local",
@@ -1134,7 +1688,21 @@ class AudioGenLocalModule(GenerationModule):
 
 
 class AudioGenAPIModule(GenerationModule):
-    """Cloud audio generation via ElevenLabs/Replicate."""
+    """
+    Cloud audio generation via ElevenLabs/Replicate.
+    
+    📖 WHAT THIS DOES:
+    Premium text-to-speech with natural voices (ElevenLabs)
+    or AI music generation (MusicGen via Replicate).
+    
+    📐 PROVIDERS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ elevenlabs │ Best TTS voices (natural, expressive)                │
+    │ replicate  │ MusicGen and other audio models                      │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/gui/tabs/audio_tab.py → ElevenLabsTTS, ReplicateAudio
+    """
 
     INFO = ModuleInfo(
         id="audio_gen_api",
@@ -1144,27 +1712,28 @@ class AudioGenAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=[
-            "audio_generation",
-            "text_to_speech",
-            "music_generation"],
+            "audio_generation",    # Can make sounds
+            "text_to_speech",      # Can speak text
+            "music_generation"],   # Can make music
         is_cloud_service=True,
         config_schema={
             "provider": {
                 "type": "choice",
                 "options": [
-                    "elevenlabs",
-                    "replicate"],
+                    "elevenlabs",  # Best TTS
+                    "replicate"],  # MusicGen
                 "default": "elevenlabs"},
             "api_key": {
                 "type": "secret",
                         "default": ""},
             "voice": {
                 "type": "string",
-                "default": "Rachel"},
+                "default": "Rachel"},  # ElevenLabs default voice
         },
     )
 
     def load(self) -> bool:
+        """Load the audio generation provider."""
         try:
             provider = self.config.get('provider', 'elevenlabs')
             if provider == 'elevenlabs':
@@ -1179,8 +1748,27 @@ class AudioGenAPIModule(GenerationModule):
             return False
 
 
+# -----------------------------------------------------------------------------
+# 🧠 EMBEDDING GENERATION
+# -----------------------------------------------------------------------------
+
 class EmbeddingLocalModule(GenerationModule):
-    """Local embedding generation with sentence-transformers."""
+    """
+    Local embedding generation with sentence-transformers.
+    
+    📖 WHAT THIS DOES:
+    Converts text into vectors (numbers) that capture meaning.
+    This enables semantic search - finding similar text even if
+    the exact words are different.
+    
+    📐 MODELS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ all-MiniLM-L6-v2    │ Fast, good quality, 22M params             │
+    │ all-mpnet-base-v2   │ Better quality, 109M params                │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/gui/tabs/embeddings_tab.py → LocalEmbedding
+    """
 
     INFO = ModuleInfo(
         id="embedding_local",
@@ -1190,19 +1778,20 @@ class EmbeddingLocalModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=[
-            "embeddings",
-            "semantic_search"],
+            "embeddings",        # Can create vectors from text
+            "semantic_search"],  # Can find similar text
         config_schema={
             "model": {
                 "type": "choice",
                 "options": [
-                    "all-MiniLM-L6-v2",
-                    "all-mpnet-base-v2"],
+                    "all-MiniLM-L6-v2",     # Fast and small
+                    "all-mpnet-base-v2"],   # Better quality
                 "default": "all-MiniLM-L6-v2"},
         },
     )
 
     def load(self) -> bool:
+        """Load the sentence-transformers model."""
         try:
             from forge_ai.gui.tabs.embeddings_tab import LocalEmbedding
             self._addon = LocalEmbedding(model_name=self.config.get('model', 'all-MiniLM-L6-v2'))
@@ -1213,7 +1802,21 @@ class EmbeddingLocalModule(GenerationModule):
 
 
 class EmbeddingAPIModule(GenerationModule):
-    """Cloud embeddings via OpenAI."""
+    """
+    Cloud embeddings via OpenAI.
+    
+    📖 WHAT THIS DOES:
+    Uses OpenAI's embedding models to convert text to vectors.
+    Higher quality than local models, but requires API key.
+    
+    📐 MODELS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ text-embedding-3-small │ Cheaper, 1536 dimensions                 │
+    │ text-embedding-3-large │ Better quality, 3072 dimensions          │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/gui/tabs/embeddings_tab.py → OpenAIEmbedding
+    """
 
     INFO = ModuleInfo(
         id="embedding_api",
@@ -1230,8 +1833,8 @@ class EmbeddingAPIModule(GenerationModule):
             "model": {
                 "type": "choice",
                 "options": [
-                    "text-embedding-3-small",
-                    "text-embedding-3-large"],
+                    "text-embedding-3-small",  # Cheaper
+                    "text-embedding-3-large"], # Better
                 "default": "text-embedding-3-small"},
             "api_key": {
                 "type": "secret",
@@ -1240,6 +1843,7 @@ class EmbeddingAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
+        """Load the OpenAI embedding client."""
         try:
             from forge_ai.gui.tabs.embeddings_tab import OpenAIEmbedding
             self._addon = OpenAIEmbedding(
@@ -1251,8 +1855,30 @@ class EmbeddingAPIModule(GenerationModule):
             return False
 
 
+# -----------------------------------------------------------------------------
+# 🎮 3D GENERATION
+# -----------------------------------------------------------------------------
+
 class ThreeDGenLocalModule(GenerationModule):
-    """Local 3D model generation with Shap-E or Point-E."""
+    """
+    Local 3D model generation with Shap-E or Point-E.
+    
+    📖 WHAT THIS DOES:
+    Generates 3D models from text descriptions or images.
+    You can export to common formats like .obj, .ply, .glb.
+    
+    📐 MODELS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ shap-e  │ OpenAI's text-to-3D model (better quality)              │
+    │ point-e │ OpenAI's point cloud model (faster)                     │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    📐 KEY PARAMETERS:
+    - guidance_scale: How closely to follow the prompt (1-20)
+    - num_inference_steps: More steps = better quality (10-100)
+    
+    🔗 WRAPS: forge_ai/gui/tabs/threed_tab.py → Local3DGen
+    """
 
     INFO = ModuleInfo(
         id="threed_gen_local",
@@ -1262,8 +1888,8 @@ class ThreeDGenLocalModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["3d_generation", "mesh_generation"],
-        conflicts=["threed_gen_api"],
-        min_vram_mb=4000,
+        conflicts=["threed_gen_api"],  # Can only use one 3D generator
+        min_vram_mb=4000,  # Need 4GB VRAM
         requires_gpu=True,
         config_schema={
             "model": {
@@ -1275,18 +1901,19 @@ class ThreeDGenLocalModule(GenerationModule):
                 "type": "float",
                 "min": 1.0,
                 "max": 20.0,
-                "default": 15.0
+                "default": 15.0  # Higher = follows prompt more closely
             },
             "num_inference_steps": {
                 "type": "int",
                 "min": 10,
                 "max": 100,
-                "default": 64
+                "default": 64  # More steps = better but slower
             },
         },
     )
 
     def load(self) -> bool:
+        """Load the 3D generation model."""
         try:
             from forge_ai.gui.tabs.threed_tab import Local3DGen
             self._addon = Local3DGen(
@@ -1299,7 +1926,15 @@ class ThreeDGenLocalModule(GenerationModule):
 
 
 class ThreeDGenAPIModule(GenerationModule):
-    """Cloud 3D model generation via API services."""
+    """
+    Cloud 3D model generation via API services.
+    
+    📖 WHAT THIS DOES:
+    Generates 3D models using cloud APIs.
+    Good option if you don't have a GPU.
+    
+    🔗 WRAPS: forge_ai/gui/tabs/threed_tab.py → Cloud3DGen
+    """
 
     INFO = ModuleInfo(
         id="threed_gen_api",
@@ -1309,7 +1944,7 @@ class ThreeDGenAPIModule(GenerationModule):
         version="1.0.0",
         requires=[],
         provides=["3d_generation", "mesh_generation"],
-        conflicts=["threed_gen_local"],
+        conflicts=["threed_gen_local"],  # Can only use one
         is_cloud_service=True,
         config_schema={
             "service": {
@@ -1325,6 +1960,7 @@ class ThreeDGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
+        """Load the cloud 3D generation client."""
         try:
             from forge_ai.gui.tabs.threed_tab import Cloud3DGen
             self._addon = Cloud3DGen(
@@ -1337,8 +1973,33 @@ class ThreeDGenAPIModule(GenerationModule):
             return False
 
 
+# -----------------------------------------------------------------------------
+# 🎯 MOTION TRACKING
+# -----------------------------------------------------------------------------
+
 class MotionTrackingModule(Module):
-    """Motion tracking module for user mimicry."""
+    """
+    Motion tracking module for user mimicry.
+    
+    📖 WHAT THIS DOES:
+    Uses your webcam to track body pose, hands, and face.
+    The avatar can then mimic your movements in real-time!
+    
+    📐 TRACKING MODES:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ pose     │ Body pose only (33 landmarks)                          │
+    │ hands    │ Hand tracking (21 landmarks per hand)                  │
+    │ face     │ Facial mesh (468 landmarks)                            │
+    │ holistic │ Everything combined (recommended)                      │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    📐 MODEL COMPLEXITY:
+    - 0: Lite (fastest, least accurate)
+    - 1: Full (balanced)
+    - 2: Heavy (most accurate, slowest)
+    
+    🔗 WRAPS: forge_ai/tools/motion_tracking.py → MotionTracker
+    """
 
     INFO = ModuleInfo(
         id="motion_tracking",
@@ -1347,30 +2008,34 @@ class MotionTrackingModule(Module):
         category=ModuleCategory.PERCEPTION,
         version="1.0.0",
         requires=[],
-        optional=["avatar"],
-        provides=["motion_tracking", "gesture_recognition", "pose_estimation"],
+        optional=["avatar"],  # Can control avatar with movements
+        provides=[
+            "motion_tracking",       # Track body movements
+            "gesture_recognition",   # Recognize gestures
+            "pose_estimation"],      # Estimate body pose
         config_schema={
             "camera_id": {
                 "type": "int",
                 "min": 0,
                 "max": 10,
-                "default": 0
+                "default": 0  # Default webcam
             },
             "tracking_mode": {
                 "type": "choice",
                 "options": ["pose", "hands", "face", "holistic"],
-                "default": "holistic"
+                "default": "holistic"  # Track everything
             },
             "model_complexity": {
                 "type": "int",
                 "min": 0,
                 "max": 2,
-                "default": 1
+                "default": 1  # Balanced
             },
         },
     )
 
     def load(self) -> bool:
+        """Load the MediaPipe motion tracker."""
         try:
             from forge_ai.tools.motion_tracking import MotionTracker
             self._instance = MotionTracker(
@@ -1384,78 +2049,148 @@ class MotionTrackingModule(Module):
 
 
 # =============================================================================
-# Module Registry
+# 📚 MODULE REGISTRY
 # =============================================================================
+# This is the master catalog of all available modules.
+# The ModuleManager uses this to know what modules exist.
+#
+# 📐 STRUCTURE:
+# ┌────────────────────────────────────────────────────────────────────────┐
+# │  'module_id': ModuleClass,                                             │
+# │                                                                        │
+# │  Example:                                                              │
+# │  'image_gen_local': ImageGenLocalModule,  # Local Stable Diffusion    │
+# │  'image_gen_api': ImageGenAPIModule,      # Cloud DALL-E/Replicate    │
+# └────────────────────────────────────────────────────────────────────────┘
+#
+# 📐 CATEGORIES:
+# - Core: model, tokenizer, training, inference, chat_api, gguf_loader
+# - Memory: memory, embedding_local, embedding_api
+# - Perception: voice_input, vision, motion_tracking
+# - Output: voice_output, avatar
+# - Generation: image, code, video, audio, 3D (local and API variants)
+# - Tools: web_tools, file_tools, tool_router
+# - Network: api_server, network
+# - Interface: gui
 
 MODULE_REGISTRY: Dict[str, Type[Module]] = {
-    # Core
-    'model': ModelModule,
-    'tokenizer': TokenizerModule,
-    'training': TrainingModule,
-    'inference': InferenceModule,
-    'chat_api': ChatAPIModule,
-    'gguf_loader': GGUFLoaderModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Core modules - The foundation of ForgeAI
+    # ─────────────────────────────────────────────────────────────────────
+    'model': ModelModule,           # The neural network brain
+    'tokenizer': TokenizerModule,   # Text ↔ numbers converter
+    'training': TrainingModule,     # Teaches the model
+    'inference': InferenceModule,   # Generates text
+    'chat_api': ChatAPIModule,      # Cloud chat (Ollama, GPT, Claude)
+    'gguf_loader': GGUFLoaderModule,# Load llama.cpp models
 
-    # Memory
-    'memory': MemoryModule,
-    'embedding_local': EmbeddingLocalModule,
-    'embedding_api': EmbeddingAPIModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Memory modules - Remember things
+    # ─────────────────────────────────────────────────────────────────────
+    'memory': MemoryModule,                 # Conversation storage
+    'embedding_local': EmbeddingLocalModule,# Local vector embeddings
+    'embedding_api': EmbeddingAPIModule,    # Cloud embeddings
 
-    # Perception
-    'voice_input': VoiceInputModule,
-    'vision': VisionModule,
-    'motion_tracking': MotionTrackingModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Perception modules - See and hear
+    # ─────────────────────────────────────────────────────────────────────
+    'voice_input': VoiceInputModule,        # Speech-to-text
+    'vision': VisionModule,                 # Image/screen analysis
+    'motion_tracking': MotionTrackingModule,# Body/hand/face tracking
 
-    # Output
-    'voice_output': VoiceOutputModule,
-    'avatar': AvatarModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Output modules - Speak and show
+    # ─────────────────────────────────────────────────────────────────────
+    'voice_output': VoiceOutputModule,  # Text-to-speech
+    'avatar': AvatarModule,             # Visual character
 
-    # Generation (AI Capabilities)
-    'image_gen_local': ImageGenLocalModule,
-    'image_gen_api': ImageGenAPIModule,
-    'code_gen_local': CodeGenLocalModule,
-    'code_gen_api': CodeGenAPIModule,
-    'video_gen_local': VideoGenLocalModule,
-    'video_gen_api': VideoGenAPIModule,
-    'audio_gen_local': AudioGenLocalModule,
-    'audio_gen_api': AudioGenAPIModule,
-    'threed_gen_local': ThreeDGenLocalModule,
-    'threed_gen_api': ThreeDGenAPIModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Generation modules - Create content
+    # (LOCAL and API versions conflict - only use one at a time!)
+    # ─────────────────────────────────────────────────────────────────────
+    'image_gen_local': ImageGenLocalModule,   # Stable Diffusion
+    'image_gen_api': ImageGenAPIModule,       # DALL-E / Replicate
+    'code_gen_local': CodeGenLocalModule,     # Local Forge code
+    'code_gen_api': CodeGenAPIModule,         # GPT-4 code
+    'video_gen_local': VideoGenLocalModule,   # AnimateDiff
+    'video_gen_api': VideoGenAPIModule,       # Replicate video
+    'audio_gen_local': AudioGenLocalModule,   # pyttsx3 / edge-tts
+    'audio_gen_api': AudioGenAPIModule,       # ElevenLabs / MusicGen
+    'threed_gen_local': ThreeDGenLocalModule, # Shap-E / Point-E
+    'threed_gen_api': ThreeDGenAPIModule,     # Cloud 3D
 
-    # Tools
-    'web_tools': WebToolsModule,
-    'file_tools': FileToolsModule,
-    'tool_router': ToolRouterModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Tool modules - Interact with the world
+    # ─────────────────────────────────────────────────────────────────────
+    'web_tools': WebToolsModule,        # Web search and fetch
+    'file_tools': FileToolsModule,      # File read/write
+    'tool_router': ToolRouterModule,    # Route to specialized models
 
-    # Network
-    'api_server': APIServerModule,
-    'network': NetworkModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Network modules - Connect devices
+    # ─────────────────────────────────────────────────────────────────────
+    'api_server': APIServerModule,  # REST API server
+    'network': NetworkModule,       # Multi-device networking
 
-    # Interface
-    'gui': GUIModule,
+    # ─────────────────────────────────────────────────────────────────────
+    # Interface modules - User interaction
+    # ─────────────────────────────────────────────────────────────────────
+    'gui': GUIModule,  # PyQt5 graphical interface
 }
 
 
+# =============================================================================
+# 🔧 HELPER FUNCTIONS
+# =============================================================================
+# These functions make it easy to work with the module registry.
+
 def register_all(manager: ModuleManager):
-    """Register all built-in modules with a manager."""
+    """
+    Register all built-in modules with a manager.
+    
+    📖 USAGE:
+    ```python
+    manager = ModuleManager()
+    register_all(manager)  # Now manager knows about all modules
+    ```
+    """
     for module_class in MODULE_REGISTRY.values():
         manager.register(module_class)
 
 
 @lru_cache(maxsize=128)
 def get_module(module_id: str) -> Optional[Type[Module]]:
-    """Get a module class by ID."""
+    """
+    Get a module class by ID.
+    
+    📖 EXAMPLE:
+    ```python
+    ImageClass = get_module('image_gen_local')  # Returns ImageGenLocalModule
+    ```
+    """
     return MODULE_REGISTRY.get(module_id)
 
 
 @lru_cache(maxsize=32)
 def list_modules() -> List[ModuleInfo]:
-    """List all available modules."""
+    """
+    List all available modules.
+    
+    📖 RETURNS:
+    List of ModuleInfo objects with id, name, description, etc.
+    """
     return [cls.get_info() for cls in MODULE_REGISTRY.values()]
 
 
 def list_by_category(category: ModuleCategory) -> List[ModuleInfo]:
-    """List modules by category."""
+    """
+    List modules by category.
+    
+    📖 EXAMPLE:
+    ```python
+    gen_modules = list_by_category(ModuleCategory.GENERATION)
+    ```
+    """
     return [
         cls.get_info() for cls in MODULE_REGISTRY.values()
         if cls.get_info().category == category
@@ -1463,7 +2198,10 @@ def list_by_category(category: ModuleCategory) -> List[ModuleInfo]:
 
 
 def list_local_modules() -> List[ModuleInfo]:
-    """List modules that run 100% locally (no cloud/internet required)."""
+    """
+    List modules that run 100% locally (no cloud/internet required).
+    Great for privacy-conscious users or offline use!
+    """
     return [
         cls.get_info() for cls in MODULE_REGISTRY.values()
         if not cls.get_info().is_cloud_service

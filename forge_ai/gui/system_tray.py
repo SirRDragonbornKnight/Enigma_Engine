@@ -1822,9 +1822,23 @@ class ForgeSystemTray(QObject):
             self._exit_app()
     
     def _show_main_window(self):
-        """Show the main GUI window (keeps Quick Chat open)."""
+        """Show the main GUI window on the same screen as Quick Chat."""
         self.show_gui_requested.emit()
         if self.main_window:
+            # Position main window on the same monitor as Quick Chat
+            if hasattr(self, 'overlay') and self.overlay and self.overlay.isVisible():
+                from PyQt5.QtGui import QGuiApplication
+                # Get the screen where Quick Chat is
+                overlay_center = self.overlay.frameGeometry().center()
+                screen = QGuiApplication.screenAt(overlay_center)
+                if screen:
+                    screen_geo = screen.geometry()
+                    # Center main window on that screen
+                    win_size = self.main_window.size()
+                    x = screen_geo.x() + (screen_geo.width() - win_size.width()) // 2
+                    y = screen_geo.y() + (screen_geo.height() - win_size.height()) // 2
+                    self.main_window.move(x, y)
+            
             self.main_window.show()
             self.main_window.activateWindow()
             # Keep Quick Chat open too - always visible unless explicitly closed

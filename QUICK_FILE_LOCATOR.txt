@@ -1,0 +1,240 @@
+================================================================================
+                    FORGEAI - QUICK FILE LOCATOR
+================================================================================
+                      "Find Anything in Seconds!"
+================================================================================
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 🔍 WHAT DO YOU WANT TO DO?                                    │
+    │                                                                │
+    │ Find the file path below that matches your goal!              │
+    └───────────────────────────────────────────────────────────────┘
+
+================================================================================
+💬 "I want to CHAT with the AI"
+================================================================================
+
+START:   run.py --run (terminal) or run.py --gui (graphical)
+ENGINE:  forge_ai/core/inference.py      → ForgeEngine class
+MODEL:   forge_ai/core/model.py          → Forge transformer
+TOKENS:  forge_ai/core/tokenizer.py      → Convert text ↔ numbers
+GUI:     forge_ai/gui/tabs/chat_tab.py   → Chat interface
+
+    User Input → tokenizer.py → model.py → inference.py → Response
+
+================================================================================
+🎨 "I want to GENERATE IMAGES"
+================================================================================
+
+TAB:     forge_ai/gui/tabs/image_tab.py  → ImageTab, StableDiffusionLocal
+MODULE:  forge_ai/modules/registry.py    → ImageGenLocalModule
+OUTPUT:  outputs/images/                 → Generated images saved here
+
+PROVIDERS:
+  • PlaceholderImage  - Built-in (no dependencies)
+  • StableDiffusionLocal - Local SD (needs torch, diffusers)
+  • OpenAIImage - DALL-E 3 (needs API key)
+  • ReplicateImage - SDXL (needs API key)
+
+================================================================================
+💻 "I want to GENERATE CODE"
+================================================================================
+
+TAB:     forge_ai/gui/tabs/code_tab.py   → CodeTab, ForgeCode, OpenAICode
+ROUTER:  forge_ai/core/tool_router.py    → Routes "code" requests
+
+================================================================================
+🎬 "I want to GENERATE VIDEOS"
+================================================================================
+
+TAB:     forge_ai/gui/tabs/video_tab.py  → VideoTab, LocalVideo, ReplicateVideo
+OUTPUT:  outputs/videos/
+
+================================================================================
+🔊 "I want TEXT-TO-SPEECH"
+================================================================================
+
+VOICE:   forge_ai/voice/voice_generator.py → AIVoiceGenerator
+SIMPLE:  forge_ai/voice/tts_simple.py      → Basic TTS
+TAB:     forge_ai/gui/tabs/audio_tab.py    → AudioTab
+
+================================================================================
+📚 "I want to TRAIN the model"
+================================================================================
+
+COMMAND: run.py --train
+TRAINER: forge_ai/core/training.py       → train_model() function
+ADVANCED:forge_ai/core/trainer.py        → ForgeTrainer class
+DATA:    data/training.txt               → Your training data
+TAB:     forge_ai/gui/tabs/training_tab.py → GUI training interface
+
+================================================================================
+🤖 "I want to create an AVATAR"
+================================================================================
+
+CONTROL:  forge_ai/avatar/controller.py   → AvatarController, get_avatar()
+AUTO:     forge_ai/avatar/autonomous.py   → AutonomousAvatar (self-acting!)
+DESKTOP:  forge_ai/avatar/desktop_pet.py  → Desktop overlay
+ANIMATE:  forge_ai/avatar/animation_system.py → Movement
+LIP SYNC: forge_ai/avatar/lip_sync.py     → Sync mouth to speech
+TAB:      forge_ai/gui/tabs/avatar_tab.py → Avatar controls
+
+================================================================================
+⚙️ "I want to LOAD/UNLOAD modules"
+================================================================================
+
+MANAGER:  forge_ai/modules/manager.py     → ModuleManager class
+REGISTRY: forge_ai/modules/registry.py    → All module definitions
+TAB:      forge_ai/gui/tabs/modules_tab.py → Toggle modules in GUI
+CONFIG:   data/module_config.json         → Module settings
+
+================================================================================
+💾 "I want to SAVE/LOAD conversations"  
+================================================================================
+
+MANAGER:  forge_ai/memory/manager.py      → ConversationManager
+STORAGE:  data/conversations/*.json       → Saved chats
+SEARCH:   forge_ai/memory/vector_db.py    → Semantic search
+EMBED:    forge_ai/memory/embeddings.py   → Convert to vectors
+
+================================================================================
+🌐 "I want to create an API SERVER"
+================================================================================
+
+COMMAND:  run.py --serve
+SERVER:   forge_ai/comms/api_server.py    → create_api_server()
+WEB:      forge_ai/comms/web_server.py    → Full web UI
+NETWORK:  forge_ai/comms/network.py       → Multi-device (ForgeNode)
+
+ENDPOINTS:
+  GET  /health    → {"ok": true}
+  GET  /info      → Server info
+  POST /generate  → {"prompt": "...", "max_gen": 50}
+
+================================================================================
+🔧 "I want to add TOOLS for the AI"
+================================================================================
+
+EXECUTOR: forge_ai/tools/tool_executor.py → ToolExecutor class
+DEFS:     forge_ai/tools/tool_definitions.py → Define new tools
+ROUTER:   forge_ai/core/tool_router.py    → Route requests to tools
+TAB:      forge_ai/gui/tabs/tool_manager_tab.py → Manage tools
+
+BUILT-IN TOOLS:
+  • forge_ai/tools/vision.py       → See images/screen
+  • forge_ai/tools/web_tools.py    → Browse web
+  • forge_ai/tools/file_tools.py   → File operations
+  • forge_ai/tools/browser_tools.py → Browser automation
+
+================================================================================
+🔧 "I want to CONFIGURE settings"
+================================================================================
+
+CONFIG:   forge_ai/config/                → Main configuration
+PATHS:    forge_ai/__init__.py            → ROOT, DATA_DIR, MODELS_DIR
+GUI:      data/gui_settings.json          → GUI preferences
+AI:       data/ai_self_config.json        → AI personality settings
+
+================================================================================
+📂 FOLDER QUICK REFERENCE
+================================================================================
+
+forge_ai/
+├── core/          🧠 AI brain (model, inference, training)
+├── gui/           🖥️ User interface (PyQt5)
+│   └── tabs/      📑 All tab panels
+├── memory/        💾 Storage & recall
+├── comms/         🌐 Networking & API
+├── tools/         🔧 AI capabilities
+├── avatar/        🎭 Visual character
+├── voice/         🔊 Speech (TTS/STT)
+├── modules/       ⚙️ Module system
+├── config/        ⚡ Configuration
+├── builtin/       📦 Built-in fallbacks
+└── utils/         🛠️ Helper utilities
+
+data/
+├── training.txt        📚 Training data
+├── conversations/      💬 Saved chats
+├── specialized/        🎯 Specialized training data
+├── avatar/             🤖 Avatar assets
+├── themes/             🎨 GUI themes
+└── voice_profiles/     🎤 Voice settings
+
+models/
+└── *.pth              🤖 Saved model weights
+
+outputs/
+├── images/            🖼️ Generated images
+├── videos/            🎬 Generated videos
+└── audio/             🔊 Generated audio
+
+================================================================================
+⚡ IMPORT CHEATSHEET
+================================================================================
+
+# === CORE (The Brain) ===
+from forge_ai.core.model import Forge, create_model, ForgeConfig
+from forge_ai.core.inference import ForgeEngine
+from forge_ai.core.tokenizer import get_tokenizer
+from forge_ai.core.training import train_model
+from forge_ai.core.tool_router import ToolRouter, get_router
+
+# === MODULES (Control System) ===
+from forge_ai.modules import ModuleManager
+from forge_ai.modules.registry import get_all_modules
+
+# === MEMORY (Storage) ===
+from forge_ai.memory.manager import ConversationManager
+from forge_ai.memory.vector_db import SimpleVectorDB
+
+# === VOICE (Speech) ===
+from forge_ai.voice.voice_generator import AIVoiceGenerator
+from forge_ai.voice.tts_simple import speak
+from forge_ai.voice.stt_simple import listen
+
+# === AVATAR (Character) ===
+from forge_ai.avatar import get_avatar
+from forge_ai.avatar.autonomous import AutonomousAvatar
+
+# === TOOLS (Actions) ===
+from forge_ai.tools.tool_executor import ToolExecutor
+from forge_ai.tools.vision import capture_screen, analyze_image
+
+# === NETWORK (Communication) ===
+from forge_ai.comms.api_server import create_api_server
+from forge_ai.comms.network import ForgeNode
+
+# === CONFIG ===
+from forge_ai.config import CONFIG, get_config, update_config
+
+================================================================================
+🎯 COMMON WORKFLOWS
+================================================================================
+
+WORKFLOW 1: Start chatting
+----------------------------
+  run.py --gui → Chat Tab → Type message → AI responds
+
+WORKFLOW 2: Train custom AI
+----------------------------
+  1. Edit data/training.txt (add your data)
+  2. run.py --train --model small
+  3. Wait for training to complete
+  4. run.py --gui → Chat with trained AI
+
+WORKFLOW 3: Generate images
+----------------------------
+  run.py --gui → Image Tab → Enter prompt → Click Generate
+
+WORKFLOW 4: Create autonomous avatar
+----------------------------
+  run.py --gui → Avatar Tab → Enable → Start Autonomous Mode
+
+WORKFLOW 5: Start API server
+----------------------------
+  run.py --serve → Access http://localhost:5000
+
+================================================================================
+                    END OF QUICK LOCATOR
+================================================================================

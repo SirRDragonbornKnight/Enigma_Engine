@@ -1,28 +1,47 @@
 """
-ForgeAI
-=========
+================================================================================
+🔥 FORGEAI - THE MODULAR AI FRAMEWORK
+================================================================================
 
 A fully modular AI framework where EVERYTHING is a toggleable module.
 Scales from Raspberry Pi to datacenter.
 
-Quick Start:
+📍 FILE: forge_ai/__init__.py
+🏷️ TYPE: Package Root
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PACKAGE STRUCTURE:                                                         │
+│                                                                             │
+│  forge_ai/                                                                  │
+│  ├── core/       🧠 Model, training, inference, tokenizers                  │
+│  ├── modules/    ⚙️  Module system (load/unload capabilities)               │
+│  ├── gui/        🖥️  PyQt5 interface with generation tabs                   │
+│  ├── memory/     💾 Conversation storage, vector search                    │
+│  ├── comms/      🌐 API server, networking                                 │
+│  ├── voice/      🔊 TTS/STT                                                │
+│  ├── avatar/     🤖 Avatar control                                         │
+│  ├── tools/      🔧 Vision, web, file tools                                │
+│  ├── utils/      🛠️  Common utilities                                       │
+│  └── config/     ⚙️  Configuration management                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🚀 QUICK START:
     >>> from forge_ai.core import create_model, ForgeEngine
     >>> model = create_model('small')
     >>> engine = ForgeEngine()
     >>> response = engine.generate("Hello, how are you?")
 
-Package Structure:
-    forge_ai/
-    ├── core/       - Model, training, inference, tokenizers
-    ├── modules/    - Module system (load/unload capabilities)
-    ├── gui/        - PyQt5 interface with generation tabs (image, code, video, audio, 3D)
-    ├── memory/     - Conversation storage, vector search
-    ├── comms/      - API server, networking
-    ├── voice/      - TTS/STT
-    ├── avatar/     - Avatar control
-    ├── tools/      - Vision, web, file tools
-    ├── utils/      - Common utilities
-    └── config/     - Configuration management
+📚 DOCUMENTATION:
+    • README.md              - Getting started
+    • CODE_ADVENTURE_TOUR.txt - Interactive code guide
+    • QUICK_FILE_LOCATOR.txt  - Find files fast
+    • docs/CODE_TOUR.md       - Detailed documentation
+
+🔗 ENTRY POINTS:
+    • run.py --gui   → forge_ai/gui/enhanced_window.py
+    • run.py --train → forge_ai/core/training.py
+    • run.py --run   → forge_ai/core/inference.py
+    • run.py --serve → forge_ai/comms/api_server.py
 
 For more details, see the README.md or visit:
 https://github.com/SirRDragonbornKnight/AI_Tester

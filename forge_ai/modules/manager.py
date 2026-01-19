@@ -1,9 +1,64 @@
 """
-ForgeAI Module Manager
-=====================
+================================================================================
+⚙️ MODULE MANAGER - THE CONTROL CENTER
+================================================================================
 
-Central system for managing all Forge modules.
-Handles loading, unloading, dependencies, and configuration.
+This is the BRAIN that controls what's running! ForgeAI's secret power:
+EVERYTHING is a module that can be loaded/unloaded dynamically.
+
+📍 FILE: forge_ai/modules/manager.py
+🏷️ TYPE: Module Lifecycle Management
+🎯 MAIN CLASSES: ModuleManager, Module, ModuleInfo, ModuleState
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MODULE STATES:                                                             │
+│                                                                             │
+│  UNLOADED → LOADING → LOADED → ACTIVE                                      │
+│      ↑                            │                                         │
+│      └────────────────────────────┘                                         │
+│                (unload)                                                     │
+│                                                                             │
+│  ERROR / DISABLED (special states for problems)                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📦 MODULE CATEGORIES:
+    • CORE       - model, tokenizer, inference
+    • MEMORY     - memory, embeddings, vector_db
+    • INTERFACE  - gui, voice input/output
+    • PERCEPTION - vision, camera
+    • OUTPUT     - avatar, tts
+    • GENERATION - image, code, video, audio, 3d
+    • TOOLS      - web, file, browser tools
+    • NETWORK    - api_server, multi_device
+
+⚠️ CONFLICT RULES:
+    ✗ Cannot load image_gen_local AND image_gen_api together
+    ✗ Cannot load code_gen_local AND code_gen_api together  
+    ✓ Must load dependencies first (inference needs model + tokenizer)
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/modules/registry.py (all module definitions)
+    → USES:      forge_ai/modules/sandbox.py (safe execution)
+    ← USED BY:   forge_ai/gui/tabs/modules_tab.py (GUI toggle)
+    ← USED BY:   All module consumers
+
+📖 USAGE:
+    from forge_ai.modules import ModuleManager
+    
+    manager = ModuleManager()
+    manager.load('model')           # Load core model
+    manager.load('tokenizer')       # Load tokenizer
+    manager.load('image_gen_local') # Load Stable Diffusion
+    
+    mod = manager.get_module('image_gen_local')
+    result = mod.generate("a sunset", width=512)
+    
+    manager.unload('image_gen_local')  # Free memory
+
+📖 SEE ALSO:
+    • forge_ai/modules/registry.py     - All available modules defined here
+    • forge_ai/gui/tabs/modules_tab.py - GUI for toggling modules
+    • data/module_config.json          - Saved module settings
 """
 
 import json
@@ -40,18 +95,50 @@ def _get_torch():
     return _TORCH
 
 
+# =============================================================================
+# 🔄 MODULE LIFECYCLE STATES
+# =============================================================================
+# Every module goes through these states during its lifecycle.
+# The state machine ensures proper initialization and cleanup.
+
 class ModuleState(Enum):
-    """Module lifecycle states."""
-    UNLOADED = "unloaded"
-    LOADING = "loading"
-    LOADED = "loaded"
-    ACTIVE = "active"
-    ERROR = "error"
-    DISABLED = "disabled"
+    """
+    Module lifecycle states.
+    
+    📐 STATE TRANSITIONS:
+    
+    UNLOADED ──load()──▶ LOADING ──success──▶ LOADED ──activate()──▶ ACTIVE
+        ▲                    │                  │                      │
+        │                    ▼                  │                      │
+        │                  ERROR                │                      │
+        │                                       │                      │
+        └─────────unload()──────────────────────┴──────────────────────┘
+    
+    DISABLED: Manually disabled by user, won't auto-load
+    """
+    UNLOADED = "unloaded"   # Not loaded, no resources used
+    LOADING = "loading"     # Currently initializing
+    LOADED = "loaded"       # Ready to use, but not actively processing
+    ACTIVE = "active"       # Fully running and processing
+    ERROR = "error"         # Failed to load or crashed
+    DISABLED = "disabled"   # Manually disabled by user
 
 
 class ModuleCategory(Enum):
-    """Module categories for organization."""
+    """
+    Module categories for organization.
+    
+    📦 CATEGORIES:
+    - CORE: Essential modules (model, tokenizer, inference)
+    - MEMORY: Data storage (conversation history, vector DB)
+    - INTERFACE: User interaction (GUI, voice)
+    - PERCEPTION: Input processing (vision, camera)
+    - OUTPUT: Output generation (avatar, TTS)
+    - GENERATION: AI content creation (images, code, video, audio, 3D)
+    - TOOLS: Utility functions (web search, file ops)
+    - NETWORK: Communication (API server, multi-device)
+    - EXTENSION: Third-party plugins
+    """
     CORE = "core"
     MEMORY = "memory"
     INTERFACE = "interface"
@@ -65,34 +152,58 @@ class ModuleCategory(Enum):
 
 @dataclass
 class ModuleInfo:
-    """Module metadata and configuration."""
-    id: str
-    name: str
-    description: str
-    category: ModuleCategory
+    """
+    Module metadata and configuration.
+    
+    📖 WHAT THIS HOLDS:
+    Everything you need to know about a module before loading it:
+    - What it is (id, name, description)
+    - What it needs (dependencies, hardware)
+    - What conflicts with it
+    - Current state
+    """
+    # ─────────────────────────────────────────────────────────────────────────
+    # IDENTITY: Who is this module?
+    # ─────────────────────────────────────────────────────────────────────────
+    id: str                       # Unique identifier (e.g., "image_gen_local")
+    name: str                     # Human-readable name
+    description: str              # What does it do?
+    category: ModuleCategory      # Which category?
     version: str = "1.0.0"
 
-    # Dependencies
-    requires: List[str] = field(default_factory=list)  # Required modules
-    optional: List[str] = field(default_factory=list)  # Optional enhancements
-    conflicts: List[str] = field(default_factory=list)  # Cannot run together
+    # ─────────────────────────────────────────────────────────────────────────
+    # DEPENDENCIES: What does it need to work?
+    # ─────────────────────────────────────────────────────────────────────────
+    requires: List[str] = field(default_factory=list)   # MUST have these loaded first
+    optional: List[str] = field(default_factory=list)   # Nice to have, not required
+    conflicts: List[str] = field(default_factory=list)  # CANNOT run with these!
 
-    # Hardware requirements
-    min_ram_mb: int = 0
-    min_vram_mb: int = 0
-    requires_gpu: bool = False
-    supports_distributed: bool = False
+    # ─────────────────────────────────────────────────────────────────────────
+    # HARDWARE REQUIREMENTS: What resources does it need?
+    # ─────────────────────────────────────────────────────────────────────────
+    min_ram_mb: int = 0           # Minimum RAM in MB
+    min_vram_mb: int = 0          # Minimum GPU VRAM in MB
+    requires_gpu: bool = False    # MUST have GPU?
+    supports_distributed: bool = False  # Can run across multiple devices?
 
-    # Privacy and cloud requirements
-    is_cloud_service: bool = False  # True if module connects to external cloud APIs
+    # ─────────────────────────────────────────────────────────────────────────
+    # PRIVACY: Does it phone home?
+    # ─────────────────────────────────────────────────────────────────────────
+    is_cloud_service: bool = False  # True = sends data to external servers
 
-    # Capabilities provided
-    provides: List[str] = field(default_factory=list)
+    # ─────────────────────────────────────────────────────────────────────────
+    # CAPABILITIES: What features does it provide?
+    # ─────────────────────────────────────────────────────────────────────────
+    provides: List[str] = field(default_factory=list)  # e.g., ["image_generation"]
 
-    # Configuration schema
+    # ─────────────────────────────────────────────────────────────────────────
+    # CONFIGURATION: What settings can be adjusted?
+    # ─────────────────────────────────────────────────────────────────────────
     config_schema: Dict[str, Any] = field(default_factory=dict)
 
-    # Runtime info
+    # ─────────────────────────────────────────────────────────────────────────
+    # RUNTIME STATE: Current status
+    # ─────────────────────────────────────────────────────────────────────────
     state: ModuleState = ModuleState.UNLOADED
     load_time: Optional[datetime] = None
     error_message: Optional[str] = None
@@ -100,7 +211,12 @@ class ModuleInfo:
 
 @dataclass
 class ModuleHealth:
-    """Health status for a module."""
+    """
+    Health status for a module.
+    
+    📖 USED FOR:
+    Monitoring if modules are working correctly over time.
+    """
     module_id: str
     is_healthy: bool
     last_check: datetime
@@ -109,62 +225,127 @@ class ModuleHealth:
     warnings: List[str] = field(default_factory=list)
 
 
+# =============================================================================
+# 🧩 MODULE BASE CLASS - The Blueprint for All Modules
+# =============================================================================
+
 class Module:
     """
     Base class for all Forge modules.
-
-    Subclass this to create new modules.
+    
+    📖 WHAT THIS IS:
+    The template that ALL modules follow. When you create a new module,
+    you inherit from this class and override the methods.
+    
+    📐 LIFECYCLE METHODS:
+    1. load()     - Initialize resources (load model, connect to API)
+    2. activate() - Start processing (begin listening, etc.)
+    3. deactivate() - Stop processing (pause, save state)
+    4. unload()   - Release resources (free memory, close connections)
+    
+    📐 EXAMPLE (creating a new module):
+    
+        class MyModule(Module):
+            INFO = ModuleInfo(
+                id="my_module",
+                name="My Cool Module",
+                description="Does cool stuff",
+                category=ModuleCategory.EXTENSION,
+            )
+            
+            def load(self) -> bool:
+                # Initialize your module here
+                self._instance = SomeCoolThing()
+                return True
+            
+            def unload(self) -> bool:
+                # Cleanup here
+                self._instance = None
+                return True
+    
+    🔗 CONNECTS TO:
+      ← Inherited by all module classes in registry.py
+      → Managed by ModuleManager
     """
 
-    # Override these in subclasses
+    # ─────────────────────────────────────────────────────────────────────────
+    # CLASS ATTRIBUTES: Override these in subclasses!
+    # ─────────────────────────────────────────────────────────────────────────
     INFO = ModuleInfo(
         id="base",
         name="Base Module",
-        description="Base module class",
+        description="Base module class - don't instantiate directly!",
         category=ModuleCategory.EXTENSION,
     )
 
     def __init__(self, manager: 'ModuleManager', config: Dict[str, Any] = None):
-        self.manager = manager
-        self.config = config or {}
+        """
+        Initialize module instance.
+        
+        Args:
+            manager: The ModuleManager that owns this module
+            config: Configuration dictionary for this module
+        """
+        self.manager = manager        # Reference to parent manager
+        self.config = config or {}    # Module-specific settings
         self.state = ModuleState.UNLOADED
-        self._instance = None
+        self._instance = None         # The actual working object (model, API client, etc.)
 
     @classmethod
     def get_info(cls) -> ModuleInfo:
-        """Get module information."""
+        """Get module information (static metadata)."""
         return cls.INFO
 
     def load(self) -> bool:
         """
-        Load the module. Override in subclass.
-
-        Returns True if successful, False otherwise.
+        Load the module - initialize resources.
+        
+        📖 OVERRIDE THIS IN SUBCLASS!
+        Put your initialization code here:
+        - Load model weights
+        - Connect to APIs
+        - Initialize hardware
+        
+        Returns:
+            True if successful, False if failed
         """
         return True
 
     def unload(self) -> bool:
         """
-        Unload the module. Override in subclass.
-
-        Returns True if successful, False otherwise.
+        Unload the module - release resources.
+        
+        📖 OVERRIDE THIS IN SUBCLASS!
+        Put your cleanup code here:
+        - Free model from memory
+        - Close connections
+        - Save state
+        
+        Returns:
+            True if successful, False if failed
         """
         return True
 
     def activate(self) -> bool:
         """
-        Activate the module (start processing). Override in subclass.
+        Activate the module - start processing.
+        
+        📖 OPTIONAL TO OVERRIDE
+        Start any background processes, listeners, etc.
         """
         return True
 
     def deactivate(self) -> bool:
         """
-        Deactivate the module (stop processing). Override in subclass.
+        Deactivate the module - stop processing.
+        
+        📖 OPTIONAL TO OVERRIDE
+        Stop background processes, save state if needed.
         """
         return True
 
     def get_status(self) -> Dict[str, Any]:
-        """Get current module status."""
+        """Get current module status as a dictionary."""
         return {
             'id': self.INFO.id,
             'state': self.state.value,
@@ -174,6 +355,9 @@ class Module:
     def configure(self, config: Dict[str, Any]) -> bool:
         """
         Update module configuration.
+        
+        📖 OVERRIDE IF YOU NEED VALIDATION
+        Default just merges the new config in.
 
         Args:
             config: New configuration values
@@ -187,14 +371,22 @@ class Module:
     def get_interface(self) -> Any:
         """
         Get the module's public interface/instance.
+        
+        📖 WHAT THIS RETURNS:
+        The main object other code should interact with.
+        For example:
+        - Model module → returns the Forge model
+        - Image gen → returns the image generator object
+        - Memory → returns the ConversationManager
 
-        Returns the main object other modules should interact with.
+        Returns:
+            The module's working instance
         """
         return self._instance
 
     def is_loaded(self) -> bool:
         """
-        Check if the module is loaded.
+        Check if the module is loaded and usable.
 
         Returns:
             True if module is in LOADED or ACTIVE state
@@ -202,43 +394,104 @@ class Module:
         return self.state in (ModuleState.LOADED, ModuleState.ACTIVE)
 
 
+# =============================================================================
+# 🎛️ MODULE MANAGER - The Central Control System
+# =============================================================================
+
 class ModuleManager:
     """
     Central manager for all Forge modules.
-
-    Handles:
-    - Module discovery and registration
-    - Dependency resolution
-    - Loading/unloading modules
-    - Configuration management
-    - Hardware compatibility checking
+    
+    📖 WHAT THIS DOES:
+    This is the BOSS that controls all modules! It handles:
+    
+    ⚡ KEY RESPONSIBILITIES:
+    1. MODULE DISCOVERY: Find all available modules
+    2. DEPENDENCY RESOLUTION: Load modules in correct order
+    3. CONFLICT PREVENTION: Stop incompatible modules from loading together
+    4. HARDWARE CHECKING: Verify system can run the module
+    5. LIFECYCLE MANAGEMENT: Load, activate, deactivate, unload
+    6. CONFIGURATION: Save/load module settings
+    7. HEALTH MONITORING: Track module health over time
+    
+    📐 EXAMPLE USAGE:
+    
+        manager = ModuleManager()
+        
+        # Load modules in dependency order
+        manager.load('model')           # Load first (core)
+        manager.load('tokenizer')       # Load second (core)
+        manager.load('inference')       # Load third (depends on model+tokenizer)
+        manager.load('image_gen_local') # Load Stable Diffusion
+        
+        # Get the loaded module and use it
+        image_module = manager.get_module('image_gen_local')
+        image = image_module.generate("a sunset over mountains")
+        
+        # Unload when done to free memory
+        manager.unload('image_gen_local')
+    
+    📐 CONFLICT EXAMPLE:
+    
+        manager.load('image_gen_local')  # OK - loads Stable Diffusion
+        manager.load('image_gen_api')    # FAILS! - conflicts with local
+        # Error: Cannot load image_gen_api - conflicts with image_gen_local
+    
+    🔗 CONNECTS TO:
+      → Uses module classes from registry.py
+      → Saves config to data/module_config.json
+      ← Used by GUI modules tab, CLI, and all module consumers
     """
 
     def __init__(self, config_path: Optional[Path] = None, local_only: bool = True):
-        self.modules: Dict[str, Module] = {}
-        self.module_classes: Dict[str, type] = {}
+        """
+        Initialize the Module Manager.
+        
+        Args:
+            config_path: Where to save/load module configuration
+            local_only: If True, only allow local modules (no cloud APIs)
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # MODULE STORAGE
+        # ─────────────────────────────────────────────────────────────────────
+        self.modules: Dict[str, Module] = {}          # Loaded module instances
+        self.module_classes: Dict[str, type] = {}     # Registered module classes
         self.config_path = config_path or Path("data/module_config.json")
-        self.hardware_profile: Dict[str, Any] = {}
-        self.local_only = local_only  # Default to local-only for privacy
+        self.hardware_profile: Dict[str, Any] = {}    # Detected hardware
+        self.local_only = local_only  # Privacy: block cloud modules by default
 
-        # Event callbacks
-        self._on_load: List[Callable] = []
-        self._on_unload: List[Callable] = []
-        self._on_state_change: List[Callable] = []
+        # ─────────────────────────────────────────────────────────────────────
+        # EVENT CALLBACKS: Notify listeners when things happen
+        # ─────────────────────────────────────────────────────────────────────
+        self._on_load: List[Callable] = []        # Called when module loads
+        self._on_unload: List[Callable] = []      # Called when module unloads
+        self._on_state_change: List[Callable] = [] # Called on any state change
 
-        # Health monitoring
+        # ─────────────────────────────────────────────────────────────────────
+        # HEALTH MONITORING: Background thread checks module health
+        # ─────────────────────────────────────────────────────────────────────
         self._health_monitor_thread: Optional[threading.Thread] = None
         self._health_monitor_running: bool = False
-        self._health_monitor_interval: int = 60
+        self._health_monitor_interval: int = 60  # Check every 60 seconds
         self._health_monitor_stop_event: threading.Event = threading.Event()
         self._module_error_counts: Dict[str, int] = {}
 
-        # Detect hardware
+        # ─────────────────────────────────────────────────────────────────────
+        # DETECT HARDWARE: Figure out what this system can run
+        # ─────────────────────────────────────────────────────────────────────
         self._detect_hardware()
 
     def _detect_hardware(self):
-        """Detect available hardware capabilities."""
-        # Default values
+        """
+        Detect available hardware capabilities.
+        
+        📖 WHAT THIS CHECKS:
+        - CPU cores (for parallel processing)
+        - RAM (for model loading)
+        - GPU availability and VRAM (for fast inference)
+        - Apple MPS (for M1/M2 Macs)
+        """
+        # Start with safe defaults
         self.hardware_profile = {
             'cpu_cores': 1,
             'ram_mb': 4096,
@@ -248,7 +501,7 @@ class ModuleManager:
             'mps_available': False,
         }
 
-        # Try to detect GPU with torch (cached)
+        # Try to detect GPU with torch (cached to avoid repeated imports)
         torch = _get_torch()
         if torch:
             try:
@@ -262,7 +515,6 @@ class ModuleManager:
                         0).total_memory // (1024 * 1024)
             except Exception as e:
                 logger.warning(f"Error detecting GPU: {e}")
-        # Only warn once (checked in _get_torch)
 
         # Try to detect CPU/RAM with psutil
         try:
@@ -274,7 +526,15 @@ class ModuleManager:
 
     def register(self, module_class: type) -> bool:
         """
-        Register a module class.
+        Register a module class (make it available for loading).
+        
+        📖 WHAT THIS DOES:
+        Adds a module class to the registry so it can be loaded later.
+        This doesn't load the module - just makes it available.
+        
+        📐 EXAMPLE:
+            manager.register(ImageGenLocalModule)
+            # Now 'image_gen_local' can be loaded with manager.load()
 
         Args:
             module_class: Module subclass to register
@@ -292,7 +552,7 @@ class ModuleManager:
         return True
 
     def unregister(self, module_id: str) -> bool:
-        """Unregister a module class."""
+        """Unregister a module class (remove from available modules)."""
         if module_id in self.module_classes:
             # Unload if loaded
             if module_id in self.modules:
@@ -301,39 +561,74 @@ class ModuleManager:
             return True
         return False
 
+    # =========================================================================
+    # 🔍 VALIDATION: Can this module be loaded?
+    # =========================================================================
+
     def can_load(self, module_id: str) -> Tuple[bool, str]:
         """
         Check if a module can be loaded.
+        
+        📖 WHAT THIS CHECKS:
+        This runs a series of safety checks before allowing a module to load:
+        
+        📐 CHECK ORDER:
+        1. Does module exist? (registered?)
+        2. Privacy: Is it cloud but we're in local-only mode?
+        3. Hardware: Do we have GPU if required?
+        4. VRAM: Do we have enough GPU memory?
+        5. RAM: Do we have enough system memory?
+        6. Conflicts: Are any conflicting modules loaded?
+        7. Capability: Is another module already providing this feature?
+        8. Dependencies: Are all required modules loaded?
 
         Returns:
-            (can_load, reason)
+            (can_load, reason) - True/OK if can load, False/reason if not
         """
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 1: Does the module exist?
+        # ─────────────────────────────────────────────────────────────────────
         if module_id not in self.module_classes:
             return False, f"Module '{module_id}' not registered"
 
         info = self.module_classes[module_id].get_info()
 
-        # Check local-only mode
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 2: Privacy - is it cloud when we want local only?
+        # ─────────────────────────────────────────────────────────────────────
         if self.local_only and info.is_cloud_service:
             return False, "Module requires external cloud services. Disable local_only mode to use cloud modules."
 
-        # Check hardware requirements
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 3: Hardware - GPU required?
+        # ─────────────────────────────────────────────────────────────────────
         if info.requires_gpu and not self.hardware_profile['gpu_available']:
             return False, "Module requires GPU but none available"
 
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 4: VRAM - enough GPU memory?
+        # ─────────────────────────────────────────────────────────────────────
         if info.min_vram_mb > self.hardware_profile['vram_mb']:
             return False, f"Module requires {info.min_vram_mb}MB VRAM, only {self.hardware_profile['vram_mb']}MB available"
 
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 5: RAM - enough system memory?
+        # ─────────────────────────────────────────────────────────────────────
         if info.min_ram_mb > self.hardware_profile['ram_mb']:
             return False, f"Module requires {info.min_ram_mb}MB RAM, only {self.hardware_profile['ram_mb']}MB available"
 
-        # Check explicit conflicts
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 6: Explicit conflicts - module declares it can't run with another
+        # ─────────────────────────────────────────────────────────────────────
         for conflict_id in info.conflicts:
             if conflict_id in self.modules and self.modules[conflict_id].state == ModuleState.LOADED:
                 return False, f"Module conflicts with loaded module '{conflict_id}'"
 
-        # Check capability conflicts (two modules providing same thing)
-        # e.g., image_gen_local and image_gen_api both provide 'image_generation'
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 7: Capability conflicts - two modules providing same feature
+        # Example: image_gen_local and image_gen_api both provide 'image_generation'
+        # Only one can be loaded at a time!
+        # ─────────────────────────────────────────────────────────────────────
         for provided in info.provides:
             for loaded_id, loaded_module in self.modules.items():
                 if loaded_module.state == ModuleState.LOADED:
@@ -341,24 +636,53 @@ class ModuleManager:
                     if provided in loaded_info.provides and loaded_id != module_id:
                         return False, f"Capability '{provided}' already provided by '{loaded_id}'. Unload it first."
 
-        # Check dependencies
+        # ─────────────────────────────────────────────────────────────────────
+        # CHECK 8: Dependencies - are required modules loaded?
+        # ─────────────────────────────────────────────────────────────────────
         for dep_id in info.requires:
             if dep_id not in self.modules or self.modules[dep_id].state != ModuleState.LOADED:
                 return False, f"Required module '{dep_id}' not loaded"
 
+        # ─────────────────────────────────────────────────────────────────────
+        # ALL CHECKS PASSED!
+        # ─────────────────────────────────────────────────────────────────────
         return True, "OK"
+
+    # =========================================================================
+    # 📦 LOADING: Initialize and start a module
+    # =========================================================================
 
     def load(self, module_id: str, config: Dict[str, Any] = None) -> bool:
         """
         Load a module.
+        
+        📖 WHAT THIS DOES:
+        1. Validates the module can be loaded (can_load checks)
+        2. Creates an instance of the module class
+        3. Calls the module's load() method to initialize resources
+        4. Stores the module in our registry
+        5. Notifies listeners that module was loaded
+        
+        📐 LOADING FLOW:
+        
+            can_load()  ──OK──▶  create instance  ──▶  module.load()
+                │                                          │
+                ▼                                          ▼
+            return False                              success?
+                                                       │    │
+                                                      YES   NO
+                                                       │    │
+                                                       ▼    ▼
+                                                    LOADED  ERROR
 
         Args:
             module_id: Module ID to load
-            config: Optional configuration
+            config: Optional configuration dictionary
 
         Returns:
-            True if loaded successfully
+            True if loaded successfully, False otherwise
         """
+        # First, validate with all our safety checks
         can_load, reason = self.can_load(module_id)
         if not can_load:
             logger.error(f"Cannot load module '{module_id}': {reason}")
@@ -367,29 +691,38 @@ class ModuleManager:
         module_class = self.module_classes[module_id]
         module_info = module_class.get_info()
 
-        # Warn about cloud services
+        # Privacy warning for cloud services
         if module_info.is_cloud_service:
             logger.warning(
                 f"Warning: Module '{module_id}' connects to external cloud services and requires API keys + internet.")
 
         try:
-            # Create instance
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 1: Create the module instance
+            # ─────────────────────────────────────────────────────────────────
             module = module_class(self, config)
             module.state = ModuleState.LOADING
 
-            # Load
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 2: Call module's load() to initialize resources
+            # This is where the module loads models, connects to APIs, etc.
+            # ─────────────────────────────────────────────────────────────────
             if module.load():
+                # Success! Mark as loaded and store
                 module.state = ModuleState.LOADED
                 module.get_info().load_time = datetime.now()
                 self.modules[module_id] = module
 
-                # Notify listeners
+                # ─────────────────────────────────────────────────────────────
+                # STEP 3: Notify any listeners (GUI, etc.)
+                # ─────────────────────────────────────────────────────────────
                 for callback in self._on_load:
                     callback(module_id)
 
                 logger.info(f"Loaded module: {module_id}")
                 return True
             else:
+                # Module's load() returned False - something went wrong
                 module.state = ModuleState.ERROR
                 module.get_info().error_message = "load() returned False"
                 return False
@@ -406,6 +739,18 @@ class ModuleManager:
     ) -> bool:
         """
         Load a module in a sandboxed environment.
+        
+        📖 WHAT THIS IS:
+        Sandboxing provides extra security for untrusted modules by:
+        - Limiting file system access
+        - Restricting network access
+        - Controlling resource usage
+        - Isolating the module from the main process
+        
+        📐 USE CASES:
+        - Third-party plugins
+        - Experimental modules
+        - Modules from unknown sources
         
         Args:
             module_id: Module ID to load
@@ -432,7 +777,7 @@ class ModuleManager:
         
         logger.info(f"Loading module '{module_id}' in sandbox")
         
-        # Create sandbox
+        # Create sandbox environment
         sandbox = ModuleSandbox(module_id, sandbox_config)
         
         try:
@@ -440,7 +785,7 @@ class ModuleManager:
             module = module_class(self, config)
             module.state = ModuleState.LOADING
             
-            # Load module in sandbox
+            # Load module inside sandbox (restricted environment)
             def load_func():
                 return module.load()
             
@@ -451,7 +796,7 @@ class ModuleManager:
                 module.get_info().load_time = datetime.now()
                 self.modules[module_id] = module
                 
-                # Store sandbox reference with module for future use
+                # Keep sandbox reference for future sandboxed calls
                 module._sandbox = sandbox
                 
                 # Notify listeners
@@ -469,27 +814,65 @@ class ModuleManager:
             logger.error(f"Error loading module '{module_id}' in sandbox: {e}")
             return False
 
+    # =========================================================================
+    # 🗑️ UNLOADING: Release module resources
+    # =========================================================================
+
     def unload(self, module_id: str) -> bool:
-        """Unload a module."""
+        """
+        Unload a module.
+        
+        📖 WHAT THIS DOES:
+        1. Checks no other modules depend on this one
+        2. Calls module's unload() to release resources
+        3. Removes module from our registry
+        4. Notifies listeners that module was unloaded
+        
+        📐 DEPENDENCY CHECK:
+        If module B requires module A, you CANNOT unload A until B is unloaded.
+        
+            A (required by B)
+            ▲
+            │ depends
+            │
+            B
+            
+        Unload B first, then A.
+
+        Args:
+            module_id: Module ID to unload
+
+        Returns:
+            True if unloaded successfully
+        """
         if module_id not in self.modules:
             return False
 
         module = self.modules[module_id]
 
-        # Check if other modules depend on this one
+        # ─────────────────────────────────────────────────────────────────────
+        # DEPENDENCY CHECK: Are other modules depending on this one?
+        # ─────────────────────────────────────────────────────────────────────
         for other_id, other_module in self.modules.items():
             if other_id != module_id:
                 info = other_module.get_info()
                 if module_id in info.requires and other_module.state == ModuleState.LOADED:
+                    # Can't unload! Something else needs this module
                     logger.error(f"Cannot unload '{module_id}': required by '{other_id}'")
                     return False
 
         try:
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 1: Call module's unload() to release resources
+            # This is where models are freed from memory, connections closed, etc.
+            # ─────────────────────────────────────────────────────────────────
             if module.unload():
                 module.state = ModuleState.UNLOADED
                 del self.modules[module_id]
 
-                # Notify listeners
+                # ─────────────────────────────────────────────────────────────
+                # STEP 2: Notify listeners (GUI, etc.)
+                # ─────────────────────────────────────────────────────────────
                 for callback in self._on_unload:
                     callback(module_id)
 
@@ -501,8 +884,27 @@ class ModuleManager:
             logger.error(f"Error unloading module '{module_id}': {e}")
             return False
 
+    # =========================================================================
+    # ⚡ ACTIVATION: Start/stop module processing
+    # =========================================================================
+
     def activate(self, module_id: str) -> bool:
-        """Activate a loaded module."""
+        """
+        Activate a loaded module.
+        
+        📖 LOADED vs ACTIVE:
+        - LOADED: Module is initialized and ready, but not processing
+        - ACTIVE: Module is running background tasks, listening for events, etc.
+        
+        Some modules don't need activation (they work immediately when loaded).
+        Others (like voice listener) need explicit activation to start processing.
+
+        Args:
+            module_id: Module ID to activate
+
+        Returns:
+            True if activated successfully
+        """
         if module_id not in self.modules:
             return False
 
@@ -516,7 +918,19 @@ class ModuleManager:
         return False
 
     def deactivate(self, module_id: str) -> bool:
-        """Deactivate an active module."""
+        """
+        Deactivate an active module.
+        
+        📖 WHAT THIS DOES:
+        Stops the module's background processing but keeps it loaded.
+        Useful for pausing expensive operations without full unload.
+        
+        Args:
+            module_id: Module ID to deactivate
+
+        Returns:
+            True if deactivated successfully
+        """
         if module_id not in self.modules:
             return False
 
@@ -529,12 +943,44 @@ class ModuleManager:
             return True
         return False
 
+    # =========================================================================
+    # 🔍 GETTERS: Access loaded modules
+    # =========================================================================
+
     def get_module(self, module_id: str) -> Optional[Module]:
-        """Get a loaded module instance."""
+        """
+        Get a loaded module instance.
+        
+        📖 RETURNS:
+        The Module wrapper object (with state, config, etc.)
+        For the actual working object, use get_interface() instead.
+
+        Args:
+            module_id: Module ID to get
+
+        Returns:
+            Module instance or None if not loaded
+        """
         return self.modules.get(module_id)
 
     def get_interface(self, module_id: str) -> Any:
-        """Get a module's public interface."""
+        """
+        Get a module's public interface.
+        
+        📖 WHAT THIS RETURNS:
+        The actual working object inside the module.
+        This is what you use to call module functions.
+        
+        📐 EXAMPLE:
+            image_gen = manager.get_interface('image_gen_local')
+            result = image_gen.generate("a sunset")  # Use the actual generator
+
+        Args:
+            module_id: Module ID
+
+        Returns:
+            The module's working instance (model, generator, etc.)
+        """
         module = self.modules.get(module_id)
         return module.get_interface() if module else None
 

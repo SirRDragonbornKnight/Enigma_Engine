@@ -1,27 +1,67 @@
 """
-Tool Router - Connect AI models to tools and dispatch tool calls.
+================================================================================
+🛠️ TOOL ROUTER - TRAFFIC CONTROLLER FOR AI REQUESTS
+================================================================================
 
-This system allows:
-  - Assigning any model (Forge or HuggingFace) to any tool
-  - Main AI automatically calling tools based on user requests
-  - Multiple models assigned to same tool (fallback chain)
-  - Tool execution and result handling
+The Router is like a traffic controller - it figures out WHAT the user wants
+and sends their request to the RIGHT specialized model or tool!
 
-USAGE:
+📍 FILE: forge_ai/core/tool_router.py
+🏷️ TYPE: Request Routing & Tool Dispatch
+🎯 MAIN CLASSES: ToolRouter, ToolDefinition, ModelAssignment
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ROUTING FLOW:                                                              │
+│                                                                             │
+│  "Draw me a cat"                                                           │
+│         │                                                                   │
+│         ▼                                                                   │
+│  ┌─────────────────┐                                                       │
+│  │  TOOL ROUTER    │ ← Analyzes: "draw" = IMAGE tool!                      │
+│  └────────┬────────┘                                                       │
+│           │                                                                 │
+│     ┌─────┴─────┬──────────┬──────────┬──────────┐                         │
+│     ▼           ▼          ▼          ▼          ▼                         │
+│  [CHAT]     [IMAGE]    [CODE]    [VIDEO]    [AUDIO]                        │
+│             ↑ SELECTED                                                     │
+│             ▼                                                               │
+│  [Stable Diffusion] → 🎨 Cat Image!                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🛠️ BUILT-IN TOOLS:
+    • chat   - General conversation ("explain", "help", "what")
+    • image  - Generate images ("draw", "paint", "picture")
+    • code   - Generate code ("program", "script", "function")
+    • video  - Generate videos ("animate", "clip", "movie")
+    • audio  - Generate audio ("speak", "voice", "music")
+    • 3d     - Generate 3D models ("model", "mesh", "sculpt")
+    • gif    - Create GIFs ("gif", "animated")
+
+🔗 CONNECTED FILES:
+    → DISPATCHES TO: forge_ai/tools/tool_executor.py (executes tools)
+    → DISPATCHES TO: forge_ai/gui/tabs/*_tab.py (generation tabs)
+    ← USED BY:       forge_ai/core/inference.py (enable_tools mode)
+    ← USED BY:       forge_ai/gui/tabs/model_router_tab.py (configure)
+
+📖 USAGE:
     from forge_ai.core.tool_router import ToolRouter, get_router
     
     router = get_router()
     
     # Assign models to tools
     router.assign_model("chat", "forge:small_forge_ai")
-    router.assign_model("chat", "huggingface:mistralai/Mistral-7B-Instruct-v0.2")
     router.assign_model("image", "local:stable-diffusion")
     
-    # Execute tool
-    result = router.execute_tool("image", {"prompt": "a sunset"})
+    # Auto-route a request (AI decides which tool)
+    result = router.auto_route("Draw me a sunset")
     
-    # Let AI decide which tool to use
-    result = router.auto_route("Draw me a cat")
+    # Or execute specific tool
+    result = router.execute_tool("image", {"prompt": "a sunset"})
+
+📖 SEE ALSO:
+    • forge_ai/tools/tool_executor.py   - Executes the tool calls
+    • forge_ai/tools/tool_definitions.py - Define new tools
+    • data/tool_routing.json            - Saved routing config
 """
 
 import json
@@ -37,20 +77,48 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ToolDefinition:
-    """Definition of an available tool."""
-    name: str
-    description: str
-    keywords: List[str]  # Keywords that trigger this tool
-    parameters: Dict[str, str]  # param_name -> description
-    handler: Optional[Callable] = None
+    """
+    Definition of an available tool.
+    
+    📖 WHAT THIS IS:
+    A tool is any capability the AI can use - image generation, code writing,
+    web search, etc. This class defines what a tool IS and how to trigger it.
+    
+    📐 KEYWORD MATCHING:
+    When user says "draw me a cat", the router looks for keywords:
+    - "draw" matches image tool → route to image generator
+    - "explain" matches chat tool → route to chat model
+    """
+    name: str                    # Tool identifier (e.g., "image")
+    description: str             # What the tool does
+    keywords: List[str]          # Words that trigger this tool
+    parameters: Dict[str, str]   # Required parameters and descriptions
+    handler: Optional[Callable] = None  # Function that executes the tool
     
 
 @dataclass 
 class ModelAssignment:
-    """A model assigned to a tool."""
-    model_id: str  # "forge:name", "huggingface:repo/model", "local:name"
-    model_type: str  # "forge_ai", "huggingface", "local", "api"
-    priority: int = 0  # Higher = try first
+    """
+    A model assigned to handle a specific tool.
+    
+    📖 WHAT THIS IS:
+    Each tool can have multiple models assigned to it.
+    The router tries them in priority order.
+    
+    📐 MODEL ID FORMAT:
+    - "forge:name"        → ForgeAI model
+    - "huggingface:repo"  → HuggingFace model
+    - "local:name"        → Local system tool
+    - "api:service"       → External API
+    
+    📐 EXAMPLE:
+    For the "image" tool, you might assign:
+    - "local:stable-diffusion" (priority=10, fast)
+    - "api:dall-e" (priority=5, high quality but slow)
+    """
+    model_id: str                         # e.g., "forge:name", "local:name"
+    model_type: str                       # "forge_ai", "huggingface", "local", "api"
+    priority: int = 0                     # Higher = try first
     config: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -138,37 +206,98 @@ TOOL_DEFINITIONS = {
 
 
 class ToolRouter:
-    """Routes requests to appropriate tools and models."""
+    """
+    Routes requests to appropriate tools and models.
     
-    # Maximum number of models to keep in cache (LRU eviction)
-    MAX_CACHE_SIZE = 5
-    MAX_SPECIALIZED_CACHE_SIZE = 3
+    📖 WHAT THIS CLASS DOES:
+    The ToolRouter is the TRAFFIC CONTROLLER for all AI requests!
+    It looks at what the user wants and sends the request to the right place.
+    
+    📐 ROUTING FLOW:
+    
+        User: "Draw me a sunset over mountains"
+                │
+                ▼
+        ┌───────────────────────────────────────────────────┐
+        │            TOOL ROUTER                            │
+        │  1. Analyze: "draw" keyword detected              │
+        │  2. Classify: This is an IMAGE request            │
+        │  3. Find: Get assigned model for IMAGE tool       │
+        │  4. Execute: Run Stable Diffusion                 │
+        │  5. Return: Image path to user                    │
+        └───────────────────────────────────────────────────┘
+                │
+                ▼
+        🎨 sunset_image.png
+    
+    📐 SPECIALIZED MODELS:
+    For even smarter routing, you can train specialized models:
+    - Router Model: Classifies user intent (better than keywords)
+    - Vision Model: Describes what's in images
+    - Code Model: Generates code (optimized for programming)
+    
+    📐 MODEL CACHING:
+    Loading models is slow, so we keep recently-used models in memory.
+    When cache is full, oldest models are unloaded (LRU eviction).
+    
+    🔗 CONNECTS TO:
+      → Uses tool_executor.py to run tools
+      → Uses generation tabs for image/video/audio
+      ← Called by inference.py when enable_tools=True
+      ← Configured in GUI via model_router_tab.py
+    """
+    
+    # ─────────────────────────────────────────────────────────────────────────
+    # CACHE LIMITS: How many models to keep loaded at once
+    # ─────────────────────────────────────────────────────────────────────────
+    MAX_CACHE_SIZE = 5              # Main model cache
+    MAX_SPECIALIZED_CACHE_SIZE = 3  # Specialized model cache
     
     def __init__(self, config_path: Optional[Path] = None, use_specialized: bool = False):
+        """
+        Initialize the Tool Router.
+        
+        Args:
+            config_path: Where to save/load routing configuration
+            use_specialized: Enable specialized models (router, vision, code)
+        """
         from ..config import CONFIG
         
         self.config_path = config_path or Path(CONFIG.get("data_dir", "data")) / "tool_routing.json"
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Tool -> List of assigned models
+        # ─────────────────────────────────────────────────────────────────────
+        # ASSIGNMENTS: Which models handle which tools
+        # Tool name → List of assigned models (in priority order)
+        # ─────────────────────────────────────────────────────────────────────
         self.assignments: Dict[str, List[ModelAssignment]] = {}
         
-        # Tool definitions
+        # ─────────────────────────────────────────────────────────────────────
+        # TOOL DEFINITIONS: All available tools and their metadata
+        # ─────────────────────────────────────────────────────────────────────
         self.tools = TOOL_DEFINITIONS.copy()
         
-        # Loaded model instances (cached with LRU tracking)
+        # ─────────────────────────────────────────────────────────────────────
+        # MODEL CACHE: Keep loaded models in memory for speed
+        # Uses LRU (Least Recently Used) eviction when cache is full
+        # ─────────────────────────────────────────────────────────────────────
         self._model_cache: Dict[str, Any] = {}
         self._model_cache_order: List[str] = []  # Track access order for LRU
         
-        # Tool handlers
+        # ─────────────────────────────────────────────────────────────────────
+        # TOOL HANDLERS: Custom functions for each tool
+        # ─────────────────────────────────────────────────────────────────────
         self._handlers: Dict[str, Callable] = {}
         
-        # Specialized models configuration
+        # ─────────────────────────────────────────────────────────────────────
+        # SPECIALIZED MODELS: Trained models for routing/vision/code
+        # ─────────────────────────────────────────────────────────────────────
         self.use_specialized = use_specialized
         self._specialized_models: Dict[str, Any] = {}
         self._specialized_cache_order: List[str] = []
-        self._shared_tokenizer = None
+        self._shared_tokenizer = None  # Tokenizer shared across specialized models
         
+        # Load saved configuration
         self._load_config()
         
         # Load specialized models config if enabled
@@ -176,7 +305,18 @@ class ToolRouter:
             self._load_specialized_config()
     
     def _cache_model(self, key: str, model: Any, is_specialized: bool = False):
-        """Add model to cache with LRU eviction."""
+        """
+        Add model to cache with LRU eviction.
+        
+        📖 LRU (Least Recently Used) CACHING:
+        When cache is full and we need to add a new model,
+        we remove the OLDEST model (least recently accessed).
+        
+        📐 EXAMPLE:
+        Cache: [A, B, C] (max=3)
+        Access B → Cache: [A, C, B] (B moved to end)
+        Add D → Cache: [C, B, D] (A evicted, D added)
+        """
         if is_specialized:
             cache = self._specialized_models
             order = self._specialized_cache_order
@@ -186,23 +326,32 @@ class ToolRouter:
             order = self._model_cache_order
             max_size = self.MAX_CACHE_SIZE
         
-        # Update access order
+        # Update access order (move to end = most recently used)
         if key in order:
             order.remove(key)
         order.append(key)
         
         cache[key] = model
         
-        # Evict oldest if over limit
+        # Evict oldest models if over limit
         while len(order) > max_size:
-            oldest = order.pop(0)
+            oldest = order.pop(0)  # Remove from front (oldest)
             if oldest in cache:
                 old_model = cache.pop(oldest)
-                self._cleanup_model(old_model)
+                self._cleanup_model(old_model)  # Free memory
                 logger.info(f"Evicted model from cache: {oldest}")
     
     def _cleanup_model(self, model: Any):
-        """Clean up a model (free GPU memory)."""
+        """
+        Clean up a model and free GPU memory.
+        
+        📖 WHY THIS MATTERS:
+        GPU memory is limited! When we're done with a model,
+        we need to:
+        1. Move it to CPU (frees GPU memory)
+        2. Delete the reference
+        3. Tell PyTorch to empty its cache
+        """
         try:
             if model is None:
                 return
@@ -214,11 +363,12 @@ class ToolRouter:
                 model.clear()
                 model = actual_model
             
+            # Move model off GPU
             if hasattr(model, 'cpu'):
                 model.cpu()
             del model
             
-            # Free GPU memory
+            # Free GPU memory (tell PyTorch to release unused memory)
             try:
                 import torch
                 if torch.cuda.is_available():
@@ -373,19 +523,53 @@ class ToolRouter:
     
     def classify_intent(self, text: str) -> str:
         """
-        Classify user intent using specialized router model.
+        Classify user intent to determine which tool to use.
+        
+        📖 WHAT THIS DOES:
+        Analyzes user input and figures out what they want:
+        - "draw a cat" → "image"
+        - "explain quantum physics" → "chat"
+        - "write a Python function" → "code"
+        
+        📐 TWO APPROACHES:
+        
+        1. SPECIALIZED ROUTER MODEL (if use_specialized=True):
+           - Uses a trained neural network to classify intent
+           - More accurate for ambiguous requests
+           - Requires trained router model
+        
+        2. KEYWORD MATCHING (fallback):
+           - Looks for trigger words in user input
+           - Fast but less intelligent
+           - "draw" → image, "explain" → chat, etc.
+        
+        📐 FLOW:
+        
+            User: "Create a painting of a dragon"
+                    │
+                    ▼
+            ┌───────────────────────────────────────┐
+            │  TRY: Specialized Router Model        │
+            │  Input: "Create a painting of dragon" │
+            │  Output: "image"                      │
+            └───────────────────────────────────────┘
+                    │ (success)
+                    ▼
+            Return: "image"
         
         Args:
-            text: User input text
+            text: User input text to classify
         
         Returns:
-            Intent class (chat, vision, image, code, etc.)
+            Intent class (chat, vision, image, code, video, audio, 3d, gif, web)
         """
-        # Try specialized router model first
+        # ─────────────────────────────────────────────────────────────────────
+        # APPROACH 1: Try specialized router model first (more accurate)
+        # ─────────────────────────────────────────────────────────────────────
         if self.use_specialized:
             router_model = self._specialized_models.get('router')
             if router_model is None and 'router' not in self._specialized_models:
-                # Try to load it (only once)
+                # Try to load it (only once - None means we tried and failed)
                 router_model = self._load_specialized_model('router')
                 self._specialized_models['router'] = router_model
             
@@ -396,24 +580,24 @@ class ToolRouter:
                     model = router_model['model']
                     tokenizer = router_model['tokenizer']
                     
-                    # Prepare input
+                    # Prepare input in the format the router was trained on
+                    # Format: "Q: <user question>\nA: [E:tool]"
                     prompt = f"Q: {text}\nA: [E:tool]"
                     input_ids = tokenizer.encode(prompt)
                     input_tensor = torch.tensor([input_ids])
                     
-                    # Generate
+                    # Generate classification
                     with torch.no_grad():
                         output = model.generate(
                             input_tensor,
                             max_new_tokens=10,
-                            temperature=0.1,  # Low temperature for classification
+                            temperature=0.1,  # Low temperature = deterministic
                         )
                     
-                    # Decode and extract intent
+                    # Decode output and extract intent
                     result = tokenizer.decode(output[0].tolist())
                     
-                    # Extract intent from output using regex for robustness
-                    # Expected format: "Q: ... A: [E:tool]intent"
+                    # Extract intent using regex (expected: "Q: ... A: [E:tool]intent")
                     import re
                     match = re.search(r'\[E:tool\](\w+)', result)
                     if match:
@@ -422,13 +606,11 @@ class ToolRouter:
                             logger.info(f"Router classified intent: {intent}")
                             return intent
                     
-                    # Fallback: try simple split if regex fails
+                    # Fallback: try simple string splitting
                     if '[E:tool]' in result:
                         parts = result.split('[E:tool]')
                         if len(parts) > 1:
-                            # Get first word after [E:tool]
                             intent_text = parts[-1].strip()
-                            # Extract first word (handle whitespace, newlines, etc.)
                             intent = intent_text.split()[0].lower() if intent_text else None
                             if intent and intent in self.tools:
                                 logger.info(f"Router classified intent (fallback): {intent}")
@@ -437,7 +619,9 @@ class ToolRouter:
                 except Exception as e:
                     logger.warning(f"Specialized router failed: {e}")
         
-        # Fallback to keyword-based detection
+        # ─────────────────────────────────────────────────────────────────────
+        # APPROACH 2: Fallback to keyword-based detection
+        # ─────────────────────────────────────────────────────────────────────
         return self.detect_tool(text)
     
     def describe_image(self, features: str) -> str:

@@ -1,14 +1,37 @@
 """
-AI Voice Generation System
+================================================================================
+🔊 AI VOICE GENERATOR - THE VOICE HALL
+================================================================================
 
-AI can create and evolve its own voice.
+AI can create and evolve its own voice based on personality traits!
+Generate unique voices that match your AI's character.
 
-Options:
-1. AI-Generated: AI picks voice parameters based on personality
-2. User-Provided: User uploads voice samples
-3. Clone: Clone a voice from audio samples (if supported)
+📍 FILE: forge_ai/voice/voice_generator.py
+🏷️ TYPE: Voice Synthesis & Profile Generation
+🎯 MAIN CLASSES: AIVoiceGenerator, VoiceEvolution
 
-Usage:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PERSONALITY → VOICE MAPPING:                                               │
+│                                                                             │
+│  High confidence  → Lower pitch, slower speed                              │
+│  High playfulness → Varied pitch, faster speed                             │
+│  High formality   → Neutral pitch, measured pace                           │
+│  High empathy     → Warmer tone (softer volume)                            │
+│  High humor       → Higher pitch, faster speed                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🎙️ VOICE OPTIONS:
+    1. AI-Generated: AI picks parameters based on personality
+    2. User-Provided: User uploads voice samples
+    3. Clone: Clone a voice from audio samples (if supported)
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/voice/voice_profile.py (VoiceProfile storage)
+    → USES:      forge_ai/core/personality.py (AIPersonality traits)
+    ← USED BY:   forge_ai/gui/tabs/audio_tab.py (TTS tab)
+    ← USED BY:   forge_ai/avatar/controller.py (avatar speech)
+
+📖 USAGE:
     from forge_ai.voice.voice_generator import AIVoiceGenerator
     from forge_ai.core.personality import load_personality
     
@@ -20,6 +43,12 @@ Usage:
     
     # Or create from samples
     voice_profile = generator.create_from_samples(["sample1.wav", "sample2.wav"])
+
+📖 SEE ALSO:
+    • forge_ai/voice/tts_simple.py   - Simple text-to-speech
+    • forge_ai/voice/listener.py    - Speech-to-text input
+    • forge_ai/voice/lip_sync.py    - Sync avatar lips to speech
+    • data/voice_profiles/          - Saved voice configurations
 """
 
 import json

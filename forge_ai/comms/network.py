@@ -1,42 +1,62 @@
 """
-Multi-Device Communication System for Forge
+================================================================================
+🌐 MULTI-DEVICE NETWORK - CONNECT YOUR AI ARMY
+================================================================================
 
-Enables:
-  1. NETWORKED MODE: Multiple Forge instances talking to each other
-     - Pi talks to PC, PC responds
-     - AIs can have conversations with each other
-     - Share context and memory across devices
-  
-  2. DISCONNECTED MODE: Run same AI on different devices without network
-     - Export model as portable package
-     - Import on another device
-     - Sync memories when reconnected
+Connect multiple computers running ForgeAI! Share models, distribute work,
+and let AIs have conversations with each other.
 
-ARCHITECTURE:
-  
-  Device A (PC with GPU)              Device B (Raspberry Pi)
-  ┌─────────────────────┐            ┌─────────────────────┐
-  │  Forge Instance    │◄──────────►│  Forge Instance    │
-  │  - Large Model      │   Network  │  - Small Model      │
-  │  - Training         │            │  - Inference        │
-  │  - API Server       │            │  - Remote Client    │
-  └─────────────────────┘            └─────────────────────┘
+📍 FILE: forge_ai/comms/network.py
+🏷️ TYPE: Multi-Device Networking
+🎯 MAIN CLASSES: ForgeNode, Message, ModelExporter
 
-USAGE:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  NETWORK ARCHITECTURE:                                                      │
+│                                                                             │
+│  Device A (PC with GPU)              Device B (Raspberry Pi)               │
+│  ┌─────────────────────┐            ┌─────────────────────┐               │
+│  │  Forge Instance    │◄──────────►│  Forge Instance    │               │
+│  │  - Large Model      │   Network  │  - Small Model      │               │
+│  │  - Training         │            │  - Inference        │               │
+│  │  - API Server       │            │  - Remote Client    │               │
+│  └─────────────────────┘            └─────────────────────┘               │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-  # On PC (server mode)
-  from forge_ai.comms.network import ForgeNode
-  node = ForgeNode(name="pc_node", port=5000)
-  node.start_server()
-  
-  # On Pi (client mode)
-  from forge_ai.comms.network import ForgeNode
-  node = ForgeNode(name="pi_node")
-  node.connect_to("192.168.1.100:5000")
-  response = node.ask_peer("pc_node", "What is the meaning of life?")
-  
-  # AI-to-AI conversation
-  node.start_ai_conversation("pc_node", num_turns=10)
+🎮 MODES:
+    1. NETWORKED MODE: Multiple instances talking to each other
+       - Pi talks to PC, PC responds
+       - AIs can have conversations with each other
+       - Share context and memory across devices
+    
+    2. DISCONNECTED MODE: Run same AI on different devices
+       - Export model as portable package
+       - Import on another device
+       - Sync memories when reconnected
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/core/inference.py (ForgeEngine for responses)
+    → USES:      forge_ai/memory/manager.py (sync memories)
+    ← USED BY:   forge_ai/gui/tabs/network_tab.py (GUI controls)
+    📄 RELATED:  forge_ai/comms/discovery.py (auto-find nodes)
+
+📖 USAGE:
+    # On PC (server mode)
+    from forge_ai.comms.network import ForgeNode
+    node = ForgeNode(name="pc_node", port=5000)
+    node.start_server()
+    
+    # On Pi (client mode)
+    node = ForgeNode(name="pi_node")
+    node.connect_to("192.168.1.100:5000")
+    response = node.ask_peer("pc_node", "What is the meaning of life?")
+    
+    # AI-to-AI conversation
+    node.start_ai_conversation("pc_node", num_turns=10)
+
+📖 SEE ALSO:
+    • forge_ai/comms/discovery.py    - Auto-discover other nodes
+    • forge_ai/comms/memory_sync.py  - Sync memories across devices
+    • docs/multi_device_guide.md     - Multi-device setup guide
 """
 
 import json

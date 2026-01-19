@@ -1,30 +1,70 @@
 """
-Forge Inference Engine
-=======================
+================================================================================
+⚡ FORGE INFERENCE ENGINE - TALK TO YOUR AI
+================================================================================
 
-High-performance inference engine for Forge language models.
+This is how you COMMUNICATE with your AI! The ForgeEngine takes your text 
+and generates intelligent responses.
 
-Features:
-  - Efficient text generation with KV-cache support
-  - Multiple sampling strategies (greedy, top-k, top-p, beam search)
-  - Streaming generation for real-time output
-  - Batch generation support
-  - Chat-style conversation interface
-  - Automatic device selection and optimization
+📍 FILE: forge_ai/core/inference.py
+🏷️ TYPE: Text Generation Engine
+🎯 MAIN CLASS: ForgeEngine
 
-Usage:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  GENERATION FLOW:                                                           │
+│                                                                             │
+│  "Hello, how are" → [ForgeEngine] → "you doing today?"                     │
+│         │                 │                                                 │
+│         │     ┌───────────┴───────────┐                                    │
+│         │     │ 1. Tokenize input     │                                    │
+│         │     │ 2. Run through model  │                                    │
+│         │     │ 3. Sample next token  │                                    │
+│         │     │ 4. Repeat until done  │                                    │
+│         │     │ 5. Detokenize output  │                                    │
+│         │     └───────────────────────┘                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+⚡ FEATURES:
+    • KV-cache for efficient generation
+    • Multiple sampling: greedy, top-k, top-p, beam search
+    • Streaming output (token by token)
+    • Batch generation
+    • Chat with conversation history
+    • Automatic GPU/CPU selection
+
+🎛️ SAMPLING STRATEGIES:
+    • Greedy      - Always pick most likely (deterministic)
+    • Top-K       - Pick from top K most likely tokens
+    • Top-P       - Pick from tokens covering P% probability  
+    • Temperature - Higher = more creative/random
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/core/model.py (Forge - the neural network)
+    → USES:      forge_ai/core/tokenizer.py (text ↔ numbers)
+    → USES:      forge_ai/core/tool_router.py (route to tools)
+    ← USED BY:   forge_ai/gui/tabs/chat_tab.py (chat interface)
+    ← USED BY:   forge_ai/comms/api_server.py (REST API)
+    ← USED BY:   run.py --run (CLI chat)
+
+📖 USAGE:
     from forge_ai.core.inference import ForgeEngine
-
-    engine = ForgeEngine()
+    
+    engine = ForgeEngine()  # Auto-loads model
+    
+    # Simple generation
     response = engine.generate("Hello, my name is")
-    print(response)
-
-    # Streaming
+    
+    # Streaming (token by token)
     for token in engine.stream_generate("Tell me a story"):
         print(token, end="", flush=True)
-
-    # Chat
+    
+    # Chat mode (with history)
     response = engine.chat("What is AI?")
+
+📖 SEE ALSO:
+    • forge_ai/core/model.py      - The neural network being used
+    • forge_ai/core/tool_router.py - Route requests to specialized tools
+    • forge_ai/memory/manager.py   - Save conversations
 """
 import torch
 import torch.nn.functional as F
@@ -47,19 +87,82 @@ LEGACY_MODEL = MODELS_DIR / "tiny_forge_ai.pth"
 
 
 # =============================================================================
-# Inference Engine
+# ⚡ INFERENCE ENGINE - Talk to Your AI!
 # =============================================================================
+# This is the main class for generating text with a trained model.
+# It handles all the complexity of:
+#   - Loading models and tokenizers
+#   - Running the neural network
+#   - Sampling strategies (how to pick the next word)
+#   - KV-cache for fast generation
+#   - Tool routing for specialized tasks
 
 class ForgeEngine:
     """
     High-performance inference engine for Forge models.
-
-    Features:
-    - Automatic model loading and device selection
-    - KV-cache for efficient autoregressive generation
-    - Multiple sampling strategies (greedy, top-k, top-p)
-    - Streaming generation support
-    - Chat-style conversation interface
+    
+    📖 WHAT THIS DOES:
+    Takes your text prompt and generates a response using the AI model.
+    
+    📐 GENERATION LOOP:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │  "Hello, how are" ─────────────────────────────────────────────────    │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  ┌─────────────┐                                                       │
+    │  │ Tokenizer   │ → [15496, 11, 703, 389]                              │
+    │  └─────────────┘                                                       │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  ┌─────────────┐     ┌───────────────────────────────────────────┐   │
+    │  │   Model     │ ──▶ │ Probabilities for ALL vocab tokens        │   │
+    │  └─────────────┘     │ "you": 0.15, "doing": 0.08, "the": 0.02   │   │
+    │         │            └───────────────────────────────────────────┘   │
+    │         ▼                                                              │
+    │  ┌─────────────┐                                                       │
+    │  │  Sampler    │ → Pick "you" (based on temperature, top_k, etc.)    │
+    │  └─────────────┘                                                       │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  Add "you" to sequence, REPEAT until done                             │
+    │         │                                                              │
+    │         ▼                                                              │
+    │  "Hello, how are you doing today?"                                    │
+    └────────────────────────────────────────────────────────────────────────┘
+    
+    ⚡ KEY FEATURES:
+    - KV-cache: Don't recompute past tokens (10x faster!)
+    - Multiple samplers: greedy, top-k, top-p, temperature
+    - Streaming: Get tokens as they're generated
+    - Tools: Route to specialized models/APIs
+    - Chat: Maintains conversation history
+    
+    🎛️ SAMPLING STRATEGIES:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ GREEDY (temperature=0):                                                │
+    │   Always pick highest probability token                                │
+    │   Pro: Deterministic, consistent                                       │
+    │   Con: Repetitive, boring                                              │
+    │                                                                        │
+    │ TEMPERATURE (0.1 to 2.0):                                              │
+    │   Scales probabilities before sampling                                 │
+    │   Low (0.3): More focused, predictable                                │
+    │   High (1.5): More random, creative                                   │
+    │                                                                        │
+    │ TOP-K (e.g., k=50):                                                    │
+    │   Only consider top K most likely tokens                              │
+    │   Prevents sampling very unlikely tokens                              │
+    │                                                                        │
+    │ TOP-P / NUCLEUS (e.g., p=0.9):                                        │
+    │   Only consider tokens covering P% of probability mass                │
+    │   Dynamic cutoff based on confidence                                  │
+    └────────────────────────────────────────────────────────────────────────┘
+    
+    🔗 CONNECTS TO:
+      → Uses Forge model from model.py
+      → Uses tokenizer from tokenizer.py
+      → Uses ToolRouter from tool_router.py (optional)
+      ← Used by GUI chat, CLI, API server
     """
 
     @classmethod
@@ -73,8 +176,18 @@ class ForgeEngine:
         """
         Create engine directly from model and tokenizer objects.
         
+        📖 USE THIS WHEN:
+        You already have a loaded model and tokenizer, and don't want
+        the engine to load them again from disk.
+        
+        📐 EXAMPLE:
+            model = create_model('small')
+            model.load_state_dict(torch.load('my_model.pth'))
+            tokenizer = get_tokenizer()
+            engine = ForgeEngine.from_model(model, tokenizer)
+        
         Args:
-            model: A Forge model instance
+            model: A Forge model instance (already loaded)
             tokenizer: A tokenizer instance
             device: Device to use ("cuda", "cpu", or auto-detected)
             use_half: Use FP16 for faster inference (GPU only)
@@ -84,11 +197,13 @@ class ForgeEngine:
         """
         import torch
         
-        # Create instance without calling __init__
+        # Create instance without calling __init__ (bypass normal initialization)
         engine = object.__new__(cls)
         
-        # Initialize required attributes
-        engine._generation_lock = threading.Lock()
+        # ─────────────────────────────────────────────────────────────────────
+        # INITIALIZE REQUIRED ATTRIBUTES
+        # ─────────────────────────────────────────────────────────────────────
+        engine._generation_lock = threading.Lock()  # Thread safety for KV-cache
         engine.device = torch.device(device) if device else (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
@@ -100,15 +215,17 @@ class ForgeEngine:
         engine._tool_executor = None
         engine._tool_router = None
         
-        # Set model and tokenizer directly
+        # ─────────────────────────────────────────────────────────────────────
+        # SET MODEL AND TOKENIZER DIRECTLY
+        # ─────────────────────────────────────────────────────────────────────
         engine.tokenizer = tokenizer
         engine.model = model
         
-        # Move to device
+        # Move model to device and set precision
         engine.model.to(engine.device)
         if engine.use_half:
-            engine.model.half()
-        engine.model.eval()
+            engine.model.half()  # Convert to FP16
+        engine.model.eval()  # Set to evaluation mode (disable dropout)
         
         return engine
 
@@ -125,63 +242,89 @@ class ForgeEngine:
     ):
         """
         Initialize the inference engine.
+        
+        📖 THIS IS THE MAIN CONSTRUCTOR!
+        It loads the model and tokenizer, sets up the device,
+        and prepares everything for text generation.
 
         Args:
-            model_path: Path to model weights (auto-detected if None)
+            model_path: Path to model weights (.pth file)
+                        Auto-detected if None (looks in models/ folder)
             tokenizer_path: Path to tokenizer (auto-detected if None)
-            device: Device to use ("cuda", "cpu", or auto-detected)
-            use_half: Use FP16 for faster inference (GPU only)
-            model_size: Model size hint if not loading from file
-            enable_tools: Enable AI tool use system
-            module_manager: ModuleManager instance for tool execution
-            use_routing: Enable specialized model routing (default: False)
+            device: Device to use:
+                    - "cuda" = NVIDIA GPU (fastest)
+                    - "cpu" = CPU (slower but always works)
+                    - "mps" = Apple Silicon GPU
+                    - None = auto-detect best available
+            use_half: Use FP16 precision (half the memory, 2x faster on GPU)
+            model_size: Model size hint if creating new model
+            enable_tools: Enable AI tool system (web search, code, etc.)
+            module_manager: ModuleManager for tool execution
+            use_routing: Enable specialized model routing
         """
-        # Thread safety lock for KV-cache operations
+        # ─────────────────────────────────────────────────────────────────────
+        # THREAD SAFETY: Lock for KV-cache operations
+        # ─────────────────────────────────────────────────────────────────────
+        # The KV-cache is stateful - only one generation can run at a time
         self._generation_lock = threading.Lock()
         
-        # Device selection
+        # ─────────────────────────────────────────────────────────────────────
+        # DEVICE SELECTION: Pick the best available hardware
+        # ─────────────────────────────────────────────────────────────────────
         self.device = self._select_device(device)
         self.use_half = use_half and self.device.type == "cuda"
         
-        # Store configuration
+        # ─────────────────────────────────────────────────────────────────────
+        # STORE CONFIGURATION
+        # ─────────────────────────────────────────────────────────────────────
         self.enable_tools = enable_tools
         self.module_manager = module_manager
         self.use_routing = use_routing
         
-        # Check if offloading is enabled
+        # Check if CPU/GPU offloading is enabled in config
         self.use_offloading = CONFIG.get("enable_offloading", False)
         
-        # Initialize tool executor if tools are enabled
+        # ─────────────────────────────────────────────────────────────────────
+        # TOOL SYSTEM SETUP (optional)
+        # ─────────────────────────────────────────────────────────────────────
         self._tool_executor = None
         if enable_tools:
             from ..tools.tool_executor import ToolExecutor
             self._tool_executor = ToolExecutor(module_manager=module_manager)
         
-        # Initialize tool router if routing is enabled
+        # Tool router for specialized models (vision, code, etc.)
         self._tool_router = None
         if use_routing:
             from .tool_router import get_router
             self._tool_router = get_router(use_specialized=True)
             logger.info("Specialized model routing enabled")
 
-        # Load tokenizer
+        # ─────────────────────────────────────────────────────────────────────
+        # LOAD TOKENIZER
+        # ─────────────────────────────────────────────────────────────────────
         self.tokenizer = self._load_tokenizer(tokenizer_path, model_path)
 
-        # Load or create model
+        # ─────────────────────────────────────────────────────────────────────
+        # LOAD MODEL
+        # ─────────────────────────────────────────────────────────────────────
         self.model = self._load_model(model_path, model_size)
 
-        # Apply offloading or standard device placement
+        # ─────────────────────────────────────────────────────────────────────
+        # APPLY DEVICE PLACEMENT
+        # ─────────────────────────────────────────────────────────────────────
         if self.use_offloading:
+            # Advanced: Split model across CPU+GPU for large models
             self._apply_offloading()
         else:
-            # Standard: move to device and set precision
+            # Standard: Move whole model to device
             self.model.to(self.device)
             if self.use_half:
                 self.model.half()
         
+        # Set to evaluation mode (disables dropout, etc.)
         self.model.eval()
 
-        # Log initialization
+        # Log what we loaded
         self._log_init_info()
 
     def _select_device(self, device: Optional[str]) -> torch.device:
@@ -441,7 +584,7 @@ class ForgeEngine:
         print(info_msg(f"FP16: {self.use_half}"))
 
     # =========================================================================
-    # Generation Methods
+    # 📝 GENERATION METHODS - The Heart of Text Generation
     # =========================================================================
 
     def generate(
@@ -459,6 +602,42 @@ class ForgeEngine:
     ) -> str:
         """
         Generate text from a prompt.
+        
+        📖 WHAT THIS DOES:
+        This is the main generation function. Give it text, get more text back!
+        
+        📐 HOW IT WORKS:
+        1. Check if prompt needs special routing (image/code/web)
+        2. Acquire thread lock (only one generation at a time)
+        3. Tokenize the prompt into numbers
+        4. Feed tokens to model, get probability distribution
+        5. Sample next token using temperature/top-k/top-p
+        6. Repeat until max_gen tokens or stop_string found
+        7. If AI tried to use tools, execute them and continue
+        
+        📐 PARAMETER GUIDE:
+        ┌────────────────────────────────────────────────────────────────┐
+        │ temperature:  Controls randomness                              │
+        │   0.1-0.3:   Very focused, predictable                        │
+        │   0.7-0.9:   Good balance (default area)                      │
+        │   1.0-1.5:   More creative, less coherent                     │
+        │   >1.5:      Very random, may be nonsense                     │
+        │                                                                │
+        │ top_k:       Only consider top K tokens                       │
+        │   10-30:     Very focused                                      │
+        │   50:        Good default                                      │
+        │   100+:      More variety                                      │
+        │                                                                │
+        │ top_p:       Nucleus sampling - dynamic cutoff                │
+        │   0.5:       Conservative, focused                            │
+        │   0.9:       Good default                                      │
+        │   0.95-1.0:  More variety                                      │
+        │                                                                │
+        │ repetition_penalty: Discourage repeating words               │
+        │   1.0:       No penalty                                        │
+        │   1.1:       Mild (good default)                              │
+        │   1.3+:      Strong (may break grammar)                       │
+        └────────────────────────────────────────────────────────────────┘
 
         Args:
             prompt: Input text to continue
@@ -469,6 +648,8 @@ class ForgeEngine:
             repetition_penalty: Penalty for repeating tokens (>= 1.0)
             stop_strings: List of strings to stop generation at
             use_cache: Use KV-cache for faster generation
+            execute_tools: Execute AI tool calls (default: self.enable_tools)
+            max_tool_iterations: Max times AI can call tools in one generation
 
         Returns:
             Generated text (including the prompt)
@@ -477,39 +658,55 @@ class ForgeEngine:
             ValueError: If parameters are out of valid range
             TypeError: If prompt is not a string
         """
-        # Determine if tools should be executed
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 1: Determine if tools should be executed
+        # ─────────────────────────────────────────────────────────────────────
         if execute_tools is None:
             execute_tools = self.enable_tools
         
-        # Check if routing is enabled and should handle this request
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 2: Check if specialized routing should handle this
+        # Some prompts can bypass the main AI for faster execution
+        # e.g., "draw a cat" → directly calls image generator
+        # ─────────────────────────────────────────────────────────────────────
         if self.use_routing and self._tool_router:
+            # Classify what the user wants (image, code, web, etc.)
             intent = self._tool_router.classify_intent(prompt)
             logger.info(f"Classified intent: {intent}")
             
             # Check if this needs AI creativity (ambiguous/creative requests)
+            # "surprise me" → needs AI, "draw a cat" → can route directly
             if self._needs_ai_creativity(prompt):
                 logger.info("Prompt requires AI creativity, using main AI")
                 # Fall through to standard generation
             else:
-                # Direct routing for specific intents (bypasses main AI for speed)
+                # Try direct routing for speed
                 direct_result = self._try_direct_routing(intent, prompt)
                 if direct_result is not None:
                     return direct_result
         
-        # Thread-safe generation (protects KV-cache state)
-        # Use lock if available (may not exist for HuggingFace models)
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 3: Thread-safe generation (protects KV-cache state)
+        # Only one generation can happen at a time!
+        # ─────────────────────────────────────────────────────────────────────
         lock = getattr(self, '_generation_lock', None)
         if lock:
             lock.acquire()
         
         try:
-            # Standard generation
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 4: Standard text generation
+            # This is where the actual model inference happens
+            # ─────────────────────────────────────────────────────────────────
             text = self._generate_text(
                 prompt, max_gen, temperature, top_k, top_p, 
                 repetition_penalty, stop_strings, use_cache
             )
             
-            # Tool execution loop
+            # ─────────────────────────────────────────────────────────────────
+            # STEP 5: Tool execution loop
+            # If AI generated tool calls, execute them and continue
+            # ─────────────────────────────────────────────────────────────────
             if execute_tools and self._tool_executor:
                 text = self._execute_tools_in_text(
                     text, max_iterations=max_tool_iterations,
@@ -531,7 +728,17 @@ class ForgeEngine:
         **kwargs
     ) -> Generator[str, None, None]:
         """
-        Stream generated tokens. Alias for stream_generate().
+        Stream generated tokens one at a time.
+        
+        📖 WHY USE STREAMING?
+        Instead of waiting for the entire response, you get each token
+        as it's generated. Great for chat interfaces where users want
+        to see the AI "typing" in real-time.
+        
+        📐 EXAMPLE:
+            for token in engine.stream("Once upon a time"):
+                print(token, end="", flush=True)
+                # Prints: " there" " was" " a" " dragon"...
         
         Args:
             prompt: Input text to continue
@@ -708,7 +915,11 @@ class ForgeEngine:
         else:
             error = result.get("error", "Unknown error")
             return f"Web search failed: {error}"
-    
+
+    # =========================================================================
+    # 🔧 INTERNAL GENERATION - Where the magic happens!
+    # =========================================================================
+
     def _generate_text(
         self,
         prompt: str,
@@ -720,8 +931,51 @@ class ForgeEngine:
         stop_strings: Optional[List[str]],
         use_cache: bool
     ) -> str:
-        """Internal method for standard text generation."""
-        # Validate inputs
+        """
+        Internal method for standard text generation.
+        
+        📖 THIS IS THE CORE GENERATION LOOP!
+        
+        📐 THE AUTOREGRESSIVE LOOP:
+        ┌────────────────────────────────────────────────────────────────────┐
+        │  tokens = [15496, 11, 703, 389]  # "Hello, how are"               │
+        │                                                                    │
+        │  REPEAT max_gen times:                                            │
+        │    1. Feed tokens to model → logits                               │
+        │    2. Apply repetition penalty to logits                          │
+        │    3. Apply temperature scaling                                   │
+        │    4. Apply top-k filtering                                       │
+        │    5. Apply top-p (nucleus) filtering                             │
+        │    6. Sample next token from probabilities                        │
+        │    7. Add new token to sequence                                   │
+        │    8. Check for stop strings                                      │
+        │    9. Check for EOS token                                         │
+        │                                                                    │
+        │  tokens = [15496, 11, 703, 389, 499, 1804, 2651]                  │
+        │                                    └─ newly generated             │
+        └────────────────────────────────────────────────────────────────────┘
+        
+        📐 REPETITION PENALTY:
+        Discourages the model from repeating the same tokens.
+        For each token that already appeared in the sequence,
+        divide its probability by repetition_penalty.
+        
+        📐 TEMPERATURE SCALING:
+        logits = logits / temperature
+        - Low temp (0.3): Makes high-prob tokens even more likely → focused
+        - High temp (1.5): Flattens distribution → more random
+        
+        📐 TOP-K FILTERING:
+        Keep only the K highest probability tokens, zero out the rest.
+        Prevents sampling very unlikely tokens.
+        
+        📐 TOP-P (NUCLEUS) FILTERING:
+        Sort tokens by probability, keep tokens until cumulative prob >= p.
+        Dynamic cutoff - keeps more tokens when uncertain, fewer when confident.
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # INPUT VALIDATION
+        # ─────────────────────────────────────────────────────────────────────
         if not isinstance(prompt, str):
             raise TypeError(f"prompt must be a string, got {type(prompt).__name__}")
 
@@ -744,13 +998,18 @@ class ForgeEngine:
         if repetition_penalty < 1.0:
             raise ValueError(f"repetition_penalty must be >= 1.0, got {repetition_penalty}")
 
-        # Encode input
+        # ─────────────────────────────────────────────────────────────────────
+        # TOKENIZE: Convert text to numbers the model understands
+        # "Hello" → [15496]
+        # ─────────────────────────────────────────────────────────────────────
         input_ids = self._encode_prompt(prompt)
 
-        # Generate
-        with torch.no_grad():
+        # ─────────────────────────────────────────────────────────────────────
+        # GENERATE: Run the autoregressive loop
+        # ─────────────────────────────────────────────────────────────────────
+        with torch.no_grad():  # Disable gradient computation (inference only)
             if use_cache and hasattr(self.model, 'generate'):
-                # Use model's built-in generate
+                # Use model's built-in generate (has KV-cache optimization)
                 output_ids = self.model.generate(
                     input_ids,
                     max_new_tokens=max_gen,

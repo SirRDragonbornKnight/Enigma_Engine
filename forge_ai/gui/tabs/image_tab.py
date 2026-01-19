@@ -1,11 +1,43 @@
 """
-Image Generation Tab - Generate images using local or cloud models.
+================================================================================
+🎨 IMAGE GENERATION TAB - CREATE VISUAL ART
+================================================================================
 
-Providers:
-  - PLACEHOLDER: Simple test images (built-in procedural art)
-  - LOCAL: Stable Diffusion (requires diffusers, torch)
-  - OPENAI: DALL-E 3 (requires openai, API key)
-  - REPLICATE: SDXL/Flux (requires replicate, API key)
+Generate images using local or cloud AI models! From simple procedural art
+to Stable Diffusion to DALL-E 3.
+
+📍 FILE: forge_ai/gui/tabs/image_tab.py
+🏷️ TYPE: GUI Tab + Image Generators
+🎯 MAIN CLASSES: ImageTab, PlaceholderImage, StableDiffusionLocal, OpenAIImage
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  AVAILABLE PROVIDERS:                                                       │
+│                                                                             │
+│  🟢 PLACEHOLDER  - Built-in procedural art (NO dependencies!)              │
+│  🟡 LOCAL        - Stable Diffusion (requires diffusers, torch)           │
+│  🟠 OPENAI       - DALL-E 3 (requires openai, API key)                    │
+│  🔴 REPLICATE    - SDXL/Flux (requires replicate, API key)               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📁 OUTPUT LOCATION: outputs/images/
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/builtin/ (BuiltinImageGen fallback)
+    → USES:      forge_ai/config/ (CONFIG paths)
+    ← USED BY:   forge_ai/gui/enhanced_window.py (loaded as tab)
+    ← USED BY:   forge_ai/modules/registry.py (ImageGenLocalModule)
+
+📖 PROVIDER CLASSES:
+    • PlaceholderImage       - No dependencies, procedural art
+    • StableDiffusionLocal   - Local SD with diffusers library
+    • OpenAIImage            - DALL-E 3 via OpenAI API
+    • ReplicateImage         - SDXL via Replicate API
+
+📖 SEE ALSO:
+    • forge_ai/gui/tabs/code_tab.py   - Code generation tab
+    • forge_ai/gui/tabs/video_tab.py  - Video generation tab
+    • forge_ai/gui/tabs/audio_tab.py  - Audio generation tab
+    • forge_ai/core/tool_router.py    - Routes "image" requests here
 """
 
 import os

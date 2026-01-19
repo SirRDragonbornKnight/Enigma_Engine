@@ -468,27 +468,29 @@ def _populate_monitors(parent, preserve_selection=False):
 
 
 def _move_to_monitor(parent, monitor_index):
-    """Move the main window to the selected monitor."""
+    """Save the selected monitor preference (does NOT move the window)."""
     from PyQt5.QtGui import QGuiApplication
     
     screens = QGuiApplication.screens()
     if monitor_index < 0 or monitor_index >= len(screens):
         return
     
-    screen = screens[monitor_index]
-    geo = screen.geometry()
-    
+    # Just save the preference - don't move the window
+    # The window will open on this monitor next time ForgeAI starts
     main_window = parent.window()
-    if main_window:
-        # Get current window size
-        win_size = main_window.size()
-        
-        # Center window on the selected screen
-        x = geo.x() + (geo.width() - win_size.width()) // 2
-        y = geo.y() + (geo.height() - win_size.height()) // 2
-        
-        main_window.move(x, y)
-        _update_display_info(parent)
+    if main_window and hasattr(main_window, '_gui_settings'):
+        main_window._gui_settings["monitor_index"] = monitor_index
+        # Save immediately so it persists
+        try:
+            from pathlib import Path
+            import json
+            settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
+            with open(settings_path, 'w') as f:
+                json.dump(main_window._gui_settings, f, indent=2)
+        except Exception:
+            pass
+    
+    _update_display_info(parent)
 
 
 def _toggle_cloud_mode(parent, state):

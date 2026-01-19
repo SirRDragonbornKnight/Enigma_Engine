@@ -1,6 +1,44 @@
 """
-Advanced Vector Database Support for ForgeAI
-Supports FAISS (local), Pinecone (cloud), and simple in-memory fallback.
+================================================================================
+🔍 VECTOR DATABASE - SEMANTIC SEARCH ENGINE
+================================================================================
+
+Find memories by MEANING, not just keywords! Converts text to vectors
+and finds similar items using mathematical distance.
+
+📍 FILE: forge_ai/memory/vector_db.py
+🏷️ TYPE: Vector Storage & Similarity Search
+🎯 MAIN CLASSES: SimpleVectorDB, FAISSVectorDB, VectorDBInterface
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SEMANTIC SEARCH FLOW:                                                      │
+│                                                                             │
+│  Search: "feline pets"                                                     │
+│     │                                                                       │
+│     ▼                                                                       │
+│  [Embedding] → [0.2, 0.8, 0.1, ...]  (convert to vector)                   │
+│     │                                                                       │
+│     ▼                                                                       │
+│  [VectorDB Search] → Find similar vectors (cosine similarity)              │
+│     │                                                                       │
+│     ▼                                                                       │
+│  Results: "Tell me about cats" (similar meaning!)                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📊 AVAILABLE BACKENDS:
+    • SimpleVectorDB  - Pure Python, no dependencies (fallback)
+    • FAISSVectorDB   - Facebook AI's fast similarity search
+    • PineconeVectorDB - Cloud-based (requires API key)
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/memory/embeddings.py (convert text to vectors)
+    ← USED BY:   forge_ai/memory/manager.py (ConversationManager)
+    ← USED BY:   forge_ai/memory/rag.py (retrieval-augmented generation)
+
+📖 SEE ALSO:
+    • forge_ai/memory/manager.py    - Uses this for conversation search
+    • forge_ai/memory/embeddings.py - Converts text to vectors
+    • forge_ai/memory/search.py     - High-level search interface
 """
 import logging
 import time
@@ -12,17 +50,57 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# 📐 VECTOR DATABASE INTERFACE
+# =============================================================================
+
 class VectorDBInterface(ABC):
-    """Abstract interface for vector databases."""
+    """
+    Abstract interface for vector databases.
+    
+    📖 WHAT IS A VECTOR DATABASE?
+    A special database that stores "vectors" (lists of numbers) and can
+    quickly find similar vectors using mathematical distance measures.
+    
+    📐 WHY USE VECTORS?
+    Text like "I love cats" gets converted to numbers like [0.2, 0.8, ...].
+    Similar text gets similar numbers, so we can find related content
+    by finding vectors that are "close together" in mathematical space.
+    
+    📐 IMPLEMENTATIONS:
+    - SimpleVectorDB: Pure Python, no dependencies, good for small data
+    - FAISSVectorDB: Facebook's library, fast, good for large data
+    - PineconeVectorDB: Cloud service, scales to millions of vectors
+    
+    🔗 CONNECTS TO:
+      ← Implemented by SimpleVectorDB, FAISSVectorDB, PineconeVectorDB
+      → Used by ConversationManager for semantic search
+    """
     
     @abstractmethod
     def add(self, vectors: np.ndarray, ids: List[str], metadata: Optional[List[Dict]] = None) -> None:
-        """Add vectors with IDs and optional metadata."""
+        """
+        Add vectors with IDs and optional metadata.
+        
+        Args:
+            vectors: Array of shape (n, dim) containing n vectors
+            ids: List of unique identifiers for each vector
+            metadata: Optional list of dicts with extra info for each vector
+        """
         pass
     
     @abstractmethod
     def search(self, query_vector: np.ndarray, top_k: int = 5) -> List[Tuple[str, float, Dict]]:
-        """Search for similar vectors. Returns list of (id, score, metadata)."""
+        """
+        Search for similar vectors.
+        
+        Args:
+            query_vector: The vector to search for
+            top_k: Number of results to return
+            
+        Returns:
+            List of (id, similarity_score, metadata) tuples, sorted by score
+        """
         pass
     
     @abstractmethod
@@ -32,7 +110,7 @@ class VectorDBInterface(ABC):
     
     @abstractmethod
     def save(self, path: Path) -> None:
-        """Save index to disk."""
+        """Save index to disk for persistence."""
         pass
     
     @abstractmethod
@@ -46,15 +124,35 @@ class VectorDBInterface(ABC):
         pass
 
 
+# =============================================================================
+# ⚡ FAISS VECTOR DATABASE (Fast, Production-Ready)
+# =============================================================================
+
 class FAISSVectorDB(VectorDBInterface):
-    """FAISS-based vector database (fast, local, production-ready)."""
+    """
+    FAISS-based vector database (fast, local, production-ready).
+    
+    📖 WHAT IS FAISS?
+    Facebook AI Similarity Search - a library for efficient similarity
+    search. Can handle millions of vectors with sub-millisecond queries!
+    
+    📐 INDEX TYPES:
+    - Flat: Exact search, slow for large data, best accuracy
+    - IVFFlat: Clusters data, fast approximate search
+    - HNSW: Graph-based, very fast, good accuracy
+    
+    📐 WHEN TO USE:
+    - Large datasets (>10,000 vectors)
+    - Need fast search (<10ms)
+    - Running locally (not cloud)
+    """
     
     def __init__(self, dim: int, index_type: str = "Flat"):
         """
         Initialize FAISS vector database.
         
         Args:
-            dim: Dimension of vectors
+            dim: Dimension of vectors (e.g., 128, 512, 768)
             index_type: Type of index ('Flat', 'IVFFlat', 'HNSW')
         """
         try:
@@ -68,20 +166,30 @@ class FAISSVectorDB(VectorDBInterface):
         self.dim = dim
         self.index_type = index_type
         
-        # Create index based on type
+        # ─────────────────────────────────────────────────────────────────────
+        # CREATE INDEX based on type
+        # Different index types trade off speed vs accuracy
+        # ─────────────────────────────────────────────────────────────────────
         if index_type == "Flat":
+            # Exact L2 distance search - slow but accurate
             self.index = faiss.IndexFlatL2(dim)
         elif index_type == "IVFFlat":
+            # Inverted file index - clusters vectors for faster search
             quantizer = faiss.IndexFlatL2(dim)
             self.index = faiss.IndexIVFFlat(quantizer, dim, 100)  # 100 clusters
         elif index_type == "HNSW":
-            self.index = faiss.IndexHNSWFlat(dim, 32)  # 32 neighbors
+            # Hierarchical Navigable Small World - graph-based, very fast
+            self.index = faiss.IndexHNSWFlat(dim, 32)  # 32 neighbors per node
         else:
             raise ValueError(f"Unknown index type: {index_type}")
         
-        self.id_map = {}  # Map from internal index to string ID
-        self.metadata = {}  # Store metadata
-        self.counter = 0
+        # ─────────────────────────────────────────────────────────────────────
+        # METADATA STORAGE
+        # FAISS only stores vectors, so we track IDs and metadata separately
+        # ─────────────────────────────────────────────────────────────────────
+        self.id_map = {}    # Internal index → string ID
+        self.metadata = {}  # ID → metadata dict
+        self.counter = 0    # Next internal index
     
     def add(self, vectors: np.ndarray, ids: List[str], metadata: Optional[List[Dict]] = None) -> None:
         """Add vectors to the index."""
@@ -254,30 +362,83 @@ class PineconeVectorDB(VectorDBInterface):
         return stats.total_vector_count
 
 
+# =============================================================================
+# 🟢 SIMPLE VECTOR DATABASE (Pure Python Fallback)
+# =============================================================================
+
 class SimpleVectorDB(VectorDBInterface):
-    """Simple in-memory vector database (fallback, no dependencies)."""
+    """
+    Simple in-memory vector database (fallback, no dependencies).
+    
+    📖 WHAT THIS IS:
+    A pure Python implementation of a vector database.
+    No fancy libraries needed - just numpy!
+    
+    📐 HOW IT WORKS:
+    
+    ┌──────────────────────────────────────────────────────────────────────┐
+    │  ADDING VECTORS:                                                     │
+    │    add([0.2, 0.8, ...], "message_123")                              │
+    │                ↓                                                     │
+    │    vectors: [ [0.2, 0.8, ...], [0.1, 0.9, ...], ... ]              │
+    │    ids:     [ "message_123",   "message_456",   ... ]              │
+    │                                                                      │
+    │  SEARCHING:                                                          │
+    │    search([0.21, 0.79, ...])  # Query vector                        │
+    │                ↓                                                     │
+    │    1. Compute cosine similarity with ALL stored vectors             │
+    │    2. Sort by similarity (highest first)                            │
+    │    3. Return top K results                                          │
+    │                                                                      │
+    │  COSINE SIMILARITY:                                                  │
+    │    similarity = (A · B) / (|A| × |B|)                               │
+    │    Range: -1 (opposite) to 1 (identical)                            │
+    └──────────────────────────────────────────────────────────────────────┘
+    
+    📐 WHEN TO USE:
+    - Small datasets (<10,000 vectors)
+    - Don't want to install FAISS
+    - Quick prototyping
+    
+    📐 LIMITATIONS:
+    - Slow for large datasets (O(n) search)
+    - All vectors must fit in memory
+    """
     
     def __init__(self, dim: int):
-        """Initialize simple vector database."""
+        """
+        Initialize simple vector database.
+        
+        Args:
+            dim: Dimension of vectors (all vectors must have this size)
+        """
         self.dim = dim
-        self.vectors = []
-        self.ids = []
-        self.metadata = []
+        self.vectors = []   # List of numpy arrays
+        self.ids = []       # List of string IDs (same order as vectors)
+        self.metadata = []  # List of metadata dicts (same order as vectors)
     
     def add(self, vectors, ids, metadata: Optional[List[Dict]] = None) -> None:
         """
-        Add vectors.
+        Add vectors to the database.
+        
+        📖 SUPPORTS TWO APIS:
+        - Legacy: add(single_vector, single_id)
+        - New:    add(array_of_vectors, list_of_ids)
         
         Args:
             vectors: Vector or array of vectors
             ids: Single ID (legacy) or list of IDs (new API)
             metadata: Optional metadata list
         """
-        # Convert to numpy array if needed (backward compatibility)
+        # ─────────────────────────────────────────────────────────────────────
+        # CONVERT TO NUMPY: Handle various input types
+        # ─────────────────────────────────────────────────────────────────────
         if not isinstance(vectors, np.ndarray):
             vectors = np.array(vectors)
         
-        # Handle single ID (legacy API)
+        # ─────────────────────────────────────────────────────────────────────
+        # BACKWARD COMPATIBILITY: Handle single ID (legacy API)
+        # ─────────────────────────────────────────────────────────────────────
         if isinstance(ids, str):
             ids = [ids]
             if vectors.ndim == 1:
@@ -286,9 +447,14 @@ class SimpleVectorDB(VectorDBInterface):
         if vectors.ndim == 1:
             vectors = vectors.reshape(1, -1)
         
+        # ─────────────────────────────────────────────────────────────────────
+        # ADD EACH VECTOR: Store with its ID and metadata
+        # ─────────────────────────────────────────────────────────────────────
         for i, vec in enumerate(vectors):
+            # Validate dimension
             if vec.shape[0] != self.dim:
                 raise ValueError(f"Expected dim {self.dim}, got {vec.shape[0]}")
+            
             self.vectors.append(vec.astype(float))
             self.ids.append(ids[i])
             self.metadata.append(metadata[i] if metadata else {})
@@ -297,13 +463,28 @@ class SimpleVectorDB(VectorDBInterface):
         """
         Search using cosine similarity.
         
+        📖 COSINE SIMILARITY EXPLAINED:
+        Measures the angle between two vectors, ignoring magnitude.
+        
+        📐 FORMULA:
+        similarity = (A · B) / (|A| × |B|)
+        
+        Where:
+        - A · B = dot product (sum of element-wise multiplication)
+        - |A| = magnitude (sqrt of sum of squares)
+        
+        📐 INTERPRETATION:
+        - 1.0 = vectors point same direction (same meaning)
+        - 0.0 = vectors are perpendicular (unrelated)
+        - -1.0 = vectors point opposite (opposite meaning)
+        
         Args:
-            query_vector: Query vector
+            query_vector: Vector to search for
             top_k: Number of results (new API)
             topk: Number of results (legacy API, deprecated)
             
         Returns:
-            List of (id, score, metadata) tuples
+            List of (id, similarity_score, metadata) tuples, best first
         """
         # Support legacy topk parameter
         if topk is not None:
@@ -312,20 +493,30 @@ class SimpleVectorDB(VectorDBInterface):
         if not self.vectors:
             return []
         
-        # Convert to numpy array if needed (backward compatibility)
+        # ─────────────────────────────────────────────────────────────────────
+        # CONVERT QUERY: Ensure numpy array with correct dtype
+        # ─────────────────────────────────────────────────────────────────────
         if not isinstance(query_vector, np.ndarray):
             query_vector = np.array(query_vector)
         
-        vectors_array = np.stack(self.vectors, axis=0)
-        query = query_vector.astype(float)
+        # ─────────────────────────────────────────────────────────────────────
+        # COMPUTE COSINE SIMILARITY with all stored vectors
+        # This is O(n) - checks every vector in the database
+        # ─────────────────────────────────────────────────────────────────────
+        vectors_array = np.stack(self.vectors, axis=0)  # Shape: (n, dim)
+        query = query_vector.astype(float)               # Shape: (dim,)
         
-        # Cosine similarity
-        dots = vectors_array @ query
+        # Dot product: how much vectors "align"
+        dots = vectors_array @ query  # Shape: (n,)
+        
+        # Normalize by magnitudes to get cosine similarity
         norms = np.linalg.norm(vectors_array, axis=1) * np.linalg.norm(query)
-        similarities = dots / (norms + 1e-9)
+        similarities = dots / (norms + 1e-9)  # Add epsilon to avoid division by zero
         
-        # Get top k
-        indices = np.argsort(-similarities)[:top_k]
+        # ─────────────────────────────────────────────────────────────────────
+        # GET TOP K: Sort by similarity (descending) and take top k
+        # ─────────────────────────────────────────────────────────────────────
+        indices = np.argsort(-similarities)[:top_k]  # Negative for descending
         
         results = []
         for idx in indices:
@@ -334,7 +525,14 @@ class SimpleVectorDB(VectorDBInterface):
         return results
     
     def delete(self, ids: List[str]) -> None:
-        """Delete vectors by IDs."""
+        """
+        Delete vectors by IDs.
+        
+        📖 NOTE:
+        This modifies lists in-place. For very large databases,
+        consider marking as deleted and periodically compacting.
+        """
+        # Find indices to remove
         to_remove = []
         for i, id_ in enumerate(self.ids):
             if id_ in ids:
@@ -347,7 +545,17 @@ class SimpleVectorDB(VectorDBInterface):
             del self.metadata[i]
     
     def save(self, path: Path) -> None:
-        """Save to disk."""
+        """
+        Save database to disk using pickle.
+        
+        📖 FILE FORMAT:
+        {
+            'vectors': list of numpy arrays,
+            'ids': list of string IDs,
+            'metadata': list of dicts,
+            'dim': vector dimension
+        }
+        """
         import pickle
         
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -361,7 +569,7 @@ class SimpleVectorDB(VectorDBInterface):
             }, f)
     
     def load(self, path: Path) -> None:
-        """Load from disk."""
+        """Load database from disk."""
         import pickle
         
         with open(path, 'rb') as f:
@@ -372,9 +580,13 @@ class SimpleVectorDB(VectorDBInterface):
             self.dim = data['dim']
     
     def count(self) -> int:
-        """Get number of vectors."""
+        """Get number of vectors in the database."""
         return len(self.vectors)
 
+
+# =============================================================================
+# 🏭 FACTORY FUNCTION
+# =============================================================================
 
 def create_vector_db(
     dim: int,
@@ -383,6 +595,24 @@ def create_vector_db(
 ) -> VectorDBInterface:
     """
     Factory function to create vector database.
+    
+    📖 USE THIS to create the right database for your needs:
+    
+    📐 BACKEND OPTIONS:
+    - "simple": Pure Python, no dependencies, good for small data
+    - "faiss": Fast local search, good for medium/large data
+    - "pinecone": Cloud service, scales to millions
+    
+    📐 EXAMPLE:
+        # Simple (default, no setup needed)
+        db = create_vector_db(128)
+        
+        # FAISS (fast, local)
+        db = create_vector_db(128, backend="faiss", index_type="HNSW")
+        
+        # Pinecone (cloud, needs API key)
+        db = create_vector_db(128, backend="pinecone", 
+                              api_key="...", environment="us-west1-gcp")
     
     Args:
         dim: Dimension of vectors

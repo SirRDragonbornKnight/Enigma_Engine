@@ -153,15 +153,15 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.texture_colors = None  # Per-vertex colors from texture
         
         # Camera
-        self.rotation_x = 20.0  # Slight tilt for better view
-        self.rotation_y = 45.0  # Start at 45 degrees
+        self.rotation_x = 15.0  # Slight tilt for better view
+        self.rotation_y = 0.0  # Face forward (front-facing)
         self.zoom = 3.0
         self.pan_x = 0.0
         self.pan_y = 0.0
         
         # Default camera settings (for reset)
-        self._default_rotation_x = 20.0
-        self._default_rotation_y = 45.0
+        self._default_rotation_x = 15.0
+        self._default_rotation_y = 0.0
         self._default_zoom = 3.0
         
         # Interaction
@@ -230,10 +230,13 @@ class OpenGL3DWidget(QOpenGLWidget):
             all_normals = []
             all_colors = []
             vertex_offset = 0
+            mesh_names_list = []  # Store mesh names for front/back detection
             
             # Get list of meshes (handle both Scene and single Mesh)
             if hasattr(scene, 'geometry') and scene.geometry:
                 meshes = list(scene.geometry.values())
+                # Also get mesh names from the geometry dict
+                mesh_names_list = list(scene.geometry.keys())
             else:
                 meshes = [scene]
             
@@ -269,6 +272,9 @@ class OpenGL3DWidget(QOpenGLWidget):
             self.faces = np.vstack(all_faces)
             self.normals = np.vstack(all_normals)
             self.colors = np.vstack(all_colors) if all_colors else None
+            
+            # Store mesh names for front/back detection (before auto-orient is called)
+            self._mesh_names = mesh_names_list
             
             # Check if we actually got colors
             if self.colors is not None:
@@ -664,7 +670,10 @@ class OpenGL3DWidget(QOpenGLWidget):
         """Automatically detect and fix model orientation.
         
         Returns (pitch, yaw, roll) adjustments in degrees needed to make
-        the model upright. Most character models should be taller than wide.
+        the model upright AND facing the camera. Uses:
+        1. Bounding box analysis for up-axis
+        2. Normal analysis for front/back detection
+        3. Mesh name heuristics (face, eye, front markers)
         """
         if self.vertices is None or len(self.vertices) == 0:
             return (0.0, 0.0, 0.0)
@@ -677,47 +686,144 @@ class OpenGL3DWidget(QOpenGLWidget):
             
             x_size, y_size, z_size = dims[0], dims[1], dims[2]
             
-            # Find which axis is the "up" axis (should be tallest for humanoids)
-            max_dim = max(x_size, y_size, z_size)
-            
-            # Detect current up axis
             pitch, yaw, roll = 0.0, 0.0, 0.0
+            
+            # === STEP 1: Detect up-axis (pitch/roll correction) ===
             
             # Standard Y-up (most common, no rotation needed)
             if y_size >= x_size and y_size >= z_size:
                 print(f"[Avatar] Auto-orient: Model appears Y-up (correct), dims={dims}")
-                return (0.0, 0.0, 0.0)
             
             # Z-up (Blender, some game engines) - rotate 90° around X
-            if z_size > y_size and z_size > x_size:
+            elif z_size > y_size and z_size > x_size:
                 print(f"[Avatar] Auto-orient: Model appears Z-up, rotating -90° X")
                 pitch = -90.0
-                return (pitch, 0.0, 0.0)
             
             # X-up (unusual but possible) - rotate 90° around Z
-            if x_size > y_size and x_size > z_size:
+            elif x_size > y_size and x_size > z_size:
                 print(f"[Avatar] Auto-orient: Model appears X-up, rotating 90° Z")
                 roll = 90.0
-                return (0.0, 0.0, roll)
             
-            # If model is lying flat (wider than tall), check orientation
+            # If model is lying flat (wider than tall)
             horizontal_size = max(x_size, z_size)
             if horizontal_size > y_size * 1.5:
-                # Model might be lying down
                 if z_size > x_size:
                     print(f"[Avatar] Auto-orient: Model appears lying forward, rotating -90° X")
                     pitch = -90.0
                 else:
                     print(f"[Avatar] Auto-orient: Model appears lying sideways, rotating 90° Z")
                     roll = 90.0
-                return (pitch, 0.0, roll)
             
-            print(f"[Avatar] Auto-orient: No rotation needed, dims={dims}")
-            return (0.0, 0.0, 0.0)
+            # === STEP 2: Detect front/back facing (yaw correction) ===
+            yaw = self._detect_facing_direction()
+            
+            if yaw != 0:
+                print(f"[Avatar] Auto-orient: Detected backward facing, rotating {yaw}° Y")
+            
+            return (pitch, yaw, roll)
             
         except Exception as e:
             print(f"[Avatar] Auto-orient error: {e}")
             return (0.0, 0.0, 0.0)
+    
+    def _detect_facing_direction(self) -> float:
+        """Detect if model is facing backward and needs 180° yaw rotation.
+        
+        Uses multiple heuristics:
+        1. Mesh name analysis (look for "face", "eye", "front" keywords)
+        2. Normal distribution analysis (where do most normals point?)
+        3. Vertex density in upper region (faces have more detail)
+        
+        Returns: yaw adjustment in degrees (0 or 180)
+        """
+        yaw_correction = 0.0
+        confidence_score = 0
+        
+        try:
+            # === Heuristic 1: Mesh name analysis ===
+            front_indicators = ['face', 'eye', 'nose', 'mouth', 'front', 'head', 'visor', 'lens']
+            back_indicators = ['back', 'spine', 'rear', 'tail', 'behind']
+            
+            mesh_names = getattr(self, '_mesh_names', []) or []
+            if hasattr(self, '_model_metadata') and self._model_metadata:
+                mesh_names = self._model_metadata.get('mesh_names', [])
+            
+            front_meshes = []
+            back_meshes = []
+            
+            for name in mesh_names:
+                name_lower = str(name).lower()
+                if any(indicator in name_lower for indicator in front_indicators):
+                    front_meshes.append(name)
+                if any(indicator in name_lower for indicator in back_indicators):
+                    back_meshes.append(name)
+            
+            # If we find "face" or "eye" meshes, check their centroid position
+            if front_meshes:
+                print(f"[Avatar] Front-detection: Found front-indicator meshes: {front_meshes}")
+                confidence_score += 1
+            
+            # === Heuristic 2: Normal distribution analysis ===
+            if self.normals is not None and len(self.normals) > 0:
+                # Normalize normals
+                norms = np.linalg.norm(self.normals, axis=1, keepdims=True)
+                norms[norms == 0] = 1  # Avoid division by zero
+                normalized_normals = self.normals / norms
+                
+                # Focus on upper half of model (more likely to be face/front)
+                if self.vertices is not None:
+                    y_center = self.vertices[:, 1].mean()
+                    upper_mask = self.vertices[:, 1] > y_center
+                    
+                    if upper_mask.sum() > 10:  # Need enough vertices
+                        upper_normals = normalized_normals[upper_mask]
+                        
+                        # Average normal direction in upper region
+                        avg_normal = upper_normals.mean(axis=0)
+                        
+                        # For most character models:
+                        # - If facing viewer (+Z toward camera), average Z normal is positive
+                        # - If facing away (-Z toward camera), average Z normal is negative
+                        avg_z = avg_normal[2] if len(avg_normal) > 2 else 0
+                        
+                        print(f"[Avatar] Front-detection: Upper region avg normal Z = {avg_z:.3f}")
+                        
+                        # If most normals point backward (negative Z), model is facing away
+                        if avg_z < -0.1:  # Threshold: significant negative Z
+                            confidence_score += 2  # Normals are strong indicator
+                            print(f"[Avatar] Front-detection: Normals suggest model faces -Z (backward)")
+            
+            # === Heuristic 3: Vertex density in upper front ===
+            # Character faces have more vertices than backs of heads
+            if self.vertices is not None and len(self.vertices) > 100:
+                # Split into front (+Z) and back (-Z) halves
+                z_center = self.vertices[:, 2].mean()
+                y_center = self.vertices[:, 1].mean()
+                
+                # Count vertices in upper-front vs upper-back
+                upper_front = ((self.vertices[:, 1] > y_center) & (self.vertices[:, 2] > z_center)).sum()
+                upper_back = ((self.vertices[:, 1] > y_center) & (self.vertices[:, 2] <= z_center)).sum()
+                
+                if upper_front > 0 and upper_back > 0:
+                    ratio = upper_back / upper_front
+                    print(f"[Avatar] Front-detection: Upper back/front vertex ratio = {ratio:.2f}")
+                    
+                    # If there's significantly more detail in the "back" half, model is facing away
+                    if ratio > 1.5:  # 50% more vertices in back half
+                        confidence_score += 1
+                        print(f"[Avatar] Front-detection: More detail in back suggests backward facing")
+            
+            # === Decision ===
+            if confidence_score >= 2:
+                print(f"[Avatar] Front-detection: Confidence {confidence_score}/4 - applying 180° yaw")
+                yaw_correction = 180.0
+            else:
+                print(f"[Avatar] Front-detection: Confidence {confidence_score}/4 - no yaw correction")
+            
+        except Exception as e:
+            print(f"[Avatar] Front-detection error: {e}")
+        
+        return yaw_correction
     
     def apply_auto_orientation(self):
         """Detect and apply automatic orientation correction."""
@@ -1084,7 +1190,7 @@ class AvatarOverlayWindow(QWidget):
     Features:
     - Drag anywhere to move
     - Right-click for menu (expressions, size, close)
-    - Scroll wheel to resize (when enabled)
+    - Drag from edges/corners to resize (when enabled)
     - Always on top of other windows
     - Blue border shows when resize mode is ON
     """
@@ -1120,7 +1226,12 @@ class AvatarOverlayWindow(QWidget):
         self._resize_edge = None  # Which edge is being dragged
         self._resize_start_pos = None
         self._resize_start_size = None
-        self._edge_margin = 10  # Pixels from edge to trigger resize
+        self._resize_start_geo = None  # Starting geometry for position adjustments
+        self._edge_margin = 12  # Pixels from edge to trigger resize (slightly larger for easier grabbing)
+        
+        # Rotation state for Shift+drag rotation
+        self._rotation_angle = 0.0  # Current rotation in degrees
+        self._rotate_start_x = None  # Starting X for rotation drag
         
         # Enable mouse tracking for resize cursor feedback
         self.setMouseTracking(True)
@@ -1155,12 +1266,21 @@ class AvatarOverlayWindow(QWidget):
         return None
         
     def _update_scaled_pixmap(self):
-        """Update scaled pixmap to match current size."""
+        """Update scaled pixmap to match current size and rotation."""
         if self._original_pixmap:
-            self.pixmap = self._original_pixmap.scaled(
+            # Scale first
+            scaled = self._original_pixmap.scaled(
                 self._size - 20, self._size - 20,
                 Qt_KeepAspectRatio, Qt_SmoothTransformation
             )
+            # Apply rotation if any
+            rotation = getattr(self, '_rotation_angle', 0.0)
+            if rotation != 0:
+                from PyQt5.QtGui import QTransform
+                transform = QTransform().rotate(rotation)
+                self.pixmap = scaled.transformed(transform, Qt_SmoothTransformation)
+            else:
+                self.pixmap = scaled
         self.update()
         
     def paintEvent(self, a0):
@@ -1198,7 +1318,7 @@ class AvatarOverlayWindow(QWidget):
             painter.drawText(self.rect(), Qt_AlignCenter, "?")
         
     def mousePressEvent(self, a0):  # type: ignore
-        """Start drag to move or resize."""
+        """Start drag to move, resize, or rotate (Shift+drag when enabled)."""
         if a0.button() == Qt_LeftButton:
             try:
                 global_pos = a0.globalPosition().toPoint()
@@ -1207,21 +1327,30 @@ class AvatarOverlayWindow(QWidget):
                 global_pos = a0.globalPos()
                 local_pos = a0.pos()
             
-            # Check if we're on an edge (for resize)
-            edge = self._get_edge_at_pos(local_pos)
-            if edge:
-                self._resize_edge = edge
-                self._resize_start_pos = global_pos
-                self._resize_start_size = self._size
-                self._resize_start_geo = self.geometry()
+            # Check for Shift+drag (rotation mode) - only when resize/rotate is enabled
+            modifiers = a0.modifiers()
+            shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
+            
+            if shift_held and getattr(self, '_resize_enabled', False):
+                # Start rotation drag (only when enabled)
+                self._rotate_start_x = global_pos.x()
+                self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
             else:
-                # Normal drag
-                self._drag_pos = global_pos - self.pos()
-                self.setCursor(QCursor(Qt_ClosedHandCursor))
+                # Check if we're on an edge (for resize) - _get_edge_at_pos already checks _resize_enabled
+                edge = self._get_edge_at_pos(local_pos)
+                if edge:
+                    self._resize_edge = edge
+                    self._resize_start_pos = global_pos
+                    self._resize_start_size = self._size
+                    self._resize_start_geo = self.geometry()
+                else:
+                    # Normal drag
+                    self._drag_pos = global_pos - self.pos()
+                    self.setCursor(QCursor(Qt_ClosedHandCursor))
         a0.accept()
             
     def mouseMoveEvent(self, a0):  # type: ignore
-        """Handle drag to move or resize."""
+        """Handle drag to move, resize, or rotate."""
         try:
             global_pos = a0.globalPosition().toPoint()
             local_pos = a0.position().toPoint()
@@ -1229,8 +1358,19 @@ class AvatarOverlayWindow(QWidget):
             global_pos = a0.globalPos()
             local_pos = a0.pos()
         
+        # If rotating (Shift+drag)
+        if self._rotate_start_x is not None and a0.buttons() == Qt_LeftButton:
+            delta_x = global_pos.x() - self._rotate_start_x
+            self._rotation_angle = (self._rotation_angle + delta_x * 0.5) % 360
+            self._rotate_start_x = global_pos.x()
+            self._update_scaled_pixmap()  # Re-render with rotation
+            self.update()
+            a0.accept()
+            return
+        
         # If resizing
         if self._resize_edge and a0.buttons() == Qt_LeftButton:
+            delta = global_pos - self._resize_start_pos
             delta = global_pos - self._resize_start_pos
             new_size = self._resize_start_size
             new_geo = self._resize_start_geo
@@ -1255,7 +1395,24 @@ class AvatarOverlayWindow(QWidget):
         
         # If dragging
         if self._drag_pos is not None and a0.buttons() == Qt_LeftButton:
-            self.move(global_pos - self._drag_pos)
+            new_pos = global_pos - self._drag_pos
+            
+            # Keep avatar on virtual desktop (all monitors combined) - can drag across monitors
+            # but can't go completely off-screen
+            try:
+                from PyQt5.QtWidgets import QDesktopWidget
+                desktop = QDesktopWidget()
+                # Get combined geometry of all screens
+                virtual_geo = desktop.geometry()  # Virtual desktop = all monitors
+                min_visible = 50
+                new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
+                new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
+                new_pos.setX(new_x)
+                new_pos.setY(new_y)
+            except Exception:
+                pass  # If virtual desktop fails, allow free movement
+            
+            self.move(new_pos)
             a0.accept()
             return
         
@@ -1280,13 +1437,30 @@ class AvatarOverlayWindow(QWidget):
         # Save position if we were dragging
         if self._drag_pos is not None:
             try:
-                from ....avatar.persistence import save_position
+                from ....avatar.persistence import save_position, write_avatar_state_for_ai
                 pos = self.pos()
                 save_position(pos.x(), pos.y())
+                write_avatar_state_for_ai()  # Update AI awareness
+            except Exception:
+                pass
+        # Save size if we were resizing
+        if self._resize_edge is not None:
+            try:
+                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                save_avatar_settings(overlay_size=self._size)
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
+        # Save rotation if we were rotating
+        if self._rotate_start_x is not None:
+            try:
+                from ....avatar.persistence import save_avatar_settings
+                save_avatar_settings(overlay_rotation=self._rotation_angle)
             except Exception:
                 pass
         self._drag_pos = None
         self._resize_edge = None
+        self._rotate_start_x = None
         self.setCursor(QCursor(Qt_ArrowCursor))
         a0.accept()
     
@@ -1308,20 +1482,9 @@ class AvatarOverlayWindow(QWidget):
             self.closed.emit()
         
     def wheelEvent(self, a0):  # type: ignore
-        """Scroll to resize (only when resize mode is enabled)."""
-        if not getattr(self, '_resize_enabled', False):
-            a0.ignore()
-            return
-            
-        delta = a0.angleDelta().y()
-        if delta > 0:
-            self._size = min(500, self._size + 20)
-        else:
-            self._size = max(100, self._size - 20)
-        
-        self.setFixedSize(self._size, self._size)
-        self._update_scaled_pixmap()
-        a0.accept()
+        """Scroll wheel is disabled for resize - use edge drag instead."""
+        # Resize is now done via edge dragging, not scroll wheel
+        a0.ignore()
         
     def contextMenuEvent(self, a0):  # type: ignore
         """Right-click to show options menu."""
@@ -1362,10 +1525,17 @@ class AvatarOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # Resize toggle - default is OFF, so show "Enable Resize" first
-        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', False) else "Enable Resize"
+        # Resize & Rotate toggle - default is OFF
+        resize_text = "Disable Resize/Rotate" if getattr(self, '_resize_enabled', False) else "Enable Resize/Rotate"
         resize_action = menu.addAction(resize_text)
+        resize_action.setToolTip("Enable edge-drag resize and Shift+drag rotate")
         resize_action.triggered.connect(self._toggle_resize)
+        
+        menu.addSeparator()
+        
+        # Center on screen (moved from double-click)
+        center_action = menu.addAction("Center on Screen")
+        center_action.triggered.connect(self._center_on_screen)
         
         menu.addSeparator()
         
@@ -1387,17 +1557,19 @@ class AvatarOverlayWindow(QWidget):
             pass
     
     def _toggle_resize(self):
-        """Toggle resize mode and update border visibility."""
+        """Toggle resize/rotate mode and update border visibility."""
         self._resize_enabled = not getattr(self, '_resize_enabled', False)
         self.update()  # Repaint to show/hide border
+        # Save setting
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(resize_enabled=self._resize_enabled)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
     
-    def _close_avatar(self):
-        """Close the avatar."""
-        self.hide()
-        self.closed.emit()
-    
-    def mouseDoubleClickEvent(self, a0):  # type: ignore
-        """Double-click to reset position to center of screen."""
+    def _center_on_screen(self):
+        """Center the avatar on the current screen."""
         screen = QApplication.primaryScreen()
         if screen:
             screen_geo = screen.availableGeometry()
@@ -1405,6 +1577,15 @@ class AvatarOverlayWindow(QWidget):
                 screen_geo.center().x() - self._size // 2,
                 screen_geo.center().y() - self._size // 2
             )
+    
+    def _close_avatar(self):
+        """Close the avatar."""
+        self.hide()
+        self.closed.emit()
+    
+    def mouseDoubleClickEvent(self, a0):  # type: ignore
+        """Double-click does nothing - use right-click menu for Center on Screen."""
+        a0.accept()  # Consume the event
 
 
 class Avatar3DOverlayWindow(QWidget):
@@ -1413,6 +1594,7 @@ class Avatar3DOverlayWindow(QWidget):
     Features:
     - Drag to move anywhere (rotation is DISABLED for desktop mode)
     - Right-click menu for options
+    - Drag from edges/corners to resize (when enabled)
     - Adaptive animation system that works with ANY model
     - AI can control: position, size, emotion, speaking, gestures
     - Lip sync (adapts to model capabilities)
@@ -1436,6 +1618,17 @@ class Avatar3DOverlayWindow(QWidget):
         self._size = 250
         self.setFixedSize(self._size, self._size)
         self._resize_enabled = False  # Default OFF - user must enable via right-click
+        
+        # Edge-drag resize state
+        self._resize_edge = None  # Which edge is being dragged
+        self._resize_start_pos = None
+        self._resize_start_size = None
+        self._resize_start_geo = None
+        self._edge_margin = 12  # Pixels from edge to trigger resize
+        
+        # Rotation state for Shift+drag manual rotation
+        self._rotate_start_x = None
+        self._manual_yaw_offset = 0.0  # Manual yaw adjustment from user
         
         # Start at bottom right
         screen = QApplication.primaryScreen()
@@ -1653,30 +1846,148 @@ class Avatar3DOverlayWindow(QWidget):
         """Get information about the loaded model for AI awareness."""
         return self._model_info.copy()
     
+    def _get_edge_at_pos(self, pos):
+        """Get which edge the mouse is near (for resize cursor)."""
+        if not getattr(self, '_resize_enabled', False):
+            return None
+        
+        margin = self._edge_margin
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        
+        edges = []
+        if x < margin:
+            edges.append('left')
+        elif x > w - margin:
+            edges.append('right')
+        if y < margin:
+            edges.append('top')
+        elif y > h - margin:
+            edges.append('bottom')
+        
+        if edges:
+            return '-'.join(edges)
+        return None
+    
+    def _do_resize(self, global_pos):
+        """Perform edge-drag resize."""
+        if not self._resize_edge or not self._resize_start_pos:
+            return
+        
+        delta = global_pos - self._resize_start_pos
+        new_size = self._resize_start_size
+        
+        if 'right' in self._resize_edge or 'bottom' in self._resize_edge:
+            # Resize from right/bottom - increase size
+            change = max(delta.x(), delta.y())
+            new_size = max(100, min(500, self._resize_start_size + change))
+        elif 'left' in self._resize_edge or 'top' in self._resize_edge:
+            # Resize from left/top - decrease size and move
+            change = max(-delta.x(), -delta.y())
+            new_size = max(100, min(500, self._resize_start_size + change))
+            # Adjust position to keep bottom-right corner fixed
+            if self._resize_start_geo:
+                size_diff = new_size - self._resize_start_size
+                self.move(self._resize_start_geo.x() - size_diff, self._resize_start_geo.y() - size_diff)
+        
+        self._size = new_size
+        self.setFixedSize(self._size, self._size)
+        self._gl_container.setFixedSize(self._size, self._size)
+        if self._gl_widget:
+            self._gl_widget.setFixedSize(self._size, self._size)
+            self._apply_circular_mask()
+    
     def eventFilter(self, obj, event):
-        """Handle mouse events for dragging - blocks rotation in desktop mode."""
+        """Handle mouse events for dragging and edge-resize - blocks rotation in desktop mode."""
         if obj == self._gl_widget:
             event_type = event.type()
             
+            try:
+                global_pos = event.globalPosition().toPoint()
+                local_pos = event.position().toPoint()
+            except AttributeError:
+                global_pos = event.globalPos() if hasattr(event, 'globalPos') else None
+                local_pos = event.pos() if hasattr(event, 'pos') else None
+            
             # Block ALL mouse events that would cause rotation
-            # Only allow: press for drag start, move for drag, release for drag end
             if event_type == event.MouseButtonPress:
-                if event.button() == Qt_LeftButton:
-                    try:
-                        global_pos = event.globalPosition().toPoint()
-                    except AttributeError:
-                        global_pos = event.globalPos()
-                    self._drag_pos = global_pos - self.pos()
-                    self.setCursor(QCursor(Qt_ClosedHandCursor))
+                if event.button() == Qt_LeftButton and local_pos and global_pos:
+                    # Check for Shift+drag (manual rotation mode) - only when resize/rotate enabled
+                    modifiers = event.modifiers()
+                    shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
+                    
+                    if shift_held and getattr(self, '_resize_enabled', False):
+                        # Start rotation drag (only when enabled)
+                        self._rotate_start_x = global_pos.x()
+                        self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
+                    else:
+                        # Check if we're on an edge (for resize) - _get_edge_at_pos checks _resize_enabled
+                        edge = self._get_edge_at_pos(local_pos)
+                        if edge:
+                            self._resize_edge = edge
+                            self._resize_start_pos = global_pos
+                            self._resize_start_size = self._size
+                            self._resize_start_geo = self.geometry()
+                        else:
+                            # Normal drag
+                            self._drag_pos = global_pos - self.pos()
+                            self.setCursor(QCursor(Qt_ClosedHandCursor))
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseMove:
-                if self._drag_pos is not None:
-                    try:
-                        global_pos = event.globalPosition().toPoint()
-                    except AttributeError:
-                        global_pos = event.globalPos()
-                    self.move(global_pos - self._drag_pos)
+                if global_pos:
+                    # If rotating (Shift+drag)
+                    if self._rotate_start_x is not None:
+                        delta_x = global_pos.x() - self._rotate_start_x
+                        self._manual_yaw_offset = (self._manual_yaw_offset + delta_x * 0.5) % 360
+                        self._rotate_start_x = global_pos.x()
+                        # Apply rotation to the 3D model
+                        if self._gl_widget:
+                            import math
+                            self._gl_widget.model_yaw = math.radians(self._manual_yaw_offset)
+                            self._gl_widget.update()
+                        return True
+                    
+                    # If resizing
+                    if self._resize_edge:
+                        self._do_resize(global_pos)
+                        return True
+                    
+                    # If dragging
+                    if self._drag_pos is not None:
+                        new_pos = global_pos - self._drag_pos
+                        
+                        # Keep avatar on virtual desktop (all monitors) - can drag across monitors
+                        try:
+                            from PyQt5.QtWidgets import QDesktopWidget
+                            desktop = QDesktopWidget()
+                            virtual_geo = desktop.geometry()
+                            min_visible = 50
+                            new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
+                            new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
+                            new_pos.setX(new_x)
+                            new_pos.setY(new_y)
+                        except Exception:
+                            pass  # If virtual desktop fails, allow free movement
+                        
+                        self.move(new_pos)
+                        return True
+                    
+                    # Update cursor based on position (only when resize enabled)
+                    if local_pos:
+                        edge = self._get_edge_at_pos(local_pos)
+                        if edge:
+                            # Set resize cursor
+                            if 'left' in edge or 'right' in edge:
+                                self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
+                            if 'top' in edge or 'bottom' in edge:
+                                self.setCursor(QCursor(Qt.SizeVerCursor if hasattr(Qt, 'SizeVerCursor') else 0))
+                            if ('top' in edge and 'left' in edge) or ('bottom' in edge and 'right' in edge):
+                                self.setCursor(QCursor(Qt.SizeFDiagCursor if hasattr(Qt, 'SizeFDiagCursor') else 0))
+                            if ('top' in edge and 'right' in edge) or ('bottom' in edge and 'left' in edge):
+                                self.setCursor(QCursor(Qt.SizeBDiagCursor if hasattr(Qt, 'SizeBDiagCursor') else 0))
+                        else:
+                            self.setCursor(QCursor(Qt_OpenHandCursor))
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseButtonRelease:
@@ -1684,29 +1995,40 @@ class Avatar3DOverlayWindow(QWidget):
                     # Save position when drag ends
                     if self._drag_pos is not None:
                         try:
-                            from ....avatar.persistence import save_position
+                            from ....avatar.persistence import save_position, write_avatar_state_for_ai
                             pos = self.pos()
                             save_position(pos.x(), pos.y())
+                            write_avatar_state_for_ai()
+                        except Exception:
+                            pass
+                    # Save size when resize ends
+                    if self._resize_edge is not None:
+                        try:
+                            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                            save_avatar_settings(overlay_3d_size=self._size)
+                            write_avatar_state_for_ai()
+                        except Exception:
+                            pass
+                    # Save rotation when rotation drag ends
+                    if self._rotate_start_x is not None:
+                        try:
+                            from ....avatar.persistence import save_avatar_settings
+                            save_avatar_settings(overlay_3d_yaw=self._manual_yaw_offset)
                         except Exception:
                             pass
                     self._drag_pos = None
+                    self._resize_edge = None
+                    self._rotate_start_x = None
                     self.setCursor(QCursor(Qt_OpenHandCursor))
                 return True  # Block event from reaching GL widget
             
             elif event_type == event.MouseButtonDblClick:
-                # Double-click resets to center of screen
-                screen = QApplication.primaryScreen()
-                if screen:
-                    screen_geo = screen.availableGeometry()
-                    self.move(
-                        screen_geo.center().x() - self._size // 2,
-                        screen_geo.center().y() - self._size // 2
-                    )
+                # Double-click does nothing - use right-click menu for Center on Screen
                 return True  # Block event
             
             elif event_type == event.Wheel:
-                # Allow wheel events to pass through for resizing (handled by parent)
-                return False
+                # Scroll wheel is disabled - use edge drag for resizing
+                return True
                 
         return super().eventFilter(obj, event)
     
@@ -1722,23 +2044,9 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def wheelEvent(self, event):
-        """Scroll to resize overlay (only when resize mode is enabled)."""
-        if not getattr(self, '_resize_enabled', False):
-            event.ignore()
-            return
-            
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self._size = min(500, self._size + 25)
-        else:
-            self._size = max(100, self._size - 25)
-        
-        self.setFixedSize(self._size, self._size)
-        self._gl_container.setFixedSize(self._size, self._size)
-        if self._gl_widget:
-            self._gl_widget.setFixedSize(self._size, self._size)
-            self._apply_circular_mask()
-        event.accept()
+        """Scroll wheel is disabled for resize - use edge drag instead."""
+        # Resize is now done via edge dragging, not scroll wheel
+        event.ignore()
     
     def paintEvent(self, event):
         """Draw border when resize mode is enabled."""
@@ -1792,10 +2100,17 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # Resize toggle - default is OFF
-        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', False) else "Enable Resize"
+        # Resize & Rotate toggle - default is OFF
+        resize_text = "Disable Resize/Rotate" if getattr(self, '_resize_enabled', False) else "Enable Resize/Rotate"
         resize_action = menu.addAction(resize_text)
+        resize_action.setToolTip("Enable edge-drag resize and Shift+drag rotate")
         resize_action.triggered.connect(self._toggle_resize)
+        
+        menu.addSeparator()
+        
+        # Center on screen (moved from double-click)
+        center_action = menu.addAction("Center on Screen")
+        center_action.triggered.connect(self._center_on_screen)
         
         menu.addSeparator()
         
@@ -1817,10 +2132,27 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _toggle_resize(self):
-        """Toggle resize mode and update border visibility."""
+        """Toggle resize/rotate mode and update border visibility."""
         self._resize_enabled = not getattr(self, '_resize_enabled', False)
         self.update()  # Repaint to show/hide border
+        # Save setting
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(resize_enabled=self._resize_enabled)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
     
+    def _center_on_screen(self):
+        """Center the avatar on the current screen."""
+        screen = QApplication.primaryScreen()
+        if screen:
+            screen_geo = screen.availableGeometry()
+            self.move(
+                screen_geo.center().x() - self._size // 2,
+                screen_geo.center().y() - self._size // 2
+            )
+
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
         import json
@@ -2190,7 +2522,7 @@ def create_avatar_subtab(parent):
     settings_row.addWidget(parent.avatar_auto_load_checkbox)
     
     parent.avatar_resize_checkbox = QCheckBox("Allow popup resize")
-    parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window (scroll to resize)")
+    parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window (drag from edges to resize)")
     parent.avatar_resize_checkbox.setChecked(False)  # Default OFF - less intrusive
     parent.avatar_resize_checkbox.toggled.connect(lambda c: _toggle_resize_enabled(parent, c))
     settings_row.addWidget(parent.avatar_resize_checkbox)
@@ -2406,11 +2738,25 @@ def create_avatar_subtab(parent):
         view_row.addWidget(view_right)
         viewer_layout.addLayout(view_row)
         
-        # Reset orientation button
-        reset_orient_btn = QPushButton("Reset Orientation")
+        # Quick orientation buttons row (simplified)
+        quick_orient_row = QHBoxLayout()
+        
+        reset_orient_btn = QPushButton("Reset")
         reset_orient_btn.setToolTip("Reset orientation to 0")
         reset_orient_btn.clicked.connect(lambda: _reset_orientation(parent))
-        viewer_layout.addWidget(reset_orient_btn)
+        quick_orient_row.addWidget(reset_orient_btn)
+        
+        auto_orient_btn = QPushButton("Auto-Orient")
+        auto_orient_btn.setToolTip("Auto-detect and fix model orientation")
+        auto_orient_btn.clicked.connect(lambda: _auto_orient_model(parent))
+        quick_orient_row.addWidget(auto_orient_btn)
+        
+        viewer_layout.addLayout(quick_orient_row)
+        
+        # Hint about controls on popup
+        rotate_hint = QLabel("💡 Popup: Right-click → Enable Resize/Rotate, then Shift+drag")
+        rotate_hint.setStyleSheet("color: #6c7086; font-size: 10px;")
+        viewer_layout.addWidget(rotate_hint)
         
         # Save orientation button
         parent.save_orientation_btn = QPushButton("Save Orientation for This Model")
@@ -2561,7 +2907,7 @@ def create_avatar_subtab(parent):
 
 
 def _restore_avatar_settings(parent):
-    """Restore saved avatar settings from gui_settings.json."""
+    """Restore saved avatar settings from gui_settings.json and avatar_settings.json."""
     try:
         from pathlib import Path
         from ....config import CONFIG
@@ -2583,8 +2929,11 @@ def _restore_avatar_settings(parent):
             parent.avatar_resize_checkbox.setChecked(parent._avatar_resize_enabled)
         
         # Restore saved overlay sizes for later use when overlay is created
-        parent._saved_overlay_size = settings.get("avatar_overlay_size", 300)
-        parent._saved_overlay_3d_size = settings.get("avatar_overlay_3d_size", 250)
+        # Validate sizes are within bounds (100-500) to handle corrupted settings
+        saved_2d_size = settings.get("avatar_overlay_size", 300)
+        saved_3d_size = settings.get("avatar_overlay_3d_size", 250)
+        parent._saved_overlay_size = max(100, min(500, saved_2d_size if isinstance(saved_2d_size, (int, float)) else 300))
+        parent._saved_overlay_3d_size = max(100, min(500, saved_3d_size if isinstance(saved_3d_size, (int, float)) else 250))
         
         # Restore last avatar selection (always restore the selection)
         last_avatar_index = settings.get("last_avatar_index", 0)
@@ -2616,17 +2965,51 @@ def _restore_avatar_settings(parent):
             data = parent.avatar_combo.currentData()
             if data and len(data) > 1:
                 parent._current_path = data[1]
+            
+            # ALWAYS load the avatar preview when tab opens (not just when auto-load desktop is on)
+            # This shows the selected avatar in the preview pane
+            QTimer.singleShot(300, lambda: _load_avatar_preview(parent))
         
-        # Auto-load avatar if setting is enabled
+        # Auto-load avatar TO DESKTOP if setting is enabled
         if parent._avatar_auto_load and selection_restored:
             parent._avatar_auto_loaded = True
             # Apply the avatar after a brief delay (let UI settle)
             QTimer.singleShot(500, lambda: _apply_avatar(parent))
             parent.avatar_status.setText("Auto-loading avatar...")
             parent.avatar_status.setStyleSheet("color: #f9e2af;")
-            
+    
     except Exception as e:
-        print(f"[Avatar] Could not restore settings: {e}")
+        print(f"[Avatar] Could not restore gui settings: {e}")
+    
+    # Also restore display settings from avatar_settings.json
+    try:
+        from ....avatar.persistence import load_avatar_settings
+        avatar_settings = load_avatar_settings()
+        
+        # Restore display settings to 3D widget
+        if hasattr(parent, 'avatar_preview_3d') and parent.avatar_preview_3d:
+            parent.avatar_preview_3d.wireframe_mode = avatar_settings.wireframe_mode
+            parent.avatar_preview_3d.show_grid = avatar_settings.show_grid
+            parent.avatar_preview_3d.light_intensity = avatar_settings.light_intensity
+            parent.avatar_preview_3d.ambient_strength = avatar_settings.ambient_strength
+        
+        # Update UI controls to match
+        if hasattr(parent, 'wireframe_checkbox'):
+            parent.wireframe_checkbox.setChecked(avatar_settings.wireframe_mode)
+        if hasattr(parent, 'show_grid_checkbox'):
+            parent.show_grid_checkbox.setChecked(avatar_settings.show_grid)
+        if hasattr(parent, 'light_slider'):
+            parent.light_slider.setValue(int(avatar_settings.light_intensity * 50))
+        if hasattr(parent, 'ambient_slider'):
+            parent.ambient_slider.setValue(int(avatar_settings.ambient_strength * 200))
+            
+        # Restore resize enabled from avatar persistence
+        if hasattr(parent, 'avatar_resize_checkbox'):
+            parent.avatar_resize_checkbox.setChecked(avatar_settings.resize_enabled)
+            parent._avatar_resize_enabled = avatar_settings.resize_enabled
+        
+    except Exception as e:
+        print(f"[Avatar] Could not restore avatar settings: {e}")
 
 
 def _toggle_auto_load(parent, enabled: bool):
@@ -2654,8 +3037,16 @@ def _toggle_resize_enabled(parent, enabled: bool):
         parent._overlay_3d._resize_enabled = enabled
         parent._overlay_3d.update()  # Trigger repaint to show/hide border
     
+    # Save setting to persistence
+    try:
+        from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+        save_avatar_settings(resize_enabled=enabled)
+        write_avatar_state_for_ai()
+    except Exception as e:
+        print(f"[Avatar] Could not save resize setting: {e}")
+    
     if enabled:
-        parent.avatar_status.setText("Popup resize enabled (scroll to resize)")
+        parent.avatar_status.setText("Popup resize enabled (drag edges to resize)")
         parent.avatar_status.setStyleSheet("color: #a6e3a1;")
     else:
         parent.avatar_status.setText("Popup resize disabled")
@@ -3272,6 +3663,12 @@ def _set_wireframe(parent, enabled: bool):
     if parent.avatar_preview_3d:
         parent.avatar_preview_3d.wireframe_mode = enabled
         parent.avatar_preview_3d.update()
+    # Save setting
+    try:
+        from ....avatar.persistence import save_avatar_settings
+        save_avatar_settings(wireframe_mode=enabled)
+    except Exception:
+        pass
 
 
 def _set_show_grid(parent, enabled: bool):
@@ -3279,6 +3676,12 @@ def _set_show_grid(parent, enabled: bool):
     if parent.avatar_preview_3d:
         parent.avatar_preview_3d.show_grid = enabled
         parent.avatar_preview_3d.update()
+    # Save setting
+    try:
+        from ....avatar.persistence import save_avatar_settings
+        save_avatar_settings(show_grid=enabled)
+    except Exception:
+        pass
 
 
 def _set_lighting(parent, intensity: float):
@@ -3287,6 +3690,12 @@ def _set_lighting(parent, intensity: float):
         parent.avatar_preview_3d.light_intensity = intensity
         parent.avatar_preview_3d._update_lighting()
         parent.avatar_preview_3d.update()
+    # Save setting
+    try:
+        from ....avatar.persistence import save_avatar_settings
+        save_avatar_settings(light_intensity=intensity)
+    except Exception:
+        pass
 
 
 def _set_ambient(parent, strength: float):
@@ -3295,6 +3704,12 @@ def _set_ambient(parent, strength: float):
         parent.avatar_preview_3d.ambient_strength = strength
         parent.avatar_preview_3d._update_lighting()
         parent.avatar_preview_3d.update()
+    # Save setting
+    try:
+        from ....avatar.persistence import save_avatar_settings
+        save_avatar_settings(ambient_strength=strength)
+    except Exception:
+        pass
 
 
 def _set_rotate_speed(parent, speed: float):
@@ -3641,6 +4056,12 @@ def _load_json(path: Path) -> dict:
         return {}
 
 
+def _load_avatar_preview(parent):
+    """Load the currently selected avatar into the preview pane (called on tab open)."""
+    # Simply call _on_avatar_selected which handles all preview logic
+    _on_avatar_selected(parent)
+
+
 def _on_avatar_selected(parent):
     """Handle avatar selection from dropdown - show preview."""
     data = parent.avatar_combo.currentData()
@@ -3808,6 +4229,14 @@ def _apply_avatar(parent):
         return
     
     path = parent._current_path
+    
+    # Save current avatar to persistence for AI awareness
+    try:
+        from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+        save_avatar_settings(current_avatar=str(path))
+        write_avatar_state_for_ai()
+    except Exception as e:
+        print(f"[Avatar] Could not save current avatar: {e}")
     
     # Load into the backend controller
     if parent._is_3d_model:

@@ -1,0 +1,876 @@
+================================================================================
+   _____ ____  ____   ____ _____       _    _____  
+  |  ___/ __ \|  _ \ / ___| ____|     / \  |_ _\ \ 
+  | |_ | |  | | |_) | |  _|  _|      / _ \  | | \ \
+  |  _|| |  | |  _ <| |_| | |___    / ___ \ | |  ) )
+  |_|   \____/|_| \_\\____|_____|  /_/   \_\___|/_/ 
+
+        ✨ CODE ADVENTURE TOUR - CHOOSE YOUR PATH ✨
+================================================================================
+
+Welcome, brave traveler! This is your interactive guide through the ForgeAI 
+kingdom - a fully modular AI framework that scales from Raspberry Pi to 
+datacenter. Like a "Choose Your Own Adventure" book, follow the paths that 
+interest you!
+
+📍 YOUR LOCATION: Root folder (c:\Users\...\Forge_AI\)
+
+================================================================================
+                    🗺️ THE GRAND MAP OF FORGEAI 🗺️
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                         🏰 MAIN CASTLE (run.py)                         │
+    │                    Your journey starts here!                            │
+    └─────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                      📦 forge_ai/ PACKAGE                               │
+    │   The main kingdom containing all the magical components                │
+    ├──────────┬──────────┬──────────┬──────────┬──────────┬─────────────────┤
+    │   🧠     │   🎮     │   💾     │   🌐     │   🔧     │      🎭         │
+    │  CORE    │   GUI    │  MEMORY  │  COMMS   │  TOOLS   │    AVATAR       │
+    │          │          │          │          │          │                 │
+    │ The Brain│ Visuals  │ Storage  │ Network  │ Actions  │  Your AI Pet    │
+    └──────────┴──────────┴──────────┴──────────┴──────────┴─────────────────┘
+
+
+================================================================================
+                 🚀 CHAPTER 1: THE ENTRANCE GATE (run.py)
+================================================================================
+
+📍 FILE: run.py (Line 1-336)
+🏷️ TYPE: Main Entry Point
+🔗 CONNECTS TO: forge_ai.core, forge_ai.gui, forge_ai.comms
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  This is where EVERYTHING begins! Like the front door to a castle.         │
+│                                                                             │
+│  🗝️ COMMAND OPTIONS:                                                       │
+│     python run.py --gui     → Opens the graphical interface (Recommended!) │
+│     python run.py --train   → Train your AI model                          │
+│     python run.py --run     → Chat in terminal                             │
+│     python run.py --serve   → Start REST API server                        │
+│     python run.py --build   → Build new model from scratch                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+IF YOU WANT TO...
+  • Create AI magic → TURN TO CHAPTER 2 (The Brain)
+  • See beautiful interface → TURN TO CHAPTER 3 (The GUI)
+  • Store memories → TURN TO CHAPTER 4 (Memory Vault)
+  • Network with others → TURN TO CHAPTER 5 (Communications)
+  • Do actions → TURN TO CHAPTER 6 (Tool Workshop)
+  • Create an avatar → TURN TO CHAPTER 7 (Avatar Chamber)
+  • Manage modules → TURN TO CHAPTER 8 (Module Control Room)
+
+
+================================================================================
+            🧠 CHAPTER 2: THE BRAIN (forge_ai/core/)
+================================================================================
+
+📍 LOCATION: forge_ai/core/
+🏷️ TYPE: Neural Network & Intelligence Center
+🔗 CONNECTED FROM: run.py, gui, memory, tools
+
+This is where the REAL AI magic happens! The neural networks, tokenizers,
+training loops, and inference engines all live here.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/core/ CONTENTS:                                                │
+│  ├── model.py          ⭐ THE MAIN TRANSFORMER MODEL (Forge class)         │
+│  ├── inference.py      ⭐ GENERATES TEXT (ForgeEngine class)               │
+│  ├── tokenizer.py      Text ↔ Numbers converter                            │
+│  ├── training.py       Teaching the AI to learn                            │
+│  ├── tool_router.py    ⭐ ROUTES REQUESTS TO RIGHT TOOL                    │
+│  ├── model_registry.py Manages multiple loaded models                      │
+│  ├── huggingface_loader.py  Load HuggingFace models                        │
+│  ├── huggingface_exporter.py Upload to HuggingFace Hub                     │
+│  ├── gguf_loader.py    Load GGUF format models (llama.cpp)                 │
+│  ├── personality.py    AI personality traits                               │
+│  ├── layers.py         Building blocks (attention, etc)                    │
+│  └── quantization.py   Shrink models to save memory                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 2A: THE FORGE MODEL (forge_ai/core/model.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/core/model.py (752 lines)
+🏷️ CLASS: Forge, ForgeConfig
+
+This is the HEART of ForgeAI - a production-grade transformer!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  MODEL ARCHITECTURE DIAGRAM                                    │
+    │                                                                │
+    │  Input Text → [Tokenizer] → Numbers                           │
+    │       ↓                                                        │
+    │  [Embedding Layer] - Converts numbers to vectors              │
+    │       ↓                                                        │
+    │  [Transformer Blocks] × N layers                              │
+    │    ├── RMSNorm (normalization)                                │
+    │    ├── Self-Attention with RoPE (understanding context)       │
+    │    ├── SwiGLU Activation (better than ReLU!)                  │
+    │    └── Residual connections                                   │
+    │       ↓                                                        │
+    │  [Output Head] → Next word probabilities                      │
+    └───────────────────────────────────────────────────────────────┘
+
+KEY FEATURES:
+  ⚡ RoPE (Rotary Position Embeddings) - Better than learned positions
+  ⚡ RMSNorm - Faster and more stable than LayerNorm  
+  ⚡ SwiGLU - Superior activation function
+  ⚡ GQA (Grouped Query Attention) - Efficient attention
+  ⚡ KV-Cache - Fast autoregressive generation
+
+MODEL SIZES (15 presets!):
+  ┌────────────┬──────────┬────────────────────────────────┐
+  │ Size       │ Params   │ Best For                       │
+  ├────────────┼──────────┼────────────────────────────────┤
+  │ nano       │ ~1M      │ Embedded/Testing               │
+  │ micro      │ ~2M      │ Raspberry Pi                   │
+  │ tiny       │ ~5M      │ Light devices                  │
+  │ small      │ ~27M     │ Desktop default                │
+  │ medium     │ ~85M     │ Good balance                   │
+  │ large      │ ~300M    │ Quality focus                  │
+  │ xl → omega │ 1B-70B+  │ Datacenter                     │
+  └────────────┴──────────┴────────────────────────────────┘
+
+HOW TO USE:
+  ```python
+  from forge_ai.core.model import create_model, Forge
+  
+  # Create model
+  model = create_model('small')  # Use preset
+  
+  # Or custom config
+  from forge_ai.core.model import ForgeConfig
+  config = ForgeConfig(vocab_size=8000, dim=512, n_layers=8)
+  model = Forge(config)
+  ```
+
+→ NEXT: Want to generate text? TURN TO 2B (Inference Engine)
+→ NEXT: Want to train the model? GO TO forge_ai/core/training.py
+
+-------------------------------------------------------------------------------
+📜 2B: THE INFERENCE ENGINE (forge_ai/core/inference.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/core/inference.py (1444 lines)
+🏷️ CLASS: ForgeEngine
+🔗 USES: model.py, tokenizer.py
+
+This is how you TALK to your AI! The ForgeEngine takes your text and 
+generates responses.
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  GENERATION FLOW                                               │
+    │                                                                │
+    │  "Hello, how are" → [ForgeEngine] → "you doing today?"        │
+    │         │                 │                                    │
+    │         │     ┌───────────┴───────────┐                       │
+    │         │     │ 1. Tokenize input     │                       │
+    │         │     │ 2. Run through model  │                       │
+    │         │     │ 3. Sample next token  │                       │
+    │         │     │ 4. Repeat until done  │                       │
+    │         │     │ 5. Detokenize output  │                       │
+    │         │     └───────────────────────┘                       │
+    └───────────────────────────────────────────────────────────────┘
+
+SAMPLING STRATEGIES:
+  • Greedy      - Always pick most likely (deterministic)
+  • Top-K       - Pick from top K most likely tokens
+  • Top-P       - Pick from tokens covering P% probability  
+  • Temperature - Controls randomness (higher = more creative)
+
+HOW TO USE:
+  ```python
+  from forge_ai.core.inference import ForgeEngine
+  
+  engine = ForgeEngine()  # Auto-loads model
+  
+  # Generate text
+  response = engine.generate("Hello, my name is")
+  
+  # Stream tokens
+  for token in engine.stream_generate("Tell me a story"):
+      print(token, end="", flush=True)
+  
+  # Chat mode (with history)
+  response = engine.chat("What is AI?")
+  ```
+
+→ NEXT: Want to route to specialized models? TURN TO 2C (Tool Router)
+
+-------------------------------------------------------------------------------
+📜 2C: THE TOOL ROUTER (forge_ai/core/tool_router.py)  
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/core/tool_router.py (1465 lines)
+🏷️ CLASS: ToolRouter
+🔗 CONNECTS: All generation capabilities (image, code, video, audio, 3D)
+
+The Router is like a traffic controller - it figures out WHAT the user wants
+and sends their request to the RIGHT specialized model!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  "Draw me a cat"                                               │
+    │         │                                                      │
+    │         ▼                                                      │
+    │  ┌─────────────────┐                                          │
+    │  │  TOOL ROUTER    │ ← Analyzes: "draw" = IMAGE tool!         │
+    │  └────────┬────────┘                                          │
+    │           │                                                    │
+    │     ┌─────┴─────┬──────────┬──────────┬──────────┐            │
+    │     ▼           ▼          ▼          ▼          ▼            │
+    │  [CHAT]     [IMAGE]    [CODE]    [VIDEO]    [AUDIO]           │
+    │             ↑ SELECTED                                         │
+    │             ▼                                                  │
+    │  [Stable Diffusion] → 🎨 Cat Image!                           │
+    └───────────────────────────────────────────────────────────────┘
+
+BUILT-IN TOOLS:
+  • chat   - General conversation ("explain", "help", "what")
+  • image  - Generate images ("draw", "paint", "picture")
+  • code   - Generate code ("program", "script", "function")
+  • video  - Generate videos ("animate", "clip", "movie")
+  • audio  - Generate audio ("speak", "voice", "music")
+  • 3d     - Generate 3D models ("model", "mesh", "sculpt")
+  • gif    - Create GIFs ("gif", "animated")
+
+HOW TO USE:
+  ```python
+  from forge_ai.core.tool_router import ToolRouter, get_router
+  
+  router = get_router()
+  
+  # Assign models to tools
+  router.assign_model("chat", "forge:small_forge_ai")
+  router.assign_model("image", "local:stable-diffusion")
+  
+  # Auto-route a request
+  result = router.auto_route("Draw me a sunset")
+  # → Automatically uses IMAGE tool!
+  ```
+
+→ NEXT: See the GUI implementation? TURN TO CHAPTER 3
+
+
+================================================================================
+            🎮 CHAPTER 3: THE GUI CASTLE (forge_ai/gui/)
+================================================================================
+
+📍 LOCATION: forge_ai/gui/
+🏷️ TYPE: User Interface (PyQt5)
+🔗 CONNECTED FROM: run.py --gui
+
+The graphical kingdom where users interact with ForgeAI through beautiful
+windows, tabs, and buttons!
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/gui/ CONTENTS:                                                 │
+│  ├── enhanced_window.py  ⭐ MAIN WINDOW (EnhancedMainWindow class)         │
+│  ├── tabs/               ⭐ ALL THE TAB PANELS                             │
+│  │   ├── chat_tab.py        💬 Chat with AI                                │
+│  │   ├── image_tab.py       🎨 Generate images                             │
+│  │   ├── code_tab.py        💻 Generate code                               │
+│  │   ├── video_tab.py       🎬 Generate videos                             │
+│  │   ├── audio_tab.py       🔊 Generate audio/TTS                          │
+│  │   ├── threed_tab.py      🎲 Generate 3D models                          │
+│  │   ├── training_tab.py    📚 Train your model                            │
+│  │   ├── modules_tab.py     ⚙️ Toggle modules on/off                       │
+│  │   ├── avatar_tab.py      🤖 Avatar control                              │
+│  │   ├── camera_tab.py      📷 Webcam capture                              │
+│  │   ├── vision_tab.py      👁️ Image analysis                              │
+│  │   └── settings_tab.py    🔧 App settings                                │
+│  ├── system_tray.py      System tray icon + quick commands                 │
+│  ├── styles.py           Theme CSS (dark/light/shadow/midnight)            │
+│  └── theme_system.py     Theme management                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 3A: THE MAIN WINDOW (forge_ai/gui/enhanced_window.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/gui/enhanced_window.py (5538 lines!)
+🏷️ CLASS: EnhancedMainWindow
+
+This is the BIG main application window! It contains:
+  • First-run setup wizard
+  • Tab system for all features
+  • Model selection
+  • Theme toggling
+  • Background AI worker threads
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  ╔══════════════════════════════════════════════════════════╗  │
+    │  ║  ForgeAI - Your Model Name                      [-][□][X]║  │
+    │  ╠══════════════════════════════════════════════════════════╣  │
+    │  ║ [💬Chat][🎨Image][💻Code][🎬Video][🔊Audio][🎲3D][⚙️]... ║  │
+    │  ╠══════════════════════════════════════════════════════════╣  │
+    │  ║                                                          ║  │
+    │  ║   ┌────────────────────────────────────────────────────┐ ║  │
+    │  ║   │                                                    │ ║  │
+    │  ║   │           Tab Content Area                         │ ║  │
+    │  ║   │                                                    │ ║  │
+    │  ║   │                                                    │ ║  │
+    │  ║   └────────────────────────────────────────────────────┘ ║  │
+    │  ║                                                          ║  │
+    │  ║  [Status Bar: Model loaded, GPU status, etc.]            ║  │
+    │  ╚══════════════════════════════════════════════════════════╝  │
+    └─────────────────────────────────────────────────────────────────┘
+
+KEY WORKER CLASS: AIGenerationWorker (runs AI in background thread)
+  - Keeps GUI responsive while AI thinks
+  - Emits: finished, error, thinking, stopped signals
+
+-------------------------------------------------------------------------------
+📜 3B: GENERATION TABS (forge_ai/gui/tabs/)
+-------------------------------------------------------------------------------
+
+Each tab contains BOTH the generation logic AND the GUI!
+
+🎨 IMAGE TAB (forge_ai/gui/tabs/image_tab.py - 1120 lines)
+   Classes: PlaceholderImage, StableDiffusionLocal, OpenAIImage, ReplicateImage
+   GUI: ImageTab
+   
+   Providers:
+     • PLACEHOLDER - Built-in procedural art (no dependencies!)
+     • LOCAL - Stable Diffusion (needs diffusers, torch)
+     • OPENAI - DALL-E 3 (needs API key)
+     • REPLICATE - SDXL/Flux (needs API key)
+
+💻 CODE TAB (forge_ai/gui/tabs/code_tab.py)
+   Classes: ForgeCode, OpenAICode
+   GUI: CodeTab
+   
+🎬 VIDEO TAB (forge_ai/gui/tabs/video_tab.py)
+   Classes: LocalVideo, ReplicateVideo  
+   GUI: VideoTab
+
+🔊 AUDIO TAB (forge_ai/gui/tabs/audio_tab.py)
+   Classes: LocalTTS, ElevenLabsTTS, ReplicateAudio
+   GUI: AudioTab
+
+🎲 3D TAB (forge_ai/gui/tabs/threed_tab.py)
+   Classes: Local3DGen, Cloud3DGen
+   GUI: ThreeDTab
+
+→ NEXT: How does memory work? TURN TO CHAPTER 4
+
+
+================================================================================
+           💾 CHAPTER 4: THE MEMORY VAULT (forge_ai/memory/)
+================================================================================
+
+📍 LOCATION: forge_ai/memory/
+🏷️ TYPE: Storage & Recall System
+🔗 CONNECTED FROM: gui (chat), core (context)
+
+This is where the AI stores its memories - conversations, learned facts,
+and semantic embeddings for intelligent recall!
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/memory/ CONTENTS:                                              │
+│  ├── manager.py        ⭐ ConversationManager - saves/loads chats          │
+│  ├── vector_db.py      ⭐ SimpleVectorDB - semantic search                 │
+│  ├── memory_db.py      Short message storage                               │
+│  ├── embeddings.py     Convert text to vectors                             │
+│  ├── search.py         Search through memories                             │
+│  ├── rag.py            Retrieval-Augmented Generation                      │
+│  ├── encryption.py     Encrypt sensitive memories                          │
+│  └── backup.py         Backup/restore memories                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 4A: CONVERSATION MANAGER (forge_ai/memory/manager.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/memory/manager.py (156 lines)
+🏷️ CLASS: ConversationManager
+
+Saves conversations to JSON files and pushes to vector database for search.
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  MEMORY FLOW                                                   │
+    │                                                                │
+    │  User: "Tell me about cats"                                   │
+    │        │                                                       │
+    │        ▼                                                       │
+    │  ┌─────────────────────┐                                      │
+    │  │ ConversationManager │                                      │
+    │  └──────────┬──────────┘                                      │
+    │             │                                                  │
+    │     ┌───────┴───────┐                                         │
+    │     ▼               ▼                                          │
+    │  [JSON File]   [VectorDB]                                     │
+    │  /data/conv/   embedding                                       │
+    │  my_chat.json  for search                                      │
+    └───────────────────────────────────────────────────────────────┘
+
+HOW TO USE:
+  ```python
+  from forge_ai.memory.manager import ConversationManager
+  
+  manager = ConversationManager()
+  
+  # Save conversation
+  messages = [
+      {"role": "user", "text": "Hello!", "ts": 12345},
+      {"role": "ai", "text": "Hi there!", "ts": 12346}
+  ]
+  manager.save_conversation("my_chat", messages)
+  
+  # Load conversation
+  data = manager.load_conversation("my_chat")
+  ```
+
+Storage Location: data/conversations/*.json
+
+-------------------------------------------------------------------------------
+📜 4B: VECTOR DATABASE (forge_ai/memory/vector_db.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/memory/vector_db.py
+🏷️ CLASSES: SimpleVectorDB, FAISSVectorDB
+
+Semantic search - find memories by MEANING, not just keywords!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  Search: "feline pets"                                         │
+    │     │                                                          │
+    │     ▼                                                          │
+    │  [Embedding] → [0.2, 0.8, 0.1, ...]  (convert to vector)      │
+    │     │                                                          │
+    │     ▼                                                          │
+    │  [VectorDB Search] → Find similar vectors                      │
+    │     │                                                          │
+    │     ▼                                                          │
+    │  Results: "Tell me about cats" (similar meaning!)              │
+    └───────────────────────────────────────────────────────────────┘
+
+→ NEXT: Network with other devices? TURN TO CHAPTER 5
+
+
+================================================================================
+           🌐 CHAPTER 5: COMMUNICATIONS HUB (forge_ai/comms/)
+================================================================================
+
+📍 LOCATION: forge_ai/comms/
+🏷️ TYPE: Networking & API
+🔗 CONNECTED FROM: run.py --serve, remote clients
+
+Connect your AI to the world! REST APIs, multi-device networking, mobile apps.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/comms/ CONTENTS:                                               │
+│  ├── api_server.py     ⭐ REST API (Flask) - simple endpoints              │
+│  ├── web_server.py     Full web UI with WebSocket                          │
+│  ├── network.py        ⭐ Multi-device networking (ForgeNode)              │
+│  ├── remote_client.py  Connect to remote Forge servers                     │
+│  ├── mobile_api.py     Mobile app API                                      │
+│  ├── discovery.py      Auto-discover other Forge nodes                     │
+│  └── memory_sync.py    Sync memories across devices                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 5A: REST API SERVER (forge_ai/comms/api_server.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/comms/api_server.py (67 lines)
+🏷️ FUNCTION: create_api_server()
+
+Simple Flask API for scripts and automation:
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  ENDPOINTS:                                                    │
+    │                                                                │
+    │  GET  /health    → {"ok": true}                               │
+    │  GET  /info      → Server information                         │
+    │  POST /generate  → Generate text from prompt                  │
+    │       Body: {"prompt": "Hello", "max_gen": 50, "temperature": 1.0}
+    └───────────────────────────────────────────────────────────────┘
+
+Start with: python run.py --serve
+Access at: http://localhost:5000
+
+-------------------------------------------------------------------------------
+📜 5B: MULTI-DEVICE NETWORKING (forge_ai/comms/network.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/comms/network.py
+🏷️ CLASSES: ForgeNode, Message, ModelExporter
+
+Connect multiple computers running ForgeAI!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │                                                                │
+    │   [PC #1]  ←───→  [PC #2]  ←───→  [Raspberry Pi]             │
+    │   ForgeNode       ForgeNode        ForgeNode                  │
+    │                                                                │
+    │   Share models, distribute inference, sync memories!          │
+    │                                                                │
+    └───────────────────────────────────────────────────────────────┘
+
+→ NEXT: What tools can AI use? TURN TO CHAPTER 6
+
+
+================================================================================
+           🔧 CHAPTER 6: THE TOOL WORKSHOP (forge_ai/tools/)
+================================================================================
+
+📍 LOCATION: forge_ai/tools/
+🏷️ TYPE: AI Capabilities & Actions
+🔗 CONNECTED FROM: core (tool_router), gui (tabs)
+
+The workshop where AI gets its superpowers! Vision, web browsing, file
+manipulation, game control, and more!
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/tools/ CONTENTS:                                               │
+│  ├── tool_executor.py    ⭐ Executes AI tool calls safely                  │
+│  ├── tool_definitions.py ⭐ All tool definitions                           │
+│  ├── tool_registry.py    Manages available tools                           │
+│  ├── vision.py           👁️ Image/screen analysis                          │
+│  ├── web_tools.py        🌐 Web browsing, search                           │
+│  ├── file_tools.py       📁 File operations                                │
+│  ├── browser_tools.py    🖥️ Browser automation                             │
+│  ├── document_tools.py   📄 Document processing                            │
+│  ├── game_router.py      🎮 Game AI routing                                │
+│  ├── robot_modes.py      🤖 Robot hardware control                         │
+│  └── automation_tools.py 🔄 Task automation                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 6A: TOOL EXECUTOR (forge_ai/tools/tool_executor.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/tools/tool_executor.py (1717 lines)
+🏷️ CLASS: ToolExecutor
+
+The safe executor - parses AI tool requests, validates them, and runs them!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  AI OUTPUT: "I'll search the web for that."                   │
+    │             {"tool": "web_search", "query": "AI news"}        │
+    │                          │                                     │
+    │                          ▼                                     │
+    │              ┌───────────────────┐                            │
+    │              │   TOOL EXECUTOR   │                            │
+    │              ├───────────────────┤                            │
+    │              │ 1. Parse JSON     │                            │
+    │              │ 2. Validate params│                            │
+    │              │ 3. Check security │                            │
+    │              │ 4. Execute tool   │                            │
+    │              │ 5. Return result  │                            │
+    │              └───────────────────┘                            │
+    │                          │                                     │
+    │                          ▼                                     │
+    │  RESULT: Search results about AI news...                      │
+    └───────────────────────────────────────────────────────────────┘
+
+SECURITY:
+  • Timeout protection (operations can't hang forever)
+  • Path blocking (AI can't access sensitive files)
+  • Parameter validation
+
+→ NEXT: Create an avatar? TURN TO CHAPTER 7
+
+
+================================================================================
+           🎭 CHAPTER 7: THE AVATAR CHAMBER (forge_ai/avatar/)
+================================================================================
+
+📍 LOCATION: forge_ai/avatar/
+🏷️ TYPE: Visual Character System
+🔗 CONNECTED FROM: gui (avatar_tab), core (inference)
+
+Create a virtual companion that reacts to your screen, expresses emotions,
+and behaves autonomously!
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/avatar/ CONTENTS:                                              │
+│  ├── autonomous.py      ⭐ Autonomous behavior (AutonomousAvatar)          │
+│  ├── controller.py      ⭐ Main avatar control (AvatarController)          │
+│  ├── desktop_pet.py     Desktop pet overlay                                │
+│  ├── animation_system.py Animation and movement                            │
+│  ├── lip_sync.py        Sync mouth to speech                               │
+│  ├── emotion_sync.py    Sync expressions to AI mood                        │
+│  ├── customizer.py      Customize appearance                               │
+│  ├── presets.py         Pre-made avatar designs                            │
+│  └── assets/            Image/sprite assets                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 7A: AUTONOMOUS AVATAR (forge_ai/avatar/autonomous.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/avatar/autonomous.py (632 lines)
+🏷️ CLASSES: AutonomousAvatar, AutonomousConfig, AvatarMood
+
+Your avatar can ACT ON ITS OWN!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  AUTONOMOUS BEHAVIORS:                                         │
+    │                                                                │
+    │  🖥️ Screen Watching  - React to what's on screen             │
+    │  💤 Idle Animations  - Random movements when bored            │
+    │  👀 Curiosity        - "Look at" interesting things           │
+    │  😊 Mood System      - Happy, bored, excited, sleepy...       │
+    │  🧠 Memory           - Remember what it's seen                 │
+    │  ⏰ Time Awareness   - Sleepy at night, energetic during day  │
+    └───────────────────────────────────────────────────────────────┘
+
+MOOD STATES:
+  • NEUTRAL, HAPPY, CURIOUS, BORED
+  • EXCITED, SLEEPY, FOCUSED, PLAYFUL, THOUGHTFUL
+
+HOW TO USE:
+  ```python
+  from forge_ai.avatar import get_avatar
+  from forge_ai.avatar.autonomous import AutonomousAvatar
+  
+  avatar = get_avatar()
+  avatar.enable()
+  
+  autonomous = AutonomousAvatar(avatar)
+  autonomous.start()  # Avatar does its own thing!
+  autonomous.stop()   # Back to manual control
+  ```
+
+→ NEXT: Manage all modules? TURN TO CHAPTER 8
+
+
+================================================================================
+           ⚙️ CHAPTER 8: MODULE CONTROL ROOM (forge_ai/modules/)
+================================================================================
+
+📍 LOCATION: forge_ai/modules/
+🏷️ TYPE: Central Module System
+🔗 CONNECTS: EVERYTHING!
+
+This is the CONTROL CENTER where you toggle capabilities on and off!
+ForgeAI's secret power: EVERYTHING is a module that can be loaded/unloaded.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/modules/ CONTENTS:                                             │
+│  ├── manager.py     ⭐ ModuleManager - loads/unloads modules               │
+│  ├── registry.py    ⭐ All available modules defined here                  │
+│  ├── sandbox.py     Safe execution environment                             │
+│  └── updater.py     Module updates                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+-------------------------------------------------------------------------------
+📜 8A: MODULE MANAGER (forge_ai/modules/manager.py)
+-------------------------------------------------------------------------------
+📍 FILE: forge_ai/modules/manager.py (975 lines)
+🏷️ CLASSES: ModuleManager, Module, ModuleInfo, ModuleState, ModuleCategory
+
+The brain that controls what's running!
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  MODULE STATES:                                                │
+    │                                                                │
+    │  UNLOADED → LOADING → LOADED → ACTIVE                         │
+    │      ↑                            │                            │
+    │      └────────────────────────────┘                            │
+    │                (unload)                                        │
+    │                                                                │
+    │  ERROR / DISABLED (special states)                            │
+    └───────────────────────────────────────────────────────────────┘
+
+    ┌───────────────────────────────────────────────────────────────┐
+    │  MODULE CATEGORIES:                                            │
+    │                                                                │
+    │  CORE       - model, tokenizer, inference                     │
+    │  MEMORY     - memory, embeddings                               │
+    │  INTERFACE  - gui, voice                                       │
+    │  PERCEPTION - vision, camera                                   │
+    │  OUTPUT     - avatar, tts                                      │
+    │  GENERATION - image, code, video, audio, 3d                    │
+    │  TOOLS      - web, file, browser                              │
+    │  NETWORK    - api_server, multi_device                        │
+    └───────────────────────────────────────────────────────────────┘
+
+HOW TO USE:
+  ```python
+  from forge_ai.modules import ModuleManager
+  
+  manager = ModuleManager()
+  
+  # Load core modules
+  manager.load('model')
+  manager.load('tokenizer')
+  manager.load('inference')
+  
+  # Load generation capability (LOCAL or API - not both!)
+  manager.load('image_gen_local')  # Stable Diffusion
+  # OR
+  manager.load('image_gen_api')    # DALL-E (can't load both!)
+  
+  # Use module
+  image_mod = manager.get_module('image_gen_local')
+  result = image_mod.generate("a sunset", width=512, height=512)
+  
+  # Unload when done
+  manager.unload('image_gen_local')
+  ```
+
+CONFLICT PREVENTION:
+  ❌ Can't load image_gen_local AND image_gen_api together
+  ❌ Can't load without dependencies
+  ❌ Checks hardware limits
+
+
+================================================================================
+           🔊 CHAPTER 9: THE VOICE HALL (forge_ai/voice/)
+================================================================================
+
+📍 LOCATION: forge_ai/voice/
+🏷️ TYPE: Speech System (TTS + STT)
+🔗 CONNECTED FROM: gui, avatar
+
+Give your AI a voice and let it hear you!
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  📁 forge_ai/voice/ CONTENTS:                                               │
+│  ├── voice_generator.py  ⭐ Create voices from personality                 │
+│  ├── voice_profile.py    Voice settings storage                            │
+│  ├── listener.py         Speech-to-text (STT)                              │
+│  ├── tts_simple.py       Simple text-to-speech                             │
+│  ├── natural_tts.py      Natural-sounding TTS                              │
+│  ├── whisper_stt.py      Whisper-based STT                                 │
+│  ├── lip_sync.py         Sync lips to audio                                │
+│  └── voice_effects.py    Add effects to voice                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+VOICE FROM PERSONALITY:
+  ```python
+  from forge_ai.voice.voice_generator import AIVoiceGenerator
+  
+  generator = AIVoiceGenerator()
+  voice = generator.generate_voice_from_personality(personality)
+  
+  # Personality traits → Voice parameters
+  # High confidence → lower pitch, slower
+  # High playfulness → varied pitch, faster
+  # High formality → neutral, measured pace
+  ```
+
+
+================================================================================
+            📚 CHAPTER 10: CONFIGURATION REALM (forge_ai/config/)
+================================================================================
+
+📍 LOCATION: forge_ai/config/
+🏷️ TYPE: Settings & Configuration
+🔗 USED BY: Everything!
+
+All settings, paths, and hyperparameters live here.
+
+HOW TO USE:
+  ```python
+  from forge_ai.config import CONFIG
+  
+  # Get values
+  models_dir = CONFIG["models_dir"]
+  max_len = CONFIG.get("max_len", 1024)
+  
+  # Update values
+  from forge_ai.config import update_config
+  update_config({"max_len": 2048})
+  ```
+
+
+================================================================================
+                    🎯 QUICK REFERENCE PATHS
+================================================================================
+
+START HERE:
+  run.py                           → Main entry point
+
+THE BRAIN (AI):
+  forge_ai/core/model.py          → Forge transformer model
+  forge_ai/core/inference.py      → ForgeEngine for generation
+  forge_ai/core/training.py       → Training loop
+  forge_ai/core/tokenizer.py      → Text ↔ Numbers
+  forge_ai/core/tool_router.py    → Route to right tool
+
+THE INTERFACE:
+  forge_ai/gui/enhanced_window.py → Main PyQt5 window
+  forge_ai/gui/tabs/chat_tab.py   → Chat interface
+  forge_ai/gui/tabs/image_tab.py  → Image generation
+
+THE STORAGE:
+  forge_ai/memory/manager.py      → Conversation storage
+  forge_ai/memory/vector_db.py    → Semantic search
+
+THE NETWORK:
+  forge_ai/comms/api_server.py    → REST API
+  forge_ai/comms/network.py       → Multi-device
+
+THE ACTIONS:
+  forge_ai/tools/tool_executor.py → Execute AI tools
+  forge_ai/tools/vision.py        → See images/screen
+
+THE CHARACTER:
+  forge_ai/avatar/autonomous.py   → Self-acting avatar
+  forge_ai/avatar/controller.py   → Avatar control
+
+THE CONTROL:
+  forge_ai/modules/manager.py     → Load/unload modules
+
+THE VOICE:
+  forge_ai/voice/voice_generator.py → TTS voice creation
+  forge_ai/voice/listener.py      → STT input
+
+
+================================================================================
+                    ⚠️ DANGER ZONES (What NOT To Do!)
+================================================================================
+
+  ❌ DON'T load conflicting modules (both image_gen_local AND image_gen_api)
+  ❌ DON'T bypass ModuleManager - always use manager.load()
+  ❌ DON'T train with very small datasets (<1000 lines)
+  ❌ DON'T use extremely high learning rates (default 0.0001 is safe)
+  ❌ DON'T delete model folders manually (use Model Manager)
+  ❌ DON'T train during inference (close chat first)
+  ❌ DON'T run multiple instances on same model (can corrupt files)
+  ❌ DON'T block the UI thread (use QThread for long operations)
+
+
+================================================================================
+                    🗺️ DEPENDENCY MAP
+================================================================================
+
+    run.py
+      │
+      ├──→ forge_ai/__init__.py ──→ forge_ai/config/
+      │
+      ├──→ forge_ai/core/training.py (--train)
+      │       └──→ model.py, tokenizer.py
+      │
+      ├──→ forge_ai/core/inference.py (--run)
+      │       └──→ model.py, tokenizer.py
+      │       └──→ tool_router.py ──→ tools/
+      │
+      ├──→ forge_ai/gui/enhanced_window.py (--gui)
+      │       └──→ tabs/*.py
+      │       └──→ core/inference.py
+      │       └──→ memory/manager.py
+      │       └──→ avatar/controller.py
+      │       └──→ voice/voice_generator.py
+      │
+      └──→ forge_ai/comms/api_server.py (--serve)
+              └──→ core/inference.py
+
+
+================================================================================
+                    🎮 YOUR ADVENTURE AWAITS!
+================================================================================
+
+Now you understand the ForgeAI kingdom! Here are your next steps:
+
+1. BEGINNER: Start with `python run.py --gui` and explore the tabs
+2. DEVELOPER: Look at forge_ai/core/model.py to understand the architecture  
+3. CUSTOMIZER: Check forge_ai/modules/registry.py to add new modules
+4. INTEGRATOR: Use forge_ai/comms/api_server.py for external connections
+
+Remember: Everything is a MODULE. Load what you need, unload what you don't!
+
+Happy coding, adventurer! 🚀
+
+================================================================================
+                    END OF TOUR
+================================================================================

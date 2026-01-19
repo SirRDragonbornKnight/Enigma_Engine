@@ -35,6 +35,10 @@ class AvatarSettings:
     # 3D specific
     overlay_3d_size: int = 250
     
+    # Manual rotation (Shift+drag on popup)
+    overlay_rotation: float = 0.0  # 2D overlay rotation
+    overlay_3d_yaw: float = 0.0  # 3D overlay yaw rotation
+    
     # Appearance
     primary_color: str = "#6b8afd"
     secondary_color: str = "#4a6fd9"
@@ -46,6 +50,12 @@ class AvatarSettings:
     # Behavior
     resize_enabled: bool = False
     auto_emotion: bool = True
+    
+    # Display settings (for 3D preview)
+    wireframe_mode: bool = False
+    show_grid: bool = True
+    light_intensity: float = 1.0
+    ambient_strength: float = 0.15
     
     # Custom emotion mappings
     emotion_mappings: Dict[str, str] = field(default_factory=dict)
@@ -186,3 +196,98 @@ def save_avatar_settings(**kwargs) -> None:
 def load_avatar_settings() -> AvatarSettings:
     """Quick function to load avatar settings."""
     return get_persistence().load()
+
+
+def get_avatar_state_for_ai() -> Dict[str, Any]:
+    """
+    Get complete avatar state for AI awareness.
+    
+    Returns a dict containing:
+    - position: (x, y) screen coordinates
+    - size: overlay size in pixels
+    - facing: which direction avatar is facing (based on model yaw)
+    - expression: current expression
+    - screen_region: which part of screen (top-left, center, bottom-right, etc.)
+    - visible: whether overlay is shown
+    """
+    import json
+    from pathlib import Path
+    
+    settings = get_persistence().load()
+    x, y = settings.screen_position
+    size = settings.overlay_3d_size or settings.overlay_size
+    
+    # Determine screen region
+    try:
+        from PyQt5.QtWidgets import QApplication
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            screen_w, screen_h = geo.width(), geo.height()
+        else:
+            screen_w, screen_h = 1920, 1080  # Fallback
+    except:
+        screen_w, screen_h = 1920, 1080
+    
+    # Determine region (3x3 grid)
+    third_w, third_h = screen_w // 3, screen_h // 3
+    col = min(2, x // third_w) if third_w > 0 else 1
+    row = min(2, y // third_h) if third_h > 0 else 1
+    
+    regions = [
+        ["top-left", "top-center", "top-right"],
+        ["middle-left", "center", "middle-right"],
+        ["bottom-left", "bottom-center", "bottom-right"]
+    ]
+    screen_region = regions[row][col]
+    
+    # Get facing direction from model orientation
+    facing = "forward"  # Default
+    try:
+        orient_path = Path("data/avatar/model_orientations.json")
+        if orient_path.exists():
+            with open(orient_path, 'r') as f:
+                orientations = json.load(f)
+            # Get current model's orientation
+            current_avatar = settings.current_avatar
+            if current_avatar:
+                model_key = Path(current_avatar).name
+                if model_key in orientations:
+                    yaw = orientations[model_key].get('yaw', 0)
+                    # Convert yaw to facing direction
+                    yaw = yaw % 360
+                    if 315 <= yaw or yaw < 45:
+                        facing = "forward"
+                    elif 45 <= yaw < 135:
+                        facing = "right"
+                    elif 135 <= yaw < 225:
+                        facing = "backward"
+                    else:
+                        facing = "left"
+    except:
+        pass
+    
+    return {
+        "position": {"x": x, "y": y},
+        "size": size,
+        "facing": facing,
+        "expression": settings.current_expression,
+        "screen_region": screen_region,
+        "screen_size": {"width": screen_w, "height": screen_h},
+        "resize_enabled": settings.resize_enabled,
+        "avatar_type": settings.avatar_type,
+        "current_avatar": settings.current_avatar,
+    }
+
+
+def write_avatar_state_for_ai() -> None:
+    """Write avatar state to a JSON file that AI can read."""
+    import json
+    from pathlib import Path
+    
+    state = get_avatar_state_for_ai()
+    state_path = Path("data/avatar/ai_avatar_state.json")
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(state_path, 'w') as f:
+        json.dump(state, f, indent=2)
