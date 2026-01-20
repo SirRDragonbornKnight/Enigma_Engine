@@ -65,8 +65,8 @@ from .vector_db import SimpleVectorDB
 from ..config import CONFIG
 from ..memory.memory_db import add_memory
 
+# Global fallback directory for conversations (backward compatibility)
 CONV_DIR = Path(CONFIG["data_dir"]) / "conversations"
-CONV_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =============================================================================
@@ -79,14 +79,13 @@ class ConversationManager:
     
     📖 WHAT THIS DOES:
     The ConversationManager is your AI's MEMORY VAULT!
-    It handles saving and loading chat conversations, plus integrates
-    with the vector database for semantic (meaning-based) search.
+    Each AI model now has its own separate conversation history!
     
     📐 TWO STORAGE SYSTEMS:
     
     ┌──────────────────────────────────────────────────────────────────────┐
     │  1. JSON FILES (Simple Storage)                                      │
-    │     Location: data/conversations/*.json                              │
+    │     Location: models/{model_name}/conversations/*.json               │
     │     Format: {"name": "...", "saved_at": ..., "messages": [...]}     │
     │     Use: Load/save entire conversations by name                      │
     │                                                                      │
@@ -111,21 +110,35 @@ class ConversationManager:
       ← enhanced_window.py: Shows conversation history
     
     Attributes:
+        model_name: Name of the current AI model (for per-model storage)
         conv_dir: Directory for storing conversation files
         vector_db: Vector database for semantic search
     """
     
-    def __init__(self, vector_db: Optional[SimpleVectorDB] = None):
+    def __init__(self, model_name: Optional[str] = None, vector_db: Optional[SimpleVectorDB] = None):
         """
         Initialize the conversation manager.
         
         Args:
+            model_name: Name of AI model (stores conversations in models/{name}/conversations/)
+                       If None, uses global data/conversations/ directory
             vector_db: Optional vector database instance. If None, creates a new one.
         """
         # ─────────────────────────────────────────────────────────────────────
-        # STORAGE PATHS
+        # STORAGE PATHS - Per-model or global
         # ─────────────────────────────────────────────────────────────────────
-        self.conv_dir = CONV_DIR  # data/conversations/
+        self.model_name = model_name
+        
+        if model_name:
+            # Per-model storage: models/{model_name}/conversations/
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            self.conv_dir = models_dir / model_name / "conversations"
+        else:
+            # Global storage (backward compatibility): data/conversations/
+            self.conv_dir = CONV_DIR
+        
+        # Create directory if it doesn't exist
+        self.conv_dir.mkdir(parents=True, exist_ok=True)
         
         # ─────────────────────────────────────────────────────────────────────
         # VECTOR DATABASE: For semantic search (find by meaning)

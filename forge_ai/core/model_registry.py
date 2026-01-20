@@ -208,6 +208,7 @@ class ModelRegistry:
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "checkpoints").mkdir(exist_ok=True)
         (model_dir / "data").mkdir(exist_ok=True)  # AI's own training data
+        (model_dir / "conversations").mkdir(exist_ok=True)  # AI's own conversation history
 
         # Save config
         with open(model_dir / "config.json", "w") as f:

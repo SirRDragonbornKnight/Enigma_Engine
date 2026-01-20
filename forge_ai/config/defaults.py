@@ -68,6 +68,8 @@ CONFIG = {
     "api_host": "127.0.0.1",
     "api_port": 5000,
     "enable_cors": True,
+    "require_api_key": True,       # Require authentication for API access
+    "forgeai_api_key": None,       # Set via env FORGEAI_API_KEY or forge_config.json
 
     # === Hardware ===
     "device": "auto",       # "auto", "cpu", "cuda", "mps"
@@ -161,6 +163,7 @@ def _load_env_config() -> None:
         "FORGE_API_HOST": "api_host",
         "FORGE_API_PORT": "api_port",
         "FORGE_LOG_LEVEL": "log_level",
+        "FORGEAI_API_KEY": "forgeai_api_key",    # API authentication key
         # Legacy ENIGMA_ prefix (still supported)
         "ENIGMA_DATA_DIR": "data_dir",
         "ENIGMA_MODELS_DIR": "models_dir",
