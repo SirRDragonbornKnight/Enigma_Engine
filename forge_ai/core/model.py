@@ -79,6 +79,19 @@ from ..config import CONFIG
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# FLASH ATTENTION: Optional high-performance attention (2-4x faster)
+# ─────────────────────────────────────────────────────────────────────────────
+# Requires: pip install flash-attn (CUDA only, Ampere+ GPU recommended)
+# Falls back silently to standard attention if not available.
+try:
+    from flash_attn import flash_attn_func
+    HAS_FLASH_ATTN = True
+    logger.info("Flash Attention available - will use for fp16/bf16 CUDA tensors")
+except ImportError:
+    HAS_FLASH_ATTN = False
+    flash_attn_func = None  # type: ignore
+
 MAX_LEN = CONFIG.get("max_len", 1024)
 
 # Global registry of loaded models
@@ -679,27 +692,56 @@ class Attention(nn.Module):
             k = k.repeat_interleave(self.n_rep, dim=2)
             v = v.repeat_interleave(self.n_rep, dim=2)
 
-        # Transpose for batched matrix multiply: [batch, heads, seq, dim]
-        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 5: Compute attention (Flash or Standard)
+        # ─────────────────────────────────────────────────────────────────────
+        # Try Flash Attention if: available, CUDA, half precision, no cache
+        # Flash Attention is O(n) memory vs O(n²) and 2-4x faster!
+        use_flash = (
+            HAS_FLASH_ATTN
+            and x.is_cuda
+            and x.dtype in (torch.float16, torch.bfloat16)
+            and not use_cache  # Flash doesn't support incremental decode well
+            and (mask is None or T == k.shape[1])  # Full sequence, not cached
+        )
+        
+        if use_flash:
+            # ─────────────────────────────────────────────────────────────────
+            # FLASH ATTENTION PATH: O(n) memory, 2-4x faster
+            # ─────────────────────────────────────────────────────────────────
+            # flash_attn expects [batch, seq, heads, dim] - we already have that!
+            # It handles causal masking internally with is_causal=True
+            output = flash_attn_func(
+                q, k, v,
+                dropout_p=self.dropout.p if self.training else 0.0,
+                causal=True,  # Autoregressive masking
+                softmax_scale=1.0 / math.sqrt(self.head_dim)
+            )
+            # output is [batch, seq, heads, dim], need [batch, seq, dim]
+            output = output.view(B, T, -1)
+        else:
+            # ─────────────────────────────────────────────────────────────────
+            # STANDARD ATTENTION PATH: Works everywhere (CPU, MPS, any dtype)
+            # ─────────────────────────────────────────────────────────────────
+            # Transpose for batched matrix multiply: [batch, heads, seq, dim]
+            q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+            
+            # scores = Q @ K.T / sqrt(head_dim) - scaled dot-product attention
+            scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+            if mask is not None:
+                scores = scores + mask  # Mask is -inf for blocked positions
+
+            # Softmax and dropout, then weighted sum of values
+            attn = self.dropout(F.softmax(scores, dim=-1))
+            output = torch.matmul(attn, v)
+            
+            # Reshape back: [batch, heads, seq, dim] -> [batch, seq, heads*dim]
+            output = output.transpose(1, 2).contiguous().view(B, T, -1)
 
         # ─────────────────────────────────────────────────────────────────────
-        # STEP 5: Compute attention scores and apply mask
+        # STEP 6: Project back to model dimension
         # ─────────────────────────────────────────────────────────────────────
-        # scores = Q @ K.T / sqrt(head_dim) - scaled dot-product attention
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-        if mask is not None:
-            scores = scores + mask  # Mask is -inf for blocked positions
-
-        # ─────────────────────────────────────────────────────────────────────
-        # STEP 6: Softmax and dropout, then weighted sum of values
-        # ─────────────────────────────────────────────────────────────────────
-        attn = self.dropout(F.softmax(scores, dim=-1))
-        output = torch.matmul(attn, v)
-
-        # ─────────────────────────────────────────────────────────────────────
-        # STEP 7: Concatenate heads and project back
-        # ─────────────────────────────────────────────────────────────────────
-        return self.wo(output.transpose(1, 2).contiguous().view(B, T, -1))
+        return self.wo(output)
 
     def clear_cache(self):
         """Clear the KV-cache (call between different sequences)."""
