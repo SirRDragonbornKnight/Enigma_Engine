@@ -28,7 +28,7 @@ ForgeAI is a **fully modular AI framework** where EVERYTHING is a toggleable mod
 ```
 
 ### Core Packages
-- **forge_ai.core**: Forge transformer model with RoPE, RMSNorm, SwiGLU, KV-cache, tool routing
+- **forge_ai.core**: Forge transformer model with RoPE, RMSNorm, SwiGLU, GQA, KV-cache, optional Flash Attention, tool routing
 - **forge_ai.modules**: Module system - manager, registry, state handling
 - **forge_ai.gui.tabs**: Generation capabilities in standalone tabs (image, code, video, audio, 3D, embeddings, camera)
 - **forge_ai.memory**: Conversation storage (JSON/SQLite), vector search

@@ -165,6 +165,7 @@ response = engine.generate("write a sort function")  # Routes to code model
 See `docs/SPECIALIZED_MODELS.md` for complete guide.
 
 ### Upgraded Components (Optional)
+- **⚡ Flash Attention** - 2-4x faster training (auto-detected, CUDA + fp16/bf16)
 - **🎤 Whisper STT** - High-accuracy speech recognition (vs basic STT)
 - **🔊 Natural TTS** - Coqui/Bark for realistic voices (vs pyttsx3)
 - **⚡ tiktoken** - 5-10x faster tokenization (vs BPE)
@@ -172,6 +173,7 @@ See `docs/SPECIALIZED_MODELS.md` for complete guide.
 
 Install upgraded components with:
 ```bash
+pip install flash-attn      # Flash Attention (RTX 30xx/40xx required)
 pip install openai-whisper  # Whisper STT
 pip install TTS             # Coqui TTS
 pip install tiktoken        # Fast tokenizer

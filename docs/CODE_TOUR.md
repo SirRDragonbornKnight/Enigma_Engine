@@ -65,7 +65,9 @@ Contains `Enigma`, a production-grade transformer language model.
 - **RoPE (Rotary Position Embeddings)** - Better position awareness than learned embeddings
 - **RMSNorm** - More stable than LayerNorm, faster training
 - **SwiGLU Activation** - Better than GELU for transformers
+- **GQA (Grouped Query Attention)** - Memory efficient attention
 - **KV-Cache** - Fast autoregressive generation
+- **Flash Attention** - Optional 2-4x speedup (auto-detected, requires CUDA + fp16)
 - **Pre-norm Architecture** - More stable training
 - **Weight Tying** - Embedding and output head share weights
 

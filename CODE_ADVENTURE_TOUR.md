@@ -52,7 +52,8 @@ The neural network itself. Called "Forge".
 
 **What it does:**
 - Takes numbers in, predicts next word
-- Uses modern techniques: RoPE, RMSNorm, SwiGLU
+- Uses modern techniques: RoPE, RMSNorm, SwiGLU, GQA
+- Optional Flash Attention (auto-detected, 2-4x faster on modern GPUs)
 
 **Model sizes:**
 | Size | Params | Best For |
