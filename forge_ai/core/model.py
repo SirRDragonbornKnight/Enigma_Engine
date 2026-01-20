@@ -391,14 +391,18 @@ def list_presets() -> dict:
     """List all presets with descriptions and estimated parameters."""
     result = {}
     for name, config in MODEL_PRESETS.items():
-        config.vocab_size = 32000  # Standard for estimation
+        # IMPORTANT: Create a copy to avoid mutating the global preset!
+        # Without copy, setting vocab_size corrupts the shared config object.
+        import copy
+        config_copy = copy.deepcopy(config)
+        config_copy.vocab_size = 32000  # Standard for estimation
         result[name] = {
             'description': MODEL_DESCRIPTIONS.get(name, ""),
-            'estimated_params': estimate_parameters(config),
-            'dim': config.dim,
-            'layers': config.n_layers,
-            'heads': config.n_heads,
-            'max_seq_len': config.max_seq_len,
+            'estimated_params': estimate_parameters(config_copy),
+            'dim': config_copy.dim,
+            'layers': config_copy.n_layers,
+            'heads': config_copy.n_heads,
+            'max_seq_len': config_copy.max_seq_len,
         }
     return result
 
@@ -646,6 +650,11 @@ class Attention(nn.Module):
         # STEP 3: Handle KV-cache (for efficient generation)
         # ─────────────────────────────────────────────────────────────────────
         if use_cache:
+            # Detach K, V from computation graph to prevent memory explosion
+            # if someone accidentally backprops with use_cache=True
+            k = k.detach()
+            v = v.detach()
+            
             if self.cache_k is None:
                 # First token - just store K, V
                 self.cache_k, self.cache_v = k, v
@@ -962,10 +971,18 @@ class Forge(nn.Module):
 
         # RoPE frequencies
         if self.config.use_rope:
+            head_dim = self.config.dim // self.config.n_heads
+            # Validate head_dim is even (required for RoPE complex number reshape)
+            if head_dim % 2 != 0:
+                raise ValueError(
+                    f"head_dim must be even for RoPE, got {head_dim} "
+                    f"(dim={self.config.dim}, n_heads={self.config.n_heads}). "
+                    f"Adjust dim or n_heads so dim/n_heads is even."
+                )
             self.register_buffer(
                 'freqs_cis',
                 precompute_rope_frequencies(
-                    self.config.dim // self.config.n_heads,
+                    head_dim,
                     self.config.max_seq_len * 2,
                     self.config.rope_theta
                 )
@@ -1016,6 +1033,10 @@ class Forge(nn.Module):
 
         mask = None
         if T > 1:
+            # NOTE: Causal mask is rebuilt each forward pass.
+            # For inference with KV-cache, this is wasteful since we only need
+            # the last row. Future optimization: cache a static mask buffer.
+            # For training, this is fine since T varies per batch.
             mask = torch.full((T, T), float('-inf'), device=input_ids.device)
             mask = torch.triu(mask, diagonal=1).unsqueeze(0).unsqueeze(0)
 
@@ -1057,6 +1078,9 @@ class Forge(nn.Module):
             next_logits = logits[:, -1, :] / temperature
 
             # Repetition penalty
+            # NOTE: This is O(n²) for long sequences - acceptable for small/medium
+            # contexts but not scalable for very long generation.
+            # TODO: For large contexts, consider frequency-based penalty instead.
             if repetition_penalty != 1.0:
                 for i in range(input_ids.shape[0]):
                     for tok in set(generated[i].tolist()):
