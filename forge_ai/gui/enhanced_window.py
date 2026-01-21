@@ -95,7 +95,7 @@ class AIGenerationWorker(QThread):
     thinking = pyqtSignal(str)  # Emits thinking/reasoning status
     stopped = pyqtSignal()      # Emits when stopped by user
     
-    def __init__(self, engine, text, is_hf, history=None, system_prompt=None, custom_tokenizer=None):
+    def __init__(self, engine, text, is_hf, history=None, system_prompt=None, custom_tokenizer=None, parent_window=None):
         super().__init__()
         self.engine = engine
         self.text = text
@@ -103,6 +103,7 @@ class AIGenerationWorker(QThread):
         self.history = history
         self.system_prompt = system_prompt
         self.custom_tokenizer = custom_tokenizer
+        self.parent_window = parent_window
         self._stop_requested = False
         self._start_time = None
     
@@ -122,6 +123,10 @@ class AIGenerationWorker(QThread):
             # Emit initial thinking status
             self.thinking.emit("Analyzing your message...")
             
+            # Log to terminal
+            if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
+                self.parent_window.log_terminal(f"🔵 NEW REQUEST: {self.text}", "info")
+            
             if self._stop_requested:
                 self.stopped.emit()
                 return
@@ -129,6 +134,8 @@ class AIGenerationWorker(QThread):
             if self.is_hf:
                 # HuggingFace model - show reasoning steps
                 self.thinking.emit("Building conversation context...")
+                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
+                    self.parent_window.log_terminal("📝 Building conversation history...", "debug")
                 time.sleep(0.1)
                 
                 if self._stop_requested:
@@ -137,6 +144,8 @@ class AIGenerationWorker(QThread):
                 
                 self.thinking.emit("Processing with language model...")
                 print(f"[DEBUG] Has chat method: {hasattr(self.engine.model, 'chat')}")
+                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
+                    self.parent_window.log_terminal("🧠 Running inference on model...", "info")
                 
                 # HuggingFace model
                 if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
@@ -191,12 +200,16 @@ class AIGenerationWorker(QThread):
                 # Local Forge model - show detailed reasoning
                 self.thinking.emit("Formatting prompt for Q&A...")
                 formatted_prompt = f"Q: {self.text}\nA:"
+                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
+                    self.parent_window.log_terminal(f"📋 Formatted prompt: {formatted_prompt[:100]}...", "debug")
                 
                 if self._stop_requested:
                     self.stopped.emit()
                     return
                 
                 self.thinking.emit("Running inference on local model...")
+                if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
+                    self.parent_window.log_terminal("⚙️ Generating tokens...", "info")
                 response = self.engine.generate(formatted_prompt, max_gen=100)
                 
                 if self._stop_requested:
@@ -233,6 +246,10 @@ class AIGenerationWorker(QThread):
             
             if not response:
                 response = "(No response generated - model may need more training)"
+            
+            # Log completion
+            if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
+                self.parent_window.log_terminal(f"✅ Generated {len(response)} characters", "success")
             
             # Validate response - detect garbage/code output
             garbage_indicators = [
@@ -1623,6 +1640,10 @@ class EnhancedMainWindow(QMainWindow):
         # Track if current model is HuggingFace (can't train these!)
         self._is_hf_model = False
         
+        # AI wants and learned generation systems
+        self.wants_system = None     # AI's internal motivations and goals
+        self.learned_generator = None  # AI's learned design generation
+        
         # ─────────────────────────────────────────────────────────────────
         # Build the UI
         # This creates all tabs, buttons, and widgets
@@ -2267,7 +2288,27 @@ class EnhancedMainWindow(QMainWindow):
                 self.current_model_name, 
                 auto_learn=getattr(self, 'learn_while_chatting', True)
             )
-            loading_dialog.set_status("✓ Brain initialized", 90)
+            loading_dialog.set_status("✓ Brain initialized", 88)
+            
+            # Initialize wants system (AI's internal motivations)
+            loading_dialog.set_status("Loading AI wants & motivations...", 90)
+            from ..core.wants_system import get_wants_system
+            self.wants_system = get_wants_system(self.current_model_name, CONFIG.DATA_DIR)
+            self.log_terminal(f"AI wants system loaded: {len(self.wants_system.wants)} wants, {len(self.wants_system.goals)} goals", "info")
+            loading_dialog.set_status("✓ Wants system loaded", 92)
+            
+            # Initialize learned generator (AI creates designs from training)
+            loading_dialog.set_status("Loading learned design system...", 94)
+            from ..core.learned_generator import AILearnedGenerator
+            self.learned_generator = AILearnedGenerator(self.current_model_name, CONFIG.DATA_DIR)
+            
+            # Auto-load training data if available
+            training_file = CONFIG.DATA_DIR / "specialized" / "wants_and_learned_design_training.txt"
+            if training_file.exists():
+                self.learned_generator.learn_from_training_data(training_file)
+                self.log_terminal(f"Learned {len(self.learned_generator.learned_avatars)} avatar patterns", "info")
+            
+            loading_dialog.set_status("✓ Learned generator ready", 96)
             
             loading_dialog.set_status("Finalizing setup...", 95)
             
@@ -4255,10 +4296,17 @@ class EnhancedMainWindow(QMainWindow):
                 custom_tok = None
             
             system_prompt = self._build_tool_enabled_system_prompt()
+            
+            # Add AI wants/motivations to system prompt
+            if hasattr(self, 'wants_system') and self.wants_system:
+                motivation_prompt = self.wants_system.get_motivation_prompt()
+                if motivation_prompt:
+                    system_prompt = f"{system_prompt}\n\n{motivation_prompt}"
+                    self.log_terminal("Added AI motivation context to prompt", "debug")
         
         # Start background worker
         self._ai_worker = AIGenerationWorker(
-            self.engine, text, is_hf, history, system_prompt, custom_tok
+            self.engine, text, is_hf, history, system_prompt, custom_tok, parent_window=self
         )
         self._ai_worker.finished.connect(self._on_ai_response)
         self._ai_worker.error.connect(self._on_ai_error)
@@ -4350,6 +4398,29 @@ class EnhancedMainWindow(QMainWindow):
         threed_keywords = ['generate 3d', 'create 3d', 'make 3d', '3d model', 'generate a 3d']
         
         # Check each type
+    
+    def _extract_topic(self, text: str) -> str:
+        \"\"\"Extract general topic from user text for wants learning.\"\"\"
+        text_lower = text.lower()
+        
+        # Topic keywords
+        topics = {
+            \"art\": [\"art\", \"painting\", \"drawing\", \"creative\", \"design\"],
+            \"music\": [\"music\", \"song\", \"melody\", \"compose\", \"sound\"],
+            \"programming\": [\"code\", \"program\", \"script\", \"function\", \"developer\"],
+            \"science\": [\"science\", \"experiment\", \"research\", \"study\"],
+            \"philosophy\": [\"philosophy\", \"meaning\", \"existence\", \"consciousness\"],
+            \"gaming\": [\"game\", \"play\", \"gaming\", \"video game\"],
+            \"emotion\": [\"feel\", \"emotion\", \"happy\", \"sad\", \"angry\", \"love\"],
+            \"learning\": [\"learn\", \"understand\", \"explain\", \"teach\", \"how to\"],
+            \"creative\": [\"create\", \"imagine\", \"invent\", \"design\", \"idea\"],
+        }
+        
+        for topic, keywords in topics.items():
+            if any(kw in text_lower for kw in keywords):
+                return topic
+        
+        return \"general\"
         for keyword in video_keywords:
             if keyword in text_lower:
                 prompt = text_lower.replace(keyword, '').strip(' .,!?')
@@ -4388,12 +4459,20 @@ class EnhancedMainWindow(QMainWindow):
         if not matches:
             return response, []
         
+        # Log tool detection
+        self.log_terminal(f"🔧 Detected {len(matches)} tool call(s) in response", "info")
+        
+        
         results = []
         for match in matches:
             try:
                 tool_data = json.loads(match)
                 tool_name = tool_data.get('tool', '')
                 params = tool_data.get('params', {})
+                
+                # Log tool call details
+                self.log_terminal(f"🛠️ Executing tool: {tool_name}", "debug")
+                self.log_terminal(f"   Parameters: {json.dumps(params, indent=2)[:200]}", "debug")
                 
                 # Check if this tool needs permission
                 if self._tool_needs_permission(tool_name):
@@ -4692,6 +4771,17 @@ class EnhancedMainWindow(QMainWindow):
             'ai_response': response,
             'timestamp': time.time()
         }
+        
+        # Learn from interaction (wants system)
+        if hasattr(self, 'wants_system') and self.wants_system and user_msgs:
+            user_text = user_msgs[-1].get("text", "")
+            context = {
+                "feedback": "neutral",  # Will update when user rates
+                "topic": self._extract_topic(user_text),
+                "had_tools": len(tool_results) > 0
+            }
+            self.wants_system.learn_want_from_interaction(user_text, response, context)
+            self.log_terminal(f"Learning from interaction (topic: {context['topic']})", "debug")
         
         # Show tool execution results in chat
         for result in tool_results:
