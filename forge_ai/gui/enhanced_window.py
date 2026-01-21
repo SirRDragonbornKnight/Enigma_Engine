@@ -2121,7 +2121,7 @@ class EnhancedMainWindow(QMainWindow):
         })
         
         # Only add avatar if it's set to auto-run (actually needs loading)
-        settings = self._load_settings()
+        settings = self._load_gui_settings()
         if settings.get('avatar_auto_run', False):
             loading_items.append({
                 'name': 'Avatar Overlay',
@@ -4398,29 +4398,6 @@ class EnhancedMainWindow(QMainWindow):
         threed_keywords = ['generate 3d', 'create 3d', 'make 3d', '3d model', 'generate a 3d']
         
         # Check each type
-    
-    def _extract_topic(self, text: str) -> str:
-        \"\"\"Extract general topic from user text for wants learning.\"\"\"
-        text_lower = text.lower()
-        
-        # Topic keywords
-        topics = {
-            \"art\": [\"art\", \"painting\", \"drawing\", \"creative\", \"design\"],
-            \"music\": [\"music\", \"song\", \"melody\", \"compose\", \"sound\"],
-            \"programming\": [\"code\", \"program\", \"script\", \"function\", \"developer\"],
-            \"science\": [\"science\", \"experiment\", \"research\", \"study\"],
-            \"philosophy\": [\"philosophy\", \"meaning\", \"existence\", \"consciousness\"],
-            \"gaming\": [\"game\", \"play\", \"gaming\", \"video game\"],
-            \"emotion\": [\"feel\", \"emotion\", \"happy\", \"sad\", \"angry\", \"love\"],
-            \"learning\": [\"learn\", \"understand\", \"explain\", \"teach\", \"how to\"],
-            \"creative\": [\"create\", \"imagine\", \"invent\", \"design\", \"idea\"],
-        }
-        
-        for topic, keywords in topics.items():
-            if any(kw in text_lower for kw in keywords):
-                return topic
-        
-        return \"general\"
         for keyword in video_keywords:
             if keyword in text_lower:
                 prompt = text_lower.replace(keyword, '').strip(' .,!?')
@@ -4447,6 +4424,29 @@ class EnhancedMainWindow(QMainWindow):
                 return ('image', prompt if prompt else text)
         
         return (None, None)
+    
+    def _extract_topic(self, text: str) -> str:
+        """Extract general topic from user text for wants learning."""
+        text_lower = text.lower()
+        
+        # Topic keywords
+        topics = {
+            "art": ["art", "painting", "drawing", "creative", "design"],
+            "music": ["music", "song", "melody", "compose", "sound"],
+            "programming": ["code", "program", "script", "function", "developer"],
+            "science": ["science", "experiment", "research", "study"],
+            "philosophy": ["philosophy", "meaning", "existence", "consciousness"],
+            "gaming": ["game", "play", "gaming", "video game"],
+            "emotion": ["feel", "emotion", "happy", "sad", "angry", "love"],
+            "learning": ["learn", "understand", "explain", "teach", "how to"],
+            "creative": ["create", "imagine", "invent", "design", "idea"],
+        }
+        
+        for topic, keywords in topics.items():
+            if any(kw in text_lower for kw in keywords):
+                return topic
+        
+        return "general"
     
     def _execute_tool_from_response(self, response: str):
         """Parse and execute any tool calls in the AI response, return modified response."""
