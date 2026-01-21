@@ -407,7 +407,7 @@ class AvatarImportWizard(QDialog):
             
             # Install bundle
             from ..config import CONFIG
-            avatars_dir = CONFIG.DATA_DIR / "avatar" / "installed"
+            avatars_dir = Path(CONFIG["data_dir"]) / "avatar" / "installed"
             avatars_dir.mkdir(parents=True, exist_ok=True)
             
             # Save as bundle then install
@@ -736,7 +736,7 @@ class AvatarPickerDialog(QDialog):
             from .sample_avatars import generate_sample_avatars
             from ..config import CONFIG
             
-            output_dir = CONFIG.DATA_DIR / "avatar" / "samples"
+            output_dir = Path(CONFIG["data_dir"]) / "avatar" / "samples"
             avatars = generate_sample_avatars(str(output_dir))
             
             # Add samples to grid

@@ -338,6 +338,6 @@ def get_wants_system(model_name: str, config_dir: Optional[Path] = None) -> AIWa
     """
     if config_dir is None:
         from ..config import CONFIG
-        config_dir = CONFIG.DATA_DIR
+        config_dir = Path(CONFIG["data_dir"])
     
     return AIWantsSystem(model_name, config_dir)

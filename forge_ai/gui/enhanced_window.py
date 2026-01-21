@@ -2293,17 +2293,17 @@ class EnhancedMainWindow(QMainWindow):
             # Initialize wants system (AI's internal motivations)
             loading_dialog.set_status("Loading AI wants & motivations...", 90)
             from ..core.wants_system import get_wants_system
-            self.wants_system = get_wants_system(self.current_model_name, CONFIG.DATA_DIR)
+            self.wants_system = get_wants_system(self.current_model_name, Path(CONFIG["data_dir"]))
             self.log_terminal(f"AI wants system loaded: {len(self.wants_system.wants)} wants, {len(self.wants_system.goals)} goals", "info")
             loading_dialog.set_status("✓ Wants system loaded", 92)
             
             # Initialize learned generator (AI creates designs from training)
             loading_dialog.set_status("Loading learned design system...", 94)
             from ..core.learned_generator import AILearnedGenerator
-            self.learned_generator = AILearnedGenerator(self.current_model_name, CONFIG.DATA_DIR)
+            self.learned_generator = AILearnedGenerator(self.current_model_name, Path(CONFIG["data_dir"]))
             
             # Auto-load training data if available
-            training_file = CONFIG.DATA_DIR / "specialized" / "wants_and_learned_design_training.txt"
+            training_file = Path(CONFIG["data_dir"]) / "specialized" / "wants_and_learned_design_training.txt"
             if training_file.exists():
                 self.learned_generator.learn_from_training_data(training_file)
                 self.log_terminal(f"Learned {len(self.learned_generator.learned_avatars)} avatar patterns", "info")

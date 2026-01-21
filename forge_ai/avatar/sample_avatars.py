@@ -909,7 +909,7 @@ def generate_sample_avatars(output_dir: Optional[str] = None) -> Dict[str, Path]
     """
     if output_dir is None:
         from ..config import CONFIG
-        output_dir = CONFIG.DATA_DIR / "avatar" / "samples"
+        output_dir = Path(CONFIG["data_dir"]) / "avatar" / "samples"
     
     generator = SampleAvatarGenerator()
     return generator.generate_all(str(output_dir))

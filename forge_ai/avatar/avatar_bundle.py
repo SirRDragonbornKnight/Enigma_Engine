@@ -395,7 +395,7 @@ def install_avatar_bundle(bundle_path: str, avatars_dir: Optional[str] = None) -
     if avatars_dir is None:
         # Default installation directory
         from ..config import CONFIG
-        avatars_dir = CONFIG.DATA_DIR / "avatar" / "installed"
+        avatars_dir = Path(CONFIG["data_dir"]) / "avatar" / "installed"
     
     avatars_dir = Path(avatars_dir)
     avatars_dir.mkdir(parents=True, exist_ok=True)
@@ -429,7 +429,7 @@ def list_installed_avatars(avatars_dir: Optional[str] = None) -> List[Dict[str, 
     """
     if avatars_dir is None:
         from ..config import CONFIG
-        avatars_dir = CONFIG.DATA_DIR / "avatar" / "installed"
+        avatars_dir = Path(CONFIG["data_dir"]) / "avatar" / "installed"
     
     avatars_dir = Path(avatars_dir)
     avatars = []
