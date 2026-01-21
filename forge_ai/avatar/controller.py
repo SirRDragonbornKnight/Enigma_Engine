@@ -73,11 +73,25 @@ from pathlib import Path
 from threading import Lock
 from typing import Dict, Optional, List, Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, IntEnum
 
 from ..config import CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+class ControlPriority(IntEnum):
+    """Priority levels for avatar control systems.
+    
+    Higher values = higher priority. When multiple systems want control,
+    the highest priority wins. Bone animation is primary.
+    """
+    BONE_ANIMATION = 100    # Primary: Direct bone control for rigged models
+    USER_MANUAL = 80        # User dragging/clicking avatar
+    AI_TOOL_CALL = 70       # AI explicit commands via tools
+    AUTONOMOUS = 50         # Autonomous behaviors
+    IDLE_ANIMATION = 30     # Background idle animations
+    FALLBACK = 10          # Last resort (for non-avatar-trained models)
 
 
 class AvatarState(Enum):
@@ -169,11 +183,82 @@ class AvatarController:
         self._animation_lock = Lock()
         self._animation_thread: Optional[threading.Thread] = None
         self._running = False
+        
+        # Control priority system - bone animation is primary
+        self._control_lock = Lock()
+        self._current_controller: str = "none"
+        self._current_priority: ControlPriority = ControlPriority.FALLBACK
+        self._control_timeout: float = 0.0  # When current control expires
+        self._priority_hold_time: float = 2.0  # Seconds to hold priority
     
     @property
     def is_enabled(self) -> bool:
         """Check if avatar is enabled."""
         return self.state != AvatarState.OFF
+    
+    @property
+    def current_controller(self) -> str:
+        """Get the name of the current controlling system."""
+        with self._control_lock:
+            # Check if control has expired
+            if time.time() > self._control_timeout:
+                self._current_controller = "none"
+                self._current_priority = ControlPriority.FALLBACK
+            return self._current_controller
+    
+    def request_control(self, requester: str, priority: ControlPriority, 
+                       duration: float = None) -> bool:
+        """Request control of the avatar.
+        
+        Args:
+            requester: Name of the requesting system (e.g., 'bone_controller')
+            priority: Priority level of the request
+            duration: How long to hold control (seconds). None = use default
+        
+        Returns:
+            True if control granted, False if denied
+        
+        """
+        if not hasattr(self, '_control_lock'):
+            # Priority system not initialized (old version compatibility)
+            return True
+            
+        with self._control_lock:
+            current_time = time.time()
+            
+            # If control expired, anyone can take it
+            if current_time > self._control_timeout:
+                self._current_controller = requester
+                self._current_priority = priority
+                self._control_timeout = current_time + (duration or self._priority_hold_time)
+                logger.debug(f"Control granted to {requester} (priority {priority})")
+                return True
+            
+            # If new priority is higher, override current controller
+            if priority > self._current_priority:
+                logger.debug(f"Control override: {self._current_controller} -> {requester} "
+                           f"(priority {self._current_priority} -> {priority})")
+                self._current_controller = requester
+                self._current_priority = priority
+                self._control_timeout = current_time + (duration or self._priority_hold_time)
+                return True
+            
+            # If same priority and same requester, extend timeout
+            if priority == self._current_priority and requester == self._current_controller:
+                self._control_timeout = current_time + (duration or self._priority_hold_time)
+                return True
+            
+            # Denied - lower priority or different requester
+            return False
+    
+    def release_control(self, requester: str) -> None:
+        """Release control of the avatar."""
+        with self._control_lock:
+            if self._current_controller == requester:
+                self._current_controller = "none"
+                self._current_priority = ControlPriority.FALLBACK
+                self._control_timeout = 0.0
+                logger.debug(f"Control released by {requester}")
     
     def enable(self) -> bool:
         """
@@ -292,7 +377,8 @@ class AvatarController:
     
     # === Movement ===
     
-    def move_to(self, x: int, y: int, animate: bool = True) -> None:
+    def move_to(self, x: int, y: int, animate: bool = True, 
+                requester: str = "manual", priority: ControlPriority = ControlPriority.USER_MANUAL) -> None:
         """
         Move avatar to position.
         
@@ -300,9 +386,17 @@ class AvatarController:
             x: Target X coordinate
             y: Target Y coordinate
             animate: Whether to animate the movement
+            requester: Name of the requesting system
+            priority: Priority level of the request
         """
         if not self.is_enabled:
             return
+        
+        # Request control - if denied, don't move (backward compatible)
+        if hasattr(self, 'request_control'):
+            if not self.request_control(requester, priority, duration=1.0):
+                logger.debug(f"Move denied for {requester} - controlled by {self.current_controller}")
+                return
         
         if animate:
             self._set_state(AvatarState.MOVING)
@@ -588,13 +682,22 @@ class AvatarController:
     
     # === Expressions ===
     
-    def set_expression(self, expression: str) -> None:
+    def set_expression(self, expression: str, requester: str = "manual", 
+                      priority: ControlPriority = ControlPriority.USER_MANUAL) -> None:
         """
         Set avatar facial expression.
         
         Args:
             expression: One of: neutral, happy, sad, surprised, thinking, confused
+            requester: Name of the requesting system
+            priority: Priority level of the request
         """
+        # Request control - if denied, don't change expression (backward compatible)
+        if self.is_enabled and hasattr(self, 'request_control'):
+            if not self.request_control(requester, priority, duration=0.5):
+                logger.debug(f"Expression change denied for {requester} - controlled by {self.current_controller}")
+                return
+        
         # Update current expression (always track, even when disabled)
         old_expression = getattr(self, '_current_expression', 'neutral')
         self._current_expression = expression

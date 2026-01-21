@@ -6,8 +6,11 @@
 Makes the avatar react to the screen, do things on its own, express curiosity,
 and behave naturally WITHOUT explicit commands! Your AI pet comes to life!
 
+FALLBACK SYSTEM: Only takes control when bone controller is not active.
+Priority: AUTONOMOUS (50) - lower than BONE_ANIMATION (100)
+
 📍 FILE: forge_ai/avatar/autonomous.py
-🏷️ TYPE: Autonomous Behavior System
+🏷️ TYPE: Autonomous Behavior System (Fallback)
 🎯 MAIN CLASSES: AutonomousAvatar, AutonomousConfig, AvatarMood
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -229,7 +232,17 @@ class AutonomousAvatar:
                     AvatarMood.PLAYFUL: "winking",
                     AvatarMood.THOUGHTFUL: "thinking",
                 }
-                self.avatar.set_expression(mood_expressions.get(mood, "neutral"))
+                # Use AUTONOMOUS priority (fallback to bone control)
+                try:
+                    from .controller import ControlPriority
+                    self.avatar.set_expression(
+                        mood_expressions.get(mood, "neutral"),
+                        requester="autonomous",
+                        priority=ControlPriority.AUTONOMOUS
+                    )
+                except TypeError:
+                    # Fallback for old signature
+                    self.avatar.set_expression(mood_expressions.get(mood, "neutral"))
                 
                 # Notify callbacks
                 for cb in self._on_mood_change:
@@ -454,7 +467,19 @@ class AutonomousAvatar:
         
         expressions = mood_expressions.get(self._mood, ["neutral"])
         expression = random.choice(expressions)
-        self.avatar.set_expression(expression)
+        
+        # Use AUTONOMOUS priority (fallback to bone control)
+        try:
+            from .controller import ControlPriority
+            self.avatar.set_expression(
+                expression,
+                requester="autonomous",
+                priority=ControlPriority.AUTONOMOUS
+            )
+        except TypeError:
+            # Fallback for old signature
+            self.avatar.set_expression(expression)
+        
         self._record_action(f"express:{expression}")
     
     def _random_gesture(self):

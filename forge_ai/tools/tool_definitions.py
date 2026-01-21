@@ -295,6 +295,65 @@ CUSTOMIZE_AVATAR = ToolDefinition(
     ],
 )
 
+CONTROL_AVATAR_BONES = ToolDefinition(
+    name="control_avatar_bones",
+    description="Control individual avatar bones for natural body language, gestures, and expressions. Makes the avatar nod, wave, point, shrug, or perform custom bone movements. PRIMARY control system for rigged 3D avatars.",
+    category="control",
+    module="avatar",
+    parameters=[
+        ToolParameter(
+            name="action",
+            type="string",
+            description="Type of bone control action",
+            required=True,
+            enum=["move_bone", "gesture", "reset_pose"],
+        ),
+        ToolParameter(
+            name="bone_name",
+            type="string",
+            description="Name of bone to move (for move_bone action)",
+            required=False,
+            enum=["head", "neck", "spine", "chest", "hips", "left_shoulder", "right_shoulder",
+                  "left_upper_arm", "right_upper_arm", "left_forearm", "right_forearm",
+                  "left_hand", "right_hand", "left_upper_leg", "right_upper_leg",
+                  "left_lower_leg", "right_lower_leg", "left_foot", "right_foot"],
+        ),
+        ToolParameter(
+            name="pitch",
+            type="float",
+            description="Pitch rotation in degrees (nodding up/down). Range: typically -45 to 45",
+            required=False,
+        ),
+        ToolParameter(
+            name="yaw",
+            type="float",
+            description="Yaw rotation in degrees (turning left/right). Range: typically -80 to 80",
+            required=False,
+        ),
+        ToolParameter(
+            name="roll",
+            type="float",
+            description="Roll rotation in degrees (tilting side to side). Range: typically -30 to 30",
+            required=False,
+        ),
+        ToolParameter(
+            name="gesture_name",
+            type="string",
+            description="Predefined gesture name (for gesture action)",
+            required=False,
+            enum=["nod", "shake", "wave", "shrug", "point", "thinking", "bow", "stretch"],
+        ),
+    ],
+    examples=[
+        "Make the avatar nod",
+        "Avatar, wave hello",
+        "Make the avatar do a thinking pose",
+        "Move the avatar's head to look left",
+        "Avatar shrug gesture",
+        "Reset avatar to neutral position",
+    ],
+)
+
 # --- Text-to-Speech Tools ---
 
 SPEAK = ToolDefinition(
@@ -1306,6 +1365,7 @@ ALL_TOOLS = [
     
     # Control
     CONTROL_AVATAR,
+    CONTROL_AVATAR_BONES,
     CUSTOMIZE_AVATAR,
     SPEAK,
     CREATE_VOICE_PROFILE,

@@ -1,6 +1,9 @@
 """
 Avatar Bone Control System
 
+PRIMARY AVATAR CONTROL: Direct bone/joint manipulation for rigged 3D avatars.
+This is the main control system, with fallback to other systems for non-rigged models.
+
 Allows AI to control individual bones/joints of rigged 3D avatars
 with built-in limits to prevent unnatural movements.
 
@@ -136,10 +139,14 @@ class BoneController:
     """
     Controls avatar bones with anatomical limits.
     
+    PRIMARY AVATAR CONTROL SYSTEM - highest priority.
+    
     Prevents unnatural movements by:
     1. Clamping rotations to realistic limits
     2. Limiting movement speed to prevent jerkiness
     3. Smoothing movements over time
+    
+    Integrates with AvatarController to request control at BONE_ANIMATION priority.
     """
     
     def __init__(self):
@@ -149,10 +156,21 @@ class BoneController:
         self._avatar_bones: List[str] = []
         self._callbacks: List[callable] = []
         
+        # Link to main avatar controller for priority system
+        self._avatar_controller = None
+        
         # Command file for AI to write bone commands
         self._command_file = Path("data/avatar/bone_commands.json")
         self._command_file.parent.mkdir(parents=True, exist_ok=True)
         self._last_command_time = 0.0
+    
+    def link_avatar_controller(self, controller) -> None:
+        """Link to main avatar controller for priority coordination."""
+        if controller is None:
+            logger.warning("Attempted to link None avatar controller")
+            return
+        self._avatar_controller = controller
+        logger.info("Bone controller linked to main avatar controller")
     
     def set_avatar_bones(self, bone_names: List[str]) -> None:
         """Set the available bones for the current avatar."""
@@ -192,6 +210,8 @@ class BoneController:
         """
         Move a bone to the specified rotation.
         
+        As PRIMARY control system, requests BONE_ANIMATION priority from AvatarController.
+        
         Args:
             bone_name: Name of the bone to move
             pitch: Target pitch rotation (degrees)
@@ -202,6 +222,33 @@ class BoneController:
         Returns:
             Tuple of (actual_pitch, actual_yaw, actual_roll) after clamping
         """
+        # Request control from main avatar controller (highest priority)
+        if self._avatar_controller:
+            try:
+                from .controller import ControlPriority
+                granted = self._avatar_controller.request_control(
+                    "bone_controller", 
+                    ControlPriority.BONE_ANIMATION,
+                    duration=1.0
+                )
+                if not granted:
+                    logger.debug(f"Bone control denied - {self._avatar_controller.current_controller} has control")
+                    # Return current state without modifying
+                    with self._lock:
+                        if bone_name in self._bone_states:
+                            state = self._bone_states[bone_name]
+                            return state.pitch, state.yaw, state.roll
+                        return 0.0, 0.0, 0.0
+            except ImportError as e:
+                logger.warning(f"ControlPriority not available: {e}")
+                # Continue without priority system
+            except AttributeError as e:
+                logger.warning(f"Avatar controller missing request_control method: {e}")
+                # Continue without priority system
+            except Exception as e:
+                logger.warning(f"Error requesting control: {e}")
+                # Continue without priority system
+        
         with self._lock:
             if bone_name not in self._bone_states:
                 self._bone_states[bone_name] = BoneState(last_update=time.time())
@@ -375,9 +422,18 @@ class BoneController:
 _bone_controller: Optional[BoneController] = None
 
 
-def get_bone_controller() -> BoneController:
-    """Get the global bone controller instance."""
+def get_bone_controller(avatar_controller=None) -> BoneController:
+    """Get the global bone controller instance.
+    
+    Args:
+        avatar_controller: Optional AvatarController to link for priority coordination
+    """
     global _bone_controller
     if _bone_controller is None:
         _bone_controller = BoneController()
+    
+    # Link to avatar controller if provided
+    if avatar_controller is not None and _bone_controller._avatar_controller is None:
+        _bone_controller.link_avatar_controller(avatar_controller)
+    
     return _bone_controller

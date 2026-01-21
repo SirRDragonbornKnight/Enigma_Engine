@@ -1,0 +1,168 @@
+# Avatar Control Training Data
+# Trains AI to control avatar bones naturally
+
+# Basic bone movements
+User: nod your head
+Assistant: <bone_control>head|pitch=15,yaw=0,roll=0</bone_control>
+
+User: shake your head no
+Assistant: <bone_control>head|pitch=0,yaw=-20,roll=0</bone_control><bone_control>head|pitch=0,yaw=20,roll=0</bone_control><bone_control>head|pitch=0,yaw=0,roll=0</bone_control>
+
+User: tilt your head
+Assistant: <bone_control>head|pitch=0,yaw=0,roll=15</bone_control>
+
+User: look up
+Assistant: <bone_control>head|pitch=25,yaw=0,roll=0</bone_control><bone_control>neck|pitch=10,yaw=0,roll=0</bone_control>
+
+User: look down
+Assistant: <bone_control>head|pitch=-20,yaw=0,roll=0</bone_control><bone_control>neck|pitch=-10,yaw=0,roll=0</bone_control>
+
+User: look left
+Assistant: <bone_control>head|pitch=0,yaw=-30,roll=0</bone_control><bone_control>neck|pitch=0,yaw=-15,roll=0</bone_control>
+
+User: look right
+Assistant: <bone_control>head|pitch=0,yaw=30,roll=0</bone_control><bone_control>neck|pitch=0,yaw=15,roll=0</bone_control>
+
+# Arm movements
+User: wave hello
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=-45</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: raise your hand
+Assistant: <bone_control>right_upper_arm|pitch=180,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control>
+
+User: cross your arms
+Assistant: <bone_control>left_upper_arm|pitch=30,yaw=45,roll=0</bone_control><bone_control>right_upper_arm|pitch=30,yaw=-45,roll=0</bone_control><bone_control>left_forearm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: point at something
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control>
+
+User: thumbs up
+Assistant: <bone_control>right_upper_arm|pitch=45,yaw=0,roll=-30</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: hands on hips
+Assistant: <bone_control>left_upper_arm|pitch=-30,yaw=30,roll=0</bone_control><bone_control>right_upper_arm|pitch=-30,yaw=-30,roll=0</bone_control><bone_control>left_forearm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: relax your arms
+Assistant: <bone_control>left_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>left_forearm|pitch=10,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=10,yaw=0,roll=0</bone_control>
+
+# Body movements
+User: stand up straight
+Assistant: <bone_control>spine|pitch=0,yaw=0,roll=0</bone_control><bone_control>chest|pitch=0,yaw=0,roll=0</bone_control><bone_control>hips|pitch=0,yaw=0,roll=0</bone_control>
+
+User: lean forward
+Assistant: <bone_control>spine|pitch=-15,yaw=0,roll=0</bone_control><bone_control>chest|pitch=-10,yaw=0,roll=0</bone_control>
+
+User: lean back
+Assistant: <bone_control>spine|pitch=20,yaw=0,roll=0</bone_control><bone_control>chest|pitch=15,yaw=0,roll=0</bone_control>
+
+User: twist to the left
+Assistant: <bone_control>spine|pitch=0,yaw=-20,roll=0</bone_control><bone_control>chest|pitch=0,yaw=-15,roll=0</bone_control>
+
+User: twist to the right
+Assistant: <bone_control>spine|pitch=0,yaw=20,roll=0</bone_control><bone_control>chest|pitch=0,yaw=15,roll=0</bone_control>
+
+User: shrug your shoulders
+Assistant: <bone_control>left_shoulder|pitch=20,yaw=0,roll=0</bone_control><bone_control>right_shoulder|pitch=20,yaw=0,roll=0</bone_control>
+
+# Complex gestures
+User: thinking pose
+Assistant: <bone_control>head|pitch=-10,yaw=15,roll=5</bone_control><bone_control>right_upper_arm|pitch=90,yaw=30,roll=0</bone_control><bone_control>right_forearm|pitch=120,yaw=0,roll=0</bone_control>
+
+User: confident stance
+Assistant: <bone_control>spine|pitch=10,yaw=0,roll=0</bone_control><bone_control>chest|pitch=5,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=-10,yaw=20,roll=0</bone_control><bone_control>right_upper_arm|pitch=-10,yaw=-20,roll=0</bone_control>
+
+User: excited jump
+Assistant: <bone_control>spine|pitch=-5,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=120,yaw=0,roll=-20</bone_control><bone_control>right_upper_arm|pitch=120,yaw=0,roll=20</bone_control>
+
+User: bow
+Assistant: <bone_control>spine|pitch=-30,yaw=0,roll=0</bone_control><bone_control>chest|pitch=-20,yaw=0,roll=0</bone_control><bone_control>head|pitch=-15,yaw=0,roll=0</bone_control><bone_control>neck|pitch=-10,yaw=0,roll=0</bone_control>
+
+User: stretch
+Assistant: <bone_control>spine|pitch=15,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=160,yaw=0,roll=0</bone_control><bone_control>right_upper_arm|pitch=160,yaw=0,roll=0</bone_control><bone_control>left_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control>
+
+# Emotional expressions with body language
+User: show you're happy
+Assistant: <bone_control>head|pitch=10,yaw=0,roll=0</bone_control><bone_control>spine|pitch=5,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=30,yaw=-15,roll=0</bone_control><bone_control>right_upper_arm|pitch=30,yaw=15,roll=0</bone_control>
+
+User: show you're sad
+Assistant: <bone_control>head|pitch=-15,yaw=0,roll=0</bone_control><bone_control>spine|pitch=-10,yaw=0,roll=0</bone_control><bone_control>left_shoulder|pitch=-10,yaw=0,roll=0</bone_control><bone_control>right_shoulder|pitch=-10,yaw=0,roll=0</bone_control>
+
+User: show surprise
+Assistant: <bone_control>head|pitch=15,yaw=0,roll=0</bone_control><bone_control>neck|pitch=10,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=45,yaw=-30,roll=0</bone_control><bone_control>right_upper_arm|pitch=45,yaw=30,roll=0</bone_control>
+
+User: show confusion
+Assistant: <bone_control>head|pitch=0,yaw=0,roll=15</bone_control><bone_control>right_upper_arm|pitch=60,yaw=20,roll=0</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: defensive posture
+Assistant: <bone_control>spine|pitch=-5,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=60,yaw=30,roll=0</bone_control><bone_control>right_upper_arm|pitch=60,yaw=-30,roll=0</bone_control><bone_control>left_forearm|pitch=100,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=100,yaw=0,roll=0</bone_control>
+
+# Neutral/reset
+User: return to neutral position
+Assistant: <bone_control>head|pitch=0,yaw=0,roll=0</bone_control><bone_control>neck|pitch=0,yaw=0,roll=0</bone_control><bone_control>spine|pitch=0,yaw=0,roll=0</bone_control><bone_control>chest|pitch=0,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>left_forearm|pitch=10,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=10,yaw=0,roll=0</bone_control>
+
+User: reset pose
+Assistant: <bone_control>head|pitch=0,yaw=0,roll=0</bone_control><bone_control>neck|pitch=0,yaw=0,roll=0</bone_control><bone_control>spine|pitch=0,yaw=0,roll=0</bone_control><bone_control>chest|pitch=0,yaw=0,roll=0</bone_control><bone_control>hips|pitch=0,yaw=0,roll=0</bone_control><bone_control>left_shoulder|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_shoulder|pitch=0,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>left_forearm|pitch=10,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=10,yaw=0,roll=0</bone_control>
+
+# Additional natural variations
+User: can you wave at me
+Assistant: Sure! <bone_control>right_upper_arm|pitch=90,yaw=0,roll=-45</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: give me a thumbs up
+Assistant: <bone_control>right_upper_arm|pitch=45,yaw=0,roll=-30</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: look at me
+Assistant: <bone_control>head|pitch=5,yaw=0,roll=0</bone_control><bone_control>neck|pitch=3,yaw=0,roll=0</bone_control>
+
+User: turn your head to the side
+Assistant: <bone_control>head|pitch=0,yaw=30,roll=0</bone_control><bone_control>neck|pitch=0,yaw=20,roll=0</bone_control>
+
+User: stand at attention
+Assistant: <bone_control>spine|pitch=5,yaw=0,roll=0</bone_control><bone_control>chest|pitch=3,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_upper_arm|pitch=0,yaw=0,roll=0</bone_control><bone_control>head|pitch=0,yaw=0,roll=0</bone_control>
+
+User: salute
+Assistant: <bone_control>right_upper_arm|pitch=100,yaw=0,roll=-30</bone_control><bone_control>right_forearm|pitch=120,yaw=0,roll=0</bone_control><bone_control>head|pitch=5,yaw=0,roll=0</bone_control>
+
+User: fold your arms
+Assistant: <bone_control>left_upper_arm|pitch=30,yaw=45,roll=0</bone_control><bone_control>right_upper_arm|pitch=30,yaw=-45,roll=0</bone_control><bone_control>left_forearm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: look surprised
+Assistant: <bone_control>head|pitch=15,yaw=0,roll=0</bone_control><bone_control>neck|pitch=10,yaw=0,roll=0</bone_control><bone_control>left_upper_arm|pitch=45,yaw=-30,roll=0</bone_control><bone_control>right_upper_arm|pitch=45,yaw=30,roll=0</bone_control>
+
+User: slump down sadly
+Assistant: <bone_control>head|pitch=-15,yaw=0,roll=0</bone_control><bone_control>spine|pitch=-10,yaw=0,roll=0</bone_control><bone_control>left_shoulder|pitch=-10,yaw=0,roll=0</bone_control><bone_control>right_shoulder|pitch=-10,yaw=0,roll=0</bone_control>
+
+User: reach for something
+Assistant: <bone_control>right_upper_arm|pitch=120,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>spine|pitch=10,yaw=0,roll=0</bone_control>
+
+User: put your hands behind your back
+Assistant: <bone_control>left_upper_arm|pitch=-30,yaw=0,roll=45</bone_control><bone_control>right_upper_arm|pitch=-30,yaw=0,roll=-45</bone_control><bone_control>left_forearm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: clap your hands
+Assistant: <bone_control>left_upper_arm|pitch=60,yaw=30,roll=0</bone_control><bone_control>right_upper_arm|pitch=60,yaw=-30,roll=0</bone_control><bone_control>left_forearm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: cover your mouth
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=120,yaw=0,roll=0</bone_control><bone_control>head|pitch=-5,yaw=0,roll=0</bone_control>
+
+User: scratch your head
+Assistant: <bone_control>right_upper_arm|pitch=110,yaw=0,roll=-20</bone_control><bone_control>right_forearm|pitch=120,yaw=0,roll=0</bone_control><bone_control>head|pitch=0,yaw=0,roll=10</bone_control>
+
+User: facepalm
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=120,yaw=0,roll=0</bone_control><bone_control>head|pitch=-20,yaw=0,roll=0</bone_control>
+
+User: punch forward
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>spine|pitch=0,yaw=-15,roll=0</bone_control>
+
+User: duck down
+Assistant: <bone_control>spine|pitch=-20,yaw=0,roll=0</bone_control><bone_control>chest|pitch=-15,yaw=0,roll=0</bone_control><bone_control>head|pitch=-10,yaw=0,roll=0</bone_control><bone_control>neck|pitch=-10,yaw=0,roll=0</bone_control>
+
+User: stretch arms above head
+Assistant: <bone_control>left_upper_arm|pitch=160,yaw=0,roll=0</bone_control><bone_control>right_upper_arm|pitch=160,yaw=0,roll=0</bone_control><bone_control>left_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>spine|pitch=15,yaw=0,roll=0</bone_control>
+
+User: point at the screen
+Assistant: <bone_control>right_upper_arm|pitch=80,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>head|pitch=-5,yaw=10,roll=0</bone_control>
+
+User: beckoning gesture
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=-30</bone_control><bone_control>right_forearm|pitch=100,yaw=0,roll=0</bone_control>
+
+User: stop gesture
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=0</bone_control><bone_control>right_forearm|pitch=0,yaw=0,roll=0</bone_control><bone_control>spine|pitch=5,yaw=0,roll=0</bone_control>

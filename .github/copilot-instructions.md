@@ -101,9 +101,23 @@ Each tab contains both the implementation (provider classes) and the GUI:
 - **forge_ai/web/app.py**: `run_web()` function - Flask web dashboard, `app` Flask instance
 
 ### Autonomous Systems (Avatar/Robot/Game Control)
-- **forge_ai/avatar/autonomous.py**: `AutonomousAvatar`, `AutonomousConfig`, `ScreenRegion` - Avatar auto-behavior
+- **forge_ai/avatar/controller.py**: `AvatarController`, `ControlPriority` - Main avatar control with priority system
+- **forge_ai/avatar/bone_control.py**: `BoneController`, `get_bone_controller()` - PRIMARY avatar control via bone rigging (priority 100)
+- **forge_ai/avatar/autonomous.py**: `AutonomousAvatar`, `AutonomousConfig`, `ScreenRegion` - FALLBACK auto-behavior (priority 50)
 - **forge_ai/tools/robot_modes.py**: `RobotModeController`, `get_mode_controller()` - Robot hardware control
 - **forge_ai/tools/game_router.py**: `GameAIRouter`, `GameConfig`, `get_game_router()` - Game-specific AI routing
+
+### Avatar Control Priority System
+Avatar control uses a priority system to prevent conflicts:
+```python
+ControlPriority.BONE_ANIMATION = 100   # PRIMARY - Direct bone control (rigged models)
+ControlPriority.USER_MANUAL = 80       # User dragging/clicking
+ControlPriority.AI_TOOL_CALL = 70      # AI explicit commands
+ControlPriority.AUTONOMOUS = 50        # Autonomous behaviors (FALLBACK)
+ControlPriority.IDLE_ANIMATION = 30    # Background animations
+ControlPriority.FALLBACK = 10          # For non-avatar-trained models
+```
+**Bone animation is PRIMARY** - all other systems are fallbacks for models without bone control.
 
 ### Tools System
 - **forge_ai/tools/tool_executor.py**: `ToolExecutor` class - Executes AI tool calls

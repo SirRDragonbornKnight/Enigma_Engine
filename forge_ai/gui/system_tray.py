@@ -655,8 +655,8 @@ class QuickCommandOverlay(QWidget):
         self.stop_btn.hide()  # Hidden by default
         input_layout.addWidget(self.stop_btn)
         
-        # Voice input button (record style)
-        self.voice_btn = QPushButton("REC")
+        # Voice input button (record style) with visual indicator
+        self.voice_btn = QPushButton("🎤")
         self.voice_btn.setFixedSize(45, 40)
         self.voice_btn.setToolTip("Record - Click to speak")
         self.voice_btn.setCheckable(True)
@@ -666,7 +666,7 @@ class QuickCommandOverlay(QWidget):
                 border: 2px solid #555;
                 border-radius: 8px;
                 color: #888;
-                font-size: 11px;
+                font-size: 18px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -685,6 +685,38 @@ class QuickCommandOverlay(QWidget):
         """)
         self.voice_btn.clicked.connect(self._toggle_voice_input)
         input_layout.addWidget(self.voice_btn)
+        
+        # Voice visual animation timer (for pulsing effect when recording)
+        self._voice_pulse_timer = QTimer(self)
+        self._voice_pulse_timer.timeout.connect(self._pulse_voice_button)
+        self._voice_pulse_state = 0
+        
+        # Avatar control button
+        self.avatar_btn = QPushButton("👤")
+        self.avatar_btn.setFixedSize(45, 40)
+        self.avatar_btn.setToolTip("Avatar - Control avatar gestures")
+        self.avatar_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #444;
+                border: 2px solid #555;
+                border-radius: 8px;
+                color: #888;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #555;
+                border-color: #9b59b6;
+                color: #9b59b6;
+            }
+            QPushButton:pressed {
+                background-color: #8e44ad;
+                border-color: #7d3c98;
+                color: white;
+            }
+        """)
+        self.avatar_btn.clicked.connect(self._open_avatar_controls)
+        input_layout.addWidget(self.avatar_btn)
         
         frame_layout.addLayout(input_layout)
         
@@ -1064,6 +1096,9 @@ class QuickCommandOverlay(QWidget):
             self.voice_btn.setToolTip("Listening... (click to stop)")
             self.set_status("Listening...")
             
+            # Start pulse animation
+            self._voice_pulse_timer.start(200)  # Pulse every 200ms
+            
             # Try to start voice recognition
             try:
                 # Signal to start voice input
@@ -1075,11 +1110,121 @@ class QuickCommandOverlay(QWidget):
                 self._voice_thread.start()
             except Exception as e:
                 self.voice_btn.setChecked(False)
+                self._voice_pulse_timer.stop()
                 self.set_status(f"Voice error: {e}")
         else:
             self.voice_btn.setToolTip("Voice input (click to speak)")
             self.set_status("Ready")
             self._voice_thread = None
+            self._voice_pulse_timer.stop()
+            # Reset button to default state
+            self._voice_pulse_state = 0
+    
+    def _pulse_voice_button(self):
+        """Animate voice button with pulsing effect when recording."""
+        if not self.voice_btn.isChecked():
+            self._voice_pulse_timer.stop()
+            return
+        
+        # Cycle through pulse states (0-3)
+        self._voice_pulse_state = (self._voice_pulse_state + 1) % 4
+        
+        # Create pulsing effect with opacity/border
+        if self._voice_pulse_state == 0:
+            border_color = "#e74c3c"
+        elif self._voice_pulse_state == 1:
+            border_color = "#ff6b5a"
+        elif self._voice_pulse_state == 2:
+            border_color = "#e74c3c"
+        else:
+            border_color = "#c0392b"
+        
+        self.voice_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: #e74c3c;
+                border: 3px solid {border_color};
+                border-radius: 8px;
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+            }}
+        """)
+    
+    def _open_avatar_controls(self):
+        """Open avatar control menu with quick gestures."""
+        try:
+            from PyQt5.QtWidgets import QMenu
+            from PyQt5.QtCore import QPoint
+            
+            menu = QMenu(self)
+            menu.setStyleSheet("""
+                QMenu {
+                    background-color: #2c2c2c;
+                    border: 1px solid #555;
+                    padding: 5px;
+                }
+                QMenu::item {
+                    color: #ddd;
+                    padding: 5px 20px;
+                }
+                QMenu::item:selected {
+                    background-color: #9b59b6;
+                }
+            """)
+            
+            # Add gesture actions
+            gestures = [
+                ("👋 Wave", "wave hello"),
+                ("👍 Thumbs Up", "give me a thumbs up"),
+                ("👎 Thumbs Down", "give me a thumbs down"),
+                ("🫡 Salute", "salute"),
+                ("🤷 Shrug", "shrug your shoulders"),
+                ("✋ Stop", "make a stop gesture"),
+                ("☝️ Point", "point at the screen"),
+                ("👏 Clap", "clap your hands"),
+                ("🤦 Facepalm", "do a facepalm"),
+                ("🙋 Raise Hand", "raise your hand"),
+                ("💪 Flex", "flex your muscles"),
+            ]
+            
+            for emoji_text, command in gestures:
+                action = menu.addAction(emoji_text)
+                action.triggered.connect(lambda checked, cmd=command: self._send_avatar_command(cmd))
+            
+            menu.addSeparator()
+            
+            # Add "Open Avatar Tab" option
+            open_tab_action = menu.addAction("🎭 Open Avatar Tab")
+            open_tab_action.triggered.connect(self._open_avatar_tab)
+            
+            # Show menu below button
+            button_pos = self.avatar_btn.mapToGlobal(QPoint(0, self.avatar_btn.height()))
+            menu.exec_(button_pos)
+            
+        except Exception as e:
+            self.set_status(f"Avatar menu error: {e}")
+    
+    def _send_avatar_command(self, command: str):
+        """Send an avatar control command to the AI."""
+        self.command_input.setText(command)
+        self._on_chat()
+    
+    def _open_avatar_tab(self):
+        """Open the main GUI avatar tab."""
+        try:
+            main_window = self._get_main_window()
+            if main_window and hasattr(main_window, 'tab_widget'):
+                # Find avatar tab (usually tab 2)
+                for i in range(main_window.tab_widget.count()):
+                    if "avatar" in main_window.tab_widget.tabText(i).lower():
+                        main_window.tab_widget.setCurrentIndex(i)
+                        main_window.show()
+                        main_window.activateWindow()
+                        return
+            # If not found, just open GUI
+            self._open_gui()
+        except Exception as e:
+            self.set_status(f"Error: {e}")
     
     def _toggle_voice(self):
         """Legacy toggle - redirects to voice input."""
@@ -1119,6 +1264,8 @@ class QuickCommandOverlay(QWidget):
     def _voice_done(self):
         """Called when voice input completes."""
         self.voice_btn.setChecked(False)
+        self._voice_pulse_timer.stop()
+        self._voice_pulse_state = 0
         self.set_status("Ready")
         self._voice_thread = None
         # Auto-send the voice input
@@ -1129,6 +1276,8 @@ class QuickCommandOverlay(QWidget):
     def _voice_error(self, error: str):
         """Called when voice input fails."""
         self.voice_btn.setChecked(False)
+        self._voice_pulse_timer.stop()
+        self._voice_pulse_state = 0
         self.set_status(f"Voice: {error[:30]}")
         self._voice_thread = None
     

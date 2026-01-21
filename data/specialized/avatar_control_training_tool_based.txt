@@ -1,0 +1,255 @@
+# Avatar Control Training Data (Tool-Based Format)
+# ================================================
+# Teaches the AI to control avatar using the control_avatar_bones TOOL
+# Format: Q/A with tool calls (JSON) - NO VISIBLE TAGS IN OUTPUT
+# The tool executes silently in the background while AI speaks naturally
+
+Q: nod your head
+A: Sure!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "gesture", "gesture_name": "nod"}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true, "result": "Nodded head"}</tool_result>
+
+Q: shake your head no
+A: Okay, shaking my head.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "yaw": -20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "yaw": 20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: tilt your head to the side
+A: Like this?
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "roll": 15}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: wave hello
+A: Hello! 👋
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "gesture", "gesture_name": "wave"}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true, "result": "Waved hand"}</tool_result>
+
+Q: wave goodbye
+A: Goodbye!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": 50, "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: give me a thumbs up
+A: You got it! 👍
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_hand", "pitch": 90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: give me a thumbs down
+A: 👎
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_hand", "pitch": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: shrug your shoulders
+A: I don't know! 🤷
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "gesture", "gesture_name": "shrug"}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true, "result": "Shrugged shoulders"}</tool_result>
+
+Q: reach out your hand
+A: Reaching out.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "yaw": 45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: point forward
+A: There!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": 0}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_hand", "pitch": -10}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: cross your arms
+A: Done.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "pitch": -30, "yaw": -45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -30, "yaw": 45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: look up
+A: Looking up now.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "pitch": -20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: look down
+A: Looking down.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "pitch": 20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: look left
+A: Okay.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: look right
+A: Looking right.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "yaw": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: raise your left hand
+A: Left hand up!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "pitch": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: raise your right hand
+A: Right hand up!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: raise both hands
+A: Both hands up!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "pitch": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: salute
+A: Yes sir! 🫡
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -60, "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: do a facepalm
+A: *sigh* 🤦
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: stretch your arms
+A: Stretching!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "pitch": -120, "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -120, "yaw": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: can you wave at me
+A: Of course!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "gesture", "gesture_name": "wave"}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: stand at attention
+A: Ready!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "reset_pose"}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: fold your arms
+A: Folding arms.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "pitch": -20, "yaw": -50}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -20, "yaw": 50}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: slump down sadly
+A: ...
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "spine", "pitch": 20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "pitch": 15}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: reach for something
+A: Reaching!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -45, "yaw": 45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: put hands behind back
+A: Hands behind back.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "pitch": 30, "yaw": -60}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": 30, "yaw": 60}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: clap your hands
+A: *clap clap* 👏
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "yaw": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: cover your mouth
+A: Oh my!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -70}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: scratch your head
+A: Hmm...
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -80, "yaw": -20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: punch forward
+A: Pow!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": 0}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: duck down
+A: Ducking!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "spine", "pitch": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "head", "pitch": 20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: point at the screen
+A: Right there!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": 0}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_hand", "pitch": -10}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: make a beckoning gesture
+A: Come here!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_hand", "pitch": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: make a stop gesture
+A: Stop! ✋
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_hand", "pitch": 90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: reset pose
+A: Back to neutral position.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "reset_pose"}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true, "result": "Reset to default pose"}</tool_result>
+
+Q: flex your muscles
+A: 💪 Check these out!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -90, "yaw": 45}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: tip your hat
+A: Good day to you!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "pitch": -80, "yaw": -20}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: lean forward
+A: Leaning in.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "spine", "pitch": 15}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: lean back
+A: Relaxing.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "spine", "pitch": -15}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: turn to the left
+A: Turning left.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "spine", "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: turn to the right
+A: Turning right.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "spine", "yaw": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: spread your arms wide
+A: Wide open!
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "yaw": -90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "yaw": 90}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+
+Q: bring your hands together
+A: Hands together.
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "left_arm", "yaw": 30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>
+<tool_call>{"tool": "control_avatar_bones", "params": {"action": "move_bone", "bone_name": "right_arm", "yaw": -30}}</tool_call>
+<tool_result>{"tool": "control_avatar_bones", "success": true}</tool_result>

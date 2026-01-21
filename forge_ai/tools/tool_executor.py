@@ -444,6 +444,8 @@ class ToolExecutor:
             return self._execute_analyze_image(module, params)
         elif tool_name == "control_avatar":
             return self._execute_control_avatar(module, params)
+        elif tool_name == "control_avatar_bones":
+            return self._execute_control_avatar_bones(params)
         elif tool_name == "customize_avatar":
             return self._execute_customize_avatar(module, params)
         elif tool_name == "speak":
@@ -748,6 +750,82 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "control_avatar",
+            }
+    
+    def _execute_control_avatar_bones(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute bone-level avatar control."""
+        try:
+            from ..avatar.ai_control import get_ai_avatar_control, BoneCommand
+            
+            ai_control = get_ai_avatar_control()
+            action = params.get("action", "")
+            
+            if action == "move_bone":
+                bone_name = params.get("bone_name")
+                if not bone_name:
+                    return {
+                        "success": False,
+                        "error": "bone_name required for move_bone action",
+                        "tool": "control_avatar_bones",
+                    }
+                
+                pitch = params.get("pitch")
+                yaw = params.get("yaw")
+                roll = params.get("roll")
+                
+                command = BoneCommand(bone_name, pitch=pitch, yaw=yaw, roll=roll)
+                ai_control.execute_commands([command])
+                
+                return {
+                    "success": True,
+                    "result": f"Moved {bone_name} (pitch={pitch}, yaw={yaw}, roll={roll})",
+                    "tool": "control_avatar_bones",
+                }
+            
+            elif action == "gesture":
+                gesture_name = params.get("gesture_name")
+                if not gesture_name:
+                    return {
+                        "success": False,
+                        "error": "gesture_name required for gesture action",
+                        "tool": "control_avatar_bones",
+                    }
+                
+                success = ai_control.execute_gesture(gesture_name)
+                if success:
+                    return {
+                        "success": True,
+                        "result": f"Executed gesture: {gesture_name}",
+                        "tool": "control_avatar_bones",
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Unknown gesture: {gesture_name}",
+                        "tool": "control_avatar_bones",
+                    }
+            
+            elif action == "reset_pose":
+                ai_control.reset_pose()
+                return {
+                    "success": True,
+                    "result": "Avatar reset to neutral pose",
+                    "tool": "control_avatar_bones",
+                }
+            
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown action: {action}",
+                    "tool": "control_avatar_bones",
+                }
+        
+        except Exception as e:
+            logger.error(f"Error in control_avatar_bones: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "control_avatar_bones",
             }
     
     def _execute_customize_avatar(self, module, params: Dict[str, Any]) -> Dict[str, Any]:

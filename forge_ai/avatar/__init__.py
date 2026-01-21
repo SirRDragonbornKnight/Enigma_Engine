@@ -74,6 +74,7 @@ from .controller import (
     AvatarConfig,
     AvatarState,
     AvatarPosition,
+    ControlPriority,
     get_avatar,
     enable_avatar,
     disable_avatar,
@@ -182,6 +183,15 @@ from .autonomous import (
     get_autonomous_avatar,
 )
 
+# AI Control System
+from .ai_control import (
+    AIAvatarControl,
+    BoneCommand,
+    get_ai_avatar_control,
+    parse_bone_commands,
+    process_ai_response,
+)
+
 # Preset system
 from .presets import (
     AvatarPreset,
@@ -246,12 +256,18 @@ __all__ = [
     "AvatarController",
     "AvatarConfig",
     "AvatarState",
-    "AvatarPosition",
-    "get_avatar",
+    "AvatarPosition",    "ControlPriority",    "get_avatar",
     "enable_avatar",
     "disable_avatar",
     "toggle_avatar",
     "execute_action",
+    
+    # AI Control
+    "AIAvatarControl",
+    "BoneCommand",
+    "get_ai_avatar_control",
+    "parse_bone_commands",
+    "process_ai_response",
     
     # Identity & Appearance
     "AIAvatarIdentity",

@@ -1862,6 +1862,35 @@ class Avatar3DOverlayWindow(QWidget):
                     self._model_info['estimated_type'] = metadata.get('estimated_type', 'unknown')
                     self._model_info['has_textures'] = metadata.get('has_textures', False)
                     self._model_info['materials'] = metadata.get('materials', [])
+                    
+                    # Connect bone controller if model has skeleton
+                    if self._model_info['has_skeleton'] and self._model_info['skeleton_bones']:
+                        try:
+                            from ....avatar.bone_control import get_bone_controller
+                            from ....avatar import get_avatar
+                            
+                            # Get avatar controller first
+                            avatar_controller = get_avatar()
+                            if avatar_controller is None:
+                                print("[Avatar] Warning: Avatar controller not initialized, bone control unavailable")
+                            else:
+                                # Link bone controller to avatar controller
+                                bone_controller = get_bone_controller(avatar_controller=avatar_controller)
+                                bone_controller.set_avatar_bones(self._model_info['skeleton_bones'])
+                                
+                                # Write bone info for AI to read
+                                bone_controller.write_info_for_ai()
+                                
+                                print(f"[Avatar] ✓ Bone controller initialized with {len(self._model_info['skeleton_bones'])} bones")
+                                print(f"[Avatar] ✓ Detected bones: {', '.join(self._model_info['skeleton_bones'][:5])}"
+                                      f"{'...' if len(self._model_info['skeleton_bones']) > 5 else ''}")
+                                print(f"[Avatar] ✓ Bone animation is now PRIMARY control (priority 100)")
+                        except ImportError as e:
+                            print(f"[Avatar] Bone controller module not available: {e}")
+                        except Exception as e:
+                            print(f"[Avatar] Could not initialize bone controller: {e}")
+                            import traceback
+                            traceback.print_exc()
                 
                 # Initialize AdaptiveAnimator with model capabilities
                 if self._animator:
