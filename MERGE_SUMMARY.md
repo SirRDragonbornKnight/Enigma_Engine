@@ -112,5 +112,58 @@ e78a1eb Initial plan for merge
 ```
 
 ---
+
+## Recent Updates (January 21, 2026)
+
+### Avatar Control System Integration
+**Commits:** b437ae5, 09c6d35
+
+**Features Implemented:**
+- Priority-based avatar control system (6 priority levels)
+- Bone animation as PRIMARY control (priority 100)
+- AI training data for bone control (168 examples)
+- Tool system integration (`control_avatar_bones`)
+- Automatic bone detection on model upload
+- Conflict prevention between control systems
+
+**Files Added:**
+- `data/specialized/avatar_control_training.txt` - Training examples
+- `scripts/train_avatar_control.py` - One-command training
+- `forge_ai/tools/avatar_control_tool.py` - Tool definition
+- `forge_ai/avatar/ai_control.py` - AI command parsing
+- `AI_AVATAR_CONTROL_GUIDE.md` - Complete guide (296 lines)
+- `AVATAR_CONTROL_STATUS.md` - Status and fixes (153 lines)
+- `AVATAR_PRIORITY_SYSTEM.md` - Priority explanation (200+ lines)
+
+**Files Modified:**
+- `forge_ai/avatar/controller.py` - Added ControlPriority enum, request/release control
+- `forge_ai/avatar/bone_control.py` - Integrated priority system
+- `forge_ai/avatar/autonomous.py` - Updated to fallback (priority 50)
+- `forge_ai/tools/tool_definitions.py` - Added CONTROL_AVATAR_BONES
+- `forge_ai/tools/tool_executor.py` - Added _execute_control_avatar_bones()
+- `CODE_ADVENTURE_TOUR.md` - Added Chapter 9: Avatar Control
+- `docs/HOW_TO_TRAIN_AVATAR_AI.txt` - Added bone control section
+- `docs/AVATAR_SYSTEM_GUIDE.md` - Updated integration info
+
+**Key Design:**
+```
+Priority Hierarchy:
+BONE_ANIMATION (100)  ← PRIMARY for rigged 3D models
+USER_MANUAL (80)      ← Direct user input
+AI_TOOL_CALL (70)     ← AI commands
+AUTONOMOUS (50)       ← Background (FALLBACK)
+IDLE_ANIMATION (30)   ← Subtle movements
+FALLBACK (10)         ← Last resort
+```
+
+**Integration Status:** ✅ Complete
+- Core system with priority coordination
+- AI training pipeline ready
+- Tool system fully integrated
+- Documentation comprehensive (1,356 lines)
+- No conflicts between control systems
+
+---
 *Merge completed by: Copilot Agent*
 *Date: January 5, 2026*
+*Avatar Control Integration: January 21, 2026*
