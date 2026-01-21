@@ -64,16 +64,20 @@ express emotions, "interact" with windows, and speak with lip sync.
 
 import ctypes
 import json
+import logging
 import re
 import subprocess
 import time
 import threading
 from pathlib import Path
+from threading import Lock
 from typing import Dict, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 class AvatarState(Enum):
@@ -160,8 +164,9 @@ class AvatarController:
         # Current expression state
         self._current_expression: str = "neutral"
         
-        # Animation queue
+        # Animation queue (thread-safe)
         self._animation_queue: List[Dict] = []
+        self._animation_lock = Lock()
         self._animation_thread: Optional[threading.Thread] = None
         self._running = False
     
@@ -193,11 +198,11 @@ class AvatarController:
             self._set_state(AvatarState.IDLE)
             self.config.enabled = True
             
-            print("Avatar enabled")
+            logger.info("Avatar enabled")
             return True
             
         except Exception as e:
-            print(f"Failed to enable avatar: {e}")
+            logger.error(f"Failed to enable avatar: {e}")
             return False
     
     def disable(self) -> None:
@@ -213,7 +218,7 @@ class AvatarController:
         
         self._set_state(AvatarState.OFF)
         self.config.enabled = False
-        print("Avatar disabled")
+        logger.info("Avatar disabled")
     
     def toggle(self) -> bool:
         """Toggle avatar on/off. Returns new state (True=on)."""
@@ -233,7 +238,7 @@ class AvatarController:
             try:
                 cb(old_state, state)
             except Exception as e:
-                print(f"[Avatar] State callback error: {e}")
+                logger.warning(f"State callback error: {e}")
     
     def _init_renderer(self) -> None:
         """Initialize the renderer component."""
@@ -254,8 +259,12 @@ class AvatarController:
     def _animation_loop(self) -> None:
         """Background animation processing loop."""
         while self._running:
-            if self._animation_queue:
-                animation = self._animation_queue.pop(0)
+            animation = None
+            with self._animation_lock:
+                if self._animation_queue:
+                    animation = self._animation_queue.pop(0)
+            
+            if animation:
                 self._execute_animation(animation)
             elif self.state == AvatarState.IDLE and self.config.idle_animation:
                 # Idle animation
@@ -279,7 +288,7 @@ class AvatarController:
             try:
                 on_complete()
             except Exception as e:
-                print(f"[Avatar] Animation callback error: {e}")
+                logger.warning(f"Animation callback error: {e}")
     
     # === Movement ===
     
@@ -297,13 +306,14 @@ class AvatarController:
         
         if animate:
             self._set_state(AvatarState.MOVING)
-            self._animation_queue.append({
-                "type": "move",
-                "from": (self.position.x, self.position.y),
-                "to": (x, y),
-                "duration": 0.5,
-                "on_complete": lambda: self._set_state(AvatarState.IDLE),
-            })
+            with self._animation_lock:
+                self._animation_queue.append({
+                    "type": "move",
+                    "from": (self.position.x, self.position.y),
+                    "to": (x, y),
+                    "duration": 0.5,
+                    "on_complete": lambda: self._set_state(AvatarState.IDLE),
+                })
         
         self.position.x = x
         self.position.y = y
@@ -315,7 +325,7 @@ class AvatarController:
             try:
                 cb(x, y)
             except Exception as e:
-                print(f"[Avatar] Move callback error: {e}")
+                logger.warning(f"Move callback error: {e}")
     
     def move_relative(self, dx: int, dy: int) -> None:
         """Move avatar by offset."""
@@ -349,7 +359,7 @@ class AvatarController:
             y = (height - self.position.height) // 2
             self.move_to(x, y)
         except Exception as e:
-            print(f"[Avatar] Could not center on screen: {e}")
+            logger.warning(f"Could not center on screen: {e}")
     
     # === Voice Profile ===
     
@@ -376,10 +386,10 @@ class AvatarController:
                 self.voice_profile = profile_name_or_profile
                 self.config.voice_profile = profile_name_or_profile.name
             
-            print(f"[Avatar] Voice profile set to: {self.config.voice_profile}")
+            logger.info(f"Voice profile set to: {self.config.voice_profile}")
             return True
         except Exception as e:
-            print(f"[Avatar] Failed to set voice profile: {e}")
+            logger.error(f"Failed to set voice profile: {e}")
             return False
     
     def get_voice_profile_name(self) -> str:
@@ -452,11 +462,15 @@ class AvatarController:
         
         if animate:
             self._set_state(AvatarState.SPEAKING)
-            self._animation_queue.append({
-                "type": "speak",
-                "text": text,
-                "duration": duration,
-            })
+            with self._animation_lock:
+                self._animation_queue.append({
+                    "type": "speak",
+                    "text": text,
+                    "duration": duration,
+                })
+            
+            # Also send command to desktop overlay via file bridge
+            self.control("speak", text)
         
         # Use TTS with avatar's voice profile
         if use_tts:
@@ -466,7 +480,7 @@ class AvatarController:
             try:
                 cb(text)
             except Exception as e:
-                print(f"[Avatar] Speak callback error: {e}")
+                logger.warning(f"Speak callback error: {e}")
     
     def _speak_with_voice_profile(self, text: str) -> None:
         """Speak text using avatar's configured voice profile."""
@@ -489,7 +503,7 @@ class AvatarController:
             
             engine.speak(text)
         except Exception as e:
-            print(f"[Avatar] TTS error: {e}")
+            logger.error(f"TTS error: {e}")
     
     def think(self, duration: float = 2.0) -> None:
         """Show thinking animation."""
@@ -497,10 +511,11 @@ class AvatarController:
             return
         
         self._set_state(AvatarState.THINKING)
-        self._animation_queue.append({
-            "type": "think",
-            "duration": duration,
-        })
+        with self._animation_lock:
+            self._animation_queue.append({
+                "type": "think",
+                "duration": duration,
+            })
     
     # === Screen Interaction ===
     
@@ -534,17 +549,18 @@ class AvatarController:
         self.move_to(target_x, target_y)
         
         # Animate interaction
-        self._animation_queue.append({
-            "type": f"interact_{action}",
-            "target": window_pos,
-            "duration": 1.0,
-        })
+        with self._animation_lock:
+            self._animation_queue.append({
+                "type": f"interact_{action}",
+                "target": window_pos,
+                "duration": 1.0,
+            })
         
         for cb in self._callbacks["interact"]:
             try:
                 cb(window_title, action, window_pos)
             except Exception as e:
-                print(f"[Avatar] Interact callback error: {e}")
+                logger.warning(f"Interact callback error: {e}")
         
         return True
     
@@ -563,11 +579,12 @@ class AvatarController:
         if not self.is_enabled:
             return
         
-        self._animation_queue.append({
-            "type": "point",
-            "target": (x, y),
-            "duration": 1.0,
-        })
+        with self._animation_lock:
+            self._animation_queue.append({
+                "type": "point",
+                "target": (x, y),
+                "duration": 1.0,
+            })
     
     # === Expressions ===
     
@@ -587,15 +604,19 @@ class AvatarController:
             try:
                 cb(old_expression, expression)
             except Exception as e:
-                print(f"[Avatar] Expression callback error: {e}")
+                logger.warning(f"Expression callback error: {e}")
         
         # Only queue animation if fully enabled
         if self.is_enabled:
-            self._animation_queue.append({
-                "type": "expression",
-                "expression": expression,
-                "duration": 0.5,
-            })
+            with self._animation_lock:
+                self._animation_queue.append({
+                    "type": "expression",
+                    "expression": expression,
+                    "duration": 0.5,
+                })
+            
+            # Also send emotion to desktop overlay via file bridge
+            self.control("emotion", expression)
     
     def execute_action(self, action: str, params: dict = None) -> dict:
         """
@@ -692,7 +713,7 @@ class AvatarController:
         """
         path = Path(model_path)
         if not path.exists():
-            print(f"Model not found: {model_path}")
+            logger.warning(f"Model not found: {model_path}")
             return False
         
         self.config.model_path = str(path)
@@ -700,7 +721,7 @@ class AvatarController:
         if self._renderer:
             self._renderer.load_model(model_path)
         
-        print(f"Avatar model changed to: {path.name}")
+        logger.info(f"Avatar model changed to: {path.name}")
         return True
     
     def set_scale(self, scale: float) -> None:
@@ -754,7 +775,7 @@ class AvatarController:
         self._emotion_sync = EmotionExpressionSync(self, personality)
         self._emotion_sync.start_sync()
         
-        print(f"[Avatar] Linked to personality: {personality.model_name}")
+        logger.info(f"Linked to personality: {personality.model_name}")
     
     def auto_design(self) -> Optional['AvatarAppearance']:
         """
@@ -770,10 +791,10 @@ class AvatarController:
             if self.is_enabled and self._renderer:
                 self._renderer.set_appearance(appearance)
             
-            print(f"[Avatar] AI designed appearance: {self._identity.reasoning}")
+            logger.info(f"AI designed appearance: {self._identity.reasoning}")
             return appearance
         else:
-            print("[Avatar] No personality linked. Use link_personality() first.")
+            logger.warning("No personality linked. Use link_personality() first.")
             return None
     
     def describe_desired_appearance(self, description: str) -> Optional['AvatarAppearance']:
@@ -798,7 +819,7 @@ class AvatarController:
         if self.is_enabled and self._renderer:
             self._renderer.set_appearance(appearance)
         
-        print(f"[Avatar] Created appearance from: {description}")
+        logger.info(f"Created appearance from: {description}")
         return appearance
     
     def get_customizer(self) -> 'AvatarCustomizer':
@@ -842,7 +863,7 @@ class AvatarController:
         if self.is_enabled and self._renderer:
             self._renderer.set_appearance(appearance)
         
-        print("[Avatar] Appearance updated")
+        logger.debug("Appearance updated")
     
     def explain_appearance(self) -> str:
         """
@@ -942,17 +963,17 @@ class AvatarRenderer:
         """Show avatar window."""
         # Stub - implement with actual rendering
         self._visible = True
-        print(f"[Avatar] Showing at ({self.controller.position.x}, {self.controller.position.y})")
+        logger.debug(f"Showing at ({self.controller.position.x}, {self.controller.position.y})")
     
     def hide(self) -> None:
         """Hide avatar window."""
         self._visible = False
-        print("[Avatar] Hidden")
+        logger.debug("Hidden")
     
     def set_position(self, x: int, y: int) -> None:
         """Update avatar position."""
         if self._visible:
-            print(f"[Avatar] Moving to ({x}, {y})")
+            logger.debug(f"Moving to ({x}, {y})")
     
     def render_frame(self, animation_data: Dict = None) -> None:
         """Render a single frame."""
@@ -961,20 +982,20 @@ class AvatarRenderer:
     def load_model(self, model_path: str) -> bool:
         """Load a 3D model file."""
         # Stub - implement with actual 3D rendering library
-        print(f"[Avatar] Loading model: {model_path}")
+        logger.debug(f"Loading model: {model_path}")
         return True
     
     def set_scale(self, scale: float) -> None:
         """Set avatar scale."""
-        print(f"[Avatar] Scale set to: {scale}")
+        logger.debug(f"Scale set to: {scale}")
     
     def set_opacity(self, opacity: float) -> None:
         """Set avatar opacity."""
-        print(f"[Avatar] Opacity set to: {opacity}")
+        logger.debug(f"Opacity set to: {opacity}")
     
     def set_color(self, color: str) -> None:
         """Set avatar color/tint."""
-        print(f"[Avatar] Color set to: {color}")
+        logger.debug(f"Color set to: {color}")
 
 
 class AvatarAnimator:
@@ -997,7 +1018,7 @@ class AvatarAnimator:
     def play(self, animation_type: str, duration: float = 1.0) -> None:
         """Play an animation."""
         self.current_animation = animation_type
-        print(f"[Avatar] Animation: {animation_type} ({duration}s)")
+        logger.debug(f"Animation: {animation_type} ({duration}s)")
     
     def stop(self) -> None:
         """Stop current animation."""
@@ -1029,7 +1050,7 @@ class ScreenInteractor:
             elif platform.system() == "Darwin":
                 return self._find_window_macos(title)
         except Exception as e:
-            print(f"Window search error: {e}")
+            logger.warning(f"Window search error: {e}")
         
         return None
     

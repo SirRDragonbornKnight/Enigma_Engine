@@ -39,6 +39,13 @@ class AvatarSettings:
     overlay_rotation: float = 0.0  # 2D overlay rotation
     overlay_3d_yaw: float = 0.0  # 3D overlay yaw rotation
     
+    # Per-avatar size overrides (avatar_path -> size)
+    per_avatar_sizes: Dict[str, int] = field(default_factory=dict)
+    per_avatar_positions: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+    
+    # Reposition mode (allows dragging to move avatar)
+    reposition_enabled: bool = False
+    
     # Appearance
     primary_color: str = "#6b8afd"
     secondary_color: str = "#4a6fd9"
@@ -76,11 +83,43 @@ class AvatarSettings:
         if "screen_position" in data and isinstance(data["screen_position"], list):
             data["screen_position"] = tuple(data["screen_position"])
         
+        # Handle per_avatar_positions tuple conversion
+        if "per_avatar_positions" in data:
+            converted = {}
+            for k, v in data["per_avatar_positions"].items():
+                if isinstance(v, list):
+                    converted[k] = tuple(v)
+                else:
+                    converted[k] = v
+            data["per_avatar_positions"] = converted
+        
         # Remove unknown fields
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known_fields}
         
         return cls(**filtered)
+    
+    def get_size_for_avatar(self, avatar_path: str) -> int:
+        """Get the saved size for a specific avatar, or default."""
+        if avatar_path and avatar_path in self.per_avatar_sizes:
+            return self.per_avatar_sizes[avatar_path]
+        return self.overlay_size
+    
+    def set_size_for_avatar(self, avatar_path: str, size: int) -> None:
+        """Set the size for a specific avatar."""
+        if avatar_path:
+            self.per_avatar_sizes[avatar_path] = size
+    
+    def get_position_for_avatar(self, avatar_path: str) -> Tuple[int, int]:
+        """Get the saved position for a specific avatar, or default."""
+        if avatar_path and avatar_path in self.per_avatar_positions:
+            return self.per_avatar_positions[avatar_path]
+        return self.screen_position
+    
+    def set_position_for_avatar(self, avatar_path: str, x: int, y: int) -> None:
+        """Set the position for a specific avatar."""
+        if avatar_path:
+            self.per_avatar_positions[avatar_path] = (x, y)
 
 
 class AvatarPersistence:

@@ -55,11 +55,13 @@ and behave naturally WITHOUT explicit commands! Your AI pet comes to life!
     • forge_ai/avatar/lip_sync.py        - Sync mouth to speech
 """
 
+import logging
 import random
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from threading import Lock
 from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
 from datetime import datetime
 
@@ -68,6 +70,8 @@ if TYPE_CHECKING:
 
 # Type alias for optional AvatarController
 _AvatarController = Optional['AvatarController']
+
+logger = logging.getLogger(__name__)
 
 
 class AvatarMood(Enum):
@@ -151,6 +155,7 @@ class AutonomousAvatar:
         
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._state_lock = Lock()  # Thread safety for state changes
         
         # State
         self._mood = AvatarMood.NEUTRAL
@@ -190,47 +195,48 @@ class AutonomousAvatar:
             return
         
         if not self.avatar.is_enabled:
-            print("[Autonomous] Avatar must be enabled first")
+            logger.warning("Avatar must be enabled first")
             return
         
         self._running = True
         self.config.enabled = True
         self._thread = threading.Thread(target=self._behavior_loop, daemon=True)
         self._thread.start()
-        print("[Autonomous] Avatar autonomous mode started")
+        logger.info("Avatar autonomous mode started")
     
     def stop(self):
         """Stop autonomous behavior."""
         self._running = False
         self.config.enabled = False
-        print("[Autonomous] Avatar autonomous mode stopped")
+        logger.info("Avatar autonomous mode stopped")
     
     def set_mood(self, mood: AvatarMood):
         """Set avatar mood."""
-        if mood != self._mood:
-            old_mood = self._mood
-            self._mood = mood
-            
-            # Update expression to match mood
-            mood_expressions = {
-                AvatarMood.HAPPY: "happy",
-                AvatarMood.CURIOUS: "thinking",
-                AvatarMood.BORED: "neutral",
-                AvatarMood.EXCITED: "excited",
-                AvatarMood.SLEEPY: "sleeping",
-                AvatarMood.FOCUSED: "thinking",
-                AvatarMood.NEUTRAL: "neutral",
-                AvatarMood.PLAYFUL: "winking",
-                AvatarMood.THOUGHTFUL: "thinking",
-            }
-            self.avatar.set_expression(mood_expressions.get(mood, "neutral"))
-            
-            # Notify callbacks
-            for cb in self._on_mood_change:
-                try:
-                    cb(old_mood, mood)
-                except Exception:
-                    pass
+        with self._state_lock:
+            if mood != self._mood:
+                old_mood = self._mood
+                self._mood = mood
+                
+                # Update expression to match mood
+                mood_expressions = {
+                    AvatarMood.HAPPY: "happy",
+                    AvatarMood.CURIOUS: "thinking",
+                    AvatarMood.BORED: "neutral",
+                    AvatarMood.EXCITED: "excited",
+                    AvatarMood.SLEEPY: "sleeping",
+                    AvatarMood.FOCUSED: "thinking",
+                    AvatarMood.NEUTRAL: "neutral",
+                    AvatarMood.PLAYFUL: "winking",
+                    AvatarMood.THOUGHTFUL: "thinking",
+                }
+                self.avatar.set_expression(mood_expressions.get(mood, "neutral"))
+                
+                # Notify callbacks
+                for cb in self._on_mood_change:
+                    try:
+                        cb(old_mood, mood)
+                    except Exception:
+                        pass
     
     def on_mood_change(self, callback: Callable):
         """Register callback for mood changes."""
@@ -306,7 +312,7 @@ class AutonomousAvatar:
                 time.sleep(0.5)
                 
             except Exception as e:
-                print(f"[Autonomous] Error in behavior loop: {e}")
+                logger.error(f"Error in behavior loop: {e}")
                 time.sleep(1)
     
     def _do_autonomous_action(self):

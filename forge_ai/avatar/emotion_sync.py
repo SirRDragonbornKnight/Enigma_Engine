@@ -4,11 +4,15 @@ Emotion-Expression Synchronization
 Automatically updates avatar expression based on AI mood and emotional state.
 """
 
+import logging
 import threading
 import time
+from threading import Lock
 from typing import Optional, Callable
 
 from ..core.personality import AIPersonality
+
+logger = logging.getLogger(__name__)
 
 
 class EmotionExpressionSync:
@@ -55,6 +59,7 @@ class EmotionExpressionSync:
         self.personality = personality
         self._sync_thread: Optional[threading.Thread] = None
         self._running = False
+        self._state_lock = Lock()  # Thread safety for state changes
         self._last_mood: Optional[str] = None
         self._callbacks: list = []
     
@@ -66,14 +71,14 @@ class EmotionExpressionSync:
         self._running = True
         self._sync_thread = threading.Thread(target=self._sync_loop, daemon=True)
         self._sync_thread.start()
-        print("[EmotionSync] Started mood monitoring")
+        logger.info("Started mood monitoring")
     
     def stop_sync(self):
         """Stop background mood monitoring."""
         self._running = False
         if self._sync_thread:
             self._sync_thread.join(timeout=1.0)
-        print("[EmotionSync] Stopped mood monitoring")
+        logger.info("Stopped mood monitoring")
     
     def _sync_loop(self):
         """Background loop to monitor mood changes."""
@@ -81,9 +86,10 @@ class EmotionExpressionSync:
             if self.personality:
                 current_mood = self.personality.mood
                 
-                if current_mood != self._last_mood:
-                    self.on_mood_change(self._last_mood, current_mood)
-                    self._last_mood = current_mood
+                with self._state_lock:
+                    if current_mood != self._last_mood:
+                        self.on_mood_change(self._last_mood, current_mood)
+                        self._last_mood = current_mood
             
             time.sleep(0.5)  # Check every 0.5 seconds
     
@@ -99,14 +105,14 @@ class EmotionExpressionSync:
         
         if self.avatar.is_enabled:
             self.avatar.set_expression(expression)
-            print(f"[EmotionSync] Mood changed: {old_mood} → {new_mood}, expression: {expression}")
+            logger.debug(f"Mood changed: {old_mood} → {new_mood}, expression: {expression}")
         
         # Notify callbacks
         for callback in self._callbacks:
             try:
                 callback(old_mood, new_mood, expression)
             except Exception as e:
-                print(f"[EmotionSync] Callback error: {e}")
+                logger.warning(f"Callback error: {e}")
     
     def on_speaking(self, text: str):
         """

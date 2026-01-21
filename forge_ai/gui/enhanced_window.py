@@ -1893,6 +1893,7 @@ class EnhancedMainWindow(QMainWindow):
             if hasattr(self, '_current_path') and self._current_path:
                 settings["last_avatar_path"] = str(self._current_path)
             settings["avatar_auto_load"] = getattr(self, '_avatar_auto_load', False)
+            settings["avatar_auto_run"] = getattr(self, '_avatar_auto_run', False)
             settings["avatar_resize_enabled"] = getattr(self, '_avatar_resize_enabled', False)  # Default OFF
             
             # Save avatar overlay size if it exists
@@ -2088,36 +2089,24 @@ class EnhancedMainWindow(QMainWindow):
         sys.stdout.flush()
         
         # Build list of activated elements to load
+        # Only show items that actually take time to load
         loading_items = []
         
-        # Model is always loaded
+        # Model is always loaded (the main thing)
         loading_items.append({
             'name': self.current_model_name,
             'type': 'model',
             'icon': '>'
         })
         
-        # Check which modules are enabled and will be loaded
-        if self.module_manager:
-            active_modules = self.module_manager.list_loaded()
-            module_icons = {
-                'avatar': '>',
-                'memory': '>',
-                'web_tools': '>',
-                'file_tools': '>',
-                'voice_input': '>',
-                'voice_output': '>',
-                'image_gen_local': '>',
-                'code_gen': '>',
-                'embedding': '>',
-            }
-            for mod_id in active_modules:
-                if mod_id in module_icons:
-                    loading_items.append({
-                        'name': mod_id.replace('_', ' ').title(),
-                        'type': 'module',
-                        'icon': module_icons.get(mod_id, '>')
-                    })
+        # Only add avatar if it's set to auto-run (actually needs loading)
+        settings = self._load_settings()
+        if settings.get('avatar_auto_run', False):
+            loading_items.append({
+                'name': 'Avatar Overlay',
+                'type': 'module',
+                'icon': '>'
+            })
         
         # Create and show loading dialog with all items
         loading_dialog = ModelLoadingDialog(

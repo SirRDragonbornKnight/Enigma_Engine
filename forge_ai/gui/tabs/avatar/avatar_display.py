@@ -1221,13 +1221,17 @@ class AvatarOverlayWindow(QWidget):
         self._original_pixmap = None
         self._drag_pos = None
         self._resize_enabled = False  # Default OFF - user must enable via right-click
+        self._reposition_enabled = True  # Default ON - allow dragging to move
+        
+        # Current avatar path (for per-avatar settings)
+        self._avatar_path = None
         
         # Resize state for edge-drag resizing
         self._resize_edge = None  # Which edge is being dragged
         self._resize_start_pos = None
         self._resize_start_size = None
         self._resize_start_geo = None  # Starting geometry for position adjustments
-        self._edge_margin = 12  # Pixels from edge to trigger resize (slightly larger for easier grabbing)
+        self._edge_margin = 20  # Pixels from edge to trigger resize (larger for easier grabbing)
         
         # Rotation state for Shift+drag rotation
         self._rotation_angle = 0.0  # Current rotation in degrees
@@ -1236,6 +1240,21 @@ class AvatarOverlayWindow(QWidget):
         # Enable mouse tracking for resize cursor feedback
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_ArrowCursor))
+    
+    def set_avatar_path(self, path: str):
+        """Set the current avatar path and load per-avatar settings."""
+        self._avatar_path = path
+        # Load per-avatar size and position
+        try:
+            from ....avatar.persistence import load_avatar_settings
+            settings = load_avatar_settings()
+            self._size = settings.get_size_for_avatar(path)
+            self.setFixedSize(self._size, self._size)
+            x, y = settings.get_position_for_avatar(path)
+            self.move(x, y)
+            self._update_scaled_pixmap()
+        except Exception:
+            pass
         
     def set_avatar(self, pixmap: QPixmap):
         """Set avatar image."""
@@ -1289,11 +1308,11 @@ class AvatarOverlayWindow(QWidget):
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         
-        # Draw resize border when resize mode is ON
+        # Draw thin resize border when resize mode is ON
         if getattr(self, '_resize_enabled', False):
             pen = painter.pen()
             pen.setColor(QColor("#3498db"))  # Blue border
-            pen.setWidth(3)
+            pen.setWidth(2)
             painter.setPen(pen)
             painter.setBrush(Qt_NoBrush)
             painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
@@ -1343,8 +1362,8 @@ class AvatarOverlayWindow(QWidget):
                     self._resize_start_pos = global_pos
                     self._resize_start_size = self._size
                     self._resize_start_geo = self.geometry()
-                else:
-                    # Normal drag
+                elif getattr(self, '_reposition_enabled', True):
+                    # Normal drag (only if reposition is enabled)
                     self._drag_pos = global_pos - self.pos()
                     self.setCursor(QCursor(Qt_ClosedHandCursor))
         a0.accept()
@@ -1376,13 +1395,13 @@ class AvatarOverlayWindow(QWidget):
             new_geo = self._resize_start_geo
             
             if 'right' in self._resize_edge or 'bottom' in self._resize_edge:
-                # Resize from right/bottom - increase size
+                # Resize from right/bottom - increase size (no max limit)
                 change = max(delta.x(), delta.y())
-                new_size = max(100, min(500, self._resize_start_size + change))
+                new_size = max(50, self._resize_start_size + change)
             elif 'left' in self._resize_edge or 'top' in self._resize_edge:
-                # Resize from left/top - decrease size and move
+                # Resize from left/top - decrease size and move (no max limit)
                 change = max(-delta.x(), -delta.y())
-                new_size = max(100, min(500, self._resize_start_size + change))
+                new_size = max(50, self._resize_start_size + change)
                 # Adjust position to keep bottom-right corner fixed
                 size_diff = new_size - self._resize_start_size
                 self.move(new_geo.x() - size_diff, new_geo.y() - size_diff)
@@ -1393,8 +1412,8 @@ class AvatarOverlayWindow(QWidget):
             a0.accept()
             return
         
-        # If dragging
-        if self._drag_pos is not None and a0.buttons() == Qt_LeftButton:
+        # If dragging (only if reposition enabled)
+        if self._drag_pos is not None and a0.buttons() == Qt_LeftButton and getattr(self, '_reposition_enabled', True):
             new_pos = global_pos - self._drag_pos
             
             # Keep avatar on virtual desktop (all monitors combined) - can drag across monitors
@@ -1434,20 +1453,30 @@ class AvatarOverlayWindow(QWidget):
             
     def mouseReleaseEvent(self, a0):  # type: ignore
         """End drag or resize."""
-        # Save position if we were dragging
+        # Save position if we were dragging (per-avatar)
         if self._drag_pos is not None:
             try:
-                from ....avatar.persistence import save_position, write_avatar_state_for_ai
+                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
                 pos = self.pos()
-                save_position(pos.x(), pos.y())
+                persistence = get_persistence()
+                settings = persistence.load()
+                if self._avatar_path:
+                    settings.set_position_for_avatar(self._avatar_path, pos.x(), pos.y())
+                settings.screen_position = (pos.x(), pos.y())  # Also save as default
+                persistence.save(settings)
                 write_avatar_state_for_ai()  # Update AI awareness
             except Exception:
                 pass
-        # Save size if we were resizing
+        # Save size if we were resizing (per-avatar)
         if self._resize_edge is not None:
             try:
-                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
-                save_avatar_settings(overlay_size=self._size)
+                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                persistence = get_persistence()
+                settings = persistence.load()
+                if self._avatar_path:
+                    settings.set_size_for_avatar(self._avatar_path, self._size)
+                settings.overlay_size = self._size  # Also save as default
+                persistence.save(settings)
                 write_avatar_state_for_ai()
             except Exception:
                 pass
@@ -1467,13 +1496,15 @@ class AvatarOverlayWindow(QWidget):
     def showEvent(self, a0):
         """Restore saved position when shown."""
         super().showEvent(a0)
-        try:
-            from ....avatar.persistence import load_position
-            x, y = load_position()
-            if x is not None and y is not None:
-                self.move(x, y)
-        except Exception:
-            pass
+        # Position is loaded per-avatar in set_avatar_path, so only use default if no avatar path
+        if not self._avatar_path:
+            try:
+                from ....avatar.persistence import load_position
+                x, y = load_position()
+                if x is not None and y is not None:
+                    self.move(x, y)
+            except Exception:
+                pass
         
     def keyPressEvent(self, a0):  # type: ignore
         """ESC to close."""
@@ -1482,9 +1513,35 @@ class AvatarOverlayWindow(QWidget):
             self.closed.emit()
         
     def wheelEvent(self, a0):  # type: ignore
-        """Scroll wheel is disabled for resize - use edge drag instead."""
-        # Resize is now done via edge dragging, not scroll wheel
-        a0.ignore()
+        """Scroll wheel to resize when resize is enabled."""
+        if getattr(self, '_resize_enabled', False):
+            # Get scroll delta
+            try:
+                delta = a0.angleDelta().y()
+            except AttributeError:
+                delta = a0.delta()
+            
+            # Resize based on scroll direction (no limits)
+            if delta > 0:
+                new_size = self._size + 20  # Scroll up = bigger
+            else:
+                new_size = max(50, self._size - 20)   # Scroll down = smaller (min 50)
+            
+            self._size = new_size
+            self.setFixedSize(self._size, self._size)
+            self._update_scaled_pixmap()
+            
+            # Save size
+            try:
+                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                save_avatar_settings(overlay_size=self._size)
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
+            
+            a0.accept()
+        else:
+            a0.ignore()
         
     def contextMenuEvent(self, a0):  # type: ignore
         """Right-click to show options menu."""
@@ -1530,6 +1587,10 @@ class AvatarOverlayWindow(QWidget):
         resize_action = menu.addAction(resize_text)
         resize_action.setToolTip("Enable edge-drag resize and Shift+drag rotate")
         resize_action.triggered.connect(self._toggle_resize)
+        
+        # Size input action
+        size_action = menu.addAction(f"Set Size... ({self._size}px)")
+        size_action.triggered.connect(self._show_size_dialog)
         
         menu.addSeparator()
         
@@ -1583,6 +1644,30 @@ class AvatarOverlayWindow(QWidget):
         self.hide()
         self.closed.emit()
     
+    def _show_size_dialog(self):
+        """Show dialog to set avatar size."""
+        from PyQt5.QtWidgets import QInputDialog
+        size, ok = QInputDialog.getInt(
+            self, "Set Avatar Size", "Size (pixels):",
+            self._size, 50, 2000, 10
+        )
+        if ok:
+            self._size = size
+            self.setFixedSize(self._size, self._size)
+            self._update_scaled_pixmap()
+            # Save size (per-avatar)
+            try:
+                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                persistence = get_persistence()
+                settings = persistence.load()
+                if self._avatar_path:
+                    settings.set_size_for_avatar(self._avatar_path, self._size)
+                settings.overlay_size = self._size  # Also save as default
+                persistence.save(settings)
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
+    
     def mouseDoubleClickEvent(self, a0):  # type: ignore
         """Double-click does nothing - use right-click menu for Center on Screen."""
         a0.accept()  # Consume the event
@@ -1624,7 +1709,7 @@ class Avatar3DOverlayWindow(QWidget):
         self._resize_start_pos = None
         self._resize_start_size = None
         self._resize_start_geo = None
-        self._edge_margin = 12  # Pixels from edge to trigger resize
+        self._edge_margin = 20  # Pixels from edge to trigger resize (larger for easier grabbing)
         
         # Rotation state for Shift+drag manual rotation
         self._rotate_start_x = None
@@ -2044,19 +2129,48 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def wheelEvent(self, event):
-        """Scroll wheel is disabled for resize - use edge drag instead."""
-        # Resize is now done via edge dragging, not scroll wheel
-        event.ignore()
+        """Scroll wheel to resize when resize is enabled."""
+        if getattr(self, '_resize_enabled', False):
+            # Get scroll delta
+            try:
+                delta = event.angleDelta().y()
+            except AttributeError:
+                delta = event.delta()
+            
+            # Resize based on scroll direction (no limits)
+            if delta > 0:
+                new_size = self._size + 20  # Scroll up = bigger
+            else:
+                new_size = max(50, self._size - 20)   # Scroll down = smaller (min 50)
+            
+            self._size = new_size
+            self.setFixedSize(self._size, self._size)
+            self._gl_container.setFixedSize(self._size, self._size)
+            if self._gl_widget:
+                self._gl_widget.setFixedSize(self._size, self._size)
+                self._apply_circular_mask()
+            
+            # Save size
+            try:
+                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                save_avatar_settings(overlay_3d_size=self._size)
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
+            
+            event.accept()
+        else:
+            event.ignore()
     
     def paintEvent(self, event):
-        """Draw border when resize mode is enabled."""
+        """Draw thin border when resize mode is enabled."""
         super().paintEvent(event)
         if getattr(self, '_resize_enabled', False):
             painter = QPainter(self)
             painter.setRenderHint(QPainter.Antialiasing, True)
             pen = painter.pen()
             pen.setColor(QColor("#3498db"))  # Blue border
-            pen.setWidth(3)
+            pen.setWidth(2)
             painter.setPen(pen)
             painter.setBrush(Qt_NoBrush)
             painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
@@ -2106,6 +2220,10 @@ class Avatar3DOverlayWindow(QWidget):
         resize_action.setToolTip("Enable edge-drag resize and Shift+drag rotate")
         resize_action.triggered.connect(self._toggle_resize)
         
+        # Size input action
+        size_action = menu.addAction(f"Set Size... ({self._size}px)")
+        size_action.triggered.connect(self._show_size_dialog)
+        
         menu.addSeparator()
         
         # Center on screen (moved from double-click)
@@ -2152,6 +2270,28 @@ class Avatar3DOverlayWindow(QWidget):
                 screen_geo.center().x() - self._size // 2,
                 screen_geo.center().y() - self._size // 2
             )
+    
+    def _show_size_dialog(self):
+        """Show dialog to set avatar size."""
+        from PyQt5.QtWidgets import QInputDialog
+        size, ok = QInputDialog.getInt(
+            self, "Set Avatar Size", "Size (pixels):",
+            self._size, 50, 2000, 10
+        )
+        if ok:
+            self._size = size
+            self.setFixedSize(self._size, self._size)
+            self._gl_container.setFixedSize(self._size, self._size)
+            if self._gl_widget:
+                self._gl_widget.setFixedSize(self._size, self._size)
+                self._apply_circular_mask()
+            # Save size
+            try:
+                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                save_avatar_settings(overlay_3d_size=self._size)
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
 
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
@@ -2513,7 +2653,7 @@ def create_avatar_subtab(parent):
     top_row.addStretch()
     left_panel.addLayout(top_row)
     
-    # Settings row: Auto-load on startup + Manual resize toggle
+    # Settings row: Auto-load on startup + Auto-run + Manual resize toggle
     settings_row = QHBoxLayout()
     
     parent.avatar_auto_load_checkbox = QCheckBox("Auto-load on startup")
@@ -2521,11 +2661,22 @@ def create_avatar_subtab(parent):
     parent.avatar_auto_load_checkbox.toggled.connect(lambda c: _toggle_auto_load(parent, c))
     settings_row.addWidget(parent.avatar_auto_load_checkbox)
     
+    parent.avatar_auto_run_checkbox = QCheckBox("Auto-show pop-out")
+    parent.avatar_auto_run_checkbox.setToolTip("Automatically show the desktop pop-out overlay when ForgeAI starts")
+    parent.avatar_auto_run_checkbox.toggled.connect(lambda c: _toggle_auto_run(parent, c))
+    settings_row.addWidget(parent.avatar_auto_run_checkbox)
+    
     parent.avatar_resize_checkbox = QCheckBox("Allow popup resize")
     parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window (drag from edges to resize)")
     parent.avatar_resize_checkbox.setChecked(False)  # Default OFF - less intrusive
     parent.avatar_resize_checkbox.toggled.connect(lambda c: _toggle_resize_enabled(parent, c))
     settings_row.addWidget(parent.avatar_resize_checkbox)
+    
+    parent.avatar_reposition_checkbox = QCheckBox("Allow reposition")
+    parent.avatar_reposition_checkbox.setToolTip("Allow dragging the avatar to reposition it (saved per avatar)")
+    parent.avatar_reposition_checkbox.setChecked(True)  # Default ON - natural behavior
+    parent.avatar_reposition_checkbox.toggled.connect(lambda c: _toggle_reposition_enabled(parent, c))
+    settings_row.addWidget(parent.avatar_reposition_checkbox)
     
     settings_row.addStretch()
     left_panel.addLayout(settings_row)
@@ -2923,6 +3074,11 @@ def _restore_avatar_settings(parent):
         if hasattr(parent, 'avatar_auto_load_checkbox'):
             parent.avatar_auto_load_checkbox.setChecked(parent._avatar_auto_load)
         
+        # Restore auto-run setting
+        parent._avatar_auto_run = settings.get("avatar_auto_run", False)
+        if hasattr(parent, 'avatar_auto_run_checkbox'):
+            parent.avatar_auto_run_checkbox.setChecked(parent._avatar_auto_run)
+        
         # Restore resize enabled setting (default OFF now)
         parent._avatar_resize_enabled = settings.get("avatar_resize_enabled", False)
         if hasattr(parent, 'avatar_resize_checkbox'):
@@ -2977,6 +3133,18 @@ def _restore_avatar_settings(parent):
             QTimer.singleShot(500, lambda: _apply_avatar(parent))
             parent.avatar_status.setText("Auto-loading avatar...")
             parent.avatar_status.setStyleSheet("color: #f9e2af;")
+            
+            # Auto-RUN the overlay if that setting is also enabled
+            if getattr(parent, '_avatar_auto_run', False):
+                def auto_run_overlay():
+                    # Simulate clicking the Run button
+                    if not parent.show_overlay_btn.isChecked():
+                        parent.show_overlay_btn.setChecked(True)
+                        _toggle_overlay(parent)
+                        parent.avatar_status.setText("Avatar auto-started on desktop!")
+                        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                # Run after apply completes
+                QTimer.singleShot(1000, auto_run_overlay)
     
     except Exception as e:
         print(f"[Avatar] Could not restore gui settings: {e}")
@@ -3021,6 +3189,23 @@ def _toggle_auto_load(parent, enabled: bool):
     else:
         parent.avatar_status.setText("Avatar auto-load disabled")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
+        # If auto-load is off, also disable auto-run
+        if hasattr(parent, 'avatar_auto_run_checkbox'):
+            parent.avatar_auto_run_checkbox.setChecked(False)
+
+
+def _toggle_auto_run(parent, enabled: bool):
+    """Toggle auto-run avatar overlay on startup setting."""
+    parent._avatar_auto_run = enabled
+    if enabled:
+        # Auto-run requires auto-load to be on
+        if not getattr(parent, '_avatar_auto_load', False):
+            parent.avatar_auto_load_checkbox.setChecked(True)
+        parent.avatar_status.setText("Avatar will auto-run on desktop at startup")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    else:
+        parent.avatar_status.setText("Avatar auto-run disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
 
 
 def _toggle_resize_enabled(parent, enabled: bool):
@@ -3050,6 +3235,34 @@ def _toggle_resize_enabled(parent, enabled: bool):
         parent.avatar_status.setStyleSheet("color: #a6e3a1;")
     else:
         parent.avatar_status.setText("Popup resize disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _toggle_reposition_enabled(parent, enabled: bool):
+    """Toggle reposition mode for avatar popup."""
+    parent._avatar_reposition_enabled = enabled
+    
+    # Update 2D overlay if it exists
+    if parent._overlay:
+        parent._overlay._reposition_enabled = enabled
+    
+    # Update 3D overlay if it exists
+    if parent._overlay_3d:
+        parent._overlay_3d._reposition_enabled = enabled
+    
+    # Save setting to persistence
+    try:
+        from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+        save_avatar_settings(reposition_enabled=enabled)
+        write_avatar_state_for_ai()
+    except Exception as e:
+        print(f"[Avatar] Could not save reposition setting: {e}")
+    
+    if enabled:
+        parent.avatar_status.setText("Reposition enabled (drag avatar to move)")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    else:
+        parent.avatar_status.setText("Reposition disabled (avatar locked in place)")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
 
 
