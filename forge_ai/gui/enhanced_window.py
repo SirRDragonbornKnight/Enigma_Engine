@@ -116,10 +116,6 @@ class AIGenerationWorker(QThread):
             import time
             self._start_time = time.time()
             
-            # Debug output
-            print(f"[DEBUG] AIWorker starting - is_hf={self.is_hf}, custom_tokenizer={self.custom_tokenizer is not None}")
-            print(f"[DEBUG] Engine model type: {type(self.engine.model)}")
-            
             # Emit initial thinking status
             self.thinking.emit("Analyzing your message...")
             
@@ -143,7 +139,6 @@ class AIGenerationWorker(QThread):
                     return
                 
                 self.thinking.emit("Processing with language model...")
-                print(f"[DEBUG] Has chat method: {hasattr(self.engine.model, 'chat')}")
                 if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
                     self.parent_window.log_terminal("🧠 Running inference on model...", "info")
                 
@@ -2096,16 +2091,11 @@ class EnhancedMainWindow(QMainWindow):
     
     def _load_current_model(self):
         """Load the current model into the engine with progress dialog."""
-        print(f"[DEBUG] _load_current_model called, model={self.current_model_name}")
         import sys
         sys.stdout.flush()
         
         if not self.current_model_name:
-            print("[DEBUG] No model name, returning")
             return
-            
-        print(f"[DEBUG] Creating loading dialog...")
-        sys.stdout.flush()
         
         # Build list of activated elements to load
         # Only show items that actually take time to load
@@ -2137,9 +2127,6 @@ class EnhancedMainWindow(QMainWindow):
         loading_dialog.raise_()
         loading_dialog.activateWindow()
         
-        print(f"[DEBUG] Dialog shown, processing events...")
-        sys.stdout.flush()
-        
         # Force dialog to fully render before starting loading
         QApplication.processEvents()
         QApplication.processEvents()  # Double process to ensure rendering
@@ -2149,17 +2136,10 @@ class EnhancedMainWindow(QMainWindow):
         time.sleep(0.1)
         QApplication.processEvents()
         
-        print(f"[DEBUG] Starting model load...")
-        sys.stdout.flush()
-        
         try:
-            print(f"[DEBUG] Set status Initializing...")
-            sys.stdout.flush()
             loading_dialog.set_status("Initializing...", 5)
             QApplication.processEvents()
             
-            print(f"[DEBUG] Reading registry...")
-            sys.stdout.flush()
             loading_dialog.set_status("Reading model registry...", 10)
             
             # Check for cancellation
@@ -2168,8 +2148,6 @@ class EnhancedMainWindow(QMainWindow):
                 return
             
             # Create engine with selected model
-            print(f"[DEBUG] About to call registry.load_model...")
-            sys.stdout.flush()
             loading_dialog.set_status("Loading model weights from disk...", 15)
             
             # Progress callback for detailed model loading updates
@@ -2177,15 +2155,11 @@ class EnhancedMainWindow(QMainWindow):
                 # Map registry progress (5-38%) to dialog progress (15-40%)
                 mapped_pct = 15 + int((pct / 40) * 25)
                 loading_dialog.set_status(msg, mapped_pct)
-                print(f"[DEBUG] Load progress: {msg} ({pct}%)")
-                sys.stdout.flush()
             
             model, config = self.registry.load_model(
                 self.current_model_name,
                 progress_callback=on_load_progress
             )
-            print(f"[DEBUG] Model loaded! config={config}")
-            sys.stdout.flush()
             loading_dialog.set_status("✓ Model weights loaded", 40)
             
             
@@ -4286,10 +4260,8 @@ class EnhancedMainWindow(QMainWindow):
             
             # Check if using custom tokenizer - should be False for HuggingFace models!
             using_custom = getattr(self.engine, '_using_custom_tokenizer', False)
-            print(f"[DEBUG] _using_custom_tokenizer = {using_custom}")
             
             if using_custom:
-                print("[WARNING] Custom tokenizer is enabled but this causes issues with HF models!")
                 # Don't pass custom tokenizer - let model use its own
                 custom_tok = None
             
@@ -5270,7 +5242,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             from ..voice import speak
             speak(clean_text)
         except Exception as e:
-            print(f"[DEBUG] TTS error: {e}")
+            pass  # Silently fail TTS
     
     def _on_speak_last(self):
         if hasattr(self, 'last_response'):
@@ -5779,8 +5751,8 @@ def run_app(minimize_to_tray: bool = True):
         sys.exit(app.exec_())
         return
     
-    # Don't show main window - start with Quick Chat
-    # window.show()  # Commented out - Quick Chat opens instead
+    # Start minimized to system tray - use Quick Chat or tray menu to open
+    # Main window stays hidden until user opens it
     
     sys.exit(app.exec_())
 
