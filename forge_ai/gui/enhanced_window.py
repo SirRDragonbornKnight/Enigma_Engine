@@ -1732,30 +1732,27 @@ class EnhancedMainWindow(QMainWindow):
         pass
     
     def _force_quit(self):
-        """Force quit the application with cleanup (Alt+F4)."""
+        """Hide GUI to tray (Alt+F4). Use Quick Chat to fully quit ForgeAI."""
         try:
             # Try to save any unsaved state
             self._save_gui_settings()
-            # Hide tray icon if exists
-            tray = get_system_tray()
-            if tray and hasattr(tray, 'tray_icon'):
-                tray.tray_icon.hide()
-        except Exception:
-            pass
-        QApplication.quit()
+            # Just hide, don't exit
+            self.hide()
+            print("Main GUI hidden. Use Quick Chat's 'Quit Forge' to exit completely.")
+        except Exception as e:
+            print(f"Error hiding GUI: {e}")
+            self.hide()
     
     def _emergency_quit(self):
-        """Emergency quit - no questions asked, just exit."""
+        """Emergency hide - force hide the GUI window."""
         import sys
-        print("[EMERGENCY] Force quitting application...")
+        print("[EMERGENCY] Force hiding main GUI window...")
         # Also try to hide tray
         try:
-            tray = get_system_tray()
-            if tray and hasattr(tray, 'tray_icon'):
-                tray.tray_icon.hide()
+            self.hide()
+            print("Use Quick Chat to quit ForgeAI completely.")
         except:
             pass
-        sys.exit(0)
     
     def _is_huggingface_model(self) -> bool:
         """Check if the currently loaded model is a HuggingFace model."""
@@ -1937,7 +1934,11 @@ class EnhancedMainWindow(QMainWindow):
             print(f"Could not save GUI settings: {e}")
     
     def closeEvent(self, event):
-        """Handle window close - save settings and clean up threads/timers."""
+        """Handle window close - hide to system tray, don't exit ForgeAI.
+        
+        Only Quick Chat can quit ForgeAI completely.
+        Closing the main GUI just hides it - you can reopen from system tray.
+        """
         # Save settings first
         self._save_gui_settings()
         
@@ -1955,15 +1956,12 @@ class EnhancedMainWindow(QMainWindow):
             except Exception as e:
                 print(f"Error stopping health monitor: {e}")
         
-        # Close avatar overlay if open
-        if hasattr(self, '_overlay') and self._overlay:
-            try:
-                self._overlay.close()
-                self._overlay = None
-            except Exception as e:
-                print(f"Error closing avatar overlay: {e}")
+        # Don't close, just hide to tray
+        self.hide()
+        event.ignore()  # Keep the window in memory
         
-        event.accept()
+        # Show notification
+        print("Main GUI hidden to system tray. Use Quick Chat or system tray to reopen.")
     
     def keyPressEvent(self, event):
         """Handle key press events - Escape stops all generations."""
