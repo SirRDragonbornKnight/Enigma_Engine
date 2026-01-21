@@ -389,6 +389,97 @@ Creates voice settings based on personality.
 
 ---
 
+## 🎭 Chapter 9: Avatar Control (`forge_ai/avatar/`)
+
+Make your AI control a virtual character with natural body language.
+
+### Priority System (How Control Works)
+
+Avatar control uses a **priority hierarchy** to prevent conflicts:
+
+```
+BONE_ANIMATION (100)  ← PRIMARY: Direct bone control for rigged 3D models
+     ↓ blocks
+USER_MANUAL (80)      ← User dragging/clicking avatar
+     ↓ blocks
+AI_TOOL_CALL (70)     ← AI explicit commands via tools
+     ↓ blocks
+AUTONOMOUS (50)       ← Background behaviors (FALLBACK)
+     ↓ blocks
+IDE_ANIMATION (30)    ← Subtle idle movements
+     ↓ blocks
+FALLBACK (10)         ← Last resort
+```
+
+**Key Point:** Bone animation is PRIMARY - other systems are fallbacks.
+
+### `bone_control.py`
+Direct bone manipulation for rigged 3D models.
+
+**Class:** `BoneController`
+
+**What it does:**
+- Detects bones automatically when model loads
+- Controls bones with priority 100 (highest)
+- Allows natural gestures (nod, wave, point, etc.)
+
+**How to use:**
+```python
+from forge_ai.avatar.bone_control import get_bone_controller
+
+controller = get_bone_controller()
+controller.move_bone("head", pitch=15, yaw=0, roll=0)  # Nod
+```
+
+### `ai_control.py`
+Parses AI bone commands from responses.
+
+**What it does:**
+- Reads `<bone_control>` tags from AI output
+- Executes predefined gestures
+- Formats: `<bone_control>head|pitch=15,yaw=0,roll=0</bone_control>`
+
+**Predefined gestures:**
+- `nod`, `shake`, `wave`, `shrug`, `point`, `thinking`, `bow`, `stretch`
+
+### `controller.py`
+Main avatar controller with priority system.
+
+**Class:** `AvatarController`
+
+**Methods:**
+- `request_control(requester, priority, duration)` - Request control
+- `release_control(requester)` - Release control
+- `current_controller` - Check who's in control
+
+### `autonomous.py`
+Fallback behaviors when bone control isn't active.
+
+**Class:** `AutonomousAvatar`
+
+**What it does:**
+- Background idle behaviors (priority 50)
+- Screen watching and reactions
+- Only active when higher priorities aren't
+
+### Avatar Tool Integration
+
+**Tool name:** `control_avatar_bones`
+
+**AI can call it like this:**
+```json
+{
+  "action": "gesture",
+  "gesture_name": "wave"
+}
+```
+
+**Files:**
+- `forge_ai/tools/avatar_control_tool.py` - Tool definition
+- `forge_ai/tools/tool_executor.py` - Executes tool calls
+
+---
+
 ## 📖 Quick Reference: What to Read First
 
 **Understand the AI brain:**
@@ -407,8 +498,14 @@ Creates voice settings based on personality.
 1. `forge_ai/comms/api_server.py`
 
 **Make an avatar:**
-1. `forge_ai/avatar/controller.py`
-2. `forge_ai/avatar/autonomous.py`
+1. `forge_ai/avatar/controller.py` - Priority system
+2. `forge_ai/avatar/bone_control.py` - PRIMARY control
+3. `forge_ai/avatar/ai_control.py` - AI command parsing
+4. `forge_ai/avatar/autonomous.py` - Fallback behaviors
+
+**Train avatar AI:**
+1. `data/specialized/avatar_control_training.txt` - Training examples
+2. `scripts/train_avatar_control.py` - One-command training
 
 ---
 

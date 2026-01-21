@@ -50,6 +50,58 @@ IDLE_ANIMATION (30)   ← Subtle movements
 FALLBACK (10)         ← Last resort
 ```
 
+## 🔄 Complete Workflow
+
+### User Uploads Rigged 3D Model
+
+```
+1. User uploads GLB/GLTF/FBX with skeleton
+        ↓
+2. AvatarController detects bones
+        ↓
+3. BoneController.initialize() called
+        ↓
+4. Priority 100 (BONE_ANIMATION) activated
+        ↓
+5. Console: "Bone controller initialized with X bones"
+        ↓
+6. System ready for AI bone control
+```
+
+### AI Controls Avatar
+
+**Method 1: Direct Bone Commands**
+```
+User: "Wave hello"
+     ↓
+AI Model (trained with avatar_control_training.txt)
+     ↓
+Generates: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=-45</bone_control>
+     ↓
+ai_control.py parses command
+     ↓
+BoneController.move_bone() called
+     ↓
+Avatar waves!
+```
+
+**Method 2: Tool Call**
+```
+AI decides to gesture
+     ↓
+Calls tool: control_avatar_bones(action="gesture", gesture_name="nod")
+     ↓
+tool_executor.py routes to _execute_control_avatar_bones()
+     ↓
+avatar_control_tool.execute_avatar_control()
+     ↓
+ai_control.py executes gesture
+     ↓
+BoneController moves bones
+     ↓
+Avatar nods!
+```
+
 ### What Happens When You Load an Avatar
 
 ```python

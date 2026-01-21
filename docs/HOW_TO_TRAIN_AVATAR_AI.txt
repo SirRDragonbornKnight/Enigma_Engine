@@ -8,9 +8,22 @@ OVERVIEW
 This guide explains how to set up and train an AI that can control its avatar,
 express emotions, and act as a desktop companion.
 
-There are TWO ways to use AI with avatar:
+There are THREE ways to use AI with avatar:
   1. COMPANION MODE (Easy) - Enable a toggle, AI controls avatar automatically
-  2. TOOL TRAINING (Advanced) - Train the AI to use avatar tools explicitly
+  2. BONE CONTROL (Recommended) - AI controls rigged 3D models with natural gestures
+  3. TOOL TRAINING (Advanced) - Train the AI to use avatar tools explicitly
+
+PRIORITY SYSTEM:
+---------------
+Avatar control uses priorities to prevent conflicts:
+  - BONE_ANIMATION (100) = PRIMARY for rigged 3D models
+  - USER_MANUAL (80) = User dragging/clicking
+  - AI_TOOL_CALL (70) = AI explicit commands
+  - AUTONOMOUS (50) = Background behaviors (FALLBACK)
+  - IDLE_ANIMATION (30) = Subtle movements
+  - FALLBACK (10) = Last resort
+
+Bone control is PRIMARY - other systems are fallbacks.
 
 
 ================================================================================
@@ -47,7 +60,90 @@ In the Chat tab or Settings, you can configure:
 
 
 ================================================================================
-SECTION 2: AVATAR TOOLS (FOR TOOL-AWARE MODELS)
+SECTION 2: BONE CONTROL MODE (RECOMMENDED FOR 3D AVATARS)
+================================================================================
+
+Bone Control Mode trains the AI to directly control avatar bones for natural
+gestures and body language. This is the PRIMARY control method for rigged 3D
+models (GLB/GLTF with skeletons).
+
+HOW BONE CONTROL WORKS:
+-----------------------
+1. Upload a rigged 3D model (GLB/GLTF with bones)
+2. System auto-detects bones and initializes BoneController (priority 100)
+3. AI generates bone commands like: <bone_control>head|pitch=15,yaw=0,roll=0</bone_control>
+4. BoneController executes with highest priority
+5. Avatar performs natural gesture!
+
+QUICK START - TRAIN BONE CONTROL AI:
+------------------------------------
+ForgeAI includes a ready-to-use training script!
+
+1. Run the training script:
+   cd /home/pi/ForgeAI
+   python scripts/train_avatar_control.py
+
+2. This creates a specialized model trained on 168 examples like:
+   User: "wave hello"
+   AI: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=-45</bone_control>
+       <bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+3. Load the trained model in GUI:
+   - Open ForgeAI (python run.py --gui)
+   - Go to Model Manager tab
+   - Load "avatar_control" model
+   - Enable avatar module in Modules tab
+   - Upload rigged 3D model in Avatar tab
+
+4. Chat and watch it move:
+   You: "Nod your head"
+   AI: <bone_control>head|pitch=15,yaw=0,roll=0</bone_control> *nods*
+
+TRAINING DATA FORMAT:
+---------------------
+The training file (data/specialized/avatar_control_training.txt) uses:
+
+# Basic format
+User: [natural language command]
+Assistant: <bone_control>[bone_name|pitch=X,yaw=Y,roll=Z]</bone_control>
+
+# Examples
+User: nod your head
+Assistant: <bone_control>head|pitch=15,yaw=0,roll=0</bone_control>
+
+User: wave hello
+Assistant: <bone_control>right_upper_arm|pitch=90,yaw=0,roll=-45</bone_control>
+<bone_control>right_forearm|pitch=90,yaw=0,roll=0</bone_control>
+
+User: look left
+Assistant: <bone_control>head|pitch=0,yaw=-30,roll=0</bone_control>
+<bone_control>neck|pitch=0,yaw=-15,roll=0</bone_control>
+
+AVAILABLE BONES:
+----------------
+head, neck, spine, spine1, spine2, chest, hips, pelvis,
+left_shoulder, left_upper_arm, left_forearm, left_hand,
+right_shoulder, right_upper_arm, right_forearm, right_hand,
+left_upper_leg, left_lower_leg, left_foot,
+right_upper_leg, right_lower_leg, right_foot
+
+ROTATION RANGES (degrees):
+--------------------------
+- Pitch (nod up/down): -45 to 45 typically
+- Yaw (turn left/right): -80 to 80 typically  
+- Roll (tilt side/side): -30 to 30 typically
+
+PREDEFINED GESTURES:
+--------------------
+The AI can also use predefined gestures:
+- nod, shake, wave, shrug, point, thinking, bow, stretch
+
+User: "show me a shrug"
+Assistant: <gesture>shrug</gesture>
+
+
+================================================================================
+SECTION 3: AVATAR TOOLS (FOR TOOL-AWARE MODELS)
 ================================================================================
 
 If you want the AI to EXPLICITLY control its avatar via tool calls, you need
@@ -276,18 +372,36 @@ FILES REFERENCE
 ================================================================================
 
 Training Data Locations:
-  data/training.txt                    - Base AI training
-  data/tool_training_data.txt          - Tool usage examples
-  data/specialized/avatar_training.txt - Avatar-specific (create this!)
+  data/training.txt                           - Base AI training
+  data/tool_training_data.txt                 - Tool usage examples
+  data/specialized/avatar_control_training.txt - Bone control (168 examples)
+  data/specialized/avatar_training.txt        - Avatar tools (create if needed)
 
-Avatar Files:
-  data/avatar/models/       - 3D model files (.glb, .gltf, .obj)
+Avatar Implementation Files:
+  forge_ai/avatar/controller.py      - Priority system, main controller
+  forge_ai/avatar/bone_control.py    - PRIMARY bone control (priority 100)
+  forge_ai/avatar/ai_control.py      - Parses AI bone commands
+  forge_ai/avatar/autonomous.py      - Fallback behaviors (priority 50)
+  forge_ai/tools/avatar_control_tool.py - Tool definition for AI
+
+Training Scripts:
+  scripts/train_avatar_control.py    - One-command bone control training
+
+Avatar Asset Files:
+  data/avatar/models/       - 3D model files (.glb, .gltf, .obj, .fbx)
   data/avatar/images/       - 2D avatar images
   data/avatar/capabilities.json - Model capabilities for AI
 
 Configuration:
   data/gui_settings.json    - Avatar settings (position, size, etc.)
   forge_modules.json        - Module enable/disable state
+
+Documentation:
+  AI_AVATAR_CONTROL_GUIDE.md       - Complete bone control guide
+  AVATAR_CONTROL_STATUS.md         - System status and fixes
+  AVATAR_PRIORITY_SYSTEM.md        - Priority system explanation
+  docs/AVATAR_SYSTEM_GUIDE.md      - Full features guide
+  docs/HOW_TO_TRAIN_AVATAR_AI.txt  - This file
 
 
 ================================================================================
