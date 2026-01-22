@@ -12,6 +12,7 @@ from typing import Dict, List, Set, Tuple, Any
 from collections import defaultdict
 
 sys.path.insert(0, '.')
+os.environ['FORGE_NO_AUDIO'] = '1'  # Skip audio checks
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 ISSUES = []

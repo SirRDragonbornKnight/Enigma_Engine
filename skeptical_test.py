@@ -6,6 +6,7 @@ Tests everything as if nothing works. Actually runs code, not just imports.
 import sys
 import os
 sys.path.insert(0, '.')
+os.environ['FORGE_NO_AUDIO'] = '1'  # Skip audio checks
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 import traceback

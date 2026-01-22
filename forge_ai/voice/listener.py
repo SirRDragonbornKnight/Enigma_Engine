@@ -33,6 +33,52 @@ except ImportError:
     sr = None
 
 
+def _check_audio_device():
+    """
+    Check if audio input device exists (lazy evaluation).
+    Returns False if no device found, avoiding repeated error spam.
+    """
+    import os
+    
+    # Allow skipping audio check for tests/headless environments
+    if os.getenv('FORGE_NO_AUDIO'):
+        return False
+    
+    if not HAS_SPEECH:
+        return False
+    
+    try:
+        # This will spam ALSA errors once, but we cache the result
+        p = sr.Microphone.get_pyaudio().PyAudio()
+        device_count = p.get_device_count()
+        has_device = False
+        for i in range(device_count):
+            try:
+                info = p.get_device_info_by_index(i)
+                if info.get('maxInputChannels', 0) > 0:
+                    has_device = True
+                    break
+            except:
+                continue
+        p.terminate()
+        return has_device
+    except Exception:
+        return False
+
+
+# Cache result after first check
+_AUDIO_DEVICE_CHECKED = False
+_HAS_AUDIO_DEVICE = None
+
+def has_audio_device():
+    """Check if audio device is available (cached)."""
+    global _AUDIO_DEVICE_CHECKED, _HAS_AUDIO_DEVICE
+    if not _AUDIO_DEVICE_CHECKED:
+        _HAS_AUDIO_DEVICE = _check_audio_device()
+        _AUDIO_DEVICE_CHECKED = True
+    return _HAS_AUDIO_DEVICE
+
+
 @dataclass
 class VoiceConfig:
     """Configuration for voice listener."""
@@ -94,6 +140,11 @@ class VoiceListener:
             raise ImportError(
                 "SpeechRecognition required. Install with:\n"
                 "  pip install SpeechRecognition pyaudio"
+            )
+        if not has_audio_device():
+            raise RuntimeError(
+                "No audio input device detected. "
+                "Connect a microphone or disable voice input module."
             )
         if self.microphone is None:
             self.microphone = sr.Microphone()

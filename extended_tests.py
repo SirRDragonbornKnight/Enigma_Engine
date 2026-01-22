@@ -6,6 +6,7 @@ Tests edge cases, error handling, and integration points.
 import sys
 import os
 sys.path.insert(0, '.')
+os.environ['FORGE_NO_AUDIO'] = '1'  # Skip audio checks
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 
 import traceback
