@@ -923,9 +923,18 @@ class QuickCommandOverlay(QWidget):
         self.set_status("Ready")
     
     def _stop_generation(self):
-        """Stop the current AI generation."""
+        """Stop the current AI generation via ChatSync."""
         self._stop_requested = True
         self.stop_requested.emit()
+        
+        # Use ChatSync to stop - this stops in both Quick Chat and main GUI
+        try:
+            from .chat_sync import ChatSync
+            chat_sync = ChatSync.instance()
+            chat_sync.stop_generation()
+        except Exception:
+            pass
+        
         self.stop_responding()
         # Add stopped message
         self.response_area.append(

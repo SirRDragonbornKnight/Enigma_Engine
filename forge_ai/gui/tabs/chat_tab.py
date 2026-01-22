@@ -504,12 +504,22 @@ def _save_chat(parent):
 
 
 def _stop_generation(parent):
-    """Stop the current AI generation."""
-    if hasattr(parent, '_ai_worker') and parent._ai_worker and parent._ai_worker.isRunning():
-        parent._ai_worker.stop()
+    """Stop the current AI generation via ChatSync."""
+    try:
+        from ..chat_sync import ChatSync
+        chat_sync = ChatSync.instance()
+        chat_sync.stop_generation()
         parent.chat_status.setText("Stopping generation...")
-        parent.stop_btn.setEnabled(False)
-        parent.stop_btn.setText("Stopping...")
+        if hasattr(parent, 'stop_btn'):
+            parent.stop_btn.setEnabled(False)
+            parent.stop_btn.setText("Stop")
+    except Exception as e:
+        # Fallback to old method
+        if hasattr(parent, '_ai_worker') and parent._ai_worker and parent._ai_worker.isRunning():
+            parent._ai_worker.stop()
+            parent.chat_status.setText("Stopping generation...")
+            parent.stop_btn.setEnabled(False)
+            parent.stop_btn.setText("Stop")
 
 
 def _handle_feedback_link(parent, url):

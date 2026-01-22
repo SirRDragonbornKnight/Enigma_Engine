@@ -194,7 +194,7 @@ class OpenGL3DWidget(QOpenGLWidget):
         
         self.setMinimumSize(250, 250)
         self.setMouseTracking(True)
-        self.setCursor(QCursor(Qt_OpenHandCursor))
+        self.setCursor(QCursor(Qt_ArrowCursor))  # Use normal cursor, not grabbing hand
         
     def load_model(self, path: str) -> bool:
         """Load a 3D model file with texture support."""
@@ -1134,11 +1134,11 @@ class OpenGL3DWidget(QOpenGLWidget):
         # Right-click OR left-click rotates (Sketchfab lets you orbit with right-click)
         if event.button() == Qt_LeftButton:
             self.is_panning = event.modifiers() == Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else False
-            self.setCursor(QCursor(Qt_ClosedHandCursor))
+            # Don't change cursor - keep normal arrow
         elif event.button() == Qt.RightButton if hasattr(Qt, 'RightButton') else 0x00000002:
             # Right-click = orbit (rotation) - Sketchfab style
             self.is_panning = False
-            self.setCursor(QCursor(Qt_ClosedHandCursor))
+            # Don't change cursor - keep normal arrow
         event.accept()
         
     def mouseMoveEvent(self, event):
@@ -1168,7 +1168,7 @@ class OpenGL3DWidget(QOpenGLWidget):
         """End drag."""
         self.last_pos = None
         self.is_panning = False
-        self.setCursor(QCursor(Qt_OpenHandCursor))
+        self.setCursor(QCursor(Qt_ArrowCursor))  # Keep normal cursor
         event.accept()
         
     def wheelEvent(self, event):
@@ -1303,23 +1303,33 @@ class AvatarOverlayWindow(QWidget):
         self.update()
         
     def paintEvent(self, a0):
-        """Draw avatar with subtle shadow, and border when resize is enabled."""
+        """Draw avatar with border that wraps tightly when resize is off."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         
-        # Draw thin resize border when resize mode is ON
-        if getattr(self, '_resize_enabled', False):
-            pen = painter.pen()
-            pen.setColor(QColor("#3498db"))  # Blue border
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.setBrush(Qt_NoBrush)
-            painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
-        
         if self.pixmap:
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
+            
+            # Draw border - blue when resize ON, subtle when OFF (wraps around avatar)
+            if getattr(self, '_resize_enabled', False):
+                # Wide border around full window when resize is enabled
+                pen = painter.pen()
+                pen.setColor(QColor("#3498db"))  # Blue border
+                pen.setWidth(3)
+                painter.setPen(pen)
+                painter.setBrush(Qt_NoBrush)
+                painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
+            else:
+                # Tight border around avatar only when resize is disabled
+                pen = painter.pen()
+                pen.setColor(QColor(60, 60, 80, 100))  # Subtle dark border
+                pen.setWidth(1)
+                painter.setPen(pen)
+                painter.setBrush(Qt_NoBrush)
+                # Draw border just around the avatar image
+                painter.drawRoundedRect(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6, 8, 8)
             
             # Draw a subtle circular background/glow
             painter.setPen(Qt_NoPen)
@@ -1363,9 +1373,9 @@ class AvatarOverlayWindow(QWidget):
                     self._resize_start_size = self._size
                     self._resize_start_geo = self.geometry()
                 elif getattr(self, '_reposition_enabled', True):
-                    # Normal drag (only if reposition is enabled)
+                    # Normal drag (only if reposition is enabled) - no hand cursor
                     self._drag_pos = global_pos - self.pos()
-                    self.setCursor(QCursor(Qt_ClosedHandCursor))
+                    # Keep arrow cursor, no grabbing hand
         a0.accept()
             
     def mouseMoveEvent(self, a0):  # type: ignore
