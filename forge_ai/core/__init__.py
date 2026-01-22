@@ -149,6 +149,39 @@ def _lazy_load_model_exporter():
             pass
     return ModelExporter, export_model, list_export_providers
 
+# AI Wants & Motivation System (optional)
+AIWantsSystem = None
+get_wants_system = None
+
+def _lazy_load_wants_system():
+    """Lazy load AI wants system on first use."""
+    global AIWantsSystem, get_wants_system
+    if AIWantsSystem is None:
+        try:
+            from .wants_system import (
+                AIWantsSystem as _AWS,
+                get_wants_system as _get_wants,
+            )
+            AIWantsSystem = _AWS
+            get_wants_system = _get_wants
+        except ImportError:
+            pass
+    return AIWantsSystem, get_wants_system
+
+# Learned Generator System (optional)
+LearnedGenerator = None
+
+def _lazy_load_learned_generator():
+    """Lazy load learned generator on first use."""
+    global LearnedGenerator
+    if LearnedGenerator is None:
+        try:
+            from .learned_generator import AILearnedGenerator as _LG
+            LearnedGenerator = _LG
+        except ImportError:
+            pass
+    return LearnedGenerator
+
 
 __all__ = [
     # Model
@@ -207,4 +240,11 @@ __all__ = [
     "ModelExporter",
     "export_model",
     "list_export_providers",
+    
+    # AI Wants & Motivation System
+    "AIWantsSystem",
+    "get_wants_system",
+    
+    # Learned Generator
+    "LearnedGenerator",
 ]

@@ -333,6 +333,35 @@ def _get_clipboard() -> str:
         except:
             pass
     
+    # Linux fallback using xclip/xsel
+    if os.name == 'posix':
+        try:
+            import subprocess
+            # Try xclip first
+            result = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], 
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return result.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        try:
+            # Try xsel as fallback
+            result = subprocess.run(['xsel', '--clipboard', '--output'], 
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return result.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        try:
+            # macOS pbpaste
+            result = subprocess.run(['pbpaste'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return result.stdout
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    
     return ""
 
 
@@ -357,6 +386,38 @@ def _set_clipboard(text: str) -> bool:
             return True
     except ImportError:
         pass
+    
+    # Linux fallback using xclip/xsel
+    if os.name == 'posix':
+        try:
+            import subprocess
+            # Try xclip first
+            process = subprocess.Popen(['xclip', '-selection', 'clipboard'],
+                                       stdin=subprocess.PIPE, text=True)
+            process.communicate(input=text, timeout=5)
+            if process.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        try:
+            # Try xsel as fallback
+            process = subprocess.Popen(['xsel', '--clipboard', '--input'],
+                                       stdin=subprocess.PIPE, text=True)
+            process.communicate(input=text, timeout=5)
+            if process.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
+        try:
+            # macOS pbcopy
+            process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE, text=True)
+            process.communicate(input=text, timeout=5)
+            if process.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
     
     return False
 

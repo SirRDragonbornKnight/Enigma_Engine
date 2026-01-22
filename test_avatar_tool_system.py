@@ -172,13 +172,13 @@ def load_training_examples():
     print("TRAINING DATA VISUALIZATION")
     print("="*80)
     
-    training_file = Path(__file__).parent.parent / "data/specialized/avatar_control_training_tool_based.txt"
+    training_file = Path(__file__).parent / "data/specialized/avatar_control_training_tool_based.txt"
     
     if not training_file.exists():
         print(f"❌ Training file not found: {training_file}")
         return
     
-    with open(training_file, 'r') as f:
+    with open(training_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
     # Find first complete example
