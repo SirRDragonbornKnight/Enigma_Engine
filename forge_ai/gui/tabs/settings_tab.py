@@ -829,17 +829,20 @@ def _load_system_prompt(parent):
             preset = settings.get("system_prompt_preset", "simple")
             custom_prompt = settings.get("custom_system_prompt", "")
             
-            # Set combo box
+            # Set combo box (without triggering signal)
+            parent.system_prompt_preset.blockSignals(True)
             for i in range(parent.system_prompt_preset.count()):
                 if parent.system_prompt_preset.itemData(i) == preset:
                     parent.system_prompt_preset.setCurrentIndex(i)
                     break
+            parent.system_prompt_preset.blockSignals(False)
             
-            # Set custom prompt text
-            parent.custom_system_prompt.setText(custom_prompt)
+            # Set custom prompt text only if preset is custom
+            if preset == "custom" and custom_prompt:
+                parent.custom_system_prompt.setText(custom_prompt)
             
-            # Enable/disable text area based on preset
-            parent.custom_system_prompt.setEnabled(preset == "custom")
+            # Apply the preset to show proper text
+            _apply_system_prompt_preset(parent)
             
             # Set on main window
             main_window = parent.window()
@@ -848,29 +851,86 @@ def _load_system_prompt(parent):
                 main_window._custom_system_prompt = custom_prompt
     except Exception as e:
         print(f"Could not load system prompt: {e}")
+        # Apply default preset on error
+        _apply_system_prompt_preset(parent)
 
 
 def _apply_system_prompt_preset(parent):
-    """Apply the selected system prompt preset."""
+    """Apply the selected system prompt preset and display the actual prompt text."""
     preset = parent.system_prompt_preset.currentData()
     
+    # Define the actual prompts
+    SIMPLE_PROMPT = "You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful."
+    
+    FULL_PROMPT = """You are ForgeAI, an intelligent AI assistant with access to various tools and capabilities.
+
+## Tool Usage
+When you need to perform an action (generate media, access files, etc.), use this format:
+<tool_call>{"tool": "tool_name", "params": {"param1": "value1"}}</tool_call>
+
+## Available Tools
+- generate_image: Create an image from a text description
+- generate_video: Generate a video from a description
+- generate_code: Generate code for a task
+- generate_audio: Generate speech or audio
+- generate_3d: Generate a 3D model
+- read_file: Read contents of a file
+- write_file: Write content to a file (requires permission)
+- web_search: Search the web
+- screenshot: Take a screenshot
+- run_command: Run a system command (requires permission)
+
+## Important
+- For system-modifying actions, the user will be asked for permission
+- Always explain what you're about to do before using a tool
+- Be helpful, accurate, and respect user privacy
+
+Be friendly, concise, and proactive in helping users accomplish their goals."""
+    
     if preset == "simple":
-        parent.custom_system_prompt.setEnabled(False)
-        parent.custom_system_prompt.setPlaceholderText(
-            "Using simple prompt:\\n\\n"
-            "You are a helpful AI assistant. Answer questions clearly and conversationally."
-        )
+        parent.custom_system_prompt.setReadOnly(True)
+        parent.custom_system_prompt.setText(SIMPLE_PROMPT)
+        parent.custom_system_prompt.setStyleSheet("""
+            QTextEdit {
+                background-color: #252525;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: monospace;
+                color: #aaa;
+            }
+        """)
     elif preset == "full":
-        parent.custom_system_prompt.setEnabled(False)
-        parent.custom_system_prompt.setPlaceholderText(
-            "Using full prompt with tools (for larger models)..."
-        )
+        parent.custom_system_prompt.setReadOnly(True)
+        parent.custom_system_prompt.setText(FULL_PROMPT)
+        parent.custom_system_prompt.setStyleSheet("""
+            QTextEdit {
+                background-color: #252525;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: monospace;
+                color: #aaa;
+            }
+        """)
     else:  # custom
-        parent.custom_system_prompt.setEnabled(True)
-        parent.custom_system_prompt.setPlaceholderText(
-            "Enter your custom system prompt here...\\n\\n"
-            "Example: You are a helpful AI assistant. Be friendly and concise."
-        )
+        parent.custom_system_prompt.setReadOnly(False)
+        # Don't overwrite existing custom text
+        if not parent.custom_system_prompt.toPlainText().strip():
+            parent.custom_system_prompt.setPlaceholderText(
+                "Enter your custom system prompt here...\n\n"
+                "Example: You are a helpful AI assistant. Be friendly and concise."
+            )
+        parent.custom_system_prompt.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: monospace;
+                color: white;
+            }
+        """)
     
     # Auto-save when preset changes
     _save_system_prompt(parent)
