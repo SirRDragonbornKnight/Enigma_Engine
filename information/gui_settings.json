@@ -10,5 +10,7 @@
   "always_on_top": false,
   "monitor_index": 0,
   "user_display_name": "User",
-  "mini_chat_always_on_top": true
+  "mini_chat_always_on_top": true,
+  "system_prompt_preset": "simple",
+  "custom_system_prompt": "You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful."
 }

@@ -2018,16 +2018,17 @@ class EnhancedMainWindow(QMainWindow):
         """Handle close dialog action."""
         dialog.close()
         
+        # ALWAYS save settings on any close action
+        self._save_gui_settings()
+        
         if action == 'hide':
             # Just hide to tray
             self.hide()
         elif action == 'close':
             # Close GUI but keep tray running
-            self._save_gui_settings()
             self.hide()
         elif action == 'quit':
             # Quit everything
-            self._save_gui_settings()
             from PyQt5.QtWidgets import QApplication
             QApplication.instance().quit()
     

@@ -1303,7 +1303,7 @@ class AvatarOverlayWindow(QWidget):
         self.update()
         
     def paintEvent(self, a0):
-        """Draw avatar with border that wraps tightly when resize is off."""
+        """Draw avatar with border that always wraps tightly around the image."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
@@ -1312,32 +1312,28 @@ class AvatarOverlayWindow(QWidget):
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             
-            # Draw border - blue when resize ON, green tight border when OFF
-            if getattr(self, '_resize_enabled', False):
-                # Wide border around full window when resize is enabled
-                pen = painter.pen()
-                pen.setColor(QColor("#3498db"))  # Blue border
-                pen.setWidth(3)
-                painter.setPen(pen)
-                painter.setBrush(Qt_NoBrush)
-                painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
-            else:
-                # Tight GREEN border around avatar only when resize is disabled
-                pen = painter.pen()
-                pen.setColor(QColor("#2ecc71"))  # Visible green border
-                pen.setWidth(2)
-                painter.setPen(pen)
-                painter.setBrush(Qt_NoBrush)
-                # Draw border just around the avatar image
-                painter.drawRoundedRect(x - 2, y - 2, self.pixmap.width() + 4, self.pixmap.height() + 4, 8, 8)
-            
-            # Draw a subtle circular background/glow
+            # Draw a subtle circular background/glow FIRST (behind everything)
             painter.setPen(Qt_NoPen)
             painter.setBrush(QColor(30, 30, 46, 80))  # Semi-transparent dark
             painter.drawEllipse(x - 5, y - 5, self.pixmap.width() + 10, self.pixmap.height() + 10)
             
             # Draw the avatar
             painter.drawPixmap(x, y, self.pixmap)
+            
+            # Draw border ALWAYS tight around avatar - color indicates resize mode
+            pen = painter.pen()
+            if getattr(self, '_resize_enabled', False):
+                # Blue border when resize is enabled (you can resize)
+                pen.setColor(QColor("#3498db"))  # Blue
+                pen.setWidth(3)
+            else:
+                # Green border when resize is disabled (fixed size)
+                pen.setColor(QColor("#2ecc71"))  # Green
+                pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(Qt_NoBrush)
+            # Draw border tightly around the avatar image
+            painter.drawRoundedRect(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6, 8, 8)
         else:
             # Draw placeholder circle
             painter.setPen(QColor("#6c7086"))
