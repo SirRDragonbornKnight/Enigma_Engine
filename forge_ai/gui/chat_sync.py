@@ -249,24 +249,40 @@ class ChatSync(QObject if HAS_PYQT else object):
             if self._stop_requested:
                 return
             
+            # Get conversation history for context
+            history = self.get_history_for_context(max_messages=6)
+            # Remove the last message (it's the user message we just added)
+            if history and history[-1].get("role") == "user":
+                history = history[:-1]
+            
             # Try to use the engine
-            if self._engine:
-                response = self._engine.generate(
-                    user_text,
-                    max_gen=200,
-                    temperature=0.8
-                )
-            elif self._main_window and hasattr(self._main_window, 'engine') and self._main_window.engine:
-                response = self._main_window.engine.generate(
-                    user_text,
-                    max_gen=200,
-                    temperature=0.8
-                )
+            engine = self._engine
+            if not engine and self._main_window and hasattr(self._main_window, 'engine'):
+                engine = self._main_window.engine
+            
+            if engine:
+                # Prefer chat() method for HuggingFace chat models
+                if hasattr(engine, 'chat'):
+                    response = engine.chat(
+                        user_text,
+                        max_gen=200,
+                        temperature=0.8
+                    )
+                else:
+                    response = engine.generate(
+                        user_text,
+                        max_gen=200,
+                        temperature=0.8
+                    )
             else:
                 response = "⚠️ No AI model loaded. Open the full GUI to load a model."
             
             if self._stop_requested:
                 return
+            
+            # Validate response - check for tensor output or other issues
+            if response:
+                response = self._clean_response(response)
             
             # Add AI response
             self.add_ai_message(response, source)
@@ -280,6 +296,41 @@ class ChatSync(QObject if HAS_PYQT else object):
             error_msg = f"<span style='color: #e74c3c;'>Error: {e}</span>"
             self.add_ai_message(error_msg, source)
             self.generation_finished.emit(error_msg)
+    
+    def _clean_response(self, response) -> str:
+        """Clean and validate AI response."""
+        import re
+        
+        # Check if response is a tensor (model didn't decode output)
+        if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
+            try:
+                import torch
+                if isinstance(response, torch.Tensor):
+                    return "⚠️ Model returned raw tensor. Try a different model or check configuration."
+            except ImportError:
+                pass
+            return "⚠️ Model returned invalid data format."
+        
+        # Convert to string if needed
+        response = str(response) if response else ""
+        
+        # Check for tensor patterns in the text (model hallucinating code)
+        tensor_patterns = [
+            r'tensor\s*\(\s*\[\[',  # tensor([[
+            r'tensor\s*\(\s*\[',    # tensor([
+            r'device=.cuda:\d+.',   # device='cuda:0'
+            r'dtype=torch\.\w+',    # dtype=torch.float32
+        ]
+        
+        for pattern in tensor_patterns:
+            if re.search(pattern, response):
+                # Try to extract any meaningful text before the tensor garbage
+                clean_text = re.split(pattern, response)[0].strip()
+                if clean_text and len(clean_text) > 10:
+                    return clean_text
+                return "I understand. How can I help you today?"
+        
+        return response.strip() if response else "..."
     
     def _update_user_message_ui(self, msg: ChatMessage, source: str):
         """Update both chat UIs with a user message."""

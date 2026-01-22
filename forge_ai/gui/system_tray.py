@@ -499,7 +499,7 @@ class QuickCommandOverlay(QWidget):
         # Header widget for dragging (like a window title bar)
         self._header_widget = QFrame()
         self._header_widget.setFixedHeight(30)
-        self._header_widget.setCursor(Qt.OpenHandCursor)
+        self._header_widget.setCursor(Qt.SizeAllCursor)
         self._header_widget.setStyleSheet("background: rgba(50, 50, 50, 0.5); border-radius: 4px;")
         self._header_widget.setMouseTracking(True)
         
@@ -660,31 +660,9 @@ class QuickCommandOverlay(QWidget):
         self.stop_btn.hide()  # Hidden by default
         input_layout.addWidget(self.stop_btn)
         
-        # Open GUI button
-        self.gui_btn = QPushButton("🖥️")
-        self.gui_btn.setFixedSize(40, 40)
-        self.gui_btn.setToolTip("Open Full GUI")
-        self.gui_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #16a085;
-                border: none;
-                border-radius: 8px;
-                color: white;
-                font-size: 18px;
-            }
-            QPushButton:hover {
-                background-color: #1abc9c;
-            }
-            QPushButton:pressed {
-                background-color: #0e7c68;
-            }
-        """)
-        self.gui_btn.clicked.connect(self._open_main_gui)
-        input_layout.addWidget(self.gui_btn)
-        
         frame_layout.addLayout(input_layout)
         
-        # Bottom row: hint text only
+        # Bottom row: hint text and open GUI link
         bottom_layout = QHBoxLayout()
         bottom_layout.setSpacing(8)
         
@@ -697,6 +675,26 @@ class QuickCommandOverlay(QWidget):
             }
         """)
         bottom_layout.addWidget(self.hint_label)
+        
+        # Open GUI button - small text link style
+        self.gui_btn = QPushButton("Open GUI")
+        self.gui_btn.setFixedHeight(18)
+        self.gui_btn.setToolTip("Open Full GUI (ESC)")
+        self.gui_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #3498db;
+                font-size: 10px;
+                padding: 0 4px;
+            }
+            QPushButton:hover {
+                color: #5dade2;
+                text-decoration: underline;
+            }
+        """)
+        self.gui_btn.clicked.connect(self._open_gui)
+        bottom_layout.addWidget(self.gui_btn)
         
         bottom_layout.addStretch()
         
@@ -1253,7 +1251,7 @@ class QuickCommandOverlay(QWidget):
                 except Exception as avatar_err:
                     self.set_status(f"Avatar error: {avatar_err}")
                     # Fallback to opening full GUI with avatar tab
-                    self._open_main_gui()
+                    self._open_gui()
                     
         except Exception as e:
             self.set_status(f"Run avatar error: {e}")
