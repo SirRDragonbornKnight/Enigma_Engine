@@ -763,10 +763,18 @@ class QuickCommandOverlay(QWidget):
         
         menu.addSeparator()
         
-        # Run avatar
-        avatar_action = QAction("Run Avatar", self)
-        avatar_action.triggered.connect(self._run_avatar)
-        menu.addAction(avatar_action)
+        # Avatar submenu
+        avatar_menu = menu.addMenu("Avatar")
+        
+        # Run avatar (toggle desktop overlay)
+        run_avatar_action = QAction("Toggle Desktop Avatar", self)
+        run_avatar_action.triggered.connect(self._run_avatar)
+        avatar_menu.addAction(run_avatar_action)
+        
+        # Open avatar tab
+        open_avatar_tab_action = QAction("Open Avatar Tab", self)
+        open_avatar_tab_action.triggered.connect(self._open_avatar_tab)
+        avatar_menu.addAction(open_avatar_tab_action)
         
         menu.addSeparator()
         
@@ -1279,41 +1287,73 @@ class QuickCommandOverlay(QWidget):
             main_window = self._get_main_window()
             
             if main_window:
-                # Try to use the avatar tab's show_overlay_btn directly
+                # Method 1: Try show_overlay_btn (set by avatar_display.py on main window)
                 if hasattr(main_window, 'show_overlay_btn') and main_window.show_overlay_btn:
-                    # If not checked, click to enable; if checked, click to disable (toggle)
-                    main_window.show_overlay_btn.click()
-                    self.set_status("Avatar toggled")
-                # Try toggle method with parameter
-                elif hasattr(main_window, '_toggle_avatar'):
-                    # Enable avatar (pass True)
-                    if hasattr(main_window, 'avatar_action'):
-                        current = main_window.avatar_action.isChecked()
-                        main_window.avatar_action.setChecked(not current)
-                        main_window._toggle_avatar(not current)
+                    if not main_window.show_overlay_btn.isChecked():
+                        main_window.show_overlay_btn.click()
+                        self.set_status("Avatar started")
                     else:
-                        main_window._toggle_avatar(True)
-                    self.set_status("Avatar toggled")
-                # Try enable method
-                elif hasattr(main_window, '_enable_avatar'):
-                    main_window._enable_avatar()
-                    self.set_status("Avatar enabled")
-                # If main window exists, try to show avatar controller
-                elif hasattr(main_window, 'avatar_controller') and main_window.avatar_controller:
-                    main_window.avatar_controller.show()
-                    self.set_status("Avatar shown")
-                else:
-                    # Open avatar tab as last resort
-                    self._open_avatar_tab()
+                        main_window.show_overlay_btn.click()
+                        self.set_status("Avatar stopped")
+                    return
+                
+                # Method 2: Try avatar_controller directly
+                if hasattr(main_window, 'avatar_controller') and main_window.avatar_controller:
+                    if main_window.avatar_controller.isVisible():
+                        main_window.avatar_controller.hide()
+                        self.set_status("Avatar hidden")
+                    else:
+                        main_window.avatar_controller.show()
+                        self.set_status("Avatar shown")
+                    return
+                
+                # Method 3: Try desktop_pet overlay
+                if hasattr(main_window, 'desktop_pet') and main_window.desktop_pet:
+                    if main_window.desktop_pet.isVisible():
+                        main_window.desktop_pet.hide()
+                        self.set_status("Avatar hidden")
+                    else:
+                        main_window.desktop_pet.show()
+                        self.set_status("Avatar shown")
+                    return
+                
+                # Method 4: Try via avatar module
+                try:
+                    from ..avatar import get_avatar
+                    avatar = get_avatar()
+                    if avatar and hasattr(avatar, 'overlay'):
+                        if avatar.overlay and avatar.overlay.isVisible():
+                            avatar.overlay.hide()
+                            self.set_status("Avatar hidden")
+                        elif avatar.overlay:
+                            avatar.overlay.show()
+                            self.set_status("Avatar shown")
+                        else:
+                            # Need to create overlay
+                            from ..avatar.desktop_pet import DesktopPetOverlay
+                            avatar.overlay = DesktopPetOverlay()
+                            avatar.overlay.show()
+                            self.set_status("Avatar started")
+                        return
+                except Exception as e:
+                    print(f"Avatar module error: {e}")
+                
+                # Method 5: Open avatar tab as last resort
+                self._open_avatar_tab()
+                self.set_status("Opened avatar tab")
             else:
                 # No main window - try to launch standalone avatar
                 self.set_status("Opening avatar...")
                 try:
-                    from ..avatar.controller import AvatarController
+                    from ..avatar.desktop_pet import DesktopPetOverlay
                     if not hasattr(self, '_avatar_window') or not self._avatar_window:
-                        self._avatar_window = AvatarController()
-                    self._avatar_window.show()
-                    self.set_status("Avatar launched")
+                        self._avatar_window = DesktopPetOverlay()
+                    if self._avatar_window.isVisible():
+                        self._avatar_window.hide()
+                        self.set_status("Avatar hidden")
+                    else:
+                        self._avatar_window.show()
+                        self.set_status("Avatar launched")
                 except Exception as avatar_err:
                     self.set_status(f"Avatar error: {avatar_err}")
                     # Fallback to opening full GUI with avatar tab
@@ -1331,16 +1371,38 @@ class QuickCommandOverlay(QWidget):
         """Open the main GUI avatar tab."""
         try:
             main_window = self._get_main_window()
-            if main_window and hasattr(main_window, 'tab_widget'):
-                # Find avatar tab (usually tab 2)
-                for i in range(main_window.tab_widget.count()):
-                    if "avatar" in main_window.tab_widget.tabText(i).lower():
-                        main_window.tab_widget.setCurrentIndex(i)
-                        main_window.show()
-                        main_window.activateWindow()
+            if main_window:
+                # Show the main window first
+                main_window.show()
+                main_window.activateWindow()
+                
+                # Try using the sidebar switch method
+                if hasattr(main_window, '_switch_to_tab'):
+                    main_window._switch_to_tab('avatar')
+                    self.set_status("Opened Avatar tab")
+                    return
+                
+                # Try using content_stack directly
+                if hasattr(main_window, 'content_stack') and hasattr(main_window, '_tab_indices'):
+                    if 'avatar' in main_window._tab_indices:
+                        idx = main_window._tab_indices['avatar']
+                        main_window.content_stack.setCurrentIndex(idx)
+                        self.set_status("Opened Avatar tab")
                         return
-            # If not found, just open GUI
-            self._open_gui()
+                
+                # Legacy: Try tab_widget
+                if hasattr(main_window, 'tab_widget'):
+                    for i in range(main_window.tab_widget.count()):
+                        if "avatar" in main_window.tab_widget.tabText(i).lower():
+                            main_window.tab_widget.setCurrentIndex(i)
+                            self.set_status("Opened Avatar tab")
+                            return
+                
+                self.set_status("Avatar tab not found")
+            else:
+                # No main window, just open GUI
+                self._open_gui()
+                self.set_status("Opening GUI...")
         except Exception as e:
             self.set_status(f"Error: {e}")
     
