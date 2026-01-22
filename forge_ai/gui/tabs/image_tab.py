@@ -860,7 +860,7 @@ class ImageTab(QWidget):
         self.generate_btn.clicked.connect(self._generate_image)
         btn_layout.addWidget(self.generate_btn)
         
-        self.stop_btn = QPushButton("⏹ Stop")
+        self.stop_btn = QPushButton("Stop")
         self.stop_btn.setStyleSheet("background-color: #7f8c8d; font-weight: bold; padding: 10px;")
         self.stop_btn.clicked.connect(self._stop_generation)
         self.stop_btn.setEnabled(False)

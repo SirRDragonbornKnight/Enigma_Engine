@@ -261,12 +261,21 @@ class ChatSync(QObject if HAS_PYQT else object):
                 engine = self._main_window.engine
             
             if engine:
+                # Get system prompt from main window user settings, or use default
+                system_prompt = None
+                if self._main_window and hasattr(self._main_window, '_get_user_system_prompt'):
+                    system_prompt = self._main_window._get_user_system_prompt()
+                else:
+                    # Fallback: simple prompt
+                    system_prompt = "You are a helpful AI assistant. Answer questions clearly and conversationally."
+                
                 # Prefer chat() method for HuggingFace chat models
                 if hasattr(engine, 'chat'):
                     response = engine.chat(
                         user_text,
                         max_gen=200,
-                        temperature=0.8
+                        temperature=0.8,
+                        system_prompt=system_prompt
                     )
                 else:
                     response = engine.generate(

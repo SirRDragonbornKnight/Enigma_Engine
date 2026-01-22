@@ -353,7 +353,7 @@ class DesktopPetWindow(QWidget):
         if event.button() == Qt_LeftButton:
             self._drag_pos = event.globalPos() - self.pos()
             self._is_dragging = True
-            self.setCursor(QCursor(Qt_ClosedHandCursor))
+            # No cursor change - use default arrow like normal windows
             self.dragging.emit(event.globalPos())
             event.accept()
     
@@ -368,7 +368,7 @@ class DesktopPetWindow(QWidget):
         if self._is_dragging:
             self._is_dragging = False
             self._drag_pos = None
-            self.setCursor(QCursor(Qt_ArrowCursor))
+            # No cursor change needed
             self.dropped.emit(self.pos())
             event.accept()
     

@@ -229,13 +229,13 @@ class SchedulerTab(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        header = QLabel("⏰ Task Scheduler")
+        header = QLabel("Task Scheduler")
         header.setFont(QFont("Arial", 16, QFont.Bold))
         header_layout.addWidget(header)
         
         header_layout.addStretch()
         
-        add_btn = QPushButton("➕ New Task")
+        add_btn = QPushButton("New Task")
         add_btn.clicked.connect(self._add_task)
         header_layout.addWidget(add_btn)
         
@@ -274,7 +274,7 @@ class SchedulerTab(QWidget):
         history_layout.addWidget(self.history_table)
         
         # Clear history button
-        clear_btn = QPushButton("🗑️ Clear History")
+        clear_btn = QPushButton("Clear History")
         clear_btn.clicked.connect(self._clear_history)
         history_layout.addWidget(clear_btn)
         
@@ -310,7 +310,7 @@ class SchedulerTab(QWidget):
             self.tasks_table.insertRow(row)
             
             # Status
-            status = "🟢" if task.get("enabled", True) else "⚪"
+            status = "[ON]" if task.get("enabled", True) else "[OFF]"
             self.tasks_table.setItem(row, 0, QTableWidgetItem(status))
             
             # Name
@@ -342,7 +342,7 @@ class SchedulerTab(QWidget):
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(2, 2, 2, 2)
             
-            run_btn = QPushButton("▶️")
+            run_btn = QPushButton(">")
             run_btn.setMaximumWidth(30)
             run_btn.setToolTip("Run now")
             run_btn.clicked.connect(lambda _, t=task: self._run_task(t))
@@ -546,7 +546,7 @@ class SchedulerTab(QWidget):
         
         menu = QMenu(self)
         
-        run_action = menu.addAction("▶️ Run Now")
+        run_action = menu.addAction("Run Now")
         run_action.triggered.connect(lambda: self._run_task(task))
         
         edit_action = menu.addAction("Edit")

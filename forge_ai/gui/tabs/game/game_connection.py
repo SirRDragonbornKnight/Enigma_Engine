@@ -418,7 +418,7 @@ def _on_game_detected(parent, game_id: str):
         config = router.get_game(game_id)
         
         if config:
-            parent.game_routing_status.setText(f"🎮 Detected: {config.name}")
+            parent.game_routing_status.setText(f"Detected: {config.name}")
             parent.game_routing_status.setStyleSheet("color: #22c55e; font-weight: bold;")
             
             # Update combo without triggering change
@@ -458,7 +458,7 @@ def _change_active_game(parent):
             router.set_active_game(game_id)
             config = router.get_game(game_id)
             if config:
-                parent.game_routing_status.setText(f"🎮 Active: {config.name}")
+                parent.game_routing_status.setText(f"Active: {config.name}")
                 parent.game_routing_status.setStyleSheet("color: #a6e3a1; font-weight: bold;")
     except ImportError:
         parent.game_routing_status.setText("Game router not available")

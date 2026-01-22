@@ -450,7 +450,7 @@ class AvatarCard(QFrame):
         super().__init__(parent)
         self.avatar_info = avatar_info
         self._setup_ui()
-        self.setCursor(Qt.PointingHandCursor)
+        # No special cursor - use default
     
     def _setup_ui(self):
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)

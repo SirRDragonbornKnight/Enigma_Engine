@@ -63,12 +63,12 @@ class LogViewerWidget(QWidget):
         self.auto_scroll_cb.stateChanged.connect(lambda s: setattr(self, 'auto_scroll', s == Qt.Checked))
         controls.addWidget(self.auto_scroll_cb)
         
-        refresh_btn = QPushButton("🔄")
+        refresh_btn = QPushButton("R")
         refresh_btn.setMaximumWidth(40)
         refresh_btn.clicked.connect(self._load_log)
         controls.addWidget(refresh_btn)
         
-        clear_btn = QPushButton("🗑️")
+        clear_btn = QPushButton("X")
         clear_btn.setMaximumWidth(40)
         clear_btn.setToolTip("Clear display")
         clear_btn.clicked.connect(lambda: self.log_display.clear())
@@ -184,7 +184,7 @@ class LogsTab(QWidget):
         
         # Compact header row with description
         header_row = QHBoxLayout()
-        header = QLabel("📋 Logs")
+        header = QLabel("Logs")
         header.setFont(QFont("Arial", 11, QFont.Bold))
         header_row.addWidget(header)
         
@@ -208,7 +208,7 @@ class LogsTab(QWidget):
         self.log_list.currentItemChanged.connect(self._on_log_selected)
         left_layout.addWidget(self.log_list)
         
-        refresh_list_btn = QPushButton("🔄 Refresh List")
+        refresh_list_btn = QPushButton("Refresh List")
         refresh_list_btn.clicked.connect(self._refresh_log_list)
         left_layout.addWidget(refresh_list_btn)
         
@@ -241,11 +241,11 @@ class LogsTab(QWidget):
         # Bottom controls
         bottom = QHBoxLayout()
         
-        export_btn = QPushButton("📥 Export Logs")
+        export_btn = QPushButton("Export Logs")
         export_btn.clicked.connect(self._export_logs)
         bottom.addWidget(export_btn)
         
-        clear_all_btn = QPushButton("🗑️ Clear All Logs")
+        clear_all_btn = QPushButton("Clear All Logs")
         clear_all_btn.clicked.connect(self._clear_all_logs)
         bottom.addWidget(clear_all_btn)
         
@@ -273,7 +273,7 @@ class LogsTab(QWidget):
                 continue
             
             for log_file in sorted(log_dir.glob("*.log"), reverse=True):
-                item = QListWidgetItem(f"📄 {log_file.name}")
+                item = QListWidgetItem(f"{log_file.name}")
                 item.setData(Qt.UserRole, str(log_file))
                 
                 # Color by type
@@ -287,7 +287,7 @@ class LogsTab(QWidget):
             
             # Also check .txt files that might be logs
             for log_file in sorted(log_dir.glob("*.txt"), reverse=True):
-                item = QListWidgetItem(f"📝 {log_file.name}")
+                item = QListWidgetItem(f"{log_file.name}")
                 item.setData(Qt.UserRole, str(log_file))
                 self.log_list.addItem(item)
     

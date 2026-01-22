@@ -228,7 +228,7 @@ class VoiceCloneTab(QWidget):
         layout.setSpacing(10)
         
         # Title
-        title = QLabel("🎙️ Voice Cloning & AI Voice Generation")
+        title = QLabel("Voice Cloning & AI Voice Generation")
         title.setFont(QFont("Segoe UI", 14, QFont.Bold))
         title.setStyleSheet("color: #89b4fa; margin-bottom: 10px;")
         layout.addWidget(title)
@@ -321,7 +321,7 @@ class VoiceCloneTab(QWidget):
         layout.addWidget(self.analysis_label)
         
         # Clone button
-        clone_btn = QPushButton("🎙️ Create Cloned Voice")
+        clone_btn = QPushButton("Create Cloned Voice")
         clone_btn.setStyleSheet("""
             QPushButton { 
                 background: #a6e3a1; color: #1e1e2e; 
@@ -388,7 +388,7 @@ class VoiceCloneTab(QWidget):
         layout.addLayout(base_layout)
         
         # Generate button
-        gen_btn = QPushButton("🤖 Generate AI Voice")
+        gen_btn = QPushButton("Generate AI Voice")
         gen_btn.setStyleSheet("""
             QPushButton { 
                 background: #89b4fa; color: #1e1e2e; 
@@ -405,12 +405,12 @@ class VoiceCloneTab(QWidget):
         presets_layout = QGridLayout(presets_group)
         
         presets = [
-            ("🤖 Cold AI", "A cold, calculating AI with a robotic, monotone voice. Speaks deliberately."),
-            ("😊 Friendly", "A warm, friendly assistant who speaks cheerfully with an upbeat tone."),
-            ("🧙 Wise Sage", "An ancient wise mentor who speaks slowly and thoughtfully with gravitas."),
-            ("⚡ Energetic", "A hyperactive, fast-talking character full of energy and excitement."),
-            ("🎭 Mysterious", "A dark, mysterious entity with a deep, echoing voice."),
-            ("😰 Nervous", "A timid, nervous character who speaks quickly and with uncertainty."),
+            ("Cold AI", "A cold, calculating AI with a robotic, monotone voice. Speaks deliberately."),
+            ("Friendly", "A warm, friendly assistant who speaks cheerfully with an upbeat tone."),
+            ("Wise Sage", "An ancient wise mentor who speaks slowly and thoughtfully with gravitas."),
+            ("Energetic", "A hyperactive, fast-talking character full of energy and excitement."),
+            ("Mysterious", "A dark, mysterious entity with a deep, echoing voice."),
+            ("Nervous", "A timid, nervous character who speaks quickly and with uncertainty."),
         ]
         
         for i, (label, desc) in enumerate(presets):
@@ -571,7 +571,7 @@ class VoiceCloneTab(QWidget):
             features = result.get("features", {})
             issues = result.get("issues", [])
             
-            analysis = f"📊 Analysis:\n"
+            analysis = f"Analysis:\n"
             analysis += f"  Duration: {features.get('duration', 0):.1f}s\n"
             analysis += f"  Pitch: {features.get('pitch', 1.0):.2f}\n"
             analysis += f"  Energy: {features.get('energy', 0.5):.2f}\n"
@@ -679,7 +679,7 @@ class VoiceCloneTab(QWidget):
             for file in PROFILES_DIR.glob("*.json"):
                 try:
                     profile = VoiceProfile.load(file.stem)
-                    item = QListWidgetItem(f"🎙️ {profile.name}")
+                    item = QListWidgetItem(f"{profile.name}")
                     item.setData(Qt.UserRole, file.stem)
                     self.profiles_list.addItem(item)
                 except Exception:

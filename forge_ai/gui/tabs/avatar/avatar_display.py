@@ -2934,7 +2934,7 @@ def create_avatar_subtab(parent):
         viewer_layout.addLayout(quick_orient_row)
         
         # Hint about controls on popup
-        rotate_hint = QLabel("💡 Popup: Right-click → Enable Resize/Rotate, then Shift+drag")
+        rotate_hint = QLabel("Tip: Popup - Right-click to Enable Resize/Rotate, then Shift+drag")
         rotate_hint.setStyleSheet("color: #6c7086; font-size: 10px;")
         viewer_layout.addWidget(rotate_hint)
         
@@ -3817,7 +3817,7 @@ def _toggle_overlay(parent):
                 parent._overlay_3d.load_model(str(parent._current_path))
                 parent._overlay_3d.show()
                 parent._overlay_3d.raise_()
-                parent.show_overlay_btn.setText("⏹ Stop")
+                parent.show_overlay_btn.setText("Stop")
                 parent.avatar_status.setText("3D avatar on desktop! Drag window to move, right-click for gestures.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
@@ -3851,7 +3851,7 @@ def _toggle_overlay(parent):
                 parent._overlay.set_avatar(scaled)
                 parent._overlay.show()
                 parent._overlay.raise_()
-                parent.show_overlay_btn.setText("⏹ Stop")
+                parent.show_overlay_btn.setText("Stop")
                 parent.avatar_status.setText("Avatar on desktop! Drag to move, right-click for gestures.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
@@ -3864,7 +3864,7 @@ def _toggle_overlay(parent):
             parent._overlay.hide()
         if parent._overlay_3d:
             parent._overlay_3d.hide()
-        parent.show_overlay_btn.setText("▶ Run")
+        parent.show_overlay_btn.setText("Run")
         parent.avatar_status.setText("Avatar stopped")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
 
@@ -3872,7 +3872,7 @@ def _toggle_overlay(parent):
 def _on_overlay_closed(parent):
     """Handle overlay closed."""
     parent.show_overlay_btn.setChecked(False)
-    parent.show_overlay_btn.setText("▶ Run")
+    parent.show_overlay_btn.setText("Run")
 
 
 def _toggle_3d_render(parent, enabled):
@@ -4425,7 +4425,7 @@ def _create_model_info_card(parent, path: Path):
     font = painter.font()
     font.setPointSize(36)
     painter.setFont(font)
-    painter.drawText(0, 40, size, 60, Qt_AlignCenter, "📦")
+    painter.drawText(0, 40, size, 60, Qt_AlignCenter, "[3D]")
     
     # "3D Model" label
     font.setPointSize(14)

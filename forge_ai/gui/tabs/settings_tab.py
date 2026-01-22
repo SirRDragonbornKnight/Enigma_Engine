@@ -266,7 +266,7 @@ def _on_game_detected(parent, game_id: str):
         
         if config:
             if hasattr(parent, 'game_status_label'):
-                parent.game_status_label.setText(f"🎮 Detected: {config.name}")
+                parent.game_status_label.setText(f"Detected: {config.name}")
                 parent.game_status_label.setStyleSheet("color: #22c55e; font-weight: bold;")
             
             # Update combo without triggering change
@@ -311,7 +311,7 @@ def _change_active_game(parent):
             router.set_active_game(game_id)
             config = router.get_game(game_id)
             if config and hasattr(parent, 'game_status_label'):
-                parent.game_status_label.setText(f"🎮 Active: {config.name}")
+                parent.game_status_label.setText(f"Active: {config.name}")
                 parent.game_status_label.setStyleSheet("color: #22c55e;")
     except Exception as e:
         if hasattr(parent, 'game_status_label'):
@@ -761,6 +761,113 @@ def _save_chat_names(parent):
         print(f"Could not save chat names: {e}")
 
 
+# ===== SYSTEM PROMPT SETTINGS =====
+def _save_system_prompt(parent):
+    """Save the custom system prompt to settings."""
+    import json
+    from pathlib import Path
+    from ...config import CONFIG
+    
+    try:
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings = {}
+        if settings_path.exists():
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+        
+        preset = parent.system_prompt_preset.currentData()
+        custom_prompt = parent.custom_system_prompt.toPlainText().strip()
+        
+        settings["system_prompt_preset"] = preset
+        settings["custom_system_prompt"] = custom_prompt
+        
+        with open(settings_path, 'w') as f:
+            json.dump(settings, f, indent=2)
+        
+        # Update main window's system prompt setting
+        main_window = parent.window()
+        if main_window:
+            main_window._system_prompt_preset = preset
+            main_window._custom_system_prompt = custom_prompt
+        
+        parent.prompt_status_label.setText("System prompt saved!")
+        parent.prompt_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+    except Exception as e:
+        parent.prompt_status_label.setText(f"Error saving: {e}")
+        parent.prompt_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+def _load_system_prompt(parent):
+    """Load the system prompt settings."""
+    import json
+    from pathlib import Path
+    from ...config import CONFIG
+    
+    try:
+        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        if settings_path.exists():
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+            
+            preset = settings.get("system_prompt_preset", "simple")
+            custom_prompt = settings.get("custom_system_prompt", "")
+            
+            # Set combo box
+            for i in range(parent.system_prompt_preset.count()):
+                if parent.system_prompt_preset.itemData(i) == preset:
+                    parent.system_prompt_preset.setCurrentIndex(i)
+                    break
+            
+            # Set custom prompt text
+            parent.custom_system_prompt.setText(custom_prompt)
+            
+            # Enable/disable text area based on preset
+            parent.custom_system_prompt.setEnabled(preset == "custom")
+            
+            # Set on main window
+            main_window = parent.window()
+            if main_window:
+                main_window._system_prompt_preset = preset
+                main_window._custom_system_prompt = custom_prompt
+    except Exception as e:
+        print(f"Could not load system prompt: {e}")
+
+
+def _apply_system_prompt_preset(parent):
+    """Apply the selected system prompt preset."""
+    preset = parent.system_prompt_preset.currentData()
+    
+    if preset == "simple":
+        parent.custom_system_prompt.setEnabled(False)
+        parent.custom_system_prompt.setPlaceholderText(
+            "Using simple prompt:\\n\\n"
+            "You are a helpful AI assistant. Answer questions clearly and conversationally."
+        )
+    elif preset == "full":
+        parent.custom_system_prompt.setEnabled(False)
+        parent.custom_system_prompt.setPlaceholderText(
+            "Using full prompt with tools (for larger models)..."
+        )
+    else:  # custom
+        parent.custom_system_prompt.setEnabled(True)
+        parent.custom_system_prompt.setPlaceholderText(
+            "Enter your custom system prompt here...\\n\\n"
+            "Example: You are a helpful AI assistant. Be friendly and concise."
+        )
+    
+    # Auto-save when preset changes
+    _save_system_prompt(parent)
+
+
+def _reset_system_prompt(parent):
+    """Reset system prompt to default."""
+    parent.system_prompt_preset.setCurrentIndex(0)  # Simple
+    parent.custom_system_prompt.clear()
+    _save_system_prompt(parent)
+    parent.prompt_status_label.setText("Reset to default (Simple)")
+    parent.prompt_status_label.setStyleSheet("color: #3b82f6; font-style: italic;")
+
+
 def _load_chat_names(parent):
     """Load chat display names from settings."""
     import json
@@ -968,7 +1075,7 @@ def create_settings_tab(parent):
     power_layout.addWidget(custom_frame)
     
     # Recommended settings info
-    rec_frame = QGroupBox("💡 Recommended Settings")
+    rec_frame = QGroupBox("Recommended Settings")
     rec_layout = QVBoxLayout(rec_frame)
     
     rec_info = QLabel(
@@ -1318,10 +1425,10 @@ def create_settings_tab(parent):
     robot_mode_row = QHBoxLayout()
     robot_mode_row.addWidget(QLabel("Mode:"))
     parent.robot_mode_combo = QComboBox()
-    parent.robot_mode_combo.addItem("🔴 DISABLED", "disabled")
-    parent.robot_mode_combo.addItem("🟢 MANUAL (User)", "manual")
-    parent.robot_mode_combo.addItem("🔵 AUTO (AI)", "auto")
-    parent.robot_mode_combo.addItem("🟡 SAFE (Limited)", "safe")
+    parent.robot_mode_combo.addItem("DISABLED", "disabled")
+    parent.robot_mode_combo.addItem("MANUAL (User)", "manual")
+    parent.robot_mode_combo.addItem("AUTO (AI)", "auto")
+    parent.robot_mode_combo.addItem("SAFE (Limited)", "safe")
     parent.robot_mode_combo.currentIndexChanged.connect(
         lambda: _change_robot_mode(parent)
     )
@@ -1544,6 +1651,70 @@ def create_settings_tab(parent):
     
     layout.addWidget(api_group)
     
+    # === SYSTEM PROMPT ===
+    prompt_group = QGroupBox("System Prompt")
+    prompt_layout = QVBoxLayout(prompt_group)
+    
+    prompt_desc = QLabel(
+        "Customize the system prompt that tells the AI how to behave. "
+        "This affects both the main Chat and Quick Chat."
+    )
+    prompt_desc.setWordWrap(True)
+    prompt_layout.addWidget(prompt_desc)
+    
+    # Preset selector
+    preset_row = QHBoxLayout()
+    preset_row.addWidget(QLabel("Preset:"))
+    parent.system_prompt_preset = QComboBox()
+    parent.system_prompt_preset.addItem("Simple (recommended for small models)", "simple")
+    parent.system_prompt_preset.addItem("Full (with tools, for larger models)", "full")
+    parent.system_prompt_preset.addItem("Custom", "custom")
+    parent.system_prompt_preset.currentIndexChanged.connect(
+        lambda: _apply_system_prompt_preset(parent)
+    )
+    preset_row.addWidget(parent.system_prompt_preset)
+    preset_row.addStretch()
+    prompt_layout.addLayout(preset_row)
+    
+    # Custom prompt text area
+    parent.custom_system_prompt = QTextEdit()
+    parent.custom_system_prompt.setPlaceholderText(
+        "Enter your custom system prompt here...\n\n"
+        "Example: You are a helpful AI assistant. Be friendly and concise."
+    )
+    parent.custom_system_prompt.setMaximumHeight(120)
+    parent.custom_system_prompt.setStyleSheet("""
+        QTextEdit {
+            background-color: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: monospace;
+        }
+    """)
+    prompt_layout.addWidget(parent.custom_system_prompt)
+    
+    # Save button
+    prompt_buttons = QHBoxLayout()
+    save_prompt_btn = QPushButton("Save System Prompt")
+    save_prompt_btn.clicked.connect(lambda: _save_system_prompt(parent))
+    prompt_buttons.addWidget(save_prompt_btn)
+    
+    reset_prompt_btn = QPushButton("Reset to Default")
+    reset_prompt_btn.clicked.connect(lambda: _reset_system_prompt(parent))
+    prompt_buttons.addWidget(reset_prompt_btn)
+    prompt_buttons.addStretch()
+    prompt_layout.addLayout(prompt_buttons)
+    
+    parent.prompt_status_label = QLabel("")
+    parent.prompt_status_label.setStyleSheet("color: #888; font-style: italic;")
+    prompt_layout.addWidget(parent.prompt_status_label)
+    
+    layout.addWidget(prompt_group)
+    
+    # Load saved system prompt
+    _load_system_prompt(parent)
+    
     # === AI CONNECTION STATUS ===
     connection_group = QGroupBox("AI Connection Status")
     connection_layout = QVBoxLayout(connection_group)
@@ -1672,7 +1843,7 @@ def create_settings_tab(parent):
     reset_window_btn.clicked.connect(lambda: _reset_window_position(parent))
     reset_buttons.addWidget(reset_window_btn)
     
-    reset_ontop_btn = QPushButton("📌 Disable Always-On-Top")
+    reset_ontop_btn = QPushButton("Disable Always-On-Top")
     reset_ontop_btn.setToolTip("Turn off always-on-top for main window")
     reset_ontop_btn.setStyleSheet("""
         QPushButton {

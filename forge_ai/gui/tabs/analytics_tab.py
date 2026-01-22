@@ -168,7 +168,7 @@ class AnalyticsTab(QWidget):
         # Header
         header_layout = QHBoxLayout()
         
-        header = QLabel("📊 Analytics Dashboard")
+        header = QLabel("Analytics Dashboard")
         header.setFont(QFont("Arial", 16, QFont.Bold))
         header_layout.addWidget(header)
         
@@ -181,11 +181,11 @@ class AnalyticsTab(QWidget):
         self.period_combo.currentIndexChanged.connect(self._load_analytics)
         header_layout.addWidget(self.period_combo)
         
-        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn = QPushButton("Refresh")
         refresh_btn.clicked.connect(self._load_analytics)
         header_layout.addWidget(refresh_btn)
         
-        export_btn = QPushButton("📤 Export")
+        export_btn = QPushButton("Export")
         export_btn.clicked.connect(self._export_analytics)
         header_layout.addWidget(export_btn)
         
@@ -252,7 +252,7 @@ class AnalyticsTab(QWidget):
         self.tool_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         tool_table_layout.addWidget(self.tool_table)
         
-        detail_tabs.addTab(tool_table_widget, "🔧 Tool Details")
+        detail_tabs.addTab(tool_table_widget, "Tool Details")
         
         # Session history table
         session_widget = QWidget()
@@ -264,7 +264,7 @@ class AnalyticsTab(QWidget):
         self.session_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         session_layout.addWidget(self.session_table)
         
-        detail_tabs.addTab(session_widget, "💬 Sessions")
+        detail_tabs.addTab(session_widget, "Sessions")
         
         # Model performance table
         model_widget = QWidget()
@@ -276,7 +276,7 @@ class AnalyticsTab(QWidget):
         self.model_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         model_layout.addWidget(self.model_table)
         
-        detail_tabs.addTab(model_widget, "🤖 Models")
+        detail_tabs.addTab(model_widget, "Models")
         
         # Training history
         training_widget = QWidget()
@@ -288,7 +288,7 @@ class AnalyticsTab(QWidget):
         self.training_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         training_layout.addWidget(self.training_table)
         
-        detail_tabs.addTab(training_widget, "📈 Training")
+        detail_tabs.addTab(training_widget, "Training")
         
         scroll_layout.addWidget(detail_tabs)
         

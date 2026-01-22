@@ -187,6 +187,12 @@ The module manager automatically prevents:
 - **Modules**: Always use ModuleManager for loading capabilities
 - **Tabs**: Generation implementations live directly in their GUI tabs
 
+## UI Guidelines
+- **NO EMOJIS**: Never use emojis, unicode symbols, or special characters in GUI text (buttons, labels, menus, status messages, tooltips). Keep UI text clean and professional.
+- **Button Text**: Keep button text short (1-2 words max). Use tooltips for longer descriptions.
+- **Font Sizes**: Use 10-12px for most UI elements. Never exceed 14px except for headings.
+- **Consistent Styling**: Follow existing PyQt5 stylesheet patterns in the codebase.
+
 ## What NOT To Do
 
 ❌ **DON'T load conflicting modules** - e.g., both `image_gen_local` AND `image_gen_api`

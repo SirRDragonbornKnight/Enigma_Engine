@@ -169,7 +169,7 @@ class NotesTab(QWidget):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel("📝 Notes & Bookmarks")
+        header = QLabel("Notes & Bookmarks")
         header.setFont(QFont("Arial", 16, QFont.Bold))
         layout.addWidget(header)
         
@@ -178,11 +178,11 @@ class NotesTab(QWidget):
         
         # Notes tab
         notes_widget = self._create_notes_widget()
-        self.tabs.addTab(notes_widget, "📝 Notes")
+        self.tabs.addTab(notes_widget, "Notes")
         
         # Bookmarks tab
         bookmarks_widget = self._create_bookmarks_widget()
-        self.tabs.addTab(bookmarks_widget, "🔖 Bookmarks")
+        self.tabs.addTab(bookmarks_widget, "Bookmarks")
         
         layout.addWidget(self.tabs)
     
@@ -199,7 +199,7 @@ class NotesTab(QWidget):
         self.notes_search.textChanged.connect(self._search_notes)
         controls.addWidget(self.notes_search)
         
-        new_btn = QPushButton("➕ New Note")
+        new_btn = QPushButton("New Note")
         new_btn.clicked.connect(self._new_note)
         controls.addWidget(new_btn)
         
@@ -249,11 +249,11 @@ class NotesTab(QWidget):
         # Save/Delete buttons
         btn_layout = QHBoxLayout()
         
-        save_btn = QPushButton("💾 Save")
+        save_btn = QPushButton("Save")
         save_btn.clicked.connect(self._save_note)
         btn_layout.addWidget(save_btn)
         
-        delete_btn = QPushButton("🗑️ Delete")
+        delete_btn = QPushButton("Delete")
         delete_btn.clicked.connect(self._delete_note)
         btn_layout.addWidget(delete_btn)
         
@@ -279,7 +279,7 @@ class NotesTab(QWidget):
         self.bookmarks_search.textChanged.connect(self._search_bookmarks)
         controls.addWidget(self.bookmarks_search)
         
-        add_btn = QPushButton("➕ Add Bookmark")
+        add_btn = QPushButton("Add Bookmark")
         add_btn.clicked.connect(self._add_bookmark)
         controls.addWidget(add_btn)
         
@@ -300,15 +300,15 @@ class NotesTab(QWidget):
         
         btn_layout = QHBoxLayout()
         
-        open_btn = QPushButton("🌐 Open in Browser")
+        open_btn = QPushButton("Open in Browser")
         open_btn.clicked.connect(self._open_selected_bookmark)
         btn_layout.addWidget(open_btn)
         
-        copy_btn = QPushButton("📋 Copy URL")
+        copy_btn = QPushButton("Copy URL")
         copy_btn.clicked.connect(self._copy_bookmark_url)
         btn_layout.addWidget(copy_btn)
         
-        delete_bm_btn = QPushButton("🗑️ Delete")
+        delete_bm_btn = QPushButton("Delete")
         delete_bm_btn.clicked.connect(self._delete_bookmark)
         btn_layout.addWidget(delete_bm_btn)
         
@@ -334,7 +334,7 @@ class NotesTab(QWidget):
         
         for note in notes:
             tags_str = ", ".join(note.get("tags", []))
-            display = f"📝 {note['name']}"
+            display = f"{note['name']}"
             if tags_str:
                 display += f" [{tags_str}]"
             

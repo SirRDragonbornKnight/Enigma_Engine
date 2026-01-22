@@ -121,7 +121,7 @@ class AIGenerationWorker(QThread):
             
             # Log to terminal
             if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                self.parent_window.log_terminal(f"🔵 NEW REQUEST: {self.text}", "info")
+                self.parent_window.log_terminal(f"NEW REQUEST: {self.text}", "info")
             
             if self._stop_requested:
                 self.stopped.emit()
@@ -131,7 +131,7 @@ class AIGenerationWorker(QThread):
                 # HuggingFace model - show reasoning steps
                 self.thinking.emit("Building conversation context...")
                 if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal("📝 Building conversation history...", "debug")
+                    self.parent_window.log_terminal("Building conversation history...", "debug")
                 time.sleep(0.1)
                 
                 if self._stop_requested:
@@ -140,7 +140,7 @@ class AIGenerationWorker(QThread):
                 
                 self.thinking.emit("Processing with language model...")
                 if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal("🧠 Running inference on model...", "info")
+                    self.parent_window.log_terminal("Running inference on model...", "info")
                 
                 # HuggingFace model
                 if hasattr(self.engine.model, 'chat') and not self.custom_tokenizer:
@@ -184,19 +184,19 @@ class AIGenerationWorker(QThread):
                                 )
                             else:
                                 response = (
-                                    "⚠️ Model returned raw tensor data. This usually means:\n"
+                                    "[Warning] Model returned raw tensor data. This usually means:\n"
                                     "• The model is not properly configured for text generation\n"
                                     "• Try a different model or check if it needs fine-tuning\n"
                                     "• Local Forge models need training first"
                                 )
                     except Exception as decode_err:
-                        response = f"⚠️ Could not decode model output: {decode_err}"
+                        response = f"[Warning] Could not decode model output: {decode_err}"
             else:
                 # Local Forge model - show detailed reasoning
                 self.thinking.emit("Formatting prompt for Q&A...")
                 formatted_prompt = f"Q: {self.text}\nA:"
                 if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal(f"📋 Formatted prompt: {formatted_prompt[:100]}...", "debug")
+                    self.parent_window.log_terminal(f"Formatted prompt: {formatted_prompt[:100]}...", "debug")
                 
                 if self._stop_requested:
                     self.stopped.emit()
@@ -204,7 +204,7 @@ class AIGenerationWorker(QThread):
                 
                 self.thinking.emit("Running inference on local model...")
                 if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                    self.parent_window.log_terminal("⚙️ Generating tokens...", "info")
+                    self.parent_window.log_terminal("Generating tokens...", "info")
                 response = self.engine.generate(formatted_prompt, max_gen=100)
                 
                 if self._stop_requested:
@@ -216,7 +216,7 @@ class AIGenerationWorker(QThread):
                 # Check if response is a tensor
                 if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
                     response = (
-                        "⚠️ Model returned raw data instead of text.\n"
+                        "[Warning] Model returned raw data instead of text.\n"
                         "This model may need more training. Go to the Train tab."
                     )
                 else:
@@ -244,7 +244,7 @@ class AIGenerationWorker(QThread):
             
             # Log completion
             if self.parent_window and hasattr(self.parent_window, 'log_terminal'):
-                self.parent_window.log_terminal(f"✅ Generated {len(response)} characters", "success")
+                self.parent_window.log_terminal(f"Generated {len(response)} characters", "success")
             
             # Validate response - detect garbage/code output
             garbage_indicators = [
@@ -271,7 +271,7 @@ class AIGenerationWorker(QThread):
             
             if is_garbage:
                 response = (
-                    "⚠️ The model generated code/technical text instead of a response.\n\n"
+                    "[Warning] The model generated code/technical text instead of a response.\n\n"
                     "This can happen with small models like Qwen2-0.5B when asked simple questions.\n"
                     "Try:\n"
                     "• Using a larger model (tinyllama_chat, phi2, or qwen2_1.5b_instruct)\n"
@@ -401,7 +401,7 @@ class GenerationPreviewPopup(QDialog):
             preview_label.setAlignment(Qt.AlignCenter)
             preview_label.setMinimumSize(400, 300)
             preview_label.setStyleSheet("border: 1px solid #45475a; border-radius: 8px; color: #cdd6f4;")
-            preview_label.setText(f"🎬 Video Generated\n\nClick 'Open' to play")
+            preview_label.setText(f"Video Generated\n\nClick 'Open' to play")
             container_layout.addWidget(preview_label)
             
         elif self.result_type == "audio" and self.result_path:
@@ -1327,7 +1327,7 @@ class SetupWizard(QWizard):
         
         # Info label
         info_label = QLabel(
-            "💡 Using a base model copies its trained weights and training data,\n"
+            "Tip: Using a base model copies its trained weights and training data,\n"
             "giving your new model a head start. Great for specialization!"
         )
         info_label.setWordWrap(True)
@@ -2019,7 +2019,7 @@ class EnhancedMainWindow(QMainWindow):
             pass
         
         if stopped_any:
-            self.statusBar().showMessage("⏹ All generations stopped (Escape pressed)", 3000)
+            self.statusBar().showMessage("All generations stopped (Escape pressed)", 3000)
     
     def _run_setup_wizard(self):
         """Run first-time setup wizard."""
@@ -2501,35 +2501,6 @@ class EnhancedMainWindow(QMainWindow):
         self.companion_action.setChecked(False)
         self.companion_action.triggered.connect(self._toggle_companion_mode)
         self._companion = None
-        
-        # ─────────────────────────────────────────────────────────────────
-        # Quick Chat button (top right of menu bar)
-        # ─────────────────────────────────────────────────────────────────
-        # Add spacer to push Quick Chat button to the right
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        menubar.setCornerWidget(spacer, Qt.TopLeftCorner)
-        
-        # Open Quick Chat button in menu bar (right side)
-        quick_chat_btn = QPushButton("Open Quick Chat")
-        quick_chat_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 4px 12px;
-                font-size: 11px;
-                font-weight: bold;
-                margin: 2px 8px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        quick_chat_btn.setToolTip("Open the Quick Chat overlay")
-        quick_chat_btn.clicked.connect(self._open_quick_chat)
-        menubar.setCornerWidget(quick_chat_btn, Qt.TopRightCorner)
         
         # ─────────────────────────────────────────────────────────────────
         # Status bar (bottom of window)
@@ -4225,6 +4196,16 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
+        # Sync to Quick Chat (so it shows in both places)
+        if hasattr(self, '_chat_sync') and self._chat_sync:
+            quick_chat = self._chat_sync._quick_chat
+            if quick_chat and hasattr(quick_chat, 'response_area'):
+                quick_html = f"<div style='color: #9b59b6; margin: 4px 0;'><b>{user_name}:</b> {text}</div>"
+                quick_chat.response_area.append(quick_html)
+                # Also start responding state on Quick Chat
+                if hasattr(quick_chat, 'start_responding'):
+                    quick_chat.start_responding()
+        
         # Show "thinking" indicator in chat
         self.chat_display.append(
             f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>{self.current_model_name} is thinking...</i></div>'
@@ -4265,10 +4246,12 @@ class EnhancedMainWindow(QMainWindow):
                 # Don't pass custom tokenizer - let model use its own
                 custom_tok = None
             
-            system_prompt = self._build_tool_enabled_system_prompt()
+            # Get system prompt from user settings
+            system_prompt = self._get_user_system_prompt()
             
-            # Add AI wants/motivations to system prompt
-            if hasattr(self, 'wants_system') and self.wants_system:
+            # Add AI wants/motivations to system prompt (only for larger models)
+            preset = getattr(self, '_system_prompt_preset', 'simple')
+            if preset != 'simple' and hasattr(self, 'wants_system') and self.wants_system:
                 motivation_prompt = self.wants_system.get_motivation_prompt()
                 if motivation_prompt:
                     system_prompt = f"{system_prompt}\n\n{motivation_prompt}"
@@ -4335,7 +4318,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # Add stopped message to chat
         self.chat_display.append(
-            '<div style="color: #f9e2af; padding: 4px;"><i>⏹ Generation stopped</i></div>'
+            '<div style="color: #f9e2af; padding: 4px;"><i>Generation stopped</i></div>'
         )
     
     def _detect_generation_intent(self, text: str):
@@ -4430,7 +4413,7 @@ class EnhancedMainWindow(QMainWindow):
             return response, []
         
         # Log tool detection
-        self.log_terminal(f"🔧 Detected {len(matches)} tool call(s) in response", "info")
+        self.log_terminal(f"Detected {len(matches)} tool call(s) in response", "info")
         
         
         results = []
@@ -4441,7 +4424,7 @@ class EnhancedMainWindow(QMainWindow):
                 params = tool_data.get('params', {})
                 
                 # Log tool call details
-                self.log_terminal(f"🛠️ Executing tool: {tool_name}", "debug")
+                self.log_terminal(f"Executing tool: {tool_name}", "debug")
                 self.log_terminal(f"   Parameters: {json.dumps(params, indent=2)[:200]}", "debug")
                 
                 # Check if this tool needs permission
@@ -4671,6 +4654,12 @@ class EnhancedMainWindow(QMainWindow):
         # Remove the thinking indicator from chat display
         self._remove_thinking_indicator()
         
+        # Stop Quick Chat responding state
+        if hasattr(self, '_chat_sync') and self._chat_sync:
+            quick_chat = self._chat_sync._quick_chat
+            if quick_chat and hasattr(quick_chat, 'stop_responding'):
+                quick_chat.stop_responding()
+        
         # AUTO-CONTROL: Automatically control avatar/robot/game based on response
         self._auto_control_from_response(response)
         
@@ -4700,7 +4689,7 @@ class EnhancedMainWindow(QMainWindow):
         thinking_time = ""
         if hasattr(self, '_generation_start_time'):
             elapsed = time.time() - self._generation_start_time
-            thinking_time = f'<span style="color: #6c7086; font-size: 10px; float: right;">⏱️ {elapsed:.1f}s</span>'
+            thinking_time = f'<span style="color: #6c7086; font-size: 10px; float: right;">{elapsed:.1f}s</span>'
         
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
@@ -4763,7 +4752,7 @@ class EnhancedMainWindow(QMainWindow):
                 elif result.get('auto_detected'):
                     self.chat_display.append(
                         f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #f9e2af;">'
-                        f'<b style="color: #f9e2af;">🎨 Auto-generating {result_type}...</b> Check the {result_type.title()} tab for results.</div>'
+                        f'<b style="color: #f9e2af;">Auto-generating {result_type}...</b> Check the {result_type.title()} tab for results.</div>'
                     )
             else:
                 self.chat_display.append(
@@ -4777,6 +4766,13 @@ class EnhancedMainWindow(QMainWindow):
             "text": response,
             "ts": time.time()
         })
+        
+        # Sync AI response to Quick Chat (so it shows in both places)
+        if hasattr(self, '_chat_sync') and self._chat_sync:
+            quick_chat = self._chat_sync._quick_chat
+            if quick_chat and hasattr(quick_chat, 'response_area'):
+                quick_html = f"<div style='color: #3498db; margin-bottom: 8px;'><b>{self.current_model_name}:</b> {display_response}</div>"
+                quick_chat.response_area.append(quick_html)
         
         # Learn from interaction (Forge models only)
         if not self._is_huggingface_model():
@@ -4816,6 +4812,18 @@ class EnhancedMainWindow(QMainWindow):
             popup.show()
         except Exception as e:
             print(f"Could not show preview popup: {e}")
+    
+    def _get_user_system_prompt(self) -> str:
+        """Get the system prompt based on user settings."""
+        preset = getattr(self, '_system_prompt_preset', 'simple')
+        custom_prompt = getattr(self, '_custom_system_prompt', '')
+        
+        if preset == 'custom' and custom_prompt:
+            return custom_prompt
+        elif preset == 'full':
+            return self._build_tool_enabled_system_prompt()
+        else:  # simple (default)
+            return "You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful."
     
     def _build_tool_enabled_system_prompt(self) -> str:
         """Build system prompt with all available tools the AI can use."""
@@ -5219,7 +5227,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             clean_text = re.sub(r'```[\s\S]*?```', '', clean_text)  # Remove code blocks
             clean_text = clean_text.strip()[:500]  # Limit length
             
-            if not clean_text or clean_text.startswith("⚠️"):
+            if not clean_text or clean_text.startswith("[Warning]"):
                 return  # Don't speak empty or error messages
             
             # Try to use voice profile system first (uses avatar voice if available)

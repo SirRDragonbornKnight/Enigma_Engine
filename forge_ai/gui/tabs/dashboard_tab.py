@@ -356,7 +356,7 @@ class DashboardTab(QWidget):
         # === Header ===
         header_layout = QHBoxLayout()
         
-        title = QLabel("📊 Dashboard")
+        title = QLabel("Dashboard")
         title.setStyleSheet("color: #cdd6f4; font-size: 22px; font-weight: bold;")
         header_layout.addWidget(title)
         
@@ -533,8 +533,8 @@ class DashboardTab(QWidget):
         self.activity_container = QVBoxLayout()
         self.activity_container.setSpacing(0)
         
-        self._add_activity("Dashboard initialized", "🚀")
-        self._add_activity("System monitoring started", "📊")
+        self._add_activity("Dashboard initialized", "*")
+        self._add_activity("System monitoring started", "*")
         
         activity_inner.addLayout(self.activity_container)
         activity_inner.addStretch()

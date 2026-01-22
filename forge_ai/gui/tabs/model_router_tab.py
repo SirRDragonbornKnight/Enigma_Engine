@@ -20,21 +20,21 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
 
-# Tool icons/colors
+# Tool icons/colors - Plain text for professional appearance
 TOOL_STYLES = {
-    "chat": {"color": "#3498db", "icon": "💬"},
-    "image": {"color": "#e91e63", "icon": "🖼️"},
-    "code": {"color": "#9b59b6", "icon": "💻"},
-    "video": {"color": "#e74c3c", "icon": "🎬"},
-    "audio": {"color": "#f39c12", "icon": "🔊"},
-    "3d": {"color": "#1abc9c", "icon": "🧊"},
-    "gif": {"color": "#ff6b6b", "icon": "🎞️"},
-    "web": {"color": "#2ecc71", "icon": "🌐"},
-    "memory": {"color": "#34495e", "icon": "🧠"},
-    "embeddings": {"color": "#9b59b6", "icon": "🔍"},
-    "camera": {"color": "#00bcd4", "icon": "📷"},
-    "vision": {"color": "#ff9800", "icon": "👁️"},
-    "avatar": {"color": "#e91e63", "icon": "🎭"},
+    "chat": {"color": "#3498db", "icon": "[Chat]"},
+    "image": {"color": "#e91e63", "icon": "[Image]"},
+    "code": {"color": "#9b59b6", "icon": "[Code]"},
+    "video": {"color": "#e74c3c", "icon": "[Video]"},
+    "audio": {"color": "#f39c12", "icon": "[Audio]"},
+    "3d": {"color": "#1abc9c", "icon": "[3D]"},
+    "gif": {"color": "#ff6b6b", "icon": "[GIF]"},
+    "web": {"color": "#2ecc71", "icon": "[Web]"},
+    "memory": {"color": "#34495e", "icon": "[Memory]"},
+    "embeddings": {"color": "#9b59b6", "icon": "[Embed]"},
+    "camera": {"color": "#00bcd4", "icon": "[Camera]"},
+    "vision": {"color": "#ff9800", "icon": "[Vision]"},
+    "avatar": {"color": "#e91e63", "icon": "[Avatar]"},
 }
 
 

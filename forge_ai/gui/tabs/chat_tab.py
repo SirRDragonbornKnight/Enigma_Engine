@@ -487,7 +487,7 @@ def _new_chat(parent):
     model_name = parent.current_model_name if hasattr(parent, 'current_model_name') else "AI"
     parent.chat_display.append(
         f'<div style="color: #a6e3a1; padding: 8px;">'
-        f'<b>✨ New conversation started with {model_name}</b><br>'
+        f'<b>New conversation started with {model_name}</b><br>'
         f'<span style="color: #6c7086;">Previous chat has been saved. Type a message to begin.</span>'
         f'</div><hr>'
     )
@@ -507,7 +507,7 @@ def _stop_generation(parent):
     """Stop the current AI generation."""
     if hasattr(parent, '_ai_worker') and parent._ai_worker and parent._ai_worker.isRunning():
         parent._ai_worker.stop()
-        parent.chat_status.setText("⏹ Stopping generation...")
+        parent.chat_status.setText("Stopping generation...")
         parent.stop_btn.setEnabled(False)
         parent.stop_btn.setText("Stopping...")
 

@@ -444,7 +444,7 @@ class VideoTab(QWidget):
         self.generate_btn.clicked.connect(self._generate_video)
         btn_layout.addWidget(self.generate_btn)
         
-        self.stop_btn = QPushButton("⏹ Stop")
+        self.stop_btn = QPushButton("Stop")
         self.stop_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 8px;")
         self.stop_btn.clicked.connect(self._stop_generation)
         self.stop_btn.setEnabled(False)

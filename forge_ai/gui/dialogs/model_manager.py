@@ -160,10 +160,10 @@ class ModelManagerDialog(QDialog):
         self.hf_preset_combo.addItem("Qwen/Qwen2-1.5B-Instruct (1.5B) [Medium] - Multilingual")
         self.hf_preset_combo.addItem("stabilityai/stablelm-2-zephyr-1_6b (1.6B) [Medium] - Stable chat")
         self.hf_preset_combo.addItem("google/gemma-2b-it (2B) [Medium] - Google Gemma")
-        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 (7B) [Large] ⚠️GPU")
-        self.hf_preset_combo.addItem("HuggingFaceH4/zephyr-7b-beta (7B) [Large] ⚠️GPU")
-        self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf (7B) [Large] ⚠️GPU")
-        self.hf_preset_combo.addItem("xai-org/grok-1 (314B) [Huge] ⚠️Datacenter")
+        self.hf_preset_combo.addItem("mistralai/Mistral-7B-Instruct-v0.2 (7B) [Large] GPU")
+        self.hf_preset_combo.addItem("HuggingFaceH4/zephyr-7b-beta (7B) [Large] GPU")
+        self.hf_preset_combo.addItem("meta-llama/Llama-2-7b-chat-hf (7B) [Large] GPU")
+        self.hf_preset_combo.addItem("xai-org/grok-1 (314B) [Huge] Datacenter")
         hf_layout.addWidget(self.hf_preset_combo)
         
         # Custom input
@@ -179,7 +179,7 @@ class ModelManagerDialog(QDialog):
         hf_layout.addLayout(hf_input_layout)
         
         # Delete HF model button
-        self.hf_delete_btn = QPushButton("🗑️ Delete Selected HF Model")
+        self.hf_delete_btn = QPushButton("Delete Selected HF Model")
         self.hf_delete_btn.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
         self.hf_delete_btn.setToolTip("Delete a HuggingFace model from this system")
         self.hf_delete_btn.clicked.connect(self._on_delete_hf_model)

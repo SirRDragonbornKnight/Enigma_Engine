@@ -499,7 +499,7 @@ class QuickCommandOverlay(QWidget):
         # Header widget for dragging (like a window title bar)
         self._header_widget = QFrame()
         self._header_widget.setFixedHeight(30)
-        self._header_widget.setCursor(Qt.SizeAllCursor)
+        # No special cursor - keep default arrow like normal windows
         self._header_widget.setStyleSheet("background: rgba(50, 50, 50, 0.5); border-radius: 4px;")
         self._header_widget.setMouseTracking(True)
         
@@ -745,18 +745,18 @@ class QuickCommandOverlay(QWidget):
         menu.addSeparator()
         
         # Voice input
-        voice_input_action = QAction("🎤 Voice Input...", self)
+        voice_input_action = QAction("Voice Input...", self)
         voice_input_action.triggered.connect(self._toggle_voice_input_menu)
         menu.addAction(voice_input_action)
         
         # Voice output toggle
         voice_status = "ON" if self._auto_speak else "OFF"
-        voice_output_action = QAction(f"🔊 Voice Output ({voice_status})", self)
+        voice_output_action = QAction(f"Voice Output ({voice_status})", self)
         voice_output_action.triggered.connect(self._toggle_voice_output_menu)
         menu.addAction(voice_output_action)
         
         # Speak last response
-        speak_last_action = QAction("💬 Speak Last Response", self)
+        speak_last_action = QAction("Speak Last Response", self)
         speak_last_action.triggered.connect(self._speak_last_response)
         speak_last_action.setEnabled(bool(getattr(self, '_last_response', None)))
         menu.addAction(speak_last_action)
@@ -764,25 +764,25 @@ class QuickCommandOverlay(QWidget):
         menu.addSeparator()
         
         # Run avatar
-        avatar_action = QAction("👤 Run Avatar", self)
+        avatar_action = QAction("Run Avatar", self)
         avatar_action.triggered.connect(self._run_avatar)
         menu.addAction(avatar_action)
         
         menu.addSeparator()
         
         # New window
-        new_window_action = QAction("➕ New Chat Window", self)
+        new_window_action = QAction("New Chat Window", self)
         new_window_action.triggered.connect(self._create_new_instance)
         menu.addAction(new_window_action)
         
         menu.addSeparator()
         
         # Close options
-        close_action = QAction("❌ Close Window", self)
+        close_action = QAction("Close Window", self)
         close_action.triggered.connect(self._close_overlay)
         menu.addAction(close_action)
         
-        quit_action = QAction("⚠️ Quit Forge", self)
+        quit_action = QAction("Quit Forge", self)
         quit_action.triggered.connect(self._quit_app)
         menu.addAction(quit_action)
         
@@ -929,13 +929,31 @@ class QuickCommandOverlay(QWidget):
         self.response_area.setHtml(html)
     
     def _quit_app(self):
-        """Quit the entire application."""
+        """Quit the entire application and clean up tray icons."""
         from PyQt5.QtWidgets import QApplication
         try:
             self.hide()
             
-            # Close all instances
+            # Close all Quick Chat instances
             QuickCommandOverlay.close_all_instances()
+            
+            # Clean up system tray icons to prevent ghost icons
+            for widget in QApplication.topLevelWidgets():
+                # Hide and clean up any system tray instance
+                if hasattr(widget, 'tray_icon'):
+                    widget.tray_icon.hide()
+                    widget.tray_icon.setVisible(False)
+            
+            # Also clean up the ForgeSystemTray if accessible
+            app = QApplication.instance()
+            if app:
+                for child in app.children():
+                    if hasattr(child, 'tray_icon'):
+                        child.tray_icon.hide()
+                        child.tray_icon.setVisible(False)
+            
+            # Process events to ensure tray cleanup completes
+            QApplication.processEvents()
             
             # Quit Qt application
             QApplication.quit()
@@ -962,7 +980,7 @@ class QuickCommandOverlay(QWidget):
         
         dialog = QDialog(self)
         dialog.setWindowTitle("Close Forge")
-        dialog.setFixedSize(280, 140)
+        dialog.setFixedSize(350, 180)
         dialog.setStyleSheet("""
             QDialog {
                 background-color: #2b2b2b;
@@ -971,32 +989,39 @@ class QuickCommandOverlay(QWidget):
             }
             QLabel {
                 color: #ecf0f1;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: bold;
             }
             QPushButton {
                 background-color: #3498db;
                 color: white;
                 border: none;
-                padding: 8px 16px;
+                padding: 6px 10px;
                 border-radius: 5px;
-                font-size: 12px;
-                min-width: 80px;
+                font-size: 10px;
+                min-width: 70px;
+                max-width: 100px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
+            }
+            QPushButton#hideBtn {
+                background-color: #27ae60;
+            }
+            QPushButton#hideBtn:hover {
+                background-color: #229954;
+            }
+            QPushButton#closeBtn {
+                background-color: #f39c12;
+            }
+            QPushButton#closeBtn:hover {
+                background-color: #d68910;
             }
             QPushButton#quitBtn {
                 background-color: #e74c3c;
             }
             QPushButton#quitBtn:hover {
                 background-color: #c0392b;
-            }
-            QPushButton#closeAllBtn {
-                background-color: #9b59b6;
-            }
-            QPushButton#closeAllBtn:hover {
-                background-color: #8e44ad;
             }
             QPushButton#cancelBtn {
                 background-color: #7f8c8d;
@@ -1008,38 +1033,65 @@ class QuickCommandOverlay(QWidget):
         
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
         
         # Title
-        title = QLabel("Close Forge?")
+        title = QLabel("Close Options")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
-        # Count instances
-        instance_count = len(QuickCommandOverlay.get_all_instances())
+        # Description
+        desc = QLabel("Choose how to close Forge:")
+        desc.setStyleSheet("font-weight: normal; font-size: 11px; color: #aaa;")
+        desc.setAlignment(Qt.AlignCenter)
+        layout.addWidget(desc)
         
-        # Buttons row
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(8)
+        # Buttons row 1 - main options
+        btn_layout1 = QHBoxLayout()
+        btn_layout1.setSpacing(8)
         
-        quit_btn = QPushButton("Quit")
+        # Hide to Tray - keeps AI running in background
+        hide_btn = QPushButton("Hide")
+        hide_btn.setObjectName("hideBtn")
+        hide_btn.setToolTip("Hide window - AI keeps running in tray")
+        hide_btn.clicked.connect(lambda: (dialog.accept(), self._hide_to_tray()))
+        btn_layout1.addWidget(hide_btn)
+        
+        # Close Window - closes just this Quick Chat
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("closeBtn")
+        close_btn.setToolTip("Close this window only")
+        close_btn.clicked.connect(lambda: (dialog.accept(), self._close_overlay()))
+        btn_layout1.addWidget(close_btn)
+        
+        # Quit Forge - full exit
+        quit_btn = QPushButton("Quit All")
         quit_btn.setObjectName("quitBtn")
+        quit_btn.setToolTip("Quit Forge completely")
         quit_btn.clicked.connect(lambda: (dialog.accept(), self._quit_app()))
-        btn_layout.addWidget(quit_btn)
+        btn_layout1.addWidget(quit_btn)
         
-        # Show Close All only if multiple instances
-        if instance_count > 1:
-            close_all_btn = QPushButton(f"Close All ({instance_count})")
-            close_all_btn.setObjectName("closeAllBtn")
-            close_all_btn.clicked.connect(lambda: (dialog.accept(), QuickCommandOverlay.close_all_instances()))
-            btn_layout.addWidget(close_all_btn)
+        layout.addLayout(btn_layout1)
         
+        # Buttons row 2 - cancel
+        btn_layout2 = QHBoxLayout()
+        btn_layout2.setSpacing(8)
+        
+        btn_layout2.addStretch()
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setObjectName("cancelBtn")
         cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
+        btn_layout2.addWidget(cancel_btn)
+        btn_layout2.addStretch()
         
-        layout.addLayout(btn_layout)
+        layout.addLayout(btn_layout2)
+        
+        dialog.exec_()
+    
+    def _hide_to_tray(self):
+        """Hide the window but keep AI running in system tray."""
+        self.hide()
+        self.set_status("Hidden to tray - AI still running")
         
         dialog.exec_()
     
@@ -1191,17 +1243,17 @@ class QuickCommandOverlay(QWidget):
             
             # Add gesture actions
             gestures = [
-                ("👋 Wave", "wave hello"),
-                ("👍 Thumbs Up", "give me a thumbs up"),
-                ("👎 Thumbs Down", "give me a thumbs down"),
-                ("🫡 Salute", "salute"),
-                ("🤷 Shrug", "shrug your shoulders"),
-                ("✋ Stop", "make a stop gesture"),
-                ("☝️ Point", "point at the screen"),
-                ("👏 Clap", "clap your hands"),
-                ("🤦 Facepalm", "do a facepalm"),
-                ("🙋 Raise Hand", "raise your hand"),
-                ("💪 Flex", "flex your muscles"),
+                ("Wave", "wave hello"),
+                ("Thumbs Up", "give me a thumbs up"),
+                ("Thumbs Down", "give me a thumbs down"),
+                ("Salute", "salute"),
+                ("Shrug", "shrug your shoulders"),
+                ("Stop", "make a stop gesture"),
+                ("Point", "point at the screen"),
+                ("Clap", "clap your hands"),
+                ("Facepalm", "do a facepalm"),
+                ("Raise Hand", "raise your hand"),
+                ("Flex", "flex your muscles"),
             ]
             
             for emoji_text, command in gestures:
@@ -1211,7 +1263,7 @@ class QuickCommandOverlay(QWidget):
             menu.addSeparator()
             
             # Add "Open Avatar Tab" option
-            open_tab_action = menu.addAction("🎭 Open Avatar Tab")
+            open_tab_action = menu.addAction("Open Avatar Tab")
             open_tab_action.triggered.connect(self._open_avatar_tab)
             
             # Show menu at cursor position
@@ -1227,17 +1279,31 @@ class QuickCommandOverlay(QWidget):
             main_window = self._get_main_window()
             
             if main_window:
-                # If main window exists, try to show avatar from there
-                if hasattr(main_window, 'avatar_controller') and main_window.avatar_controller:
-                    # Show avatar if hidden
+                # Try to use the avatar tab's show_overlay_btn directly
+                if hasattr(main_window, 'show_overlay_btn') and main_window.show_overlay_btn:
+                    # If not checked, click to enable; if checked, click to disable (toggle)
+                    main_window.show_overlay_btn.click()
+                    self.set_status("Avatar toggled")
+                # Try toggle method with parameter
+                elif hasattr(main_window, '_toggle_avatar'):
+                    # Enable avatar (pass True)
+                    if hasattr(main_window, 'avatar_action'):
+                        current = main_window.avatar_action.isChecked()
+                        main_window.avatar_action.setChecked(not current)
+                        main_window._toggle_avatar(not current)
+                    else:
+                        main_window._toggle_avatar(True)
+                    self.set_status("Avatar toggled")
+                # Try enable method
+                elif hasattr(main_window, '_enable_avatar'):
+                    main_window._enable_avatar()
+                    self.set_status("Avatar enabled")
+                # If main window exists, try to show avatar controller
+                elif hasattr(main_window, 'avatar_controller') and main_window.avatar_controller:
                     main_window.avatar_controller.show()
                     self.set_status("Avatar shown")
-                elif hasattr(main_window, '_show_avatar_window'):
-                    # Use the main window's show avatar method
-                    main_window._show_avatar_window()
-                    self.set_status("Avatar window opened")
                 else:
-                    # Open avatar tab
+                    # Open avatar tab as last resort
                     self._open_avatar_tab()
             else:
                 # No main window - try to launch standalone avatar
@@ -1424,7 +1490,6 @@ class QuickCommandOverlay(QWidget):
         """Handle mouse press on header for dragging."""
         if event.button() == Qt.LeftButton:
             self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
-            self._header_widget.setCursor(Qt.ClosedHandCursor)
         event.accept()
     
     def _header_mouse_move(self, event):
@@ -1436,7 +1501,6 @@ class QuickCommandOverlay(QWidget):
     def _header_mouse_release(self, event):
         """Handle mouse release on header."""
         self._drag_pos = None
-        self._header_widget.setCursor(Qt.OpenHandCursor)
         event.accept()
     
     # === Resizing support ===

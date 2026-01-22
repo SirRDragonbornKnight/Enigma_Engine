@@ -104,7 +104,7 @@ class NetworkTab(QWidget):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel("🌐 Network & Multi-Device")
+        header = QLabel("Network & Multi-Device")
         header.setFont(QFont("Arial", 16, QFont.Bold))
         layout.addWidget(header)
         
@@ -163,11 +163,11 @@ class NetworkTab(QWidget):
         # Scan controls
         scan_layout = QHBoxLayout()
         
-        self.scan_btn = QPushButton("🔍 Scan Network")
+        self.scan_btn = QPushButton("Scan Network")
         self.scan_btn.clicked.connect(self._scan_network)
         scan_layout.addWidget(self.scan_btn)
         
-        self.add_device_btn = QPushButton("➕ Add Device")
+        self.add_device_btn = QPushButton("Add Device")
         self.add_device_btn.clicked.connect(self._add_device_manual)
         scan_layout.addWidget(self.add_device_btn)
         
@@ -202,7 +202,7 @@ class NetworkTab(QWidget):
         self.remote_url.setPlaceholderText("http://192.168.1.100:8765")
         connect_layout.addWidget(self.remote_url)
         
-        connect_btn = QPushButton("🔗 Connect")
+        connect_btn = QPushButton("Connect")
         connect_btn.clicked.connect(self._connect_to_remote)
         connect_layout.addWidget(connect_btn)
         
@@ -356,7 +356,7 @@ class NetworkTab(QWidget):
     
     def _on_scan_complete(self, devices: list):
         """Handle scan completion."""
-        self.scan_btn.setText("🔍 Scan Network")
+        self.scan_btn.setText("Scan Network")
         self.scan_progress.setVisible(False)
         self._log(f"Scan complete. Found {len(devices)} device(s).")
         self._save_config()
@@ -387,13 +387,13 @@ class NetworkTab(QWidget):
         actions_layout = QHBoxLayout(actions_widget)
         actions_layout.setContentsMargins(2, 2, 2, 2)
         
-        connect_btn = QPushButton("🔗")
+        connect_btn = QPushButton(">")
         connect_btn.setMaximumWidth(30)
         connect_btn.setToolTip("Connect")
         connect_btn.clicked.connect(lambda: self._connect_to_device(device))
         actions_layout.addWidget(connect_btn)
         
-        remove_btn = QPushButton("❌")
+        remove_btn = QPushButton("X")
         remove_btn.setMaximumWidth(30)
         remove_btn.setToolTip("Remove")
         remove_btn.clicked.connect(lambda: self._remove_device(row))

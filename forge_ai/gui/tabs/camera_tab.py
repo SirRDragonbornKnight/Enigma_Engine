@@ -145,18 +145,18 @@ class CameraTab(QWidget):
         # Row 2: Start/Stop and capture buttons
         row2 = QHBoxLayout()
         
-        self.btn_start = QPushButton("▶ Start Camera")
+        self.btn_start = QPushButton("Start Camera")
         self.btn_start.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
         self.btn_start.clicked.connect(self.toggle_camera)
         row2.addWidget(self.btn_start)
         
-        self.btn_capture = QPushButton("📸 Capture Photo")
+        self.btn_capture = QPushButton("Capture Photo")
         self.btn_capture.setStyleSheet("background-color: #89b4fa; color: #1e1e2e; font-weight: bold;")
         self.btn_capture.clicked.connect(self.capture_photo)
         self.btn_capture.setEnabled(False)
         row2.addWidget(self.btn_capture)
         
-        self.btn_record = QPushButton("⏺ Record Video")
+        self.btn_record = QPushButton("Record Video")
         self.btn_record.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
         self.btn_record.clicked.connect(self.toggle_recording)
         self.btn_record.setEnabled(False)
@@ -168,7 +168,7 @@ class CameraTab(QWidget):
         # Row 3: Analysis options
         row3 = QHBoxLayout()
         
-        self.btn_analyze = QPushButton("🤖 AI Analyze")
+        self.btn_analyze = QPushButton("AI Analyze")
         self.btn_analyze.setToolTip("Have AI describe what it sees in the camera")
         self.btn_analyze.clicked.connect(self.analyze_frame)
         self.btn_analyze.setEnabled(False)
@@ -239,7 +239,7 @@ class CameraTab(QWidget):
         self.camera_thread.error.connect(self._on_camera_error)
         self.camera_thread.start()
         
-        self.btn_start.setText("⏹ Stop Camera")
+        self.btn_start.setText("Stop Camera")
         self.btn_start.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
         self.btn_capture.setEnabled(True)
         self.btn_record.setEnabled(True)
@@ -258,7 +258,7 @@ class CameraTab(QWidget):
         if self.is_recording:
             self.toggle_recording()
             
-        self.btn_start.setText("▶ Start Camera")
+        self.btn_start.setText("Start Camera")
         self.btn_start.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
         self.btn_capture.setEnabled(False)
         self.btn_record.setEnabled(False)
@@ -317,7 +317,7 @@ class CameraTab(QWidget):
         try:
             cv2.imwrite(str(filename), self.current_frame)
             self.status_label.setText(f"Status: Photo saved to {filename.name}")
-            self.analysis_text.appendPlainText(f"\n📸 Photo saved: {filename.name}")
+            self.analysis_text.appendPlainText(f"\nPhoto saved: {filename.name}")
         except Exception as e:
             QMessageBox.warning(self, "Save Error", f"Failed to save photo: {e}")
             
@@ -333,10 +333,10 @@ class CameraTab(QWidget):
             if self.video_writer:
                 self.video_writer.release()
                 self.video_writer = None
-            self.btn_record.setText("⏺ Record Video")
+            self.btn_record.setText("Record Video")
             self.btn_record.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
             self.status_label.setText("Status: Recording stopped")
-            self.analysis_text.appendPlainText("\n⏹ Recording stopped")
+            self.analysis_text.appendPlainText("\nRecording stopped")
         else:
             # Start recording
             if self.current_frame is None:
@@ -355,10 +355,10 @@ class CameraTab(QWidget):
                 return
                 
             self.is_recording = True
-            self.btn_record.setText("⏹ Stop Recording")
+            self.btn_record.setText("Stop Recording")
             self.btn_record.setStyleSheet("background-color: #fab387; color: #1e1e2e; font-weight: bold; animation: blink 1s infinite;")
             self.status_label.setText(f"Status: Recording to {filename.name}")
-            self.analysis_text.appendPlainText(f"\n⏺ Recording started: {filename.name}")
+            self.analysis_text.appendPlainText(f"\nRecording started: {filename.name}")
             
     def analyze_frame(self):
         """Have AI analyze the current frame."""
@@ -381,7 +381,7 @@ class CameraTab(QWidget):
                 self.main_window._last_screenshot = pil_image
                 
             # Try to use vision tools for analysis
-            self.analysis_text.appendPlainText("\n🤖 Analyzing frame...")
+            self.analysis_text.appendPlainText("\nAnalyzing frame...")
             
             # Check for vision capabilities
             try:
