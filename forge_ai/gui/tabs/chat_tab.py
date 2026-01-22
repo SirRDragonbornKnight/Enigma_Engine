@@ -40,7 +40,7 @@ def create_chat_tab(parent):
     # Quick action buttons
     parent.btn_new_chat = QPushButton("+ New Chat")
     parent.btn_new_chat.setToolTip("Start a fresh conversation (saves current chat first)")
-    parent.btn_new_chat.setMaximumWidth(90)
+    parent.btn_new_chat.setMaximumWidth(100)
     parent.btn_new_chat.clicked.connect(lambda: _new_chat(parent))
     parent.btn_new_chat.setStyleSheet("""
         QPushButton {
@@ -163,7 +163,7 @@ def create_chat_tab(parent):
     
     # Send button - matches Quick Chat style
     parent.send_btn = QPushButton("Send")
-    parent.send_btn.setFixedSize(60, 40)
+    parent.send_btn.setFixedSize(70, 40)
     parent.send_btn.clicked.connect(parent._on_send)
     parent.send_btn.setStyleSheet("""
         QPushButton {
@@ -171,7 +171,7 @@ def create_chat_tab(parent):
             border: none;
             border-radius: 8px;
             color: white;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
         }
         QPushButton:hover {
@@ -186,14 +186,14 @@ def create_chat_tab(parent):
     # Stop button (hidden by default, shown during generation)
     parent.stop_btn = QPushButton("Stop")
     parent.stop_btn.setToolTip("Stop AI generation")
-    parent.stop_btn.setFixedSize(60, 40)
+    parent.stop_btn.setFixedSize(70, 40)
     parent.stop_btn.setStyleSheet("""
         QPushButton {
             background-color: #e74c3c;
             border: none;
             border-radius: 8px;
             color: white;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
         }
         QPushButton:hover {
@@ -209,7 +209,7 @@ def create_chat_tab(parent):
     
     # Voice input button (REC style) - matches Quick Chat
     parent.rec_btn = QPushButton("REC")
-    parent.rec_btn.setFixedSize(50, 40)
+    parent.rec_btn.setFixedSize(55, 40)
     parent.rec_btn.setToolTip("Record - Click to speak")
     parent.rec_btn.setCheckable(True)
     parent.rec_btn.setStyleSheet("""
@@ -218,7 +218,7 @@ def create_chat_tab(parent):
             border: 2px solid #555;
             border-radius: 8px;
             color: #888;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: bold;
         }
         QPushButton:hover {
@@ -241,13 +241,13 @@ def create_chat_tab(parent):
     # Speak Last button (for TTS on demand)
     parent.btn_speak = QPushButton("TTS")
     parent.btn_speak.setToolTip("Speak last AI response")
-    parent.btn_speak.setFixedSize(40, 40)
+    parent.btn_speak.setFixedSize(50, 40)
     parent.btn_speak.setStyleSheet("""
         QPushButton {
             background-color: #cba6f7;
             color: #1e1e2e;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 11px;
             border-radius: 8px;
         }
         QPushButton:hover {
@@ -288,7 +288,7 @@ def create_chat_tab(parent):
     
     # Voice output toggle - compact style like Quick Chat
     parent.voice_toggle_btn = QPushButton("OFF")
-    parent.voice_toggle_btn.setFixedSize(40, 24)
+    parent.voice_toggle_btn.setFixedSize(45, 24)
     parent.voice_toggle_btn.setCheckable(True)
     parent.voice_toggle_btn.setToolTip("AI Voice: Click to toggle auto-speak")
     parent.voice_toggle_btn.setStyleSheet("""
