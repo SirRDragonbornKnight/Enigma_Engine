@@ -2707,6 +2707,24 @@ def create_avatar_subtab(parent):
     parent.avatar_reposition_checkbox.toggled.connect(lambda c: _toggle_reposition_enabled(parent, c))
     settings_row.addWidget(parent.avatar_reposition_checkbox)
     
+    # Reset Position button - moves avatar back to visible area
+    parent.reset_position_btn = QPushButton("Reset Position")
+    parent.reset_position_btn.setToolTip("Reset avatar position to center of screen (use if avatar went off-screen)")
+    parent.reset_position_btn.setStyleSheet("""
+        QPushButton {
+            background: #f38ba8;
+            color: #1e1e2e;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background: #eba0ac;
+        }
+    """)
+    parent.reset_position_btn.clicked.connect(lambda: _reset_avatar_position(parent))
+    settings_row.addWidget(parent.reset_position_btn)
+    
     settings_row.addStretch()
     left_panel.addLayout(settings_row)
     
@@ -3293,6 +3311,68 @@ def _toggle_reposition_enabled(parent, enabled: bool):
     else:
         parent.avatar_status.setText("Reposition disabled (avatar locked in place)")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _reset_avatar_position(parent):
+    """Reset avatar overlay position to center of primary screen."""
+    try:
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QPoint
+        
+        # Get primary screen geometry
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            center_x = geo.x() + (geo.width() // 2) - 150  # Offset for avatar size
+            center_y = geo.y() + (geo.height() // 2) - 150
+        else:
+            center_x, center_y = 400, 300  # Fallback
+        
+        # Reset 2D overlay position
+        if parent._overlay:
+            parent._overlay.move(center_x, center_y)
+            parent.avatar_status.setText(f"Avatar moved to center ({center_x}, {center_y})")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        
+        # Reset 3D overlay position
+        if parent._overlay_3d:
+            parent._overlay_3d.move(center_x, center_y)
+            parent.avatar_status.setText(f"Avatar moved to center ({center_x}, {center_y})")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        
+        # Save the new position to persistence
+        try:
+            from ....avatar.persistence import save_position, save_avatar_settings, write_avatar_state_for_ai
+            save_position(center_x, center_y)
+            
+            # Also clear per-avatar positions so it doesn't get overridden
+            current_path = getattr(parent, '_current_path', None)
+            if current_path:
+                from ....avatar.persistence import get_persistence
+                persistence = get_persistence()
+                settings = persistence.load()
+                # Remove saved position for current avatar so it uses the new default
+                if str(current_path) in settings.per_avatar_positions:
+                    del settings.per_avatar_positions[str(current_path)]
+                    persistence.save(settings)
+            
+            write_avatar_state_for_ai()
+        except Exception as e:
+            print(f"[Avatar] Could not save reset position: {e}")
+        
+        # If no overlay is visible yet, still save the position for next time
+        if not parent._overlay and not parent._overlay_3d:
+            try:
+                from ....avatar.persistence import save_position
+                save_position(center_x, center_y)
+                parent.avatar_status.setText(f"Position reset to center - run avatar to see it")
+                parent.avatar_status.setStyleSheet("color: #89b4fa;")
+            except Exception:
+                pass
+                
+    except Exception as e:
+        parent.avatar_status.setText(f"Reset position error: {e}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
 
 
 def _overlay_wheel_resize(overlay, event):

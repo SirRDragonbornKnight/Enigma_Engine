@@ -771,6 +771,11 @@ class QuickCommandOverlay(QWidget):
         run_avatar_action.triggered.connect(self._run_avatar)
         avatar_menu.addAction(run_avatar_action)
         
+        # Reset position (if avatar went off-screen)
+        reset_pos_action = QAction("Reset Position", self)
+        reset_pos_action.triggered.connect(self._reset_avatar_position)
+        avatar_menu.addAction(reset_pos_action)
+        
         # Open avatar tab
         open_avatar_tab_action = QAction("Open Avatar Tab", self)
         open_avatar_tab_action.triggered.connect(self._open_avatar_tab)
@@ -1405,6 +1410,61 @@ class QuickCommandOverlay(QWidget):
                 self.set_status("Opening GUI...")
         except Exception as e:
             self.set_status(f"Error: {e}")
+    
+    def _reset_avatar_position(self):
+        """Reset avatar overlay position to center of primary screen."""
+        try:
+            from PyQt5.QtWidgets import QApplication
+            
+            # Get primary screen geometry
+            screen = QApplication.primaryScreen()
+            if screen:
+                geo = screen.availableGeometry()
+                center_x = geo.x() + (geo.width() // 2) - 150
+                center_y = geo.y() + (geo.height() // 2) - 150
+            else:
+                center_x, center_y = 400, 300
+            
+            # Try to move via main window's avatar overlays
+            main_window = self._get_main_window()
+            moved = False
+            
+            if main_window:
+                # Try 2D overlay
+                if hasattr(main_window, '_overlay') and main_window._overlay:
+                    main_window._overlay.move(center_x, center_y)
+                    moved = True
+                
+                # Try 3D overlay
+                if hasattr(main_window, '_overlay_3d') and main_window._overlay_3d:
+                    main_window._overlay_3d.move(center_x, center_y)
+                    moved = True
+            
+            # Also try standalone avatar window
+            if hasattr(self, '_avatar_window') and self._avatar_window:
+                self._avatar_window.move(center_x, center_y)
+                moved = True
+            
+            # Save the new position
+            try:
+                from ..avatar.persistence import save_position, get_persistence
+                save_position(center_x, center_y)
+                
+                # Clear per-avatar positions
+                persistence = get_persistence()
+                settings = persistence.load()
+                settings.per_avatar_positions.clear()
+                persistence.save(settings)
+            except Exception as e:
+                print(f"Could not save position: {e}")
+            
+            if moved:
+                self.set_status(f"Avatar moved to ({center_x}, {center_y})")
+            else:
+                self.set_status("Position reset - run avatar to see it")
+                
+        except Exception as e:
+            self.set_status(f"Reset error: {e}")
     
     def _toggle_voice(self):
         """Legacy toggle - redirects to voice input."""
