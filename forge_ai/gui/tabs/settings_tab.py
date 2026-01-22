@@ -608,7 +608,11 @@ def _update_cloud_model_options(parent):
 
 
 def _toggle_always_on_top(parent, state):
-    """Toggle always on top window flag."""
+    """Toggle always on top window flag.
+    
+    When main window is set to always-on-top, Quick Chat should have priority
+    (appear above main window) if it's also always-on-top.
+    """
     from PyQt5.QtCore import Qt
     
     main_window = parent.window()
@@ -623,6 +627,19 @@ def _toggle_always_on_top(parent, state):
         main_window.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
     
     main_window.show()
+    
+    # Ensure Quick Chat has priority when visible (raise it above main window)
+    if hasattr(main_window, 'mini_chat') and main_window.mini_chat and main_window.mini_chat.isVisible():
+        from PyQt5.QtCore import QTimer
+        # Brief delay to ensure main window is positioned first, then raise Quick Chat
+        QTimer.singleShot(50, lambda: _raise_mini_chat(main_window))
+
+
+def _raise_mini_chat(main_window):
+    """Raise Quick Chat above main window to give it z-order priority."""
+    if hasattr(main_window, 'mini_chat') and main_window.mini_chat and main_window.mini_chat.isVisible():
+        main_window.mini_chat.raise_()
+        main_window.mini_chat.activateWindow()
 
 
 def _disable_always_on_top(parent):

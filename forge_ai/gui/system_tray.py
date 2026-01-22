@@ -1303,12 +1303,19 @@ class QuickCommandOverlay(QWidget):
             if main_window:
                 # Method 1: Try show_overlay_btn (set by avatar_display.py on main window)
                 if hasattr(main_window, 'show_overlay_btn') and main_window.show_overlay_btn:
-                    if not main_window.show_overlay_btn.isChecked():
-                        main_window.show_overlay_btn.click()
-                        self.set_status("Avatar started")
-                    else:
-                        main_window.show_overlay_btn.click()
-                        self.set_status("Avatar stopped")
+                    # Check if an avatar is actually loaded
+                    if hasattr(main_window, '_using_builtin_sprite') and main_window._using_builtin_sprite:
+                        # No avatar loaded - show message and open avatar tab
+                        self.set_status("No avatar loaded. Opening avatar tab...")
+                        self._open_avatar_tab()
+                        return
+                    
+                    was_checked = main_window.show_overlay_btn.isChecked()
+                    main_window.show_overlay_btn.click()
+                    
+                    # Check the result - if button unchecked itself, avatar might have failed
+                    from PyQt5.QtCore import QTimer
+                    QTimer.singleShot(100, lambda: self._check_avatar_status(main_window, was_checked))
                     return
                 
                 # Method 2: Try avatar_controller directly
@@ -1375,6 +1382,33 @@ class QuickCommandOverlay(QWidget):
                     
         except Exception as e:
             self.set_status(f"Run avatar error: {e}")
+    
+    def _check_avatar_status(self, main_window, was_checked):
+        """Check if avatar toggle succeeded and update status."""
+        try:
+            now_checked = main_window.show_overlay_btn.isChecked()
+            if was_checked and not now_checked:
+                # Was trying to start, now stopped - success
+                self.set_status("Avatar stopped")
+            elif not was_checked and now_checked:
+                # Was stopped, now started - success
+                self.set_status("Avatar running")
+            elif not was_checked and not now_checked:
+                # Tried to start but failed - no avatar loaded
+                # Get status from avatar_status label if available
+                if hasattr(main_window, 'avatar_status'):
+                    status_text = main_window.avatar_status.text()
+                    if "Select" in status_text or "load" in status_text.lower():
+                        self.set_status("No avatar selected. Open avatar tab first.")
+                    else:
+                        self.set_status(status_text[:40] if len(status_text) > 40 else status_text)
+                else:
+                    self.set_status("Avatar could not start")
+            else:
+                # was_checked and now_checked - tried to stop but still running?
+                self.set_status("Avatar running")
+        except Exception:
+            pass
     
     def _send_avatar_command(self, command: str):
         """Send an avatar control command to the AI."""

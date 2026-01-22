@@ -1928,6 +1928,109 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             print(f"Could not save GUI settings: {e}")
     
+    def _show_close_dialog(self):
+        """Show close options dialog - same as Quick Chat close."""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Close Options")
+        dialog.setFixedSize(320, 140)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #1e1e2e;
+                border: 1px solid #313244;
+            }
+            QLabel {
+                color: #cdd6f4;
+                font-size: 13px;
+            }
+            QPushButton {
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+        
+        label = QLabel("What would you like to do?")
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
+        # Hide button - hide to tray
+        hide_btn = QPushButton("Hide")
+        hide_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+            }
+        """)
+        hide_btn.setToolTip("Hide window to system tray")
+        hide_btn.clicked.connect(lambda: self._close_action(dialog, 'hide'))
+        btn_layout.addWidget(hide_btn)
+        
+        # Close button - close this window only
+        close_btn = QPushButton("Close GUI")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f9e2af;
+                color: #1e1e2e;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #f5c2e7;
+            }
+        """)
+        close_btn.setToolTip("Close main GUI only")
+        close_btn.clicked.connect(lambda: self._close_action(dialog, 'close'))
+        btn_layout.addWidget(close_btn)
+        
+        # Quit All button - quit entire app
+        quit_btn = QPushButton("Quit All")
+        quit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f38ba8;
+                color: #1e1e2e;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #ed5b7c;
+            }
+        """)
+        quit_btn.setToolTip("Quit ForgeAI completely")
+        quit_btn.clicked.connect(lambda: self._close_action(dialog, 'quit'))
+        btn_layout.addWidget(quit_btn)
+        
+        layout.addLayout(btn_layout)
+        dialog.exec_()
+    
+    def _close_action(self, dialog, action):
+        """Handle close dialog action."""
+        dialog.close()
+        
+        if action == 'hide':
+            # Just hide to tray
+            self.hide()
+        elif action == 'close':
+            # Close GUI but keep tray running
+            self._save_gui_settings()
+            self.hide()
+        elif action == 'quit':
+            # Quit everything
+            self._save_gui_settings()
+            from PyQt5.QtWidgets import QApplication
+            QApplication.instance().quit()
+    
     def closeEvent(self, event):
         """Handle window close - hide to system tray, don't exit ForgeAI.
         
@@ -2560,7 +2663,7 @@ class EnhancedMainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
         
-        # App title/logo area
+        # App title/logo area with close button
         title_widget = QWidget()
         title_widget.setFixedHeight(50)
         title_widget.setStyleSheet("""
@@ -2568,7 +2671,7 @@ class EnhancedMainWindow(QMainWindow):
             border-bottom: 1px solid #1e1e2e;
         """)
         title_layout = QHBoxLayout(title_widget)
-        title_layout.setContentsMargins(16, 0, 16, 0)
+        title_layout.setContentsMargins(16, 0, 8, 0)
         app_title = QLabel("FORGE AI")
         app_title.setStyleSheet("""
             color: #89b4fa;
@@ -2577,6 +2680,30 @@ class EnhancedMainWindow(QMainWindow):
             letter-spacing: 2px;
         """)
         title_layout.addWidget(app_title)
+        title_layout.addStretch()
+        
+        # Close button - shows close options dialog
+        close_btn = QPushButton("X")
+        close_btn.setFixedSize(28, 28)
+        close_btn.setToolTip("Close Options")
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #6c7086;
+                border: 1px solid #45475a;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e74c3c;
+                border-color: #e74c3c;
+                color: white;
+            }
+        """)
+        close_btn.clicked.connect(self._show_close_dialog)
+        title_layout.addWidget(close_btn)
+        
         sidebar_layout.addWidget(title_widget)
         
         # Sidebar list widget

@@ -1312,7 +1312,7 @@ class AvatarOverlayWindow(QWidget):
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             
-            # Draw border - blue when resize ON, subtle when OFF (wraps around avatar)
+            # Draw border - blue when resize ON, green tight border when OFF
             if getattr(self, '_resize_enabled', False):
                 # Wide border around full window when resize is enabled
                 pen = painter.pen()
@@ -1322,14 +1322,14 @@ class AvatarOverlayWindow(QWidget):
                 painter.setBrush(Qt_NoBrush)
                 painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
             else:
-                # Tight border around avatar only when resize is disabled
+                # Tight GREEN border around avatar only when resize is disabled
                 pen = painter.pen()
-                pen.setColor(QColor(60, 60, 80, 100))  # Subtle dark border
-                pen.setWidth(1)
+                pen.setColor(QColor("#2ecc71"))  # Visible green border
+                pen.setWidth(2)
                 painter.setPen(pen)
                 painter.setBrush(Qt_NoBrush)
                 # Draw border just around the avatar image
-                painter.drawRoundedRect(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6, 8, 8)
+                painter.drawRoundedRect(x - 2, y - 2, self.pixmap.width() + 4, self.pixmap.height() + 4, 8, 8)
             
             # Draw a subtle circular background/glow
             painter.setPen(Qt_NoPen)
@@ -1515,6 +1515,18 @@ class AvatarOverlayWindow(QWidget):
                     self.move(x, y)
             except Exception:
                 pass
+    
+    def hideEvent(self, a0):
+        """Save position and size when hidden."""
+        super().hideEvent(a0)
+        try:
+            from ....avatar.persistence import save_avatar_settings, save_position, write_avatar_state_for_ai
+            pos = self.pos()
+            save_position(pos.x(), pos.y())
+            save_avatar_settings(overlay_size=self._size)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
         
     def keyPressEvent(self, a0):  # type: ignore
         """ESC to close."""
@@ -3919,10 +3931,28 @@ def _toggle_overlay(parent):
             if parent._overlay is None:
                 parent._overlay = AvatarOverlayWindow()
                 parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
-                # Apply saved size
-                saved_size = getattr(parent, '_saved_overlay_size', 300)
+                
+                # Load size from avatar persistence (most reliable) or gui settings
+                try:
+                    from ....avatar.persistence import load_avatar_settings
+                    avatar_settings = load_avatar_settings()
+                    saved_size = avatar_settings.overlay_size
+                    if saved_size < 100 or saved_size > 500:
+                        saved_size = 300
+                except Exception:
+                    saved_size = getattr(parent, '_saved_overlay_size', 300)
+                
                 parent._overlay._size = saved_size
                 parent._overlay.setFixedSize(saved_size, saved_size)
+                
+                # Also restore position from persistence
+                try:
+                    from ....avatar.persistence import load_position
+                    x, y = load_position()
+                    if x >= 0 and y >= 0:
+                        parent._overlay.move(x, y)
+                except Exception:
+                    pass
             
             # Sync resize enabled state to overlay (default OFF)
             parent._overlay._resize_enabled = getattr(parent, '_avatar_resize_enabled', False)
