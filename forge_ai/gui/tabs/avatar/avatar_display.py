@@ -1848,7 +1848,7 @@ class Avatar3DOverlayWindow(QWidget):
             self._gl_widget.installEventFilter(self)
         
         self.setMouseTracking(True)
-        self.setCursor(QCursor(Qt_OpenHandCursor))
+        self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow by default - not hand cursor
     
     def _on_animator_transform(self, pos_offset, rot_offset, scale):
         """Callback from AdaptiveAnimator for transform updates."""
@@ -2154,7 +2154,7 @@ class Avatar3DOverlayWindow(QWidget):
                             if ('top' in edge and 'right' in edge) or ('bottom' in edge and 'left' in edge):
                                 self.setCursor(QCursor(Qt.SizeBDiagCursor if hasattr(Qt, 'SizeBDiagCursor') else 0))
                         else:
-                            self.setCursor(QCursor(Qt_OpenHandCursor))
+                            self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor when not over resize edge
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseButtonRelease:
@@ -2186,7 +2186,7 @@ class Avatar3DOverlayWindow(QWidget):
                     self._drag_pos = None
                     self._resize_edge = None
                     self._rotate_start_x = None
-                    self.setCursor(QCursor(Qt_OpenHandCursor))
+                    self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor after mouse release
                 return True  # Block event from reaching GL widget
             
             elif event_type == event.MouseButtonDblClick:
@@ -3948,13 +3948,16 @@ def _toggle_overlay(parent):
             if parent._overlay_3d is None:
                 parent._overlay_3d = Avatar3DOverlayWindow()
                 parent._overlay_3d.closed.connect(lambda: _on_overlay_closed(parent))
-                # Apply saved size
+                # Apply saved size (minimum 200)
                 saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
+                if saved_size < 200:
+                    saved_size = 250
                 parent._overlay_3d._size = saved_size
                 parent._overlay_3d.setFixedSize(saved_size, saved_size)
             
-            # Sync resize enabled state to overlay (default OFF)
-            parent._overlay_3d._resize_enabled = getattr(parent, '_avatar_resize_enabled', False)
+            # ALWAYS set resize to OFF by default when showing overlay
+            # This overrides any saved setting - user can enable via right-click if wanted
+            parent._overlay_3d._resize_enabled = False
             
             # Load the model into 3D overlay
             if parent._current_path:
