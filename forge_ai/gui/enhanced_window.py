@@ -4443,15 +4443,10 @@ class EnhancedMainWindow(QMainWindow):
                 if hasattr(quick_chat, 'start_responding'):
                     quick_chat.start_responding()
         
-        # Show "thinking" indicator in chat
-        self.chat_display.append(
-            f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>{self.current_model_name} is thinking...</i></div>'
-        )
-        
-        # Show thinking panel and stop button
+        # Show thinking panel and stop button (no longer appending thinking div to chat - causes HTML corruption)
         if hasattr(self, 'thinking_frame'):
             self.thinking_frame.show()
-            self.thinking_label.setText("Analyzing your message...")
+            self.thinking_label.setText(f"{self.current_model_name} is thinking...")
         if hasattr(self, 'stop_btn'):
             self.stop_btn.show()
             self.stop_btn.setEnabled(True)
@@ -4509,25 +4504,12 @@ class EnhancedMainWindow(QMainWindow):
         self._ai_worker.start()
     
     def _remove_thinking_indicator(self):
-        """Remove the thinking indicator from chat display."""
-        if hasattr(self, 'chat_display'):
-            # Get current HTML and remove thinking div
-            html = self.chat_display.toHtml()
-            
-            # Remove the thinking div - handle multiple possible formats
-            import re
-            # Pattern 1: div with id=thinking
-            html = re.sub(r'<div[^>]*id=["\']?thinking["\']?[^>]*>.*?</div>', '', html, flags=re.DOTALL | re.IGNORECASE)
-            # Pattern 2: italic text with "is thinking"
-            html = re.sub(r'<div[^>]*>\s*<i>[^<]*is thinking[^<]*</i>\s*</div>', '', html, flags=re.DOTALL | re.IGNORECASE)
-            # Pattern 3: just the thinking text without div
-            html = re.sub(r'<i>[^<]*is thinking\.\.\.[^<]*</i>', '', html, flags=re.IGNORECASE)
-            
-            self.chat_display.setHtml(html)
-            
-            # Scroll to bottom
-            scrollbar = self.chat_display.verticalScrollBar()
-            scrollbar.setValue(scrollbar.maximum())
+        """Remove the thinking indicator from chat display safely."""
+        # Instead of manipulating HTML (which can corrupt formatting),
+        # we just don't show the thinking indicator in the chat at all.
+        # The thinking_frame above the input already shows the status.
+        # This is a no-op now for safety.
+        pass
     
     def _on_thinking_update(self, status: str):
         """Update the thinking indicator with current status."""
@@ -4915,6 +4897,16 @@ class EnhancedMainWindow(QMainWindow):
         # Remove tool_call tags from display
         import re
         display_response = re.sub(r'<tool_call>.*?</tool_call>', '', clean_response, flags=re.DOTALL).strip()
+        
+        # Clean up code fence artifacts (``` with nothing useful)
+        # Remove standalone ``` or ```language markers with no actual code
+        display_response = re.sub(r'^```\w*\s*$', '', display_response, flags=re.MULTILINE)
+        display_response = re.sub(r'```\s*```', '', display_response)  # Empty code blocks
+        display_response = re.sub(r'^\s*```\s*$', '', display_response, flags=re.MULTILINE)
+        # If response is ONLY code fences, replace with a helpful message
+        if re.match(r'^[\s`]*$', display_response):
+            display_response = "I'm here to help! What would you like to know?"
+        display_response = display_response.strip()
         
         # Format response
         if HAVE_TEXT_FORMATTER:

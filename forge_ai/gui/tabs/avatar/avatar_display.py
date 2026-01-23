@@ -3748,12 +3748,11 @@ def _test_random_expression(parent):
         )
         parent.avatar_preview_2d.set_svg_sprite(svg_data)
         
-        # Also update overlay if visible
+        # Also update overlay if visible (pass original, overlay handles scaling)
         if parent._overlay and parent._overlay.isVisible():
             pixmap = parent.avatar_preview_2d.original_pixmap
             if pixmap:
-                scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-                parent._overlay.set_avatar(scaled)
+                parent._overlay.set_avatar(pixmap)
 
 
 def _set_expression(parent, expression: str, from_callback: bool = False):
@@ -3782,12 +3781,11 @@ def _set_expression(parent, expression: str, from_callback: bool = False):
         )
         parent.avatar_preview_2d.set_svg_sprite(svg_data)
         
-        # Update overlay too
+        # Update overlay too (pass original, overlay handles scaling)
         if parent._overlay and parent._overlay.isVisible():
             pixmap = parent.avatar_preview_2d.original_pixmap
             if pixmap:
-                scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-                parent._overlay.set_avatar(scaled)
+                parent._overlay.set_avatar(pixmap)
     else:
         # Using custom avatar - try to find expression-specific image
         _update_avatar_for_expression(parent, expression)
@@ -3828,10 +3826,9 @@ def _update_avatar_for_expression(parent, expression: str):
             if not pixmap.isNull():
                 parent.avatar_preview_2d.set_avatar(pixmap)
                 
-                # Update overlay
+                # Update overlay (pass original, overlay handles scaling)
                 if parent._overlay and parent._overlay.isVisible():
-                    scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-                    parent._overlay.set_avatar(scaled)
+                    parent._overlay.set_avatar(pixmap)
                 return
     
     # No expression-specific image found - keep current
@@ -3987,8 +3984,8 @@ def _toggle_overlay(parent):
                 return
             
             if pixmap:
-                scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-                parent._overlay.set_avatar(scaled)
+                # Pass the ORIGINAL pixmap - set_avatar and _update_scaled_pixmap will handle scaling
+                parent._overlay.set_avatar(pixmap)
                 parent._overlay.show()
                 parent._overlay.raise_()
                 parent.show_overlay_btn.setText("Stop")
@@ -4653,12 +4650,11 @@ def _apply_avatar(parent):
     
     parent.avatar_status.setStyleSheet("color: #a6e3a1;")
     
-    # Update overlay if visible
+    # Update overlay if visible (pass original, overlay handles scaling)
     if parent._overlay and parent._overlay.isVisible():
         pixmap = parent.avatar_preview_2d.original_pixmap
         if pixmap:
-            scaled = pixmap.scaled(280, 280, Qt_KeepAspectRatio, Qt_SmoothTransformation)
-            parent._overlay.set_avatar(scaled)
+            parent._overlay.set_avatar(pixmap)
 
 
 def _load_avatar_file(parent):

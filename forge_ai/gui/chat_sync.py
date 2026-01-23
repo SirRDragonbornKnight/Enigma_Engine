@@ -323,6 +323,14 @@ class ChatSync(QObject if HAS_PYQT else object):
         # Convert to string if needed
         response = str(response) if response else ""
         
+        # Clean up code fence artifacts (``` with nothing useful)
+        response = re.sub(r'^```\w*\s*$', '', response, flags=re.MULTILINE)
+        response = re.sub(r'```\s*```', '', response)  # Empty code blocks
+        response = re.sub(r'^\s*```\s*$', '', response, flags=re.MULTILINE)
+        # If response is ONLY code fences or whitespace, replace with helpful message
+        if re.match(r'^[\s`]*$', response):
+            response = "I'm here to help! What would you like to know?"
+        
         # Check for tensor patterns in the text (model hallucinating code)
         tensor_patterns = [
             r'tensor\s*\(\s*\[\[',  # tensor([[

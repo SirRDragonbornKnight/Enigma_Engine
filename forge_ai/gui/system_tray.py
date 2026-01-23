@@ -934,29 +934,21 @@ class QuickCommandOverlay(QWidget):
         self._responding_timer.start(400)  # Animate status bar only
         self.chat_btn.hide()  # Hide send button
         self.stop_btn.show()  # Show stop button
-        self.set_status("Thinking...")
-        
-        # Add thinking indicator AFTER user message is shown (use timer)
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(100, self._add_thinking_indicator)
+        ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
+        self.set_status(f"{ai_name} is thinking...")
+        # Note: We no longer append thinking indicators to chat - they caused HTML corruption
     
     def _add_thinking_indicator(self):
-        """Add thinking indicator after user message is displayed."""
-        if not self._is_responding:
-            return  # Already done
-        ai_name = getattr(self, 'ai_display_name', None) or getattr(self, 'model_name', 'AI')
-        self.response_area.append(
-            f'<div id="thinking" style="color: #f9e2af; padding: 4px;"><i>{ai_name} is thinking...</i></div>'
-        )
-        self.response_area.verticalScrollBar().setValue(
-            self.response_area.verticalScrollBar().maximum()
-        )
+        """No-op: thinking indicator is shown in status bar instead of chat."""
+        # Previously appended a thinking div which had to be removed with regex,
+        # causing HTML corruption. Now we just use the status bar.
+        pass
     
     def stop_responding(self):
-        """Remove the thinking indicator from chat."""
+        """Stop the responding state."""
         self._is_responding = False
         self._responding_timer.stop()
-        self._remove_thinking_indicator()
+        # No need to remove thinking indicator - we don't add one anymore
         self.stop_btn.hide()  # Hide stop button
         self.chat_btn.show()  # Show send button
         self.set_status("Ready")
@@ -982,12 +974,10 @@ class QuickCommandOverlay(QWidget):
         self.set_status("Stopped")
     
     def _remove_thinking_indicator(self):
-        """Remove the thinking indicator from chat."""
-        html = self.response_area.toHtml()
-        # Remove the thinking div
-        import re
-        html = re.sub(r'<div id="thinking"[^>]*>.*?</div>', '', html, flags=re.IGNORECASE | re.DOTALL)
-        self.response_area.setHtml(html)
+        """Remove the thinking indicator from chat - now a no-op to prevent HTML corruption."""
+        # Previously used regex on HTML which could corrupt formatting.
+        # The thinking indicator is now handled by the UI frame, not appended to chat.
+        pass
     
     def _quit_app(self):
         """Quit the entire application and clean up tray icons."""
