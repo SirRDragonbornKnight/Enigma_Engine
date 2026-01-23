@@ -467,7 +467,7 @@ class GenerationPreviewPopup(QDialog):
         container_layout.addLayout(btn_layout)
         
         # Hint
-        hint = QLabel("Click anywhere to close • Auto-closes in 15s")
+        hint = QLabel("Click anywhere to close. Auto-closes in 15s")
         hint.setStyleSheet("color: #6c7086; font-size: 9px; border: none;")
         hint.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(hint)

@@ -122,7 +122,7 @@ class NetworkTab(QWidget):
         # Server status
         status_layout = QHBoxLayout()
         
-        self.server_status = QLabel("● Stopped")
+        self.server_status = QLabel("[STOPPED]")
         self.server_status.setStyleSheet("color: #f44336; font-weight: bold;")
         status_layout.addWidget(self.server_status)
         
@@ -300,7 +300,7 @@ class NetworkTab(QWidget):
             self._log(f"Starting API server on port {port}...")
             
             # For now, just update status (actual server would be started here)
-            self.server_status.setText(f"● Running on port {port}")
+            self.server_status.setText(f"[RUNNING] on port {port}")
             self.server_status.setStyleSheet("color: #4caf50; font-weight: bold;")
             self.start_server_btn.setText("Stop Server")
             

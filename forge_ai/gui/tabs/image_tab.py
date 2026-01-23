@@ -709,13 +709,13 @@ class ImageTab(QWidget):
         try:
             provider = get_provider('local')
             if provider and provider.is_loaded:
-                self.ready_indicator.setText("● Ready")
+                self.ready_indicator.setText("[OK] Ready")
                 self.ready_indicator.setStyleSheet("color: #2ecc71; font-size: 11px;")
             else:
-                self.ready_indicator.setText("● Not Loaded")
+                self.ready_indicator.setText("[!] Not Loaded")
                 self.ready_indicator.setStyleSheet("color: #f39c12; font-size: 11px;")
         except Exception:
-            self.ready_indicator.setText("● Not Ready")
+            self.ready_indicator.setText("[X] Not Ready")
             self.ready_indicator.setStyleSheet("color: #e74c3c; font-size: 11px;")
     
     def setup_ui(self):
@@ -730,7 +730,7 @@ class ImageTab(QWidget):
         header_layout.addStretch()
         
         # Ready indicator
-        self.ready_indicator = QLabel("● Not Ready")
+        self.ready_indicator = QLabel("[X] Not Ready")
         self.ready_indicator.setStyleSheet("color: #e74c3c; font-size: 11px;")
         header_layout.addWidget(self.ready_indicator)
         

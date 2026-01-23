@@ -171,10 +171,10 @@ class PresetSelector(QWidget):
         if self._custom_presets:
             self.combo.insertSeparator(self.combo.count())
             for name in self._custom_presets.keys():
-                self.combo.addItem(f"★ {name}")
+                self.combo.addItem(f"[Custom] {name}")
     
     def _on_selection(self, text: str):
-        name = text.lower().replace("★ ", "")
+        name = text.lower().replace("[custom] ", "")
         if name in self.presets:
             self.preset_changed.emit(name, self.presets[name])
         elif name in self._custom_presets:

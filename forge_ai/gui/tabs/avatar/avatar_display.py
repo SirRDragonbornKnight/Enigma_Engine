@@ -3054,7 +3054,7 @@ def create_avatar_subtab(parent):
     right_panel.addStretch()
     
     # Info
-    info = QLabel("Desktop avatar: Drag window to move • Right-click for gestures • Double-click to center")
+    info = QLabel("Desktop avatar: Drag window to move | Right-click for gestures | Double-click to center")
     info.setStyleSheet("color: #6c7086; font-size: 10px;")
     info.setWordWrap(True)
     right_panel.addWidget(info)
@@ -4176,7 +4176,7 @@ def _auto_orient_model(parent):
     if hasattr(parent, 'roll_slider'):
         parent.roll_slider.setValue(int(roll))
     
-    parent.avatar_status.setText(f"Auto-oriented: X={pitch}°, Y={yaw}°, Z={roll}°")
+    parent.avatar_status.setText(f"Auto-oriented: X={pitch}deg, Y={yaw}deg, Z={roll}deg")
     parent.avatar_status.setStyleSheet("color: #89b4fa;")
 
 
@@ -4678,7 +4678,7 @@ def _load_avatar_file(parent):
         _preview_3d_model(parent, path)
     elif path.suffix.lower() == ".json":
         # Add to combo and trigger selection
-        parent.avatar_combo.addItem(f"📄 {path.stem}", ("config", str(path)))
+        parent.avatar_combo.addItem(f"[cfg] {path.stem}", ("config", str(path)))
         parent.avatar_combo.setCurrentIndex(parent.avatar_combo.count() - 1)
         return
     

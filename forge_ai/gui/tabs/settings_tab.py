@@ -1396,7 +1396,7 @@ def create_settings_tab(parent):
     parent.audio_input_combo.setMinimumWidth(250)
     input_row.addWidget(parent.audio_input_combo)
     
-    refresh_audio_btn = QPushButton("↻")
+    refresh_audio_btn = QPushButton("R")
     refresh_audio_btn.setMaximumWidth(30)
     refresh_audio_btn.setToolTip("Refresh device list")
     refresh_audio_btn.clicked.connect(lambda: _refresh_audio_devices(parent))

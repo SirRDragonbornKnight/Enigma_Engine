@@ -650,8 +650,8 @@ class DashboardTab(QWidget):
                 sent_speed = (net_io.bytes_sent - self.prev_net_io.bytes_sent) / elapsed / 1024
                 recv_speed = (net_io.bytes_recv - self.prev_net_io.bytes_recv) / elapsed / 1024
                 
-                self.net_sent_label.setText(f"↑ {sent_speed:.1f} KB/s")
-                self.net_recv_label.setText(f"↓ {recv_speed:.1f} KB/s")
+                self.net_sent_label.setText(f"UP: {sent_speed:.1f} KB/s")
+                self.net_recv_label.setText(f"DN: {recv_speed:.1f} KB/s")
                 
                 # Normalize for chart (cap at 1000 KB/s = 100%)
                 net_percent = min(100, (sent_speed + recv_speed) / 10)
@@ -668,7 +668,7 @@ class DashboardTab(QWidget):
                 self.temp_gauge.set_value(temp_percent)
                 
                 temp_color = "#a6e3a1" if temp < 60 else "#f9e2af" if temp < 75 else "#f38ba8"
-                self.temp_label.setText(f"Temp: {temp:.1f}°C")
+                self.temp_label.setText(f"Temp: {temp:.1f} C")
                 self.temp_label.setStyleSheet(f"color: {temp_color}; font-size: 10px;")
             else:
                 self.temp_gauge.set_value(0)

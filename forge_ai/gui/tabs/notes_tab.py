@@ -357,7 +357,7 @@ class NotesTab(QWidget):
             bookmarks = self.bookmarks_manager.list_bookmarks()
         
         for bookmark in bookmarks:
-            display = f"🔖 {bookmark['title']}"
+            display = f"[*] {bookmark['title']}"
             item = QListWidgetItem(display)
             item.setData(Qt.UserRole, bookmark.get("id"))
             item.setToolTip(bookmark.get("url", ""))

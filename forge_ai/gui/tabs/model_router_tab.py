@@ -302,13 +302,13 @@ class ToolAssignmentWidget(QFrame):
             # Check actual readiness
             ready = self._check_tool_ready()
             if ready:
-                self.status_label.setText(f"● Ready ({len(self.assignments)})")
+                self.status_label.setText(f"[OK] Ready ({len(self.assignments)})")
                 self.status_label.setStyleSheet("color: #2ecc71; font-size: 11px; font-weight: bold;")
             else:
-                self.status_label.setText(f"● Not Loaded ({len(self.assignments)})")
+                self.status_label.setText(f"[!] Not Loaded ({len(self.assignments)})")
                 self.status_label.setStyleSheet("color: #f39c12; font-size: 11px;")
         else:
-            self.status_label.setText("● No model")
+            self.status_label.setText("[X] No model")
             self.status_label.setStyleSheet("color: #e74c3c; font-size: 11px;")
     
     def _check_tool_ready(self) -> bool:

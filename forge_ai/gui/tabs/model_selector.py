@@ -116,7 +116,7 @@ class ModelSelector(QWidget):
         layout.addWidget(self.model_combo)
         
         # Status indicator
-        self.status_label = QLabel("●")
+        self.status_label = QLabel("[*]")
         self.status_label.setToolTip("Model status")
         self.status_label.setStyleSheet("color: #888; font-size: 14px;")
         layout.addWidget(self.status_label)
@@ -151,7 +151,7 @@ class ModelSelector(QWidget):
                 free_options.append(opt + (True,))
         
         if free_options:
-            self.model_combo.addItem("══ FREE OPTIONS ══", "__separator__")
+            self.model_combo.addItem("== FREE OPTIONS ==", "__separator__")
             
             current_type = None
             for opt in free_options:
@@ -162,17 +162,17 @@ class ModelSelector(QWidget):
                 # Add separator for different types
                 if model_type != current_type:
                     if model_type == "local":
-                        self.model_combo.addItem("── Local (No API needed) ──", "__separator__")
+                        self.model_combo.addItem("-- Local (No API needed) --", "__separator__")
                     elif model_type == "huggingface":
-                        self.model_combo.addItem("── HuggingFace (Free API) ──", "__separator__")
+                        self.model_combo.addItem("-- HuggingFace (Free API) --", "__separator__")
                     elif model_type == "forge_ai":
-                        self.model_combo.addItem("── Your Forge Models ──", "__separator__")
+                        self.model_combo.addItem("-- Your Forge Models --", "__separator__")
                     current_type = model_type
                 
                 self.model_combo.addItem(display_name, model_id)
         
         if paid_options:
-            self.model_combo.addItem("══ PAID OPTIONS ══", "__separator__")
+            self.model_combo.addItem("== PAID OPTIONS ==", "__separator__")
             for opt in paid_options:
                 model_id = opt[0]
                 display_name = opt[1]
@@ -184,7 +184,7 @@ class ModelSelector(QWidget):
             registry = ModelRegistry()
             models = registry.list_models()
             if models:
-                self.model_combo.addItem("── Your Trained Models ──", "__separator__")
+                self.model_combo.addItem("-- Your Trained Models --", "__separator__")
                 for model in models:
                     name = model.get("name", str(model)) if isinstance(model, dict) else str(model)
                     if not name.startswith("enigma:"):
@@ -231,7 +231,7 @@ class ModelSelector(QWidget):
             return
         
         # Visual feedback - show pending
-        self.status_label.setText("◐")
+        self.status_label.setText("[...]")
         self.status_label.setStyleSheet("color: #f39c12; font-size: 14px;")
         self.status_label.setToolTip("Selection pending - click Apply")
     
@@ -268,11 +268,11 @@ class ModelSelector(QWidget):
     def _update_status(self, is_set: bool):
         """Update the status indicator."""
         if is_set:
-            self.status_label.setText("●")
+            self.status_label.setText("[OK]")
             self.status_label.setStyleSheet("color: #2ecc71; font-size: 14px;")
             self.status_label.setToolTip("Model assigned")
         else:
-            self.status_label.setText("○")
+            self.status_label.setText("[*]")
             self.status_label.setStyleSheet("color: #888; font-size: 14px;")
             self.status_label.setToolTip("No model assigned")
     
