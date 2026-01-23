@@ -1914,12 +1914,9 @@ class EnhancedMainWindow(QMainWindow):
         if self._gui_settings.get("window_x") is not None and self._gui_settings.get("window_y") is not None:
             self.move(self._gui_settings["window_x"], self._gui_settings["window_y"])
         
-        # Apply last tab
-        if hasattr(self, 'content_stack') and self._gui_settings.get("last_tab") is not None:
-            try:
-                self.content_stack.setCurrentIndex(self._gui_settings["last_tab"])
-            except Exception:
-                pass
+        # NOTE: We do NOT restore last_tab here because _build_ui() already
+        # sets the sidebar to 'chat' tab. Setting content_stack without updating
+        # sidebar causes a mismatch where sidebar shows chat but content shows avatar.
     
     def _load_gui_settings(self):
         """Load GUI settings from file."""
@@ -5952,6 +5949,18 @@ def run_app(minimize_to_tray: bool = True):
     app.setQuitOnLastWindowClosed(False)  # Keep running when window closes
     
     window = EnhancedMainWindow()
+    
+    # Connect app's aboutToQuit signal to save settings before exit
+    # This ensures settings are saved regardless of how the app closes
+    def save_before_quit():
+        try:
+            if window and hasattr(window, '_save_gui_settings'):
+                window._save_gui_settings()
+                print("Settings saved before quit")
+        except Exception as e:
+            print(f"Error saving settings on quit: {e}")
+    
+    app.aboutToQuit.connect(save_before_quit)
     
     # Create system tray
     try:

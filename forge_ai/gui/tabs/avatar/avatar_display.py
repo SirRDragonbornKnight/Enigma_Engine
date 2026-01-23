@@ -1285,11 +1285,12 @@ class AvatarOverlayWindow(QWidget):
         return None
         
     def _update_scaled_pixmap(self):
-        """Update scaled pixmap to match current size and rotation."""
+        """Update scaled pixmap to match current size and rotation, then resize window to wrap tightly."""
         if self._original_pixmap:
-            # Scale first
+            # Scale to fit within the requested size (with small margin for border)
+            border_margin = 8  # Space for the border
             scaled = self._original_pixmap.scaled(
-                self._size - 20, self._size - 20,
+                self._size - border_margin, self._size - border_margin,
                 Qt_KeepAspectRatio, Qt_SmoothTransformation
             )
             # Apply rotation if any
@@ -1300,6 +1301,14 @@ class AvatarOverlayWindow(QWidget):
                 self.pixmap = scaled.transformed(transform, Qt_SmoothTransformation)
             else:
                 self.pixmap = scaled
+            
+            # TIGHT WRAP: Resize window to match pixmap size (plus border margin)
+            if self.pixmap:
+                new_width = self.pixmap.width() + border_margin
+                new_height = self.pixmap.height() + border_margin
+                # Only resize if different from current (avoid infinite loop)
+                if self.width() != new_width or self.height() != new_height:
+                    self.setFixedSize(new_width, new_height)
         self.update()
         
     def paintEvent(self, a0):
@@ -1309,13 +1318,14 @@ class AvatarOverlayWindow(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         
         if self.pixmap:
+            # Center pixmap in window (should be nearly edge-to-edge with tight wrap)
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             
             # Draw a subtle circular background/glow FIRST (behind everything)
             painter.setPen(Qt_NoPen)
             painter.setBrush(QColor(30, 30, 46, 80))  # Semi-transparent dark
-            painter.drawEllipse(x - 5, y - 5, self.pixmap.width() + 10, self.pixmap.height() + 10)
+            painter.drawEllipse(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6)
             
             # Draw the avatar
             painter.drawPixmap(x, y, self.pixmap)
@@ -1333,7 +1343,7 @@ class AvatarOverlayWindow(QWidget):
             painter.setPen(pen)
             painter.setBrush(Qt_NoBrush)
             # Draw border tightly around the avatar image
-            painter.drawRoundedRect(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6, 8, 8)
+            painter.drawRoundedRect(x - 2, y - 2, self.pixmap.width() + 4, self.pixmap.height() + 4, 6, 6)
         else:
             # Draw placeholder circle
             painter.setPen(QColor("#6c7086"))

@@ -457,16 +457,24 @@ def _clear_chat(parent):
 
 
 def _new_chat(parent):
-    """Start a new chat - save current chat first, then clear."""
+    """Start a new chat - save current chat first, then clear both main chat and Quick Chat."""
     # Save current chat if there's content
     if hasattr(parent, 'chat_messages') and parent.chat_messages:
         if hasattr(parent, '_save_current_chat'):
             parent._save_current_chat()
             parent.chat_status.setText("Previous chat saved. Starting new conversation...")
     
-    # Clear the chat
+    # Clear the main chat
     parent.chat_display.clear()
     parent.chat_messages = []
+    
+    # Also clear Quick Chat via ChatSync
+    try:
+        from ..chat_sync import ChatSync
+        chat_sync = ChatSync.instance()
+        chat_sync.clear_chat()  # This clears both main and quick chat displays
+    except Exception:
+        pass
     
     # Reset any HuggingFace conversation history
     if hasattr(parent, 'engine') and parent.engine:
@@ -483,7 +491,7 @@ def _new_chat(parent):
     except:
         pass
     
-    # Show welcome message
+    # Show welcome message in main chat
     model_name = parent.current_model_name if hasattr(parent, 'current_model_name') else "AI"
     parent.chat_display.append(
         f'<div style="color: #a6e3a1; padding: 8px;">'
@@ -504,22 +512,38 @@ def _save_chat(parent):
 
 
 def _stop_generation(parent):
-    """Stop the current AI generation via ChatSync."""
+    """Stop the current AI generation - handles both AIGenerationWorker and ChatSync."""
+    stopped = False
+    
+    # First, try to stop the AIGenerationWorker (used by main chat tab's _on_send)
+    if hasattr(parent, '_ai_worker') and parent._ai_worker:
+        if parent._ai_worker.isRunning():
+            parent._ai_worker.stop()
+            stopped = True
+    
+    # Also stop ChatSync (used by quick chat and shared generation)
     try:
         from ..chat_sync import ChatSync
         chat_sync = ChatSync.instance()
-        chat_sync.stop_generation()
+        if chat_sync.is_generating:
+            chat_sync.stop_generation()
+            stopped = True
+    except Exception:
+        pass
+    
+    # Update UI
+    if stopped:
         parent.chat_status.setText("Stopping generation...")
         if hasattr(parent, 'stop_btn'):
             parent.stop_btn.setEnabled(False)
-            parent.stop_btn.setText("Stop")
-    except Exception as e:
-        # Fallback to old method
-        if hasattr(parent, '_ai_worker') and parent._ai_worker and parent._ai_worker.isRunning():
-            parent._ai_worker.stop()
-            parent.chat_status.setText("Stopping generation...")
-            parent.stop_btn.setEnabled(False)
-            parent.stop_btn.setText("Stop")
+            parent.stop_btn.setText("...")
+        if hasattr(parent, 'thinking_frame'):
+            parent.thinking_frame.hide()
+        if hasattr(parent, 'send_btn'):
+            parent.send_btn.setEnabled(True)
+            parent.send_btn.setText("Send")
+    else:
+        parent.chat_status.setText("Nothing to stop")
 
 
 def _handle_feedback_link(parent, url):

@@ -783,6 +783,12 @@ class QuickCommandOverlay(QWidget):
         
         menu.addSeparator()
         
+        # New conversation (clear chat)
+        new_conv_action = QAction("New Conversation", self)
+        new_conv_action.setToolTip("Clear chat and start fresh")
+        new_conv_action.triggered.connect(self._start_new_conversation)
+        menu.addAction(new_conv_action)
+        
         # New window
         new_window_action = QAction("New Chat Window", self)
         new_window_action.triggered.connect(self._create_new_instance)
@@ -842,6 +848,39 @@ class QuickCommandOverlay(QWidget):
         main_window = self._get_main_window()
         if main_window:
             main_window.auto_speak = self._auto_speak
+    
+    def _start_new_conversation(self):
+        """Start a new conversation - clear chat history in both Quick Chat and main chat."""
+        # Clear Quick Chat display
+        self.response_area.clear()
+        
+        # Clear via ChatSync (syncs to main chat too)
+        try:
+            from .chat_sync import ChatSync
+            chat_sync = ChatSync.instance()
+            chat_sync.clear_chat()
+        except Exception:
+            pass
+        
+        # Reset model conversation history
+        try:
+            from .chat_sync import ChatSync
+            chat_sync = ChatSync.instance()
+            if chat_sync._main_window and hasattr(chat_sync._main_window, 'engine'):
+                engine = chat_sync._main_window.engine
+                if engine and hasattr(engine, 'model') and hasattr(engine.model, 'reset_conversation'):
+                    engine.model.reset_conversation()
+        except Exception:
+            pass
+        
+        # Show welcome message
+        model_name = getattr(self, 'model_name', 'AI')
+        self.response_area.append(
+            f"<div style='color: #2ecc71; padding: 4px;'>"
+            f"<b>New conversation started with {model_name}</b><br>"
+            f"<span style='color: #888;'>Type a message to begin.</span></div>"
+        )
+        self.set_status("New conversation started")
     
     def _create_new_instance(self):
         """Create a new Quick Chat window."""
