@@ -1961,8 +1961,9 @@ class Avatar3DOverlayWindow(QWidget):
                 self._base_pan_y = self._gl_widget.pan_y
                 self._base_rotation_y = self._gl_widget.rotation_y
                 
-                # Start idle animation (fallback if no animator)
-                if self._idle_animation_enabled and not self._animator:
+                # Always start idle animation for visual feedback
+                # The animator handles more complex animations via callbacks
+                if self._idle_animation_enabled:
                     self._start_idle_animation()
             
             return result
@@ -2526,9 +2527,23 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _do_speaking_pulse(self):
-        """Fallback speaking animation when no animator."""
-        # Simple scale pulse handled by idle animation
-        pass
+        """Fallback speaking animation when no animator - subtle scale pulse."""
+        if not self._gl_widget:
+            return
+        import threading
+        def animate():
+            import time
+            import math
+            # Pulse for ~2 seconds
+            for i in range(60):
+                # Subtle zoom pulse (1.0 to 1.05)
+                pulse = 1.0 + 0.03 * abs(math.sin(i * 0.3))
+                self._gl_widget.zoom = pulse
+                self._gl_widget.update()
+                time.sleep(0.033)
+            self._gl_widget.zoom = 1.0
+            self._gl_widget.update()
+        threading.Thread(target=animate, daemon=True).start()
     
     def _do_nod_fallback(self):
         """Fallback nod animation."""
@@ -3198,12 +3213,19 @@ def _restore_avatar_settings(parent):
         if hasattr(parent, 'avatar_resize_checkbox'):
             parent.avatar_resize_checkbox.setChecked(parent._avatar_resize_enabled)
         
-        # Restore saved overlay sizes for later use when overlay is created
-        # Validate sizes are within bounds (100-500) to handle corrupted settings
-        saved_2d_size = settings.get("avatar_overlay_size", 300)
-        saved_3d_size = settings.get("avatar_overlay_3d_size", 250)
-        parent._saved_overlay_size = max(100, min(500, saved_2d_size if isinstance(saved_2d_size, (int, float)) else 300))
-        parent._saved_overlay_3d_size = max(100, min(500, saved_3d_size if isinstance(saved_3d_size, (int, float)) else 250))
+        # Restore saved overlay sizes from avatar persistence (primary) or gui settings (fallback)
+        # Avatar persistence is more reliable as it's updated when resizing
+        try:
+            from ...avatar.persistence import load_avatar_settings
+            avatar_settings = load_avatar_settings()
+            saved_2d_size = avatar_settings.overlay_size
+            saved_3d_size = avatar_settings.overlay_3d_size
+        except Exception:
+            saved_2d_size = settings.get("avatar_overlay_size", 300)
+            saved_3d_size = settings.get("avatar_overlay_3d_size", 250)
+        
+        parent._saved_overlay_size = max(200, min(800, saved_2d_size if isinstance(saved_2d_size, (int, float)) else 300))
+        parent._saved_overlay_3d_size = max(200, min(800, saved_3d_size if isinstance(saved_3d_size, (int, float)) else 250))
         
         # Restore last avatar selection (always restore the selection)
         last_avatar_index = settings.get("last_avatar_index", 0)
@@ -3948,12 +3970,22 @@ def _toggle_overlay(parent):
             if parent._overlay_3d is None:
                 parent._overlay_3d = Avatar3DOverlayWindow()
                 parent._overlay_3d.closed.connect(lambda: _on_overlay_closed(parent))
-                # Apply saved size (minimum 200)
-                saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
-                if saved_size < 200:
-                    saved_size = 250
+                
+                # Load size from avatar persistence (primary) or fallback
+                try:
+                    from ....avatar.persistence import load_avatar_settings
+                    avatar_settings = load_avatar_settings()
+                    saved_size = avatar_settings.overlay_3d_size
+                except Exception:
+                    saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
+                
+                # Ensure minimum size 200, max 800
+                saved_size = max(200, min(800, saved_size))
                 parent._overlay_3d._size = saved_size
                 parent._overlay_3d.setFixedSize(saved_size, saved_size)
+                parent._overlay_3d._gl_container.setFixedSize(saved_size, saved_size)
+                if parent._overlay_3d._gl_widget:
+                    parent._overlay_3d._gl_widget.setFixedSize(saved_size, saved_size)
             
             # ALWAYS set resize to OFF by default when showing overlay
             # This overrides any saved setting - user can enable via right-click if wanted
