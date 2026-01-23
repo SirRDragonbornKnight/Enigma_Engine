@@ -1779,6 +1779,18 @@ class Avatar3DOverlayWindow(QWidget):
         self._drag_pos = None
         self._model_path = None
         self._use_circular_mask = True
+        self._click_through_mode = True  # NEW: Click-through by default - hold Alt to interact
+        self._interaction_modifier = Qt.AltModifier if hasattr(Qt, 'AltModifier') else 0x08000000
+        self._show_control_bar = False  # NEW: Optional persistent control bar (invisible but functional when False)
+        self._control_bar_height = 25  # Height of control bar
+        self._control_bar_width = 150  # Width of control bar
+        self._control_bar_x = 5  # Control bar X position (relative to avatar)
+        self._control_bar_y = 5  # Control bar Y position (relative to avatar)
+        self._control_bar_drag_pos = None  # For dragging the control bar
+        self._control_bar_resize_edge = None  # For resizing the control bar
+        self._control_bar_resize_start_pos = None
+        self._control_bar_resize_start_width = 0
+        self._control_bar_resize_start_height = 0
         
         # Adaptive Animator - works with ANY model
         self._animator = None
@@ -1847,8 +1859,27 @@ class Avatar3DOverlayWindow(QWidget):
         if self._gl_widget:
             self._gl_widget.installEventFilter(self)
         
+        # Install event filter on self to catch key events
+        self.installEventFilter(self)
+        
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow by default - not hand cursor
+        
+        # Timer to check for Alt key state changes (for visual feedback)
+        self._key_check_timer = QTimer()
+        self._key_check_timer.timeout.connect(self._check_key_state)
+        self._key_check_timer.start(100)  # Check every 100ms
+        self._last_alt_state = False
+    
+    def _check_key_state(self):
+        """Check if Alt key state changed and update visual feedback."""
+        from PyQt5.QtWidgets import QApplication as QApp
+        modifiers = QApp.keyboardModifiers()
+        alt_held = bool(modifiers & self._interaction_modifier)
+        
+        if alt_held != self._last_alt_state:
+            self._last_alt_state = alt_held
+            self.update()  # Repaint to show/hide interaction overlay
     
     def _on_animator_transform(self, pos_offset, rot_offset, scale):
         """Callback from AdaptiveAnimator for transform updates."""
@@ -2070,7 +2101,7 @@ class Avatar3DOverlayWindow(QWidget):
             self._apply_circular_mask()
     
     def eventFilter(self, obj, event):
-        """Handle mouse events for dragging and edge-resize - blocks rotation in desktop mode."""
+        """Handle mouse events - control bar always functional (even when invisible), Alt for avatar interaction."""
         if obj == self._gl_widget:
             event_type = event.type()
             
@@ -2081,34 +2112,138 @@ class Avatar3DOverlayWindow(QWidget):
                 global_pos = event.globalPos() if hasattr(event, 'globalPos') else None
                 local_pos = event.pos() if hasattr(event, 'pos') else None
             
-            # Block ALL mouse events that would cause rotation
+            # Check if Alt is held
+            from PyQt5.QtWidgets import QApplication as QApp
+            modifiers = QApp.keyboardModifiers()
+            alt_held = bool(modifiers & self._interaction_modifier)
+            
+            # Check if click is in control bar area (ALWAYS, even when invisible)
+            in_control_bar = False
+            on_control_bar_edge = None
+            if local_pos:
+                bar_x = self._control_bar_x
+                bar_y = self._control_bar_y
+                bar_w = self._control_bar_width
+                bar_h = self._control_bar_height
+                
+                # Check if in control bar bounds
+                in_control_bar = (local_pos.x() >= bar_x and local_pos.x() <= bar_x + bar_w and
+                                 local_pos.y() >= bar_y and local_pos.y() <= bar_y + bar_h)
+                
+                # Check if on control bar edge (for resizing)
+                edge_margin = 8
+                if in_control_bar:
+                    if local_pos.x() >= bar_x + bar_w - edge_margin:
+                        on_control_bar_edge = 'right'
+                    elif local_pos.x() <= bar_x + edge_margin:
+                        on_control_bar_edge = 'left'
+                    elif local_pos.y() >= bar_y + bar_h - edge_margin:
+                        on_control_bar_edge = 'bottom'
+                    elif local_pos.y() <= bar_y + edge_margin:
+                        on_control_bar_edge = 'top'
+            
+            # If neither Alt held nor in control bar, and not currently interacting, pass through ALL events
+            if not alt_held and not in_control_bar and self._drag_pos is None and self._resize_edge is None and self._rotate_start_x is None and self._control_bar_drag_pos is None and self._control_bar_resize_edge is None:
+                return False  # Let event pass through to windows below
+            
+            # Alt is held or we're in the middle of an interaction - handle the event
             if event_type == event.MouseButtonPress:
                 if event.button() == Qt_LeftButton and local_pos and global_pos:
-                    # Check for Shift+drag (manual rotation mode) - only when resize/rotate enabled
-                    modifiers = event.modifiers()
-                    shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
-                    
-                    if shift_held and getattr(self, '_resize_enabled', False):
-                        # Start rotation drag (only when enabled)
-                        self._rotate_start_x = global_pos.x()
-                        self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
-                    else:
-                        # Check if we're on an edge (for resize) - _get_edge_at_pos checks _resize_enabled
-                        edge = self._get_edge_at_pos(local_pos)
-                        if edge:
-                            self._resize_edge = edge
-                            self._resize_start_pos = global_pos
-                            self._resize_start_size = self._size
-                            self._resize_start_geo = self.geometry()
+                    # PRIORITY 1: Control bar interaction (even when invisible)
+                    if in_control_bar:
+                        if on_control_bar_edge:
+                            # Start resizing control bar
+                            self._control_bar_resize_edge = on_control_bar_edge
+                            self._control_bar_resize_start_pos = local_pos
+                            self._control_bar_resize_start_width = self._control_bar_width
+                            self._control_bar_resize_start_height = self._control_bar_height
+                            return True
                         else:
-                            # Normal drag
-                            self._drag_pos = global_pos - self.pos()
-                            self.setCursor(QCursor(Qt_ClosedHandCursor))
+                            # Start dragging control bar (which drags the whole avatar)
+                            self._control_bar_drag_pos = global_pos - self.pos()
+                            self.setCursor(QCursor(Qt_ArrowCursor))
+                            return True
+                    
+                    # PRIORITY 2: Avatar interaction (only when Alt held)
+                    if alt_held:
+                        # Check for Shift+drag (manual rotation mode) - only when resize/rotate enabled
+                        modifiers = event.modifiers()
+                        shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
+                        
+                        if shift_held and getattr(self, '_resize_enabled', False):
+                            # Start rotation drag (only when enabled)
+                            self._rotate_start_x = global_pos.x()
+                            self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow cursor
+                        else:
+                            # Check if we're on an edge (for resize) - _get_edge_at_pos checks _resize_enabled
+                            edge = self._get_edge_at_pos(local_pos)
+                            if edge:
+                                self._resize_edge = edge
+                                self._resize_start_pos = global_pos
+                                self._resize_start_size = self._size
+                                self._resize_start_geo = self.geometry()
+                            else:
+                                # Normal drag
+                                self._drag_pos = global_pos - self.pos()
+                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow cursor
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseMove:
-                if global_pos:
-                    # If rotating (Shift+drag)
+                if global_pos and local_pos:
+                    # PRIORITY 1: Control bar resize
+                    if self._control_bar_resize_edge:
+                        edge = self._control_bar_resize_edge
+                        delta_x = local_pos.x() - self._control_bar_resize_start_pos.x()
+                        delta_y = local_pos.y() - self._control_bar_resize_start_pos.y()
+                        
+                        # Update control bar size based on edge
+                        if edge == 'right':
+                            self._control_bar_width = max(80, min(300, self._control_bar_resize_start_width + delta_x))
+                        elif edge == 'left':
+                            new_width = max(80, min(300, self._control_bar_resize_start_width - delta_x))
+                            width_change = self._control_bar_width - new_width
+                            self._control_bar_width = new_width
+                            self._control_bar_x += width_change
+                        elif edge == 'bottom':
+                            self._control_bar_height = max(20, min(60, self._control_bar_resize_start_height + delta_y))
+                        elif edge == 'top':
+                            new_height = max(20, min(60, self._control_bar_resize_start_height - delta_y))
+                            height_change = self._control_bar_height - new_height
+                            self._control_bar_height = new_height
+                            self._control_bar_y += height_change
+                        
+                        self.update()
+                        return True
+                    
+                    # PRIORITY 2: Control bar drag (drags entire avatar)
+                    if self._control_bar_drag_pos is not None:
+                        new_pos = global_pos - self._control_bar_drag_pos
+                        
+                        # Keep avatar on virtual desktop
+                        try:
+                            from PyQt5.QtWidgets import QDesktopWidget
+                            desktop = QDesktopWidget()
+                            virtual_geo = desktop.geometry()
+                            min_visible = 50
+                            new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
+                            new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
+                            new_pos.setX(new_x)
+                            new_pos.setY(new_y)
+                        except Exception:
+                            pass
+                        
+                        self.move(new_pos)
+                        return True
+                    
+                    # Update cursor based on control bar edge hover
+                    if on_control_bar_edge:
+                        if on_control_bar_edge in ['left', 'right']:
+                            self.setCursor(QCursor(Qt_SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 6))
+                        elif on_control_bar_edge in ['top', 'bottom']:
+                            self.setCursor(QCursor(Qt_SizeVerCursor if hasattr(Qt, 'SizeVerCursor') else 7))
+                        return True
+                    
+                    # PRIORITY 3: Avatar rotation (Shift+drag)
                     if self._rotate_start_x is not None:
                         delta_x = global_pos.x() - self._rotate_start_x
                         self._manual_yaw_offset = (self._manual_yaw_offset + delta_x * 0.5) % 360
@@ -2120,12 +2255,12 @@ class Avatar3DOverlayWindow(QWidget):
                             self._gl_widget.update()
                         return True
                     
-                    # If resizing
+                    # PRIORITY 4: Avatar resize
                     if self._resize_edge:
                         self._do_resize(global_pos)
                         return True
                     
-                    # If dragging
+                    # PRIORITY 5: Avatar drag
                     if self._drag_pos is not None:
                         new_pos = global_pos - self._drag_pos
                         
@@ -2151,15 +2286,15 @@ class Avatar3DOverlayWindow(QWidget):
                         if edge:
                             # Set resize cursor
                             if 'left' in edge or 'right' in edge:
-                                self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
+                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
                             if 'top' in edge or 'bottom' in edge:
-                                self.setCursor(QCursor(Qt.SizeVerCursor if hasattr(Qt, 'SizeVerCursor') else 0))
+                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
                             if ('top' in edge and 'left' in edge) or ('bottom' in edge and 'right' in edge):
-                                self.setCursor(QCursor(Qt.SizeFDiagCursor if hasattr(Qt, 'SizeFDiagCursor') else 0))
+                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
                             if ('top' in edge and 'right' in edge) or ('bottom' in edge and 'left' in edge):
-                                self.setCursor(QCursor(Qt.SizeBDiagCursor if hasattr(Qt, 'SizeBDiagCursor') else 0))
+                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
                         else:
-                            self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor when not over resize edge
+                            self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor always
                 return True  # Block event from reaching GL widget
                 
             elif event_type == event.MouseButtonRelease:
@@ -2191,6 +2326,9 @@ class Avatar3DOverlayWindow(QWidget):
                     self._drag_pos = None
                     self._resize_edge = None
                     self._rotate_start_x = None
+                    self._control_bar_drag_pos = None
+                    self._control_bar_resize_edge = None
+                    self._control_bar_resize_start_pos = None
                     self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor after mouse release
                 return True  # Block event from reaching GL widget
             
@@ -2250,11 +2388,74 @@ class Avatar3DOverlayWindow(QWidget):
             event.ignore()
     
     def paintEvent(self, event):
-        """Draw thin border when resize mode is enabled."""
+        """Draw control bar (if visible) or interaction indicator when Alt is held."""
         super().paintEvent(event)
-        if getattr(self, '_resize_enabled', False):
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        # Check if Alt is held
+        from PyQt5.QtWidgets import QApplication as QApp
+        modifiers = QApp.keyboardModifiers()
+        alt_held = bool(modifiers & self._interaction_modifier)
+        
+        # Draw persistent control bar if VISIBLE (always functional even when invisible)
+        if getattr(self, '_show_control_bar', False):
+            bar_x = self._control_bar_x
+            bar_y = self._control_bar_y
+            bar_w = self._control_bar_width
+            bar_h = self._control_bar_height
+            
+            # Semi-transparent dark bar with rounded corners
+            painter.setBrush(QColor(30, 30, 46, 200))
+            painter.setPen(Qt.NoPen if hasattr(Qt, 'NoPen') else 0)
+            painter.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 5, 5)
+            
+            # Resize handles (small squares on corners/edges)
+            handle_size = 6
+            painter.setBrush(QColor(137, 180, 250, 180))
+            painter.setPen(QColor(205, 214, 244, 200))
+            # Right edge handle
+            painter.drawRect(bar_x + bar_w - handle_size//2, bar_y + bar_h//2 - handle_size//2, handle_size, handle_size)
+            # Left edge handle
+            painter.drawRect(bar_x - handle_size//2, bar_y + bar_h//2 - handle_size//2, handle_size, handle_size)
+            # Bottom edge handle
+            painter.drawRect(bar_x + bar_w//2 - handle_size//2, bar_y + bar_h - handle_size//2, handle_size, handle_size)
+            # Top edge handle
+            painter.drawRect(bar_x + bar_w//2 - handle_size//2, bar_y - handle_size//2, handle_size, handle_size)
+            
+            # Grip lines in center
+            painter.setPen(QColor(205, 214, 244, 150))
+            center_x = bar_x + bar_w // 2
+            center_y = bar_y + bar_h // 2
+            for i in range(3):
+                y = center_y - 4 + i * 4
+                painter.drawLine(center_x - 12, y, center_x + 12, y)
+            
+            # Show size in corner
+            painter.setPen(QColor(205, 214, 244, 120))
+            font = painter.font()
+            font.setPointSize(7)
+            painter.setFont(font)
+            painter.drawText(bar_x + bar_w - 45, bar_y, 40, bar_h, Qt_AlignCenter, f"{self._size}px")
+        
+        # Show interaction hint when Alt is held (and control bar is hidden)
+        elif alt_held:
+            # Semi-transparent overlay to show avatar is interactive
+            painter.fillRect(0, 0, self.width(), self.height(), QColor(100, 150, 255, 30))
+            
+            # Show "INTERACTIVE" text at top
+            painter.setPen(QColor(255, 255, 255, 200))
+            font = painter.font()
+            font.setPointSize(8)
+            font.setBold(True)
+            painter.setFont(font)
+            text_rect = painter.boundingRect(0, 5, self.width(), 20, Qt_AlignCenter, "ALT: INTERACTIVE")
+            painter.fillRect(text_rect.adjusted(-5, -2, 5, 2), QColor(30, 30, 46, 200))
+            painter.drawText(0, 5, self.width(), 20, Qt_AlignCenter, "ALT: INTERACTIVE")
+        
+        # Draw border when resize mode is enabled
+        if getattr(self, '_resize_enabled', False) and (alt_held or self._show_control_bar):
             pen = painter.pen()
             pen.setColor(QColor("#3498db"))  # Blue border
             pen.setWidth(2)
@@ -2301,10 +2502,35 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
+        # Interaction mode submenu
+        interaction_menu = menu.addMenu("Interaction Mode")
+        
+        # Click-through mode toggle (Alt-key mode)
+        click_through_text = "✓ Click-through (Alt to interact)" if getattr(self, '_click_through_mode', True) else "Click-through (Alt to interact)"
+        click_through_action = interaction_menu.addAction(click_through_text)
+        click_through_action.setToolTip("Avatar passes through clicks by default - hold Alt to interact")
+        click_through_action.triggered.connect(self._toggle_click_through_mode)
+        
+        # Always interactive mode
+        always_interactive_text = "✓ Always Interactive" if not getattr(self, '_click_through_mode', True) else "Always Interactive"
+        always_interactive_action = interaction_menu.addAction(always_interactive_text)
+        always_interactive_action.setToolTip("Avatar always responds to clicks (traditional behavior)")
+        always_interactive_action.triggered.connect(self._set_always_interactive)
+        
+        interaction_menu.addSeparator()
+        
+        # Control bar toggle
+        bar_text = "✓ Show Control Bar" if getattr(self, '_show_control_bar', False) else "Show Control Bar"
+        bar_action = interaction_menu.addAction(bar_text)
+        bar_action.setToolTip("Show/hide persistent draggable control bar (always functional)")
+        bar_action.triggered.connect(self._toggle_control_bar)
+        
+        menu.addSeparator()
+        
         # Resize & Rotate toggle - default is OFF
         resize_text = "Disable Resize/Rotate" if getattr(self, '_resize_enabled', False) else "Enable Resize/Rotate"
         resize_action = menu.addAction(resize_text)
-        resize_action.setToolTip("Enable edge-drag resize and Shift+drag rotate")
+        resize_action.setToolTip("Enable edge-drag resize and Shift+Alt+drag rotate")
         resize_action.triggered.connect(self._toggle_resize)
         
         # Size input action
@@ -2337,13 +2563,52 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _toggle_resize(self):
-        """Toggle resize/rotate mode and update border visibility."""
+        """Toggle resize/rotate mode and update border visibility - Avatar3DOverlayWindow version."""
         self._resize_enabled = not getattr(self, '_resize_enabled', False)
         self.update()  # Repaint to show/hide border
         # Save setting
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
             save_avatar_settings(resize_enabled=self._resize_enabled)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
+    
+    def _toggle_control_bar(self):
+        """Toggle persistent control bar visibility."""
+        self._show_control_bar = not getattr(self, '_show_control_bar', False)
+        self.update()  # Repaint to show/hide control bar
+        # Save setting
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(show_control_bar_3d=self._show_control_bar)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
+    
+    def _toggle_click_through_mode(self):
+        """Toggle click-through mode (Alt-key interaction)."""
+        if not getattr(self, '_click_through_mode', True):
+            # Currently always interactive, switch to click-through
+            self._click_through_mode = True
+            self.update()
+        # If already in click-through mode, do nothing (use _set_always_interactive to disable)
+        # Save setting
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(click_through_mode_3d=self._click_through_mode)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
+    
+    def _set_always_interactive(self):
+        """Disable click-through mode - avatar always responds to clicks."""
+        self._click_through_mode = False
+        self.update()
+        # Save setting
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(click_through_mode_3d=self._click_through_mode)
             write_avatar_state_for_ai()
         except Exception:
             pass
@@ -2572,6 +2837,8 @@ class Avatar3DOverlayWindow(QWidget):
     def _close(self):
         self._command_timer.stop()
         self._idle_timer.stop()
+        if hasattr(self, '_key_check_timer'):
+            self._key_check_timer.stop()
         if self._animator:
             self._animator.stop()
         self.hide()
@@ -2580,6 +2847,8 @@ class Avatar3DOverlayWindow(QWidget):
     def closeEvent(self, event):
         self._command_timer.stop()
         self._idle_timer.stop()
+        if hasattr(self, '_key_check_timer'):
+            self._key_check_timer.stop()
         if self._animator:
             self._animator.stop()
         super().closeEvent(event)
