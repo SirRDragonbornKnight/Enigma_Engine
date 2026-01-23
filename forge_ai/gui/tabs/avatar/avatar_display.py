@@ -1789,14 +1789,14 @@ class Avatar3DOverlayWindow(QWidget):
         except ImportError as e:
             print(f"[Avatar3DOverlay] AdaptiveAnimator not available: {e}")
         
-        # Idle animation state (fallback if no animator)
-        self._idle_animation_enabled = True
+        # Idle animation state (DISABLED by default - looks weird on humanoid models)
+        self._idle_animation_enabled = False  # Only enable for simple/abstract models
         self._idle_timer = QTimer()
         self._idle_timer.timeout.connect(self._do_idle_animation)
         self._idle_phase = 0.0  # Animation phase (radians)
-        self._idle_bob_amount = 0.02  # How much to bob up/down (fraction of zoom)
-        self._idle_sway_amount = 0.3  # How much to sway left/right (degrees)
-        self._idle_speed = 0.05  # Animation speed
+        self._idle_bob_amount = 0.005  # Very subtle if enabled
+        self._idle_sway_amount = 0.1  # Very subtle if enabled
+        self._idle_speed = 0.03  # Slower
         self._base_pan_y = 0.0  # Base camera Y position
         self._base_rotation_y = 0.0  # Base camera Y rotation
         
@@ -1957,14 +1957,12 @@ class Avatar3DOverlayWindow(QWidget):
                         json.dump(caps, f, indent=2)
                     print(f"[Avatar3DOverlay] Model capabilities written to {caps_path}")
                 
-                # Save base camera positions for idle animation
+                # Save base camera positions
                 self._base_pan_y = self._gl_widget.pan_y
                 self._base_rotation_y = self._gl_widget.rotation_y
                 
-                # Always start idle animation for visual feedback
-                # The animator handles more complex animations via callbacks
-                if self._idle_animation_enabled:
-                    self._start_idle_animation()
+                # Don't start idle animation - it looks weird on humanoid models
+                # The AdaptiveAnimator handles proper animations via bone/blendshape
             
             return result
         return False
@@ -2527,23 +2525,10 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _do_speaking_pulse(self):
-        """Fallback speaking animation when no animator - subtle scale pulse."""
-        if not self._gl_widget:
-            return
-        import threading
-        def animate():
-            import time
-            import math
-            # Pulse for ~2 seconds
-            for i in range(60):
-                # Subtle zoom pulse (1.0 to 1.05)
-                pulse = 1.0 + 0.03 * abs(math.sin(i * 0.3))
-                self._gl_widget.zoom = pulse
-                self._gl_widget.update()
-                time.sleep(0.033)
-            self._gl_widget.zoom = 1.0
-            self._gl_widget.update()
-        threading.Thread(target=animate, daemon=True).start()
+        """Fallback speaking indicator - disabled for humanoid models."""
+        # Don't do weird pulsing on human-shaped avatars
+        # Proper lip sync should be handled by AdaptiveAnimator if model supports it
+        pass
     
     def _do_nod_fallback(self):
         """Fallback nod animation."""
