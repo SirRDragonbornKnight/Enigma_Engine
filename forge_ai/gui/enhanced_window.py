@@ -1893,11 +1893,11 @@ class EnhancedMainWindow(QMainWindow):
             self.microphone_action.blockSignals(False)
         
         # Apply learn while chatting to menu action
-        if hasattr(self, 'learning_action'):
-            self.learning_action.blockSignals(True)
-            self.learning_action.setChecked(self.learn_while_chatting)
-            self.learning_action.setText(f"Learn While Chatting ({'ON' if self.learn_while_chatting else 'OFF'})")
-            self.learning_action.blockSignals(False)
+        if hasattr(self, 'learn_action'):
+            self.learn_action.blockSignals(True)
+            self.learn_action.setChecked(self.learn_while_chatting)
+            self.learn_action.setText(f"Learn While Chatting ({'ON' if self.learn_while_chatting else 'OFF'})")
+            self.learn_action.blockSignals(False)
         
         # Apply to learning indicator in chat tab
         if hasattr(self, 'learning_indicator'):

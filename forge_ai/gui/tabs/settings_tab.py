@@ -1261,7 +1261,7 @@ def create_settings_tab(parent):
     provider_row = QHBoxLayout()
     provider_row.addWidget(QLabel("Provider:"))
     parent.cloud_provider_combo = QComboBox()
-    parent.cloud_provider_combo.addItem("🆓 Ollama (FREE, Local)", "ollama")
+    parent.cloud_provider_combo.addItem("[FREE] Ollama (Local)", "ollama")
     parent.cloud_provider_combo.addItem("OpenAI (GPT-4)", "openai")
     parent.cloud_provider_combo.addItem("Anthropic (Claude)", "anthropic")
     parent.cloud_provider_combo.addItem("Google (Gemini - Free tier)", "google")
@@ -1514,7 +1514,7 @@ def create_settings_tab(parent):
     robot_layout.addLayout(robot_mode_row)
     
     # E-STOP button
-    parent.estop_btn = QPushButton("🛑 EMERGENCY STOP")
+    parent.estop_btn = QPushButton("EMERGENCY STOP")
     parent.estop_btn.setStyleSheet("""
         QPushButton {
             background-color: #dc2626;
