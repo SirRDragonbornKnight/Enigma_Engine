@@ -895,7 +895,7 @@ class ImageTab(QWidget):
                         QMetaObject.invokeMethod(
                             self.status_label, "setText",
                             Qt.QueuedConnection, 
-                            Q_ARG(str, "✓ Model loaded and ready!")
+                            Q_ARG(str, "[OK] Model loaded and ready!")
                         )
                         QMetaObject.invokeMethod(
                             self.ready_indicator, "setText",
@@ -911,7 +911,7 @@ class ImageTab(QWidget):
                         QMetaObject.invokeMethod(
                             self.status_label, "setText",
                             Qt.QueuedConnection,
-                            Q_ARG(str, "✗ Failed to load model")
+                            Q_ARG(str, "[X] Failed to load model")
                         )
                     QMetaObject.invokeMethod(
                         self.generate_btn, "setEnabled",
@@ -923,7 +923,7 @@ class ImageTab(QWidget):
                 QMetaObject.invokeMethod(
                     self.status_label, "setText",
                     Qt.QueuedConnection,
-                    Q_ARG(str, f"✗ Error: {e}")
+                    Q_ARG(str, f"[X] Error: {e}")
                 )
                 QMetaObject.invokeMethod(
                     self.generate_btn, "setEnabled",

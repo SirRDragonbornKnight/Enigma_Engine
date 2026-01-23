@@ -844,17 +844,17 @@ Checkpoints: {checkpoints}
                     response_clean = response.replace(prompt, "").strip()[:100]
                     
                     if len(response_clean) < 2:
-                        results.append(f"<span style='color: #f9e2af;'>⚠ Response too short: '{response_clean}'</span>")
+                        results.append(f"<span style='color: #f9e2af;'>[!] Response too short: '{response_clean}'</span>")
                         failed += 1
                     elif response_clean.count(response_clean[0]) == len(response_clean):
-                        results.append(f"<span style='color: #f38ba8;'>✗ Repetitive output: '{response_clean}'</span>")
+                        results.append(f"<span style='color: #f38ba8;'>[X] Repetitive output: '{response_clean}'</span>")
                         failed += 1
                     else:
-                        results.append(f"<span style='color: #a6e3a1;'>✓ Response: {response_clean}</span>")
+                        results.append(f"<span style='color: #a6e3a1;'>[OK] Response: {response_clean}</span>")
                         passed += 1
                         
                 except Exception as e:
-                    results.append(f"<span style='color: #f38ba8;'>✗ Error: {e}</span>")
+                    results.append(f"<span style='color: #f38ba8;'>[X] Error: {e}</span>")
                     failed += 1
                 
                 QApplication.processEvents()

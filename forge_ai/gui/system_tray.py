@@ -1588,7 +1588,7 @@ class QuickCommandOverlay(QWidget):
             clean_text = re.sub(r'```[\s\S]*?```', '', clean_text)  # Remove code blocks
             clean_text = clean_text.strip()[:500]
             
-            if clean_text and not clean_text.startswith("⚠️"):
+            if clean_text and not clean_text.startswith("[!"):
                 from forge_ai.voice import speak
                 speak(clean_text)
         except Exception as e:

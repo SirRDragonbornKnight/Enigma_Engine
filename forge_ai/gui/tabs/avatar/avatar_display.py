@@ -1899,10 +1899,10 @@ class Avatar3DOverlayWindow(QWidget):
                                 # Write bone info for AI to read
                                 bone_controller.write_info_for_ai()
                                 
-                                print(f"[Avatar] ✓ Bone controller initialized with {len(self._model_info['skeleton_bones'])} bones")
-                                print(f"[Avatar] ✓ Detected bones: {', '.join(self._model_info['skeleton_bones'][:5])}"
+                                print(f"[Avatar] Bone controller initialized with {len(self._model_info['skeleton_bones'])} bones")
+                                print(f"[Avatar] Detected bones: {', '.join(self._model_info['skeleton_bones'][:5])}"
                                       f"{'...' if len(self._model_info['skeleton_bones']) > 5 else ''}")
-                                print(f"[Avatar] ✓ Bone animation is now PRIMARY control (priority 100)")
+                                print(f"[Avatar] Bone animation is now PRIMARY control (priority 100)")
                         except ImportError as e:
                             print(f"[Avatar] Bone controller module not available: {e}")
                         except Exception as e:
