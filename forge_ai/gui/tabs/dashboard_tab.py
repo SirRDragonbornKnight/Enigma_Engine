@@ -714,7 +714,7 @@ class DashboardTab(QWidget):
             alerts_to_show.append(("warning", f"Disk space low: {100-disk:.0f}% free"))
         
         if temp and temp > self.alert_thresholds['temp_high']:
-            alerts_to_show.append(("critical" if temp > 80 else "warning", f"High temperature: {temp:.1f}°C"))
+            alerts_to_show.append(("critical" if temp > 80 else "warning", f"High temperature: {temp:.1f} C"))
         
         # Show new alerts
         for level, message in alerts_to_show:
