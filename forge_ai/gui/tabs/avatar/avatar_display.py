@@ -1264,9 +1264,10 @@ class AvatarOverlayWindow(QWidget):
         self._update_scaled_pixmap()
     
     def _get_edge_at_pos(self, pos):
-        """Get which edge the mouse is near (for resize cursor)."""
+        """Get which edge the mouse is near (for resize cursor).
+        Only returns edge if resize is ENABLED."""
         if not getattr(self, '_resize_enabled', False):
-            return None
+            return None  # Resize disabled - no edge detection
         
         margin = self._edge_margin
         x, y = pos.x(), pos.y()
@@ -1287,11 +1288,14 @@ class AvatarOverlayWindow(QWidget):
         return None
         
     def _update_scaled_pixmap(self):
-        """Scale avatar to fit within _size, then resize window to TIGHTLY wrap the result."""
+        """Scale avatar to fit within _size, then resize window to TIGHTLY wrap the result.
+        This ALWAYS wraps tightly, regardless of resize mode."""
         if not self._original_pixmap or self._original_pixmap.isNull():
+            # No image - set a default small size
+            self.setFixedSize(100, 100)
             return
             
-        # Border space around the image
+        # Border space around the image (small - just for the border line)
         border_margin = 8
         
         # Scale image to fit within _size (this is the max dimension)
@@ -1311,22 +1315,26 @@ class AvatarOverlayWindow(QWidget):
             self.pixmap = scaled
         
         if not self.pixmap or self.pixmap.isNull():
+            self.setFixedSize(100, 100)
             return
             
-        # Calculate exact window size to wrap tightly
+        # Calculate exact window size to wrap TIGHTLY around the image
         img_w = self.pixmap.width()
         img_h = self.pixmap.height()
         win_w = img_w + border_margin
         win_h = img_h + border_margin
         
-        # FORCE the window to this exact size - remove ALL constraints first
+        # CRITICAL: Force the window to this EXACT size
+        # Clear all size constraints first
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
-        # Now set the exact size
-        self.setGeometry(self.x(), self.y(), win_w, win_h)
+        # Set geometry and fixed size
+        self.resize(win_w, win_h)
         self.setFixedSize(win_w, win_h)
         
+        # Force a repaint
         self.update()
+        self.repaint()
         
     def paintEvent(self, a0):
         """Draw avatar with border that always wraps tightly around the image."""
@@ -3107,7 +3115,7 @@ def create_avatar_subtab(parent):
     parent._using_builtin_sprite = False
     parent._avatar_module_enabled = avatar_module_enabled
     parent._avatar_auto_load = False
-    parent._avatar_resize_enabled = True
+    parent._avatar_resize_enabled = False  # Default OFF - user must enable via right-click menu
     
     # Create directories
     AVATAR_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
