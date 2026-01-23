@@ -1914,9 +1914,9 @@ class ForgeSystemTray(QObject):
         header_layout.addStretch()
         
         # X close button on right
-        close_btn = QPushButton("⊗")
+        close_btn = QPushButton("X")
         close_btn.setFixedSize(20, 20)
-        close_btn.setToolTip("Hide GUI (use Quick Chat to quit)")
+        close_btn.setToolTip("Exit ForgeAI")
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -2811,11 +2811,20 @@ class ForgeSystemTray(QObject):
         )
     
     def _exit_app(self):
-        """Hide system tray menu - use Quick Chat to quit ForgeAI."""
-        # Just hide the main GUI window, don't exit
+        """Exit the ForgeAI application completely."""
+        # Hide overlay and tray
+        if hasattr(self, 'overlay') and self.overlay:
+            self.overlay.hide()
+        if hasattr(self, 'tray_icon') and self.tray_icon:
+            self.tray_icon.hide()
+        
+        # Close main window
         if self.main_window:
-            self.main_window.hide()
-        # Note: Use Quick Chat's "Quit Forge" to actually exit the application
+            self.main_window.close()
+        
+        # Quit the application
+        if self.app:
+            self.app.quit()
     
     def set_status(self, text: str):
         """Update the status in the tray menu."""

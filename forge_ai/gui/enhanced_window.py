@@ -1606,9 +1606,17 @@ class EnhancedMainWindow(QMainWindow):
         # ─────────────────────────────────────────────────────────────────
         # Initialize state variables
         # ─────────────────────────────────────────────────────────────────
-        self.auto_speak = False          # Auto-speak responses?
-        self.microphone_enabled = False  # Voice input enabled?
+        self.auto_speak = self._gui_settings.get("auto_speak", False)
+        self.microphone_enabled = self._gui_settings.get("microphone_enabled", False)
         self.chat_messages = []          # Conversation history
+        self.learn_while_chatting = self._gui_settings.get("learn_while_chatting", True)
+        
+        # System prompt settings
+        self._system_prompt_preset = self._gui_settings.get("system_prompt_preset", "simple")
+        self._custom_system_prompt = self._gui_settings.get("custom_system_prompt", "")
+        
+        # Mini chat settings
+        self._mini_chat_on_top = self._gui_settings.get("mini_chat_always_on_top", True)
         
         # Display names
         self.user_display_name = self._gui_settings.get("user_display_name", "You")
@@ -1644,6 +1652,11 @@ class EnhancedMainWindow(QMainWindow):
         # This creates all tabs, buttons, and widgets
         # ─────────────────────────────────────────────────────────────────
         self._build_ui()
+        
+        # ─────────────────────────────────────────────────────────────────
+        # Apply saved settings to UI widgets AFTER building UI
+        # ─────────────────────────────────────────────────────────────────
+        self._apply_saved_settings_to_ui()
         
         # ─────────────────────────────────────────────────────────────────
         # First-run check or model selection
@@ -1855,6 +1868,58 @@ class EnhancedMainWindow(QMainWindow):
             )
             return False
         return True
+    
+    def _apply_saved_settings_to_ui(self):
+        """Apply saved settings to UI widgets after building the UI."""
+        # Apply auto_speak to menu action
+        if hasattr(self, 'auto_speak_action'):
+            self.auto_speak_action.blockSignals(True)
+            self.auto_speak_action.setChecked(self.auto_speak)
+            self.auto_speak_action.setText(f"AI Auto-Speak ({'ON' if self.auto_speak else 'OFF'})")
+            self.auto_speak_action.blockSignals(False)
+        
+        # Apply to voice toggle button in chat tab
+        if hasattr(self, 'voice_toggle_btn'):
+            self.voice_toggle_btn.blockSignals(True)
+            self.voice_toggle_btn.setChecked(self.auto_speak)
+            self.voice_toggle_btn.setText("ON" if self.auto_speak else "OFF")
+            self.voice_toggle_btn.blockSignals(False)
+        
+        # Apply microphone enabled to menu action
+        if hasattr(self, 'microphone_action'):
+            self.microphone_action.blockSignals(True)
+            self.microphone_action.setChecked(self.microphone_enabled)
+            self.microphone_action.setText(f"Microphone ({'ON' if self.microphone_enabled else 'OFF'})")
+            self.microphone_action.blockSignals(False)
+        
+        # Apply learn while chatting to menu action
+        if hasattr(self, 'learning_action'):
+            self.learning_action.blockSignals(True)
+            self.learning_action.setChecked(self.learn_while_chatting)
+            self.learning_action.setText(f"Learn While Chatting ({'ON' if self.learn_while_chatting else 'OFF'})")
+            self.learning_action.blockSignals(False)
+        
+        # Apply to learning indicator in chat tab
+        if hasattr(self, 'learning_indicator'):
+            if self.learn_while_chatting:
+                self.learning_indicator.setText("Learning: ON")
+                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+            else:
+                self.learning_indicator.setText("Learning: OFF")
+                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+        
+        # Apply window position and size
+        if self._gui_settings.get("window_width") and self._gui_settings.get("window_height"):
+            self.resize(self._gui_settings["window_width"], self._gui_settings["window_height"])
+        if self._gui_settings.get("window_x") is not None and self._gui_settings.get("window_y") is not None:
+            self.move(self._gui_settings["window_x"], self._gui_settings["window_y"])
+        
+        # Apply last tab
+        if hasattr(self, 'content_stack') and self._gui_settings.get("last_tab") is not None:
+            try:
+                self.content_stack.setCurrentIndex(self._gui_settings["last_tab"])
+            except Exception:
+                pass
     
     def _load_gui_settings(self):
         """Load GUI settings from file."""
@@ -4245,12 +4310,17 @@ class EnhancedMainWindow(QMainWindow):
                 self.avatar_expressions["neutral"] = filepath
     
     def _display_avatar_image(self, filepath):
-        """Display an avatar image."""
+        """Display an avatar image with border wrapped tightly around it."""
         pixmap = QPixmap(filepath)
         if not pixmap.isNull():
             scaled = pixmap.scaled(380, 380, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # Set the label to the exact size of the scaled image so border wraps tight
+            self.avatar_image_label.setFixedSize(scaled.width() + 4, scaled.height() + 4)  # +4 for border
             self.avatar_image_label.setPixmap(scaled)
             self.avatar_image_label.setStyleSheet("border: 2px solid #89b4fa; border-radius: 12px; background: #1e1e2e;")
+            self.avatar_image_label.setAlignment(Qt.AlignCenter)
+            
             if hasattr(self, 'avatar_status_label'):
                 self.avatar_status_label.setText(f"Avatar loaded: {Path(filepath).name}")
         else:

@@ -2558,10 +2558,9 @@ class AvatarPreviewWidget(QFrame):
         
         self.setMinimumSize(250, 250)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # No border in stylesheet - we draw it in paintEvent to wrap tight around image
         self.setStyleSheet("""
             QFrame {
-                border: 2px solid #45475a;
-                border-radius: 12px;
                 background: #1e1e2e;
             }
         """)
@@ -2610,7 +2609,7 @@ class AvatarPreviewWidget(QFrame):
         self.update()
         
     def paintEvent(self, a0):
-        """Draw avatar."""
+        """Draw avatar with border wrapped tightly around the image."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
@@ -2618,7 +2617,22 @@ class AvatarPreviewWidget(QFrame):
         if self.pixmap:
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
+            
+            # Draw a subtle background/glow behind the avatar
+            painter.setPen(Qt_NoPen)
+            painter.setBrush(QColor(30, 30, 46, 80))
+            painter.drawRoundedRect(x - 5, y - 5, self.pixmap.width() + 10, self.pixmap.height() + 10, 12, 12)
+            
+            # Draw the avatar
             painter.drawPixmap(x, y, self.pixmap)
+            
+            # Draw border TIGHT around the avatar image
+            pen = painter.pen()
+            pen.setColor(QColor("#45475a"))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(Qt_NoBrush)
+            painter.drawRoundedRect(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6, 10, 10)
         else:
             painter.setPen(QColor("#6c7086"))
             painter.drawText(self.rect(), Qt_AlignCenter, 
