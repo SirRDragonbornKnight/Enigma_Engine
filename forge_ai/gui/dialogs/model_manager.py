@@ -781,7 +781,7 @@ Checkpoints: {checkpoints}
         try:
             # Load the model
             model, config = self.registry.load_model(name)
-            results.append(f"<span style='color: #a6e3a1;'>✓ Model loaded successfully</span>")
+            results.append(f"<span style='color: #a6e3a1;'>[OK] Model loaded successfully</span>")
             results.append(f"<span style='color: #6c7086;'>  Source: {config.get('source', 'local')}</span>")
             QApplication.processEvents()
             
@@ -870,7 +870,7 @@ Checkpoints: {checkpoints}
                 results.append("<span style='color: #6c7086;'>Tip: Try training with more data or check if weights are corrupted.</span>")
                 
         except Exception as e:
-            results.append(f"<span style='color: #f38ba8;'>✗ Failed to load model: {e}</span>")
+            results.append(f"<span style='color: #f38ba8;'>[X] Failed to load model: {e}</span>")
             results.append("<span style='color: #6c7086;'>Check that model files exist and are not corrupted.</span>")
     
     def _on_clone(self):

@@ -2336,7 +2336,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.current_model_name,
                 progress_callback=on_load_progress
             )
-            loading_dialog.set_status("✓ Model weights loaded", 40)
+            loading_dialog.set_status("[OK] Model weights loaded", 40)
             
             
             if loading_dialog.is_cancelled():
@@ -2356,7 +2356,7 @@ class EnhancedMainWindow(QMainWindow):
             # Create engine instance without calling __init__
             from ..core.inference import ForgeEngine
             self.engine = ForgeEngine.__new__(ForgeEngine)
-            loading_dialog.set_status("✓ Engine created", 50)
+            loading_dialog.set_status("[OK] Engine created", 50)
             
             # Set required attributes that __init__ would normally set
             import torch
@@ -2382,7 +2382,7 @@ class EnhancedMainWindow(QMainWindow):
             try:
                 from ..core.tool_router import get_router
                 self.engine._tool_router = get_router(use_specialized=False)  # Keyword-based for speed
-                loading_dialog.set_status("✓ Fast routing enabled", 57)
+                loading_dialog.set_status("[OK] Fast routing enabled", 57)
             except Exception as e:
                 logger.warning(f"Could not enable routing: {e}")
                 self.engine.use_routing = False
@@ -2397,7 +2397,7 @@ class EnhancedMainWindow(QMainWindow):
             if is_huggingface:
                 # HuggingFaceModel is already loaded and ready
                 self.engine.model = model  # This is a HuggingFaceModel wrapper
-                loading_dialog.set_status("✓ HuggingFace model ready", 65)
+                loading_dialog.set_status("[OK] HuggingFace model ready", 65)
                 
                 # Check if user wants custom tokenizer instead of model's own
                 use_custom_tokenizer = config.get("use_custom_tokenizer", False)
@@ -2406,22 +2406,22 @@ class EnhancedMainWindow(QMainWindow):
                     from ..core.tokenizer import load_tokenizer
                     self.engine.tokenizer = load_tokenizer()
                     self.engine._using_custom_tokenizer = True
-                    loading_dialog.set_status("✓ Custom tokenizer loaded", 75)
+                    loading_dialog.set_status("[OK] Custom tokenizer loaded", 75)
                 else:
                     self.engine.tokenizer = model.tokenizer  # Use HF tokenizer
                     self.engine._using_custom_tokenizer = False
-                    loading_dialog.set_status("✓ Using model's tokenizer", 75)
+                    loading_dialog.set_status("[OK] Using model's tokenizer", 75)
             else:
                 # Local Forge model
                 self.engine.model = model
                 loading_dialog.set_status("Moving model to GPU/CPU...", 68)
                 self.engine.model.to(self.engine.device)
                 self.engine.model.eval()
-                loading_dialog.set_status("✓ Model ready on device", 72)
+                loading_dialog.set_status("[OK] Model ready on device", 72)
                 loading_dialog.set_status("Loading tokenizer...", 75)
                 from ..core.tokenizer import load_tokenizer
                 self.engine.tokenizer = load_tokenizer()
-                loading_dialog.set_status("✓ Tokenizer loaded", 80)
+                loading_dialog.set_status("[OK] Tokenizer loaded", 80)
             
             if loading_dialog.is_cancelled():
                 loading_dialog.close()
@@ -2436,14 +2436,14 @@ class EnhancedMainWindow(QMainWindow):
                 self.current_model_name, 
                 auto_learn=getattr(self, 'learn_while_chatting', True)
             )
-            loading_dialog.set_status("✓ Brain initialized", 88)
+            loading_dialog.set_status("[OK] Brain initialized", 88)
             
             # Initialize wants system (AI's internal motivations)
             loading_dialog.set_status("Loading AI wants & motivations...", 90)
             from ..core.wants_system import get_wants_system
             self.wants_system = get_wants_system(self.current_model_name, Path(CONFIG["data_dir"]))
             self.log_terminal(f"AI wants system loaded: {len(self.wants_system.wants)} wants, {len(self.wants_system.goals)} goals", "info")
-            loading_dialog.set_status("✓ Wants system loaded", 92)
+            loading_dialog.set_status("[OK] Wants system loaded", 92)
             
             # Initialize learned generator (AI creates designs from training)
             loading_dialog.set_status("Loading learned design system...", 94)
@@ -2456,7 +2456,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.learned_generator.learn_from_training_data(training_file)
                 self.log_terminal(f"Learned {len(self.learned_generator.learned_avatars)} avatar patterns", "info")
             
-            loading_dialog.set_status("✓ Learned generator ready", 96)
+            loading_dialog.set_status("[OK] Learned generator ready", 96)
             
             loading_dialog.set_status("Finalizing setup...", 95)
             

@@ -327,7 +327,7 @@ class ModelLoadingDialog(QDialog):
         # Also update first loading item if it exists
         if self._loading_items and self._item_widgets:
             # Extract short status from full text
-            short_status = text.replace("✓ ", "").split("...")[0]
+            short_status = text.replace("[OK] ", "").split("...")[0]
             if len(short_status) > 20:
                 short_status = short_status[:18] + "..."
             

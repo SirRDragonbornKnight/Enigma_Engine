@@ -284,7 +284,7 @@ class ChatSync(QObject if HAS_PYQT else object):
                         temperature=0.8
                     )
             else:
-                response = "⚠️ No AI model loaded. Open the full GUI to load a model."
+                response = "[WARNING] No AI model loaded. Open the full GUI to load a model."
             
             if self._stop_requested:
                 return
@@ -315,10 +315,10 @@ class ChatSync(QObject if HAS_PYQT else object):
             try:
                 import torch
                 if isinstance(response, torch.Tensor):
-                    return "⚠️ Model returned raw tensor. Try a different model or check configuration."
+                    return "[WARNING] Model returned raw tensor. Try a different model or check configuration."
             except ImportError:
                 pass
-            return "⚠️ Model returned invalid data format."
+            return "[WARNING] Model returned invalid data format."
         
         # Convert to string if needed
         response = str(response) if response else ""
