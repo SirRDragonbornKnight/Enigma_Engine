@@ -3980,15 +3980,16 @@ def _toggle_overlay(parent):
                     from ....avatar.persistence import load_avatar_settings
                     avatar_settings = load_avatar_settings()
                     saved_size = avatar_settings.overlay_size
-                    if saved_size < 100 or saved_size > 500:
+                    # Ensure reasonable size (minimum 200 for visibility)
+                    if saved_size < 200 or saved_size > 500:
                         saved_size = 300
                 except Exception:
                     saved_size = getattr(parent, '_saved_overlay_size', 300)
+                    if saved_size < 200:
+                        saved_size = 300
                 
-                # Set the max dimension for scaling - DON'T set window size here!
-                # The window size will be set by set_avatar -> _update_scaled_pixmap
-                parent._overlay._size = saved_size
-                # DON'T call setFixedSize here - it prevents tight wrapping!
+                # Set the max dimension for scaling - minimum 200
+                parent._overlay._size = max(200, saved_size)
                 
                 # Restore position from persistence
                 try:
@@ -3999,8 +4000,9 @@ def _toggle_overlay(parent):
                 except Exception:
                     pass
             
-            # Sync resize enabled state to overlay (default OFF)
-            parent._overlay._resize_enabled = getattr(parent, '_avatar_resize_enabled', False)
+            # ALWAYS set resize to OFF by default when showing overlay
+            # This overrides any saved setting
+            parent._overlay._resize_enabled = False
             
             # Only show avatar if one is selected - don't show default/test sprite
             pixmap = parent.avatar_preview_2d.original_pixmap
