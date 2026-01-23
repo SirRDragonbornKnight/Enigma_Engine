@@ -391,7 +391,7 @@ class GenerationPreviewPopup(QDialog):
                 preview_label.setMovie(self._movie)
                 self._movie.start()
             else:
-                preview_label.setText("🎲 Animation Generated")
+                preview_label.setText("Animation Generated")
             
             container_layout.addWidget(preview_label)
             

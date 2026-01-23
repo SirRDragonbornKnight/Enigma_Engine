@@ -315,9 +315,9 @@ def create_chat_tab(parent):
     
     layout.addLayout(bottom_layout)
     
-    # Initialize auto_speak and voice thread tracking
-    parent.auto_speak = False
-    parent._voice_thread = None
+    # Initialize voice thread tracking (auto_speak is already set from saved settings)
+    if not hasattr(parent, '_voice_thread'):
+        parent._voice_thread = None
     
     # Update voice button state from saved settings
     _update_voice_button_state(parent)

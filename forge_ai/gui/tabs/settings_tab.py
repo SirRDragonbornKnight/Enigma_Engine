@@ -552,11 +552,11 @@ def _toggle_cloud_mode(parent, state):
                 else:
                     if provider == 'ollama':
                         parent.cloud_status_label.setText(
-                            f"✗ Ollama not running. Install from https://ollama.ai\n"
+                            f"[X] Ollama not running. Install from https://ollama.ai\n"
                             f"Then run: ollama run {parent.cloud_model_combo.currentData()}"
                         )
                     else:
-                        parent.cloud_status_label.setText(f"✗ Failed: {msg}")
+                        parent.cloud_status_label.setText(f"[X] Failed: {msg}")
                     parent.cloud_status_label.setStyleSheet("color: #ef4444;")
             else:
                 parent.cloud_status_label.setText("API mode enabled (apply on restart)")
@@ -1477,9 +1477,9 @@ def create_settings_tab(parent):
     parent.avatar_activity_slider.setMaximumWidth(100)
     parent.avatar_activity_slider.setToolTip("How active the avatar is (1=calm, 10=energetic)")
     avatar_behavior_row.addWidget(parent.avatar_activity_slider)
-    avatar_behavior_row.addWidget(QLabel("🐢"))
+    avatar_behavior_row.addWidget(QLabel("Slow"))
     avatar_behavior_row.addStretch()
-    avatar_behavior_row.addWidget(QLabel("🐰"))
+    avatar_behavior_row.addWidget(QLabel("Fast"))
     avatar_layout.addLayout(avatar_behavior_row)
     
     parent.avatar_status_label = QLabel("Avatar: Idle")
@@ -2759,7 +2759,7 @@ def _test_microphone(parent):
     parent._mic_test_running = True
     parent._mic_test_stop_requested = False
     parent.mic_test_btn.setEnabled(True)
-    parent.mic_test_btn.setText("🛑 Stop Test")
+    parent.mic_test_btn.setText("Stop Test")
     parent.mic_status_label.setText("Listening... (click Stop to end)")
     parent.mic_status_label.setStyleSheet("color: #f59e0b;")
     

@@ -738,7 +738,7 @@ class QuickCommandOverlay(QWidget):
         """)
         
         # Always on top toggle
-        always_on_top_action = QAction("✓ Always on Top" if (self.windowFlags() & Qt.WindowStaysOnTopHint) else "  Always on Top", self)
+        always_on_top_action = QAction("[*] Always on Top" if (self.windowFlags() & Qt.WindowStaysOnTopHint) else "    Always on Top", self)
         always_on_top_action.triggered.connect(self._toggle_always_on_top)
         menu.addAction(always_on_top_action)
         

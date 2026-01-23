@@ -97,7 +97,7 @@ class CameraTab(QWidget):
         layout = QVBoxLayout(self)
         
         # Header
-        header = QLabel("📷 Camera")
+        header = QLabel("Camera")
         header.setObjectName("header")
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #f9e2af;")
         layout.addWidget(header)

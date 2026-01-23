@@ -579,7 +579,7 @@ Checkpoints: {checkpoints}
         layout.addWidget(cache_checkbox)
         
         # Warning
-        warning = QLabel("⚠️ This cannot be undone!")
+        warning = QLabel("WARNING: This cannot be undone!")
         warning.setStyleSheet("color: #f38ba8; font-weight: bold;")
         layout.addWidget(warning)
         

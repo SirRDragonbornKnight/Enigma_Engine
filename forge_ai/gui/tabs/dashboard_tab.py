@@ -595,7 +595,7 @@ class DashboardTab(QWidget):
     def _update_time(self):
         """Update the current time display."""
         now = datetime.now()
-        self.time_label.setText(now.strftime("🕐 %H:%M:%S"))
+        self.time_label.setText(now.strftime("Time: %H:%M:%S"))
     
     def _update_uptime(self):
         """Update system uptime."""
