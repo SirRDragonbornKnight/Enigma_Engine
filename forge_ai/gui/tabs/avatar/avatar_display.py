@@ -1286,13 +1286,16 @@ class AvatarOverlayWindow(QWidget):
         
     def _update_scaled_pixmap(self):
         """Update scaled pixmap to match current size and rotation, then resize window to wrap tightly."""
-        if self._original_pixmap:
+        if self._original_pixmap and not self._original_pixmap.isNull():
             # Scale to fit within the requested size (with small margin for border)
             border_margin = 8  # Space for the border
+            max_dim = max(50, self._size - border_margin)  # Ensure positive
+            
             scaled = self._original_pixmap.scaled(
-                self._size - border_margin, self._size - border_margin,
+                max_dim, max_dim,
                 Qt_KeepAspectRatio, Qt_SmoothTransformation
             )
+            
             # Apply rotation if any
             rotation = getattr(self, '_rotation_angle', 0.0)
             if rotation != 0:
@@ -1302,13 +1305,15 @@ class AvatarOverlayWindow(QWidget):
             else:
                 self.pixmap = scaled
             
-            # TIGHT WRAP: Resize window to match pixmap size (plus border margin)
-            if self.pixmap:
+            # TIGHT WRAP: Resize window to exactly fit pixmap (plus border margin)
+            if self.pixmap and not self.pixmap.isNull():
                 new_width = self.pixmap.width() + border_margin
                 new_height = self.pixmap.height() + border_margin
-                # Only resize if different from current (avoid infinite loop)
-                if self.width() != new_width or self.height() != new_height:
-                    self.setFixedSize(new_width, new_height)
+                # Force resize window to wrap tightly - use setMinimum/Maximum to allow any size
+                self.setMinimumSize(1, 1)  # Allow shrinking
+                self.setMaximumSize(16777215, 16777215)  # Allow growing (Qt max)
+                self.resize(new_width, new_height)
+                self.setFixedSize(new_width, new_height)  # Lock at this size
         self.update()
         
     def paintEvent(self, a0):
