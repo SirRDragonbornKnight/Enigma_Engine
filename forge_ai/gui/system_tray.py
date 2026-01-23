@@ -49,7 +49,7 @@ def get_current_model_name() -> str:
         from ..config import CONFIG
         # Try to get from gui_settings.json first (most accurate)
         import json
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
@@ -812,7 +812,7 @@ class QuickCommandOverlay(QWidget):
         try:
             import json
             from pathlib import Path
-            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             settings = {}
             if settings_path.exists():
                 with open(settings_path, 'r') as f:
@@ -856,7 +856,7 @@ class QuickCommandOverlay(QWidget):
         try:
             import json
             from pathlib import Path
-            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             if settings_path.exists():
                 with open(settings_path, 'r') as f:
                     settings = json.load(f)
@@ -2742,7 +2742,7 @@ class ForgeSystemTray(QObject):
         }
         try:
             import json
-            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             if settings_path.exists():
                 with open(settings_path, 'r') as f:
                     settings = json.load(f)

@@ -7,6 +7,7 @@ Features:
 - Module state checking
 - Overlay/popup windows
 - Settings persistence
+- NoScrollComboBox - combo that ignores scroll wheel
 """
 
 import json
@@ -19,11 +20,50 @@ try:
         QPushButton, QComboBox, QGroupBox, QColorDialog,
         QDialog, QSlider, QSpinBox, QCheckBox
     )
-    from PyQt5.QtCore import Qt, pyqtSignal
+    from PyQt5.QtCore import Qt, pyqtSignal, QEvent
     from PyQt5.QtGui import QColor, QCursor, QPixmap, QPainter
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
+
+
+# =============================================================================
+# NoScrollComboBox - Combo box that ignores scroll wheel events
+# =============================================================================
+class NoScrollComboBox(QComboBox):
+    """A QComboBox that ignores scroll wheel events to prevent accidental changes.
+    
+    Use this instead of QComboBox when the dropdown shouldn't respond to scrolling,
+    which is especially useful when combo boxes are in scrollable areas.
+    """
+    
+    def wheelEvent(self, event):
+        """Ignore scroll wheel events - user must click to change value."""
+        event.ignore()
+
+
+def disable_scroll_on_combos(parent_widget):
+    """Install event filter on all QComboBox children to disable scroll wheel.
+    
+    Call this after creating a widget tree to disable scroll wheel on all combo boxes.
+    
+    Args:
+        parent_widget: The parent widget containing combo boxes
+    """
+    if not HAS_PYQT:
+        return
+    
+    class ScrollFilter(QWidget):
+        def eventFilter(self, obj, event):
+            if event.type() == QEvent.Wheel and isinstance(obj, QComboBox):
+                event.ignore()
+                return True
+            return False
+    
+    scroll_filter = ScrollFilter(parent_widget)
+    for combo in parent_widget.findChildren(QComboBox):
+        combo.setFocusPolicy(Qt.StrongFocus)  # Only respond when focused
+        combo.installEventFilter(scroll_filter)
 
 from ...config import CONFIG
 

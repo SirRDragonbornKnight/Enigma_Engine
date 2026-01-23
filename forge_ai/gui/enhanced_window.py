@@ -1923,6 +1923,13 @@ class EnhancedMainWindow(QMainWindow):
             # Save learn while chatting preference
             settings["learn_while_chatting"] = getattr(self, 'learn_while_chatting', True)
             
+            # Save system prompt settings
+            settings["system_prompt_preset"] = getattr(self, '_system_prompt_preset', 'simple')
+            settings["custom_system_prompt"] = getattr(self, '_custom_system_prompt', '')
+            
+            # Save mini chat settings
+            settings["mini_chat_always_on_top"] = getattr(self, '_mini_chat_on_top', True)
+            
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
         except Exception as e:
@@ -2888,8 +2895,36 @@ class EnhancedMainWindow(QMainWindow):
         # Enable text selection on all QLabels in the GUI
         self._enable_text_selection()
         
+        # Disable scroll wheel on all combo boxes to prevent accidental changes
+        self._disable_combo_scroll()
+        
         # Restore saved settings after UI is built
         self._restore_gui_settings()
+    
+    def _disable_combo_scroll(self):
+        """Disable scroll wheel on all combo boxes to prevent accidental changes.
+        
+        Users often accidentally change dropdown selections when scrolling.
+        This makes combos only respond to clicks, not scroll wheel.
+        """
+        from PyQt5.QtCore import Qt, QEvent
+        from PyQt5.QtWidgets import QComboBox
+        
+        class ComboScrollFilter(QWidget):
+            """Event filter that ignores scroll wheel events on combo boxes."""
+            def eventFilter(self, obj, event):
+                if event.type() == QEvent.Wheel and isinstance(obj, QComboBox):
+                    event.ignore()
+                    return True
+                return False
+        
+        # Create and store the filter (needs to stay alive)
+        self._combo_scroll_filter = ComboScrollFilter(self)
+        
+        # Apply to all combo boxes in the window
+        for combo in self.findChildren(QComboBox):
+            combo.setFocusPolicy(Qt.StrongFocus)  # Only respond when explicitly focused
+            combo.installEventFilter(self._combo_scroll_filter)
     
     def _enable_text_selection(self):
         """Enable text selection on all QLabel widgets in the GUI."""
@@ -2956,6 +2991,13 @@ class EnhancedMainWindow(QMainWindow):
         
         # Restore learn while chatting preference
         self.learn_while_chatting = settings.get("learn_while_chatting", True)
+        
+        # Restore system prompt settings
+        self._system_prompt_preset = settings.get("system_prompt_preset", "simple")
+        self._custom_system_prompt = settings.get("custom_system_prompt", "")
+        
+        # Restore mini chat on top preference
+        self._mini_chat_on_top = settings.get("mini_chat_always_on_top", True)
         
         # ALWAYS start on Chat tab - ignore saved last_tab setting
         # This ensures predictable behavior when opening the GUI

@@ -700,15 +700,15 @@ def _reset_all_settings(parent):
         return
     
     try:
-        # Delete gui_settings.json
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        # Delete gui_settings.json (primary location)
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             settings_path.unlink()
         
-        # Also reset data dir settings
-        data_settings = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
-        if data_settings.exists():
-            data_settings.unlink()
+        # Also reset info dir settings (legacy location)
+        info_settings = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        if info_settings.exists():
+            info_settings.unlink()
         
         QMessageBox.information(
             parent, "Settings Reset",
@@ -734,7 +734,7 @@ def _toggle_mini_chat_on_top(parent, state):
     
     # Save to gui_settings.json
     try:
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         settings = {}
         if settings_path.exists():
             with open(settings_path, 'r') as f:
@@ -758,7 +758,7 @@ def _save_chat_names(parent):
     from ...config import CONFIG
     
     try:
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         settings = {}
         if settings_path.exists():
             with open(settings_path, 'r') as f:
@@ -786,7 +786,7 @@ def _save_system_prompt(parent):
     from ...config import CONFIG
     
     try:
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         settings = {}
         if settings_path.exists():
             with open(settings_path, 'r') as f:
@@ -821,7 +821,7 @@ def _load_system_prompt(parent):
     from ...config import CONFIG
     
     try:
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
@@ -952,7 +952,7 @@ def _load_chat_names(parent):
     from ...config import CONFIG
     
     try:
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
@@ -1980,7 +1980,7 @@ def _load_mini_chat_on_top_setting(parent):
         import json
         from pathlib import Path
         from ...config import CONFIG
-        settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             settings = json.loads(settings_path.read_text())
             on_top = settings.get("mini_chat_always_on_top", True)  # Default to True
@@ -2373,7 +2373,7 @@ def _apply_custom_resources(parent):
         try:
             from pathlib import Path
             import json
-            settings_path = Path(CONFIG.get("info_dir", "information")) / "gui_settings.json"
+            settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             
             settings = {}
             if settings_path.exists():
