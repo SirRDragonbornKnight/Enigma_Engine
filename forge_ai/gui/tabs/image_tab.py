@@ -900,7 +900,7 @@ class ImageTab(QWidget):
                         QMetaObject.invokeMethod(
                             self.ready_indicator, "setText",
                             Qt.QueuedConnection,
-                            Q_ARG(str, "● Ready")
+                            Q_ARG(str, "[OK] Ready")
                         )
                         QMetaObject.invokeMethod(
                             self.ready_indicator, "setStyleSheet",

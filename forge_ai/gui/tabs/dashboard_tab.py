@@ -229,7 +229,7 @@ class StatusCard(QFrame):
     clicked = pyqtSignal(str)
     
     def __init__(self, title: str, status: str = "Unknown", 
-                 icon: str = "●", color: str = "#6c7086", parent=None):
+                 icon: str = "[*]", color: str = "#6c7086", parent=None):
         super().__init__(parent)
         self.title = title
         self.status = status
@@ -510,12 +510,12 @@ class DashboardTab(QWidget):
         
         self.status_cards = {}
         modules_to_show = [
-            ("Model", "●"),
-            ("Tokenizer", "●"),
-            ("Memory", "●"),
-            ("API Server", "●"),
-            ("Voice Input", "●"),
-            ("Voice Output", "●"),
+            ("Model", "[*]"),
+            ("Tokenizer", "[*]"),
+            ("Memory", "[*]"),
+            ("API Server", "[*]"),
+            ("Voice Input", "[*]"),
+            ("Voice Output", "[*]"),
         ]
         
         for i, (name, icon) in enumerate(modules_to_show):
