@@ -1868,7 +1868,8 @@ class Avatar3DOverlayWindow(QWidget):
         self._gl_widget.update()
     
     def _apply_circular_mask(self):
-        """Apply a circular mask."""
+        """Apply a circular mask to BOTH the GL widget AND the window.
+        This allows clicks to pass through the transparent corners."""
         if not self._use_circular_mask:
             return
         
@@ -1880,8 +1881,13 @@ class Avatar3DOverlayWindow(QWidget):
         path.addEllipse(QRectF(padding, padding, self._size - padding*2, self._size - padding*2))
         
         region = QRegion(path.toFillPolygon().toPolygon())
+        
+        # Apply mask to GL widget (visual clipping)
         if self._gl_widget:
             self._gl_widget.setMask(region)
+        
+        # Apply mask to WINDOW (click pass-through for corners)
+        self.setMask(region)
     
     def load_model(self, path: str) -> bool:
         """Load a 3D model into the overlay."""
