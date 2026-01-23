@@ -1192,6 +1192,7 @@ class AvatarOverlayWindow(QWidget):
     - Right-click for menu (expressions, size, close)
     - Drag from edges/corners to resize (when enabled)
     - Always on top of other windows
+    - Border wraps TIGHTLY around the avatar image
     - Blue border shows when resize mode is ON
     """
     
@@ -1213,8 +1214,9 @@ class AvatarOverlayWindow(QWidget):
         # Ensure the window can receive focus and input
         self.setFocusPolicy(Qt.StrongFocus if hasattr(Qt, 'StrongFocus') else 0x0b)
         
+        # _size is the TARGET maximum dimension for scaling (not window size!)
         self._size = 300
-        self.setFixedSize(self._size, self._size)
+        # DON'T call setFixedSize here - let set_avatar do it based on actual image
         self.move(100, 100)
         
         self.pixmap = None
@@ -1249,7 +1251,7 @@ class AvatarOverlayWindow(QWidget):
             from ....avatar.persistence import load_avatar_settings
             settings = load_avatar_settings()
             self._size = settings.get_size_for_avatar(path)
-            self.setFixedSize(self._size, self._size)
+            # DON'T setFixedSize here - _update_scaled_pixmap will handle it
             x, y = settings.get_position_for_avatar(path)
             self.move(x, y)
             self._update_scaled_pixmap()
@@ -1257,7 +1259,7 @@ class AvatarOverlayWindow(QWidget):
             pass
         
     def set_avatar(self, pixmap: QPixmap):
-        """Set avatar image."""
+        """Set avatar image and resize window to wrap tightly around it."""
         self._original_pixmap = pixmap
         self._update_scaled_pixmap()
     
@@ -1285,35 +1287,45 @@ class AvatarOverlayWindow(QWidget):
         return None
         
     def _update_scaled_pixmap(self):
-        """Update scaled pixmap to match current size and rotation, then resize window to wrap tightly."""
-        if self._original_pixmap and not self._original_pixmap.isNull():
-            # Scale to fit within the requested size (with small margin for border)
-            border_margin = 8  # Space for the border
-            max_dim = max(50, self._size - border_margin)  # Ensure positive
+        """Scale avatar to fit within _size, then resize window to TIGHTLY wrap the result."""
+        if not self._original_pixmap or self._original_pixmap.isNull():
+            return
             
-            scaled = self._original_pixmap.scaled(
-                max_dim, max_dim,
-                Qt_KeepAspectRatio, Qt_SmoothTransformation
-            )
+        # Border space around the image
+        border_margin = 8
+        
+        # Scale image to fit within _size (this is the max dimension)
+        max_dim = max(50, self._size - border_margin)
+        scaled = self._original_pixmap.scaled(
+            max_dim, max_dim,
+            Qt_KeepAspectRatio, Qt_SmoothTransformation
+        )
+        
+        # Apply rotation if any
+        rotation = getattr(self, '_rotation_angle', 0.0)
+        if rotation != 0:
+            from PyQt5.QtGui import QTransform
+            transform = QTransform().rotate(rotation)
+            self.pixmap = scaled.transformed(transform, Qt_SmoothTransformation)
+        else:
+            self.pixmap = scaled
+        
+        if not self.pixmap or self.pixmap.isNull():
+            return
             
-            # Apply rotation if any
-            rotation = getattr(self, '_rotation_angle', 0.0)
-            if rotation != 0:
-                from PyQt5.QtGui import QTransform
-                transform = QTransform().rotate(rotation)
-                self.pixmap = scaled.transformed(transform, Qt_SmoothTransformation)
-            else:
-                self.pixmap = scaled
-            
-            # TIGHT WRAP: Resize window to exactly fit pixmap (plus border margin)
-            if self.pixmap and not self.pixmap.isNull():
-                new_width = self.pixmap.width() + border_margin
-                new_height = self.pixmap.height() + border_margin
-                # Force resize window to wrap tightly - use setMinimum/Maximum to allow any size
-                self.setMinimumSize(1, 1)  # Allow shrinking
-                self.setMaximumSize(16777215, 16777215)  # Allow growing (Qt max)
-                self.resize(new_width, new_height)
-                self.setFixedSize(new_width, new_height)  # Lock at this size
+        # Calculate exact window size to wrap tightly
+        img_w = self.pixmap.width()
+        img_h = self.pixmap.height()
+        win_w = img_w + border_margin
+        win_h = img_h + border_margin
+        
+        # FORCE the window to this exact size - remove ALL constraints first
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
+        # Now set the exact size
+        self.setGeometry(self.x(), self.y(), win_w, win_h)
+        self.setFixedSize(win_w, win_h)
+        
         self.update()
         
     def paintEvent(self, a0):
@@ -1428,7 +1440,7 @@ class AvatarOverlayWindow(QWidget):
                 self.move(new_geo.x() - size_diff, new_geo.y() - size_diff)
             
             self._size = new_size
-            self.setFixedSize(self._size, self._size)
+            # DON'T call setFixedSize here - let _update_scaled_pixmap handle window sizing
             self._update_scaled_pixmap()
             a0.accept()
             return
@@ -1561,7 +1573,7 @@ class AvatarOverlayWindow(QWidget):
                 new_size = max(50, self._size - 20)   # Scroll down = smaller (min 50)
             
             self._size = new_size
-            self.setFixedSize(self._size, self._size)
+            # DON'T call setFixedSize - let _update_scaled_pixmap handle window sizing
             self._update_scaled_pixmap()
             
             # Save size
@@ -1686,7 +1698,7 @@ class AvatarOverlayWindow(QWidget):
         )
         if ok:
             self._size = size
-            self.setFixedSize(self._size, self._size)
+            # DON'T call setFixedSize - let _update_scaled_pixmap handle window sizing
             self._update_scaled_pixmap()
             # Save size (per-avatar)
             try:
@@ -3429,7 +3441,7 @@ def _overlay_wheel_resize(overlay, event):
         overlay._size = min(500, overlay._size + 20)
     else:
         overlay._size = max(100, overlay._size - 20)
-    overlay.setFixedSize(overlay._size, overlay._size)
+    # DON'T call setFixedSize - let _update_scaled_pixmap handle window sizing
     overlay._update_scaled_pixmap()
     event.accept()
 
@@ -3955,6 +3967,7 @@ def _toggle_overlay(parent):
                 parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
                 
                 # Load size from avatar persistence (most reliable) or gui settings
+                # This sets _size which is the MAX dimension for scaling, NOT the window size
                 try:
                     from ....avatar.persistence import load_avatar_settings
                     avatar_settings = load_avatar_settings()
@@ -3964,10 +3977,12 @@ def _toggle_overlay(parent):
                 except Exception:
                     saved_size = getattr(parent, '_saved_overlay_size', 300)
                 
+                # Set the max dimension for scaling - DON'T set window size here!
+                # The window size will be set by set_avatar -> _update_scaled_pixmap
                 parent._overlay._size = saved_size
-                parent._overlay.setFixedSize(saved_size, saved_size)
+                # DON'T call setFixedSize here - it prevents tight wrapping!
                 
-                # Also restore position from persistence
+                # Restore position from persistence
                 try:
                     from ....avatar.persistence import load_position
                     x, y = load_position()
@@ -3989,7 +4004,7 @@ def _toggle_overlay(parent):
                 return
             
             if pixmap:
-                # Pass the ORIGINAL pixmap - set_avatar and _update_scaled_pixmap will handle scaling
+                # Pass the ORIGINAL pixmap - set_avatar will scale and resize window to wrap tightly
                 parent._overlay.set_avatar(pixmap)
                 parent._overlay.show()
                 parent._overlay.raise_()
@@ -4295,7 +4310,7 @@ def _reset_overlay(parent):
     if parent._overlay and parent._overlay.isVisible():
         parent._overlay.move(100, 100)
         parent._overlay._size = 300
-        parent._overlay.setFixedSize(300, 300)
+        # DON'T call setFixedSize - let _update_scaled_pixmap handle window size
         parent._overlay._update_scaled_pixmap()
         
         parent.avatar_status.setText("Desktop overlay reset")
@@ -4314,7 +4329,7 @@ def _reset_all_avatar(parent):
     if parent._overlay:
         parent._overlay.move(100, 100)
         parent._overlay._size = 300
-        parent._overlay.setFixedSize(300, 300)
+        # DON'T call setFixedSize - let _update_scaled_pixmap handle window size
         parent._overlay._update_scaled_pixmap()
     
     # Reset colors
