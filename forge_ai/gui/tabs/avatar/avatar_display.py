@@ -2853,7 +2853,7 @@ class BoneHitRegion(QWidget):
             # Update cursor based on position and lock state
             edge = self._get_edge_at_pos(event.pos())
             if self._resize_locked or not edge:
-                self.setCursor(QCursor(Qt_OpenHandCursor if hasattr(Qt, 'OpenHandCursor') else Qt_ArrowCursor))
+                self.setCursor(QCursor(Qt_ArrowCursor))
             elif edge in ['left', 'right']:
                 self.setCursor(QCursor(Qt_SizeHorCursor))
             elif edge in ['top', 'bottom']:
@@ -2863,7 +2863,7 @@ class BoneHitRegion(QWidget):
             elif edge in ['top-right', 'bottom-left']:
                 self.setCursor(QCursor(Qt_SizeBDiagCursor))
             else:
-                self.setCursor(QCursor(Qt_OpenHandCursor if hasattr(Qt, 'OpenHandCursor') else Qt_ArrowCursor))
+                self.setCursor(QCursor(Qt_ArrowCursor))
     
     def mouseReleaseEvent(self, event):
         if event.button() == Qt_LeftButton:
@@ -2920,6 +2920,8 @@ class BoneHitManager:
         'arm_r': (0.8, 0.38),      # Right upper arm
         'elbow_l': (0.15, 0.50),   # Left elbow
         'elbow_r': (0.85, 0.50),   # Right elbow
+        'hand_l': (0.08, 0.60),    # Left hand
+        'hand_r': (0.92, 0.60),    # Right hand
         'leg_l': (0.4, 0.68),      # Left upper leg
         'leg_r': (0.6, 0.68),      # Right upper leg
         'knee_l': (0.38, 0.82),    # Left knee
