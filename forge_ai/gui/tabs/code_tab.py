@@ -336,6 +336,7 @@ class CodeTab(QWidget):
             'Local (Forge Model)',
             'OpenAI (GPT-4) - Cloud'
         ])
+        self.provider_combo.setToolTip("Local: Uses your ForgeAI model (free, offline)\nCloud: Uses OpenAI API (requires API key, better quality)")
         settings_layout.addWidget(self.provider_combo)
         
         settings_layout.addWidget(QLabel("Language:"))
@@ -344,6 +345,7 @@ class CodeTab(QWidget):
             'python', 'javascript', 'java', 'cpp', 'go', 'rust',
             'html', 'css', 'sql', 'bash', 'typescript'
         ])
+        self.language_combo.setToolTip("Select the programming language for the generated code")
         settings_layout.addWidget(self.language_combo)
         
         settings_layout.addStretch()
@@ -358,6 +360,7 @@ class CodeTab(QWidget):
         self.prompt_input.setPlaceholderText(
             "Describe what you want the code to do..."
         )
+        self.prompt_input.setToolTip("Describe what you want the code to do.\nBe specific about inputs, outputs, and functionality.\nExample: 'A function that sorts a list of numbers in ascending order'")
         prompt_layout.addWidget(self.prompt_input)
         
         prompt_group.setLayout(prompt_layout)
@@ -367,6 +370,7 @@ class CodeTab(QWidget):
         auto_layout = QHBoxLayout()
         self.auto_open_file_cb = QCheckBox("Auto-open saved file in explorer")
         self.auto_open_file_cb.setChecked(True)
+        self.auto_open_file_cb.setToolTip("Automatically open the saved file location after saving")
         auto_layout.addWidget(self.auto_open_file_cb)
         auto_layout.addStretch()
         layout.addLayout(auto_layout)
@@ -377,18 +381,22 @@ class CodeTab(QWidget):
         self.generate_btn = QPushButton("Generate Code")
         self.generate_btn.setStyleSheet("background-color: #3498db; font-weight: bold; padding: 10px;")
         self.generate_btn.clicked.connect(self._generate_code)
+        self.generate_btn.setToolTip("Generate code based on your description (Ctrl+Enter)")
         btn_layout.addWidget(self.generate_btn)
         
         self.copy_btn = QPushButton("Copy to Clipboard")
         self.copy_btn.clicked.connect(self._copy_code)
+        self.copy_btn.setToolTip("Copy the generated code to your clipboard")
         btn_layout.addWidget(self.copy_btn)
         
         self.save_btn = QPushButton("Save to File")
         self.save_btn.clicked.connect(self._save_code)
+        self.save_btn.setToolTip("Save the generated code to a file")
         btn_layout.addWidget(self.save_btn)
         
         self.open_folder_btn = QPushButton("Output Folder")
         self.open_folder_btn.clicked.connect(lambda: open_folder(OUTPUT_DIR))
+        self.open_folder_btn.setToolTip("Open the folder where generated code files are saved")
         btn_layout.addWidget(self.open_folder_btn)
         
         btn_layout.addStretch()

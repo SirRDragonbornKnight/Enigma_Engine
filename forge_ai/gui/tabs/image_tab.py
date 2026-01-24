@@ -758,11 +758,13 @@ class ImageTab(QWidget):
         self.prompt_input = QTextEdit()
         self.prompt_input.setMaximumHeight(60)
         self.prompt_input.setPlaceholderText("Describe the image you want to generate...")
+        self.prompt_input.setToolTip("Describe what you want in the image.\nBe specific about subjects, style, colors, lighting.\nExample: 'A majestic mountain at sunset, photorealistic, golden light'")
         prompt_layout.addWidget(self.prompt_input)
         
         self.neg_prompt_input = QTextEdit()
         self.neg_prompt_input.setMaximumHeight(40)
         self.neg_prompt_input.setPlaceholderText("Negative prompt (what to avoid)...")
+        self.neg_prompt_input.setToolTip("Things to avoid in the image.\nExample: 'blurry, low quality, watermark, text'")
         prompt_layout.addWidget(self.neg_prompt_input)
         
         # Reference image input
@@ -810,6 +812,7 @@ class ImageTab(QWidget):
         self.width_spin.setRange(256, 2048)
         self.width_spin.setValue(512)
         self.width_spin.setSingleStep(64)
+        self.width_spin.setToolTip("Image width in pixels (512 is standard, higher = more detail but slower)")
         options_layout.addWidget(self.width_spin)
         
         options_layout.addWidget(QLabel("Height:"))
@@ -817,12 +820,14 @@ class ImageTab(QWidget):
         self.height_spin.setRange(256, 2048)
         self.height_spin.setValue(512)
         self.height_spin.setSingleStep(64)
+        self.height_spin.setToolTip("Image height in pixels (512 is standard, higher = more detail but slower)")
         options_layout.addWidget(self.height_spin)
         
         options_layout.addWidget(QLabel("Steps:"))
         self.steps_spin = QSpinBox()
         self.steps_spin.setRange(1, 150)
         self.steps_spin.setValue(30)
+        self.steps_spin.setToolTip("Number of inference steps (more = better quality but slower, 20-50 is typical)")
         options_layout.addWidget(self.steps_spin)
         
         options_layout.addWidget(QLabel("Guidance:"))
@@ -830,6 +835,7 @@ class ImageTab(QWidget):
         self.guidance_spin.setRange(1.0, 20.0)
         self.guidance_spin.setValue(7.5)
         self.guidance_spin.setSingleStep(0.5)
+        self.guidance_spin.setToolTip("How closely to follow your prompt (7-12 is typical, higher = more literal)")
         options_layout.addWidget(self.guidance_spin)
         
         options_layout.addStretch()
@@ -858,6 +864,7 @@ class ImageTab(QWidget):
         self.generate_btn = QPushButton("Generate Image")
         self.generate_btn.setStyleSheet("background-color: #e74c3c; font-weight: bold; padding: 10px;")
         self.generate_btn.clicked.connect(self._generate_image)
+        self.generate_btn.setToolTip("Start generating an image from your prompt")
         btn_layout.addWidget(self.generate_btn)
         
         self.stop_btn = QPushButton("Stop")
@@ -870,10 +877,12 @@ class ImageTab(QWidget):
         self.save_btn = QPushButton("Save As...")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self._save_image)
+        self.save_btn.setToolTip("Save the generated image to a custom location")
         btn_layout.addWidget(self.save_btn)
         
         self.open_folder_btn = QPushButton("Open Output Folder")
         self.open_folder_btn.clicked.connect(self._open_output_folder)
+        self.open_folder_btn.setToolTip("Open the folder where generated images are saved")
         btn_layout.addWidget(self.open_folder_btn)
         
         layout.addLayout(btn_layout)

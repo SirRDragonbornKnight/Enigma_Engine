@@ -262,6 +262,7 @@ def create_training_tab(parent):
     
     parent.btn_train = QPushButton("Start Training")
     parent.btn_train.clicked.connect(parent._on_start_training)
+    parent.btn_train.setToolTip("Start training the model on your data.\\nTraining will run for the specified number of epochs.\\nYou can stop training at any time.")
     parent.btn_train.setStyleSheet("""
         QPushButton {
             padding: 12px 24px;
@@ -277,7 +278,7 @@ def create_training_tab(parent):
     btn_layout.addWidget(parent.btn_train)
     
     parent.btn_stop_train = QPushButton("Stop")
-    parent.btn_stop_train.setToolTip("Stop training after current epoch")
+    parent.btn_stop_train.setToolTip("Stop training after the current epoch completes.\\nPartial training progress will be saved.")
     parent.btn_stop_train.clicked.connect(parent._on_stop_training)
     parent.btn_stop_train.setEnabled(False)
     parent.btn_stop_train.setStyleSheet("""

@@ -72,6 +72,7 @@ class ModuleListItem(QFrame):
         # Toggle checkbox
         self.toggle = QCheckBox()
         self.toggle.setFixedWidth(18)
+        self.toggle.setToolTip("Enable or disable this module")
         layout.addWidget(self.toggle)
         
         # Name and description
@@ -176,6 +177,7 @@ class ModulesTab(QWidget):
         self.search_input.setPlaceholderText("Search...")
         self.search_input.setFixedWidth(200)
         self.search_input.textChanged.connect(self._filter_modules)
+        self.search_input.setToolTip("Search modules by name or description")
         self.search_input.setStyleSheet("""
             QLineEdit {
                 padding: 6px 10px;
@@ -187,6 +189,7 @@ class ModulesTab(QWidget):
         refresh_btn = QPushButton("Refresh")
         refresh_btn.setMinimumWidth(80)
         refresh_btn.clicked.connect(self._refresh_status)
+        refresh_btn.setToolTip("Refresh module status and resource usage")
         header_layout.addWidget(refresh_btn)
         
         layout.addLayout(header_layout)

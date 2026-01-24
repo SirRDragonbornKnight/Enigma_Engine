@@ -376,10 +376,12 @@ class VideoTab(QWidget):
         settings_layout.addWidget(QLabel("Provider:"))
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(['Local (AnimateDiff)', 'Replicate (Cloud)'])
+        self.provider_combo.setToolTip("Local: Uses AnimateDiff (requires GPU)\nCloud: Uses Replicate API (requires API key)")
         settings_layout.addWidget(self.provider_combo)
         
         self.load_btn = QPushButton("Load")
         self.load_btn.clicked.connect(self._load_provider)
+        self.load_btn.setToolTip("Load the selected video generation provider")
         settings_layout.addWidget(self.load_btn)
         
         settings_layout.addWidget(QLabel("Duration:"))
@@ -405,6 +407,7 @@ class VideoTab(QWidget):
         prompt_layout.addWidget(QLabel("Prompt:"))
         self.prompt_input = QLineEdit()
         self.prompt_input.setPlaceholderText("Describe the video you want to generate...")
+        self.prompt_input.setToolTip("Describe the video scene, motion, and style.\nExample: 'A cat walking through a forest, cinematic'")
         prompt_layout.addWidget(self.prompt_input)
         layout.addLayout(prompt_layout)
         
@@ -414,14 +417,17 @@ class VideoTab(QWidget):
         self.ref_input_path = QLineEdit()
         self.ref_input_path.setPlaceholderText("Optional reference video/image")
         self.ref_input_path.setReadOnly(True)
+        self.ref_input_path.setToolTip("Optional: Select a reference video or image as a starting point")
         ref_layout.addWidget(self.ref_input_path)
         
         browse_ref_btn = QPushButton("Browse")
         browse_ref_btn.clicked.connect(self._browse_reference)
+        browse_ref_btn.setToolTip("Browse for a reference video or image")
         ref_layout.addWidget(browse_ref_btn)
         
         clear_ref_btn = QPushButton("Clear")
         clear_ref_btn.clicked.connect(self._clear_reference)
+        clear_ref_btn.setToolTip("Clear the reference file")
         ref_layout.addWidget(clear_ref_btn)
         layout.addLayout(ref_layout)
         
@@ -429,9 +435,11 @@ class VideoTab(QWidget):
         auto_layout = QHBoxLayout()
         self.auto_open_file_cb = QCheckBox("Auto-open file in explorer")
         self.auto_open_file_cb.setChecked(True)
+        self.auto_open_file_cb.setToolTip("Automatically open the saved file location")
         auto_layout.addWidget(self.auto_open_file_cb)
         self.auto_open_viewer_cb = QCheckBox("Auto-open in default app")
         self.auto_open_viewer_cb.setChecked(False)
+        self.auto_open_viewer_cb.setToolTip("Automatically open the video in your default media player")
         auto_layout.addWidget(self.auto_open_viewer_cb)
         auto_layout.addStretch()
         layout.addLayout(auto_layout)
@@ -442,6 +450,7 @@ class VideoTab(QWidget):
         self.generate_btn = QPushButton("Generate Video")
         self.generate_btn.setStyleSheet("background-color: #9b59b6; font-weight: bold; padding: 8px;")
         self.generate_btn.clicked.connect(self._generate_video)
+        self.generate_btn.setToolTip("Start generating a video from your prompt")
         btn_layout.addWidget(self.generate_btn)
         
         self.stop_btn = QPushButton("Stop")
@@ -454,15 +463,18 @@ class VideoTab(QWidget):
         self.open_btn = QPushButton("Open")
         self.open_btn.setEnabled(False)
         self.open_btn.clicked.connect(self._open_video)
+        self.open_btn.setToolTip("Open the generated video in your default player")
         btn_layout.addWidget(self.open_btn)
         
         self.save_btn = QPushButton("Save As")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self._save_video)
+        self.save_btn.setToolTip("Save the video to a custom location")
         btn_layout.addWidget(self.save_btn)
         
         self.open_folder_btn = QPushButton("Output Folder")
         self.open_folder_btn.clicked.connect(self._open_output_folder)
+        self.open_folder_btn.setToolTip("Open the folder where videos are saved")
         btn_layout.addWidget(self.open_folder_btn)
         
         btn_layout.addStretch()

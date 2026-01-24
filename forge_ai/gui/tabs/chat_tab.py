@@ -146,6 +146,7 @@ def create_chat_tab(parent):
     parent.chat_input = QLineEdit()
     parent.chat_input.setPlaceholderText("Chat here...")
     parent.chat_input.returnPressed.connect(parent._on_send)
+    parent.chat_input.setToolTip("Type your message and press Enter or click Send")
     parent.chat_input.setStyleSheet("""
         QLineEdit {
             background-color: rgba(50, 50, 50, 0.9);
@@ -165,6 +166,7 @@ def create_chat_tab(parent):
     parent.send_btn = QPushButton("Send")
     parent.send_btn.setFixedSize(70, 40)
     parent.send_btn.clicked.connect(parent._on_send)
+    parent.send_btn.setToolTip("Send your message (Enter)")
     parent.send_btn.setStyleSheet("""
         QPushButton {
             background-color: #3498db;
