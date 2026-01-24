@@ -2721,6 +2721,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.model_router_tab import ModelRouterTab
         from .tabs.tool_manager_tab import ToolManagerTab
         from .tabs.voice_clone_tab import VoiceCloneTab
+        from .tabs.workspace_tab import create_workspace_tab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -2790,7 +2791,7 @@ class EnhancedMainWindow(QMainWindow):
             # Core
             ("section", "CORE"),
             ("", "Chat", "chat"),
-            ("", "Train", "train"),
+            ("", "Workspace", "workspace"),
             ("", "History", "history"),
             # Model
             ("section", "MODEL"),
@@ -2820,7 +2821,6 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Terminal", "terminal"),
             ("", "Files", "files"),
             ("", "Logs", "logs"),
-            ("", "Notes", "notes"),
             ("", "Network", "network"),
             ("", "Analytics", "analytics"),
             ("", "Scheduler", "scheduler"),
@@ -2857,8 +2857,8 @@ class EnhancedMainWindow(QMainWindow):
         
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
-            'chat', 'train', 'history', 'scale', 'modules', 'tools', 'router',
-            'game', 'robot', 'terminal', 'files', 'logs', 'notes', 'network',
+            'chat', 'workspace', 'history', 'scale', 'modules', 'tools', 'router',
+            'game', 'robot', 'terminal', 'files', 'logs', 'network',
             'analytics', 'scheduler', 'examples', 'settings', 'gif', 'voice'
         ]
         
@@ -2906,7 +2906,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # Add all tabs to the stack (in order matching nav_items)
         self.content_stack.addWidget(wrap_in_scroll(create_chat_tab(self)))  # Chat
-        self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Train
+        self.content_stack.addWidget(wrap_in_scroll(create_workspace_tab(self)))  # Workspace
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
         self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
@@ -2929,7 +2929,6 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
-        self.content_stack.addWidget(wrap_in_scroll(create_notes_tab(self)))  # Notes
         self.content_stack.addWidget(wrap_in_scroll(create_network_tab(self)))  # Network
         self.content_stack.addWidget(wrap_in_scroll(create_analytics_tab(self)))  # Analytics
         self.content_stack.addWidget(wrap_in_scroll(create_scheduler_tab(self)))  # Scheduler
@@ -5549,10 +5548,14 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         if not self._require_forge_model("Training"):
             return
         
-        # DON'T auto-save editor - it might overwrite good data with truncated content
-        # User should explicitly click Save if they want to save editor changes
+        # Get training data path - check workspace first, then old training tab
+        training_path = None
+        if hasattr(self, '_workspace_training_file') and self._workspace_training_file:
+            training_path = self._workspace_training_file
+        elif hasattr(self, 'training_data_path') and self.training_data_path:
+            training_path = self.training_data_path
         
-        if not hasattr(self, 'training_data_path') or not self.training_data_path:
+        if not training_path:
             QMessageBox.warning(self, "No Data", "Select a training file first.")
             return
         
@@ -5563,11 +5566,38 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         self._is_training = True
         self._stop_training = False
         
-        # Update buttons and progress
-        self.btn_train.setEnabled(False)
-        self.btn_train.setText("Training...")
-        self.btn_stop_train.setEnabled(True)
-        self.train_progress.setValue(0)
+        # Get training parameters - check workspace first, then old training tab
+        epochs = self.workspace_epochs_spin.value() if hasattr(self, 'workspace_epochs_spin') else self.epochs_spin.value()
+        batch_size = self.workspace_batch_spin.value() if hasattr(self, 'workspace_batch_spin') else self.batch_spin.value()
+        lr_text = self.workspace_lr_input.text() if hasattr(self, 'workspace_lr_input') else self.lr_input.text()
+        
+        # Update buttons and progress for both UIs
+        def update_ui(training=True, progress=0):
+            # Workspace UI
+            if hasattr(self, 'workspace_btn_train'):
+                self.workspace_btn_train.setEnabled(not training)
+                self.workspace_btn_train.setText("Training..." if training else "Start Training")
+            if hasattr(self, 'workspace_btn_stop'):
+                self.workspace_btn_stop.setEnabled(training)
+            if hasattr(self, 'workspace_train_progress'):
+                self.workspace_train_progress.setValue(progress)
+            if hasattr(self, 'workspace_progress_label'):
+                if training and progress < 100:
+                    self.workspace_progress_label.setText(f"Training... {progress}%")
+                elif progress == 100:
+                    self.workspace_progress_label.setText("Training complete!")
+                else:
+                    self.workspace_progress_label.setText("Ready to train")
+            # Old training UI (for compatibility)
+            if hasattr(self, 'btn_train'):
+                self.btn_train.setEnabled(not training)
+                self.btn_train.setText("Training..." if training else "Start Training")
+            if hasattr(self, 'btn_stop_train'):
+                self.btn_stop_train.setEnabled(training)
+            if hasattr(self, 'train_progress'):
+                self.train_progress.setValue(progress)
+        
+        update_ui(training=True, progress=0)
         QApplication.processEvents()
         
         try:
@@ -5579,12 +5609,11 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                 model=model,
                 model_name=self.current_model_name,
                 registry=self.registry,
-                data_path=self.training_data_path,
-                batch_size=self.batch_spin.value(),
-                learning_rate=float(self.lr_input.text()),
+                data_path=training_path,
+                batch_size=batch_size,
+                learning_rate=float(lr_text),
             )
             
-            epochs = self.epochs_spin.value()
             stopped_early = False
             for epoch in range(epochs):
                 # Check if user requested stop
@@ -5594,29 +5623,22 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                 
                 trainer.train(epochs=1)
                 progress = int((epoch + 1) / epochs * 100)
-                self.train_progress.setValue(progress)
+                update_ui(training=True, progress=progress)
                 QApplication.processEvents()
             
             # Reload model
             self._load_current_model()
             
-            self.train_progress.setValue(100)
-            self.btn_train.setText("Train")
-            self.btn_train.setEnabled(True)
-            self.btn_stop_train.setEnabled(False)
+            update_ui(training=False, progress=100)
             self._is_training = False
             self._stop_training = False
             
             if stopped_early:
-                self.btn_stop_train.setText("Stop")
                 QMessageBox.information(self, "Stopped", f"Training stopped after epoch {epoch + 1}. Progress saved!")
             else:
                 QMessageBox.information(self, "Done", "Training finished!")
         except Exception as e:
-            self.btn_train.setText("Train")
-            self.btn_train.setEnabled(True)
-            self.btn_stop_train.setEnabled(False)
-            self.btn_stop_train.setText("Stop")
+            update_ui(training=False, progress=0)
             self._is_training = False
             self._stop_training = False
             QMessageBox.warning(self, "Training Error", str(e))
@@ -5624,9 +5646,18 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
     def _on_stop_training(self):
         """Stop training after current epoch."""
         self._stop_training = True
-        self.btn_stop_train.setEnabled(False)
-        self.btn_stop_train.setText("Stopping...")
-        self.btn_train.setText("Stopping...")
+        # Update both UIs
+        if hasattr(self, 'btn_stop_train'):
+            self.btn_stop_train.setEnabled(False)
+            self.btn_stop_train.setText("Stopping...")
+        if hasattr(self, 'btn_train'):
+            self.btn_train.setText("Stopping...")
+        if hasattr(self, 'workspace_btn_stop'):
+            self.workspace_btn_stop.setEnabled(False)
+        if hasattr(self, 'workspace_btn_train'):
+            self.workspace_btn_train.setText("Stopping...")
+        if hasattr(self, 'workspace_progress_label'):
+            self.workspace_progress_label.setText("Stopping after current epoch...")
     
     # === AI Control Methods ===
     # These methods allow the AI to control the GUI programmatically

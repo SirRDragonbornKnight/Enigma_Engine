@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .chat_tab import create_chat_tab
     from .training_tab import create_training_tab
+    from .workspace_tab import create_workspace_tab
     from .avatar_tab import create_avatar_tab
     from .avatar.avatar_display import create_avatar_subtab
     from .game.game_connection import create_game_subtab
@@ -64,6 +65,7 @@ def __getattr__(name: str):
         # Chat and core tabs
         'create_chat_tab': ('.chat_tab', 'create_chat_tab'),
         'create_training_tab': ('.training_tab', 'create_training_tab'),
+        'create_workspace_tab': ('.workspace_tab', 'create_workspace_tab'),
         'create_avatar_tab': ('.avatar_tab', 'create_avatar_tab'),
         'create_avatar_subtab': ('.avatar.avatar_display', 'create_avatar_subtab'),
         'create_game_subtab': ('.game.game_connection', 'create_game_subtab'),
@@ -144,7 +146,8 @@ def __getattr__(name: str):
 
 __all__ = [
     'create_chat_tab',
-    'create_training_tab', 
+    'create_training_tab',
+    'create_workspace_tab',
     'create_avatar_tab',
     'create_avatar_subtab',
     'create_game_subtab',
