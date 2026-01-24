@@ -8,7 +8,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSpinBox, QLineEdit, QProgressBar, QFileDialog,
     QPlainTextEdit, QMessageBox, QInputDialog, QGroupBox,
-    QFrame, QDialog, QTextEdit, QDialogButtonBox, QCheckBox
+    QFrame, QDialog, QTextEdit, QDialogButtonBox, QCheckBox,
+    QComboBox, QScrollArea
 )
 from PyQt5.QtCore import Qt
 
@@ -97,6 +98,72 @@ def create_training_tab(parent):
     file_layout.addWidget(parent.training_file_label)
     
     layout.addWidget(file_group)
+    
+    # Prompt Templates section (collapsible)
+    prompt_group = QGroupBox("Prompt Templates")
+    prompt_group.setCheckable(True)
+    prompt_group.setChecked(False)  # Collapsed by default
+    prompt_layout = QVBoxLayout(prompt_group)
+    
+    # Template selector row
+    template_row = QHBoxLayout()
+    template_row.addWidget(QLabel("Template:"))
+    parent.training_prompt_combo = QComboBox()
+    parent.training_prompt_combo.setMinimumWidth(200)
+    _populate_prompt_templates(parent)
+    parent.training_prompt_combo.currentIndexChanged.connect(
+        lambda: _preview_prompt_template(parent)
+    )
+    template_row.addWidget(parent.training_prompt_combo)
+    
+    btn_refresh = QPushButton("Refresh")
+    btn_refresh.setToolTip("Reload templates from Settings")
+    btn_refresh.clicked.connect(lambda: _populate_prompt_templates(parent))
+    template_row.addWidget(btn_refresh)
+    
+    template_row.addStretch()
+    prompt_layout.addLayout(template_row)
+    
+    # Preview area
+    parent.prompt_preview = QTextEdit()
+    parent.prompt_preview.setReadOnly(True)
+    parent.prompt_preview.setMaximumHeight(80)
+    parent.prompt_preview.setPlaceholderText("Select a template to preview...")
+    parent.prompt_preview.setStyleSheet("""
+        QTextEdit {
+            background-color: #252525;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #aaa;
+        }
+    """)
+    prompt_layout.addWidget(parent.prompt_preview)
+    
+    # Insert buttons
+    insert_row = QHBoxLayout()
+    
+    btn_insert_start = QPushButton("Insert at Start")
+    btn_insert_start.setToolTip("Add this prompt at the beginning of training data")
+    btn_insert_start.clicked.connect(lambda: _insert_prompt_template(parent, "start"))
+    insert_row.addWidget(btn_insert_start)
+    
+    btn_insert_cursor = QPushButton("Insert at Cursor")
+    btn_insert_cursor.setToolTip("Insert prompt at current cursor position")
+    btn_insert_cursor.clicked.connect(lambda: _insert_prompt_template(parent, "cursor"))
+    insert_row.addWidget(btn_insert_cursor)
+    
+    btn_wrap = QPushButton("Wrap Selection")
+    btn_wrap.setToolTip("Wrap selected text with Q:/A: format")
+    btn_wrap.clicked.connect(lambda: _wrap_selection_qa(parent))
+    insert_row.addWidget(btn_wrap)
+    
+    insert_row.addStretch()
+    prompt_layout.addLayout(insert_row)
+    
+    layout.addWidget(prompt_group)
     
     # File content editor
     parent.training_editor = QPlainTextEdit()
@@ -560,3 +627,176 @@ def _extract_training_content(html: str, as_qa: bool = True, include_headers: bo
         result = re.sub(r' {2,}', ' ', result)
     
     return result.strip()
+
+
+def _populate_prompt_templates(parent):
+    """Populate the prompt templates dropdown with built-in and user presets."""
+    import json
+    from pathlib import Path
+    
+    parent.training_prompt_combo.clear()
+    
+    # Built-in templates
+    parent.training_prompt_combo.addItem("-- Select a template --", None)
+    parent.training_prompt_combo.addItem("Simple Assistant", "simple")
+    parent.training_prompt_combo.addItem("Full (with tools)", "full")
+    parent.training_prompt_combo.addItem("ForgeAI Complete", "forgeai_full")
+    parent.training_prompt_combo.addItem("Q&A Format Example", "qa_example")
+    parent.training_prompt_combo.addItem("Conversation Format", "conversation")
+    parent.training_prompt_combo.addItem("Custom (from Settings)", "custom")
+    
+    # Load user presets from user_prompts.json
+    user_presets_path = Path(CONFIG.get("data_dir", "data")) / "user_prompts.json"
+    if user_presets_path.exists():
+        try:
+            with open(user_presets_path, 'r', encoding='utf-8') as f:
+                user_presets = json.load(f)
+            for name in user_presets.keys():
+                parent.training_prompt_combo.addItem(f"[User] {name}", f"user_{name}")
+        except Exception:
+            pass
+
+
+def _get_template_content(template_id):
+    """Get the content of a template by ID."""
+    import json
+    from pathlib import Path
+    
+    templates = {
+        "simple": "You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful.",
+        
+        "full": """You are ForgeAI, an intelligent AI assistant with access to various tools and capabilities.
+
+## Tool Usage
+When you need to perform an action, use this format:
+<tool_call>{"tool": "tool_name", "params": {"param1": "value1"}}</tool_call>
+
+## Available Tools
+- generate_image: Create an image from text
+- generate_code: Generate code for a task
+- read_file: Read contents of a file
+- web_search: Search the web
+
+Be helpful, accurate, and respect user privacy.""",
+
+        "forgeai_full": """You are the AI assistant for ForgeAI, a modular AI framework.
+
+## Avatar System
+- A 3D avatar appears on screen that you can control
+- Control bones: head, neck, chest, shoulders, arms, legs
+
+## Generation Tools
+Use <tool_call>{"tool": "name", "params": {}}</tool_call> format:
+- generate_image, generate_video, generate_code, generate_audio
+
+## Interaction Style
+- Be friendly and conversational
+- Explain what you're doing before using tools""",
+
+        "qa_example": """Q: What is your name?
+A: I am ForgeAI, your helpful AI assistant.
+
+Q: What can you help me with?
+A: I can help with coding, creative tasks, answering questions, and more.
+
+Q: How do I train you?
+A: Add more Q&A pairs like this to teach me new information!""",
+
+        "conversation": """User: Hello there!
+Assistant: Hi! How can I help you today?
+
+User: I have a question about coding.
+Assistant: Of course! I'd be happy to help with coding. What would you like to know?""",
+    }
+    
+    if template_id in templates:
+        return templates[template_id]
+    
+    # Check for user preset
+    if template_id and template_id.startswith("user_"):
+        preset_name = template_id[5:]
+        user_presets_path = Path(CONFIG.get("data_dir", "data")) / "user_prompts.json"
+        if user_presets_path.exists():
+            try:
+                with open(user_presets_path, 'r', encoding='utf-8') as f:
+                    user_presets = json.load(f)
+                if preset_name in user_presets:
+                    return user_presets[preset_name]
+            except Exception:
+                pass
+    
+    # Check for custom from gui_settings
+    if template_id == "custom":
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        if settings_path.exists():
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                return settings.get("system_prompt", "")
+            except Exception:
+                pass
+    
+    return ""
+
+
+def _preview_prompt_template(parent):
+    """Preview the selected template."""
+    template_id = parent.training_prompt_combo.currentData()
+    if not template_id:
+        parent.prompt_preview.clear()
+        return
+    
+    content = _get_template_content(template_id)
+    # Show first 300 chars with ellipsis
+    preview = content[:300] + "..." if len(content) > 300 else content
+    parent.prompt_preview.setText(preview)
+
+
+def _insert_prompt_template(parent, position="cursor"):
+    """Insert the selected template into the training editor."""
+    template_id = parent.training_prompt_combo.currentData()
+    if not template_id:
+        QMessageBox.information(parent, "No Template", "Please select a template first.")
+        return
+    
+    content = _get_template_content(template_id)
+    if not content:
+        return
+    
+    # Add header comment
+    template_name = parent.training_prompt_combo.currentText()
+    insert_text = f"# System Prompt: {template_name}\n{content}\n\n"
+    
+    if position == "start":
+        current = parent.training_editor.toPlainText()
+        parent.training_editor.setPlainText(insert_text + current)
+    else:  # cursor
+        cursor = parent.training_editor.textCursor()
+        cursor.insertText(insert_text)
+
+
+def _wrap_selection_qa(parent):
+    """Wrap the selected text in Q&A format."""
+    cursor = parent.training_editor.textCursor()
+    selected = cursor.selectedText()
+    
+    if not selected:
+        QMessageBox.information(parent, "No Selection", "Select some text to wrap in Q&A format.")
+        return
+    
+    # Replace Unicode paragraph separators with newlines
+    selected = selected.replace('\u2029', '\n')
+    
+    # Try to split into Q and A
+    lines = selected.strip().split('\n')
+    
+    if len(lines) >= 2:
+        # Assume first line is question, rest is answer
+        question = lines[0].strip()
+        answer = '\n'.join(lines[1:]).strip()
+        wrapped = f"Q: {question}\nA: {answer}\n"
+    else:
+        # Single line - make it a question with placeholder answer
+        wrapped = f"Q: {selected.strip()}\nA: [Your answer here]\n"
+    
+    cursor.insertText(wrapped)
