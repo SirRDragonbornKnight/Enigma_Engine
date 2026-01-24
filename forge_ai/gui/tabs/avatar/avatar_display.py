@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
     QSlider, QColorDialog, QGridLayout, QScrollArea, QTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent, QPen
 
 # Optional SVG support - not all PyQt5 installs have it
 try:
@@ -39,7 +39,9 @@ Qt_FramelessWindowHint: Any = getattr(Qt, 'FramelessWindowHint', 0x00000800)
 Qt_WindowStaysOnTopHint: Any = getattr(Qt, 'WindowStaysOnTopHint', 0x00040000)
 Qt_Tool: Any = getattr(Qt, 'Tool', 0x00000008)
 Qt_WA_TranslucentBackground: Any = getattr(Qt, 'WA_TranslucentBackground', 120)
+Qt_WA_TransparentForMouseEvents: Any = getattr(Qt, 'WA_TransparentForMouseEvents', 51)
 Qt_LeftButton: Any = getattr(Qt, 'LeftButton', 0x00000001)
+Qt_RightButton: Any = getattr(Qt, 'RightButton', 0x00000002)
 Qt_KeepAspectRatio: Any = getattr(Qt, 'KeepAspectRatio', 1)
 Qt_SmoothTransformation: Any = getattr(Qt, 'SmoothTransformation', 1)
 Qt_AlignCenter: Any = getattr(Qt, 'AlignCenter', 0x0084)
@@ -49,6 +51,9 @@ Qt_NoBrush: Any = getattr(Qt, 'NoBrush', 0)
 Qt_OpenHandCursor: Any = getattr(Qt, 'OpenHandCursor', 17)
 Qt_ClosedHandCursor: Any = getattr(Qt, 'ClosedHandCursor', 18)
 Qt_ArrowCursor: Any = getattr(Qt, 'ArrowCursor', 0)
+Qt_SizeHorCursor: Any = getattr(Qt, 'SizeHorCursor', 6)
+Qt_SizeVerCursor: Any = getattr(Qt, 'SizeVerCursor', 7)
+Qt_ShiftModifier: Any = getattr(Qt, 'ShiftModifier', 0x02000000)
 import json
 import os
 import time
@@ -191,6 +196,9 @@ class OpenGL3DWidget(QOpenGLWidget):
         self.model_pitch = 0.0  # Rotation around X axis (radians)
         self.model_yaw = 0.0    # Rotation around Y axis (radians)
         self.model_roll = 0.0   # Rotation around Z axis (radians)
+        
+        # Flag to disable mouse interaction (used in overlay mode where parent handles mouse)
+        self.disable_mouse_interaction = False
         
         self.setMinimumSize(250, 250)
         self.setMouseTracking(True)
@@ -1130,6 +1138,10 @@ class OpenGL3DWidget(QOpenGLWidget):
     
     def mousePressEvent(self, event):
         """Start drag or pan. Left-click to rotate, Right-click to orbit (Sketchfab style), Shift+Left to pan."""
+        # If mouse interaction disabled (overlay mode), ignore
+        if getattr(self, 'disable_mouse_interaction', False):
+            event.ignore()
+            return
         self.last_pos = event.pos()
         # Right-click OR left-click rotates (Sketchfab lets you orbit with right-click)
         if event.button() == Qt_LeftButton:
@@ -1143,6 +1155,10 @@ class OpenGL3DWidget(QOpenGLWidget):
         
     def mouseMoveEvent(self, event):
         """Rotate or pan on drag. Works with both left and right mouse buttons."""
+        # If mouse interaction disabled (overlay mode), ignore
+        if getattr(self, 'disable_mouse_interaction', False):
+            event.ignore()
+            return
         if self.last_pos is not None:
             dx = event.x() - self.last_pos.x()
             dy = event.y() - self.last_pos.y()
@@ -1166,6 +1182,10 @@ class OpenGL3DWidget(QOpenGLWidget):
             
     def mouseReleaseEvent(self, event):
         """End drag."""
+        # If mouse interaction disabled (overlay mode), ignore
+        if getattr(self, 'disable_mouse_interaction', False):
+            event.ignore()
+            return
         self.last_pos = None
         self.is_panning = False
         self.setCursor(QCursor(Qt_ArrowCursor))  # Keep normal cursor
@@ -1173,6 +1193,10 @@ class OpenGL3DWidget(QOpenGLWidget):
         
     def wheelEvent(self, event):
         """Zoom with scroll wheel."""
+        # If mouse interaction disabled (overlay mode), ignore
+        if getattr(self, 'disable_mouse_interaction', False):
+            event.ignore()
+            return
         delta = event.angleDelta().y() / 120
         self.zoom = max(1.0, min(15.0, self.zoom - delta * 0.3))
         self.update()
@@ -1726,6 +1750,532 @@ class AvatarOverlayWindow(QWidget):
         a0.accept()  # Consume the event
 
 
+class DragBarWidget(QWidget):
+    """A draggable bar widget that sits on top of the avatar for moving/resizing.
+    
+    Has two modes:
+    - Visible: Shows a solid bar with grip lines
+    - Ghost: Nearly invisible (just a subtle outline) but still functional
+    """
+    
+    drag_started = pyqtSignal(object)  # Emits global position
+    drag_moved = pyqtSignal(object)   # Emits global position
+    drag_ended = pyqtSignal()
+    position_changed = pyqtSignal(int, int)  # Emits x, y when bar is repositioned within parent
+    context_menu_requested = pyqtSignal(object)  # Emits global position for context menu
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._drag_pos = None
+        self._resize_edge = None
+        self._resize_start_pos = None
+        self._resize_start_size = None
+        self._bar_drag_pos = None  # For dragging the bar itself within the window
+        self._ghost_mode = False  # When True, bar is nearly invisible
+        self._reposition_mode = False  # When True, dragging moves bar not avatar
+        self.setMouseTracking(True)
+        self.setCursor(QCursor(Qt_ArrowCursor))
+        self.setMinimumSize(20, 10)  # Allow smaller sizes
+        self.setContextMenuPolicy(Qt.CustomContextMenu if hasattr(Qt, 'CustomContextMenu') else 3)
+        
+    def set_ghost_mode(self, ghost: bool):
+        """Set ghost mode - when True, bar is nearly invisible but still functional."""
+        self._ghost_mode = ghost
+        self.update()
+        
+    def is_ghost_mode(self) -> bool:
+        return self._ghost_mode
+    
+    def set_reposition_mode(self, reposition: bool):
+        """Set reposition mode - when True, dragging moves bar instead of avatar."""
+        self._reposition_mode = reposition
+        self.update()
+    
+    def is_reposition_mode(self) -> bool:
+        return self._reposition_mode
+    
+    def contextMenuEvent(self, event):
+        """Forward right-click to parent for context menu."""
+        self.context_menu_requested.emit(event.globalPos())
+        event.accept()
+        
+    def paintEvent(self, event):
+        """Draw the drag bar."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        w, h = self.width(), self.height()
+        
+        if self._ghost_mode:
+            # Ghost mode: very subtle, just a faint outline
+            painter.setBrush(QColor(255, 255, 255, 15))  # Nearly invisible
+            painter.setPen(QColor(255, 255, 255, 40))
+            painter.drawRoundedRect(1, 1, w-2, h-2, 5, 5)
+            # Tiny grip hint in center
+            painter.setPen(QColor(255, 255, 255, 60))
+            center_x, center_y = w // 2, h // 2
+            painter.drawLine(center_x - 8, center_y, center_x + 8, center_y)
+        else:
+            # Visible mode: solid bar
+            painter.setBrush(QColor(30, 30, 46, 200))
+            painter.setPen(QColor(100, 100, 120, 180))
+            painter.drawRoundedRect(0, 0, w, h, 5, 5)
+            
+            # Resize handles on edges
+            handle_size = 6
+            painter.setBrush(QColor(137, 180, 250, 180))
+            painter.setPen(QColor(200, 200, 220, 200))
+            # Right edge handle
+            painter.drawRect(w - handle_size, h//2 - handle_size//2, handle_size, handle_size)
+            # Bottom edge handle
+            painter.drawRect(w//2 - handle_size//2, h - handle_size, handle_size, handle_size)
+            
+            # Grip lines in center
+            painter.setPen(QColor(200, 200, 220, 150))
+            center_x = w // 2
+            center_y = h // 2
+            for i in range(3):
+                y = center_y - 4 + i * 4
+                painter.drawLine(center_x - 15, y, center_x + 15, y)
+    
+    def _get_edge(self, pos):
+        """Check if mouse is on an edge for resizing."""
+        if self._ghost_mode:
+            return None  # No resize in ghost mode
+        margin = 8
+        w, h = self.width(), self.height()
+        if pos.x() >= w - margin:
+            return 'right'
+        elif pos.y() >= h - margin:
+            return 'bottom'
+        return None
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            edge = self._get_edge(event.pos())
+            if edge:
+                self._resize_edge = edge
+                self._resize_start_pos = event.pos()
+                self._resize_start_size = self.size()
+            elif event.modifiers() & Qt_ShiftModifier:
+                # Shift+drag repositions the bar within the window
+                self._bar_drag_pos = event.pos()
+            elif self._reposition_mode:
+                # Reposition mode: drag moves bar, not avatar
+                self._bar_drag_pos = event.pos()
+            else:
+                # Regular drag moves the whole window
+                self._drag_pos = event.globalPos() - self.parent().pos()
+                self.drag_started.emit(event.globalPos())
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if self._resize_edge:
+            delta = event.pos() - self._resize_start_pos
+            if self._resize_edge == 'right':
+                new_w = max(20, min(300, self._resize_start_size.width() + delta.x()))
+                self.setFixedWidth(new_w)
+            elif self._resize_edge == 'bottom':
+                new_h = max(10, min(100, self._resize_start_size.height() + delta.y()))
+                self.setFixedHeight(new_h)
+            event.accept()
+        elif self._bar_drag_pos is not None:
+            # Reposition bar within parent
+            delta = event.pos() - self._bar_drag_pos
+            new_x = self.x() + delta.x()
+            new_y = self.y() + delta.y()
+            # Clamp to parent bounds
+            parent = self.parent()
+            if parent:
+                new_x = max(0, min(parent.width() - self.width(), new_x))
+                new_y = max(0, min(parent.height() - self.height(), new_y))
+            self.move(new_x, new_y)
+            self.position_changed.emit(new_x, new_y)
+            event.accept()
+        elif self._drag_pos is not None:
+            self.drag_moved.emit(event.globalPos())
+            event.accept()
+        else:
+            # Update cursor based on position
+            edge = self._get_edge(event.pos())
+            if edge == 'right':
+                self.setCursor(QCursor(Qt_SizeHorCursor))
+            elif edge == 'bottom':
+                self.setCursor(QCursor(Qt_SizeVerCursor))
+            else:
+                self.setCursor(QCursor(Qt_ArrowCursor))
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            if self._drag_pos is not None:
+                self.drag_ended.emit()
+            self._drag_pos = None
+            self._bar_drag_pos = None
+            self._resize_edge = None
+            self._resize_start_pos = None
+            self._resize_start_size = None
+            self.setCursor(QCursor(Qt_ArrowCursor))
+            event.accept()
+
+
+class FloatingDragBar(QWidget):
+    """A separate top-level window that floats above the avatar for interaction.
+    
+    Behavior modes:
+    - VISIBLE mode: Shows bar, dragging moves the bar itself (repositions on avatar)
+    - GHOST mode: Nearly invisible bar, dragging moves the avatar window
+    - ANCHORED mode: Fully invisible, auto-centers on avatar, dragging moves avatar
+    
+    Right-click always shows context menu.
+    Edges can resize the bar (visible mode only).
+    """
+    
+    drag_started = pyqtSignal(object)
+    drag_moved = pyqtSignal(object)
+    drag_ended = pyqtSignal()
+    position_changed = pyqtSignal(int, int)
+    context_menu_requested = pyqtSignal(object)
+    
+    def __init__(self, avatar_window):
+        # Separate top-level window, not a child
+        super().__init__(None)
+        self._avatar = avatar_window
+        
+        # Frameless, always on top, tool window (no taskbar)
+        self.setWindowFlags(
+            Qt_FramelessWindowHint |
+            Qt_WindowStaysOnTopHint |
+            Qt_Tool
+        )
+        self.setAttribute(Qt_WA_TranslucentBackground, True)
+        
+        self._width = 100
+        self._height = 25
+        self.setFixedSize(self._width, self._height)
+        
+        # Relative position within avatar bounds
+        self._rel_x = 5
+        self._rel_y = 5
+        
+        self._drag_pos = None
+        self._ghost_mode = False
+        self._anchored_mode = False  # New: fully invisible, auto-centered
+        self._anchor_offset_x = 0.5  # 0.0=left, 0.5=center, 1.0=right
+        self._anchor_offset_y = 0.5  # 0.0=top, 0.5=center, 1.0=bottom
+        self._bar_drag_pos = None
+        self._resize_edge = None
+        self._resize_start_pos = None
+        self._resize_start_size = None
+        
+        self.setMouseTracking(True)
+        # Use arrow cursor, not hand - subtle change
+        self.setCursor(QCursor(Qt_ArrowCursor))
+    
+    def set_relative_position(self, x: int, y: int):
+        """Set position relative to avatar window."""
+        self._rel_x = x
+        self._rel_y = y
+        if not self._anchored_mode:
+            self._update_position()
+    
+    def _update_position(self):
+        """Update screen position based on avatar window position."""
+        if self._avatar:
+            avatar_pos = self._avatar.pos()
+            avatar_w = self._avatar.width()
+            avatar_h = self._avatar.height()
+            
+            if self._anchored_mode:
+                # Anchored mode: scale drag area with avatar size (60% of avatar)
+                self._width = max(100, int(avatar_w * 0.6))
+                self._height = max(100, int(avatar_h * 0.6))
+                self.setFixedSize(self._width, self._height)
+                
+                # Calculate position based on anchor offset (0.5 = center)
+                anchor_x = int(avatar_w * self._anchor_offset_x - self._width / 2)
+                anchor_y = int(avatar_h * self._anchor_offset_y - self._height / 2)
+                # Clamp to avatar bounds
+                anchor_x = max(0, min(avatar_w - self._width, anchor_x))
+                anchor_y = max(0, min(avatar_h - self._height, anchor_y))
+                self.move(avatar_pos.x() + anchor_x, avatar_pos.y() + anchor_y)
+            else:
+                self.move(avatar_pos.x() + self._rel_x, avatar_pos.y() + self._rel_y)
+    
+    def set_ghost_mode(self, ghost: bool):
+        self._ghost_mode = ghost
+        if ghost:
+            self._anchored_mode = False
+        self.update()
+    
+    def set_anchored_mode(self, anchored: bool, anchor_x: float = 0.5, anchor_y: float = 0.5):
+        """Enable anchored mode - fully invisible, auto-positioned drag area.
+        
+        Args:
+            anchored: Enable/disable anchored mode
+            anchor_x: Horizontal anchor (0.0=left, 0.5=center, 1.0=right)
+            anchor_y: Vertical anchor (0.0=top, 0.5=center, 1.0=bottom)
+        """
+        self._anchored_mode = anchored
+        self._anchor_offset_x = max(0.0, min(1.0, anchor_x))
+        self._anchor_offset_y = max(0.0, min(1.0, anchor_y))
+        if anchored:
+            self._ghost_mode = False
+        self._update_position()  # This will now set the size based on avatar
+        self.update()
+    
+    def is_anchored_mode(self) -> bool:
+        return self._anchored_mode
+    
+    def set_anchor_point(self, x: float, y: float):
+        """Set the anchor point (0.0-1.0 range for both axes)."""
+        self._anchor_offset_x = max(0.0, min(1.0, x))
+        self._anchor_offset_y = max(0.0, min(1.0, y))
+        self._update_position()
+    
+    def is_ghost_mode(self) -> bool:
+        return self._ghost_mode
+    
+    def isVisible(self):
+        return super().isVisible()
+    
+    def setVisible(self, visible: bool):
+        super().setVisible(visible)
+    
+    def geometry(self):
+        """Return geometry in avatar-relative coordinates for hit testing."""
+        from PyQt5.QtCore import QRect
+        return QRect(self._rel_x, self._rel_y, self._width, self._height)
+    
+    def contextMenuEvent(self, event):
+        self.context_menu_requested.emit(event.globalPos())
+        event.accept()
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        w, h = self.width(), self.height()
+        
+        if self._anchored_mode:
+            # ANCHORED MODE: Draw a nearly invisible but solid hit area
+            # Alpha=1 is enough to capture mouse events but appears invisible
+            painter.setBrush(QColor(128, 128, 128, 1))  # Almost invisible
+            painter.setPen(Qt_NoPen)
+            painter.drawRect(0, 0, w, h)
+        elif self._ghost_mode:
+            painter.setBrush(QColor(255, 255, 255, 15))
+            painter.setPen(QColor(255, 255, 255, 40))
+            painter.drawRoundedRect(1, 1, w-2, h-2, 5, 5)
+            painter.setPen(QColor(255, 255, 255, 60))
+            cx, cy = w // 2, h // 2
+            painter.drawLine(cx - 8, cy, cx + 8, cy)
+        else:
+            painter.setBrush(QColor(30, 30, 46, 220))
+            painter.setPen(QColor(100, 100, 120, 200))
+            painter.drawRoundedRect(0, 0, w, h, 5, 5)
+            
+            # Resize handles
+            hs = 6
+            painter.setBrush(QColor(137, 180, 250, 180))
+            painter.setPen(QColor(200, 200, 220, 200))
+            painter.drawRect(w - hs, h//2 - hs//2, hs, hs)
+            painter.drawRect(w//2 - hs//2, h - hs, hs, hs)
+            
+            # Grip lines
+            painter.setPen(QColor(200, 200, 220, 150))
+            cx, cy = w // 2, h // 2
+            for i in range(3):
+                y = cy - 4 + i * 4
+                painter.drawLine(cx - 15, y, cx + 15, y)
+    
+    def _get_edge(self, pos):
+        if self._ghost_mode or self._anchored_mode:
+            return None  # No resize edges in ghost or anchored mode
+        margin = 8
+        w, h = self.width(), self.height()
+        if pos.x() >= w - margin:
+            return 'right'
+        elif pos.y() >= h - margin:
+            return 'bottom'
+        return None
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            edge = self._get_edge(event.pos())
+            if edge and not self._anchored_mode:
+                # Resize from edges (not in anchored mode)
+                self._resize_edge = edge
+                self._resize_start_pos = event.pos()
+                self._resize_start_size = self.size()
+            elif self._ghost_mode or self._anchored_mode:
+                # GHOST/ANCHORED MODE: drag moves the avatar
+                self._drag_pos = event.globalPos() - self._avatar.pos()
+                self.drag_started.emit(event.globalPos())
+            else:
+                # VISIBLE MODE: drag moves the bar itself
+                self._bar_drag_pos = event.pos()
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if self._resize_edge and self._resize_start_pos:
+            delta = event.pos() - self._resize_start_pos
+            new_w = self._resize_start_size.width()
+            new_h = self._resize_start_size.height()
+            if self._resize_edge == 'right':
+                new_w = max(50, self._resize_start_size.width() + delta.x())
+            elif self._resize_edge == 'bottom':
+                new_h = max(15, self._resize_start_size.height() + delta.y())
+            self._width = new_w
+            self._height = new_h
+            self.setFixedSize(new_w, new_h)
+        elif self._bar_drag_pos is not None:
+            # Moving bar within avatar bounds
+            delta = event.pos() - self._bar_drag_pos
+            new_x = max(0, min(self._avatar.width() - self.width(), self._rel_x + delta.x()))
+            new_y = max(0, min(self._avatar.height() - self.height(), self._rel_y + delta.y()))
+            self._rel_x = new_x
+            self._rel_y = new_y
+            self._update_position()
+            self.position_changed.emit(new_x, new_y)
+        elif self._drag_pos is not None:
+            # Moving avatar window (ghost mode)
+            self.drag_moved.emit(event.globalPos())
+        else:
+            # Update cursor based on position
+            edge = self._get_edge(event.pos())
+            if edge == 'right':
+                self.setCursor(QCursor(Qt_SizeHorCursor))
+            elif edge == 'bottom':
+                self.setCursor(QCursor(Qt_SizeVerCursor))
+            else:
+                self.setCursor(QCursor(Qt_ArrowCursor))
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            if self._drag_pos is not None:
+                self.drag_ended.emit()
+            self._drag_pos = None
+            self._bar_drag_pos = None
+            self._resize_edge = None
+            self._resize_start_pos = None
+            self._resize_start_size = None
+            self.setCursor(QCursor(Qt_ArrowCursor))
+            event.accept()
+    
+    def wheelEvent(self, event):
+        """Forward scroll wheel to avatar for resizing."""
+        if self._avatar and hasattr(self._avatar, '_set_size'):
+            try:
+                delta = event.angleDelta().y()
+            except AttributeError:
+                delta = getattr(event, 'delta', lambda: 0)()
+            
+            # Resize based on scroll direction
+            current_size = getattr(self._avatar, '_size', 300)
+            if delta > 0:
+                new_size = current_size + 20  # Scroll up = bigger
+            else:
+                new_size = max(50, current_size - 20)  # Scroll down = smaller
+            
+            self._avatar._set_size(new_size)
+            event.accept()
+        else:
+            event.ignore()
+
+
+class AvatarHitLayer(QWidget):
+    """Invisible hit layer that covers the entire avatar - ZERO configuration needed.
+    
+    This is a separate top-level window that:
+    - Automatically matches the avatar's exact size and position
+    - Is completely invisible but captures mouse events
+    - Left-drag moves the avatar
+    - Scroll wheel resizes the avatar
+    - Right-click shows context menu
+    
+    The user does NOTHING - it just works.
+    """
+    
+    drag_started = pyqtSignal(object)
+    drag_moved = pyqtSignal(object)
+    drag_ended = pyqtSignal()
+    context_menu_requested = pyqtSignal(object)
+    
+    def __init__(self, avatar_window):
+        super().__init__(None)  # Top-level window, not a child
+        self._avatar = avatar_window
+        
+        # Frameless, always on top, tool window (no taskbar entry)
+        self.setWindowFlags(
+            Qt_FramelessWindowHint |
+            Qt_WindowStaysOnTopHint |
+            Qt_Tool
+        )
+        self.setAttribute(Qt_WA_TranslucentBackground, True)
+        
+        self._drag_pos = None
+        self.setMouseTracking(True)
+        self.setCursor(QCursor(Qt_OpenHandCursor))
+        
+        # Sync with avatar immediately
+        self._sync_with_avatar()
+    
+    def _sync_with_avatar(self):
+        """Sync size and position with avatar window."""
+        if self._avatar:
+            self.setFixedSize(self._avatar.size())
+            self.move(self._avatar.pos())
+    
+    def paintEvent(self, event):
+        """Draw invisible but clickable area."""
+        painter = QPainter(self)
+        # Alpha=1 is enough to capture mouse events but appears invisible
+        painter.setBrush(QColor(0, 0, 0, 1))
+        painter.setPen(Qt_NoPen)
+        painter.drawRect(0, 0, self.width(), self.height())
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            self._drag_pos = event.globalPos() - self._avatar.pos()
+            self.setCursor(QCursor(Qt_ClosedHandCursor))
+            self.drag_started.emit(event.globalPos())
+            event.accept()
+        elif event.button() == Qt_RightButton:
+            self.context_menu_requested.emit(event.globalPos())
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None:
+            self.drag_moved.emit(event.globalPos())
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            if self._drag_pos is not None:
+                self.drag_ended.emit()
+            self._drag_pos = None
+            self.setCursor(QCursor(Qt_OpenHandCursor))
+            event.accept()
+    
+    def wheelEvent(self, event):
+        """Scroll wheel resizes the avatar."""
+        if self._avatar and hasattr(self._avatar, '_set_size'):
+            try:
+                delta = event.angleDelta().y()
+            except AttributeError:
+                delta = getattr(event, 'delta', lambda: 0)()
+            
+            current_size = getattr(self._avatar, '_size', 300)
+            if delta > 0:
+                new_size = current_size + 20  # Scroll up = bigger
+            else:
+                new_size = max(50, current_size - 20)  # Scroll down = smaller
+            
+            self._avatar._set_size(new_size)
+            event.accept()
+        else:
+            event.ignore()
+
+
 class Avatar3DOverlayWindow(QWidget):
     """Advanced 3D overlay for desktop avatar display.
     
@@ -1757,16 +2307,7 @@ class Avatar3DOverlayWindow(QWidget):
         self.setFixedSize(self._size, self._size)
         self._resize_enabled = False  # Default OFF - user must enable via right-click
         
-        # Edge-drag resize state
-        self._resize_edge = None  # Which edge is being dragged
-        self._resize_start_pos = None
-        self._resize_start_size = None
-        self._resize_start_geo = None
-        self._edge_margin = 20  # Pixels from edge to trigger resize (larger for easier grabbing)
-        
-        # Rotation state for Shift+drag manual rotation
-        self._rotate_start_x = None
-        self._manual_yaw_offset = 0.0  # Manual yaw adjustment from user
+        # NOTE: Edge-drag resize removed - use scroll wheel or size dialog instead
         
         # Start at bottom right
         screen = QApplication.primaryScreen()
@@ -1776,21 +2317,19 @@ class Avatar3DOverlayWindow(QWidget):
         else:
             self.move(100, 100)
         
-        self._drag_pos = None
+        # Click-through enabled flag - actual setup done after GL widget created
+        self._click_through_enabled = True
+        
         self._model_path = None
         self._use_circular_mask = True
-        self._click_through_mode = True  # NEW: Click-through by default - hold Alt to interact
-        self._interaction_modifier = Qt.AltModifier if hasattr(Qt, 'AltModifier') else 0x08000000
-        self._show_control_bar = False  # NEW: Optional persistent control bar (invisible but functional when False)
+        
+        # Drag bar - ALWAYS functional for dragging, can be made visible for resize/reposition
+        self._show_control_bar = True  # DEFAULT: Show the drag bar so users can see it
         self._control_bar_height = 25  # Height of control bar
-        self._control_bar_width = 150  # Width of control bar
+        self._control_bar_width = 100  # Width of control bar (smaller default)
         self._control_bar_x = 5  # Control bar X position (relative to avatar)
         self._control_bar_y = 5  # Control bar Y position (relative to avatar)
-        self._control_bar_drag_pos = None  # For dragging the control bar
-        self._control_bar_resize_edge = None  # For resizing the control bar
-        self._control_bar_resize_start_pos = None
-        self._control_bar_resize_start_width = 0
-        self._control_bar_resize_start_height = 0
+        # NOTE: Drag bar state is handled by DragBarWidget, not these variables
         
         # Adaptive Animator - works with ANY model
         self._animator = None
@@ -1844,8 +2383,13 @@ class Avatar3DOverlayWindow(QWidget):
         if HAS_OPENGL and HAS_TRIMESH:
             self._gl_widget = OpenGL3DWidget(self._gl_container, transparent_bg=True)
             self._gl_widget.setFixedSize(self._size, self._size)
+            # Disable GL widget's own mouse handling - drag bar handles interaction
+            self._gl_widget.disable_mouse_interaction = True
             gl_layout.addWidget(self._gl_widget)
+            # Apply visual mask (circular shape)
             self._apply_circular_mask()
+            # Apply click-through (avatar visible, clicks pass through)
+            self._apply_click_through()
         else:
             self._gl_widget = None
             placeholder = QLabel("3D not available")
@@ -1855,32 +2399,165 @@ class Avatar3DOverlayWindow(QWidget):
         
         main_layout.addWidget(self._gl_container)
         
-        # Install event filter for dragging - this intercepts ALL mouse events
-        if self._gl_widget:
-            self._gl_widget.installEventFilter(self)
+        # Create INVISIBLE HIT LAYER - covers entire avatar, zero config needed
+        # This is a separate top-level window that receives mouse events
+        # while the avatar window is click-through
+        self._hit_layer = AvatarHitLayer(self)
+        self._hit_layer.drag_started.connect(self._on_drag_bar_start)
+        self._hit_layer.drag_moved.connect(self._on_drag_bar_move)
+        self._hit_layer.drag_ended.connect(self._on_drag_bar_end)
+        self._hit_layer.context_menu_requested.connect(self._show_context_menu_at)
+        self._hit_layer.show()  # Always show - it's invisible anyway
         
-        # Install event filter on self to catch key events
-        self.installEventFilter(self)
+        # Keep old drag bar reference for compatibility (points to hit layer)
+        self._drag_bar = self._hit_layer
         
-        self.setMouseTracking(True)
-        self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow by default - not hand cursor
+        # Drag bar state
+        self._drag_bar_offset = None
         
-        # Timer to check for Alt key state changes (for visual feedback)
-        self._key_check_timer = QTimer()
-        self._key_check_timer.timeout.connect(self._check_key_state)
-        self._key_check_timer.start(100)  # Check every 100ms
-        self._last_alt_state = False
+        # Make avatar window fully click-through (hit layer is separate window)
+        self._apply_click_through()
     
-    def _check_key_state(self):
-        """Check if Alt key state changed and update visual feedback."""
-        from PyQt5.QtWidgets import QApplication as QApp
-        modifiers = QApp.keyboardModifiers()
-        alt_held = bool(modifiers & self._interaction_modifier)
-        
-        if alt_held != self._last_alt_state:
-            self._last_alt_state = alt_held
-            self.update()  # Repaint to show/hide interaction overlay
+    def _update_drag_bar_position(self):
+        """Update the hit layer's position to match avatar."""
+        if hasattr(self, '_hit_layer') and self._hit_layer:
+            self._hit_layer._sync_with_avatar()
     
+    def moveEvent(self, event):
+        """When avatar moves, update hit layer position too."""
+        super().moveEvent(event)
+        self._update_drag_bar_position()
+    
+    def resizeEvent(self, event):
+        """When avatar resizes, update hit layer size too."""
+        super().resizeEvent(event)
+        self._update_drag_bar_position()
+    
+    def _make_click_through(self):
+        """Set up click-through behavior.
+        
+        The avatar window is fully click-through (WS_EX_TRANSPARENT on Windows).
+        The drag bar is a separate window that receives mouse events.
+        """
+        self._click_through_enabled = True
+        self._apply_click_through()
+    
+    def _apply_click_through(self):
+        """Make the avatar window fully click-through.
+        
+        Since the drag bar is a separate top-level window, we can safely
+        make this entire window transparent to mouse events.
+        """
+        if not getattr(self, '_click_through_enabled', True):
+            return
+        
+        import sys
+        if sys.platform == 'win32':
+            self._apply_click_through_windows()
+        else:
+            self._apply_click_through_linux()
+    
+    def _apply_click_through_windows(self):
+        """Windows: Make avatar window fully click-through using WS_EX_TRANSPARENT."""
+        try:
+            import ctypes
+            
+            hwnd = int(self.winId())
+            
+            GWL_EXSTYLE = -20
+            WS_EX_LAYERED = 0x80000
+            WS_EX_TRANSPARENT = 0x20
+            
+            user32 = ctypes.windll.user32
+            current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            
+            # Add BOTH LAYERED and TRANSPARENT - makes entire window click-through
+            # This is fine because drag bar is a separate window
+            new_style = current_style | WS_EX_LAYERED | WS_EX_TRANSPARENT
+            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
+            
+            print("[Avatar] Windows click-through enabled (WS_EX_TRANSPARENT)")
+                
+        except Exception as e:
+            print(f"[Avatar] Windows click-through setup failed: {e}")
+    
+    def _apply_click_through_linux(self):
+        """Linux: Make avatar window click-through using X11 input shape."""
+        try:
+            from PyQt5.QtX11Extras import QX11Info
+            import ctypes
+            
+            x11 = ctypes.CDLL('libX11.so.6')
+            xext = ctypes.CDLL('libXext.so.6')
+            
+            display = QX11Info.display()
+            window_id = int(self.winId())
+            
+            # Set empty input shape - window receives no input
+            # ShapeInput = 2, ShapeSet = 0
+            ShapeInput = 2
+            ShapeSet = 0
+            
+            # Empty region = no input
+            XShapeCombineRectangles = xext.XShapeCombineRectangles
+            XShapeCombineRectangles(display, window_id, ShapeInput, 0, 0, None, 0, ShapeSet, 0)
+            x11.XFlush(display)
+            
+            print("[Avatar] Linux click-through enabled (X11 input shape)")
+            
+        except ImportError:
+            print("[Avatar] X11 extras not available for Linux click-through")
+        except Exception as e:
+            print(f"[Avatar] Linux click-through setup failed: {e}")
+    
+    def _on_drag_bar_start(self, global_pos):
+        """Called when drag bar drag starts."""
+        self._drag_bar_offset = global_pos - self.pos()
+    
+    def _on_drag_bar_move(self, global_pos):
+        """Called when drag bar is being dragged."""
+        if self._drag_bar_offset is not None:
+            new_pos = global_pos - self._drag_bar_offset
+            # Constrain to screen
+            try:
+                from PyQt5.QtWidgets import QDesktopWidget
+                desktop = QDesktopWidget()
+                virtual_geo = desktop.geometry()
+                min_visible = 50
+                new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
+                new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
+                new_pos.setX(new_x)
+                new_pos.setY(new_y)
+            except Exception:
+                pass
+            self.move(new_pos)
+    
+    def _on_drag_bar_end(self):
+        """Called when drag bar drag ends."""
+        self._drag_bar_offset = None
+        # Save position
+        try:
+            from ....avatar.persistence import save_position, write_avatar_state_for_ai
+            pos = self.pos()
+            save_position(pos.x(), pos.y())
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
+    
+    def _on_drag_bar_repositioned(self, new_x: int, new_y: int):
+        """Called when drag bar is repositioned within the window (Shift+drag)."""
+        self._control_bar_x = new_x
+        self._control_bar_y = new_y
+        # Update window mask to include new drag bar position
+        self._apply_circular_mask()
+        # Save position
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(control_bar_x=new_x, control_bar_y=new_y)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
+
     def _on_animator_transform(self, pos_offset, rot_offset, scale):
         """Callback from AdaptiveAnimator for transform updates."""
         if not self._gl_widget:
@@ -1899,26 +2576,49 @@ class Avatar3DOverlayWindow(QWidget):
         self._gl_widget.update()
     
     def _apply_circular_mask(self):
-        """Apply a circular mask to BOTH the GL widget AND the window.
-        This allows clicks to pass through the transparent corners."""
-        if not self._use_circular_mask:
-            return
+        """Apply window mask for visual shape only.
         
+        This controls the VISIBLE shape of the window, NOT click-through behavior.
+        Click-through is handled separately by _apply_click_through().
+        
+        Options:
+        - Circular mask: avatar appears as circle
+        - No mask: avatar appears as square/rectangle
+        """
         from PyQt5.QtGui import QRegion, QPainterPath
         from PyQt5.QtCore import QRectF
         
+        # Clear any existing mask first
+        self.clearMask()
+        
+        # If circular mask is disabled, leave window as rectangle
+        if not self._use_circular_mask:
+            return
+        
+        # Create circular path for the avatar
         path = QPainterPath()
         padding = 5
         path.addEllipse(QRectF(padding, padding, self._size - padding*2, self._size - padding*2))
+        circle_region = QRegion(path.toFillPolygon().toPolygon())
         
-        region = QRegion(path.toFillPolygon().toPolygon())
+        # Get drag bar region to include in visual mask
+        if hasattr(self, '_drag_bar') and self._drag_bar:
+            bar_x = self._drag_bar.x()
+            bar_y = self._drag_bar.y()
+            bar_w = self._drag_bar.width()
+            bar_h = self._drag_bar.height()
+        else:
+            bar_x = getattr(self, '_control_bar_x', 5)
+            bar_y = getattr(self, '_control_bar_y', 5)
+            bar_w = getattr(self, '_control_bar_width', 100)
+            bar_h = getattr(self, '_control_bar_height', 25)
         
-        # Apply mask to GL widget (visual clipping)
-        if self._gl_widget:
-            self._gl_widget.setMask(region)
+        # Add drag bar region with margin
+        drag_bar_region = QRegion(bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4)
         
-        # Apply mask to WINDOW (click pass-through for corners)
-        self.setMask(region)
+        # Combine circle + drag bar for visual mask
+        window_region = circle_region.united(drag_bar_region)
+        self.setMask(window_region)
     
     def load_model(self, path: str) -> bool:
         """Load a 3D model into the overlay."""
@@ -2049,298 +2749,8 @@ class Avatar3DOverlayWindow(QWidget):
         """Get information about the loaded model for AI awareness."""
         return self._model_info.copy()
     
-    def _get_edge_at_pos(self, pos):
-        """Get which edge the mouse is near (for resize cursor)."""
-        if not getattr(self, '_resize_enabled', False):
-            return None
-        
-        margin = self._edge_margin
-        x, y = pos.x(), pos.y()
-        w, h = self.width(), self.height()
-        
-        edges = []
-        if x < margin:
-            edges.append('left')
-        elif x > w - margin:
-            edges.append('right')
-        if y < margin:
-            edges.append('top')
-        elif y > h - margin:
-            edges.append('bottom')
-        
-        if edges:
-            return '-'.join(edges)
-        return None
-    
-    def _do_resize(self, global_pos):
-        """Perform edge-drag resize."""
-        if not self._resize_edge or not self._resize_start_pos:
-            return
-        
-        delta = global_pos - self._resize_start_pos
-        new_size = self._resize_start_size
-        
-        if 'right' in self._resize_edge or 'bottom' in self._resize_edge:
-            # Resize from right/bottom - increase size
-            change = max(delta.x(), delta.y())
-            new_size = max(100, min(500, self._resize_start_size + change))
-        elif 'left' in self._resize_edge or 'top' in self._resize_edge:
-            # Resize from left/top - decrease size and move
-            change = max(-delta.x(), -delta.y())
-            new_size = max(100, min(500, self._resize_start_size + change))
-            # Adjust position to keep bottom-right corner fixed
-            if self._resize_start_geo:
-                size_diff = new_size - self._resize_start_size
-                self.move(self._resize_start_geo.x() - size_diff, self._resize_start_geo.y() - size_diff)
-        
-        self._size = new_size
-        self.setFixedSize(self._size, self._size)
-        self._gl_container.setFixedSize(self._size, self._size)
-        if self._gl_widget:
-            self._gl_widget.setFixedSize(self._size, self._size)
-            self._apply_circular_mask()
-    
-    def eventFilter(self, obj, event):
-        """Handle mouse events - control bar always functional (even when invisible), Alt for avatar interaction."""
-        if obj == self._gl_widget:
-            event_type = event.type()
-            
-            try:
-                global_pos = event.globalPosition().toPoint()
-                local_pos = event.position().toPoint()
-            except AttributeError:
-                global_pos = event.globalPos() if hasattr(event, 'globalPos') else None
-                local_pos = event.pos() if hasattr(event, 'pos') else None
-            
-            # Check if Alt is held
-            from PyQt5.QtWidgets import QApplication as QApp
-            modifiers = QApp.keyboardModifiers()
-            alt_held = bool(modifiers & self._interaction_modifier)
-            
-            # Check if click is in control bar area (ALWAYS, even when invisible)
-            in_control_bar = False
-            on_control_bar_edge = None
-            if local_pos:
-                bar_x = self._control_bar_x
-                bar_y = self._control_bar_y
-                bar_w = self._control_bar_width
-                bar_h = self._control_bar_height
-                
-                # Check if in control bar bounds
-                in_control_bar = (local_pos.x() >= bar_x and local_pos.x() <= bar_x + bar_w and
-                                 local_pos.y() >= bar_y and local_pos.y() <= bar_y + bar_h)
-                
-                # Check if on control bar edge (for resizing)
-                edge_margin = 8
-                if in_control_bar:
-                    if local_pos.x() >= bar_x + bar_w - edge_margin:
-                        on_control_bar_edge = 'right'
-                    elif local_pos.x() <= bar_x + edge_margin:
-                        on_control_bar_edge = 'left'
-                    elif local_pos.y() >= bar_y + bar_h - edge_margin:
-                        on_control_bar_edge = 'bottom'
-                    elif local_pos.y() <= bar_y + edge_margin:
-                        on_control_bar_edge = 'top'
-            
-            # If neither Alt held nor in control bar, and not currently interacting, pass through ALL events
-            if not alt_held and not in_control_bar and self._drag_pos is None and self._resize_edge is None and self._rotate_start_x is None and self._control_bar_drag_pos is None and self._control_bar_resize_edge is None:
-                return False  # Let event pass through to windows below
-            
-            # Alt is held or we're in the middle of an interaction - handle the event
-            if event_type == event.MouseButtonPress:
-                if event.button() == Qt_LeftButton and local_pos and global_pos:
-                    # PRIORITY 1: Control bar interaction (even when invisible)
-                    if in_control_bar:
-                        if on_control_bar_edge:
-                            # Start resizing control bar
-                            self._control_bar_resize_edge = on_control_bar_edge
-                            self._control_bar_resize_start_pos = local_pos
-                            self._control_bar_resize_start_width = self._control_bar_width
-                            self._control_bar_resize_start_height = self._control_bar_height
-                            return True
-                        else:
-                            # Start dragging control bar (which drags the whole avatar)
-                            self._control_bar_drag_pos = global_pos - self.pos()
-                            self.setCursor(QCursor(Qt_ArrowCursor))
-                            return True
-                    
-                    # PRIORITY 2: Avatar interaction (only when Alt held)
-                    if alt_held:
-                        # Check for Shift+drag (manual rotation mode) - only when resize/rotate enabled
-                        modifiers = event.modifiers()
-                        shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
-                        
-                        if shift_held and getattr(self, '_resize_enabled', False):
-                            # Start rotation drag (only when enabled)
-                            self._rotate_start_x = global_pos.x()
-                            self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow cursor
-                        else:
-                            # Check if we're on an edge (for resize) - _get_edge_at_pos checks _resize_enabled
-                            edge = self._get_edge_at_pos(local_pos)
-                            if edge:
-                                self._resize_edge = edge
-                                self._resize_start_pos = global_pos
-                                self._resize_start_size = self._size
-                                self._resize_start_geo = self.geometry()
-                            else:
-                                # Normal drag
-                                self._drag_pos = global_pos - self.pos()
-                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow cursor
-                return True  # Block event from reaching GL widget
-                
-            elif event_type == event.MouseMove:
-                if global_pos and local_pos:
-                    # PRIORITY 1: Control bar resize
-                    if self._control_bar_resize_edge:
-                        edge = self._control_bar_resize_edge
-                        delta_x = local_pos.x() - self._control_bar_resize_start_pos.x()
-                        delta_y = local_pos.y() - self._control_bar_resize_start_pos.y()
-                        
-                        # Update control bar size based on edge
-                        if edge == 'right':
-                            self._control_bar_width = max(80, min(300, self._control_bar_resize_start_width + delta_x))
-                        elif edge == 'left':
-                            new_width = max(80, min(300, self._control_bar_resize_start_width - delta_x))
-                            width_change = self._control_bar_width - new_width
-                            self._control_bar_width = new_width
-                            self._control_bar_x += width_change
-                        elif edge == 'bottom':
-                            self._control_bar_height = max(20, min(60, self._control_bar_resize_start_height + delta_y))
-                        elif edge == 'top':
-                            new_height = max(20, min(60, self._control_bar_resize_start_height - delta_y))
-                            height_change = self._control_bar_height - new_height
-                            self._control_bar_height = new_height
-                            self._control_bar_y += height_change
-                        
-                        self.update()
-                        return True
-                    
-                    # PRIORITY 2: Control bar drag (drags entire avatar)
-                    if self._control_bar_drag_pos is not None:
-                        new_pos = global_pos - self._control_bar_drag_pos
-                        
-                        # Keep avatar on virtual desktop
-                        try:
-                            from PyQt5.QtWidgets import QDesktopWidget
-                            desktop = QDesktopWidget()
-                            virtual_geo = desktop.geometry()
-                            min_visible = 50
-                            new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
-                            new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
-                            new_pos.setX(new_x)
-                            new_pos.setY(new_y)
-                        except Exception:
-                            pass
-                        
-                        self.move(new_pos)
-                        return True
-                    
-                    # Update cursor based on control bar edge hover
-                    if on_control_bar_edge:
-                        if on_control_bar_edge in ['left', 'right']:
-                            self.setCursor(QCursor(Qt_SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 6))
-                        elif on_control_bar_edge in ['top', 'bottom']:
-                            self.setCursor(QCursor(Qt_SizeVerCursor if hasattr(Qt, 'SizeVerCursor') else 7))
-                        return True
-                    
-                    # PRIORITY 3: Avatar rotation (Shift+drag)
-                    if self._rotate_start_x is not None:
-                        delta_x = global_pos.x() - self._rotate_start_x
-                        self._manual_yaw_offset = (self._manual_yaw_offset + delta_x * 0.5) % 360
-                        self._rotate_start_x = global_pos.x()
-                        # Apply rotation to the 3D model
-                        if self._gl_widget:
-                            import math
-                            self._gl_widget.model_yaw = math.radians(self._manual_yaw_offset)
-                            self._gl_widget.update()
-                        return True
-                    
-                    # PRIORITY 4: Avatar resize
-                    if self._resize_edge:
-                        self._do_resize(global_pos)
-                        return True
-                    
-                    # PRIORITY 5: Avatar drag
-                    if self._drag_pos is not None:
-                        new_pos = global_pos - self._drag_pos
-                        
-                        # Keep avatar on virtual desktop (all monitors) - can drag across monitors
-                        try:
-                            from PyQt5.QtWidgets import QDesktopWidget
-                            desktop = QDesktopWidget()
-                            virtual_geo = desktop.geometry()
-                            min_visible = 50
-                            new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
-                            new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
-                            new_pos.setX(new_x)
-                            new_pos.setY(new_y)
-                        except Exception:
-                            pass  # If virtual desktop fails, allow free movement
-                        
-                        self.move(new_pos)
-                        return True
-                    
-                    # Update cursor based on position (only when resize enabled)
-                    if local_pos:
-                        edge = self._get_edge_at_pos(local_pos)
-                        if edge:
-                            # Set resize cursor
-                            if 'left' in edge or 'right' in edge:
-                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
-                            if 'top' in edge or 'bottom' in edge:
-                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
-                            if ('top' in edge and 'left' in edge) or ('bottom' in edge and 'right' in edge):
-                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
-                            if ('top' in edge and 'right' in edge) or ('bottom' in edge and 'left' in edge):
-                                self.setCursor(QCursor(Qt_ArrowCursor))  # Keep arrow
-                        else:
-                            self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor always
-                return True  # Block event from reaching GL widget
-                
-            elif event_type == event.MouseButtonRelease:
-                if event.button() == Qt_LeftButton:
-                    # Save position when drag ends
-                    if self._drag_pos is not None:
-                        try:
-                            from ....avatar.persistence import save_position, write_avatar_state_for_ai
-                            pos = self.pos()
-                            save_position(pos.x(), pos.y())
-                            write_avatar_state_for_ai()
-                        except Exception:
-                            pass
-                    # Save size when resize ends
-                    if self._resize_edge is not None:
-                        try:
-                            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
-                            save_avatar_settings(overlay_3d_size=self._size)
-                            write_avatar_state_for_ai()
-                        except Exception:
-                            pass
-                    # Save rotation when rotation drag ends
-                    if self._rotate_start_x is not None:
-                        try:
-                            from ....avatar.persistence import save_avatar_settings
-                            save_avatar_settings(overlay_3d_yaw=self._manual_yaw_offset)
-                        except Exception:
-                            pass
-                    self._drag_pos = None
-                    self._resize_edge = None
-                    self._rotate_start_x = None
-                    self._control_bar_drag_pos = None
-                    self._control_bar_resize_edge = None
-                    self._control_bar_resize_start_pos = None
-                    self.setCursor(QCursor(Qt_ArrowCursor))  # Arrow cursor after mouse release
-                return True  # Block event from reaching GL widget
-            
-            elif event_type == event.MouseButtonDblClick:
-                # Double-click does nothing - use right-click menu for Center on Screen
-                return True  # Block event
-            
-            elif event_type == event.Wheel:
-                # Scroll wheel is disabled - use edge drag for resizing
-                return True
-                
-        return super().eventFilter(obj, event)
+    # NOTE: _get_edge_at_pos and _do_resize removed - DragBarWidget handles interaction
+    # NOTE: eventFilter removed - DragBarWidget handles all interaction now
     
     def showEvent(self, a0):
         """Restore saved position when shown."""
@@ -2375,6 +2785,10 @@ class Avatar3DOverlayWindow(QWidget):
                 self._gl_widget.setFixedSize(self._size, self._size)
                 self._apply_circular_mask()
             
+            # Update drag bar size if in anchored mode
+            if hasattr(self, '_drag_bar') and self._drag_bar:
+                self._drag_bar._update_position()
+            
             # Save size
             try:
                 from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
@@ -2388,83 +2802,39 @@ class Avatar3DOverlayWindow(QWidget):
             event.ignore()
     
     def paintEvent(self, event):
-        """Draw control bar (if visible) or interaction indicator when Alt is held."""
+        """Draw visual indicators (drag bar is now a separate widget)."""
         super().paintEvent(event)
         
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         
-        # Check if Alt is held
-        from PyQt5.QtWidgets import QApplication as QApp
-        modifiers = QApp.keyboardModifiers()
-        alt_held = bool(modifiers & self._interaction_modifier)
-        
-        # Draw persistent control bar if VISIBLE (always functional even when invisible)
-        if getattr(self, '_show_control_bar', False):
-            bar_x = self._control_bar_x
-            bar_y = self._control_bar_y
-            bar_w = self._control_bar_width
-            bar_h = self._control_bar_height
-            
-            # Semi-transparent dark bar with rounded corners
-            painter.setBrush(QColor(30, 30, 46, 200))
-            painter.setPen(Qt.NoPen if hasattr(Qt, 'NoPen') else 0)
-            painter.drawRoundedRect(bar_x, bar_y, bar_w, bar_h, 5, 5)
-            
-            # Resize handles (small squares on corners/edges)
-            handle_size = 6
-            painter.setBrush(QColor(137, 180, 250, 180))
-            painter.setPen(QColor(205, 214, 244, 200))
-            # Right edge handle
-            painter.drawRect(bar_x + bar_w - handle_size//2, bar_y + bar_h//2 - handle_size//2, handle_size, handle_size)
-            # Left edge handle
-            painter.drawRect(bar_x - handle_size//2, bar_y + bar_h//2 - handle_size//2, handle_size, handle_size)
-            # Bottom edge handle
-            painter.drawRect(bar_x + bar_w//2 - handle_size//2, bar_y + bar_h - handle_size//2, handle_size, handle_size)
-            # Top edge handle
-            painter.drawRect(bar_x + bar_w//2 - handle_size//2, bar_y - handle_size//2, handle_size, handle_size)
-            
-            # Grip lines in center
-            painter.setPen(QColor(205, 214, 244, 150))
-            center_x = bar_x + bar_w // 2
-            center_y = bar_y + bar_h // 2
-            for i in range(3):
-                y = center_y - 4 + i * 4
-                painter.drawLine(center_x - 12, y, center_x + 12, y)
-            
-            # Show size in corner
-            painter.setPen(QColor(205, 214, 244, 120))
-            font = painter.font()
-            font.setPointSize(7)
-            painter.setFont(font)
-            painter.drawText(bar_x + bar_w - 45, bar_y, 40, bar_h, Qt_AlignCenter, f"{self._size}px")
-        
-        # Show interaction hint when Alt is held (and control bar is hidden)
-        elif alt_held:
-            # Semi-transparent overlay to show avatar is interactive
-            painter.fillRect(0, 0, self.width(), self.height(), QColor(100, 150, 255, 30))
-            
-            # Show "INTERACTIVE" text at top
-            painter.setPen(QColor(255, 255, 255, 200))
-            font = painter.font()
-            font.setPointSize(8)
-            font.setBold(True)
-            painter.setFont(font)
-            text_rect = painter.boundingRect(0, 5, self.width(), 20, Qt_AlignCenter, "ALT: INTERACTIVE")
-            painter.fillRect(text_rect.adjusted(-5, -2, 5, 2), QColor(30, 30, 46, 200))
-            painter.drawText(0, 5, self.width(), 20, Qt_AlignCenter, "ALT: INTERACTIVE")
-        
-        # Draw border when resize mode is enabled
-        if getattr(self, '_resize_enabled', False) and (alt_held or self._show_control_bar):
-            pen = painter.pen()
-            pen.setColor(QColor("#3498db"))  # Blue border
+        # Draw border when resize mode is enabled (scroll wheel resizing)
+        if getattr(self, '_resize_enabled', False):
+            pen = QPen(QColor("#3498db"))
             pen.setWidth(2)
             painter.setPen(pen)
             painter.setBrush(Qt_NoBrush)
             painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
+
+    def mousePressEvent(self, event):
+        """Avatar is click-through - ignore all mouse events except via drag bar."""
+        # All interaction goes through the DragBarWidget
+        event.ignore()
     
+    def mouseMoveEvent(self, event):
+        """Avatar is click-through - ignore all mouse events."""
+        event.ignore()
+    
+    def mouseReleaseEvent(self, event):
+        """Avatar is click-through - ignore all mouse events."""
+        event.ignore()
+
     def contextMenuEvent(self, event):
-        """Right-click menu."""
+        """Avatar is click-through - right-click only via drag bar."""
+        event.ignore()
+    
+    def _show_context_menu_at(self, global_pos):
+        """Show context menu at the given global position (called from drag bar)."""
         from PyQt5.QtWidgets import QMenu
         
         menu = QMenu(self)
@@ -2502,35 +2872,19 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # Interaction mode submenu
-        interaction_menu = menu.addMenu("Interaction Mode")
-        
-        # Click-through mode toggle (Alt-key mode)
-        click_through_text = "✓ Click-through (Alt to interact)" if getattr(self, '_click_through_mode', True) else "Click-through (Alt to interact)"
-        click_through_action = interaction_menu.addAction(click_through_text)
-        click_through_action.setToolTip("Avatar passes through clicks by default - hold Alt to interact")
-        click_through_action.triggered.connect(self._toggle_click_through_mode)
-        
-        # Always interactive mode
-        always_interactive_text = "✓ Always Interactive" if not getattr(self, '_click_through_mode', True) else "Always Interactive"
-        always_interactive_action = interaction_menu.addAction(always_interactive_text)
-        always_interactive_action.setToolTip("Avatar always responds to clicks (traditional behavior)")
-        always_interactive_action.triggered.connect(self._set_always_interactive)
-        
-        interaction_menu.addSeparator()
-        
-        # Control bar toggle
-        bar_text = "✓ Show Control Bar" if getattr(self, '_show_control_bar', False) else "Show Control Bar"
-        bar_action = interaction_menu.addAction(bar_text)
-        bar_action.setToolTip("Show/hide persistent draggable control bar (always functional)")
-        bar_action.triggered.connect(self._toggle_control_bar)
+        # ==== INTERACTION INFO ====
+        # No settings needed - hit layer is automatic
+        info_action = menu.addAction("Drag: Move | Scroll: Resize")
+        info_action.setEnabled(False)  # Just informational
         
         menu.addSeparator()
         
-        # Resize & Rotate toggle - default is OFF
-        resize_text = "Disable Resize/Rotate" if getattr(self, '_resize_enabled', False) else "Enable Resize/Rotate"
+        # ==== AVATAR SETTINGS ====
+        # Resize & Rotate toggle
+        resize_enabled = getattr(self, '_resize_enabled', False)
+        resize_text = "[X] Resize/Rotate Mode" if resize_enabled else "Enable Resize/Rotate"
         resize_action = menu.addAction(resize_text)
-        resize_action.setToolTip("Enable edge-drag resize and Shift+Alt+drag rotate")
+        resize_action.setToolTip("When enabled: drag avatar edges to resize, Shift+drag on drag bar to rotate")
         resize_action.triggered.connect(self._toggle_resize)
         
         # Size input action
@@ -2549,7 +2903,7 @@ class Avatar3DOverlayWindow(QWidget):
         close_action = menu.addAction("Hide Avatar")
         close_action.triggered.connect(self._close)
         
-        menu.exec_(event.globalPos())
+        menu.exec_(global_pos)
     
     def _request_gesture(self, gesture: str):
         """Request a gesture from the AI - AI decides how to react."""
@@ -2575,9 +2929,13 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _toggle_control_bar(self):
-        """Toggle persistent control bar visibility."""
+        """Toggle hit layer visibility (mostly for debugging - it's invisible anyway)."""
         self._show_control_bar = not getattr(self, '_show_control_bar', False)
-        self.update()  # Repaint to show/hide control bar
+        # Show/hide the hit layer
+        if hasattr(self, '_hit_layer'):
+            self._hit_layer.setVisible(self._show_control_bar)
+        self._apply_circular_mask()
+        self.update()
         # Save setting
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
@@ -2586,14 +2944,34 @@ class Avatar3DOverlayWindow(QWidget):
         except Exception:
             pass
     
+    def _toggle_ghost_mode(self):
+        """No-op - hit layer is always invisible."""
+        pass  # Hit layer is always invisible, no ghost mode needed
+    
+    def _toggle_anchored_mode(self):
+        """No-op - hit layer is always active and covers entire avatar."""
+        pass  # Hit layer is automatic
+    
+    def _set_anchor_position(self, x: float, y: float):
+        """No-op - hit layer covers entire avatar, no positioning needed."""
+        pass  # Hit layer is automatic
+    
+    def _toggle_reposition_mode(self):
+        """No-op - hit layer is automatic, no reposition mode needed."""
+        pass  # Hit layer is automatic
+    
+    def _set_bar_size(self, width, height):
+        """No-op - hit layer automatically matches avatar size."""
+        pass  # Hit layer is automatic
+    
+    def _show_bar_size_dialog(self):
+        """No-op - hit layer automatically matches avatar size."""
+        pass  # Hit layer is automatic
+
     def _toggle_click_through_mode(self):
-        """Toggle click-through mode (Alt-key interaction)."""
-        if not getattr(self, '_click_through_mode', True):
-            # Currently always interactive, switch to click-through
-            self._click_through_mode = True
-            self.update()
-        # If already in click-through mode, do nothing (use _set_always_interactive to disable)
-        # Save setting
+        """Enable click-through mode - clicks pass through avatar."""
+        self._click_through_mode = True
+        self.update()
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
             save_avatar_settings(click_through_mode_3d=self._click_through_mode)
@@ -2602,10 +2980,9 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _set_always_interactive(self):
-        """Disable click-through mode - avatar always responds to clicks."""
+        """Set always interactive mode - drag anywhere on avatar."""
         self._click_through_mode = False
         self.update()
-        # Save setting
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
             save_avatar_settings(click_through_mode_3d=self._click_through_mode)
@@ -2637,6 +3014,9 @@ class Avatar3DOverlayWindow(QWidget):
             if self._gl_widget:
                 self._gl_widget.setFixedSize(self._size, self._size)
                 self._apply_circular_mask()
+            # Update drag bar size if in anchored mode
+            if hasattr(self, '_drag_bar') and self._drag_bar:
+                self._drag_bar._update_position()
             # Save size
             try:
                 from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
@@ -2644,6 +3024,26 @@ class Avatar3DOverlayWindow(QWidget):
                 write_avatar_state_for_ai()
             except Exception:
                 pass
+    
+    def _set_size(self, size: int):
+        """Set avatar size programmatically (used by AI commands)."""
+        size = max(50, min(2000, size))  # Clamp to reasonable range
+        self._size = size
+        self.setFixedSize(self._size, self._size)
+        self._gl_container.setFixedSize(self._size, self._size)
+        if self._gl_widget:
+            self._gl_widget.setFixedSize(self._size, self._size)
+            self._apply_circular_mask()
+        # Update drag bar size if in anchored mode
+        if hasattr(self, '_drag_bar') and self._drag_bar:
+            self._drag_bar._update_position()
+        # Save size
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(overlay_3d_size=self._size)
+            write_avatar_state_for_ai()
+        except Exception:
+            pass
 
     def _check_ai_commands(self):
         """Check for AI commands and execute them."""
@@ -2841,6 +3241,9 @@ class Avatar3DOverlayWindow(QWidget):
             self._key_check_timer.stop()
         if self._animator:
             self._animator.stop()
+        # Close the floating drag bar
+        if hasattr(self, '_drag_bar') and self._drag_bar:
+            self._drag_bar.close()
         self.hide()
         self.closed.emit()
     
@@ -2851,6 +3254,9 @@ class Avatar3DOverlayWindow(QWidget):
             self._key_check_timer.stop()
         if self._animator:
             self._animator.stop()
+        # Close the floating drag bar
+        if hasattr(self, '_drag_bar') and self._drag_bar:
+            self._drag_bar.close()
         super().closeEvent(event)
 
 
@@ -4236,6 +4642,34 @@ def _toggle_overlay(parent):
                     from ....avatar.persistence import load_avatar_settings
                     avatar_settings = load_avatar_settings()
                     saved_size = avatar_settings.overlay_3d_size
+                    
+                    # Also restore control bar settings
+                    parent._overlay_3d._control_bar_x = avatar_settings.control_bar_x
+                    parent._overlay_3d._control_bar_y = avatar_settings.control_bar_y
+                    parent._overlay_3d._control_bar_width = avatar_settings.control_bar_width
+                    parent._overlay_3d._control_bar_height = avatar_settings.control_bar_height
+                    parent._overlay_3d._show_control_bar = avatar_settings.show_control_bar_3d
+                    parent._overlay_3d._click_through_mode = avatar_settings.click_through_mode_3d
+                    
+                    # Sync drag bar widget with loaded settings
+                    if hasattr(parent._overlay_3d, '_drag_bar'):
+                        parent._overlay_3d._drag_bar.setFixedSize(
+                            avatar_settings.control_bar_width,
+                            avatar_settings.control_bar_height
+                        )
+                        parent._overlay_3d._drag_bar.move(
+                            avatar_settings.control_bar_x,
+                            avatar_settings.control_bar_y
+                        )
+                        parent._overlay_3d._drag_bar.setVisible(avatar_settings.show_control_bar_3d)
+                        # Restore ghost mode
+                        if hasattr(avatar_settings, 'drag_bar_ghost_mode'):
+                            parent._overlay_3d._drag_bar.set_ghost_mode(avatar_settings.drag_bar_ghost_mode)
+                        # Restore anchored mode
+                        if hasattr(avatar_settings, 'drag_bar_anchored_mode') and avatar_settings.drag_bar_anchored_mode:
+                            anchor_x = getattr(avatar_settings, 'drag_bar_anchor_x', 0.5)
+                            anchor_y = getattr(avatar_settings, 'drag_bar_anchor_y', 0.5)
+                            parent._overlay_3d._drag_bar.set_anchored_mode(True, anchor_x, anchor_y)
                 except Exception:
                     saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
                 
@@ -4246,6 +4680,9 @@ def _toggle_overlay(parent):
                 parent._overlay_3d._gl_container.setFixedSize(saved_size, saved_size)
                 if parent._overlay_3d._gl_widget:
                     parent._overlay_3d._gl_widget.setFixedSize(saved_size, saved_size)
+                
+                # Reapply mask after loading settings (includes drag bar region)
+                parent._overlay_3d._apply_circular_mask()
             
             # ALWAYS set resize to OFF by default when showing overlay
             # This overrides any saved setting - user can enable via right-click if wanted
@@ -4257,7 +4694,7 @@ def _toggle_overlay(parent):
                 parent._overlay_3d.show()
                 parent._overlay_3d.raise_()
                 parent.show_overlay_btn.setText("Stop")
-                parent.avatar_status.setText("3D avatar on desktop! Drag window to move, right-click for gestures.")
+                parent.avatar_status.setText("3D avatar on desktop! Drag the bar to move, right-click for options.")
                 parent.avatar_status.setStyleSheet("color: #a6e3a1;")
             else:
                 parent.show_overlay_btn.setChecked(False)

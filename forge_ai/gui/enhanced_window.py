@@ -1980,7 +1980,10 @@ class EnhancedMainWindow(QMainWindow):
             # Save chat zoom level
             if hasattr(self, 'chat_display'):
                 font = self.chat_display.font()
-                settings["chat_zoom"] = font.pointSize()
+                font_size = font.pointSize()
+                # Only save valid font sizes (Qt returns -1 for pixel-based fonts)
+                if font_size > 0:
+                    settings["chat_zoom"] = font_size
             
             # Save learn while chatting preference
             settings["learn_while_chatting"] = getattr(self, 'learn_while_chatting', True)
@@ -3046,7 +3049,8 @@ class EnhancedMainWindow(QMainWindow):
         
         # Restore chat zoom
         chat_zoom = settings.get("chat_zoom")
-        if chat_zoom and hasattr(self, 'chat_display'):
+        # Only apply valid font sizes (must be positive integer)
+        if chat_zoom and isinstance(chat_zoom, int) and chat_zoom > 0 and hasattr(self, 'chat_display'):
             font = self.chat_display.font()
             font.setPointSize(chat_zoom)
             self.chat_display.setFont(font)

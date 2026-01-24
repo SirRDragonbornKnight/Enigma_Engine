@@ -67,6 +67,18 @@ class AvatarSettings:
     # Custom emotion mappings
     emotion_mappings: Dict[str, str] = field(default_factory=dict)
     
+    # 3D Overlay - Control Bar Settings
+    control_bar_x: int = 5
+    control_bar_y: int = 5
+    control_bar_width: int = 100
+    control_bar_height: int = 25
+    show_control_bar_3d: bool = True  # Drag bar visibility
+    click_through_mode_3d: bool = True  # Click-through mode
+    drag_bar_ghost_mode: bool = False  # Ghost mode (nearly invisible)
+    drag_bar_anchored_mode: bool = False  # Anchored mode (fully invisible, auto-centered)
+    drag_bar_anchor_x: float = 0.5  # Anchor X position (0.0-1.0)
+    drag_bar_anchor_y: float = 0.5  # Anchor Y position (0.0-1.0)
+    
     # Last modified
     last_modified: Optional[str] = None
     
