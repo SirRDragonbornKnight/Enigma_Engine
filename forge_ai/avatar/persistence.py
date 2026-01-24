@@ -78,6 +78,22 @@ class AvatarSettings:
     drag_bar_anchored_mode: bool = False  # Anchored mode (fully invisible, auto-centered)
     drag_bar_anchor_x: float = 0.5  # Anchor X position (0.0-1.0)
     drag_bar_anchor_y: float = 0.5  # Anchor Y position (0.0-1.0)
+    hit_area_ratio: float = 0.4  # Hit area size (0.1-1.0, smaller = less blocking)
+    
+    # Independent hit area edge ratios (0.0 = at avatar edge, proportional scaling)
+    hit_ratio_left: float = 0.12
+    hit_ratio_right: float = 0.12
+    hit_ratio_top: float = 0.12
+    hit_ratio_bottom: float = 0.12
+    
+    # Hit area visibility and lock
+    hit_border_visible: bool = True  # Show the dashed border
+    hit_resize_locked: bool = False  # Lock USER resize (AI can still control avatar)
+    hit_auto_track: bool = False  # Auto-track mode follows model bounds
+    
+    # Bone hit regions - per-bone hit area configs
+    bone_hit_configs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    bone_hit_visible: bool = False  # Show bone hit regions
     
     # Last modified
     last_modified: Optional[str] = None

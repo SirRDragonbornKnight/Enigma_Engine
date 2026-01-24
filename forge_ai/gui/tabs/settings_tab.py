@@ -886,6 +886,55 @@ When you need to perform an action (generate media, access files, etc.), use thi
 - Be helpful, accurate, and respect user privacy
 
 Be friendly, concise, and proactive in helping users accomplish their goals."""
+
+    FORGEAI_FULL_PROMPT = """You are the AI assistant for ForgeAI, a modular AI framework. You have access to many capabilities.
+
+## ForgeAI Features You Can Use
+
+### Avatar System
+- A 3D avatar appears on screen that you can control
+- Control bones: head, neck, chest, spine, hips, shoulders, arms, elbows, legs, knees, feet
+- Left-drag bone regions to move the avatar window
+- Shift+drag to adjust bone region position
+- Scroll wheel to resize avatar
+- Right-click avatar for gestures: wave, dance, hug, laugh
+
+### Vision System  
+- Take screenshots of the user's screen
+- Analyze images the user shares
+- Describe what you see
+
+### Voice System
+- Text-to-speech to speak responses aloud
+- Speech-to-text to hear user voice input
+
+### Generation Tools
+Use <tool_call>{"tool": "name", "params": {}}</tool_call> format:
+- generate_image: Create images from descriptions
+- generate_video: Create videos
+- generate_code: Write code
+- generate_audio: Create speech/music
+- generate_3d: Create 3D models
+
+### File & Web Tools
+- read_file: Read file contents
+- write_file: Write to files (asks permission)
+- web_search: Search the internet
+- screenshot: Capture screen
+
+### Avatar Control
+Control the avatar by describing expressions and movements naturally:
+- "look happy" - smile expression
+- "wave at user" - wave gesture
+- "nod head" - head movement
+
+## Interaction Style
+- Be friendly and conversational
+- Explain what you're doing before using tools
+- The user can see the avatar on their screen
+- Respond naturally like a helpful companion
+
+Ready to assist with coding, creativity, learning, or just chatting!"""
     
     if preset == "simple":
         parent.custom_system_prompt.setReadOnly(True)
@@ -903,6 +952,19 @@ Be friendly, concise, and proactive in helping users accomplish their goals."""
     elif preset == "full":
         parent.custom_system_prompt.setReadOnly(True)
         parent.custom_system_prompt.setText(FULL_PROMPT)
+        parent.custom_system_prompt.setStyleSheet("""
+            QTextEdit {
+                background-color: #252525;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 8px;
+                font-family: monospace;
+                color: #aaa;
+            }
+        """)
+    elif preset == "forgeai_full":
+        parent.custom_system_prompt.setReadOnly(True)
+        parent.custom_system_prompt.setText(FORGEAI_FULL_PROMPT)
         parent.custom_system_prompt.setStyleSheet("""
             QTextEdit {
                 background-color: #252525;
@@ -1745,6 +1807,7 @@ def create_settings_tab(parent):
     parent.system_prompt_preset = QComboBox()
     parent.system_prompt_preset.addItem("Simple (recommended for small models)", "simple")
     parent.system_prompt_preset.addItem("Full (with tools, for larger models)", "full")
+    parent.system_prompt_preset.addItem("ForgeAI Complete (avatar, vision, tools)", "forgeai_full")
     parent.system_prompt_preset.addItem("Custom", "custom")
     parent.system_prompt_preset.currentIndexChanged.connect(
         lambda: _apply_system_prompt_preset(parent)

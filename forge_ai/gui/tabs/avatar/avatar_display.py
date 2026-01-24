@@ -14,12 +14,13 @@ Features:
 # PyQt5 type stubs are incomplete; runtime works correctly
 
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QFileDialog, QComboBox, QCheckBox, QFrame, QSizePolicy,
     QApplication, QOpenGLWidget, QMessageBox, QGroupBox,
-    QSlider, QColorDialog, QGridLayout, QScrollArea, QTextEdit
+    QSlider, QColorDialog, QGridLayout, QScrollArea, QTextEdit,
+    QMenu
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent, QPen
@@ -53,6 +54,8 @@ Qt_ClosedHandCursor: Any = getattr(Qt, 'ClosedHandCursor', 18)
 Qt_ArrowCursor: Any = getattr(Qt, 'ArrowCursor', 0)
 Qt_SizeHorCursor: Any = getattr(Qt, 'SizeHorCursor', 6)
 Qt_SizeVerCursor: Any = getattr(Qt, 'SizeVerCursor', 7)
+Qt_SizeFDiagCursor: Any = getattr(Qt, 'SizeFDiagCursor', 8)  # \ diagonal
+Qt_SizeBDiagCursor: Any = getattr(Qt, 'SizeBDiagCursor', 9)  # / diagonal
 Qt_ShiftModifier: Any = getattr(Qt, 'ShiftModifier', 0x02000000)
 import json
 import os
@@ -2184,22 +2187,24 @@ class FloatingDragBar(QWidget):
 
 
 class AvatarHitLayer(QWidget):
-    """Invisible hit layer that covers the entire avatar - ZERO configuration needed.
+    """Resizable hit area centered on avatar with visible border.
     
     This is a separate top-level window that:
-    - Automatically matches the avatar's exact size and position
-    - Is completely invisible but captures mouse events
-    - Left-drag moves the avatar
+    - Shows a subtle dashed border so you can see it
+    - Drag edges to resize the hit area
+    - Left-drag center to move the avatar
     - Scroll wheel resizes the avatar
     - Right-click shows context menu
-    
-    The user does NOTHING - it just works.
+    - Rest of avatar is click-through!
     """
     
     drag_started = pyqtSignal(object)
     drag_moved = pyqtSignal(object)
     drag_ended = pyqtSignal()
     context_menu_requested = pyqtSignal(object)
+    
+    EDGE_MARGIN = 12  # Pixels from edge to trigger resize
+    MIN_RATIO = 0.15  # Minimum hit area ratio
     
     def __init__(self, avatar_window):
         super().__init__(None)  # Top-level window, not a child
@@ -2214,46 +2219,379 @@ class AvatarHitLayer(QWidget):
         self.setAttribute(Qt_WA_TranslucentBackground, True)
         
         self._drag_pos = None
+        self._resize_edge = None
+        self._resize_start_pos = None
+        self._resize_start_ratios = None
         self.setMouseTracking(True)
-        self.setCursor(QCursor(Qt_OpenHandCursor))
+        self.setCursor(QCursor(Qt_ArrowCursor))
+        
+        # Edge ratios (0.0 = at avatar edge, 1.0 = at center)
+        # These are proportional so they scale with avatar size
+        self._ratio_left = 0.12    # 12% inward from left edge
+        self._ratio_right = 0.12   # 12% inward from right edge
+        self._ratio_top = 0.12     # 12% inward from top edge
+        self._ratio_bottom = 0.12  # 12% inward from bottom edge
+        
+        # Visibility and lock options
+        self._show_border = True   # Show the dashed border
+        self._resize_locked = False  # Lock USER resize (AI can still control avatar)
+        
+        # Auto-track mode - follows model bounds automatically
+        self._auto_track = False  # When True, hit area follows rendered model bounds
+        self._auto_track_timer = QTimer()
+        self._auto_track_timer.timeout.connect(self._update_auto_track)
+        self._auto_track_padding = 0.05  # 5% padding around model bounds
+        
+        # Load saved settings
+        self._load_settings()
         
         # Sync with avatar immediately
         self._sync_with_avatar()
     
+    def set_auto_track(self, enabled: bool):
+        """Enable or disable auto-tracking of model bounds."""
+        self._auto_track = enabled
+        if enabled:
+            self._auto_track_timer.start(50)  # Update at 20fps
+        else:
+            self._auto_track_timer.stop()
+        self.update()
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(hit_auto_track=enabled)
+        except Exception:
+            pass
+    
+    def _update_auto_track(self):
+        """Update hit area to match model's rendered bounds."""
+        if not self._auto_track or not self._avatar:
+            return
+        
+        # Get model bounds from the GL widget
+        gl_widget = getattr(self._avatar, '_gl_widget', None)
+        if not gl_widget:
+            return
+        
+        # Try to get projected model bounds
+        bounds = self._get_model_screen_bounds(gl_widget)
+        if bounds:
+            x, y, w, h = bounds
+            avatar_pos = self._avatar.pos()
+            
+            # Add padding
+            pad = int(min(w, h) * self._auto_track_padding)
+            x = max(0, x - pad)
+            y = max(0, y - pad)
+            w = min(self._avatar.width() - x, w + pad * 2)
+            h = min(self._avatar.height() - y, h + pad * 2)
+            
+            # Update hit layer position and size
+            self.setFixedSize(max(40, w), max(40, h))
+            self.move(avatar_pos.x() + x, avatar_pos.y() + y)
+    
+    def _get_model_screen_bounds(self, gl_widget):
+        """Get the 2D screen bounds of the rendered 3D model."""
+        try:
+            # Check if model has computed bounds info
+            if hasattr(gl_widget, 'model_bounds') and gl_widget.model_bounds:
+                return gl_widget.model_bounds
+            
+            # Try to get from mesh data
+            if hasattr(gl_widget, 'mesh') and gl_widget.mesh:
+                mesh = gl_widget.mesh
+                if hasattr(mesh, 'bounds') and mesh.bounds is not None:
+                    # Get mesh bounds and convert to screen space
+                    # This is a simplified approach - full projection would be better
+                    avatar_size = self._avatar.width()
+                    
+                    # Use a fixed ratio based on typical model centering
+                    # Models are usually centered, so bounds are roughly proportional
+                    cx, cy = avatar_size // 2, avatar_size // 2
+                    
+                    # Estimate visible bounds (models typically fill 60-80% of viewport)
+                    scale = 0.7  # Assume model fills ~70% of viewport
+                    half_w = int(avatar_size * scale / 2)
+                    half_h = int(avatar_size * scale / 2)
+                    
+                    return (cx - half_w, cy - half_h, half_w * 2, half_h * 2)
+            
+            return None
+        except Exception:
+            return None
+    
+    def set_border_visible(self, visible: bool):
+        """Show or hide the border."""
+        self._show_border = visible
+        self.update()
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(hit_border_visible=visible)
+        except Exception:
+            pass
+    
+    def set_resize_locked(self, locked: bool):
+        """Lock or unlock resize."""
+        self._resize_locked = locked
+        self.update()
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(hit_resize_locked=locked)
+        except Exception:
+            pass
+    
+    def _load_settings(self):
+        """Load saved settings."""
+        try:
+            from ....avatar.persistence import load_avatar_settings
+            settings = load_avatar_settings()
+            self._ratio_left = getattr(settings, 'hit_ratio_left', 0.12)
+            self._ratio_right = getattr(settings, 'hit_ratio_right', 0.12)
+            self._ratio_top = getattr(settings, 'hit_ratio_top', 0.12)
+            self._ratio_bottom = getattr(settings, 'hit_ratio_bottom', 0.12)
+            self._show_border = getattr(settings, 'hit_border_visible', True)
+            self._resize_locked = getattr(settings, 'hit_resize_locked', False)
+            # Auto-track mode
+            auto_track = getattr(settings, 'hit_auto_track', False)
+            if auto_track:
+                self.set_auto_track(True)
+        except Exception:
+            pass
+    
+    def _save_settings(self):
+        """Save settings to persistence."""
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(
+                hit_ratio_left=self._ratio_left,
+                hit_ratio_right=self._ratio_right,
+                hit_ratio_top=self._ratio_top,
+                hit_ratio_bottom=self._ratio_bottom
+            )
+        except Exception:
+            pass
+    
+    def set_hit_ratio(self, ratio: float):
+        """Set the hit area ratio (0.0-1.0) - applies uniformly to all sides."""
+        # Convert overall ratio to edge ratios
+        # ratio=1.0 means full coverage (edge ratios = 0)
+        # ratio=0.5 means 50% coverage (edge ratios = 0.25 each side)
+        edge_ratio = (1.0 - max(self.MIN_RATIO, min(1.0, ratio))) / 2
+        self._ratio_left = edge_ratio
+        self._ratio_right = edge_ratio
+        self._ratio_top = edge_ratio
+        self._ratio_bottom = edge_ratio
+        self._sync_with_avatar()
+        self._save_settings()
+    
+    def get_hit_ratio(self) -> float:
+        """Get approximate overall hit area ratio."""
+        avg_edge = (self._ratio_left + self._ratio_right + self._ratio_top + self._ratio_bottom) / 4
+        return max(self.MIN_RATIO, 1.0 - avg_edge * 2)
+    
     def _sync_with_avatar(self):
-        """Sync size and position with avatar window."""
+        """Sync size and position with avatar window using proportional ratios."""
         if self._avatar:
-            self.setFixedSize(self._avatar.size())
-            self.move(self._avatar.pos())
+            avatar_size = self._avatar.width()
+            avatar_pos = self._avatar.pos()
+            
+            # Calculate hit area bounds using ratios (scales with avatar)
+            left_offset = int(avatar_size * self._ratio_left)
+            right_offset = int(avatar_size * self._ratio_right)
+            top_offset = int(avatar_size * self._ratio_top)
+            bottom_offset = int(avatar_size * self._ratio_bottom)
+            
+            # Calculate position and size
+            x = avatar_pos.x() + left_offset
+            y = avatar_pos.y() + top_offset
+            w = avatar_size - left_offset - right_offset
+            h = avatar_size - top_offset - bottom_offset
+            
+            # Ensure minimum size
+            min_size = int(avatar_size * self.MIN_RATIO)
+            w = max(min_size, w)
+            h = max(min_size, h)
+            
+            self.setFixedSize(w, h)
+            self.move(x, y)
+    
+    def _get_edge_at_pos(self, pos):
+        """Check if mouse is near an edge or midpoint for resizing."""
+        margin = self.EDGE_MARGIN
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        mid_x = w // 2
+        mid_y = h // 2
+        
+        # Check corners first (diagonal resize)
+        if x < margin and y < margin:
+            return 'top-left'
+        if x > w - margin and y < margin:
+            return 'top-right'
+        if x < margin and y > h - margin:
+            return 'bottom-left'
+        if x > w - margin and y > h - margin:
+            return 'bottom-right'
+        
+        # Check edge midpoints (single edge resize)
+        if abs(x - mid_x) < margin * 2 and y < margin:
+            return 'top'
+        if abs(x - mid_x) < margin * 2 and y > h - margin:
+            return 'bottom'
+        if x < margin and abs(y - mid_y) < margin * 2:
+            return 'left'
+        if x > w - margin and abs(y - mid_y) < margin * 2:
+            return 'right'
+        
+        # Check full edges
+        if x < margin:
+            return 'left'
+        if x > w - margin:
+            return 'right'
+        if y < margin:
+            return 'top'
+        if y > h - margin:
+            return 'bottom'
+        return None
     
     def paintEvent(self, event):
-        """Draw invisible but clickable area."""
+        """Draw border and handles only if visible."""
         painter = QPainter(self)
-        # Alpha=1 is enough to capture mouse events but appears invisible
-        painter.setBrush(QColor(0, 0, 0, 1))
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        w, h = self.width(), self.height()
+        mid_x, mid_y = w // 2, h // 2
+        
+        # Only draw anything if border is visible
+        if not self._show_border:
+            # Completely invisible - just a subtle fill for mouse capture
+            painter.setBrush(QColor(0, 0, 0, 1))  # Nearly invisible
+            painter.setPen(Qt_NoPen)
+            painter.drawRect(0, 0, w, h)
+            return
+        
+        # Different fill color for auto-track mode (green tint)
+        if self._auto_track:
+            painter.setBrush(QColor(100, 200, 150, 15))  # Green tint for auto-track
+        else:
+            painter.setBrush(QColor(100, 150, 255, 12))  # Blue tint for manual
         painter.setPen(Qt_NoPen)
-        painter.drawRect(0, 0, self.width(), self.height())
+        painter.drawRoundedRect(2, 2, w-4, h-4, 6, 6)
+        
+        # Dashed border - green for auto-track, blue for manual
+        if self._auto_track:
+            pen = QPen(QColor(100, 200, 150, 160))  # Green border
+        else:
+            pen = QPen(QColor(137, 180, 250, 140))  # Blue border
+        pen.setWidth(2)
+        pen.setStyle(Qt.DashLine if hasattr(Qt, 'DashLine') else 2)
+        painter.setPen(pen)
+        painter.setBrush(Qt_NoBrush)
+        painter.drawRoundedRect(2, 2, w-4, h-4, 6, 6)
+        
+        # Draw handles if not locked and not in auto-track mode
+        if not self._resize_locked and not self._auto_track:
+            handle_size = 8
+            half_handle = handle_size // 2
+            painter.setBrush(QColor(137, 180, 250, 200))
+            painter.setPen(QColor(220, 220, 240, 220))
+            
+            # Four corners
+            painter.drawRect(0, 0, handle_size, handle_size)
+            painter.drawRect(w - handle_size, 0, handle_size, handle_size)
+            painter.drawRect(0, h - handle_size, handle_size, handle_size)
+            painter.drawRect(w - handle_size, h - handle_size, handle_size, handle_size)
+            
+            # Four edge midpoints
+            painter.drawRect(mid_x - half_handle, 0, handle_size, handle_size)  # Top center
+            painter.drawRect(mid_x - half_handle, h - handle_size, handle_size, handle_size)  # Bottom center
+            painter.drawRect(0, mid_y - half_handle, handle_size, handle_size)  # Left center
+            painter.drawRect(w - handle_size, mid_y - half_handle, handle_size, handle_size)  # Right center
     
     def mousePressEvent(self, event):
         if event.button() == Qt_LeftButton:
-            self._drag_pos = event.globalPos() - self._avatar.pos()
-            self.setCursor(QCursor(Qt_ClosedHandCursor))
-            self.drag_started.emit(event.globalPos())
+            edge = self._get_edge_at_pos(event.pos())
+            # Only allow resize if not locked
+            if edge and not self._resize_locked:
+                # Start resize - store current ratios
+                self._resize_edge = edge
+                self._resize_start_pos = event.globalPos()
+                self._resize_start_ratios = {
+                    'left': self._ratio_left,
+                    'right': self._ratio_right,
+                    'top': self._ratio_top,
+                    'bottom': self._ratio_bottom
+                }
+            else:
+                # Start drag (move avatar)
+                self._drag_pos = event.globalPos() - self._avatar.pos()
+                self.drag_started.emit(event.globalPos())
             event.accept()
         elif event.button() == Qt_RightButton:
             self.context_menu_requested.emit(event.globalPos())
             event.accept()
     
     def mouseMoveEvent(self, event):
-        if self._drag_pos is not None:
+        if self._resize_edge and self._resize_start_pos and self._resize_start_ratios:
+            # Independent edge resize using ratios
+            delta = event.globalPos() - self._resize_start_pos
+            edge = self._resize_edge
+            avatar_size = self._avatar.width()
+            
+            # Convert pixel delta to ratio delta
+            ratio_delta_x = delta.x() / avatar_size if avatar_size > 0 else 0
+            ratio_delta_y = delta.y() / avatar_size if avatar_size > 0 else 0
+            max_ratio = 0.45  # Maximum 45% inward from each edge
+            
+            # Update only the specific edge(s) being dragged
+            if 'left' in edge:
+                # Dragging left edge: positive delta.x = edge moves right = more inward
+                new_ratio = self._resize_start_ratios['left'] + ratio_delta_x
+                self._ratio_left = max(0, min(max_ratio, new_ratio))
+            if 'right' in edge:
+                # Dragging right edge: positive delta.x = edge moves right = less inward
+                new_ratio = self._resize_start_ratios['right'] - ratio_delta_x
+                self._ratio_right = max(0, min(max_ratio, new_ratio))
+            if 'top' in edge:
+                # Dragging top edge: positive delta.y = edge moves down = more inward
+                new_ratio = self._resize_start_ratios['top'] + ratio_delta_y
+                self._ratio_top = max(0, min(max_ratio, new_ratio))
+            if 'bottom' in edge:
+                # Dragging bottom edge: positive delta.y = edge moves down = less inward
+                new_ratio = self._resize_start_ratios['bottom'] - ratio_delta_y
+                self._ratio_bottom = max(0, min(max_ratio, new_ratio))
+            
+            self._sync_with_avatar()
+            
+        elif self._drag_pos is not None:
             self.drag_moved.emit(event.globalPos())
+        else:
+            # Update cursor based on position (only show resize cursors if not locked)
+            edge = self._get_edge_at_pos(event.pos())
+            if self._resize_locked or not edge:
+                self.setCursor(QCursor(Qt_ArrowCursor))
+            elif edge in ['left', 'right']:
+                self.setCursor(QCursor(Qt_SizeHorCursor))
+            elif edge in ['top', 'bottom']:
+                self.setCursor(QCursor(Qt_SizeVerCursor))
+            elif edge == 'top-left' or edge == 'bottom-right':
+                self.setCursor(QCursor(Qt_SizeFDiagCursor))
+            elif edge == 'top-right' or edge == 'bottom-left':
+                self.setCursor(QCursor(Qt_SizeBDiagCursor))
+            else:
+                self.setCursor(QCursor(Qt_ArrowCursor))
     
     def mouseReleaseEvent(self, event):
         if event.button() == Qt_LeftButton:
             if self._drag_pos is not None:
                 self.drag_ended.emit()
+            elif self._resize_edge:
+                # Save ratios when resize ends
+                self._save_settings()
             self._drag_pos = None
-            self.setCursor(QCursor(Qt_OpenHandCursor))
+            self._resize_edge = None
+            self._resize_start_pos = None
+            self._resize_start_ratios = None
+            self.setCursor(QCursor(Qt_ArrowCursor))
             event.accept()
     
     def wheelEvent(self, event):
@@ -2274,6 +2612,565 @@ class AvatarHitLayer(QWidget):
             event.accept()
         else:
             event.ignore()
+
+
+class BoneHitRegion(QWidget):
+    """Individual hit region for a single bone.
+    
+    Users can resize each bone's hit area to match their avatar's shape.
+    The region follows the bone when the AI animates the avatar.
+    Left-drag center to move avatar, right-click for menu.
+    """
+    
+    EDGE_MARGIN = 8  # Pixels from edge for resize handles
+    
+    # Signals for avatar dragging
+    drag_started = pyqtSignal(object)
+    drag_moved = pyqtSignal(object)
+    drag_ended = pyqtSignal()
+    context_menu_requested = pyqtSignal(object)
+    
+    def __init__(self, bone_name: str, parent_manager):
+        super().__init__(None)  # Top-level window
+        self._bone_name = bone_name
+        self._manager = parent_manager
+        
+        # Frameless, always on top, tool window
+        self.setWindowFlags(
+            Qt_FramelessWindowHint |
+            Qt_WindowStaysOnTopHint |
+            Qt_Tool
+        )
+        self.setAttribute(Qt_WA_TranslucentBackground, True)
+        self.setMouseTracking(True)
+        
+        # Size and position relative to bone center (in pixels)
+        self._width = 40
+        self._height = 40
+        self._offset_x = 0  # Offset from bone center
+        self._offset_y = 0
+        
+        # Screen position (updated by manager)
+        self._screen_x = 0
+        self._screen_y = 0
+        
+        # Interaction state
+        self._drag_pos = None  # For moving avatar
+        self._offset_drag_pos = None  # For adjusting bone offset (Shift+drag)
+        self._resize_edge = None
+        self._resize_start = None
+        
+        # Settings (from manager)
+        self._show_border = True
+        self._resize_locked = False
+        
+        self.setFixedSize(self._width, self._height)
+        self.setCursor(QCursor(Qt_ArrowCursor))
+        
+        # Set tooltip to show bone name on hover
+        self.setToolTip(self._bone_name)
+    
+    @property
+    def bone_name(self) -> str:
+        return self._bone_name
+    
+    def get_config(self) -> dict:
+        """Get serializable config for this region."""
+        return {
+            'width': self._width,
+            'height': self._height,
+            'offset_x': self._offset_x,
+            'offset_y': self._offset_y,
+        }
+    
+    def set_config(self, config: dict):
+        """Apply saved config."""
+        self._width = config.get('width', 40)
+        self._height = config.get('height', 40)
+        self._offset_x = config.get('offset_x', 0)
+        self._offset_y = config.get('offset_y', 0)
+        self.setFixedSize(self._width, self._height)
+    
+    def update_position(self, bone_screen_x: int, bone_screen_y: int):
+        """Update position based on bone's projected screen coordinates."""
+        self._screen_x = bone_screen_x + self._offset_x - self._width // 2
+        self._screen_y = bone_screen_y + self._offset_y - self._height // 2
+        self.move(self._screen_x, self._screen_y)
+    
+    def _get_edge_at_pos(self, pos):
+        """Check if mouse is near an edge for resizing."""
+        margin = self.EDGE_MARGIN
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        
+        # Check corners
+        if x < margin and y < margin:
+            return 'top-left'
+        if x > w - margin and y < margin:
+            return 'top-right'
+        if x < margin and y > h - margin:
+            return 'bottom-left'
+        if x > w - margin and y > h - margin:
+            return 'bottom-right'
+        
+        # Check edges
+        if x < margin:
+            return 'left'
+        if x > w - margin:
+            return 'right'
+        if y < margin:
+            return 'top'
+        if y > h - margin:
+            return 'bottom'
+        return None
+    
+    def set_border_visible(self, visible: bool):
+        """Show or hide the border."""
+        self._show_border = visible
+        self.update()
+    
+    def set_resize_locked(self, locked: bool):
+        """Lock or unlock resize."""
+        self._resize_locked = locked
+        self.update()
+    
+    def paintEvent(self, event):
+        """Draw the bone region with handles."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        w, h = self.width(), self.height()
+        
+        # If border hidden, just draw minimal fill for mouse capture
+        if not self._show_border:
+            painter.setBrush(QColor(0, 0, 0, 1))  # Nearly invisible
+            painter.setPen(Qt_NoPen)
+            painter.drawRect(0, 0, w, h)
+            return
+        
+        # Semi-transparent fill
+        painter.setBrush(QColor(200, 150, 100, 30))
+        painter.setPen(Qt_NoPen)
+        painter.drawRoundedRect(2, 2, w-4, h-4, 4, 4)
+        
+        # Orange dashed border for bone regions
+        pen = QPen(QColor(255, 180, 100, 180))
+        pen.setWidth(2)
+        pen.setStyle(Qt.DashLine if hasattr(Qt, 'DashLine') else 2)
+        painter.setPen(pen)
+        painter.setBrush(Qt_NoBrush)
+        painter.drawRoundedRect(2, 2, w-4, h-4, 4, 4)
+        
+        # Draw handles at corners only if resize not locked
+        if not self._resize_locked:
+            handle_size = 6
+            painter.setBrush(QColor(255, 180, 100, 220))
+            painter.setPen(QColor(255, 220, 180))
+            
+            painter.drawRect(0, 0, handle_size, handle_size)
+            painter.drawRect(w - handle_size, 0, handle_size, handle_size)
+            painter.drawRect(0, h - handle_size, handle_size, handle_size)
+            painter.drawRect(w - handle_size, h - handle_size, handle_size, handle_size)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            edge = self._get_edge_at_pos(event.pos())
+            # Check for Shift modifier - Shift+drag adjusts bone offset
+            shift_held = event.modifiers() & Qt_ShiftModifier
+            
+            if edge and not self._resize_locked:
+                # Resize the bone region
+                self._resize_edge = edge
+                self._resize_start = {
+                    'pos': event.globalPos(),
+                    'width': self._width,
+                    'height': self._height,
+                    'offset_x': self._offset_x,
+                    'offset_y': self._offset_y,
+                }
+            elif shift_held:
+                # Shift+drag to adjust bone region offset
+                self._offset_drag_pos = event.globalPos()
+            else:
+                # Normal drag moves the avatar
+                if self._manager and self._manager._avatar:
+                    self._drag_pos = event.globalPos() - self._manager._avatar.pos()
+                    self.drag_started.emit(event.globalPos())
+            event.accept()
+        elif event.button() == Qt_RightButton:
+            # Pass context menu up to manager
+            self.context_menu_requested.emit(event.globalPos())
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if self._resize_edge and self._resize_start:
+            delta = event.globalPos() - self._resize_start['pos']
+            edge = self._resize_edge
+            
+            # Calculate new size based on edge being dragged
+            new_w = self._resize_start['width']
+            new_h = self._resize_start['height']
+            new_ox = self._resize_start['offset_x']
+            new_oy = self._resize_start['offset_y']
+            
+            if 'right' in edge:
+                new_w = max(20, self._resize_start['width'] + delta.x())
+            if 'left' in edge:
+                dw = -delta.x()
+                new_w = max(20, self._resize_start['width'] + dw)
+                new_ox = self._resize_start['offset_x'] - dw // 2
+            if 'bottom' in edge:
+                new_h = max(20, self._resize_start['height'] + delta.y())
+            if 'top' in edge:
+                dh = -delta.y()
+                new_h = max(20, self._resize_start['height'] + dh)
+                new_oy = self._resize_start['offset_y'] - dh // 2
+            
+            self._width = new_w
+            self._height = new_h
+            self._offset_x = new_ox
+            self._offset_y = new_oy
+            self.setFixedSize(new_w, new_h)
+            
+            # Update position with new offset
+            self.update_position(
+                self._screen_x + self._width // 2 - self._offset_x,
+                self._screen_y + self._height // 2 - self._offset_y
+            )
+            
+        elif self._offset_drag_pos is not None:
+            # Shift+drag: adjust bone region offset
+            delta = event.globalPos() - self._offset_drag_pos
+            self._offset_x += delta.x()
+            self._offset_y += delta.y()
+            self._offset_drag_pos = event.globalPos()
+            self.move(self.x() + delta.x(), self.y() + delta.y())
+            
+        elif self._drag_pos is not None:
+            # Normal drag: move the avatar
+            self.drag_moved.emit(event.globalPos())
+        else:
+            # Update cursor based on position and lock state
+            edge = self._get_edge_at_pos(event.pos())
+            if self._resize_locked or not edge:
+                self.setCursor(QCursor(Qt_OpenHandCursor if hasattr(Qt, 'OpenHandCursor') else Qt_ArrowCursor))
+            elif edge in ['left', 'right']:
+                self.setCursor(QCursor(Qt_SizeHorCursor))
+            elif edge in ['top', 'bottom']:
+                self.setCursor(QCursor(Qt_SizeVerCursor))
+            elif edge in ['top-left', 'bottom-right']:
+                self.setCursor(QCursor(Qt_SizeFDiagCursor))
+            elif edge in ['top-right', 'bottom-left']:
+                self.setCursor(QCursor(Qt_SizeBDiagCursor))
+            else:
+                self.setCursor(QCursor(Qt_OpenHandCursor if hasattr(Qt, 'OpenHandCursor') else Qt_ArrowCursor))
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            if self._drag_pos is not None:
+                self.drag_ended.emit()
+            self._drag_pos = None
+            self._offset_drag_pos = None
+            self._resize_edge = None
+            self._resize_start = None
+            self.setCursor(QCursor(Qt_ArrowCursor))
+            # Save config through manager
+            if self._manager:
+                self._manager._save_bone_configs()
+            event.accept()
+    
+    def wheelEvent(self, event):
+        """Scroll wheel resizes the avatar."""
+        if self._manager and self._manager._avatar and hasattr(self._manager._avatar, '_set_size'):
+            try:
+                delta = event.angleDelta().y()
+            except AttributeError:
+                delta = getattr(event, 'delta', lambda: 0)()
+            
+            current_size = getattr(self._manager._avatar, '_size', 300)
+            if delta > 0:
+                new_size = current_size + 20  # Scroll up = bigger
+            else:
+                new_size = max(50, current_size - 20)  # Scroll down = smaller
+            
+            self._manager._avatar._set_size(new_size)
+            event.accept()
+        else:
+            event.ignore()
+
+
+class BoneHitManager:
+    """Manages multiple bone hit regions for an avatar.
+    
+    Creates and updates hit regions for each detected bone.
+    Regions follow bone positions when the AI animates.
+    """
+    
+    # Default bone layout (estimated screen positions relative to avatar center)
+    # These are fallback positions when we can't get real bone transforms
+    DEFAULT_BONE_POSITIONS = {
+        'head': (0.5, 0.15),       # Top center
+        'neck': (0.5, 0.22),       # Just below head
+        'chest': (0.5, 0.35),      # Upper torso
+        'spine': (0.5, 0.45),      # Mid torso
+        'hips': (0.5, 0.55),       # Lower torso
+        'shoulder_l': (0.3, 0.28), # Left shoulder
+        'shoulder_r': (0.7, 0.28), # Right shoulder
+        'arm_l': (0.2, 0.38),      # Left upper arm
+        'arm_r': (0.8, 0.38),      # Right upper arm
+        'elbow_l': (0.15, 0.50),   # Left elbow
+        'elbow_r': (0.85, 0.50),   # Right elbow
+        'leg_l': (0.4, 0.68),      # Left upper leg
+        'leg_r': (0.6, 0.68),      # Right upper leg
+        'knee_l': (0.38, 0.82),    # Left knee
+        'knee_r': (0.62, 0.82),    # Right knee
+        'foot_l': (0.35, 0.95),    # Left foot
+        'foot_r': (0.65, 0.95),    # Right foot
+    }
+    
+    def __init__(self, avatar_window):
+        self._avatar = avatar_window
+        self._regions: Dict[str, BoneHitRegion] = {}
+        self._visible = False
+        self._edit_mode = False
+        
+        # Settings (propagated to regions)
+        self._show_border = True
+        self._resize_locked = False
+        
+        # Update timer for tracking bone positions
+        self._update_timer = QTimer()
+        self._update_timer.timeout.connect(self._update_positions)
+        
+        # Load saved configs and settings
+        self._bone_configs = self._load_bone_configs()
+        self._load_settings()
+    
+    def _load_settings(self):
+        """Load saved border/lock settings."""
+        try:
+            from ....avatar.persistence import load_avatar_settings
+            settings = load_avatar_settings()
+            self._show_border = getattr(settings, 'hit_border_visible', True)
+            self._resize_locked = getattr(settings, 'hit_resize_locked', False)
+        except Exception:
+            pass
+    
+    def set_border_visible(self, visible: bool):
+        """Show or hide borders on all bone regions."""
+        self._show_border = visible
+        for region in self._regions.values():
+            region.set_border_visible(visible)
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(hit_border_visible=visible)
+        except Exception:
+            pass
+    
+    def set_resize_locked(self, locked: bool):
+        """Lock or unlock resize on all bone regions."""
+        self._resize_locked = locked
+        for region in self._regions.values():
+            region.set_resize_locked(locked)
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(hit_resize_locked=locked)
+        except Exception:
+            pass
+    
+    def setup_bones(self, bone_names: list):
+        """Create hit regions for the given bone names."""
+        # Clear existing regions
+        self.clear()
+        
+        for bone_name in bone_names:
+            region = BoneHitRegion(bone_name, self)
+            
+            # Apply saved config if available
+            if bone_name in self._bone_configs:
+                region.set_config(self._bone_configs[bone_name])
+            
+            # Apply current settings
+            region.set_border_visible(self._show_border)
+            region.set_resize_locked(self._resize_locked)
+            
+            # Connect signals to avatar window for dragging
+            if self._avatar:
+                region.drag_started.connect(self._avatar._on_drag_bar_start)
+                region.drag_moved.connect(self._avatar._on_drag_bar_move)
+                region.drag_ended.connect(self._avatar._on_drag_bar_end)
+                region.context_menu_requested.connect(self._avatar._show_context_menu_at)
+            
+            self._regions[bone_name] = region
+        
+        # Update positions immediately
+        self._update_positions()
+    
+    def setup_from_gl_widget(self, gl_widget):
+        """Setup bones from the GL widget's model metadata."""
+        if not gl_widget:
+            return
+        
+        metadata = getattr(gl_widget, '_model_metadata', {})
+        bone_names = metadata.get('skeleton_bones', [])
+        
+        if bone_names:
+            # Use detected bones
+            self.setup_bones(bone_names)
+        else:
+            # Use default humanoid bones
+            self.setup_bones(list(self.DEFAULT_BONE_POSITIONS.keys()))
+    
+    def show(self):
+        """Show all bone regions."""
+        self._visible = True
+        for region in self._regions.values():
+            region.show()
+        self._update_timer.start(50)  # 20fps updates
+    
+    def hide(self):
+        """Hide all bone regions."""
+        self._visible = False
+        self._update_timer.stop()
+        for region in self._regions.values():
+            region.hide()
+    
+    def set_edit_mode(self, enabled: bool):
+        """Enable or disable edit mode (allows resizing)."""
+        self._edit_mode = enabled
+        # Could add visual indicator for edit mode
+    
+    def clear(self):
+        """Remove all bone regions."""
+        self._update_timer.stop()
+        for region in self._regions.values():
+            region.close()
+        self._regions.clear()
+    
+    def _update_positions(self):
+        """Update all bone region positions based on avatar state."""
+        if not self._avatar or not self._visible:
+            return
+        
+        avatar_pos = self._avatar.pos()
+        avatar_size = self._avatar.width()
+        
+        # Get bone controller if available
+        bone_controller = None
+        try:
+            from ....avatar.bone_control import get_bone_controller
+            bone_controller = get_bone_controller()
+        except Exception:
+            pass
+        
+        # Get GL widget for rotation info
+        gl_widget = getattr(self._avatar, '_gl_widget', None)
+        model_yaw = 0.0
+        if gl_widget:
+            model_yaw = getattr(gl_widget, 'model_yaw', 0.0)
+        
+        for bone_name, region in self._regions.items():
+            # Try to get actual bone position from controller
+            screen_x, screen_y = self._get_bone_screen_pos(
+                bone_name, avatar_pos, avatar_size, bone_controller, model_yaw
+            )
+            region.update_position(screen_x, screen_y)
+    
+    def _get_bone_screen_pos(self, bone_name: str, avatar_pos, avatar_size: int,
+                              bone_controller, model_yaw: float) -> tuple:
+        """Calculate screen position for a bone."""
+        # Normalize bone name for lookup
+        bone_lower = bone_name.lower()
+        
+        # Find matching default position
+        default_x, default_y = 0.5, 0.5  # Center fallback
+        for pattern, (px, py) in self.DEFAULT_BONE_POSITIONS.items():
+            if pattern in bone_lower or bone_lower in pattern:
+                default_x, default_y = px, py
+                break
+        
+        # Apply model yaw rotation to x position
+        import math
+        if model_yaw != 0:
+            # Rotate x around center (0.5)
+            cx = default_x - 0.5
+            rotated_x = cx * math.cos(model_yaw)
+            default_x = rotated_x + 0.5
+        
+        # If we have bone controller, try to get dynamic offset
+        if bone_controller:
+            try:
+                state = bone_controller.get_bone_state(bone_name)
+                if state:
+                    # Apply bone rotation to position offset
+                    pitch = state.get('pitch', 0)
+                    yaw = state.get('yaw', 0)
+                    
+                    # Small offset based on bone rotation
+                    offset_x = math.sin(yaw) * 0.05
+                    offset_y = math.sin(pitch) * 0.05
+                    
+                    default_x = max(0.05, min(0.95, default_x + offset_x))
+                    default_y = max(0.05, min(0.95, default_y + offset_y))
+            except Exception:
+                pass
+        
+        # Convert to screen coordinates
+        screen_x = avatar_pos.x() + int(avatar_size * default_x)
+        screen_y = avatar_pos.y() + int(avatar_size * default_y)
+        
+        return screen_x, screen_y
+    
+    def _show_bone_context_menu(self, region: BoneHitRegion, global_pos):
+        """Show context menu for a bone region."""
+        menu = QMenu()
+        
+        # Reset size action
+        reset_action = menu.addAction("Reset Size")
+        reset_action.triggered.connect(lambda: self._reset_region(region))
+        
+        # Hide this bone
+        hide_action = menu.addAction("Hide This Bone")
+        hide_action.triggered.connect(lambda: region.hide())
+        
+        menu.addSeparator()
+        
+        # Hide all bones
+        hide_all_action = menu.addAction("Hide All Bones")
+        hide_all_action.triggered.connect(self.hide)
+        
+        menu.exec_(global_pos)
+    
+    def _reset_region(self, region: BoneHitRegion):
+        """Reset a region to default size."""
+        region._width = 40
+        region._height = 40
+        region._offset_x = 0
+        region._offset_y = 0
+        region.setFixedSize(40, 40)
+        self._update_positions()
+        self._save_bone_configs()
+    
+    def _load_bone_configs(self) -> dict:
+        """Load saved bone region configs."""
+        try:
+            from ....avatar.persistence import load_avatar_settings
+            settings = load_avatar_settings()
+            return getattr(settings, 'bone_hit_configs', {})
+        except Exception:
+            return {}
+    
+    def _save_bone_configs(self):
+        """Save all bone region configs."""
+        configs = {}
+        for bone_name, region in self._regions.items():
+            configs[bone_name] = region.get_config()
+        
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(bone_hit_configs=configs)
+        except Exception:
+            pass
 
 
 class Avatar3DOverlayWindow(QWidget):
@@ -2399,29 +3296,25 @@ class Avatar3DOverlayWindow(QWidget):
         
         main_layout.addWidget(self._gl_container)
         
-        # Create INVISIBLE HIT LAYER - covers entire avatar, zero config needed
-        # This is a separate top-level window that receives mouse events
-        # while the avatar window is click-through
-        self._hit_layer = AvatarHitLayer(self)
-        self._hit_layer.drag_started.connect(self._on_drag_bar_start)
-        self._hit_layer.drag_moved.connect(self._on_drag_bar_move)
-        self._hit_layer.drag_ended.connect(self._on_drag_bar_end)
-        self._hit_layer.context_menu_requested.connect(self._show_context_menu_at)
-        self._hit_layer.show()  # Always show - it's invisible anyway
+        # Bone hit region manager - per-bone hit areas for precise interaction
+        # This replaces the old AvatarHitLayer - now we use bone regions for dragging
+        self._bone_hit_manager = BoneHitManager(self)
         
-        # Keep old drag bar reference for compatibility (points to hit layer)
-        self._drag_bar = self._hit_layer
+        # Keep reference for compatibility
+        self._hit_layer = None  # Removed - using bone regions now
+        self._drag_bar = None  # Removed - using bone regions now
         
-        # Drag bar state
+        # Drag bar state (for compatibility with drag handlers)
         self._drag_bar_offset = None
         
-        # Make avatar window fully click-through (hit layer is separate window)
+        # Make avatar window fully click-through (bone regions are separate windows)
         self._apply_click_through()
     
     def _update_drag_bar_position(self):
-        """Update the hit layer's position to match avatar."""
-        if hasattr(self, '_hit_layer') and self._hit_layer:
-            self._hit_layer._sync_with_avatar()
+        """Update bone hit regions position to match avatar."""
+        # Update bone hit regions
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            self._bone_hit_manager._update_positions()
     
     def moveEvent(self, event):
         """When avatar moves, update hit layer position too."""
@@ -2700,6 +3593,11 @@ class Avatar3DOverlayWindow(QWidget):
                 
                 # Don't start idle animation - it looks weird on humanoid models
                 # The AdaptiveAnimator handles proper animations via bone/blendshape
+                
+                # Setup and show bone hit regions - these are the main drag interface now
+                if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+                    self._bone_hit_manager.setup_from_gl_widget(self._gl_widget)
+                    self._bone_hit_manager.show()  # Always show - these are now the drag handles
             
             return result
         return False
@@ -2778,24 +3676,8 @@ class Avatar3DOverlayWindow(QWidget):
             else:
                 new_size = max(50, self._size - 20)   # Scroll down = smaller (min 50)
             
-            self._size = new_size
-            self.setFixedSize(self._size, self._size)
-            self._gl_container.setFixedSize(self._size, self._size)
-            if self._gl_widget:
-                self._gl_widget.setFixedSize(self._size, self._size)
-                self._apply_circular_mask()
-            
-            # Update drag bar size if in anchored mode
-            if hasattr(self, '_drag_bar') and self._drag_bar:
-                self._drag_bar._update_position()
-            
-            # Save size
-            try:
-                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
-                save_avatar_settings(overlay_3d_size=self._size)
-                write_avatar_state_for_ai()
-            except Exception:
-                pass
+            # Use _set_size which keeps center position
+            self._set_size(new_size, keep_center=True)
             
             event.accept()
         else:
@@ -2872,19 +3754,38 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # ==== INTERACTION INFO ====
-        # No settings needed - hit layer is automatic
-        info_action = menu.addAction("Drag: Move | Scroll: Resize")
-        info_action.setEnabled(False)  # Just informational
+        # ==== BONE REGION SETTINGS ====
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            bone_manager = self._bone_hit_manager
+            
+            # Border visibility toggle
+            border_visible = bone_manager._show_border
+            border_text = "[X] Show Borders" if border_visible else "Show Borders"
+            border_action = menu.addAction(border_text)
+            border_action.setToolTip("Show/hide bone region borders")
+            border_action.triggered.connect(lambda: self._toggle_hit_border())
+            
+            # Resize lock toggle
+            resize_locked = bone_manager._resize_locked
+            lock_text = "[X] Lock Resize" if resize_locked else "Lock Resize"
+            lock_action = menu.addAction(lock_text)
+            lock_action.setToolTip("Prevents resizing bone regions (Shift+drag still adjusts offset)")
+            lock_action.triggered.connect(lambda: self._toggle_hit_lock())
+            
+            menu.addSeparator()
+            
+            # Reset all bone regions
+            reset_bones_action = menu.addAction("Reset All Regions")
+            reset_bones_action.triggered.connect(self._reset_bone_regions)
         
         menu.addSeparator()
         
         # ==== AVATAR SETTINGS ====
-        # Resize & Rotate toggle
+        # Resize & Rotate toggle (for the AVATAR, not the drag area)
         resize_enabled = getattr(self, '_resize_enabled', False)
-        resize_text = "[X] Resize/Rotate Mode" if resize_enabled else "Enable Resize/Rotate"
+        resize_text = "[X] Avatar Resize Mode" if resize_enabled else "Avatar Resize Mode"
         resize_action = menu.addAction(resize_text)
-        resize_action.setToolTip("When enabled: drag avatar edges to resize, Shift+drag on drag bar to rotate")
+        resize_action.setToolTip("When enabled: scroll wheel resizes avatar")
         resize_action.triggered.connect(self._toggle_resize)
         
         # Size input action
@@ -2916,6 +3817,44 @@ class Avatar3DOverlayWindow(QWidget):
         except Exception:
             pass
     
+    def _toggle_hit_border(self):
+    
+    def _toggle_hit_border(self):
+        """Toggle drag area border visibility."""
+        if hasattr(self, '_hit_layer') and self._hit_layer:
+            current = getattr(self._hit_layer, '_show_border', True)
+            self._hit_layer.set_border_visible(not current)
+    
+    def _toggle_hit_lock(self):
+        """Toggle drag area resize lock."""
+        if hasattr(self, '_hit_layer') and self._hit_layer:
+            current = getattr(self._hit_layer, '_resize_locked', False)
+            self._hit_layer.set_resize_locked(not current)
+            self._hit_layer.update()  # Redraw to hide/show handles
+    
+    def _reset_drag_area(self):
+        """Reset drag area to default centered size."""
+        if hasattr(self, '_hit_layer') and self._hit_layer:
+            self._hit_layer._ratio_left = 0.12
+            self._hit_layer._ratio_right = 0.12
+    def _toggle_hit_border(self):
+        """Toggle bone region border visibility."""
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            current = self._bone_hit_manager._show_border
+            self._bone_hit_manager.set_border_visible(not current)
+    
+    def _toggle_hit_lock(self):
+        """Toggle bone region resize lock."""
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            current = self._bone_hit_manager._resize_locked
+            self._bone_hit_manager.set_resize_locked(not current)
+    
+    def _reset_bone_regions(self):
+        """Reset all bone regions to default sizes."""
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            for region in self._bone_hit_manager._regions.values():
+                self._bone_hit_manager._reset_region(region)
+    
     def _toggle_resize(self):
         """Toggle resize/rotate mode and update border visibility - Avatar3DOverlayWindow version."""
         self._resize_enabled = not getattr(self, '_resize_enabled', False)
@@ -2925,8 +3864,8 @@ class Avatar3DOverlayWindow(QWidget):
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
             save_avatar_settings(resize_enabled=self._resize_enabled)
             write_avatar_state_for_ai()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[Avatar] Error saving resize state: {e}")
     
     def _toggle_control_bar(self):
         """Toggle hit layer visibility (mostly for debugging - it's invisible anyway)."""
@@ -3014,9 +3953,9 @@ class Avatar3DOverlayWindow(QWidget):
             if self._gl_widget:
                 self._gl_widget.setFixedSize(self._size, self._size)
                 self._apply_circular_mask()
-            # Update drag bar size if in anchored mode
-            if hasattr(self, '_drag_bar') and self._drag_bar:
-                self._drag_bar._update_position()
+            # Update hit layer position
+            if hasattr(self, '_hit_layer') and self._hit_layer:
+                self._hit_layer._sync_with_avatar()
             # Save size
             try:
                 from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
@@ -3025,18 +3964,31 @@ class Avatar3DOverlayWindow(QWidget):
             except Exception:
                 pass
     
-    def _set_size(self, size: int):
-        """Set avatar size programmatically (used by AI commands)."""
+    def _set_size(self, size: int, keep_center: bool = True):
+        """Set avatar size programmatically (used by AI commands and scroll wheel)."""
         size = max(50, min(2000, size))  # Clamp to reasonable range
+        
+        # Calculate center before resize
+        old_center_x = self.x() + self._size // 2
+        old_center_y = self.y() + self._size // 2
+        
         self._size = size
         self.setFixedSize(self._size, self._size)
         self._gl_container.setFixedSize(self._size, self._size)
         if self._gl_widget:
             self._gl_widget.setFixedSize(self._size, self._size)
             self._apply_circular_mask()
-        # Update drag bar size if in anchored mode
-        if hasattr(self, '_drag_bar') and self._drag_bar:
-            self._drag_bar._update_position()
+        
+        # Keep centered at same position
+        if keep_center:
+            new_x = old_center_x - self._size // 2
+            new_y = old_center_y - self._size // 2
+            self.move(new_x, new_y)
+        
+        # Update hit layer position
+        if hasattr(self, '_hit_layer') and self._hit_layer:
+            self._hit_layer._sync_with_avatar()
+        
         # Save size
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
@@ -3244,6 +4196,9 @@ class Avatar3DOverlayWindow(QWidget):
         # Close the floating drag bar
         if hasattr(self, '_drag_bar') and self._drag_bar:
             self._drag_bar.close()
+        # Close bone hit regions
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            self._bone_hit_manager.clear()
         self.hide()
         self.closed.emit()
     
@@ -3257,6 +4212,9 @@ class Avatar3DOverlayWindow(QWidget):
         # Close the floating drag bar
         if hasattr(self, '_drag_bar') and self._drag_bar:
             self._drag_bar.close()
+        # Close bone hit regions
+        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
+            self._bone_hit_manager.clear()
         super().closeEvent(event)
 
 
@@ -4651,25 +5609,14 @@ def _toggle_overlay(parent):
                     parent._overlay_3d._show_control_bar = avatar_settings.show_control_bar_3d
                     parent._overlay_3d._click_through_mode = avatar_settings.click_through_mode_3d
                     
-                    # Sync drag bar widget with loaded settings
+                    # Restore hit area ratio
+                    if hasattr(parent._overlay_3d, '_hit_layer') and parent._overlay_3d._hit_layer:
+                        hit_ratio = getattr(avatar_settings, 'hit_area_ratio', 0.4)
+                        parent._overlay_3d._hit_layer.set_hit_ratio(hit_ratio)
+                    
+                    # Sync drag bar widget with loaded settings (legacy - may not be used)
                     if hasattr(parent._overlay_3d, '_drag_bar'):
-                        parent._overlay_3d._drag_bar.setFixedSize(
-                            avatar_settings.control_bar_width,
-                            avatar_settings.control_bar_height
-                        )
-                        parent._overlay_3d._drag_bar.move(
-                            avatar_settings.control_bar_x,
-                            avatar_settings.control_bar_y
-                        )
                         parent._overlay_3d._drag_bar.setVisible(avatar_settings.show_control_bar_3d)
-                        # Restore ghost mode
-                        if hasattr(avatar_settings, 'drag_bar_ghost_mode'):
-                            parent._overlay_3d._drag_bar.set_ghost_mode(avatar_settings.drag_bar_ghost_mode)
-                        # Restore anchored mode
-                        if hasattr(avatar_settings, 'drag_bar_anchored_mode') and avatar_settings.drag_bar_anchored_mode:
-                            anchor_x = getattr(avatar_settings, 'drag_bar_anchor_x', 0.5)
-                            anchor_y = getattr(avatar_settings, 'drag_bar_anchor_y', 0.5)
-                            parent._overlay_3d._drag_bar.set_anchored_mode(True, anchor_x, anchor_y)
                 except Exception:
                     saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
                 
