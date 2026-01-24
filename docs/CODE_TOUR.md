@@ -70,6 +70,9 @@ Contains `Enigma`, a production-grade transformer language model.
 - **Flash Attention** - Optional 2-4x speedup (auto-detected, requires CUDA + fp16)
 - **Pre-norm Architecture** - More stable training
 - **Weight Tying** - Embedding and output head share weights
+- **Thread-Safe Model Registry** - Safe concurrent access from GUI + API
+- **Cached Causal Mask** - Pre-computed attention mask for faster inference
+- **Vectorized Repetition Penalty** - O(vocab) instead of O(n²) for fast generation
 
 **Architecture Components:**
 ```python
@@ -93,6 +96,8 @@ Converts human text into numbers the AI can understand.
 - Includes a dictionary for ~3000 common words
 - Custom dictionary support (`forge_ai/vocab_model/dictionary.txt`)
 - Handles special tokens (padding, start, end, unknown)
+- **TokenizerProtocol** - Type-safe interface for any tokenizer implementation
+- **Helper Functions** - `encode_text()`, `decode_tokens()`, `get_vocab_size()`, `get_special_token_ids()`
 
 ### training.py - Teaching the AI
 **File:** [forge_ai/core/training.py](../forge_ai/core/training.py)

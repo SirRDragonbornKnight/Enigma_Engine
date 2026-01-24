@@ -985,8 +985,12 @@ class WebToolsModule(Module):
             from forge_ai.tools.web_tools import WebTools
             self._instance = WebTools()
             return True
-        except Exception:
+        except ImportError as e:
+            logger.debug(f"WebTools not available (optional): {e}")
             return True  # Optional module - don't fail if unavailable
+        except Exception as e:
+            logger.warning(f"WebTools failed to initialize: {e}")
+            return False  # Unexpected error - report failure
 
 
 class FileToolsModule(Module):
@@ -1024,8 +1028,12 @@ class FileToolsModule(Module):
             from forge_ai.tools.file_tools import FileTools
             self._instance = FileTools()
             return True
-        except Exception:
-            return True
+        except ImportError as e:
+            logger.debug(f"FileTools not available (optional): {e}")
+            return True  # Optional module
+        except Exception as e:
+            logger.warning(f"FileTools failed to initialize: {e}")
+            return False
 
 
 class ToolRouterModule(Module):
@@ -1210,8 +1218,12 @@ class NetworkModule(Module):
             from forge_ai.comms.network import ForgeNode
             self._instance = ForgeNode()
             return True
-        except Exception:
-            return True
+        except ImportError as e:
+            logger.debug(f"ForgeNode not available (optional): {e}")
+            return True  # Optional module
+        except Exception as e:
+            logger.warning(f"ForgeNode failed to initialize: {e}")
+            return False
 
 
 class GUIModule(Module):

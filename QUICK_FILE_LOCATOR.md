@@ -186,9 +186,9 @@ outputs/
 
 ```python
 # AI Brain
-from forge_ai.core.model import Forge, create_model
+from forge_ai.core.model import Forge, create_model, get_model, register_model
 from forge_ai.core.inference import ForgeEngine
-from forge_ai.core.tokenizer import get_tokenizer
+from forge_ai.core.tokenizer import get_tokenizer, TokenizerProtocol, encode_text, decode_tokens
 from forge_ai.core.training import train_model
 from forge_ai.core.tool_router import ToolRouter, get_router
 

@@ -94,28 +94,49 @@ except ImportError:
 
 MAX_LEN = CONFIG.get("max_len", 1024)
 
-# Global registry of loaded models
+# ─────────────────────────────────────────────────────────────────────────────
+# GLOBAL MODEL REGISTRY (Thread-Safe)
+# ─────────────────────────────────────────────────────────────────────────────
+# Registry of all loaded model instances. Uses a lock to ensure thread safety
+# when multiple threads access models concurrently (e.g., GUI + API server).
+import threading
+
 _LOADED_MODELS: Dict[str, 'Forge'] = {}
+_MODELS_LOCK = threading.RLock()  # RLock allows re-entrant locking
 
 
 def get_running_models() -> Dict[str, 'Forge']:
-    """Get all loaded model instances."""
-    return _LOADED_MODELS.copy()
+    """Get a copy of all loaded model instances (thread-safe)."""
+    with _MODELS_LOCK:
+        return _LOADED_MODELS.copy()
 
 
 def is_model_loaded(name: str) -> bool:
-    """Check if a model is loaded."""
-    return name in _LOADED_MODELS
+    """Check if a model is loaded by name (thread-safe)."""
+    with _MODELS_LOCK:
+        return name in _LOADED_MODELS
 
 
-def register_model(name: str, model: 'Forge'):
-    """Register a model instance."""
-    _LOADED_MODELS[name] = model
+def register_model(name: str, model: 'Forge') -> None:
+    """Register a model instance (thread-safe)."""
+    with _MODELS_LOCK:
+        _LOADED_MODELS[name] = model
+        logger.debug(f"Registered model: {name}")
 
 
-def unregister_model(name: str):
-    """Unregister a model."""
-    _LOADED_MODELS.pop(name, None)
+def unregister_model(name: str) -> Optional['Forge']:
+    """Unregister a model and return it if found (thread-safe)."""
+    with _MODELS_LOCK:
+        model = _LOADED_MODELS.pop(name, None)
+        if model is not None:
+            logger.debug(f"Unregistered model: {name}")
+        return model
+
+
+def get_model(name: str) -> Optional['Forge']:
+    """Get a specific model by name (thread-safe)."""
+    with _MODELS_LOCK:
+        return _LOADED_MODELS.get(name)
 
 
 # =============================================================================
@@ -1032,6 +1053,18 @@ class Forge(nn.Module):
         else:
             self.freqs_cis = None
 
+        # ─────────────────────────────────────────────────────────────────────
+        # CAUSAL MASK CACHE: Pre-compute and cache the causal attention mask
+        # ─────────────────────────────────────────────────────────────────────
+        # Instead of rebuilding the mask every forward pass, we cache a max-size
+        # mask and slice it as needed. This is especially beneficial for:
+        # - Training: Same mask reused if batch sizes are consistent
+        # - Inference: Even single-token generation reuses the cached mask
+        max_seq = self.config.max_seq_len
+        causal_mask = torch.full((max_seq, max_seq), float('-inf'))
+        causal_mask = torch.triu(causal_mask, diagonal=1)
+        self.register_buffer('_causal_mask', causal_mask, persistent=False)
+
         # Initialize
         self.apply(self._init_weights)
         self._init_output_weights()
@@ -1073,14 +1106,13 @@ class Forge(nn.Module):
         if not self.config.use_rope:
             h = h + self.pos[:, start_pos:start_pos + T]
 
+        # Use cached causal mask (sliced to current sequence length)
+        # This avoids rebuilding the mask every forward pass
         mask = None
         if T > 1:
-            # NOTE: Causal mask is rebuilt each forward pass.
-            # For inference with KV-cache, this is wasteful since we only need
-            # the last row. Future optimization: cache a static mask buffer.
-            # For training, this is fine since T varies per batch.
-            mask = torch.full((T, T), float('-inf'), device=input_ids.device)
-            mask = torch.triu(mask, diagonal=1).unsqueeze(0).unsqueeze(0)
+            # Slice the pre-computed mask to current sequence length
+            # Shape: (T, T) -> (1, 1, T, T) for broadcasting with attention
+            mask = self._causal_mask[:T, :T].unsqueeze(0).unsqueeze(0)
 
         for layer in self.layers:
             h = layer(h, self.freqs_cis, mask, use_cache, start_pos)
@@ -1119,15 +1151,19 @@ class Forge(nn.Module):
         for _ in range(max_new_tokens):
             next_logits = logits[:, -1, :] / temperature
 
-            # Repetition penalty
-            # NOTE: This is O(n²) for long sequences - acceptable for small/medium
-            # contexts but not scalable for very long generation.
-            # TODO: For large contexts, consider frequency-based penalty instead.
+            # Repetition penalty - O(vocabulary) instead of O(n²)
+            # Uses vectorized operations for efficient penalty application
             if repetition_penalty != 1.0:
+                # Get unique tokens that have been generated
+                vocab_size = next_logits.shape[-1]
                 for i in range(input_ids.shape[0]):
-                    for tok in set(generated[i].tolist()):
-                        if 0 <= tok < next_logits.shape[1]:
-                            next_logits[i, tok] /= repetition_penalty
+                    # Use bincount for O(n) counting instead of set() iteration
+                    token_ids = generated[i].clamp(0, vocab_size - 1)
+                    token_counts = torch.bincount(token_ids, minlength=vocab_size)
+                    # Create mask for tokens that appeared at least once
+                    appeared_mask = token_counts > 0
+                    # Apply penalty only to appeared tokens (vectorized)
+                    next_logits[i, appeared_mask] = next_logits[i, appeared_mask] / repetition_penalty
 
             # Top-k
             if top_k > 0:

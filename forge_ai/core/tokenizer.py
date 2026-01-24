@@ -59,7 +59,7 @@ Converts sentences into sequences of integers for the neural network.
     • forge_ai/core/advanced_tokenizer.py - Advanced tokenizer
 """
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Protocol, runtime_checkable
 import logging
 import json
 
@@ -67,6 +67,176 @@ logger = logging.getLogger(__name__)
 
 # Vocabulary directory (shared across all tokenizers)
 VOCAB_DIR = Path(__file__).resolve().parent.parent / "vocab_model"
+
+
+# =============================================================================
+# 📋 TOKENIZER PROTOCOL - Type-Safe Interface
+# =============================================================================
+# This protocol defines the contract that ALL tokenizers must follow.
+# Using Protocol enables static type checking without requiring inheritance.
+
+@runtime_checkable
+class TokenizerProtocol(Protocol):
+    """
+    Protocol defining the interface all tokenizers must implement.
+    
+    📖 WHY THIS EXISTS:
+    - Enables type checking across the codebase
+    - Allows any tokenizer (custom, HuggingFace, tiktoken) to be used
+    - runtime_checkable allows isinstance() checks at runtime
+    
+    📐 USAGE:
+        def process_text(tokenizer: TokenizerProtocol, text: str) -> List[int]:
+            return tokenizer.encode(text)
+    """
+    vocab_size: int
+    eos_token_id: int
+    bos_token_id: int
+    pad_token_id: int
+    
+    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+        """Convert text to token IDs."""
+        ...
+    
+    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+        """Convert token IDs back to text."""
+        ...
+
+
+# =============================================================================
+# 🛠️ TOKENIZER UTILITIES - Helper Functions
+# =============================================================================
+# These functions provide a unified interface for tokenizer operations,
+# handling the differences between tokenizer implementations.
+
+def encode_text(
+    tokenizer: Any,
+    text: str,
+    add_special_tokens: bool = True,
+    max_length: Optional[int] = None,
+    truncate: bool = True
+) -> List[int]:
+    """
+    Encode text using any tokenizer with a unified interface.
+    
+    📖 HANDLES:
+    - ForgeAI tokenizers (SimpleTokenizer, AdvancedBPETokenizer)
+    - HuggingFace tokenizers (transformers AutoTokenizer)
+    - tiktoken tokenizers
+    
+    Args:
+        tokenizer: Any tokenizer instance
+        text: Text to encode
+        add_special_tokens: Whether to add BOS/EOS tokens
+        max_length: Optional maximum length (truncates if exceeded)
+        truncate: Whether to truncate to max_length
+    
+    Returns:
+        List of token IDs
+    """
+    # Try direct encode method (ForgeAI tokenizers, HuggingFace)
+    if hasattr(tokenizer, 'encode'):
+        try:
+            ids = tokenizer.encode(text, add_special_tokens=add_special_tokens)
+        except TypeError:
+            # Some tokenizers don't accept add_special_tokens
+            ids = tokenizer.encode(text)
+    # Try callable interface (some HuggingFace tokenizers)
+    elif callable(tokenizer):
+        result = tokenizer(text, add_special_tokens=add_special_tokens)
+        ids = result.get('input_ids', result) if isinstance(result, dict) else result
+    else:
+        raise TypeError(f"Tokenizer {type(tokenizer)} has no encode method")
+    
+    # Handle nested lists (batch encoding)
+    if ids and isinstance(ids, list) and isinstance(ids[0], list):
+        ids = ids[0]
+    
+    # Handle tensor returns
+    if hasattr(ids, 'tolist'):
+        ids = ids.tolist()
+    
+    # Truncate if needed
+    if max_length and truncate and len(ids) > max_length:
+        ids = ids[:max_length]
+    
+    return ids
+
+
+def decode_tokens(
+    tokenizer: Any,
+    ids: List[int],
+    skip_special_tokens: bool = True
+) -> str:
+    """
+    Decode token IDs using any tokenizer with a unified interface.
+    
+    Args:
+        tokenizer: Any tokenizer instance
+        ids: List of token IDs to decode
+        skip_special_tokens: Whether to skip special tokens in output
+    
+    Returns:
+        Decoded text string
+    """
+    if hasattr(tokenizer, 'decode'):
+        try:
+            return tokenizer.decode(ids, skip_special_tokens=skip_special_tokens)
+        except TypeError:
+            # Some tokenizers don't accept skip_special_tokens
+            return tokenizer.decode(ids)
+    else:
+        raise TypeError(f"Tokenizer {type(tokenizer)} has no decode method")
+
+
+def get_vocab_size(tokenizer: Any) -> int:
+    """
+    Get vocabulary size from any tokenizer.
+    
+    Args:
+        tokenizer: Any tokenizer instance
+    
+    Returns:
+        Vocabulary size as integer
+    """
+    if hasattr(tokenizer, 'vocab_size'):
+        size = tokenizer.vocab_size
+        return size() if callable(size) else size
+    if hasattr(tokenizer, 'get_vocab_size'):
+        return tokenizer.get_vocab_size()
+    if hasattr(tokenizer, '__len__'):
+        return len(tokenizer)
+    if hasattr(tokenizer, 'vocab'):
+        return len(tokenizer.vocab)
+    raise AttributeError(f"Cannot determine vocab_size for {type(tokenizer)}")
+
+
+def get_special_token_ids(tokenizer: Any) -> Dict[str, int]:
+    """
+    Get special token IDs from any tokenizer.
+    
+    Returns dict with keys: 'pad', 'bos', 'eos', 'unk'
+    """
+    result = {}
+    
+    # Standard attribute names
+    for name, attrs in [
+        ('pad', ['pad_token_id', 'pad_id']),
+        ('bos', ['bos_token_id', 'bos_id', 'start_token_id']),
+        ('eos', ['eos_token_id', 'eos_id', 'end_token_id']),
+        ('unk', ['unk_token_id', 'unk_id']),
+    ]:
+        for attr in attrs:
+            if hasattr(tokenizer, attr):
+                val = getattr(tokenizer, attr)
+                if val is not None:
+                    result[name] = val
+                    break
+        # Default fallbacks
+        if name not in result:
+            result[name] = {'pad': 0, 'bos': 1, 'eos': 2, 'unk': 3}[name]
+    
+    return result
 
 
 # =============================================================================

@@ -1129,11 +1129,16 @@ class ForgeEngine:
         repetition_penalty: float
     ) -> torch.Tensor:
         """Sample next token with various strategies."""
-        # Apply repetition penalty
+        # Apply repetition penalty - O(vocabulary) vectorized operation
         if repetition_penalty != 1.0:
-            for token_id in set(generated[0].tolist()):
-                if 0 <= token_id < logits.shape[-1]:
-                    logits[0, token_id] /= repetition_penalty
+            vocab_size = logits.shape[-1]
+            # Clamp token IDs to valid vocab range and count occurrences
+            token_ids = generated[0].clamp(0, vocab_size - 1)
+            token_counts = torch.bincount(token_ids, minlength=vocab_size)
+            # Create mask for tokens that have appeared
+            appeared_mask = token_counts > 0
+            # Apply penalty vectorized (much faster than loop)
+            logits[0, appeared_mask] = logits[0, appeared_mask] / repetition_penalty
 
         # Temperature scaling
         logits = logits / max(temperature, 1e-8)

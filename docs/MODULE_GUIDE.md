@@ -716,6 +716,23 @@ if interface is None:
     print("Module didn't set _instance in load()")
 ```
 
+### Understanding Module Load Errors
+
+**Problem:** Optional modules silently fail.
+
+**Solution:** Check the logs! Modules now distinguish between:
+- `ImportError` (optional dependency missing) → Debug log, graceful skip
+- Other exceptions → Warning log, actual failure reported
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Now you'll see:
+# DEBUG: WebTools not available (optional): No module named 'requests'
+# WARNING: FileTools failed to initialize: Permission denied
+```
+
 ---
 
 ## Advanced Topics
