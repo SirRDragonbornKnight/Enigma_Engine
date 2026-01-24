@@ -1,4 +1,4 @@
-# 🚀 Getting Started with ForgeAI
+# Getting Started with ForgeAI
 
 ## Quick Start (5 Minutes)
 
@@ -13,11 +13,11 @@ python run.py --gui
 ```
 
 ### 3. Create Your First AI
-1. Go to **Models** tab
-2. Click **Create New Model**
-3. Enter a name (e.g., "mybot")
-4. Select size: **small** (recommended for beginners)
-5. Click **Create**
+1. The **Setup Wizard** appears on first launch
+2. Enter a name for your AI (e.g., "artemis")
+3. Choose a base model (or start fresh)
+4. Select model size based on your hardware
+5. Click **Finish** to create your AI
 
 ### 4. Train Your AI
 1. Go to **Training** tab
@@ -153,10 +153,78 @@ A: I'd be happy to help! Please provide your order number and I'll look into it.
 
 ---
 
+## Voice Customization
+
+ForgeAI supports full voice customization - you're not stuck with the Windows default!
+
+### Change Voice in GUI
+1. Go to **Settings** tab
+2. Find **Voice Settings** section
+3. Choose a voice profile (Default, GLaDOS, Jarvis, Robot, etc.)
+4. Adjust pitch, speed, and volume
+5. Click **Preview** to test
+
+### Enable Auto-Speak
+1. In **Settings** tab, find **Auto-Speak**
+2. Enable it to have your AI speak responses aloud
+3. Avatar will also animate with expressions!
+
+### Let AI Create Its Own Voice
+```python
+from forge_ai.voice.voice_generator import AIVoiceGenerator
+
+generator = AIVoiceGenerator()
+voice = generator.generate_for_personality(personality_traits)
+```
+
+See [docs/VOICE_CUSTOMIZATION.md](docs/VOICE_CUSTOMIZATION.md) for advanced options.
+
+---
+
+## Avatar Setup
+
+Give your AI a visual presence with the avatar system:
+
+### Enable Avatar
+1. Go to **Modules** tab
+2. Enable the **avatar** module
+3. Go to **Avatar** tab
+4. Load or create an avatar
+
+### Avatar During Chat
+- Avatar automatically shows expressions based on conversation emotion
+- Enable **Auto-Speak** for lip-sync animation
+- Avatar responds to happy, sad, thinking, surprised emotions
+
+See [docs/AVATAR_SYSTEM_GUIDE.md](docs/AVATAR_SYSTEM_GUIDE.md) for creating custom avatars.
+
+---
+
+## Using HuggingFace Models
+
+You can use pre-trained models from HuggingFace instead of training from scratch:
+
+### Load a HuggingFace Model
+1. Go to **Models** tab
+2. Click **Download HuggingFace Model**
+3. Enter a model ID (e.g., `TinyLlama/TinyLlama-1.1B-Chat-v1.0`)
+4. Click **Download**
+5. The model will be available in your model list
+
+### HuggingFace Models Work With:
+- Chat interface
+- Avatar expressions and speech
+- Voice output
+- All generation tabs
+
+---
+
 ## Next Steps
 
-- 📖 Read [docs/CODE_TOUR.md](docs/CODE_TOUR.md) for developer info
-- 🔧 Check [docs/WHAT_NOT_TO_DO.txt](docs/WHAT_NOT_TO_DO.txt) for common mistakes
-- 🌐 See [examples/](examples/) for code examples
+- Read [docs/CODE_TOUR.md](docs/CODE_TOUR.md) for developer info
+- Check [docs/GUI_GUIDE.md](docs/GUI_GUIDE.md) for full GUI documentation
+- See [docs/VOICE_CUSTOMIZATION.md](docs/VOICE_CUSTOMIZATION.md) for voice options
+- See [docs/AVATAR_SYSTEM_GUIDE.md](docs/AVATAR_SYSTEM_GUIDE.md) for avatar setup
+- See [examples/](examples/) for code examples
 
-Happy training! 🎉
+Happy training!

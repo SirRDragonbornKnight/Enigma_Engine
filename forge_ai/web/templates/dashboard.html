@@ -8,11 +8,11 @@
 
 {% block content %}
 <div class="dashboard">
-    <h2>📊 Dashboard</h2>
+    <h2>Dashboard</h2>
     
     <div class="ai-expression-widget">
         <div class="ai-mood">
-            <span class="mood-emoji" id="ai-mood-emoji">😊</span>
+            <span class="mood-text ai-status" id="ai-mood-emoji">[Ready]</span>
             <span class="mood-text" id="ai-mood-text">I'm feeling curious today!</span>
         </div>
         <div class="ai-interests">
@@ -48,11 +48,11 @@
     <div class="quick-actions">
         <h3>Quick Actions</h3>
         <div class="action-buttons">
-            <a href="/chat" class="btn btn-primary">💬 Start Chat</a>
-            <a href="/personality" class="btn btn-secondary">🎭 Personality</a>
-            <a href="/voice" class="btn btn-secondary">🎤 Voice Studio</a>
-            <a href="/train" class="btn btn-secondary">🎓 Train Model</a>
-            <a href="/settings" class="btn btn-secondary">⚙️ Settings</a>
+            <a href="/chat" class="btn btn-primary">Start Chat</a>
+            <a href="/personality" class="btn btn-secondary">Personality</a>
+            <a href="/voice" class="btn btn-secondary">Voice Studio</a>
+            <a href="/train" class="btn btn-secondary">Train Model</a>
+            <a href="/settings" class="btn btn-secondary">Settings</a>
         </div>
     </div>
     
@@ -73,7 +73,7 @@ async function loadDashboard() {
         const response = await fetch('/api/status');
         const data = await response.json();
         
-        document.getElementById('status').textContent = data.model_loaded ? '✅ Running' : '⚠️ No Model';
+        document.getElementById('status').textContent = data.model_loaded ? 'Running' : 'No Model';
         document.getElementById('model-name').textContent = data.model_name || 'None';
         document.getElementById('instance-count').textContent = data.instances || '1';
         document.getElementById('last-update').textContent = new Date(data.timestamp).toLocaleString();

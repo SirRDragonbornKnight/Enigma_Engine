@@ -9,16 +9,16 @@
 {% block content %}
 <div class="chat-container">
     <div class="chat-header">
-        <h2>💬 Chat Interface</h2>
+        <h2>Chat Interface</h2>
         <div class="ai-mood" id="chat-ai-mood">
-            <span class="mood-emoji" id="chat-mood-emoji">😊</span>
+            <span class="mood-text ai-status" id="chat-mood-emoji">[Ready]</span>
             <span class="mood-text" id="chat-mood-text">Ready to chat!</span>
         </div>
     </div>
     
     <div class="chat-box" id="chat-box">
         <div class="chat-message system">
-            <p>👋 Hello! I'm your Enigma AI. Ask me anything!</p>
+            <p>Hello! I'm your Forge AI. Ask me anything!</p>
         </div>
     </div>
     
@@ -67,7 +67,7 @@ try {
     
     socket.on('connect', () => {
         console.log('Connected to server');
-        addSystemMessage('✓ Connected to server');
+        addSystemMessage('Connected to server');
     });
     
     socket.on('response', (data) => {
@@ -100,9 +100,9 @@ function addMessage(content, className) {
     if (className === 'ai') {
         messageHTML += `
             <div class="message-feedback">
-                <button class="feedback-btn" data-feedback="positive" title="Good response">👍</button>
-                <button class="feedback-btn" data-feedback="negative" title="Poor response">👎</button>
-                <button class="feedback-btn explain-btn" title="Why did you say that?">❓</button>
+                <button class="feedback-btn" data-feedback="positive" title="Good response">+1</button>
+                <button class="feedback-btn" data-feedback="negative" title="Poor response">-1</button>
+                <button class="feedback-btn explain-btn" title="Why did you say that?">?</button>
             </div>
         `;
     }
