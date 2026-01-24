@@ -136,6 +136,18 @@ Find the file you need in seconds!
 | `file_tools.py` | Read/write files |
 | `browser_tools.py` | Automate browsers |
 
+**GUI Control tools:**
+| Tool | Purpose |
+|------|---------|
+| `switch_tab` | Navigate GUI tabs |
+| `adjust_setting` | Change preferences |
+| `get_setting` | Read preferences |
+| `manage_conversation` | Save/load/list chats |
+| `show_help` | Display contextual help |
+| `optimize_for_hardware` | Auto-configure for system |
+
+**GUI State Manager:** `forge_ai/gui/gui_state.py`
+
 ---
 
 ## ⚡ I want to CONFIGURE settings

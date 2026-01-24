@@ -1654,6 +1654,17 @@ class EnhancedMainWindow(QMainWindow):
         self._build_ui()
         
         # ─────────────────────────────────────────────────────────────────
+        # Register with GUIStateManager for AI tool control
+        # This allows AI tools to interact with the GUI
+        # ─────────────────────────────────────────────────────────────────
+        try:
+            from .gui_state import get_gui_state
+            gui_state = get_gui_state()
+            gui_state.set_window(self)
+        except Exception as e:
+            print(f"Could not register with GUIStateManager: {e}")
+        
+        # ─────────────────────────────────────────────────────────────────
         # Apply saved settings to UI widgets AFTER building UI
         # ─────────────────────────────────────────────────────────────────
         self._apply_saved_settings_to_ui()

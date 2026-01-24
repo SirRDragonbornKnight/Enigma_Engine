@@ -1341,6 +1341,168 @@ CHECK_RESOURCES = ToolDefinition(
 
 
 # =============================================================================
+# GUI Control Tools - AI can control the user interface
+# =============================================================================
+
+SWITCH_TAB = ToolDefinition(
+    name="switch_tab",
+    description="Navigate to a specific tab in the GUI. Use this to help users find features or switch context during conversations.",
+    category="control",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="tab_name",
+            type="string",
+            description="Name of the tab to switch to",
+            required=True,
+            enum=["chat", "train", "history", "scale", "modules", "image", "code", 
+                  "video", "audio", "search", "avatar", "vision", "personality",
+                  "terminal", "files", "examples", "settings"],
+        ),
+    ],
+    examples=[
+        "Let me take you to the image generation tab",
+        "Switch to settings so we can configure this",
+        "Open the training tab",
+    ],
+)
+
+ADJUST_SETTING = ToolDefinition(
+    name="adjust_setting",
+    description="Adjust a user preference or GUI setting. The AI can help optimize the user experience.",
+    category="control",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="setting",
+            type="string",
+            description="The setting to adjust",
+            required=True,
+            enum=["theme", "chat_zoom", "auto_speak", "learn_while_chatting",
+                  "always_on_top", "system_prompt_preset", "avatar_auto_run"],
+        ),
+        ToolParameter(
+            name="value",
+            type="string",
+            description="New value for the setting (type depends on setting)",
+            required=True,
+        ),
+    ],
+    examples=[
+        "Enable auto-speak so I can talk to you",
+        "Turn on learning mode",
+        "Make the chat text bigger",
+        "Switch to dark theme",
+    ],
+)
+
+GET_SETTING = ToolDefinition(
+    name="get_setting",
+    description="Get the current value of a user preference or setting",
+    category="control",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="setting",
+            type="string",
+            description="The setting to retrieve",
+            required=True,
+            enum=["theme", "chat_zoom", "auto_speak", "learn_while_chatting",
+                  "always_on_top", "system_prompt_preset", "avatar_auto_run",
+                  "last_model", "last_tab"],
+        ),
+    ],
+    examples=[
+        "What's the current theme?",
+        "Is auto-speak enabled?",
+        "Check if learning mode is on",
+    ],
+)
+
+MANAGE_CONVERSATION = ToolDefinition(
+    name="manage_conversation",
+    description="Manage chat conversations - save, rename, delete, list, or load conversations",
+    category="control",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="action",
+            type="string",
+            description="Action to perform on conversations",
+            required=True,
+            enum=["save", "rename", "delete", "list", "load", "new"],
+        ),
+        ToolParameter(
+            name="name",
+            type="string",
+            description="Conversation name (for save/rename/delete/load)",
+            required=False,
+        ),
+        ToolParameter(
+            name="new_name",
+            type="string",
+            description="New name (for rename action)",
+            required=False,
+        ),
+    ],
+    examples=[
+        "Save this conversation as 'Project Discussion'",
+        "Show me my saved conversations",
+        "Start a new chat",
+        "Load the conversation about Python",
+    ],
+)
+
+SHOW_HELP = ToolDefinition(
+    name="show_help",
+    description="Show help information or tips about a specific feature or the application",
+    category="control",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="topic",
+            type="string",
+            description="Topic to get help about",
+            required=False,
+            enum=["getting_started", "chat", "training", "image_generation", 
+                  "code_generation", "voice", "avatar", "modules", "settings",
+                  "keyboard_shortcuts", "tips"],
+            default="getting_started",
+        ),
+    ],
+    examples=[
+        "How do I train my AI?",
+        "Show me keyboard shortcuts",
+        "Help with image generation",
+        "Give me some tips",
+    ],
+)
+
+OPTIMIZE_FOR_HARDWARE = ToolDefinition(
+    name="optimize_for_hardware",
+    description="Automatically adjust settings based on detected hardware capabilities",
+    category="control",
+    module=None,
+    parameters=[
+        ToolParameter(
+            name="mode",
+            type="string",
+            description="Optimization mode",
+            required=False,
+            enum=["auto", "performance", "balanced", "power_saver", "gaming"],
+            default="auto",
+        ),
+    ],
+    examples=[
+        "Optimize settings for my computer",
+        "Set up for best performance",
+        "Use power-saving mode",
+        "Configure for gaming (less resources)",
+    ],
+)
+
+
+# =============================================================================
 # Registry of All Tools
 # =============================================================================
 
@@ -1402,6 +1564,14 @@ ALL_TOOLS = [
     UNLOAD_MODULE,
     LIST_MODULES,
     CHECK_RESOURCES,
+    
+    # GUI Control - AI can control the interface
+    SWITCH_TAB,
+    ADJUST_SETTING,
+    GET_SETTING,
+    MANAGE_CONVERSATION,
+    SHOW_HELP,
+    OPTIMIZE_FOR_HARDWARE,
 ]
 
 # Dictionary for fast lookup

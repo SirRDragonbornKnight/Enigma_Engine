@@ -518,6 +518,20 @@ class ToolExecutor:
         elif tool_name == "check_resources":
             return self._execute_check_resources(params)
         
+        # Handle GUI control tools
+        elif tool_name == "switch_tab":
+            return self._execute_switch_tab(params)
+        elif tool_name == "adjust_setting":
+            return self._execute_adjust_setting(params)
+        elif tool_name == "get_setting":
+            return self._execute_get_setting(params)
+        elif tool_name == "manage_conversation":
+            return self._execute_manage_conversation(params)
+        elif tool_name == "show_help":
+            return self._execute_show_help(params)
+        elif tool_name == "optimize_for_hardware":
+            return self._execute_optimize_for_hardware(params)
+        
         # Handle editing tools directly
         elif tool_name == "edit_image":
             return self._execute_edit_image(params)
@@ -1763,6 +1777,323 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e),
                 "tool": "check_resources",
+            }
+    
+    # =========================================================================
+    # GUI Control Tools
+    # =========================================================================
+    
+    def _execute_switch_tab(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Switch to a different GUI tab.
+        
+        Args:
+            params: {"tab_name": str, "reason": str (optional)}
+        """
+        try:
+            from ..gui.gui_state import get_gui_state
+            
+            tab_name = params.get("tab_name", "").lower()
+            reason = params.get("reason", "")
+            
+            if not tab_name:
+                return {
+                    "success": False,
+                    "error": "tab_name is required",
+                    "tool": "switch_tab",
+                }
+            
+            gui_state = get_gui_state()
+            result = gui_state.switch_tab(tab_name)
+            
+            if result.get("success"):
+                message = f"Switched to {tab_name} tab"
+                if reason:
+                    message += f" - {reason}"
+                return {
+                    "success": True,
+                    "result": message,
+                    "tool": "switch_tab",
+                    "tab": tab_name,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "Failed to switch tab"),
+                    "tool": "switch_tab",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error switching tab: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "switch_tab",
+            }
+    
+    def _execute_adjust_setting(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Adjust a GUI setting.
+        
+        Args:
+            params: {"setting_name": str, "value": Any}
+        """
+        try:
+            from ..gui.gui_state import get_gui_state
+            
+            setting_name = params.get("setting_name", "")
+            value = params.get("value")
+            
+            if not setting_name:
+                return {
+                    "success": False,
+                    "error": "setting_name is required",
+                    "tool": "adjust_setting",
+                }
+            
+            gui_state = get_gui_state()
+            result = gui_state.set_setting(setting_name, value)
+            
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "result": f"Set {setting_name} to {result.get('new_value')} (was {result.get('old_value')})",
+                    "tool": "adjust_setting",
+                    "setting": setting_name,
+                    "old_value": result.get("old_value"),
+                    "new_value": result.get("new_value"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "Failed to adjust setting"),
+                    "tool": "adjust_setting",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error adjusting setting: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "adjust_setting",
+            }
+    
+    def _execute_get_setting(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get the current value of a GUI setting.
+        
+        Args:
+            params: {"setting_name": str}
+        """
+        try:
+            from ..gui.gui_state import get_gui_state
+            
+            setting_name = params.get("setting_name", "")
+            
+            gui_state = get_gui_state()
+            
+            if not setting_name:
+                # Return all settings
+                settings = gui_state.get_all_settings()
+                return {
+                    "success": True,
+                    "result": f"Current settings:\n{json.dumps(settings, indent=2)}",
+                    "tool": "get_setting",
+                    "settings": settings,
+                }
+            
+            value = gui_state.get_setting(setting_name)
+            
+            return {
+                "success": True,
+                "result": f"{setting_name} = {value}",
+                "tool": "get_setting",
+                "setting": setting_name,
+                "value": value,
+            }
+        
+        except Exception as e:
+            logger.exception(f"Error getting setting: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "get_setting",
+            }
+    
+    def _execute_manage_conversation(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Manage chat conversations (save, load, rename, delete, list, new).
+        
+        Args:
+            params: {"action": str, "name": str (optional), "new_name": str (optional)}
+        """
+        try:
+            from ..gui.gui_state import get_gui_state
+            
+            action = params.get("action", "").lower()
+            name = params.get("name")
+            new_name = params.get("new_name")
+            
+            if not action:
+                return {
+                    "success": False,
+                    "error": "action is required (save, load, rename, delete, list, new)",
+                    "tool": "manage_conversation",
+                }
+            
+            gui_state = get_gui_state()
+            result = gui_state.manage_conversation(action, name, new_name)
+            
+            if result.get("success"):
+                # Build human-readable response
+                if action == "list":
+                    conversations = result.get("conversations", [])
+                    if conversations:
+                        msg = f"Found {len(conversations)} conversation(s):\n"
+                        for conv in conversations[:10]:  # Show first 10
+                            msg += f"  - {conv['name']} ({conv.get('messages', 0)} messages)\n"
+                        if len(conversations) > 10:
+                            msg += f"  ... and {len(conversations) - 10} more"
+                    else:
+                        msg = "No saved conversations found."
+                elif action == "save":
+                    msg = f"Saved conversation as '{name or 'auto-named'}'"
+                elif action == "load":
+                    msg = f"Loaded conversation '{name}'"
+                elif action == "new":
+                    msg = "Started new conversation"
+                elif action == "rename":
+                    msg = f"Renamed '{name}' to '{new_name}'"
+                elif action == "delete":
+                    msg = f"Deleted conversation '{name}'"
+                else:
+                    msg = str(result)
+                
+                return {
+                    "success": True,
+                    "result": msg,
+                    "tool": "manage_conversation",
+                    "action": action,
+                    **result,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "Action failed"),
+                    "tool": "manage_conversation",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error managing conversation: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "manage_conversation",
+            }
+    
+    def _execute_show_help(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Show contextual help for a topic.
+        
+        Args:
+            params: {"topic": str}
+        """
+        try:
+            from ..gui.gui_state import get_gui_state
+            
+            topic = params.get("topic", "getting_started")
+            
+            gui_state = get_gui_state()
+            result = gui_state.get_help(topic)
+            
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "result": f"**{result['title']}**\n\n{result['content']}",
+                    "tool": "show_help",
+                    "topic": topic,
+                    "related": result.get("related", []),
+                }
+            else:
+                # Return available topics if topic not found
+                available = result.get("available_topics", [])
+                topics_list = ", ".join(available[:10])
+                return {
+                    "success": True,
+                    "result": f"Topic '{topic}' not found. Available topics: {topics_list}",
+                    "tool": "show_help",
+                    "available_topics": available,
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error showing help: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "show_help",
+            }
+    
+    def _execute_optimize_for_hardware(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Optimize GUI settings based on hardware capabilities.
+        
+        Args:
+            params: {"mode": str (auto, performance, balanced, power_saver, gaming)}
+        """
+        try:
+            from ..gui.gui_state import get_gui_state
+            
+            mode = params.get("mode", "auto").lower()
+            
+            gui_state = get_gui_state()
+            result = gui_state.optimize_for_hardware(mode)
+            
+            if result.get("success"):
+                # Build human-readable summary
+                hardware = result.get("hardware", {})
+                applied = result.get("applied", {})
+                recommendations = result.get("recommendations", [])
+                
+                msg = f"Optimized for {result['mode'].upper()} mode\n\n"
+                msg += "Hardware detected:\n"
+                if hardware.get("gpu_available"):
+                    msg += f"  GPU: {hardware.get('gpu_name', 'Unknown')} ({hardware.get('gpu_vram_gb', 0):.1f} GB VRAM)\n"
+                else:
+                    msg += "  GPU: Not available (CPU mode)\n"
+                msg += f"  RAM: {hardware.get('ram_gb', 0):.1f} GB\n"
+                msg += f"  CPU: {hardware.get('cpu_cores', 1)} cores\n\n"
+                
+                if applied:
+                    msg += "Settings applied:\n"
+                    for key, value in applied.items():
+                        msg += f"  {key}: {value}\n"
+                    msg += "\n"
+                
+                if recommendations:
+                    msg += "Recommendations:\n"
+                    for rec in recommendations:
+                        msg += f"  -> {rec}\n"
+                
+                return {
+                    "success": True,
+                    "result": msg.strip(),
+                    "tool": "optimize_for_hardware",
+                    "mode": result["mode"],
+                    "hardware": hardware,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("error", "Optimization failed"),
+                    "tool": "optimize_for_hardware",
+                }
+        
+        except Exception as e:
+            logger.exception(f"Error optimizing for hardware: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "tool": "optimize_for_hardware",
             }
     
     def format_tool_result(self, result: Dict[str, Any]) -> str:

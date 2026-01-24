@@ -266,6 +266,23 @@ Advanced GUI with:
 - Terminal output tab
 - History per AI
 
+### gui_state.py - AI ↔ GUI Bridge
+**File:** [forge_ai/gui/gui_state.py](../forge_ai/gui/gui_state.py)
+
+Singleton manager allowing AI tools to control the GUI:
+- `switch_tab()` - Navigate to different tabs
+- `get_setting()` / `set_setting()` - Read/write user preferences
+- `manage_conversation()` - Save/load/list conversations
+- `get_help()` - Get contextual help content
+- `optimize_for_hardware()` - Auto-configure settings
+
+```python
+from forge_ai.gui.gui_state import get_gui_state
+gui = get_gui_state()
+gui.switch_tab("image")
+gui.set_setting("chat_zoom", 14)
+```
+
 ---
 
 ## 🔊 Voice Package: forge_ai/voice/

@@ -210,6 +210,61 @@ Speak text out loud using text-to-speech.
   - `text` (string, required): Text to speak
   - `voice` (string, optional, default="default"): Voice to use
 
+### GUI Control Tools
+
+These tools allow the AI to control the GUI interface for a seamless user experience.
+
+#### switch_tab
+Switch to a different GUI tab.
+- **Parameters:**
+  - `tab_name` (string, required): Name of the tab to switch to ("chat", "image", "code", "video", "audio", "avatar", "settings", etc.)
+  - `reason` (string, optional): Reason for switching (helps user understand AI's intent)
+- **Example:**
+  - "Switching to image tab to generate your picture"
+
+#### adjust_setting
+Adjust a GUI setting value.
+- **Parameters:**
+  - `setting_name` (string, required): Name of the setting ("chat_zoom", "auto_speak", "theme", "learn_while_chatting", "always_on_top", etc.)
+  - `value` (any, required): New value for the setting
+- **Examples:**
+  - "Setting chat zoom to 14 for better readability"
+  - "Enabling auto-speak mode"
+
+#### get_setting
+Get the current value of a GUI setting.
+- **Parameters:**
+  - `setting_name` (string, optional): Setting name, or empty for all settings
+- **Examples:**
+  - "Checking current theme setting"
+  - "Getting all user preferences"
+
+#### manage_conversation
+Manage chat conversations (save, load, rename, delete, list, new).
+- **Parameters:**
+  - `action` (string, required): One of "save", "load", "rename", "delete", "list", "new"
+  - `name` (string, optional): Conversation name (for save/load/rename/delete)
+  - `new_name` (string, optional): New name for rename action
+- **Examples:**
+  - "Saving this conversation as 'project discussion'"
+  - "Listing all saved conversations"
+
+#### show_help
+Show contextual help information.
+- **Parameters:**
+  - `topic` (string, optional, default="getting_started"): Help topic ("getting_started", "chat", "training", "image_generation", "settings", "keyboard_shortcuts", "tips", etc.)
+- **Examples:**
+  - "Getting help on training your AI"
+  - "Showing keyboard shortcuts"
+
+#### optimize_for_hardware
+Automatically optimize GUI settings for hardware capabilities.
+- **Parameters:**
+  - `mode` (string, optional, default="auto"): Optimization mode ("auto", "performance", "balanced", "power_saver", "gaming")
+- **Examples:**
+  - "Optimizing for best performance"
+  - "Switching to power saver mode"
+
 ### System Tools
 
 #### read_file
