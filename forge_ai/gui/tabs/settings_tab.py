@@ -975,24 +975,43 @@ Ready to assist with coding, creativity, learning, or just chatting!"""
                 color: #aaa;
             }
         """)
-    else:  # custom
-        parent.custom_system_prompt.setReadOnly(False)
-        # Don't overwrite existing custom text
-        if not parent.custom_system_prompt.toPlainText().strip():
-            parent.custom_system_prompt.setPlaceholderText(
-                "Enter your custom system prompt here...\n\n"
-                "Example: You are a helpful AI assistant. Be friendly and concise."
-            )
-        parent.custom_system_prompt.setStyleSheet("""
-            QTextEdit {
-                background-color: #2d2d2d;
-                border: 1px solid #444;
-                border-radius: 4px;
-                padding: 8px;
-                font-family: monospace;
-                color: white;
-            }
-        """)
+    else:  # custom or user preset
+        # Check if this is a user preset
+        if preset and preset.startswith("user_"):
+            preset_name = preset[5:]  # Remove "user_" prefix
+            presets = _load_user_presets_data()
+            if preset_name in presets:
+                parent.custom_system_prompt.setText(presets[preset_name])
+            parent.custom_system_prompt.setReadOnly(True)
+            parent.custom_system_prompt.setStyleSheet("""
+                QTextEdit {
+                    background-color: #252525;
+                    border: 1px solid #3b82f6;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-family: monospace;
+                    color: #aaa;
+                }
+            """)
+        else:
+            # Regular custom
+            parent.custom_system_prompt.setReadOnly(False)
+            # Don't overwrite existing custom text
+            if not parent.custom_system_prompt.toPlainText().strip():
+                parent.custom_system_prompt.setPlaceholderText(
+                    "Enter your custom system prompt here...\n\n"
+                    "Example: You are a helpful AI assistant. Be friendly and concise."
+                )
+            parent.custom_system_prompt.setStyleSheet("""
+                QTextEdit {
+                    background-color: #2d2d2d;
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    padding: 8px;
+                    font-family: monospace;
+                    color: white;
+                }
+            """)
     
     # Auto-save when preset changes
     _save_system_prompt(parent)
@@ -1005,6 +1024,132 @@ def _reset_system_prompt(parent):
     _save_system_prompt(parent)
     parent.prompt_status_label.setText("Reset to default (Simple)")
     parent.prompt_status_label.setStyleSheet("color: #3b82f6; font-style: italic;")
+
+
+def _get_user_presets_path():
+    """Get the path to the user presets file."""
+    from pathlib import Path
+    from ...config import CONFIG
+    return Path(CONFIG.get("data_dir", "data")) / "user_prompts.json"
+
+
+def _load_user_presets_data():
+    """Load user presets from JSON file."""
+    import json
+    presets_path = _get_user_presets_path()
+    if presets_path.exists():
+        try:
+            with open(presets_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_user_presets_data(presets):
+    """Save user presets to JSON file."""
+    import json
+    presets_path = _get_user_presets_path()
+    presets_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(presets_path, 'w', encoding='utf-8') as f:
+        json.dump(presets, f, indent=2)
+
+
+def _load_user_presets(parent):
+    """Load user presets into the dropdown."""
+    presets = _load_user_presets_data()
+    for name, prompt_text in presets.items():
+        # Add user presets with a "user_" prefix for data
+        parent.system_prompt_preset.addItem(f"[User] {name}", f"user_{name}")
+
+
+def _save_as_new_preset(parent):
+    """Save current prompt as a new user preset."""
+    from PyQt5.QtWidgets import QInputDialog
+    
+    prompt_text = parent.custom_system_prompt.toPlainText().strip()
+    if not prompt_text:
+        parent.prompt_status_label.setText("Cannot save empty prompt")
+        parent.prompt_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+        return
+    
+    # Get preset name from user
+    name, ok = QInputDialog.getText(
+        parent, "Save Preset", "Enter a name for this preset:",
+    )
+    
+    if not ok or not name.strip():
+        return
+    
+    name = name.strip()
+    
+    # Check if name already exists
+    presets = _load_user_presets_data()
+    if name in presets:
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            parent, "Preset Exists",
+            f"A preset named '{name}' already exists. Overwrite it?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+    else:
+        # Add to dropdown if it's a new preset
+        parent.system_prompt_preset.addItem(f"[User] {name}", f"user_{name}")
+    
+    # Save the preset
+    presets[name] = prompt_text
+    _save_user_presets_data(presets)
+    
+    # Select the new preset
+    for i in range(parent.system_prompt_preset.count()):
+        if parent.system_prompt_preset.itemData(i) == f"user_{name}":
+            parent.system_prompt_preset.setCurrentIndex(i)
+            break
+    
+    parent.prompt_status_label.setText(f"Saved preset: {name}")
+    parent.prompt_status_label.setStyleSheet("color: #10b981; font-style: italic;")
+
+
+def _delete_user_preset(parent):
+    """Delete the currently selected user preset."""
+    from PyQt5.QtWidgets import QMessageBox
+    
+    current_data = parent.system_prompt_preset.currentData()
+    
+    # Only allow deleting user presets
+    if not current_data or not current_data.startswith("user_"):
+        parent.prompt_status_label.setText("Can only delete custom user presets")
+        parent.prompt_status_label.setStyleSheet("color: #f59e0b; font-style: italic;")
+        return
+    
+    preset_name = current_data[5:]  # Remove "user_" prefix
+    
+    reply = QMessageBox.question(
+        parent, "Delete Preset",
+        f"Are you sure you want to delete the preset '{preset_name}'?",
+        QMessageBox.Yes | QMessageBox.No
+    )
+    
+    if reply != QMessageBox.Yes:
+        return
+    
+    # Remove from JSON
+    presets = _load_user_presets_data()
+    if preset_name in presets:
+        del presets[preset_name]
+        _save_user_presets_data(presets)
+    
+    # Remove from dropdown
+    current_index = parent.system_prompt_preset.currentIndex()
+    parent.system_prompt_preset.removeItem(current_index)
+    
+    # Reset to Simple
+    parent.system_prompt_preset.setCurrentIndex(0)
+    
+    parent.prompt_status_label.setText(f"Deleted preset: {preset_name}")
+    parent.prompt_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
 
 
 def _load_chat_names(parent):
@@ -1809,6 +1954,8 @@ def create_settings_tab(parent):
     parent.system_prompt_preset.addItem("Full (with tools, for larger models)", "full")
     parent.system_prompt_preset.addItem("ForgeAI Complete (avatar, vision, tools)", "forgeai_full")
     parent.system_prompt_preset.addItem("Custom", "custom")
+    # Load user presets
+    _load_user_presets(parent)
     parent.system_prompt_preset.currentIndexChanged.connect(
         lambda: _apply_system_prompt_preset(parent)
     )
@@ -1834,13 +1981,27 @@ def create_settings_tab(parent):
     """)
     prompt_layout.addWidget(parent.custom_system_prompt)
     
-    # Save button
+    # Save button row
     prompt_buttons = QHBoxLayout()
-    save_prompt_btn = QPushButton("Save System Prompt")
+    save_prompt_btn = QPushButton("Save")
+    save_prompt_btn.setToolTip("Save current prompt to selected preset")
     save_prompt_btn.clicked.connect(lambda: _save_system_prompt(parent))
     prompt_buttons.addWidget(save_prompt_btn)
     
-    reset_prompt_btn = QPushButton("Reset to Default")
+    # Save as new preset button
+    save_as_btn = QPushButton("Save As New Preset")
+    save_as_btn.setToolTip("Save current prompt as a new custom preset")
+    save_as_btn.clicked.connect(lambda: _save_as_new_preset(parent))
+    prompt_buttons.addWidget(save_as_btn)
+    
+    # Delete preset button
+    delete_preset_btn = QPushButton("Delete Preset")
+    delete_preset_btn.setToolTip("Delete the currently selected custom preset")
+    delete_preset_btn.clicked.connect(lambda: _delete_user_preset(parent))
+    prompt_buttons.addWidget(delete_preset_btn)
+    
+    reset_prompt_btn = QPushButton("Reset")
+    reset_prompt_btn.setToolTip("Reset to Simple preset")
     reset_prompt_btn.clicked.connect(lambda: _reset_system_prompt(parent))
     prompt_buttons.addWidget(reset_prompt_btn)
     prompt_buttons.addStretch()
