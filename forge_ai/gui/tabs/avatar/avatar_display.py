@@ -2691,10 +2691,24 @@ class BoneHitRegion(QWidget):
         self._offset_y = config.get('offset_y', 0)
         self.setFixedSize(self._width, self._height)
     
-    def update_position(self, bone_screen_x: int, bone_screen_y: int):
-        """Update position based on bone's projected screen coordinates."""
-        self._screen_x = bone_screen_x + self._offset_x - self._width // 2
-        self._screen_y = bone_screen_y + self._offset_y - self._height // 2
+    def update_position(self, screen_x: int, screen_y: int, width: int = None, height: int = None):
+        """Update position and optionally size based on body region.
+        
+        Args:
+            screen_x: Center X position on screen
+            screen_y: Center Y position on screen  
+            width: Optional new width (for body regions that scale with avatar)
+            height: Optional new height
+        """
+        # Update size if provided
+        if width is not None and height is not None:
+            self._width = max(20, width)
+            self._height = max(20, height)
+            self.setFixedSize(self._width, self._height)
+        
+        # Position centered on the given coordinates
+        self._screen_x = screen_x + self._offset_x - self._width // 2
+        self._screen_y = screen_y + self._offset_y - self._height // 2
         self.move(self._screen_x, self._screen_y)
     
     def _get_edge_at_pos(self, pos):
@@ -2900,35 +2914,145 @@ class BoneHitRegion(QWidget):
             event.ignore()
 
 
-class BoneHitManager:
-    """Manages multiple bone hit regions for an avatar.
+class ResizeHandle(QWidget):
+    """A draggable resize handle for the avatar overlay.
     
-    Creates and updates hit regions for each detected bone.
-    Regions follow bone positions when the AI animates.
+    Appears as a small bar at the bottom-right corner when enabled.
+    Drag it to resize the avatar - much more intuitive than scroll wheel.
     """
     
-    # Default bone layout (estimated screen positions relative to avatar center)
-    # These are fallback positions when we can't get real bone transforms
-    DEFAULT_BONE_POSITIONS = {
-        'head': (0.5, 0.15),       # Top center
-        'neck': (0.5, 0.22),       # Just below head
-        'chest': (0.5, 0.35),      # Upper torso
-        'spine': (0.5, 0.45),      # Mid torso
-        'hips': (0.5, 0.55),       # Lower torso
-        'shoulder_l': (0.3, 0.28), # Left shoulder
-        'shoulder_r': (0.7, 0.28), # Right shoulder
-        'arm_l': (0.2, 0.38),      # Left upper arm
-        'arm_r': (0.8, 0.38),      # Right upper arm
-        'elbow_l': (0.15, 0.50),   # Left elbow
-        'elbow_r': (0.85, 0.50),   # Right elbow
-        'hand_l': (0.08, 0.60),    # Left hand
-        'hand_r': (0.92, 0.60),    # Right hand
-        'leg_l': (0.4, 0.68),      # Left upper leg
-        'leg_r': (0.6, 0.68),      # Right upper leg
-        'knee_l': (0.38, 0.82),    # Left knee
-        'knee_r': (0.62, 0.82),    # Right knee
-        'foot_l': (0.35, 0.95),    # Left foot
-        'foot_r': (0.65, 0.95),    # Right foot
+    resize_requested = pyqtSignal(int)  # Emits new size
+    
+    def __init__(self, avatar_window):
+        super().__init__(None)  # Top-level window
+        
+        self._avatar = avatar_window
+        self._drag_start = None
+        self._start_size = None
+        
+        # Window setup - small handle at corner
+        self.setWindowFlags(
+            Qt_FramelessWindowHint |
+            Qt_WindowStaysOnTopHint |
+            Qt_Tool
+        )
+        self.setAttribute(Qt_WA_TranslucentBackground, True)
+        
+        self._handle_width = 60
+        self._handle_height = 16
+        self.setFixedSize(self._handle_width, self._handle_height)
+        
+        self.setCursor(QCursor(Qt_SizeFDiagCursor))  # Diagonal resize cursor
+        
+    def paintEvent(self, event):
+        """Draw the resize handle."""
+        from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw handle background
+        bg_color = QColor(69, 71, 90, 200)  # Semi-transparent dark
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(QPen(QColor(137, 180, 250), 1))
+        painter.drawRoundedRect(0, 0, self.width() - 1, self.height() - 1, 4, 4)
+        
+        # Draw resize grip lines (like a standard resize handle)
+        grip_color = QColor(137, 180, 250)
+        painter.setPen(QPen(grip_color, 2))
+        
+        # Three diagonal lines
+        for i in range(3):
+            offset = 6 + i * 6
+            painter.drawLine(self.width() - offset, self.height() - 4,
+                           self.width() - 4, self.height() - offset)
+        
+        painter.end()
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            self._drag_start = event.globalPos()
+            self._start_size = self._avatar._size if self._avatar else 250
+            event.accept()
+    
+    def mouseMoveEvent(self, event):
+        if self._drag_start is not None:
+            delta = event.globalPos() - self._drag_start
+            # Use the larger of X or Y movement
+            change = max(delta.x(), delta.y())
+            new_size = max(100, min(800, self._start_size + change))
+            
+            if self._avatar:
+                self._avatar._set_size(new_size, keep_center=False)
+                self.update_position()
+            
+            event.accept()
+    
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt_LeftButton:
+            self._drag_start = None
+            self._start_size = None
+            event.accept()
+    
+    def update_position(self):
+        """Position handle at bottom-right corner of avatar."""
+        if self._avatar:
+            avatar_pos = self._avatar.pos()
+            avatar_size = self._avatar._size
+            
+            # Position at bottom-right corner, slightly inside
+            x = avatar_pos.x() + avatar_size - self._handle_width - 5
+            y = avatar_pos.y() + avatar_size - self._handle_height - 5
+            self.move(x, y)
+
+
+class BoneHitManager:
+    """Manages body region hit areas for an avatar.
+    
+    Uses 6 body regions instead of individual bones for simplicity:
+    - Head (includes neck)
+    - Torso (chest, spine, hips)
+    - Left Arm (shoulder, arm, elbow, hand)
+    - Right Arm (shoulder, arm, elbow, hand)
+    - Left Leg (thigh, knee, foot)
+    - Right Leg (thigh, knee, foot)
+    
+    This works with any model regardless of how many bones it has.
+    """
+    
+    # Body regions with their screen positions (relative 0-1)
+    # Each region covers a larger area than individual bones
+    BODY_REGIONS = {
+        'head': {
+            'position': (0.5, 0.12),
+            'size': (0.35, 0.20),  # width, height as ratio of avatar size
+            'bones': ['head', 'neck', 'skull', 'face', 'jaw'],
+        },
+        'torso': {
+            'position': (0.5, 0.42),
+            'size': (0.45, 0.35),
+            'bones': ['chest', 'spine', 'hips', 'pelvis', 'torso', 'body', 'root'],
+        },
+        'arm_left': {
+            'position': (0.15, 0.40),
+            'size': (0.25, 0.40),
+            'bones': ['shoulder_l', 'arm_l', 'elbow_l', 'hand_l', 'finger', 'left_arm', 'l_arm'],
+        },
+        'arm_right': {
+            'position': (0.85, 0.40),
+            'size': (0.25, 0.40),
+            'bones': ['shoulder_r', 'arm_r', 'elbow_r', 'hand_r', 'finger', 'right_arm', 'r_arm'],
+        },
+        'leg_left': {
+            'position': (0.35, 0.78),
+            'size': (0.25, 0.40),
+            'bones': ['leg_l', 'knee_l', 'foot_l', 'thigh_l', 'shin_l', 'left_leg', 'l_leg'],
+        },
+        'leg_right': {
+            'position': (0.65, 0.78),
+            'size': (0.25, 0.40),
+            'bones': ['leg_r', 'knee_r', 'foot_r', 'thigh_r', 'shin_r', 'right_leg', 'r_leg'],
+        },
     }
     
     def __init__(self, avatar_window):
@@ -3010,26 +3134,11 @@ class BoneHitManager:
         self._update_positions()
     
     def setup_from_gl_widget(self, gl_widget):
-        """Setup bones from the GL widget's model metadata."""
-        if not gl_widget:
-            return
-        
-        metadata = getattr(gl_widget, '_model_metadata', {})
-        bone_names = metadata.get('skeleton_bones', [])
-        
-        # Always use default humanoid bones for consistent hitbox coverage
-        # The model's skeleton bones may be incomplete or named differently
-        # Default bones provide a standard set that works with most humanoid models
-        default_bones = list(self.DEFAULT_BONE_POSITIONS.keys())
-        
-        if bone_names and len(bone_names) >= 10:
-            # Model has enough bones - use them but ensure we have at least the core ones
-            combined = list(set(bone_names) | set(['head', 'chest', 'hips', 'hand_l', 'hand_r']))
-            self.setup_bones(combined)
-        else:
-            # Use default humanoid bones for full coverage
-            self.setup_bones(default_bones)
-            print(f"[BoneHitManager] Using {len(default_bones)} default humanoid bones")
+        """Setup body regions - always uses 6 standard regions regardless of model bones."""
+        # Always use 6 body regions for consistent, manageable hitbox coverage
+        # This works with any model - 3 bones or 59 bones
+        self.setup_bones(list(self.BODY_REGIONS.keys()))
+        print(f"[BoneHitManager] Using 6 body region hitboxes")
     
     def show(self):
         """Show all bone regions."""
@@ -3058,20 +3167,12 @@ class BoneHitManager:
         self._regions.clear()
     
     def _update_positions(self):
-        """Update all bone region positions based on avatar state."""
+        """Update all body region positions based on avatar state."""
         if not self._avatar or not self._visible:
             return
         
         avatar_pos = self._avatar.pos()
         avatar_size = self._avatar.width()
-        
-        # Get bone controller if available
-        bone_controller = None
-        try:
-            from ....avatar.bone_control import get_bone_controller
-            bone_controller = get_bone_controller()
-        except Exception:
-            pass
         
         # Get GL widget for rotation info
         gl_widget = getattr(self._avatar, '_gl_widget', None)
@@ -3079,52 +3180,31 @@ class BoneHitManager:
         if gl_widget:
             model_yaw = getattr(gl_widget, 'model_yaw', 0.0)
         
-        for bone_name, region in self._regions.items():
-            # Try to get actual bone position from controller
-            screen_x, screen_y = self._get_bone_screen_pos(
-                bone_name, avatar_pos, avatar_size, bone_controller, model_yaw
-            )
-            region.update_position(screen_x, screen_y)
+        for region_name, region in self._regions.items():
+            # Get body region config
+            region_config = self.BODY_REGIONS.get(region_name, {})
+            pos = region_config.get('position', (0.5, 0.5))
+            size = region_config.get('size', (0.2, 0.2))
+            
+            # Apply model yaw rotation to x position
+            import math
+            rel_x, rel_y = pos
+            if model_yaw != 0:
+                # Rotate x around center (0.5)
+                cx = rel_x - 0.5
+                rotated_x = cx * math.cos(model_yaw)
+                rel_x = rotated_x + 0.5
+            
+            # Calculate screen position
+            screen_x = avatar_pos.x() + int(rel_x * avatar_size)
+            screen_y = avatar_pos.y() + int(rel_y * avatar_size)
+            
+            # Calculate region size based on avatar size
+            region_w = int(size[0] * avatar_size)
+            region_h = int(size[1] * avatar_size)
+            
+            region.update_position(screen_x, screen_y, region_w, region_h)
     
-    def _get_bone_screen_pos(self, bone_name: str, avatar_pos, avatar_size: int,
-                              bone_controller, model_yaw: float) -> tuple:
-        """Calculate screen position for a bone."""
-        # Normalize bone name for lookup
-        bone_lower = bone_name.lower()
-        
-        # Find matching default position
-        default_x, default_y = 0.5, 0.5  # Center fallback
-        for pattern, (px, py) in self.DEFAULT_BONE_POSITIONS.items():
-            if pattern in bone_lower or bone_lower in pattern:
-                default_x, default_y = px, py
-                break
-        
-        # Apply model yaw rotation to x position
-        import math
-        if model_yaw != 0:
-            # Rotate x around center (0.5)
-            cx = default_x - 0.5
-            rotated_x = cx * math.cos(model_yaw)
-            default_x = rotated_x + 0.5
-        
-        # If we have bone controller, try to get dynamic offset
-        if bone_controller:
-            try:
-                state = bone_controller.get_bone_state(bone_name)
-                if state:
-                    # Apply bone rotation to position offset
-                    pitch = state.get('pitch', 0)
-                    yaw = state.get('yaw', 0)
-                    
-                    # Small offset based on bone rotation
-                    offset_x = math.sin(yaw) * 0.05
-                    offset_y = math.sin(pitch) * 0.05
-                    
-                    default_x = max(0.05, min(0.95, default_x + offset_x))
-                    default_y = max(0.05, min(0.95, default_y + offset_y))
-            except Exception:
-                pass
-        
         # Convert to screen coordinates
         screen_x = avatar_pos.x() + int(avatar_size * default_x)
         screen_y = avatar_pos.y() + int(avatar_size * default_y)
@@ -3310,6 +3390,10 @@ class Avatar3DOverlayWindow(QWidget):
         # This replaces the old AvatarHitLayer - now we use bone regions for dragging
         self._bone_hit_manager = BoneHitManager(self)
         
+        # Resize handle - draggable corner for resizing (hidden by default)
+        self._resize_handle = ResizeHandle(self)
+        self._resize_handle_visible = False
+        
         # Keep reference for compatibility
         self._hit_layer = None  # Removed - using bone regions now
         self._drag_bar = None  # Removed - using bone regions now
@@ -3321,10 +3405,24 @@ class Avatar3DOverlayWindow(QWidget):
         self._apply_click_through()
     
     def _update_drag_bar_position(self):
-        """Update bone hit regions position to match avatar."""
+        """Update bone hit regions and resize handle position to match avatar."""
         # Update bone hit regions
         if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
             self._bone_hit_manager._update_positions()
+        # Update resize handle position
+        if hasattr(self, '_resize_handle') and self._resize_handle:
+            self._resize_handle.update_position()
+    
+    def show_resize_handle(self, visible: bool = True):
+        """Show or hide the resize handle."""
+        self._resize_handle_visible = visible
+        if self._resize_handle:
+            if visible:
+                self._resize_handle.update_position()
+                self._resize_handle.show()
+                self._resize_handle.raise_()
+            else:
+                self._resize_handle.hide()
     
     def moveEvent(self, event):
         """When avatar moves, update hit layer position too."""
@@ -3791,9 +3889,16 @@ class Avatar3DOverlayWindow(QWidget):
         menu.addSeparator()
         
         # ==== AVATAR SETTINGS ====
-        # Resize & Rotate toggle (for the AVATAR, not the drag area)
+        # Show/hide resize handle
+        resize_handle_visible = getattr(self, '_resize_handle_visible', False)
+        handle_text = "[X] Resize Handle" if resize_handle_visible else "Resize Handle"
+        handle_action = menu.addAction(handle_text)
+        handle_action.setToolTip("Show drag handle at corner to resize avatar")
+        handle_action.triggered.connect(self._toggle_resize_handle)
+        
+        # Resize & Rotate toggle (for scroll wheel)
         resize_enabled = getattr(self, '_resize_enabled', False)
-        resize_text = "[X] Avatar Resize Mode" if resize_enabled else "Avatar Resize Mode"
+        resize_text = "[X] Scroll Wheel Resize" if resize_enabled else "Scroll Wheel Resize"
         resize_action = menu.addAction(resize_text)
         resize_action.setToolTip("When enabled: scroll wheel resizes avatar")
         resize_action.triggered.connect(self._toggle_resize)
@@ -3815,6 +3920,17 @@ class Avatar3DOverlayWindow(QWidget):
         close_action.triggered.connect(self._close)
         
         menu.exec_(global_pos)
+    
+    def _toggle_resize_handle(self):
+        """Toggle resize handle visibility."""
+        self._resize_handle_visible = not self._resize_handle_visible
+        self.show_resize_handle(self._resize_handle_visible)
+        # Save preference
+        try:
+            from ....avatar.persistence import save_avatar_settings
+            save_avatar_settings(resize_handle_visible=self._resize_handle_visible)
+        except Exception:
+            pass
     
     def _request_gesture(self, gesture: str):
         """Request a gesture from the AI - AI decides how to react."""
@@ -4232,6 +4348,9 @@ class Avatar3DOverlayWindow(QWidget):
         # Close bone hit regions
         if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
             self._bone_hit_manager.clear()
+        # Close resize handle
+        if hasattr(self, '_resize_handle') and self._resize_handle:
+            self._resize_handle.hide()
         self.hide()
         self.closed.emit()
     
