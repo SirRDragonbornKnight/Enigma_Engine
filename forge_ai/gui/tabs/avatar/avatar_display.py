@@ -6043,27 +6043,24 @@ def _toggle_overlay(parent):
             if parent._overlay is None:
                 parent._overlay = AvatarOverlayWindow()
                 parent._overlay.closed.connect(lambda: _on_overlay_closed(parent))
-                
-                # Load size from avatar persistence (most reliable) or gui settings
-                # This sets _size which is the MAX dimension for scaling, NOT the window size
+            
+            # Set avatar path FIRST so per-avatar settings load correctly
+            if parent._current_path:
+                parent._overlay.set_avatar_path(str(parent._current_path))
+            else:
+                # Fallback: load default size from persistence
                 try:
-                    from ....avatar.persistence import load_avatar_settings
+                    from ....avatar.persistence import load_avatar_settings, load_position
                     avatar_settings = load_avatar_settings()
                     saved_size = avatar_settings.overlay_size
-                    # Ensure reasonable size (minimum 200 for visibility)
-                    if saved_size < 200 or saved_size > 500:
+                    # Allow any reasonable size (50-2000)
+                    if saved_size < 50:
                         saved_size = 300
-                except Exception:
-                    saved_size = getattr(parent, '_saved_overlay_size', 300)
-                    if saved_size < 200:
-                        saved_size = 300
-                
-                # Set the max dimension for scaling - minimum 200
-                parent._overlay._size = max(200, saved_size)
-                
-                # Restore position from persistence
-                try:
-                    from ....avatar.persistence import load_position
+                    elif saved_size > 2000:
+                        saved_size = 2000
+                    parent._overlay._size = saved_size
+                    
+                    # Restore position
                     x, y = load_position()
                     if x >= 0 and y >= 0:
                         parent._overlay.move(x, y)
@@ -6752,6 +6749,9 @@ def _apply_avatar(parent):
     
     # Update overlay if visible (pass original, overlay handles scaling)
     if parent._overlay and parent._overlay.isVisible():
+        # Update path first so per-avatar settings are used
+        if parent._current_path:
+            parent._overlay.set_avatar_path(str(parent._current_path))
         pixmap = parent.avatar_preview_2d.original_pixmap
         if pixmap:
             parent._overlay.set_avatar(pixmap)
