@@ -3403,29 +3403,36 @@ class Avatar3DOverlayWindow(QWidget):
         super().resizeEvent(event)
     
     def _make_click_through(self):
-        """Set up dynamic click-through behavior.
+        """Set up pixel-based click-through using nativeEvent.
         
-        Uses a mouse tracking timer to check if cursor is over opaque pixels.
-        When over transparent area: window is click-through (WS_EX_TRANSPARENT)
-        When over avatar: window receives mouse events
+        Instead of polling, we override Windows WM_NCHITTEST message.
+        Windows calls this whenever it needs to know if a point is clickable.
+        We check the pixel alpha and return HTTRANSPARENT for transparent areas.
+        
+        This is zero-overhead when the mouse isn't over the window.
         """
         self._use_pixel_hit_test = True
         self._hit_test_image = None
-        self._is_currently_clickthrough = True  # Start as click-through
         self._is_dragging = False
         
-        # Timer to update hit test image
+        # Timer to update hit test image (infrequent - just for the cached frame)
         self._hit_test_timer = QTimer()
         self._hit_test_timer.timeout.connect(self._update_hit_test_image)
-        self._hit_test_timer.start(100)  # Update frame every 100ms
+        self._hit_test_timer.start(200)  # Update frame every 200ms (5fps is enough)
         
-        # Timer to check mouse position and toggle click-through
-        self._mouse_check_timer = QTimer()
-        self._mouse_check_timer.timeout.connect(self._check_mouse_over_avatar)
-        self._mouse_check_timer.start(16)  # ~60fps for smooth response
-        
-        # Start with click-through enabled
-        self._set_click_through(True)
+        # Make window layered for transparency
+        import sys
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                GWL_EXSTYLE = -20
+                WS_EX_LAYERED = 0x80000
+                user32 = ctypes.windll.user32
+                current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_LAYERED)
+            except Exception:
+                pass
     
     def _update_hit_test_image(self):
         """Capture the current GL frame for pixel-based hit testing."""
@@ -3436,65 +3443,61 @@ class Avatar3DOverlayWindow(QWidget):
         except Exception:
             pass
     
-    def _check_mouse_over_avatar(self):
-        """Check if mouse is over an opaque pixel and toggle click-through accordingly."""
-        if self._is_dragging:
-            # Don't change click-through state while dragging
-            return
+    def nativeEvent(self, eventType, message):
+        """Handle Windows native events for per-pixel hit testing.
         
-        # Get global cursor position
-        cursor_pos = QCursor.pos()
+        WM_NCHITTEST is called by Windows to determine what part of the window
+        the mouse is over. By returning HTTRANSPARENT for transparent pixels,
+        clicks pass through to windows behind.
         
-        # Convert to widget-local coordinates
-        local_pos = self.mapFromGlobal(cursor_pos)
-        x, y = local_pos.x(), local_pos.y()
-        
-        # Check if cursor is within window bounds
-        if x < 0 or x >= self.width() or y < 0 or y >= self.height():
-            # Cursor outside window - ensure click-through
-            if not self._is_currently_clickthrough:
-                self._set_click_through(True)
-            return
-        
-        # Check if pixel is opaque
-        is_opaque = self._is_pixel_opaque(x, y)
-        
-        if is_opaque and self._is_currently_clickthrough:
-            # Mouse over avatar - disable click-through to receive events
-            self._set_click_through(False)
-        elif not is_opaque and not self._is_currently_clickthrough:
-            # Mouse over transparent area - enable click-through
-            self._set_click_through(True)
-    
-    def _set_click_through(self, enabled: bool):
-        """Enable or disable click-through on Windows."""
+        This is event-driven (not polling) - only runs when Windows needs to know.
+        """
         import sys
         if sys.platform != 'win32':
-            return
+            return super().nativeEvent(eventType, message)
         
         try:
             import ctypes
-            hwnd = int(self.winId())
+            from ctypes import wintypes
             
-            GWL_EXSTYLE = -20
-            WS_EX_LAYERED = 0x80000
-            WS_EX_TRANSPARENT = 0x20
+            # Check if this is WM_NCHITTEST (0x0084)
+            WM_NCHITTEST = 0x0084
+            HTTRANSPARENT = -1
+            HTCLIENT = 1
             
-            user32 = ctypes.windll.user32
-            current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            # Get message ID - handle different PyQt versions
+            msg = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
             
-            if enabled:
-                # Add TRANSPARENT - clicks pass through
-                new_style = current_style | WS_EX_LAYERED | WS_EX_TRANSPARENT
-            else:
-                # Remove TRANSPARENT - window receives clicks
-                new_style = (current_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT
-            
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
-            self._is_currently_clickthrough = enabled
-            
+            if msg.message == WM_NCHITTEST:
+                # Don't do hit testing while dragging
+                if self._is_dragging:
+                    return super().nativeEvent(eventType, message)
+                
+                # Get mouse position from lParam
+                x = msg.lParam & 0xFFFF
+                y = (msg.lParam >> 16) & 0xFFFF
+                
+                # Handle signed coordinates (can be negative on multi-monitor)
+                if x > 32767:
+                    x -= 65536
+                if y > 32767:
+                    y -= 65536
+                
+                # Convert screen coords to widget coords
+                local_pos = self.mapFromGlobal(QPoint(x, y))
+                
+                # Check if pixel is opaque
+                if not self._is_pixel_opaque(local_pos.x(), local_pos.y()):
+                    # Transparent pixel - let click pass through
+                    return True, HTTRANSPARENT
+                
+                # Opaque pixel - handle normally (HTCLIENT = inside window)
+                return True, HTCLIENT
+                
         except Exception:
             pass
+        
+        return super().nativeEvent(eventType, message)
     
     def _is_pixel_opaque(self, x: int, y: int, threshold: int = 10) -> bool:
         """Check if the pixel at (x, y) is opaque (part of the avatar).
