@@ -1128,7 +1128,8 @@ Checkpoints: {checkpoints}
     def _cleanup_tool_routing(self, deleted_model: str):
         """Remove deleted model from tool_routing.json assignments."""
         try:
-            routing_path = Path("information/tool_routing.json")
+            from ...config import CONFIG
+            routing_path = Path(CONFIG.get("data_dir", "data")) / "tool_routing.json"
             if not routing_path.exists():
                 return
             
