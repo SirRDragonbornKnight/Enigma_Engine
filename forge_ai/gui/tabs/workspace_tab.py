@@ -288,7 +288,7 @@ def _create_prompts_section(parent):
     
     parent.workspace_prompt_combo = QComboBox()
     parent.workspace_prompt_combo.setMinimumWidth(250)
-    _load_prompt_presets(parent)
+    # Load presets AFTER editor is created (below)
     parent.workspace_prompt_combo.currentIndexChanged.connect(
         lambda: _on_preset_changed(parent)
     )
@@ -361,6 +361,9 @@ def _create_prompts_section(parent):
     editor_layout.addWidget(parent.workspace_prompt_status)
     
     layout.addWidget(editor_group, stretch=1)
+    
+    # NOW load presets after editor exists
+    _load_prompt_presets(parent)
     
     w.setLayout(layout)
     return w

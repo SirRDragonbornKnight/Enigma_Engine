@@ -95,9 +95,12 @@ def _suppress_noise():
     # ===== PYTHON WARNINGS =====
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=UserWarning)
     warnings.filterwarnings("ignore", message=".*ALSA.*")
     warnings.filterwarnings("ignore", message=".*audio.*")
     warnings.filterwarnings("ignore", message=".*jack.*")
+    warnings.filterwarnings("ignore", message=".*torch_dtype.*")
+    warnings.filterwarnings("ignore", message=".*deprecated.*")
 
 
 # MUST suppress noise BEFORE any other imports

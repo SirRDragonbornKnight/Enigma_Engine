@@ -2598,95 +2598,13 @@ class EnhancedMainWindow(QMainWindow):
         13. Settings - Configuration
         """
         # ─────────────────────────────────────────────────────────────────
-        # Menu bar
+        # Menu bar - HIDDEN (features moved to Settings tab and context menus)
+        # The menus were causing click issues and duplicated Settings tab features
         # ─────────────────────────────────────────────────────────────────
-        menubar = self.menuBar()
+        self.menuBar().setVisible(False)
         
-        # File menu
-        file_menu = menubar.addMenu("File")
-        file_menu.addAction("New Model...", self._on_new_model)
-        file_menu.addAction("Open Model...", self._on_open_model)
-        file_menu.addSeparator()
-        file_menu.addAction("Backup Current Model", self._on_backup_current)
-        file_menu.addSeparator()
-        file_menu.addAction("Exit", self.close)
-        
-        # Options menu with toggles
-        options_menu = menubar.addMenu("Options")
-        
-        # ─────────────────────────────────────────────────────────────────
-        # Theme submenu with all 4 themes
-        # ─────────────────────────────────────────────────────────────────
-        theme_menu = options_menu.addMenu("Theme")
-        self.theme_group = QActionGroup(self)
-        self.theme_group.setExclusive(True)  # Only one theme at a time
-        
-        theme_dark = theme_menu.addAction("Dark (Catppuccin)")
-        theme_dark.setCheckable(True)
-        theme_dark.setChecked(True)  # Default theme
-        theme_dark.triggered.connect(lambda: self._set_theme("dark"))
-        self.theme_group.addAction(theme_dark)
-        
-        theme_light = theme_menu.addAction("Light")
-        theme_light.setCheckable(True)
-        theme_light.triggered.connect(lambda: self._set_theme("light"))
-        self.theme_group.addAction(theme_light)
-        
-        theme_shadow = theme_menu.addAction("Shadow (Deep Purple)")
-        theme_shadow.setCheckable(True)
-        theme_shadow.triggered.connect(lambda: self._set_theme("shadow"))
-        self.theme_group.addAction(theme_shadow)
-        
-        theme_midnight = theme_menu.addAction("Midnight (Deep Blue)")
-        theme_midnight.setCheckable(True)
-        theme_midnight.triggered.connect(lambda: self._set_theme("midnight"))
-        self.theme_group.addAction(theme_midnight)
-        
-        options_menu.addSeparator()
-        
-        # Zoom - opens input dialog
-        zoom_action = options_menu.addAction("Zoom...")
-        zoom_action.setShortcut("Ctrl+Z")
-        zoom_action.triggered.connect(self._show_zoom_dialog)
-        
-        options_menu.addSeparator()
-        
-        # ─────────────────────────────────────────────────────────────────
-        # Feature toggles
-        # ─────────────────────────────────────────────────────────────────
-        self.avatar_action = options_menu.addAction("Avatar (OFF)")
-        self.avatar_action.setCheckable(True)
-        self.avatar_action.setChecked(False)
-        self.avatar_action.triggered.connect(self._toggle_avatar)
-        
-        options_menu.addSeparator()
-        
-        self.auto_speak_action = options_menu.addAction("AI Auto-Speak (OFF)")
-        self.auto_speak_action.setCheckable(True)
-        self.auto_speak_action.setChecked(False)
-        self.auto_speak_action.triggered.connect(self._toggle_auto_speak)
-        
-        self.microphone_action = options_menu.addAction("Microphone (OFF)")
-        self.microphone_action.setCheckable(True)
-        self.microphone_action.setChecked(False)
-        self.microphone_action.triggered.connect(self._toggle_microphone)
-        
-        options_menu.addSeparator()
-        
-        # Learn while chatting - enables continuous learning from conversations
-        self.learn_action = options_menu.addAction("Learn While Chatting (ON)")
-        self.learn_action.setCheckable(True)
-        self.learn_action.setChecked(True)  # On by default
-        self.learn_action.triggered.connect(self._toggle_learning)
+        # Initialize toggle state variables (previously in menu, now in Settings)
         self.learn_while_chatting = True
-        
-        options_menu.addSeparator()
-        
-        # Companion Mode - AI watches screen and comments
-        self.companion_action = options_menu.addAction("Companion Mode (OFF)")
-        self.companion_action.setCheckable(True)
-        self.companion_action.setChecked(False)
-        self.companion_action.triggered.connect(self._toggle_companion_mode)
         self._companion = None
         
         # ─────────────────────────────────────────────────────────────────

@@ -2787,6 +2787,8 @@ class BoneHitRegion(QWidget):
                     'height': self._height,
                     'offset_x': self._offset_x,
                     'offset_y': self._offset_y,
+                    'x': self.x(),  # Store initial window position
+                    'y': self.y(),
                 }
             elif shift_held:
                 # Shift+drag to adjust bone region offset
@@ -2808,35 +2810,34 @@ class BoneHitRegion(QWidget):
             edge = self._resize_edge
             
             # Calculate new size based on edge being dragged
+            # Each edge only moves that one side - not both
             new_w = self._resize_start['width']
             new_h = self._resize_start['height']
-            new_ox = self._resize_start['offset_x']
-            new_oy = self._resize_start['offset_y']
+            new_x = self._resize_start.get('x', self.x())
+            new_y = self._resize_start.get('y', self.y())
             
+            # Right edge: increase width, left side stays fixed
             if 'right' in edge:
                 new_w = max(20, self._resize_start['width'] + delta.x())
+            
+            # Left edge: increase width AND move window left
             if 'left' in edge:
-                dw = -delta.x()
-                new_w = max(20, self._resize_start['width'] + dw)
-                new_ox = self._resize_start['offset_x'] - dw // 2
+                new_w = max(20, self._resize_start['width'] - delta.x())
+                new_x = self._resize_start.get('x', self.x()) + delta.x()
+            
+            # Bottom edge: increase height, top side stays fixed
             if 'bottom' in edge:
                 new_h = max(20, self._resize_start['height'] + delta.y())
+            
+            # Top edge: increase height AND move window up
             if 'top' in edge:
-                dh = -delta.y()
-                new_h = max(20, self._resize_start['height'] + dh)
-                new_oy = self._resize_start['offset_y'] - dh // 2
+                new_h = max(20, self._resize_start['height'] - delta.y())
+                new_y = self._resize_start.get('y', self.y()) + delta.y()
             
             self._width = new_w
             self._height = new_h
-            self._offset_x = new_ox
-            self._offset_y = new_oy
             self.setFixedSize(new_w, new_h)
-            
-            # Update position with new offset
-            self.update_position(
-                self._screen_x + self._width // 2 - self._offset_x,
-                self._screen_y + self._height // 2 - self._offset_y
-            )
+            self.move(int(new_x), int(new_y))
             
         elif self._offset_drag_pos is not None:
             # Shift+drag: adjust bone region offset
@@ -3820,8 +3821,6 @@ class Avatar3DOverlayWindow(QWidget):
             pass
     
     def _toggle_hit_border(self):
-    
-    def _toggle_hit_border(self):
         """Toggle drag area border visibility."""
         if hasattr(self, '_hit_layer') and self._hit_layer:
             current = getattr(self._hit_layer, '_show_border', True)
@@ -3967,19 +3966,27 @@ class Avatar3DOverlayWindow(QWidget):
                 pass
     
     def _set_size(self, size: int, keep_center: bool = True):
-        """Set avatar size programmatically (used by AI commands and scroll wheel)."""
+        """Set avatar size programmatically (used by AI commands and scroll wheel).
+        
+        Uses debounced saving to prevent jitter from rapid resize events.
+        """
         size = max(50, min(2000, size))  # Clamp to reasonable range
+        
+        # Skip if size hasn't changed
+        if size == self._size:
+            return
         
         # Calculate center before resize
         old_center_x = self.x() + self._size // 2
         old_center_y = self.y() + self._size // 2
         
         self._size = size
+        
+        # Batch all size changes together to reduce jitter
         self.setFixedSize(self._size, self._size)
         self._gl_container.setFixedSize(self._size, self._size)
         if self._gl_widget:
             self._gl_widget.setFixedSize(self._size, self._size)
-            self._apply_circular_mask()
         
         # Keep centered at same position
         if keep_center:
@@ -3987,11 +3994,28 @@ class Avatar3DOverlayWindow(QWidget):
             new_y = old_center_y - self._size // 2
             self.move(new_x, new_y)
         
+        # Apply mask after position is set (not during resize)
+        if self._gl_widget:
+            # Debounce mask application to reduce flicker
+            if not hasattr(self, '_mask_timer'):
+                self._mask_timer = QTimer()
+                self._mask_timer.setSingleShot(True)
+                self._mask_timer.timeout.connect(self._apply_circular_mask)
+            self._mask_timer.start(50)  # Apply mask 50ms after last resize
+        
         # Update hit layer position
         if hasattr(self, '_hit_layer') and self._hit_layer:
             self._hit_layer._sync_with_avatar()
         
-        # Save size
+        # Debounce save to prevent excessive disk writes during rapid resize
+        if not hasattr(self, '_save_timer'):
+            self._save_timer = QTimer()
+            self._save_timer.setSingleShot(True)
+            self._save_timer.timeout.connect(self._save_size_debounced)
+        self._save_timer.start(300)  # Save 300ms after last resize
+    
+    def _save_size_debounced(self):
+        """Save size after debounce delay."""
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
             save_avatar_settings(overlay_3d_size=self._size)
@@ -4954,6 +4978,9 @@ def _toggle_auto_load(parent, enabled: bool):
         # If auto-load is off, also disable auto-run
         if hasattr(parent, 'avatar_auto_run_checkbox'):
             parent.avatar_auto_run_checkbox.setChecked(False)
+    
+    # Save setting immediately
+    _save_auto_settings(parent)
 
 
 def _toggle_auto_run(parent, enabled: bool):
@@ -4968,6 +4995,40 @@ def _toggle_auto_run(parent, enabled: bool):
     else:
         parent.avatar_status.setText("Avatar auto-run disabled")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
+    
+    # Save setting immediately
+    _save_auto_settings(parent)
+
+
+def _save_auto_settings(parent):
+    """Save avatar auto-load/auto-run settings to gui_settings.json."""
+    try:
+        from pathlib import Path
+        import json
+        from ....config import CONFIG
+        
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        
+        # Load existing settings
+        settings = {}
+        if settings_path.exists():
+            try:
+                with open(settings_path, "r") as f:
+                    settings = json.load(f)
+            except Exception:
+                pass
+        
+        # Update auto settings
+        settings["avatar_auto_load"] = getattr(parent, '_avatar_auto_load', False)
+        settings["avatar_auto_run"] = getattr(parent, '_avatar_auto_run', False)
+        
+        # Save back
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump(settings, f, indent=2)
+            
+    except Exception as e:
+        print(f"[Avatar] Could not save auto settings: {e}")
 
 
 def _toggle_resize_enabled(parent, enabled: bool):

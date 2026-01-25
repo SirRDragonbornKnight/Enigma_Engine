@@ -71,7 +71,7 @@ import torch                          # Main PyTorch library
 import torch.nn as nn                 # Neural network building blocks
 import torch.nn.functional as F       # Functions like cross_entropy loss
 from torch.utils.data import Dataset, DataLoader  # For loading training data
-from torch.cuda.amp import autocast, GradScaler   # Mixed precision (faster on GPU)
+from torch.amp import autocast, GradScaler        # Mixed precision (faster on GPU)
 import math                           # For cosine learning rate schedule
 import time                           # For timing training
 import logging                        # For log messages
@@ -977,7 +977,7 @@ class Trainer:
             # Two paths: with AMP (faster, less memory) or without
             if self.scaler is not None:
                 # AMP PATH: Use 16-bit floats for speed
-                with autocast():  # Automatic mixed precision context
+                with autocast(device_type=self.device.type):  # Automatic mixed precision context
                     # Forward: input_ids → model → logits (predictions)
                     logits = self.model(input_ids)
                     

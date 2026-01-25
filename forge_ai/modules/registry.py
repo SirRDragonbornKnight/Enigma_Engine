@@ -162,10 +162,18 @@ class ModelModule(Module):
         📖 WHY THIS MATTERS:
         Models can use gigabytes of memory. When unloading,
         we delete the reference so Python can garbage collect it.
+        We also explicitly clear GPU cache if available.
         """
         if self._instance is not None:
             del self._instance
             self._instance = None
+            # Force GPU memory cleanup
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
         return True
 
 
@@ -645,6 +653,13 @@ class GGUFLoaderModule(Module):
         if self._instance:
             self._instance.unload()
             self._instance = None
+            # Force GPU memory cleanup
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
         return True
 
 
@@ -1113,6 +1128,13 @@ class ToolRouterModule(Module):
             if hasattr(self._instance, '_model_cache'):
                 self._instance._model_cache.clear()
             self._instance = None
+            # Force GPU memory cleanup
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
         return True
 
 

@@ -15,7 +15,7 @@ A production-grade training system with:
 import math
 import time
 import torch
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.utils.data import Dataset, DataLoader
 from typing import Optional, List, Dict, Any, Callable
 from pathlib import Path
@@ -357,7 +357,7 @@ class Trainer:
 
                 # Forward pass with mixed precision
                 if self.config.use_amp:
-                    with autocast():
+                    with autocast(device_type=self.device.type):
                         logits, loss = self.model(input_ids, targets)
                         loss = loss / self.config.gradient_accumulation_steps
 
