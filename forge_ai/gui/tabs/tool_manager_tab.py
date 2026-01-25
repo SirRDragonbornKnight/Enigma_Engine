@@ -43,8 +43,8 @@ class ToolManagerTab(QWidget):
         header.setFont(QFont("Arial", 14, QFont.Bold))
         layout.addWidget(header)
         
-        desc = QLabel("Enable/disable tools to customize your Forge installation. "
-                     "Disable unused tools to save memory.")
+        desc = QLabel("Enable/disable AI tools to customize your Forge installation. "
+                     "Disable unused tools to save memory and speed up responses.")
         desc.setWordWrap(True)
         desc.setStyleSheet("font-size: 10px; color: #888;")
         layout.addWidget(desc)
@@ -100,11 +100,13 @@ class ToolManagerTab(QWidget):
         
         enable_all_btn = QPushButton("Enable All")
         enable_all_btn.setFixedHeight(26)
+        enable_all_btn.setToolTip("Enable all tools (may need extra packages)")
         enable_all_btn.clicked.connect(self._enable_all)
         bulk_layout.addWidget(enable_all_btn)
         
         disable_all_btn = QPushButton("Disable All")
         disable_all_btn.setFixedHeight(26)
+        disable_all_btn.setToolTip("Disable all tools (training-only mode)")
         disable_all_btn.clicked.connect(self._disable_all)
         bulk_layout.addWidget(disable_all_btn)
         

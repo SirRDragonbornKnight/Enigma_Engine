@@ -63,14 +63,15 @@ class LogViewerWidget(QWidget):
         self.auto_scroll_cb.stateChanged.connect(lambda s: setattr(self, 'auto_scroll', s == Qt.Checked))
         controls.addWidget(self.auto_scroll_cb)
         
-        refresh_btn = QPushButton("R")
-        refresh_btn.setMaximumWidth(40)
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setMaximumWidth(60)
+        refresh_btn.setToolTip("Reload log file from disk")
         refresh_btn.clicked.connect(self._load_log)
         controls.addWidget(refresh_btn)
         
-        clear_btn = QPushButton("X")
-        clear_btn.setMaximumWidth(40)
-        clear_btn.setToolTip("Clear display")
+        clear_btn = QPushButton("Clear")
+        clear_btn.setMaximumWidth(50)
+        clear_btn.setToolTip("Clear log display (file is not deleted)")
         clear_btn.clicked.connect(lambda: self.log_display.clear())
         controls.addWidget(clear_btn)
         
@@ -97,7 +98,14 @@ class LogViewerWidget(QWidget):
     def _load_log(self):
         """Load log file content."""
         if not self.log_path or not self.log_path.exists():
-            self.log_display.setPlainText("No log file found.")
+            self.log_display.setPlainText(
+                "No log file found yet.\n\n"
+                "Logs are created when:\n"
+                "- You train a model (training.log)\n"
+                "- Errors occur (errors.log)\n"
+                "- System events happen (system.log)\n\n"
+                "Try using ForgeAI and come back here to see logs."
+            )
             return
         
         try:

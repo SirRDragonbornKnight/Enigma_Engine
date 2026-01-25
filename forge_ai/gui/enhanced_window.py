@@ -2119,34 +2119,158 @@ class EnhancedMainWindow(QMainWindow):
             QApplication.instance().quit()
     
     def closeEvent(self, event):
-        """Handle window close - hide to system tray, don't exit ForgeAI.
+        """Handle window close - show close options dialog.
         
-        Only Quick Chat can quit ForgeAI completely.
-        Closing the main GUI just hides it - you can reopen from system tray.
+        This is triggered by clicking the window X button or Alt+F4.
+        Shows a dialog letting user choose: hide, close, or quit.
         """
-        # Save settings first
+        event.ignore()  # Don't close yet
+        self._show_close_dialog()  # Show the close options
+    
+    def contextMenuEvent(self, event):
+        """Show right-click context menu with common options."""
+        from PyQt5.QtWidgets import QMenu, QAction
+        
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #45475a;
+                margin: 4px 8px;
+            }
+        """)
+        
+        # Quick actions
+        new_chat_action = menu.addAction("New Chat")
+        new_chat_action.triggered.connect(self._new_chat_from_menu)
+        
+        menu.addSeparator()
+        
+        # View options
+        always_on_top_action = QAction("Always on Top", self)
+        always_on_top_action.setCheckable(True)
+        always_on_top_action.setChecked(bool(self.windowFlags() & Qt.WindowStaysOnTopHint))
+        always_on_top_action.triggered.connect(self._toggle_always_on_top)
+        menu.addAction(always_on_top_action)
+        
+        menu.addSeparator()
+        
+        # Navigation shortcuts
+        nav_menu = menu.addMenu("Go to Tab")
+        tabs = [("Chat", "chat"), ("Image", "image"), ("Code", "code"), 
+                ("Settings", "settings"), ("Modules", "modules")]
+        for name, key in tabs:
+            action = nav_menu.addAction(name)
+            action.triggered.connect(lambda checked, k=key: self._switch_to_tab(k))
+        
+        menu.addSeparator()
+        
+        # Window actions
+        hide_action = menu.addAction("Hide to Tray")
+        hide_action.triggered.connect(self.hide)
+        
+        quit_action = menu.addAction("Quit ForgeAI")
+        quit_action.triggered.connect(lambda: QApplication.instance().quit())
+        
+        menu.exec_(event.globalPos())
+    
+    def _new_chat_from_menu(self):
+        """Start new chat from context menu."""
+        self._switch_to_tab("chat")
+        if hasattr(self, 'chat_display'):
+            # Save current chat first
+            if hasattr(self, '_save_conversation'):
+                self._save_conversation()
+            self.chat_display.clear()
+            self.chat_messages = []
+    
+    def _toggle_always_on_top(self, checked):
+        """Toggle always-on-top window flag and save setting."""
+        if checked:
+            self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        else:
+            self.setWindowFlags(self.windowFlags() & ~Qt.WindowStaysOnTopHint)
+        self.show()  # Required after changing window flags
+        
+        # Save immediately
+        self._gui_settings["always_on_top"] = checked
         self._save_gui_settings()
+    
+    def _show_options_menu(self):
+        """Show options menu from the sidebar menu button."""
+        from PyQt5.QtWidgets import QMenu
+        from PyQt5.QtGui import QCursor
         
-        # Stop any running AI worker
-        if hasattr(self, '_ai_worker') and self._ai_worker:
-            if self._ai_worker.isRunning():
-                self._ai_worker.stop()
-                self._ai_worker.wait(2000)  # Wait up to 2 seconds
+        # Reuse the context menu logic
+        event_pos = QCursor.pos()
         
-        # Stop module manager health monitor if running
-        if hasattr(self, 'module_manager') and self.module_manager:
-            try:
-                if hasattr(self.module_manager, 'stop_health_monitor'):
-                    self.module_manager.stop_health_monitor()
-            except Exception as e:
-                print(f"Error stopping health monitor: {e}")
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+                border: 1px solid #45475a;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #89b4fa;
+                color: #1e1e2e;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #45475a;
+                margin: 4px 8px;
+            }
+        """)
         
-        # Don't close, just hide to tray
-        self.hide()
-        event.ignore()  # Keep the window in memory
+        # Quick actions
+        new_chat_action = menu.addAction("New Chat")
+        new_chat_action.triggered.connect(self._new_chat_from_menu)
         
-        # Show notification
-        print("Main GUI hidden to system tray. Use Quick Chat or system tray to reopen.")
+        menu.addSeparator()
+        
+        # View options
+        always_on_top_action = menu.addAction("Always on Top")
+        always_on_top_action.setCheckable(True)
+        always_on_top_action.setChecked(bool(self.windowFlags() & Qt.WindowStaysOnTopHint))
+        always_on_top_action.triggered.connect(self._toggle_always_on_top)
+        
+        menu.addSeparator()
+        
+        # Navigation shortcuts
+        nav_menu = menu.addMenu("Go to Tab")
+        tabs = [("Chat", "chat"), ("Image", "image"), ("Code", "code"), 
+                ("Settings", "settings"), ("Modules", "modules"), ("Files", "files")]
+        for name, key in tabs:
+            action = nav_menu.addAction(name)
+            action.triggered.connect(lambda checked, k=key: self._switch_to_tab(k))
+        
+        menu.addSeparator()
+        
+        # Window actions
+        hide_action = menu.addAction("Hide to Tray")
+        hide_action.triggered.connect(self.hide)
+        
+        close_action = menu.addAction("Close Options...")
+        close_action.triggered.connect(self._show_close_dialog)
+        
+        menu.exec_(event_pos)
     
     def keyPressEvent(self, event):
         """Handle key press events - Escape stops all generations."""
@@ -2706,27 +2830,26 @@ class EnhancedMainWindow(QMainWindow):
         title_layout.addWidget(app_title)
         title_layout.addStretch()
         
-        # Close button - shows close options dialog
-        close_btn = QPushButton("X")
-        close_btn.setFixedSize(28, 28)
-        close_btn.setToolTip("Close Options")
-        close_btn.setStyleSheet("""
+        # Menu button - shows options menu (right-click menu)
+        menu_btn = QPushButton("=")  # Hamburger-like icon
+        menu_btn.setFixedSize(28, 28)
+        menu_btn.setToolTip("Options Menu (or right-click anywhere)")
+        menu_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
-                color: #6c7086;
+                color: #89b4fa;
                 border: 1px solid #45475a;
                 border-radius: 4px;
-                font-size: 12px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #e74c3c;
-                border-color: #e74c3c;
-                color: white;
+                background-color: #313244;
+                border-color: #89b4fa;
             }
         """)
-        close_btn.clicked.connect(self._show_close_dialog)
-        title_layout.addWidget(close_btn)
+        menu_btn.clicked.connect(self._show_options_menu)
+        title_layout.addWidget(menu_btn)
         
         sidebar_layout.addWidget(title_widget)
         

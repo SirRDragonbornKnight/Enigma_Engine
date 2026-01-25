@@ -41,8 +41,9 @@ class ModelLoadingDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle("Loading")
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
-        self.setModal(False)
+        # Always on top + frameless + stay on top of parent
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setModal(True)  # Block interaction with parent until closed
         self.cancelled = False
         self._log_lines = []
         self._drag_pos = None
