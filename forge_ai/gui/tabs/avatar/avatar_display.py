@@ -3205,12 +3205,6 @@ class BoneHitManager:
             
             region.update_position(screen_x, screen_y, region_w, region_h)
     
-        # Convert to screen coordinates
-        screen_x = avatar_pos.x() + int(avatar_size * default_x)
-        screen_y = avatar_pos.y() + int(avatar_size * default_y)
-        
-        return screen_x, screen_y
-    
     def _show_bone_context_menu(self, region: BoneHitRegion, global_pos):
         """Show context menu for a bone region."""
         menu = QMenu()
