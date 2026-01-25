@@ -3369,8 +3369,6 @@ class Avatar3DOverlayWindow(QWidget):
             gl_layout.addWidget(self._gl_widget)
             # Apply visual mask (circular shape)
             self._apply_circular_mask()
-            # Apply click-through (avatar visible, clicks pass through)
-            self._apply_click_through()
         else:
             self._gl_widget = None
             placeholder = QLabel("3D not available")
@@ -3380,83 +3378,102 @@ class Avatar3DOverlayWindow(QWidget):
         
         main_layout.addWidget(self._gl_container)
         
-        # Bone hit region manager - per-bone hit areas for precise interaction
-        # This replaces the old AvatarHitLayer - now we use bone regions for dragging
-        self._bone_hit_manager = BoneHitManager(self)
+        # Legacy references for compatibility
+        self._bone_hit_manager = None  # Not used - pixel hit testing instead
+        self._hit_layer = None
+        self._drag_bar = None
         
-        # Resize handle - draggable corner for resizing (hidden by default)
-        self._resize_handle = ResizeHandle(self)
-        self._resize_handle_visible = False
-        
-        # Keep reference for compatibility
-        self._hit_layer = None  # Removed - using bone regions now
-        self._drag_bar = None  # Removed - using bone regions now
-        
-        # Drag bar state (for compatibility with drag handlers)
+        # Drag state
         self._drag_bar_offset = None
+        self._is_dragging = False
         
-        # Make avatar window fully click-through (bone regions are separate windows)
-        self._apply_click_through()
+        # Initialize pixel-based hit testing (only avatar pixels are clickable)
+        self._make_click_through()
     
     def _update_drag_bar_position(self):
-        """Update bone hit regions and resize handle position to match avatar."""
-        # Update bone hit regions
-        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
-            self._bone_hit_manager._update_positions()
-        # Update resize handle position
-        if hasattr(self, '_resize_handle') and self._resize_handle:
-            self._resize_handle.update_position()
-    
-    def show_resize_handle(self, visible: bool = True):
-        """Show or hide the resize handle."""
-        self._resize_handle_visible = visible
-        if self._resize_handle:
-            if visible:
-                self._resize_handle.update_position()
-                self._resize_handle.show()
-                self._resize_handle.raise_()
-            else:
-                self._resize_handle.hide()
+        """Update position tracking (for compatibility)."""
+        pass  # No longer needed - avatar window handles everything
     
     def moveEvent(self, event):
-        """When avatar moves, update hit layer position too."""
+        """When avatar moves, save position."""
         super().moveEvent(event)
-        self._update_drag_bar_position()
     
     def resizeEvent(self, event):
-        """When avatar resizes, update hit layer size too."""
+        """When avatar resizes."""
         super().resizeEvent(event)
-        self._update_drag_bar_position()
     
     def _make_click_through(self):
-        """Set up click-through behavior.
+        """Set up dynamic click-through behavior.
         
-        The avatar window is fully click-through (WS_EX_TRANSPARENT on Windows).
-        The drag bar is a separate window that receives mouse events.
+        Uses a mouse tracking timer to check if cursor is over opaque pixels.
+        When over transparent area: window is click-through (WS_EX_TRANSPARENT)
+        When over avatar: window receives mouse events
         """
-        self._click_through_enabled = True
-        self._apply_click_through()
+        self._use_pixel_hit_test = True
+        self._hit_test_image = None
+        self._is_currently_clickthrough = True  # Start as click-through
+        self._is_dragging = False
+        
+        # Timer to update hit test image
+        self._hit_test_timer = QTimer()
+        self._hit_test_timer.timeout.connect(self._update_hit_test_image)
+        self._hit_test_timer.start(100)  # Update frame every 100ms
+        
+        # Timer to check mouse position and toggle click-through
+        self._mouse_check_timer = QTimer()
+        self._mouse_check_timer.timeout.connect(self._check_mouse_over_avatar)
+        self._mouse_check_timer.start(16)  # ~60fps for smooth response
+        
+        # Start with click-through enabled
+        self._set_click_through(True)
     
-    def _apply_click_through(self):
-        """Make the avatar window fully click-through.
-        
-        Since the drag bar is a separate top-level window, we can safely
-        make this entire window transparent to mouse events.
-        """
-        if not getattr(self, '_click_through_enabled', True):
+    def _update_hit_test_image(self):
+        """Capture the current GL frame for pixel-based hit testing."""
+        if not self._gl_widget:
+            return
+        try:
+            self._hit_test_image = self._gl_widget.grabFramebuffer()
+        except Exception:
+            pass
+    
+    def _check_mouse_over_avatar(self):
+        """Check if mouse is over an opaque pixel and toggle click-through accordingly."""
+        if self._is_dragging:
+            # Don't change click-through state while dragging
             return
         
-        import sys
-        if sys.platform == 'win32':
-            self._apply_click_through_windows()
-        else:
-            self._apply_click_through_linux()
+        # Get global cursor position
+        cursor_pos = QCursor.pos()
+        
+        # Convert to widget-local coordinates
+        local_pos = self.mapFromGlobal(cursor_pos)
+        x, y = local_pos.x(), local_pos.y()
+        
+        # Check if cursor is within window bounds
+        if x < 0 or x >= self.width() or y < 0 or y >= self.height():
+            # Cursor outside window - ensure click-through
+            if not self._is_currently_clickthrough:
+                self._set_click_through(True)
+            return
+        
+        # Check if pixel is opaque
+        is_opaque = self._is_pixel_opaque(x, y)
+        
+        if is_opaque and self._is_currently_clickthrough:
+            # Mouse over avatar - disable click-through to receive events
+            self._set_click_through(False)
+        elif not is_opaque and not self._is_currently_clickthrough:
+            # Mouse over transparent area - enable click-through
+            self._set_click_through(True)
     
-    def _apply_click_through_windows(self):
-        """Windows: Make avatar window fully click-through using WS_EX_TRANSPARENT."""
+    def _set_click_through(self, enabled: bool):
+        """Enable or disable click-through on Windows."""
+        import sys
+        if sys.platform != 'win32':
+            return
+        
         try:
             import ctypes
-            
             hwnd = int(self.winId())
             
             GWL_EXSTYLE = -20
@@ -3466,15 +3483,59 @@ class Avatar3DOverlayWindow(QWidget):
             user32 = ctypes.windll.user32
             current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             
-            # Add BOTH LAYERED and TRANSPARENT - makes entire window click-through
-            # This is fine because drag bar is a separate window
-            new_style = current_style | WS_EX_LAYERED | WS_EX_TRANSPARENT
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
+            if enabled:
+                # Add TRANSPARENT - clicks pass through
+                new_style = current_style | WS_EX_LAYERED | WS_EX_TRANSPARENT
+            else:
+                # Remove TRANSPARENT - window receives clicks
+                new_style = (current_style | WS_EX_LAYERED) & ~WS_EX_TRANSPARENT
             
-            print("[Avatar] Windows click-through enabled (WS_EX_TRANSPARENT)")
-                
-        except Exception as e:
-            print(f"[Avatar] Windows click-through setup failed: {e}")
+            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
+            self._is_currently_clickthrough = enabled
+            
+        except Exception:
+            pass
+    
+    def _is_pixel_opaque(self, x: int, y: int, threshold: int = 10) -> bool:
+        """Check if the pixel at (x, y) is opaque (part of the avatar).
+        
+        Args:
+            x, y: Position relative to widget
+            threshold: Alpha value below which pixel is considered transparent
+            
+        Returns:
+            True if pixel is opaque (should handle click), False if transparent
+        """
+        if self._hit_test_image is None:
+            return False  # No image = transparent
+        
+        # Scale coordinates if image size differs from widget size
+        img_w = self._hit_test_image.width()
+        img_h = self._hit_test_image.height()
+        wid_w = self.width()
+        wid_h = self.height()
+        
+        if wid_w > 0 and wid_h > 0:
+            scaled_x = int(x * img_w / wid_w)
+            scaled_y = int(y * img_h / wid_h)
+        else:
+            scaled_x, scaled_y = x, y
+        
+        # Bounds check
+        if scaled_x < 0 or scaled_x >= img_w or scaled_y < 0 or scaled_y >= img_h:
+            return False
+        
+        # Get pixel color - check alpha
+        pixel = self._hit_test_image.pixelColor(scaled_x, scaled_y)
+        return pixel.alpha() > threshold
+    
+    def _apply_click_through(self):
+        """No-op - using dynamic click-through instead."""
+        pass
+    
+    def _apply_click_through_windows(self):
+        """No-op - using dynamic click-through instead."""
+        pass
     
     def _apply_click_through_linux(self):
         """Linux: Make avatar window click-through using X11 input shape."""
@@ -3696,10 +3757,10 @@ class Avatar3DOverlayWindow(QWidget):
                 # Don't start idle animation - it looks weird on humanoid models
                 # The AdaptiveAnimator handles proper animations via bone/blendshape
                 
-                # Setup and show bone hit regions - these are the main drag interface now
+                # DON'T show bone hitboxes anymore - using pixel-based hit testing instead
+                # The avatar window itself is now clickable (only on visible pixels)
                 if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
-                    self._bone_hit_manager.setup_from_gl_widget(self._gl_widget)
-                    self._bone_hit_manager.show()  # Always show - these are now the drag handles
+                    self._bone_hit_manager.hide()  # Hide blocky hitboxes
             
             return result
         return False
@@ -3786,39 +3847,91 @@ class Avatar3DOverlayWindow(QWidget):
             event.ignore()
     
     def paintEvent(self, event):
-        """Draw visual indicators (drag bar is now a separate widget)."""
+        """Draw visual indicators."""
         super().paintEvent(event)
-        
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        
-        # Draw border when resize mode is enabled (scroll wheel resizing)
-        if getattr(self, '_resize_enabled', False):
-            pen = QPen(QColor("#3498db"))
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.setBrush(Qt_NoBrush)
-            painter.drawRoundedRect(2, 2, self.width() - 4, self.height() - 4, 10, 10)
+        # No border drawing - clean transparent overlay
 
     def mousePressEvent(self, event):
-        """Avatar is click-through - ignore all mouse events except via drag bar."""
-        # All interaction goes through the DragBarWidget
-        event.ignore()
+        """Handle mouse press - avatar is clickable, background passes through."""
+        # Opaque pixel - handle the event
+        if event.button() == Qt_LeftButton:
+            # Start dragging the avatar
+            self._drag_bar_offset = event.globalPos() - self.pos()
+            self._is_dragging = True
+            self.setCursor(QCursor(Qt_ClosedHandCursor))
+            event.accept()
+        elif event.button() == Qt_RightButton:
+            # Show context menu
+            self._show_context_menu_at(event.globalPos())
+            event.accept()
+        else:
+            event.ignore()
     
     def mouseMoveEvent(self, event):
-        """Avatar is click-through - ignore all mouse events."""
-        event.ignore()
+        """Handle mouse move for dragging."""
+        if self._drag_bar_offset is not None:
+            # Dragging avatar
+            new_pos = event.globalPos() - self._drag_bar_offset
+            # Constrain to screen
+            try:
+                from PyQt5.QtWidgets import QDesktopWidget
+                desktop = QDesktopWidget()
+                virtual_geo = desktop.geometry()
+                min_visible = 50
+                new_x = max(min_visible - self._size, min(virtual_geo.right() - min_visible, new_pos.x()))
+                new_y = max(min_visible - self._size, min(virtual_geo.bottom() - min_visible, new_pos.y()))
+                new_pos.setX(new_x)
+                new_pos.setY(new_y)
+            except Exception:
+                pass
+            self.move(new_pos)
+            event.accept()
+        else:
+            self.setCursor(QCursor(Qt_OpenHandCursor))
+            event.ignore()
     
     def mouseReleaseEvent(self, event):
-        """Avatar is click-through - ignore all mouse events."""
-        event.ignore()
+        """Handle mouse release."""
+        if event.button() == Qt_LeftButton and self._drag_bar_offset is not None:
+            self._drag_bar_offset = None
+            self._is_dragging = False
+            self.setCursor(QCursor(Qt_OpenHandCursor))
+            # Save position
+            try:
+                from ....avatar.persistence import save_position, write_avatar_state_for_ai
+                pos = self.pos()
+                save_position(pos.x(), pos.y())
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
+            event.accept()
+        else:
+            event.ignore()
 
     def contextMenuEvent(self, event):
-        """Avatar is click-through - right-click only via drag bar."""
-        event.ignore()
+        """Handle right-click context menu."""
+        self._show_context_menu_at(event.globalPos())
+        event.accept()
+    
+    def wheelEvent(self, event):
+        """Scroll wheel to resize avatar - always active, smooth resize."""
+        try:
+            delta = event.angleDelta().y()
+        except AttributeError:
+            delta = getattr(event, 'delta', lambda: 0)()
+        
+        # Smooth resize - smaller increments
+        step = 10 if abs(delta) < 120 else 15
+        if delta > 0:
+            new_size = min(800, self._size + step)  # Scroll up = bigger, max 800
+        else:
+            new_size = max(80, self._size - step)  # Scroll down = smaller, min 80
+        
+        self._set_size(new_size, smooth=True)
+        event.accept()
     
     def _show_context_menu_at(self, global_pos):
-        """Show context menu at the given global position (called from drag bar)."""
+        """Show context menu at the given global position."""
         from PyQt5.QtWidgets import QMenu
         
         menu = QMenu(self)
@@ -3856,49 +3969,10 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # ==== BONE REGION SETTINGS ====
-        if hasattr(self, '_bone_hit_manager') and self._bone_hit_manager:
-            bone_manager = self._bone_hit_manager
-            
-            # Border visibility toggle
-            border_visible = bone_manager._show_border
-            border_text = "[X] Show Borders" if border_visible else "Show Borders"
-            border_action = menu.addAction(border_text)
-            border_action.setToolTip("Show/hide bone region borders")
-            border_action.triggered.connect(lambda: self._toggle_hit_border())
-            
-            # Resize lock toggle
-            resize_locked = bone_manager._resize_locked
-            lock_text = "[X] Lock Resize" if resize_locked else "Lock Resize"
-            lock_action = menu.addAction(lock_text)
-            lock_action.setToolTip("Prevents resizing bone regions (Shift+drag still adjusts offset)")
-            lock_action.triggered.connect(lambda: self._toggle_hit_lock())
-            
-            menu.addSeparator()
-            
-            # Reset all bone regions
-            reset_bones_action = menu.addAction("Reset All Regions")
-            reset_bones_action.triggered.connect(self._reset_bone_regions)
-        
-        menu.addSeparator()
-        
         # ==== AVATAR SETTINGS ====
-        # Show/hide resize handle
-        resize_handle_visible = getattr(self, '_resize_handle_visible', False)
-        handle_text = "[X] Resize Handle" if resize_handle_visible else "Resize Handle"
-        handle_action = menu.addAction(handle_text)
-        handle_action.setToolTip("Show drag handle at corner to resize avatar")
-        handle_action.triggered.connect(self._toggle_resize_handle)
-        
-        # Resize & Rotate toggle (for scroll wheel)
-        resize_enabled = getattr(self, '_resize_enabled', False)
-        resize_text = "[X] Scroll Wheel Resize" if resize_enabled else "Scroll Wheel Resize"
-        resize_action = menu.addAction(resize_text)
-        resize_action.setToolTip("When enabled: scroll wheel resizes avatar")
-        resize_action.triggered.connect(self._toggle_resize)
-        
         # Size input action
         size_action = menu.addAction(f"Set Size... ({self._size}px)")
+        size_action.setToolTip("Scroll wheel also resizes")
         size_action.triggered.connect(self._show_size_dialog)
         
         menu.addSeparator()
@@ -3914,17 +3988,6 @@ class Avatar3DOverlayWindow(QWidget):
         close_action.triggered.connect(self._close)
         
         menu.exec_(global_pos)
-    
-    def _toggle_resize_handle(self):
-        """Toggle resize handle visibility."""
-        self._resize_handle_visible = not self._resize_handle_visible
-        self.show_resize_handle(self._resize_handle_visible)
-        # Save preference
-        try:
-            from ....avatar.persistence import save_avatar_settings
-            save_avatar_settings(resize_handle_visible=self._resize_handle_visible)
-        except Exception:
-            pass
     
     def _request_gesture(self, gesture: str):
         """Request a gesture from the AI - AI decides how to react."""
@@ -4082,12 +4145,17 @@ class Avatar3DOverlayWindow(QWidget):
             except Exception:
                 pass
     
-    def _set_size(self, size: int, keep_center: bool = True):
+    def _set_size(self, size: int, keep_center: bool = True, smooth: bool = False):
         """Set avatar size programmatically (used by AI commands and scroll wheel).
+        
+        Args:
+            size: New size in pixels
+            keep_center: If True, keep avatar centered at same position
+            smooth: If True, use smaller increments for smoother resize
         
         Uses debounced saving to prevent jitter from rapid resize events.
         """
-        size = max(50, min(2000, size))  # Clamp to reasonable range
+        size = max(80, min(800, size))  # Clamp to reasonable range
         
         # Skip if size hasn't changed
         if size == self._size:
@@ -4120,9 +4188,8 @@ class Avatar3DOverlayWindow(QWidget):
                 self._mask_timer.timeout.connect(self._apply_circular_mask)
             self._mask_timer.start(50)  # Apply mask 50ms after last resize
         
-        # Update hit layer position
-        if hasattr(self, '_hit_layer') and self._hit_layer:
-            self._hit_layer._sync_with_avatar()
+        # Update drag bar position
+        self._update_drag_bar_position()
         
         # Debounce save to prevent excessive disk writes during rapid resize
         if not hasattr(self, '_save_timer'):
