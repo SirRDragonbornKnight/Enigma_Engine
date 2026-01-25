@@ -31,7 +31,8 @@ The router automatically picks the best model based on:
 SECTION 2: ROUTER CONFIGURATION FILE
 ================================================================================
 
-Location: information/tool_routing.json
+Location: data/tool_routing.json
+(Example template: information/tool_routing.example.json)
 
 Structure:
 {
@@ -397,7 +398,7 @@ Log output example:
 QUICK SETUP CHECKLIST
 ================================================================================
 
-[ ] Create or edit information/tool_routing.json
+[ ] Create or edit data/tool_routing.json
 [ ] Add models for each task type (chat, reasoning, math, code, creative)
 [ ] Set appropriate priorities (100 = best, 10 = fallback)
 [ ] Mark GPU requirements for large models
@@ -411,7 +412,7 @@ QUICK SETUP CHECKLIST
 EXAMPLE COMPLETE CONFIG
 ================================================================================
 
-FILE: information/tool_routing.json
+FILE: data/tool_routing.json
 
 {
   "assignments": {
