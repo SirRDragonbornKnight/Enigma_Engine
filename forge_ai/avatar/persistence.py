@@ -334,6 +334,27 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
     except:
         pass
     
+    # Load model/mesh info from capabilities file
+    model_info = {}
+    try:
+        caps_path = Path("data/avatar/capabilities.json")
+        if caps_path.exists():
+            with open(caps_path, 'r') as f:
+                caps = json.load(f)
+            model_info = caps.get('model_info', {})
+    except:
+        pass
+    
+    # Load bone info
+    bone_info = {}
+    try:
+        bone_path = Path("data/avatar/bone_info.json")
+        if bone_path.exists():
+            with open(bone_path, 'r') as f:
+                bone_info = json.load(f)
+    except:
+        pass
+    
     return {
         "position": {"x": x, "y": y},
         "size": size,
@@ -344,6 +365,26 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
         "resize_enabled": settings.resize_enabled,
         "avatar_type": settings.avatar_type,
         "current_avatar": settings.current_avatar,
+        # Model/mesh info for AI to understand what the avatar looks like
+        "model": {
+            "mesh_count": model_info.get('mesh_count', 0),
+            "mesh_names": model_info.get('mesh_names', []),
+            "vertex_count": model_info.get('vertices', 0),
+            "face_count": model_info.get('faces', 0),
+            "has_textures": model_info.get('has_textures', False),
+            "materials": model_info.get('materials', []),
+            "estimated_type": model_info.get('estimated_type', 'unknown'),
+            "bounds": model_info.get('bounds', {}),
+            "size_3d": model_info.get('size', []),
+        },
+        # Skeleton/bone info for AI to know what it can control
+        "skeleton": {
+            "has_skeleton": model_info.get('has_skeleton', False),
+            "bone_count": len(model_info.get('skeleton_bones', [])),
+            "bone_names": model_info.get('skeleton_bones', []),
+            "available_bones": bone_info.get('available_bones', []),
+            "bone_limits": bone_info.get('limits', {}),
+        },
     }
 
 
