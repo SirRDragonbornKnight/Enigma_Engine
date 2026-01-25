@@ -1999,6 +1999,9 @@ class EnhancedMainWindow(QMainWindow):
             # Save learn while chatting preference
             settings["learn_while_chatting"] = getattr(self, 'learn_while_chatting', True)
             
+            # Save has_chatted flag for first-run tips
+            settings["has_chatted"] = self._gui_settings.get("has_chatted", False)
+            
             # Save system prompt settings
             settings["system_prompt_preset"] = getattr(self, '_system_prompt_preset', 'simple')
             settings["custom_system_prompt"] = getattr(self, '_custom_system_prompt', '')
@@ -2509,9 +2512,27 @@ class EnhancedMainWindow(QMainWindow):
                 else:
                     model_note = ""
                 
+                # Check if this is user's first time
+                is_first_run = not self._gui_settings.get("has_chatted", False)
+                
+                if is_first_run:
+                    # First-time user welcome
+                    welcome_tips = """
+                    <p style='color: #89b4fa;'><b>Welcome to ForgeAI!</b> Here are some tips to get started:</p>
+                    <ul style='color: #cdd6f4; margin-left: 20px;'>
+                        <li>Just type naturally - say 'Generate an image of a sunset' or 'Write Python code for a calculator'</li>
+                        <li>The AI auto-detects what you want and uses the right tool</li>
+                        <li>Hover over sidebar items to see what each section does</li>
+                        <li>Check the <b>Files</b> tab for the full Quick Start Guide</li>
+                    </ul>
+                    """
+                else:
+                    welcome_tips = ""
+                
                 self.chat_display.append(
                     f"<p style='color: #a6e3a1;'><b>[OK] Model loaded:</b> {self.current_model_name} ({device_info})</p>"
                     f"{model_note}"
+                    f"{welcome_tips}"
                     f"<p style='color: #6c7086;'>Type a message below to chat with your AI.</p>"
                     "<hr>"
                 )
@@ -2716,45 +2737,46 @@ class EnhancedMainWindow(QMainWindow):
         self.sidebar.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         
         # Define navigation items with sections
+        # Format: (icon, name, key, tooltip)
         nav_items = [
             # Core
             ("section", "CORE"),
-            ("", "Chat", "chat"),
-            ("", "Workspace", "workspace"),
-            ("", "History", "history"),
+            ("", "Chat", "chat", "Talk to your AI - start here!"),
+            ("", "Workspace", "workspace", "Quick access to common tasks"),
+            ("", "History", "history", "View past conversations"),
             # Model
             ("section", "MODEL"),
-            ("", "Scale", "scale"),
-            ("", "Modules", "modules"),
-            ("", "Tools", "tools"),  # Tool Manager
-            ("", "Router", "router"),
+            ("", "Scale", "scale", "Grow or shrink your AI model"),
+            ("", "Modules", "modules", "Enable/disable AI features"),
+            ("", "Tools", "tools", "Manage AI tools and capabilities"),
+            ("", "Router", "router", "Assign specialized models to tasks"),
             # Generate
             ("section", "GENERATE"),
-            ("", "Image", "image"),
-            ("", "Code", "code"),
-            ("", "Video", "video"),
-            ("", "Audio", "audio"),
-            ("", "Voice", "voice"),  # Voice cloning
-            ("", "3D", "3d"),
-            ("", "GIF", "gif"),
+            ("", "Image", "image", "Generate images from text descriptions"),
+            ("", "Code", "code", "AI-powered code generation"),
+            ("", "Video", "video", "Create video content"),
+            ("", "Audio", "audio", "Text-to-speech and audio generation"),
+            ("", "Voice", "voice", "Clone and customize voices"),
+            ("", "3D", "3d", "Generate 3D models"),
+            ("", "GIF", "gif", "Create animated GIFs"),
             # Connect
             ("section", "CONNECT"),
-            ("", "Search", "search"),
-            ("", "Avatar", "avatar"),
-            ("", "Game", "game"),
-            ("", "Robot", "robot"),
-            ("", "Vision", "vision"),
-            ("", "Camera", "camera"),
+            ("", "Search", "search", "Semantic search through documents"),
+            ("", "Avatar", "avatar", "AI avatar display and control"),
+            ("", "Game", "game", "Connect AI to games"),
+            ("", "Robot", "robot", "Control robots and hardware"),
+            ("", "Vision", "vision", "AI image/screenshot analysis"),
+            ("", "Camera", "camera", "Live webcam AI analysis"),
             # Tools
             ("section", "SYSTEM"),
-            ("", "Terminal", "terminal"),
-            ("", "Files", "files"),
-            ("", "Logs", "logs"),
-            ("", "Network", "network"),
-            ("", "Analytics", "analytics"),
-            ("", "Scheduler", "scheduler"),
-            ("", "Examples", "examples"),
-            ("", "Settings", "settings"),
+            ("", "Terminal", "terminal", "View AI internal processing"),
+            ("", "Files", "files", "Edit training data and settings"),
+            ("", "Logs", "logs", "View system logs"),
+            ("", "Network", "network", "Multi-device AI networking"),
+            ("", "Analytics", "analytics", "Usage statistics and insights"),
+            ("", "Scheduler", "scheduler", "Schedule automated AI tasks"),
+            ("", "Examples", "examples", "Code examples and demos"),
+            ("", "Settings", "settings", "Configure ForgeAI preferences"),
         ]
         
         # Add items to sidebar
@@ -2806,10 +2828,11 @@ class EnhancedMainWindow(QMainWindow):
                 section_item.setForeground(QBrush(QColor("#6c7086")))
                 self.sidebar.addItem(section_item)
             else:
-                icon, name, key = item
+                icon, name, key, tooltip = item
                 list_item = QListWidgetItem(f"   {name}")
                 list_item.setData(Qt.UserRole, key)
                 list_item.setSizeHint(QSize(170, 38))
+                list_item.setToolTip(tooltip)  # Add helpful tooltip for beginners
                 self.sidebar.addItem(list_item)
                 self._nav_map[key] = stack_index
                 self._sidebar_items[key] = list_item
@@ -4357,6 +4380,10 @@ class EnhancedMainWindow(QMainWindow):
             f'<b style="color: #89b4fa;">{user_name}:</b> {text}</div>'
         )
         self.chat_input.clear()
+        
+        # Mark that user has chatted (for first-run tips)
+        if not self._gui_settings.get("has_chatted", False):
+            self._gui_settings["has_chatted"] = True
         
         # Track user message
         self.chat_messages.append({
