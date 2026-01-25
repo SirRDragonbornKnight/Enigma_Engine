@@ -3017,12 +3017,19 @@ class BoneHitManager:
         metadata = getattr(gl_widget, '_model_metadata', {})
         bone_names = metadata.get('skeleton_bones', [])
         
-        if bone_names:
-            # Use detected bones
-            self.setup_bones(bone_names)
+        # Always use default humanoid bones for consistent hitbox coverage
+        # The model's skeleton bones may be incomplete or named differently
+        # Default bones provide a standard set that works with most humanoid models
+        default_bones = list(self.DEFAULT_BONE_POSITIONS.keys())
+        
+        if bone_names and len(bone_names) >= 10:
+            # Model has enough bones - use them but ensure we have at least the core ones
+            combined = list(set(bone_names) | set(['head', 'chest', 'hips', 'hand_l', 'hand_r']))
+            self.setup_bones(combined)
         else:
-            # Use default humanoid bones
-            self.setup_bones(list(self.DEFAULT_BONE_POSITIONS.keys()))
+            # Use default humanoid bones for full coverage
+            self.setup_bones(default_bones)
+            print(f"[BoneHitManager] Using {len(default_bones)} default humanoid bones")
     
     def show(self):
         """Show all bone regions."""
@@ -5714,6 +5721,15 @@ def _toggle_overlay(parent):
                 parent._overlay_3d._gl_container.setFixedSize(saved_size, saved_size)
                 if parent._overlay_3d._gl_widget:
                     parent._overlay_3d._gl_widget.setFixedSize(saved_size, saved_size)
+                
+                # Restore position from persistence (same as 2D overlay)
+                try:
+                    from ....avatar.persistence import load_position
+                    x, y = load_position()
+                    if x >= 0 and y >= 0:
+                        parent._overlay_3d.move(x, y)
+                except Exception:
+                    pass
                 
                 # Reapply mask after loading settings (includes drag bar region)
                 parent._overlay_3d._apply_circular_mask()
