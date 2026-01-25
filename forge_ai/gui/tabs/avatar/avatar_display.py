@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
     QMenu
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent, QPen
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent, QPen, QBitmap, QRegion
 
 # Optional SVG support - not all PyQt5 installs have it
 try:
@@ -1269,6 +1269,24 @@ class AvatarOverlayWindow(QWidget):
         # Enable mouse tracking for resize cursor feedback
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_ArrowCursor))
+        
+        # Pixel-based hit testing - transparent areas pass through clicks
+        self._use_pixel_hit_test = True
+        self._is_dragging = False
+        
+        # Make window layered for transparency (Windows)
+        import sys
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                GWL_EXSTYLE = -20
+                WS_EX_LAYERED = 0x80000
+                user32 = ctypes.windll.user32
+                current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_LAYERED)
+            except Exception:
+                pass
     
     def set_avatar_path(self, path: str):
         """Set the current avatar path and load per-avatar settings."""
@@ -1404,38 +1422,6 @@ class AvatarOverlayWindow(QWidget):
             painter.drawEllipse(10, 10, size, size)
             painter.drawText(self.rect(), Qt_AlignCenter, "?")
         
-    def mousePressEvent(self, a0):  # type: ignore
-        """Start drag to move, resize, or rotate (Shift+drag when enabled)."""
-        if a0.button() == Qt_LeftButton:
-            try:
-                global_pos = a0.globalPosition().toPoint()
-                local_pos = a0.position().toPoint()
-            except AttributeError:
-                global_pos = a0.globalPos()
-                local_pos = a0.pos()
-            
-            # Check for Shift+drag (rotation mode) - only when resize/rotate is enabled
-            modifiers = a0.modifiers()
-            shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
-            
-            if shift_held and getattr(self, '_resize_enabled', False):
-                # Start rotation drag (only when enabled)
-                self._rotate_start_x = global_pos.x()
-                self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
-            else:
-                # Check if we're on an edge (for resize) - _get_edge_at_pos already checks _resize_enabled
-                edge = self._get_edge_at_pos(local_pos)
-                if edge:
-                    self._resize_edge = edge
-                    self._resize_start_pos = global_pos
-                    self._resize_start_size = self._size
-                    self._resize_start_geo = self.geometry()
-                elif getattr(self, '_reposition_enabled', True):
-                    # Normal drag (only if reposition is enabled) - no hand cursor
-                    self._drag_pos = global_pos - self.pos()
-                    # Keep arrow cursor, no grabbing hand
-        a0.accept()
-            
     def mouseMoveEvent(self, a0):  # type: ignore
         """Handle drag to move, resize, or rotate."""
         try:
@@ -1558,6 +1544,7 @@ class AvatarOverlayWindow(QWidget):
         self._drag_pos = None
         self._resize_edge = None
         self._rotate_start_x = None
+        self._is_dragging = False
         self.setCursor(QCursor(Qt_ArrowCursor))
         a0.accept()
     
@@ -1751,6 +1738,130 @@ class AvatarOverlayWindow(QWidget):
     def mouseDoubleClickEvent(self, a0):  # type: ignore
         """Double-click does nothing - use right-click menu for Center on Screen."""
         a0.accept()  # Consume the event
+    
+    def nativeEvent(self, eventType, message):
+        """Handle Windows native events for per-pixel hit testing.
+        
+        WM_NCHITTEST is called by Windows to determine what part of the window
+        the mouse is over. By returning HTTRANSPARENT for transparent pixels,
+        clicks pass through to windows behind.
+        
+        This only runs when Windows needs to know - zero overhead otherwise.
+        """
+        import sys
+        if sys.platform != 'win32':
+            return super().nativeEvent(eventType, message)
+        
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            # Check if this is WM_NCHITTEST (0x0084)
+            WM_NCHITTEST = 0x0084
+            HTTRANSPARENT = -1
+            HTCLIENT = 1
+            
+            # Get message ID - handle different PyQt versions
+            msg = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
+            
+            if msg.message == WM_NCHITTEST:
+                # Don't do hit testing while dragging
+                if getattr(self, '_is_dragging', False) or self._drag_pos is not None:
+                    return super().nativeEvent(eventType, message)
+                
+                # Get mouse position from lParam
+                x = msg.lParam & 0xFFFF
+                y = (msg.lParam >> 16) & 0xFFFF
+                
+                # Handle signed coordinates (can be negative on multi-monitor)
+                if x > 32767:
+                    x -= 65536
+                if y > 32767:
+                    y -= 65536
+                
+                # Convert screen coords to widget coords
+                local_pos = self.mapFromGlobal(QPoint(x, y))
+                
+                # Check if pixel is opaque (part of the avatar)
+                if not self._is_pixel_opaque(local_pos.x(), local_pos.y()):
+                    # Transparent pixel - let click pass through
+                    return True, HTTRANSPARENT
+                
+                # Opaque pixel - handle normally (HTCLIENT = inside window)
+                return True, HTCLIENT
+                
+        except Exception:
+            pass
+        
+        return super().nativeEvent(eventType, message)
+    
+    def _is_pixel_opaque(self, x: int, y: int, threshold: int = 10) -> bool:
+        """Check if the pixel at (x, y) is opaque (part of the avatar).
+        
+        Args:
+            x, y: Position relative to widget
+            threshold: Alpha value below which pixel is considered transparent
+            
+        Returns:
+            True if pixel is opaque (should handle click), False if transparent
+        """
+        if not self.pixmap or self.pixmap.isNull():
+            return False  # No image = transparent
+        
+        # Get the offset where pixmap is drawn (centered in window)
+        pixmap_x = (self.width() - self.pixmap.width()) // 2
+        pixmap_y = (self.height() - self.pixmap.height()) // 2
+        
+        # Convert to pixmap coordinates
+        px = x - pixmap_x
+        py = y - pixmap_y
+        
+        # Bounds check - outside pixmap is transparent
+        if px < 0 or px >= self.pixmap.width() or py < 0 or py >= self.pixmap.height():
+            return False
+        
+        # Get pixel color from pixmap - check alpha
+        img = self.pixmap.toImage()
+        if img.isNull():
+            return False
+        
+        pixel = img.pixelColor(px, py)
+        return pixel.alpha() > threshold
+    
+    def mousePressEvent(self, a0):  # type: ignore
+        """Start drag to move, resize, or rotate (Shift+drag when enabled)."""
+        if a0.button() == Qt_LeftButton:
+            try:
+                global_pos = a0.globalPosition().toPoint()
+                local_pos = a0.position().toPoint()
+            except AttributeError:
+                global_pos = a0.globalPos()
+                local_pos = a0.pos()
+            
+            # Mark as dragging for nativeEvent
+            self._is_dragging = True
+            
+            # Check for Shift+drag (rotation mode) - only when resize/rotate is enabled
+            modifiers = a0.modifiers()
+            shift_held = bool(modifiers & (Qt.ShiftModifier if hasattr(Qt, 'ShiftModifier') else 0x02000000))
+            
+            if shift_held and getattr(self, '_resize_enabled', False):
+                # Start rotation drag (only when enabled)
+                self._rotate_start_x = global_pos.x()
+                self.setCursor(QCursor(Qt.SizeHorCursor if hasattr(Qt, 'SizeHorCursor') else 0))
+            else:
+                # Check if we're on an edge (for resize) - _get_edge_at_pos already checks _resize_enabled
+                edge = self._get_edge_at_pos(local_pos)
+                if edge:
+                    self._resize_edge = edge
+                    self._resize_start_pos = global_pos
+                    self._resize_start_size = self._size
+                    self._resize_start_geo = self.geometry()
+                elif getattr(self, '_reposition_enabled', True):
+                    # Normal drag (only if reposition is enabled) - no hand cursor
+                    self._drag_pos = global_pos - self.pos()
+                    # Keep arrow cursor, no grabbing hand
+        a0.accept()
 
 
 class DragBarWidget(QWidget):
@@ -2980,7 +3091,7 @@ class ResizeHandle(QWidget):
             delta = event.globalPos() - self._drag_start
             # Use the larger of X or Y movement
             change = max(delta.x(), delta.y())
-            new_size = max(100, min(800, self._start_size + change))
+            new_size = max(50, self._start_size + change)  # Only minimum limit, no max cap
             
             if self._avatar:
                 self._avatar._set_size(new_size, keep_center=False)
@@ -3282,11 +3393,13 @@ class Avatar3DOverlayWindow(QWidget):
             Qt_Tool  # Don't show in taskbar
         )
         self.setAttribute(Qt_WA_TranslucentBackground, True)
-        self.setFocusPolicy(Qt.NoFocus if hasattr(Qt, 'NoFocus') else 0x00)
+        # WheelFocus so we can receive scroll wheel events
+        self.setFocusPolicy(Qt.WheelFocus if hasattr(Qt, 'WheelFocus') else 0x0f)
         
         self._size = 250
         self.setFixedSize(self._size, self._size)
-        self._resize_enabled = False  # Default OFF - user must enable via right-click
+        self._resize_enabled = False  # Controlled from Avatar tab
+        self._reposition_enabled = True  # Controlled from Avatar tab, default ON
         
         # NOTE: Edge-drag resize removed - use scroll wheel or size dialog instead
         
@@ -3302,7 +3415,7 @@ class Avatar3DOverlayWindow(QWidget):
         self._click_through_enabled = True
         
         self._model_path = None
-        self._use_circular_mask = True
+        self._use_circular_mask = False  # Disabled - can cause visual artifacts
         
         # Drag bar - ALWAYS functional for dragging, can be made visible for resize/reposition
         self._show_control_bar = True  # DEFAULT: Show the drag bar so users can see it
@@ -3364,8 +3477,10 @@ class Avatar3DOverlayWindow(QWidget):
         if HAS_OPENGL and HAS_TRIMESH:
             self._gl_widget = OpenGL3DWidget(self._gl_container, transparent_bg=True)
             self._gl_widget.setFixedSize(self._size, self._size)
-            # Disable GL widget's own mouse handling - drag bar handles interaction
+            # Disable GL widget's own mouse handling - parent handles interaction
             self._gl_widget.disable_mouse_interaction = True
+            # Pass wheel events to parent for resizing
+            self._gl_widget.wheelEvent = lambda e: self.wheelEvent(e)
             gl_layout.addWidget(self._gl_widget)
             # Apply visual mask (circular shape)
             self._apply_circular_mask()
@@ -3403,24 +3518,21 @@ class Avatar3DOverlayWindow(QWidget):
         super().resizeEvent(event)
     
     def _make_click_through(self):
-        """Set up pixel-based click-through using nativeEvent.
+        """Set up click-through for transparent areas.
         
-        Instead of polling, we override Windows WM_NCHITTEST message.
-        Windows calls this whenever it needs to know if a point is clickable.
-        We check the pixel alpha and return HTTRANSPARENT for transparent areas.
-        
-        This is zero-overhead when the mouse isn't over the window.
+        Uses WS_EX_TRANSPARENT to make window click-through by default,
+        then we selectively handle clicks on opaque (avatar) pixels.
         """
         self._use_pixel_hit_test = True
         self._hit_test_image = None
         self._is_dragging = False
         
-        # Timer to update hit test image (infrequent - just for the cached frame)
+        # Timer to update hit test image periodically
         self._hit_test_timer = QTimer()
         self._hit_test_timer.timeout.connect(self._update_hit_test_image)
-        self._hit_test_timer.start(200)  # Update frame every 200ms (5fps is enough)
+        self._hit_test_timer.start(200)
         
-        # Make window layered for transparency
+        # Make window click-through using Windows extended styles
         import sys
         if sys.platform == 'win32':
             try:
@@ -3428,11 +3540,61 @@ class Avatar3DOverlayWindow(QWidget):
                 hwnd = int(self.winId())
                 GWL_EXSTYLE = -20
                 WS_EX_LAYERED = 0x80000
+                WS_EX_TRANSPARENT = 0x20
                 user32 = ctypes.windll.user32
                 current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_LAYERED)
-            except Exception:
-                pass
+                # Add both LAYERED and TRANSPARENT
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_LAYERED | WS_EX_TRANSPARENT)
+            except Exception as e:
+                print(f"[Avatar] Could not set window style: {e}")
+        
+        # Start mouse tracking to detect when mouse is over avatar
+        self._start_mouse_tracking()
+    
+    def _start_mouse_tracking(self):
+        """Start tracking mouse position to enable/disable click-through dynamically."""
+        self._mouse_track_timer = QTimer()
+        self._mouse_track_timer.timeout.connect(self._check_mouse_over_avatar)
+        self._mouse_track_timer.start(16)  # ~60 FPS for responsive feel
+    
+    def _check_mouse_over_avatar(self):
+        """Check if mouse is over an opaque pixel and toggle click-through accordingly."""
+        import sys
+        if sys.platform != 'win32':
+            return
+        
+        try:
+            import ctypes
+            
+            # Get current mouse position
+            cursor_pos = QCursor.pos()
+            local_pos = self.mapFromGlobal(cursor_pos)
+            
+            # Check if mouse is within our window bounds
+            if not self.rect().contains(local_pos):
+                return
+            
+            # Check if pixel is opaque (part of avatar)
+            is_opaque = self._is_pixel_opaque(local_pos.x(), local_pos.y())
+            
+            # Toggle WS_EX_TRANSPARENT based on pixel opacity
+            hwnd = int(self.winId())
+            GWL_EXSTYLE = -20
+            WS_EX_TRANSPARENT = 0x20
+            user32 = ctypes.windll.user32
+            
+            current_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            has_transparent = bool(current_style & WS_EX_TRANSPARENT)
+            
+            if is_opaque and has_transparent:
+                # Mouse over avatar - remove transparent flag to receive clicks
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style & ~WS_EX_TRANSPARENT)
+            elif not is_opaque and not has_transparent:
+                # Mouse over background - add transparent flag to pass clicks through
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_TRANSPARENT)
+                
+        except Exception:
+            pass
     
     def _update_hit_test_image(self):
         """Capture the current GL frame for pixel-based hit testing."""
@@ -3443,80 +3605,33 @@ class Avatar3DOverlayWindow(QWidget):
         except Exception:
             pass
     
-    def nativeEvent(self, eventType, message):
-        """Handle Windows native events for per-pixel hit testing.
-        
-        WM_NCHITTEST is called by Windows to determine what part of the window
-        the mouse is over. By returning HTTRANSPARENT for transparent pixels,
-        clicks pass through to windows behind.
-        
-        This is event-driven (not polling) - only runs when Windows needs to know.
-        """
-        import sys
-        if sys.platform != 'win32':
-            return super().nativeEvent(eventType, message)
-        
-        try:
-            import ctypes
-            from ctypes import wintypes
-            
-            # Check if this is WM_NCHITTEST (0x0084)
-            WM_NCHITTEST = 0x0084
-            HTTRANSPARENT = -1
-            HTCLIENT = 1
-            
-            # Get message ID - handle different PyQt versions
-            msg = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
-            
-            if msg.message == WM_NCHITTEST:
-                # Don't do hit testing while dragging
-                if self._is_dragging:
-                    return super().nativeEvent(eventType, message)
-                
-                # Get mouse position from lParam
-                x = msg.lParam & 0xFFFF
-                y = (msg.lParam >> 16) & 0xFFFF
-                
-                # Handle signed coordinates (can be negative on multi-monitor)
-                if x > 32767:
-                    x -= 65536
-                if y > 32767:
-                    y -= 65536
-                
-                # Convert screen coords to widget coords
-                local_pos = self.mapFromGlobal(QPoint(x, y))
-                
-                # Check if pixel is opaque
-                if not self._is_pixel_opaque(local_pos.x(), local_pos.y()):
-                    # Transparent pixel - let click pass through
-                    return True, HTTRANSPARENT
-                
-                # Opaque pixel - handle normally (HTCLIENT = inside window)
-                return True, HTCLIENT
-                
-        except Exception:
-            pass
-        
-        return super().nativeEvent(eventType, message)
-    
-    def _is_pixel_opaque(self, x: int, y: int, threshold: int = 10) -> bool:
+    def _is_pixel_opaque(self, x: int, y: int, threshold: int = 30) -> bool:
         """Check if the pixel at (x, y) is opaque (part of the avatar).
+        
+        Uses a combination of alpha and RGB brightness to detect the avatar mesh.
+        The background is cleared to (0,0,0,0) so any pixel with color is the model.
         
         Args:
             x, y: Position relative to widget
-            threshold: Alpha value below which pixel is considered transparent
+            threshold: Brightness threshold below which pixel is considered transparent
             
         Returns:
             True if pixel is opaque (should handle click), False if transparent
         """
         if self._hit_test_image is None:
-            return False  # No image = transparent
+            # No image yet - try to grab one now
+            self._update_hit_test_image()
+            if self._hit_test_image is None:
+                return False  # Still no image = transparent
         
         # Scale coordinates if image size differs from widget size
         img_w = self._hit_test_image.width()
         img_h = self._hit_test_image.height()
         wid_w = self.width()
         wid_h = self.height()
+        
+        if img_w <= 0 or img_h <= 0:
+            return False
         
         if wid_w > 0 and wid_h > 0:
             scaled_x = int(x * img_w / wid_w)
@@ -3528,9 +3643,17 @@ class Avatar3DOverlayWindow(QWidget):
         if scaled_x < 0 or scaled_x >= img_w or scaled_y < 0 or scaled_y >= img_h:
             return False
         
-        # Get pixel color - check alpha
+        # Get pixel color
         pixel = self._hit_test_image.pixelColor(scaled_x, scaled_y)
-        return pixel.alpha() > threshold
+        
+        # Check alpha first (if framebuffer preserves it)
+        if pixel.alpha() > threshold:
+            return True
+        
+        # Fallback: check if pixel has ANY color (background is black)
+        # This handles cases where alpha channel isn't preserved properly
+        brightness = pixel.red() + pixel.green() + pixel.blue()
+        return brightness > threshold
     
     def _apply_click_through(self):
         """No-op - using dynamic click-through instead."""
@@ -3827,28 +3950,6 @@ class Avatar3DOverlayWindow(QWidget):
         except Exception:
             pass
     
-    def wheelEvent(self, event):
-        """Scroll wheel to resize when resize is enabled."""
-        if getattr(self, '_resize_enabled', False):
-            # Get scroll delta
-            try:
-                delta = event.angleDelta().y()
-            except AttributeError:
-                delta = event.delta()
-            
-            # Resize based on scroll direction (no limits)
-            if delta > 0:
-                new_size = self._size + 20  # Scroll up = bigger
-            else:
-                new_size = max(50, self._size - 20)   # Scroll down = smaller (min 50)
-            
-            # Use _set_size which keeps center position
-            self._set_size(new_size, keep_center=True)
-            
-            event.accept()
-        else:
-            event.ignore()
-    
     def paintEvent(self, event):
         """Draw visual indicators."""
         super().paintEvent(event)
@@ -3856,12 +3957,12 @@ class Avatar3DOverlayWindow(QWidget):
 
     def mousePressEvent(self, event):
         """Handle mouse press - avatar is clickable, background passes through."""
-        # Opaque pixel - handle the event
         if event.button() == Qt_LeftButton:
-            # Start dragging the avatar
-            self._drag_bar_offset = event.globalPos() - self.pos()
-            self._is_dragging = True
-            self.setCursor(QCursor(Qt_ClosedHandCursor))
+            # Only start drag if reposition is enabled
+            if getattr(self, '_reposition_enabled', True):
+                self._drag_bar_offset = event.globalPos() - self.pos()
+                self._is_dragging = True
+                self.setCursor(QCursor(Qt_ClosedHandCursor))
             event.accept()
         elif event.button() == Qt_RightButton:
             # Show context menu
@@ -3917,20 +4018,24 @@ class Avatar3DOverlayWindow(QWidget):
         event.accept()
     
     def wheelEvent(self, event):
-        """Scroll wheel to resize avatar - always active, smooth resize."""
+        """Scroll wheel to resize avatar - only when resize is enabled from Avatar tab."""
+        # Only resize if enabled from Avatar tab checkbox
+        if not getattr(self, '_resize_enabled', False):
+            event.ignore()
+            return
+        
         try:
             delta = event.angleDelta().y()
         except AttributeError:
             delta = getattr(event, 'delta', lambda: 0)()
         
-        # Smooth resize - smaller increments
-        step = 10 if abs(delta) < 120 else 15
+        step = 15
         if delta > 0:
-            new_size = min(800, self._size + step)  # Scroll up = bigger, max 800
+            new_size = self._size + step  # Scroll up = bigger
         else:
-            new_size = max(80, self._size - step)  # Scroll down = smaller, min 80
+            new_size = max(50, self._size - step)  # Scroll down = smaller, min 50
         
-        self._set_size(new_size, smooth=True)
+        self._set_size(new_size, keep_center=True)
         event.accept()
     
     def _show_context_menu_at(self, global_pos):
@@ -3955,7 +4060,7 @@ class Avatar3DOverlayWindow(QWidget):
             }
         """)
         
-        # Atlas-style gestures (Portal 2) - sends to AI
+        # Gestures submenu
         gestures_menu = menu.addMenu("Gestures")
         gesture_actions = [
             ("Wave", "wave"),
@@ -3972,15 +4077,19 @@ class Avatar3DOverlayWindow(QWidget):
         
         menu.addSeparator()
         
-        # ==== AVATAR SETTINGS ====
-        # Size input action
-        size_action = menu.addAction(f"Set Size... ({self._size}px)")
-        size_action.setToolTip("Scroll wheel also resizes")
-        size_action.triggered.connect(self._show_size_dialog)
+        # Resize toggle
+        resize_text = "Disable Resize" if getattr(self, '_resize_enabled', False) else "Enable Resize"
+        resize_action = menu.addAction(resize_text)
+        resize_action.triggered.connect(self._toggle_resize)
+        
+        # Reposition toggle
+        reposition_text = "Disable Reposition" if getattr(self, '_reposition_enabled', True) else "Enable Reposition"
+        reposition_action = menu.addAction(reposition_text)
+        reposition_action.triggered.connect(self._toggle_reposition)
         
         menu.addSeparator()
         
-        # Center on screen (moved from double-click)
+        # Center on screen
         center_action = menu.addAction("Center on Screen")
         center_action.triggered.connect(self._center_on_screen)
         
@@ -4040,9 +4149,9 @@ class Avatar3DOverlayWindow(QWidget):
                 self._bone_hit_manager._reset_region(region)
     
     def _toggle_resize(self):
-        """Toggle resize/rotate mode and update border visibility - Avatar3DOverlayWindow version."""
+        """Toggle resize mode - controls scroll wheel resizing."""
         self._resize_enabled = not getattr(self, '_resize_enabled', False)
-        self.update()  # Repaint to show/hide border
+        self.update()
         # Save setting
         try:
             from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
@@ -4050,6 +4159,18 @@ class Avatar3DOverlayWindow(QWidget):
             write_avatar_state_for_ai()
         except Exception as e:
             print(f"[Avatar] Error saving resize state: {e}")
+    
+    def _toggle_reposition(self):
+        """Toggle reposition mode - controls drag to move."""
+        self._reposition_enabled = not getattr(self, '_reposition_enabled', True)
+        self.update()
+        # Save setting
+        try:
+            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            save_avatar_settings(reposition_enabled=self._reposition_enabled)
+            write_avatar_state_for_ai()
+        except Exception as e:
+            print(f"[Avatar] Error saving reposition state: {e}")
     
     def _toggle_control_bar(self):
         """Toggle hit layer visibility (mostly for debugging - it's invisible anyway)."""
@@ -4158,7 +4279,7 @@ class Avatar3DOverlayWindow(QWidget):
         
         Uses debounced saving to prevent jitter from rapid resize events.
         """
-        size = max(80, min(800, size))  # Clamp to reasonable range
+        size = max(50, size)  # Only minimum limit, no maximum cap
         
         # Skip if size hasn't changed
         if size == self._size:
@@ -4617,18 +4738,6 @@ def create_avatar_subtab(parent):
     parent.avatar_auto_run_checkbox.toggled.connect(lambda c: _toggle_auto_run(parent, c))
     settings_row.addWidget(parent.avatar_auto_run_checkbox)
     
-    parent.avatar_resize_checkbox = QCheckBox("Allow popup resize")
-    parent.avatar_resize_checkbox.setToolTip("Allow manual resizing of the desktop avatar popup window (drag from edges to resize)")
-    parent.avatar_resize_checkbox.setChecked(False)  # Default OFF - less intrusive
-    parent.avatar_resize_checkbox.toggled.connect(lambda c: _toggle_resize_enabled(parent, c))
-    settings_row.addWidget(parent.avatar_resize_checkbox)
-    
-    parent.avatar_reposition_checkbox = QCheckBox("Allow reposition")
-    parent.avatar_reposition_checkbox.setToolTip("Allow dragging the avatar to reposition it (saved per avatar)")
-    parent.avatar_reposition_checkbox.setChecked(True)  # Default ON - natural behavior
-    parent.avatar_reposition_checkbox.toggled.connect(lambda c: _toggle_reposition_enabled(parent, c))
-    settings_row.addWidget(parent.avatar_reposition_checkbox)
-    
     # Reset Position button - moves avatar back to visible area
     parent.reset_position_btn = QPushButton("Reset Position")
     parent.reset_position_btn.setToolTip("Reset avatar position to center of screen (use if avatar went off-screen)")
@@ -5050,8 +5159,6 @@ def _restore_avatar_settings(parent):
         
         # Restore resize enabled setting (default OFF now)
         parent._avatar_resize_enabled = settings.get("avatar_resize_enabled", False)
-        if hasattr(parent, 'avatar_resize_checkbox'):
-            parent.avatar_resize_checkbox.setChecked(parent._avatar_resize_enabled)
         
         # Restore saved overlay sizes from avatar persistence (primary) or gui settings (fallback)
         # Avatar persistence is more reliable as it's updated when resizing
@@ -5064,8 +5171,8 @@ def _restore_avatar_settings(parent):
             saved_2d_size = settings.get("avatar_overlay_size", 300)
             saved_3d_size = settings.get("avatar_overlay_3d_size", 250)
         
-        parent._saved_overlay_size = max(200, min(800, saved_2d_size if isinstance(saved_2d_size, (int, float)) else 300))
-        parent._saved_overlay_3d_size = max(200, min(800, saved_3d_size if isinstance(saved_3d_size, (int, float)) else 250))
+        parent._saved_overlay_size = max(100, saved_2d_size if isinstance(saved_2d_size, (int, float)) else 300)
+        parent._saved_overlay_3d_size = max(100, saved_3d_size if isinstance(saved_3d_size, (int, float)) else 250)
         
         # Restore last avatar selection (always restore the selection)
         last_avatar_index = settings.get("last_avatar_index", 0)
@@ -5172,9 +5279,7 @@ def _restore_avatar_settings(parent):
             parent.ambient_slider.setValue(int(avatar_settings.ambient_strength * 200))
             
         # Restore resize enabled from avatar persistence
-        if hasattr(parent, 'avatar_resize_checkbox'):
-            parent.avatar_resize_checkbox.setChecked(avatar_settings.resize_enabled)
-            parent._avatar_resize_enabled = avatar_settings.resize_enabled
+        parent._avatar_resize_enabled = avatar_settings.resize_enabled
         
     except Exception as e:
         print(f"[Avatar] Could not restore avatar settings: {e}")
@@ -5897,8 +6002,8 @@ def _toggle_overlay(parent):
                 except Exception:
                     saved_size = getattr(parent, '_saved_overlay_3d_size', 250)
                 
-                # Ensure minimum size 200, max 800
-                saved_size = max(200, min(800, saved_size))
+                # Ensure minimum size 100, no max limit
+                saved_size = max(100, saved_size)
                 parent._overlay_3d._size = saved_size
                 parent._overlay_3d.setFixedSize(saved_size, saved_size)
                 parent._overlay_3d._gl_container.setFixedSize(saved_size, saved_size)

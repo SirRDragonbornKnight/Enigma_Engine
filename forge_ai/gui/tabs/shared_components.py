@@ -447,9 +447,9 @@ if HAS_PYQT:
         def wheelEvent(self, event):
             delta = event.angleDelta().y()
             if delta > 0:
-                self._size = min(500, self._size + 20)
+                self._size = min(800, self._size + 20)
             else:
-                self._size = max(100, self._size - 20)
+                self._size = max(50, self._size - 20)
             
             self.setFixedSize(self._size, self._size)
             if self.content_widget:

@@ -396,12 +396,12 @@ class DesktopPetWindow(QWidget):
             }
         """)
         
-        menu.addAction("👋 Wave", self._action_wave)
-        menu.addAction("💃 Dance", self._action_dance)
-        menu.addAction("😴 Sleep", self._action_sleep)
+        menu.addAction("Wave", self._action_wave)
+        menu.addAction("Dance", self._action_dance)
+        menu.addAction("Sleep", self._action_sleep)
         menu.addSeparator()
-        menu.addAction("🏠 Go Home", self._action_go_home)
-        menu.addAction("❌ Hide", self.hide)
+        menu.addAction("Go Home", self._action_go_home)
+        menu.addAction("Hide", self.hide)
         
         menu.exec_(event.globalPos())
     
