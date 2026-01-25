@@ -4923,14 +4923,38 @@ def _restore_avatar_settings(parent):
             # Auto-RUN the overlay if that setting is also enabled
             if getattr(parent, '_avatar_auto_run', False):
                 def auto_run_overlay():
-                    # Simulate clicking the Run button
-                    if not parent.show_overlay_btn.isChecked():
-                        parent.show_overlay_btn.setChecked(True)
-                        _toggle_overlay(parent)
-                        parent.avatar_status.setText("Avatar auto-started on desktop!")
-                        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
-                # Run after apply completes
-                QTimer.singleShot(1000, auto_run_overlay)
+                    # Check if we have a valid avatar loaded
+                    pixmap = parent.avatar_preview_2d.original_pixmap if hasattr(parent.avatar_preview_2d, 'original_pixmap') else None
+                    is_3d = getattr(parent, '_is_3d_model', False) and getattr(parent, '_using_3d_render', False)
+                    has_path = bool(getattr(parent, '_current_path', None))
+                    
+                    print(f"[Avatar Auto-Run] Checking: pixmap={pixmap is not None}, is_3d={is_3d}, has_path={has_path}, builtin={getattr(parent, '_using_builtin_sprite', True)}")
+                    
+                    if is_3d and has_path:
+                        # 3D model ready
+                        if not parent.show_overlay_btn.isChecked():
+                            parent.show_overlay_btn.setChecked(True)
+                            _toggle_overlay(parent)
+                            parent.avatar_status.setText("3D Avatar auto-started on desktop!")
+                            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                    elif pixmap and not getattr(parent, '_using_builtin_sprite', True):
+                        # 2D avatar ready
+                        if not parent.show_overlay_btn.isChecked():
+                            parent.show_overlay_btn.setChecked(True)
+                            _toggle_overlay(parent)
+                            parent.avatar_status.setText("Avatar auto-started on desktop!")
+                            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                    else:
+                        # Avatar not ready yet, try again after a delay
+                        parent.avatar_status.setText("Waiting for avatar to load...")
+                        parent.avatar_status.setStyleSheet("color: #f9e2af;")
+                        QTimer.singleShot(1000, auto_run_overlay)  # Retry
+                
+                # Run after apply completes - give extra time for loading
+                QTimer.singleShot(1500, auto_run_overlay)
+        elif parent._avatar_auto_load and not selection_restored:
+            parent.avatar_status.setText("Auto-load enabled but no avatar found. Add avatars to data/avatar/")
+            parent.avatar_status.setStyleSheet("color: #fab387;")
     
     except Exception as e:
         print(f"[Avatar] Could not restore gui settings: {e}")
