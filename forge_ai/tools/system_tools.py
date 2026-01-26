@@ -7,12 +7,17 @@ Tools:
   - get_system_info: Get system information
 """
 
+import logging
 import os
 import platform
+import re
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Dict, Any
 from .tool_registry import Tool
+
+logger = logging.getLogger(__name__)
 
 
 class RunCommandTool(Tool):
@@ -29,18 +34,42 @@ class RunCommandTool(Tool):
         "cwd": "Working directory (default: current directory)",
     }
     
-    # Dangerous commands that are blocked
+    # Dangerous commands/patterns that are blocked
     BLOCKED_COMMANDS = [
         "rm -rf /", "rm -rf ~", "mkfs", "dd if=", ":(){:|:&};:",
         "chmod -R 777 /", "chown -R", "> /dev/sda",
     ]
     
+    # Dangerous shell patterns that could indicate injection attacks
+    DANGEROUS_PATTERNS = [
+        r'\$\(',        # Command substitution $(...)
+        r'`[^`]+`',     # Backtick command substitution
+        r';\s*rm\s',    # Chained rm command
+        r'&&\s*rm\s',   # And-chained rm command
+        r'\|\s*rm\s',   # Piped rm command
+        r'>\s*/dev/sd', # Direct disk writes
+        r'>\s*/etc/',   # System config writes
+        r'>\s*/boot/',  # Boot partition writes
+        r'curl.*\|.*sh', # Curl pipe to shell
+        r'wget.*\|.*sh', # Wget pipe to shell
+    ]
+    
     def execute(self, command: str, timeout: int = 30, cwd: str = None, **kwargs) -> Dict[str, Any]:
         try:
-            # Safety check
+            # Validate timeout bounds
+            timeout = max(1, min(300, int(timeout)))  # 1-300 seconds
+            
+            # Safety check - blocked commands
             for blocked in self.BLOCKED_COMMANDS:
                 if blocked in command:
+                    logger.warning(f"Blocked dangerous command attempt: {blocked}")
                     return {"success": False, "error": f"Blocked dangerous command: {blocked}"}
+            
+            # Safety check - dangerous patterns
+            for pattern in self.DANGEROUS_PATTERNS:
+                if re.search(pattern, command, re.IGNORECASE):
+                    logger.warning(f"Blocked command matching dangerous pattern: {pattern}")
+                    return {"success": False, "error": "Command contains potentially dangerous pattern"}
             
             result = subprocess.run(
                 command,
@@ -61,7 +90,10 @@ class RunCommandTool(Tool):
             
         except subprocess.TimeoutExpired:
             return {"success": False, "error": f"Command timed out after {timeout}s"}
+        except ValueError as e:
+            return {"success": False, "error": f"Invalid parameter: {e}"}
         except Exception as e:
+            logger.error(f"Command execution error: {e}")
             return {"success": False, "error": str(e)}
 
 

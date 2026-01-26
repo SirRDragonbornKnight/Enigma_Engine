@@ -35,10 +35,29 @@ except ImportError:
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
 
 
-def _check_path_allowed(path: str) -> Dict[str, Any]:
-    """Check if path is allowed. Returns error dict if blocked."""
+def _check_path_allowed(path: str, resolve_first: bool = True) -> Dict[str, Any]:
+    """
+    Check if path is allowed. Returns error dict if blocked.
+    
+    Args:
+        path: The path to check
+        resolve_first: If True, resolve the path before checking (prevents traversal attacks)
+        
+    Returns:
+        Error dict if path is blocked, None if allowed
+    """
+    if resolve_first:
+        try:
+            # Resolve path to prevent traversal attacks (e.g., "../../etc/passwd")
+            resolved_path = str(Path(path).expanduser().resolve())
+        except Exception:
+            # If path can't be resolved, use original
+            resolved_path = path
+    else:
+        resolved_path = path
+    
     if HAS_SECURITY:
-        blocked, reason = is_path_blocked(path)
+        blocked, reason = is_path_blocked(resolved_path)
         if blocked:
             return {"success": False, "error": f"Access denied: {reason}"}
     return None

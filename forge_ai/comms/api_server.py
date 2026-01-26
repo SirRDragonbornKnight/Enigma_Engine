@@ -131,8 +131,20 @@ def create_app():
     def generate():
         data = request.json or {}
         prompt = data.get("prompt", "")
-        max_gen = int(data.get("max_gen", 50))
-        temp = float(data.get("temperature", 1.0))
+        
+        # Validate and bound numeric parameters to prevent abuse
+        try:
+            max_gen = int(data.get("max_gen", 50))
+            max_gen = max(1, min(2048, max_gen))  # Bound: 1-2048 tokens
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid max_gen value - must be integer"}), 400
+        
+        try:
+            temp = float(data.get("temperature", 1.0))
+            temp = max(0.0, min(2.0, temp))  # Bound: 0.0-2.0
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid temperature value - must be number"}), 400
+        
         text = engine.generate(prompt, max_gen=max_gen, temperature=temp)
         return jsonify({"text": text})
 
