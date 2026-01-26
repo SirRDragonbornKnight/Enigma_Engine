@@ -416,6 +416,7 @@ class SimpleVectorDB(VectorDBInterface):
         self.vectors = []   # List of numpy arrays
         self.ids = []       # List of string IDs (same order as vectors)
         self.metadata = []  # List of metadata dicts (same order as vectors)
+        self._vectors_array_cache = None  # Cached stacked array for search efficiency
     
     def add(self, vectors, ids, metadata: Optional[List[Dict]] = None) -> None:
         """
@@ -458,6 +459,9 @@ class SimpleVectorDB(VectorDBInterface):
             self.vectors.append(vec.astype(float))
             self.ids.append(ids[i])
             self.metadata.append(metadata[i] if metadata else {})
+        
+        # Invalidate cache since vectors changed
+        self._vectors_array_cache = None
     
     def search(self, query_vector: np.ndarray, top_k: int = 5, topk: int = None) -> List[Tuple[str, float, Dict]]:
         """
@@ -503,7 +507,10 @@ class SimpleVectorDB(VectorDBInterface):
         # COMPUTE COSINE SIMILARITY with all stored vectors
         # This is O(n) - checks every vector in the database
         # ─────────────────────────────────────────────────────────────────────
-        vectors_array = np.stack(self.vectors, axis=0)  # Shape: (n, dim)
+        # Use cached array if available, otherwise build and cache it
+        if self._vectors_array_cache is None:
+            self._vectors_array_cache = np.stack(self.vectors, axis=0)  # Shape: (n, dim)
+        vectors_array = self._vectors_array_cache
         query = query_vector.astype(float)               # Shape: (dim,)
         
         # Dot product: how much vectors "align"
@@ -543,6 +550,9 @@ class SimpleVectorDB(VectorDBInterface):
             del self.vectors[i]
             del self.ids[i]
             del self.metadata[i]
+        
+        # Invalidate cache since vectors changed
+        self._vectors_array_cache = None
     
     def save(self, path: Path) -> None:
         """

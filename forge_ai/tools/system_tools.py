@@ -40,18 +40,18 @@ class RunCommandTool(Tool):
         "chmod -R 777 /", "chown -R", "> /dev/sda",
     ]
     
-    # Dangerous shell patterns that could indicate injection attacks
+    # Dangerous shell patterns that could indicate injection attacks (pre-compiled for efficiency)
     DANGEROUS_PATTERNS = [
-        r'\$\(',        # Command substitution $(...)
-        r'`[^`]+`',     # Backtick command substitution
-        r';\s*rm\s',    # Chained rm command
-        r'&&\s*rm\s',   # And-chained rm command
-        r'\|\s*rm\s',   # Piped rm command
-        r'>\s*/dev/sd', # Direct disk writes
-        r'>\s*/etc/',   # System config writes
-        r'>\s*/boot/',  # Boot partition writes
-        r'curl.*\|.*sh', # Curl pipe to shell
-        r'wget.*\|.*sh', # Wget pipe to shell
+        re.compile(r'\$\(', re.IGNORECASE),        # Command substitution $(...)
+        re.compile(r'`[^`]+`', re.IGNORECASE),     # Backtick command substitution
+        re.compile(r';\s*rm\s', re.IGNORECASE),    # Chained rm command
+        re.compile(r'&&\s*rm\s', re.IGNORECASE),   # And-chained rm command
+        re.compile(r'\|\s*rm\s', re.IGNORECASE),   # Piped rm command
+        re.compile(r'>\s*/dev/sd', re.IGNORECASE), # Direct disk writes
+        re.compile(r'>\s*/etc/', re.IGNORECASE),   # System config writes
+        re.compile(r'>\s*/boot/', re.IGNORECASE),  # Boot partition writes
+        re.compile(r'curl.*\|.*sh', re.IGNORECASE), # Curl pipe to shell
+        re.compile(r'wget.*\|.*sh', re.IGNORECASE), # Wget pipe to shell
     ]
     
     def execute(self, command: str, timeout: int = 30, cwd: str = None, **kwargs) -> Dict[str, Any]:
@@ -65,10 +65,10 @@ class RunCommandTool(Tool):
                     logger.warning(f"Blocked dangerous command attempt: {blocked}")
                     return {"success": False, "error": f"Blocked dangerous command: {blocked}"}
             
-            # Safety check - dangerous patterns
+            # Safety check - dangerous patterns (pre-compiled)
             for pattern in self.DANGEROUS_PATTERNS:
-                if re.search(pattern, command, re.IGNORECASE):
-                    logger.warning(f"Blocked command matching dangerous pattern: {pattern}")
+                if pattern.search(command):
+                    logger.warning(f"Blocked command matching dangerous pattern: {pattern.pattern}")
                     return {"success": False, "error": "Command contains potentially dangerous pattern"}
             
             result = subprocess.run(

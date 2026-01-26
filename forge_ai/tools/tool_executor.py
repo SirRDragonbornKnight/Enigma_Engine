@@ -72,6 +72,9 @@ from .tool_definitions import get_tool_definition
 
 logger = logging.getLogger(__name__)
 
+# Pre-compiled regex pattern for parsing tool calls (efficiency optimization)
+TOOL_CALL_PATTERN = re.compile(r'<tool_call>(.*?)</tool_call>', re.DOTALL)
+
 
 class ToolTimeoutError(Exception):
     """Raised when a tool execution times out."""
@@ -207,10 +210,8 @@ class ToolExecutor:
         """
         tool_calls = []
         
-        # Pattern to match <tool_call>...</tool_call>
-        pattern = r'<tool_call>(.*?)</tool_call>'
-        
-        for match in re.finditer(pattern, text, re.DOTALL):
+        # Use pre-compiled pattern for efficiency
+        for match in TOOL_CALL_PATTERN.finditer(text):
             json_str = match.group(1).strip()
             start_pos = match.start()
             end_pos = match.end()
