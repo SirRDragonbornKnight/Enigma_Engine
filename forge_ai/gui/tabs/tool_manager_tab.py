@@ -47,12 +47,12 @@ class ToolManagerTab(QWidget):
         desc = QLabel("Enable/disable AI tools to customize your Forge installation. "
                      "Disable unused tools to save memory and speed up responses.")
         desc.setWordWrap(True)
-        desc.setStyleSheet("font-size: 10px; color: #888;")
+        desc.setStyleSheet("font-size: 13px; color: #888;")
         layout.addWidget(desc)
         
         # Stats bar
         self.stats_label = QLabel()
-        self.stats_label.setStyleSheet("color: #888; font-style: italic; font-size: 10px;")
+        self.stats_label.setStyleSheet("color: #888; font-style: italic; font-size: 13px;")
         layout.addWidget(self.stats_label)
         
         # Preset selector - more compact
@@ -84,7 +84,7 @@ class ToolManagerTab(QWidget):
         left_layout.setSpacing(4)
         
         tree_label = QLabel("Tools by Category:")
-        tree_label.setStyleSheet("font-size: 11px; font-weight: bold;")
+        tree_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         left_layout.addWidget(tree_label)
         
         self.tool_tree = QTreeWidget()
@@ -124,24 +124,24 @@ class ToolManagerTab(QWidget):
         right_layout.setSpacing(4)
         
         info_label = QLabel("Tool Information:")
-        info_label.setStyleSheet("font-size: 11px; font-weight: bold;")
+        info_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         right_layout.addWidget(info_label)
         
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
         self.info_text.setMinimumHeight(80)
         self.info_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.info_text.setStyleSheet("font-size: 10px;")
+        self.info_text.setStyleSheet("font-size: 13px;")
         right_layout.addWidget(self.info_text, 1)  # stretch factor 1
         
         # Dependencies section
         deps_label = QLabel("Required Packages:")
-        deps_label.setStyleSheet("font-size: 11px; font-weight: bold;")
+        deps_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         right_layout.addWidget(deps_label)
         
         self.deps_text = QTextEdit()
         self.deps_text.setReadOnly(True)
-        self.deps_text.setStyleSheet("font-size: 10px;")
+        self.deps_text.setStyleSheet("font-size: 13px;")
         self.deps_text.setMinimumHeight(60)
         self.deps_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         right_layout.addWidget(self.deps_text, 1)  # stretch factor 1

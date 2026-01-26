@@ -336,7 +336,7 @@ class GenerationPreviewPopup(QDialog):
         header = QHBoxLayout()
         
         title_label = QLabel(f"{title}")
-        title_label.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 14px; border: none;")
+        title_label.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 16px; border: none;")
         header.addWidget(title_label)
         
         header.addStretch()
@@ -428,7 +428,7 @@ class GenerationPreviewPopup(QDialog):
         
         # Path display
         path_label = QLabel(f"Path: {self.result_path}")
-        path_label.setStyleSheet("color: #6c7086; font-size: 10px; border: none;")
+        path_label.setStyleSheet("color: #6c7086; font-size: 13px; border: none;")
         path_label.setWordWrap(True)
         container_layout.addWidget(path_label)
         
@@ -468,7 +468,7 @@ class GenerationPreviewPopup(QDialog):
         
         # Hint
         hint = QLabel("Click anywhere to close. Auto-closes in 15s")
-        hint.setStyleSheet("color: #6c7086; font-size: 9px; border: none;")
+        hint.setStyleSheet("color: #6c7086; font-size: 12px; border: none;")
         hint.setAlignment(Qt.AlignCenter)
         container_layout.addWidget(hint)
         
@@ -660,7 +660,7 @@ QListWidget#sidebar {
     border: none;
     border-right: 2px solid #1e1e2e;
     outline: none;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     padding: 8px 0;
 }
@@ -821,7 +821,7 @@ QListWidget#sidebar {
     border: none;
     border-right: 2px solid #ccd0da;
     outline: none;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     padding: 8px 0;
 }
@@ -1844,7 +1844,7 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'learning_indicator'):
             if is_huggingface:
                 self.learning_indicator.setText("Learning: N/A")
-                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
                 self.learning_indicator.setToolTip(
                     "Learning is not available for HuggingFace models.\n\n"
                     "HuggingFace models are pre-trained and cannot be fine-tuned locally.\n"
@@ -1860,10 +1860,10 @@ class EnhancedMainWindow(QMainWindow):
                 # Restore current state
                 if getattr(self, 'learn_while_chatting', True):
                     self.learning_indicator.setText("Learning: ON")
-                    self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+                    self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 14px;")
                 else:
                     self.learning_indicator.setText("Learning: OFF")
-                    self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+                    self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
                 self.learning_indicator.setToolTip(
                     "When Learning is ON, the AI records your conversations and uses them to improve.\n\n"
                     "How it works:\n"
@@ -1933,10 +1933,10 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'learning_indicator'):
             if self.learn_while_chatting:
                 self.learning_indicator.setText("Learning: ON")
-                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 14px;")
             else:
                 self.learning_indicator.setText("Learning: OFF")
-                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
         
         # Apply window position and size
         if self._gui_settings.get("window_width") and self._gui_settings.get("window_height"):
@@ -2047,12 +2047,12 @@ class EnhancedMainWindow(QMainWindow):
             }
             QLabel {
                 color: #cdd6f4;
-                font-size: 13px;
+                font-size: 15px;
             }
             QPushButton {
                 padding: 8px 16px;
                 border-radius: 6px;
-                font-size: 12px;
+                font-size: 14px;
                 font-weight: bold;
             }
         """)
@@ -2802,7 +2802,7 @@ class EnhancedMainWindow(QMainWindow):
             QLabel {
                 color: #f39c12;
                 padding: 2px 8px;
-                font-size: 11px;
+                font-size: 14px;
             }
         """)
         self.ai_status_label.setToolTip("AI connection status")
@@ -2898,7 +2898,7 @@ class EnhancedMainWindow(QMainWindow):
                 color: #888;
                 border: 1px solid #333;
                 border-radius: 4px;
-                font-size: 10px;
+                font-size: 13px;
             }
             QPushButton:hover {
                 background-color: #313244;
@@ -3379,10 +3379,10 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'learning_indicator'):
             if checked:
                 self.learning_indicator.setText("Learning: ON")
-                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 14px;")
             else:
                 self.learning_indicator.setText("Learning: OFF")
-                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
         
         # Update brain if loaded
         if hasattr(self, 'brain') and self.brain:
@@ -4914,7 +4914,7 @@ class EnhancedMainWindow(QMainWindow):
             }
             QMessageBox QLabel {
                 color: #cdd6f4;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton {
                 background-color: #45475a;
@@ -5081,7 +5081,7 @@ class EnhancedMainWindow(QMainWindow):
         thinking_time = ""
         if hasattr(self, '_generation_start_time'):
             elapsed = time.time() - self._generation_start_time
-            thinking_time = f'<span style="color: #6c7086; font-size: 10px; float: right;">{elapsed:.1f}s</span>'
+            thinking_time = f'<span style="color: #6c7086; font-size: 13px; float: right;">{elapsed:.1f}s</span>'
         
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
@@ -5103,7 +5103,7 @@ class EnhancedMainWindow(QMainWindow):
                 f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
                 f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
                 f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
-                f'<span style="color: #6c7086; font-size: 11px;">Rate this response: </span>'
+                f'<span style="color: #6c7086; font-size: 14px;">Rate this response: </span>'
                 f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">Good</a>'
                 f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">Bad</a>'
                 f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">Critique</a>'
@@ -5705,7 +5705,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                     QLabel {{
                         color: {color};
                         padding: 2px 8px;
-                        font-size: 11px;
+                        font-size: 14px;
                     }}
                 """)
         except Exception as e:

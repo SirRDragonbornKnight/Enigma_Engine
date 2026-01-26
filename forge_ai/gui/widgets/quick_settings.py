@@ -103,7 +103,7 @@ PRESET_BUTTON_STYLE = """
         border: none;
         border-radius: 4px;
         padding: 6px 12px;
-        font-size: 11px;
+        font-size: 14px;
     }
     QPushButton:hover {
         background-color: #585b70;
@@ -145,7 +145,7 @@ class QuickSettingsPanel(QWidget):
         header = QHBoxLayout()
         
         self.title_label = QLabel("Quick Settings")
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 12px; color: #cdd6f4;")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 15px; color: #cdd6f4;")
         header.addWidget(self.title_label)
         
         header.addStretch()
@@ -451,22 +451,22 @@ class ResourceMonitor(QWidget):
         
         # CPU
         self.cpu_label = QLabel("CPU: --%")
-        self.cpu_label.setStyleSheet("color: #a6e3a1; font-size: 10px;")
+        self.cpu_label.setStyleSheet("color: #a6e3a1; font-size: 13px;")
         layout.addWidget(self.cpu_label)
         
         # RAM
         self.ram_label = QLabel("RAM: --MB")
-        self.ram_label.setStyleSheet("color: #89b4fa; font-size: 10px;")
+        self.ram_label.setStyleSheet("color: #89b4fa; font-size: 13px;")
         layout.addWidget(self.ram_label)
         
         # VRAM (if GPU)
         self.vram_label = QLabel("")
-        self.vram_label.setStyleSheet("color: #cba6f7; font-size: 10px;")
+        self.vram_label.setStyleSheet("color: #cba6f7; font-size: 13px;")
         layout.addWidget(self.vram_label)
         
         # Mode indicator
         self.mode_label = QLabel("Mode: Full")
-        self.mode_label.setStyleSheet("color: #f9e2af; font-size: 10px;")
+        self.mode_label.setStyleSheet("color: #f9e2af; font-size: 13px;")
         layout.addWidget(self.mode_label)
         
         layout.addStretch()

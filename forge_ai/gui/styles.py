@@ -97,7 +97,7 @@ BUTTON_SECONDARY = f"""
         border: none;
         border-radius: 6px;
         padding: 6px 16px;
-        font-size: 11px;
+        font-size: 14px;
     }}
     QPushButton:hover {{
         background-color: {COLORS['red']};
@@ -143,7 +143,7 @@ BUTTON_TOGGLE = f"""
         border: 1px solid {COLORS['surface1']};
         border-radius: 4px;
         padding: 4px 8px;
-        font-size: 10px;
+        font-size: 13px;
     }}
     QPushButton:hover {{
         background-color: {COLORS['surface1']};
@@ -168,7 +168,7 @@ TEXT_INPUT = f"""
         border: 1px solid {COLORS['surface1']};
         border-radius: 8px;
         padding: 10px 15px;
-        font-size: 14px;
+        font-size: 16px;
     }}
     QLineEdit:focus {{
         border-color: {COLORS['blue']};
@@ -186,7 +186,7 @@ TEXT_AREA = f"""
         border: 1px solid {COLORS['surface1']};
         border-radius: 8px;
         padding: 8px;
-        font-size: 13px;
+        font-size: 15px;
     }}
     QTextEdit:focus {{
         border-color: {COLORS['blue']};
@@ -200,7 +200,7 @@ CHAT_DISPLAY = f"""
         border: 1px solid {COLORS['surface1']};
         border-radius: 8px;
         padding: 10px;
-        font-size: 13px;
+        font-size: 15px;
     }}
 """
 
@@ -241,7 +241,7 @@ PROGRESS_BAR = f"""
         height: 18px;
         text-align: center;
         color: white;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: bold;
     }}
     QProgressBar::chunk {{
@@ -275,7 +275,7 @@ LIST_WIDGET = f"""
         border: 1px solid {COLORS['surface1']};
         border-radius: 8px;
         padding: 8px;
-        font-size: 13px;
+        font-size: 15px;
     }}
     QListWidget::item {{
         padding: 8px;
@@ -302,7 +302,7 @@ TERMINAL_OUTPUT = f"""
         border: 1px solid {COLORS['surface1']};
         border-radius: 6px;
         font-family: 'Consolas', 'Courier New', monospace;
-        font-size: 10px;
+        font-size: 13px;
         padding: 4px;
     }}
 """
@@ -412,7 +412,7 @@ LOADING_ITEM_ROW = f"""
 
 HEADER_LABEL = f"""
     QLabel {{
-        font-size: 15px;
+        font-size: 18px;
         font-weight: bold;
         color: {COLORS['blue']};
     }}
@@ -420,14 +420,14 @@ HEADER_LABEL = f"""
 
 STATUS_LABEL = f"""
     QLabel {{
-        font-size: 11px;
+        font-size: 14px;
         color: {COLORS['subtext0']};
     }}
 """
 
 HINT_LABEL = f"""
     QLabel {{
-        font-size: 10px;
+        font-size: 13px;
         color: {COLORS['overlay']};
     }}
 """

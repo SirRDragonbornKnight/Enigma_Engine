@@ -138,7 +138,7 @@ def create_training_tab(parent):
             border-radius: 4px;
             padding: 4px;
             font-family: monospace;
-            font-size: 11px;
+            font-size: 13px;
             color: #aaa;
         }
     """)
@@ -179,7 +179,7 @@ def create_training_tab(parent):
     parent.training_editor.setStyleSheet("""
         QPlainTextEdit {
             font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
+            font-size: 14px;
             line-height: 1.4;
         }
     """)
@@ -193,7 +193,7 @@ def create_training_tab(parent):
     # Epochs
     epochs_layout = QVBoxLayout()
     epochs_label = QLabel("Epochs")
-    epochs_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+    epochs_label.setStyleSheet("font-size: 14px; color: #6c7086;")
     epochs_layout.addWidget(epochs_label)
     parent.epochs_spin = QSpinBox()
     parent.epochs_spin.setRange(1, 10000)
@@ -206,7 +206,7 @@ def create_training_tab(parent):
     # Batch size
     batch_layout = QVBoxLayout()
     batch_label = QLabel("Batch Size")
-    batch_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+    batch_label.setStyleSheet("font-size: 14px; color: #6c7086;")
     batch_layout.addWidget(batch_label)
     parent.batch_spin = QSpinBox()
     parent.batch_spin.setRange(1, 64)
@@ -219,7 +219,7 @@ def create_training_tab(parent):
     # Learning rate
     lr_layout = QVBoxLayout()
     lr_label = QLabel("Learning Rate")
-    lr_label.setStyleSheet("font-size: 11px; color: #6c7086;")
+    lr_label.setStyleSheet("font-size: 14px; color: #6c7086;")
     lr_layout.addWidget(lr_label)
     parent.lr_input = QLineEdit("0.0001")
     parent.lr_input.setToolTip("How fast AI learns (lower = slower but stable)")

@@ -1374,7 +1374,7 @@ def create_settings_tab(parent):
     # Features enabled info
     parent.profile_features_label = QLabel("")
     parent.profile_features_label.setWordWrap(True)
-    parent.profile_features_label.setStyleSheet("color: #6b7280; font-size: 10px;")
+    parent.profile_features_label.setStyleSheet("color: #6b7280; font-size: 13px;")
     profile_layout.addWidget(parent.profile_features_label)
     
     # Profile status
@@ -1481,7 +1481,7 @@ def create_settings_tab(parent):
         "<b>Gaming while using AI:</b> Use 'Gaming' mode (GPU 40%, 2 threads)<br>"
         "<b>Best AI performance:</b> Use 'Maximum' mode (GPU 95%, all threads)"
     )
-    rec_info.setStyleSheet("color: #bac2de; font-size: 11px; padding: 4px;")
+    rec_info.setStyleSheet("color: #bac2de; font-size: 14px; padding: 4px;")
     rec_info.setWordWrap(True)
     rec_layout.addWidget(rec_info)
     
@@ -1639,7 +1639,7 @@ def create_settings_tab(parent):
     _load_chat_names(parent)
     
     names_note = QLabel("The AI's display name is automatically set to the loaded model name.")
-    names_note.setStyleSheet("color: #888; font-style: italic; font-size: 11px;")
+    names_note.setStyleSheet("color: #888; font-style: italic; font-size: 14px;")
     names_note.setWordWrap(True)
     names_layout.addWidget(names_note)
     
@@ -2145,7 +2145,7 @@ def create_settings_tab(parent):
     
     # Active AI Model display
     parent.active_ai_label = QLabel("Active AI: Not configured")
-    parent.active_ai_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px;")
+    parent.active_ai_label.setStyleSheet("font-weight: bold; font-size: 15px; padding: 5px; background: #1e1e2e; border-radius: 4px;")
     connection_layout.addWidget(parent.active_ai_label)
     
     # Connection indicators
@@ -2191,7 +2191,7 @@ def create_settings_tab(parent):
     cache_layout.addWidget(parent.cache_size_label)
     
     parent.cache_path_label = QLabel("")
-    parent.cache_path_label.setStyleSheet("color: #888; font-size: 10px;")
+    parent.cache_path_label.setStyleSheet("color: #888; font-size: 13px;")
     parent.cache_path_label.setWordWrap(True)
     cache_layout.addWidget(parent.cache_path_label)
     
@@ -2254,7 +2254,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 12px;
+            font-size: 14px;
         }
         QPushButton:hover {
             background: #2563eb;
@@ -2272,7 +2272,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 12px;
+            font-size: 14px;
         }
         QPushButton:hover {
             background: #7c3aed;

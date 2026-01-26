@@ -172,7 +172,7 @@ def _create_training_section(parent):
     parent.workspace_training_editor.setStyleSheet("""
         QPlainTextEdit {
             font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 12px;
+            font-size: 14px;
         }
     """)
     layout.addWidget(parent.workspace_training_editor, stretch=1)
@@ -317,7 +317,7 @@ def _create_prompts_section(parent):
     parent.workspace_prompt_editor.setStyleSheet("""
         QTextEdit {
             font-family: monospace;
-            font-size: 12px;
+            font-size: 14px;
             background-color: #2d2d2d;
             border: 1px solid #444;
             border-radius: 4px;

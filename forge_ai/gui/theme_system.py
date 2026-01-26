@@ -79,6 +79,7 @@ class Theme:
         QMainWindow, QWidget {{
             background-color: {c.bg_primary};
             color: {c.text_primary};
+            font-size: 14px;
         }}
         
         QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {{
@@ -87,6 +88,7 @@ class Theme:
             border: 1px solid {c.border_primary};
             border-radius: 4px;
             padding: 4px;
+            font-size: 15px;
             selection-background-color: {c.accent_primary};
             selection-color: {c.bg_primary};
         }}
@@ -97,6 +99,7 @@ class Theme:
             border: none;
             border-radius: 4px;
             padding: 8px 16px;
+            font-size: 14px;
             font-weight: bold;
         }}
         
@@ -137,6 +140,7 @@ class Theme:
             background-color: {c.bg_secondary};
             color: {c.text_primary};
             padding: 8px 16px;
+            font-size: 14px;
             border-top-left-radius: 4px;
             border-top-right-radius: 4px;
             margin-right: 2px;
@@ -170,6 +174,7 @@ class Theme:
             border: 1px solid {c.border_primary};
             border-radius: 4px;
             padding: 4px 8px;
+            font-size: 14px;
         }}
         
         QComboBox:hover {{
@@ -209,6 +214,7 @@ class Theme:
         QCheckBox {{
             color: {c.text_primary};
             spacing: 8px;
+            font-size: 14px;
         }}
         
         QCheckBox::indicator {{
@@ -225,6 +231,7 @@ class Theme:
         
         QLabel {{
             color: {c.text_primary};
+            font-size: 14px;
         }}
         
         QScrollBar:vertical {{
@@ -252,6 +259,7 @@ class Theme:
         QMenuBar {{
             background-color: {c.bg_secondary};
             color: {c.text_primary};
+            font-size: 14px;
         }}
         
         QMenuBar::item:selected {{
@@ -263,6 +271,7 @@ class Theme:
             background-color: {c.bg_secondary};
             color: {c.text_primary};
             border: 1px solid {c.border_primary};
+            font-size: 14px;
         }}
         
         QMenu::item:selected {{

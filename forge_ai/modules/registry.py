@@ -2082,6 +2082,522 @@ class MotionTrackingModule(Module):
             return False
 
 
+# -----------------------------------------------------------------------------
+# CAMERA MODULE
+# -----------------------------------------------------------------------------
+
+class CameraModule(Module):
+    """
+    Camera module for webcam capture and analysis.
+    
+    Provides webcam access for capturing images, recording video,
+    and analyzing camera feed with AI vision.
+    """
+
+    INFO = ModuleInfo(
+        id="camera",
+        name="Camera",
+        description="Webcam capture, recording, and AI-powered visual analysis",
+        category=ModuleCategory.PERCEPTION,
+        version="1.0.0",
+        requires=[],
+        optional=["vision"],  # For AI analysis
+        provides=["camera_capture", "video_recording"],
+        config_schema={
+            "camera_id": {
+                "type": "int",
+                "min": 0,
+                "max": 10,
+                "default": 0
+            },
+        },
+    )
+
+    def load(self) -> bool:
+        """Load camera module."""
+        return True  # Loaded on demand in the tab
+
+
+# -----------------------------------------------------------------------------
+# GIF GENERATION MODULE
+# -----------------------------------------------------------------------------
+
+class GIFGenModule(Module):
+    """
+    GIF generation module.
+    
+    Create animated GIFs from images, videos, or AI generation.
+    """
+
+    INFO = ModuleInfo(
+        id="gif_gen",
+        name="GIF Generation",
+        description="Create animated GIFs from images, videos, or AI generation",
+        category=ModuleCategory.GENERATION,
+        version="1.0.0",
+        requires=[],
+        optional=["image_gen_local", "image_gen_api"],
+        provides=["gif_generation"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load GIF generation module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# VOICE CLONE MODULE
+# -----------------------------------------------------------------------------
+
+class VoiceCloneModule(Module):
+    """
+    Voice cloning module.
+    
+    Clone voices from audio samples for TTS synthesis.
+    """
+
+    INFO = ModuleInfo(
+        id="voice_clone",
+        name="Voice Cloning",
+        description="Clone voices from audio samples for personalized TTS",
+        category=ModuleCategory.OUTPUT,
+        version="1.0.0",
+        requires=[],
+        optional=["voice_output"],
+        provides=["voice_cloning"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load voice cloning module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# NOTES MODULE
+# -----------------------------------------------------------------------------
+
+class NotesModule(Module):
+    """
+    Notes module for saving and organizing thoughts.
+    
+    Provides persistent notes that the AI can access and reference.
+    """
+
+    INFO = ModuleInfo(
+        id="notes",
+        name="Notes",
+        description="Save and organize notes that persist across sessions",
+        category=ModuleCategory.MEMORY,
+        version="1.0.0",
+        requires=[],
+        provides=["notes_storage"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load notes module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# SESSIONS MODULE
+# -----------------------------------------------------------------------------
+
+class SessionsModule(Module):
+    """
+    Sessions module for conversation management.
+    
+    Save, load, and manage multiple conversation sessions.
+    """
+
+    INFO = ModuleInfo(
+        id="sessions",
+        name="Sessions",
+        description="Manage multiple conversation sessions with save/load functionality",
+        category=ModuleCategory.MEMORY,
+        version="1.0.0",
+        requires=["memory"],
+        provides=["session_management"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load sessions module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# SCHEDULER MODULE
+# -----------------------------------------------------------------------------
+
+class SchedulerModule(Module):
+    """
+    Scheduler module for timed tasks.
+    
+    Schedule AI tasks, reminders, and automated actions.
+    """
+
+    INFO = ModuleInfo(
+        id="scheduler",
+        name="Scheduler",
+        description="Schedule timed tasks, reminders, and automated AI actions",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=[],
+        optional=["inference", "chat_api"],
+        provides=["task_scheduling"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load scheduler module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# PERSONALITY MODULE
+# -----------------------------------------------------------------------------
+
+class PersonalityModule(Module):
+    """
+    Personality module for AI behavior customization.
+    
+    Configure and customize the AI's personality, tone, and behavior.
+    """
+
+    INFO = ModuleInfo(
+        id="personality",
+        name="Personality",
+        description="Customize AI personality, tone, communication style",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        provides=["personality_config"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load personality module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# TERMINAL MODULE
+# -----------------------------------------------------------------------------
+
+class TerminalModule(Module):
+    """
+    Terminal module for command execution.
+    
+    Provides terminal access for running system commands (with safety limits).
+    """
+
+    INFO = ModuleInfo(
+        id="terminal",
+        name="Terminal",
+        description="Execute system commands with AI assistance and safety limits",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=[],
+        provides=["command_execution"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        """Load terminal module."""
+        return True
+
+
+# -----------------------------------------------------------------------------
+# ANALYTICS MODULE
+# -----------------------------------------------------------------------------
+
+class AnalyticsModule(Module):
+    """
+    Analytics module for usage statistics and insights.
+    
+    Tracks usage patterns, performance metrics, and provides insights.
+    """
+
+    INFO = ModuleInfo(
+        id="analytics",
+        name="Analytics",
+        description="Usage statistics, performance metrics, and AI insights",
+        category=ModuleCategory.INTERFACE,
+        version="1.0.0",
+        requires=[],
+        provides=["analytics", "usage_stats"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# DASHBOARD MODULE
+# -----------------------------------------------------------------------------
+
+class DashboardModule(Module):
+    """
+    Dashboard module for system overview.
+    
+    Provides a unified view of AI status, resources, and quick actions.
+    """
+
+    INFO = ModuleInfo(
+        id="dashboard",
+        name="Dashboard",
+        description="System overview with status, resources, and quick actions",
+        category=ModuleCategory.INTERFACE,
+        version="1.0.0",
+        requires=[],
+        provides=["dashboard_ui"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# EXAMPLES MODULE
+# -----------------------------------------------------------------------------
+
+class ExamplesModule(Module):
+    """
+    Examples module for prompt templates and tutorials.
+    
+    Provides example prompts, templates, and usage guides.
+    """
+
+    INFO = ModuleInfo(
+        id="examples",
+        name="Examples",
+        description="Prompt templates, examples, and usage tutorials",
+        category=ModuleCategory.INTERFACE,
+        version="1.0.0",
+        requires=[],
+        provides=["examples", "templates"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# INSTRUCTIONS MODULE
+# -----------------------------------------------------------------------------
+
+class InstructionsModule(Module):
+    """
+    Instructions module for system prompts.
+    
+    Manage system instructions that define AI behavior.
+    """
+
+    INFO = ModuleInfo(
+        id="instructions",
+        name="Instructions",
+        description="System prompts and behavior instructions for the AI",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        provides=["system_prompts"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# LOGS MODULE
+# -----------------------------------------------------------------------------
+
+class LogsModule(Module):
+    """
+    Logs module for viewing system logs.
+    
+    View and search application logs for debugging.
+    """
+
+    INFO = ModuleInfo(
+        id="logs",
+        name="Logs",
+        description="View and search system logs for debugging",
+        category=ModuleCategory.INTERFACE,
+        version="1.0.0",
+        requires=[],
+        provides=["log_viewer"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# MODEL ROUTER MODULE (different from tool_router)
+# -----------------------------------------------------------------------------
+
+class ModelRouterModule(Module):
+    """
+    Model router for specialized model assignment.
+    
+    Route different tasks to specialized AI models.
+    """
+
+    INFO = ModuleInfo(
+        id="model_router",
+        name="Model Router",
+        description="Route tasks to specialized models (code, vision, etc.)",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        optional=["model", "chat_api"],
+        provides=["model_routing"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# SCALING MODULE
+# -----------------------------------------------------------------------------
+
+class ScalingModule(Module):
+    """
+    Scaling module for model size management.
+    
+    Grow or shrink models, manage model variants.
+    """
+
+    INFO = ModuleInfo(
+        id="scaling",
+        name="Model Scaling",
+        description="Grow/shrink models, manage size variants",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=["model"],
+        provides=["model_scaling"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# GAME AI MODULE
+# -----------------------------------------------------------------------------
+
+class GameAIModule(Module):
+    """
+    Game AI module for gaming assistance.
+    
+    AI features for gaming: strategy, tactics, overlay assistance.
+    """
+
+    INFO = ModuleInfo(
+        id="game_ai",
+        name="Game AI",
+        description="Gaming AI assistant with strategy and tactical advice",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=[],
+        optional=["vision", "voice_output"],
+        provides=["game_assistance"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# ROBOT CONTROL MODULE
+# -----------------------------------------------------------------------------
+
+class RobotControlModule(Module):
+    """
+    Robot control module for hardware integration.
+    
+    Control robots, servos, and hardware via AI commands.
+    """
+
+    INFO = ModuleInfo(
+        id="robot_control",
+        name="Robot Control",
+        description="Control robots and hardware with AI commands",
+        category=ModuleCategory.TOOLS,
+        version="1.0.0",
+        requires=[],
+        provides=["robot_control", "hardware_interface"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# WORKSPACE MODULE
+# -----------------------------------------------------------------------------
+
+class WorkspaceModule(Module):
+    """
+    Workspace module for project management.
+    
+    Manage AI projects, training data, and configurations.
+    """
+
+    INFO = ModuleInfo(
+        id="workspace",
+        name="Workspace",
+        description="Project management for training data and configurations",
+        category=ModuleCategory.INTERFACE,
+        version="1.0.0",
+        requires=[],
+        provides=["workspace_management"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
+# -----------------------------------------------------------------------------
+# HUGGINGFACE MODULE
+# -----------------------------------------------------------------------------
+
+class HuggingFaceModule(Module):
+    """
+    HuggingFace integration module.
+    
+    Load and use models from HuggingFace Hub.
+    """
+
+    INFO = ModuleInfo(
+        id="huggingface",
+        name="HuggingFace",
+        description="Load and use models from HuggingFace Hub",
+        category=ModuleCategory.CORE,
+        version="1.0.0",
+        requires=[],
+        provides=["hf_models", "model_hub"],
+        config_schema={},
+    )
+
+    def load(self) -> bool:
+        return True
+
+
 # =============================================================================
 # 📚 MODULE REGISTRY
 # =============================================================================
@@ -2124,6 +2640,8 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'memory': MemoryModule,                 # Conversation storage
     'embedding_local': EmbeddingLocalModule,# Local vector embeddings
     'embedding_api': EmbeddingAPIModule,    # Cloud embeddings
+    'notes': NotesModule,                   # Persistent notes
+    'sessions': SessionsModule,             # Conversation sessions
 
     # ─────────────────────────────────────────────────────────────────────
     # Perception modules - See and hear
@@ -2131,12 +2649,14 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'voice_input': VoiceInputModule,        # Speech-to-text
     'vision': VisionModule,                 # Image/screen analysis
     'motion_tracking': MotionTrackingModule,# Body/hand/face tracking
+    'camera': CameraModule,                 # Webcam capture
 
     # ─────────────────────────────────────────────────────────────────────
     # Output modules - Speak and show
     # ─────────────────────────────────────────────────────────────────────
     'voice_output': VoiceOutputModule,  # Text-to-speech
     'avatar': AvatarModule,             # Visual character
+    'voice_clone': VoiceCloneModule,    # Voice cloning
 
     # ─────────────────────────────────────────────────────────────────────
     # Generation modules - Create content
@@ -2152,6 +2672,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'audio_gen_api': AudioGenAPIModule,       # ElevenLabs / MusicGen
     'threed_gen_local': ThreeDGenLocalModule, # Shap-E / Point-E
     'threed_gen_api': ThreeDGenAPIModule,     # Cloud 3D
+    'gif_gen': GIFGenModule,                  # GIF creation
 
     # ─────────────────────────────────────────────────────────────────────
     # Tool modules - Interact with the world
@@ -2159,6 +2680,10 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     'web_tools': WebToolsModule,        # Web search and fetch
     'file_tools': FileToolsModule,      # File read/write
     'tool_router': ToolRouterModule,    # Route to specialized models
+    'scheduler': SchedulerModule,       # Timed tasks/reminders
+    'terminal': TerminalModule,         # Command execution
+    'game_ai': GameAIModule,            # Gaming AI assistant
+    'robot_control': RobotControlModule,# Robot/hardware control
 
     # ─────────────────────────────────────────────────────────────────────
     # Network modules - Connect devices
@@ -2169,7 +2694,17 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     # ─────────────────────────────────────────────────────────────────────
     # Interface modules - User interaction
     # ─────────────────────────────────────────────────────────────────────
-    'gui': GUIModule,  # PyQt5 graphical interface
+    'gui': GUIModule,               # PyQt5 graphical interface
+    'personality': PersonalityModule,  # AI personality customization
+    'analytics': AnalyticsModule,   # Usage stats and insights
+    'dashboard': DashboardModule,   # System overview
+    'examples': ExamplesModule,     # Prompt templates
+    'instructions': InstructionsModule,  # System prompts
+    'logs': LogsModule,             # Log viewer
+    'model_router': ModelRouterModule,   # Specialized model routing
+    'scaling': ScalingModule,       # Model grow/shrink
+    'workspace': WorkspaceModule,   # Project management
+    'huggingface': HuggingFaceModule,    # HuggingFace Hub integration
 }
 
 
