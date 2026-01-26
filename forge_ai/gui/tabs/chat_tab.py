@@ -608,7 +608,8 @@ def _handle_feedback_link(parent, url):
 
 def _show_critique_dialog(parent, response_id, response_data):
     """Show a dialog for detailed critique of a response."""
-    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QComboBox
+    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton
+    from .shared_components import NoScrollComboBox
     
     dialog = QDialog(parent)
     dialog.setWindowTitle("Critique Response")
@@ -635,7 +636,8 @@ def _show_critique_dialog(parent, response_id, response_data):
     # Issue type
     issue_layout = QHBoxLayout()
     issue_layout.addWidget(QLabel("Issue type:"))
-    issue_combo = QComboBox()
+    issue_combo = NoScrollComboBox()
+    issue_combo.setToolTip("Select the type of issue with the AI response")
     issue_combo.addItems([
         "Factually incorrect",
         "Misunderstood question", 

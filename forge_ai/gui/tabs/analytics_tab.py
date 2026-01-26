@@ -17,11 +17,13 @@ from collections import defaultdict
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QGroupBox, QHeaderView,
-    QTabWidget, QComboBox, QDateEdit, QProgressBar, QFrame,
+    QTabWidget, QDateEdit, QProgressBar, QFrame,
     QScrollArea, QGridLayout, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QDate, QTimer
 from PyQt5.QtGui import QFont, QPainter, QColor, QPen
+
+from .shared_components import NoScrollComboBox
 
 # Config paths
 ANALYTICS_DIR = Path.home() / ".forge_ai" / "analytics"
@@ -176,16 +178,19 @@ class AnalyticsTab(QWidget):
         
         # Date range
         header_layout.addWidget(QLabel("Period:"))
-        self.period_combo = QComboBox()
+        self.period_combo = NoScrollComboBox()
         self.period_combo.addItems(["Today", "This Week", "This Month", "All Time"])
+        self.period_combo.setToolTip("Select time period for analytics")
         self.period_combo.currentIndexChanged.connect(self._load_analytics)
         header_layout.addWidget(self.period_combo)
         
         refresh_btn = QPushButton("Refresh")
+        refresh_btn.setToolTip("Reload analytics data")
         refresh_btn.clicked.connect(self._load_analytics)
         header_layout.addWidget(refresh_btn)
         
         export_btn = QPushButton("Export")
+        export_btn.setToolTip("Export analytics to file")
         export_btn.clicked.connect(self._export_analytics)
         header_layout.addWidget(export_btn)
         

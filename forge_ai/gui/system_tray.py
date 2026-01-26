@@ -2131,15 +2131,20 @@ class ForgeSystemTray(QObject):
     def _on_tray_activated(self, reason):
         """Handle tray icon activation.
         
-        Single click: Show the main GUI window
+        Single click: Show context menu (standard behavior)
         Double click: Show the main GUI window
         Middle click: Show quick command overlay
         """
         if reason == QSystemTrayIcon.DoubleClick:
             self._show_main_window()
         elif reason == QSystemTrayIcon.Trigger:
-            # Single click now shows GUI (more intuitive)
-            self._show_main_window()
+            # Single click shows context menu (standard Windows behavior)
+            # The menu is already set via setContextMenu, but we need to
+            # explicitly show it for consistent behavior across platforms
+            if self.menu:
+                # Get cursor position for menu placement
+                cursor_pos = QCursor.pos()
+                self.menu.popup(cursor_pos)
         elif reason == QSystemTrayIcon.MiddleClick:
             # Middle click shows overlay
             self.show_overlay()

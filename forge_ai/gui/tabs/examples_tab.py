@@ -176,6 +176,7 @@ class ExamplesTab(QWidget):
         btn_layout.setSpacing(6)
         
         self.run_btn = QPushButton("Run")
+        self.run_btn.setToolTip("Run the selected example")
         self.run_btn.clicked.connect(self._on_run_example)
         self.run_btn.setEnabled(False)
         self.run_btn.setStyleSheet("""
@@ -196,12 +197,14 @@ class ExamplesTab(QWidget):
         btn_layout.addWidget(self.run_btn)
         
         self.open_btn = QPushButton("Open")
+        self.open_btn.setToolTip("Open example file in editor")
         self.open_btn.clicked.connect(self._on_open_file)
         self.open_btn.setEnabled(False)
         self.open_btn.setStyleSheet("padding: 6px 12px;")
         btn_layout.addWidget(self.open_btn)
         
         self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setToolTip("Stop running example")
         self.stop_btn.clicked.connect(self._on_stop)
         self.stop_btn.setEnabled(False)
         self.stop_btn.setStyleSheet("""

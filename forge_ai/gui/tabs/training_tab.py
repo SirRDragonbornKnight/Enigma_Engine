@@ -9,11 +9,12 @@ from PyQt5.QtWidgets import (
     QSpinBox, QLineEdit, QProgressBar, QFileDialog,
     QPlainTextEdit, QMessageBox, QInputDialog, QGroupBox,
     QFrame, QDialog, QTextEdit, QDialogButtonBox, QCheckBox,
-    QComboBox, QScrollArea
+    QScrollArea
 )
 from PyQt5.QtCore import Qt
 
 from ...config import CONFIG
+from .shared_components import NoScrollComboBox
 
 
 def create_training_tab(parent):
@@ -108,8 +109,9 @@ def create_training_tab(parent):
     # Template selector row
     template_row = QHBoxLayout()
     template_row.addWidget(QLabel("Template:"))
-    parent.training_prompt_combo = QComboBox()
+    parent.training_prompt_combo = NoScrollComboBox()
     parent.training_prompt_combo.setMinimumWidth(200)
+    parent.training_prompt_combo.setToolTip("Select a prompt template to insert into your training data")
     _populate_prompt_templates(parent)
     parent.training_prompt_combo.currentIndexChanged.connect(
         lambda: _preview_prompt_template(parent)

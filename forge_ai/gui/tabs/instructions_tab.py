@@ -3,11 +3,12 @@
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QPlainTextEdit, QMessageBox, QFileDialog,
+    QPlainTextEdit, QMessageBox, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox
 )
 from PyQt5.QtCore import Qt
 
+from .shared_components import NoScrollComboBox
 from ...config import CONFIG
 
 # Default instructions content

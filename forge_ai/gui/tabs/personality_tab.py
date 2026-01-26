@@ -10,10 +10,12 @@ Allows users to:
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
-    QPushButton, QComboBox, QSlider, QCheckBox, QTextEdit,
+    QPushButton, QSlider, QCheckBox, QTextEdit,
     QMessageBox, QFrame
 )
 from PyQt5.QtCore import Qt
+
+from .shared_components import NoScrollComboBox
 
 
 def create_personality_tab(parent):
@@ -32,7 +34,8 @@ def create_personality_tab(parent):
     presets_row = QHBoxLayout()
     presets_row.addWidget(QLabel("Preset:"))
 
-    parent.personality_preset_combo = QComboBox()
+    parent.personality_preset_combo = NoScrollComboBox()
+    parent.personality_preset_combo.setToolTip("Select a personality preset")
     parent.personality_preset_combo.addItem("-- Select --", "")
     parent.personality_preset_combo.addItem("Professional", "professional")
     parent.personality_preset_combo.addItem("Friendly", "friendly")
@@ -44,6 +47,7 @@ def create_personality_tab(parent):
     presets_row.addWidget(parent.personality_preset_combo)
 
     apply_preset_btn = QPushButton("Apply")
+    apply_preset_btn.setToolTip("Apply selected preset")
     apply_preset_btn.clicked.connect(lambda: _apply_preset(parent))
     presets_row.addWidget(apply_preset_btn)
     presets_row.addStretch()
@@ -149,18 +153,22 @@ def create_personality_tab(parent):
     controls_row.addStretch()
 
     refresh_btn = QPushButton("Refresh")
+    refresh_btn.setToolTip("Reload current personality")
     refresh_btn.clicked.connect(lambda: _refresh_personality(parent))
     controls_row.addWidget(refresh_btn)
 
     save_btn = QPushButton("Save")
+    save_btn.setToolTip("Save current personality settings")
     save_btn.clicked.connect(lambda: _save_personality(parent))
     controls_row.addWidget(save_btn)
     
     save_custom_btn = QPushButton("Save Custom")
+    save_custom_btn.setToolTip("Save as a new custom preset")
     save_custom_btn.clicked.connect(lambda: _save_custom_preset(parent))
     controls_row.addWidget(save_custom_btn)
 
     reset_btn = QPushButton("Reset")
+    reset_btn.setToolTip("Reset to default personality")
     reset_btn.clicked.connect(lambda: _reset_personality(parent))
     controls_row.addWidget(reset_btn)
 

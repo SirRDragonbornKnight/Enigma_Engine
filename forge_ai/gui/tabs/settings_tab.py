@@ -8,10 +8,12 @@ while gaming or doing other tasks.
 import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
-    QPushButton, QComboBox, QSpinBox, QSlider, QCheckBox,
+    QPushButton, QSpinBox, QSlider, QCheckBox,
     QTextEdit, QMessageBox, QLineEdit
 )
 from PyQt5.QtCore import Qt
+
+from .shared_components import NoScrollComboBox
 
 # Qt enum constant for checkbox state
 Checked = Qt.CheckState.Checked
@@ -289,13 +291,61 @@ def _change_active_game(parent):
     game_id = parent.game_combo.currentData()
     
     if game_id == "custom":
-        # TODO: Show custom game dialog
-        QMessageBox.information(
-            parent, "Custom Game",
-            "Custom game configuration coming soon!\n"
-            "For now, add games in forge_ai/tools/game_router.py"
-        )
-        parent.game_combo.setCurrentIndex(0)
+        # Import and show custom game dialog from game_connection module
+        try:
+            from .game.game_connection import CustomGameDialog
+            dialog = CustomGameDialog(parent)
+            if dialog.exec_():
+                config = dialog.get_config()
+                try:
+                    from forge_ai.tools.game_router import get_game_router, GameConfig, GameType
+                    router = get_game_router()
+                    
+                    # Create and register game
+                    game_config = GameConfig(
+                        name=config["name"],
+                        type=GameType(config["type"]),
+                        model=config["model"],
+                        system_prompt=config["system_prompt"],
+                        process_names=config["process_names"],
+                        window_titles=config["window_titles"],
+                        quick_responses=config["quick_responses"],
+                        voice_enabled=config["voice_enabled"],
+                        multiplayer_aware=config["multiplayer_aware"],
+                        wiki_url=config["wiki_url"],
+                    )
+                    router.register_game(config["id"], game_config)
+                    
+                    # Add to combo and select
+                    parent.game_combo.insertItem(
+                        parent.game_combo.count() - 1,
+                        config["name"],
+                        config["id"]
+                    )
+                    parent.game_combo.setCurrentIndex(parent.game_combo.count() - 2)
+                    
+                    # Set active
+                    router.set_active_game(config["id"])
+                    if hasattr(parent, 'game_status_label'):
+                        parent.game_status_label.setText(f"Active: {config['name']}")
+                        parent.game_status_label.setStyleSheet("color: #22c55e;")
+                        
+                    # Save for persistence
+                    from .game.game_connection import _save_custom_game
+                    _save_custom_game(config)
+                    
+                except Exception as e:
+                    QMessageBox.warning(parent, "Error", f"Failed to register game: {e}")
+        except ImportError:
+            QMessageBox.information(
+                parent, "Custom Game",
+                "Custom game dialog not available.\n"
+                "Use the Game Connection tab to add custom games."
+            )
+        
+        # Reset if still on custom
+        if parent.game_combo.currentData() == "custom":
+            parent.game_combo.setCurrentIndex(0)
         return
     
     try:
@@ -1273,6 +1323,67 @@ def create_settings_tab(parent):
     
     layout.addWidget(device_group)
     
+    # === DEVICE PROFILE ===
+    profile_group = QGroupBox("Device Profile")
+    profile_layout = QVBoxLayout(profile_group)
+    
+    profile_desc = QLabel(
+        "Select a profile for your device type. This configures resources, features, and tools appropriately."
+    )
+    profile_desc.setWordWrap(True)
+    profile_layout.addWidget(profile_desc)
+    
+    # Profile selector
+    profile_row = QHBoxLayout()
+    profile_row.addWidget(QLabel("Profile:"))
+    
+    parent.device_profile_combo = NoScrollComboBox()
+    parent.device_profile_combo.setToolTip("Select a device profile for optimal configuration")
+    
+    # Add profiles
+    parent.device_profile_combo.addItem("Raspberry Pi / Robot - Minimal resources", "raspberry_pi")
+    parent.device_profile_combo.addItem("Phone / Tablet - Avatar display only", "phone")
+    parent.device_profile_combo.addItem("PC Gaming Mode - AI in background", "pc_gaming")
+    parent.device_profile_combo.addItem("Workstation / RTX - Full power", "workstation")
+    parent.device_profile_combo.addItem("Balanced (Default)", "balanced")
+    
+    parent.device_profile_combo.setCurrentIndex(4)  # Default to balanced
+    parent.device_profile_combo.currentIndexChanged.connect(
+        lambda idx: _apply_device_profile(parent)
+    )
+    profile_row.addWidget(parent.device_profile_combo)
+    
+    # Auto-detect button
+    auto_detect_btn = QPushButton("Auto-detect")
+    auto_detect_btn.setToolTip("Automatically detect the best profile for this hardware")
+    auto_detect_btn.setFixedWidth(90)
+    auto_detect_btn.clicked.connect(lambda: _auto_detect_profile(parent))
+    profile_row.addWidget(auto_detect_btn)
+    
+    profile_row.addStretch()
+    profile_layout.addLayout(profile_row)
+    
+    # Profile details
+    parent.profile_details_label = QLabel(
+        "Balanced: Moderate resource usage. Good for normal desktop use."
+    )
+    parent.profile_details_label.setWordWrap(True)
+    parent.profile_details_label.setStyleSheet("color: #888; font-style: italic;")
+    profile_layout.addWidget(parent.profile_details_label)
+    
+    # Features enabled info
+    parent.profile_features_label = QLabel("")
+    parent.profile_features_label.setWordWrap(True)
+    parent.profile_features_label.setStyleSheet("color: #6b7280; font-size: 10px;")
+    profile_layout.addWidget(parent.profile_features_label)
+    
+    # Profile status
+    parent.profile_status_label = QLabel("")
+    parent.profile_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+    profile_layout.addWidget(parent.profile_status_label)
+    
+    layout.addWidget(profile_group)
+    
     # === POWER MODE ===
     power_group = QGroupBox(" Power Mode")
     power_layout = QVBoxLayout(power_group)
@@ -1288,7 +1399,8 @@ def create_settings_tab(parent):
     mode_row = QHBoxLayout()
     mode_row.addWidget(QLabel("Mode:"))
     
-    parent.resource_mode_combo = QComboBox()
+    parent.resource_mode_combo = NoScrollComboBox()
+    parent.resource_mode_combo.setToolTip("Select resource usage mode")
     parent.resource_mode_combo.addItem("Minimal - Best for gaming", "minimal")
     parent.resource_mode_combo.addItem("Gaming - AI in background", "gaming")
     parent.resource_mode_combo.addItem("Balanced - Normal use (default)", "balanced")
@@ -1391,7 +1503,8 @@ def create_settings_tab(parent):
     theme_row = QHBoxLayout()
     theme_row.addWidget(QLabel("Theme:"))
 
-    parent.theme_combo = QComboBox()
+    parent.theme_combo = NoScrollComboBox()
+    parent.theme_combo.setToolTip("Select visual theme")
     parent.theme_combo.addItem("Dark (Default)", "dark")
     parent.theme_combo.addItem("Light", "light")
     parent.theme_combo.addItem("Cerulean", "cerulean")
@@ -1467,7 +1580,8 @@ def create_settings_tab(parent):
     # Provider selection
     provider_row = QHBoxLayout()
     provider_row.addWidget(QLabel("Provider:"))
-    parent.cloud_provider_combo = QComboBox()
+    parent.cloud_provider_combo = NoScrollComboBox()
+    parent.cloud_provider_combo.setToolTip("Select AI provider")
     parent.cloud_provider_combo.addItem("[FREE] Ollama (Local)", "ollama")
     parent.cloud_provider_combo.addItem("OpenAI (GPT-4)", "openai")
     parent.cloud_provider_combo.addItem("Anthropic (Claude)", "anthropic")
@@ -1483,7 +1597,8 @@ def create_settings_tab(parent):
     # Model selection
     model_row = QHBoxLayout()
     model_row.addWidget(QLabel("Model:"))
-    parent.cloud_model_combo = QComboBox()
+    parent.cloud_model_combo = NoScrollComboBox()
+    parent.cloud_model_combo.setToolTip("Select AI model")
     parent.cloud_model_combo.addItem("llama3.2:1b (Fast, FREE)", "llama3.2:1b")
     parent.cloud_model_combo.addItem("llama3.2:3b (Better, FREE)", "llama3.2:3b")
     parent.cloud_model_combo.addItem("mistral:7b (Quality, FREE)", "mistral:7b")
@@ -1563,7 +1678,8 @@ def create_settings_tab(parent):
     monitor_row = QHBoxLayout()
     monitor_row.addWidget(QLabel("Display:"))
     
-    parent.monitor_combo = QComboBox()
+    parent.monitor_combo = NoScrollComboBox()
+    parent.monitor_combo.setToolTip("Select display for Quick Chat window")
     _populate_monitors(parent)
     parent.monitor_combo.currentIndexChanged.connect(
         lambda idx: _move_to_monitor(parent, idx)
@@ -1599,8 +1715,9 @@ def create_settings_tab(parent):
     # Input device (microphone)
     input_row = QHBoxLayout()
     input_row.addWidget(QLabel("Microphone:"))
-    parent.audio_input_combo = QComboBox()
+    parent.audio_input_combo = NoScrollComboBox()
     parent.audio_input_combo.setMinimumWidth(250)
+    parent.audio_input_combo.setToolTip("Select microphone for voice input")
     input_row.addWidget(parent.audio_input_combo)
     
     refresh_audio_btn = QPushButton("R")
@@ -1614,8 +1731,9 @@ def create_settings_tab(parent):
     # Output device (speaker)
     output_row = QHBoxLayout()
     output_row.addWidget(QLabel("Speaker:"))
-    parent.audio_output_combo = QComboBox()
+    parent.audio_output_combo = NoScrollComboBox()
     parent.audio_output_combo.setMinimumWidth(250)
+    parent.audio_output_combo.setToolTip("Select speaker for voice output")
     output_row.addWidget(parent.audio_output_combo)
     output_row.addStretch()
     audio_layout.addLayout(output_row)
@@ -1708,7 +1826,8 @@ def create_settings_tab(parent):
     # Robot mode selector
     robot_mode_row = QHBoxLayout()
     robot_mode_row.addWidget(QLabel("Mode:"))
-    parent.robot_mode_combo = QComboBox()
+    parent.robot_mode_combo = NoScrollComboBox()
+    parent.robot_mode_combo.setToolTip("Select robot control mode")
     parent.robot_mode_combo.addItem("DISABLED", "disabled")
     parent.robot_mode_combo.addItem("MANUAL (User)", "manual")
     parent.robot_mode_combo.addItem("AUTO (AI)", "auto")
@@ -1795,7 +1914,8 @@ def create_settings_tab(parent):
     # Preset row
     preset_row = QHBoxLayout()
     preset_row.addWidget(QLabel("Preset:"))
-    parent.settings_personality_combo = QComboBox()
+    parent.settings_personality_combo = NoScrollComboBox()
+    parent.settings_personality_combo.setToolTip("Select AI personality preset")
     parent.settings_personality_combo.addItem("Balanced (Default)", "balanced")
     parent.settings_personality_combo.addItem("Professional", "professional")
     parent.settings_personality_combo.addItem("Friendly", "friendly")
@@ -1949,7 +2069,8 @@ def create_settings_tab(parent):
     # Preset selector
     preset_row = QHBoxLayout()
     preset_row.addWidget(QLabel("Preset:"))
-    parent.system_prompt_preset = QComboBox()
+    parent.system_prompt_preset = NoScrollComboBox()
+    parent.system_prompt_preset.setToolTip("Select system prompt preset")
     parent.system_prompt_preset.addItem("Simple (recommended for small models)", "simple")
     parent.system_prompt_preset.addItem("Full (with tools, for larger models)", "full")
     parent.system_prompt_preset.addItem("ForgeAI Complete (avatar, vision, tools)", "forgeai_full")
@@ -2192,8 +2313,9 @@ def create_settings_tab(parent):
     _refresh_cache_info(parent)
     _refresh_connections(parent)
     
-    # Load saved mini chat on top setting
+    # Load saved settings
     _load_mini_chat_on_top_setting(parent)
+    _load_device_profile(parent)
     
     return tab
 
@@ -2627,6 +2749,256 @@ def _apply_custom_resources(parent):
         parent.resource_status_label.setText(f"Error: {e}")
         parent.resource_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
         QMessageBox.warning(parent, "Error", f"Failed to apply resource limits: {e}")
+
+
+# ===== DEVICE PROFILE FUNCTIONS =====
+
+def _apply_device_profile(parent):
+    """Apply selected device profile."""
+    profile_id = parent.device_profile_combo.currentData()
+    
+    try:
+        from ...utils.hardware_profiles import get_profile_manager
+        
+        manager = get_profile_manager()
+        success = manager.set_active_profile(profile_id)
+        
+        if success:
+            profile = manager.get_active_profile()
+            
+            # Update details label
+            parent.profile_details_label.setText(profile.description)
+            
+            # Update features label
+            features = manager.get_enabled_features()
+            enabled_features = [k.replace("_", " ").title() for k, v in features.items() if v]
+            disabled_features = [k.replace("_", " ").title() for k, v in features.items() if not v]
+            
+            features_text = f"Enabled: {', '.join(enabled_features[:5])}"
+            if len(enabled_features) > 5:
+                features_text += f" +{len(enabled_features) - 5} more"
+            if disabled_features:
+                features_text += f"\nDisabled: {', '.join(disabled_features[:3])}"
+                if len(disabled_features) > 3:
+                    features_text += f" +{len(disabled_features) - 3} more"
+            
+            parent.profile_features_label.setText(features_text)
+            
+            # Update resource mode combo to match profile
+            limits = manager.get_resource_limits()
+            cpu_pct = limits["max_cpu_percent"]
+            
+            # Map CPU percentage to power mode
+            if cpu_pct <= 20:
+                mode_idx = 0  # minimal
+            elif cpu_pct <= 30:
+                mode_idx = 1  # gaming
+            elif cpu_pct <= 50:
+                mode_idx = 2  # balanced
+            elif cpu_pct <= 60:
+                mode_idx = 3  # performance
+            else:
+                mode_idx = 4  # max
+            
+            parent.resource_mode_combo.blockSignals(True)
+            parent.resource_mode_combo.setCurrentIndex(mode_idx)
+            parent.resource_mode_combo.blockSignals(False)
+            
+            # Update spinboxes
+            if hasattr(parent, 'gpu_spinbox'):
+                parent.gpu_spinbox.setValue(limits["max_gpu_memory_percent"])
+            if hasattr(parent, 'cpu_spinbox'):
+                parent.cpu_spinbox.setValue(min(limits["inference_threads"], parent.cpu_spinbox.maximum()))
+            
+            # Update status
+            parent.profile_status_label.setText(f"Profile applied: {profile.name}")
+            parent.profile_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+            
+            # Save to gui_settings
+            _save_device_profile(parent, profile_id)
+            
+        else:
+            parent.profile_status_label.setText("Failed to apply profile")
+            parent.profile_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+            
+    except ImportError:
+        # Fallback if hardware_profiles module doesn't exist
+        _apply_device_profile_fallback(parent, profile_id)
+    except Exception as e:
+        parent.profile_status_label.setText(f"Error: {str(e)[:30]}")
+        parent.profile_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+def _apply_device_profile_fallback(parent, profile_id):
+    """Fallback profile application without hardware_profiles module."""
+    # Simple mapping of profiles to resource modes
+    profile_to_mode = {
+        "raspberry_pi": ("minimal", "Pi mode: Minimal resources, text-only AI"),
+        "phone": ("minimal", "Phone mode: Avatar display only, minimal compute"),
+        "pc_gaming": ("gaming", "Gaming mode: AI runs in background with low resources"),
+        "workstation": ("max", "Workstation mode: Full power, all features enabled"),
+        "balanced": ("balanced", "Balanced mode: Moderate resources, most features"),
+    }
+    
+    mode, description = profile_to_mode.get(profile_id, ("balanced", "Unknown profile"))
+    
+    # Update resource mode
+    mode_map = {"minimal": 0, "gaming": 1, "balanced": 2, "performance": 3, "max": 4}
+    if mode in mode_map:
+        parent.resource_mode_combo.setCurrentIndex(mode_map[mode])
+    
+    parent.profile_details_label.setText(description)
+    parent.profile_features_label.setText("")
+    parent.profile_status_label.setText(f"Profile applied (basic mode)")
+    parent.profile_status_label.setStyleSheet("color: #f59e0b; font-style: italic;")
+    
+    _save_device_profile(parent, profile_id)
+
+
+def _auto_detect_profile(parent):
+    """Auto-detect the best profile for this hardware."""
+    try:
+        from ...utils.hardware_profiles import get_profile_manager
+        
+        manager = get_profile_manager()
+        recommended = manager.auto_detect_profile()
+        
+        # Find and select the recommended profile
+        for i in range(parent.device_profile_combo.count()):
+            if parent.device_profile_combo.itemData(i) == recommended:
+                parent.device_profile_combo.setCurrentIndex(i)
+                break
+        
+        parent.profile_status_label.setText(f"Auto-detected: {recommended}")
+        parent.profile_status_label.setStyleSheet("color: #3b82f6; font-style: italic;")
+        
+    except ImportError:
+        # Fallback auto-detection
+        _auto_detect_profile_fallback(parent)
+    except Exception as e:
+        parent.profile_status_label.setText(f"Detection failed: {str(e)[:25]}")
+        parent.profile_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
+def _auto_detect_profile_fallback(parent):
+    """Fallback auto-detection without hardware_profiles module."""
+    import platform
+    
+    try:
+        import psutil
+        memory_gb = psutil.virtual_memory().total / (1024**3)
+    except ImportError:
+        memory_gb = 4  # Assume moderate
+    
+    machine = platform.machine().lower()
+    
+    # Detect profile
+    if "arm" in machine or "aarch64" in machine:
+        if memory_gb < 4:
+            recommended = "raspberry_pi"
+        else:
+            recommended = "phone"
+    elif memory_gb < 4:
+        recommended = "phone"
+    elif memory_gb >= 16:
+        # Check for GPU
+        try:
+            import torch
+            if torch.cuda.is_available():
+                gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                if gpu_mem >= 8:
+                    recommended = "workstation"
+                else:
+                    recommended = "balanced"
+            else:
+                recommended = "balanced"
+        except ImportError:
+            recommended = "balanced"
+    else:
+        recommended = "balanced"
+    
+    # Select in combo
+    for i in range(parent.device_profile_combo.count()):
+        if parent.device_profile_combo.itemData(i) == recommended:
+            parent.device_profile_combo.setCurrentIndex(i)
+            break
+    
+    parent.profile_status_label.setText(f"Auto-detected: {recommended}")
+    parent.profile_status_label.setStyleSheet("color: #3b82f6; font-style: italic;")
+
+
+def _save_device_profile(parent, profile_id):
+    """Save the selected device profile to settings."""
+    try:
+        from pathlib import Path
+        import json
+        from ...config import CONFIG
+        
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        
+        settings = {}
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+        
+        settings["device_profile"] = profile_id
+        
+        settings_path.write_text(json.dumps(settings, indent=2))
+    except Exception as e:
+        print(f"Could not save device profile: {e}")
+
+
+def _load_device_profile(parent):
+    """Load saved device profile."""
+    try:
+        from pathlib import Path
+        import json
+        from ...config import CONFIG
+        
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+            profile_id = settings.get("device_profile", "balanced")
+            
+            # Find and select the profile
+            for i in range(parent.device_profile_combo.count()):
+                if parent.device_profile_combo.itemData(i) == profile_id:
+                    parent.device_profile_combo.blockSignals(True)
+                    parent.device_profile_combo.setCurrentIndex(i)
+                    parent.device_profile_combo.blockSignals(False)
+                    
+                    # Update details without triggering full apply
+                    _update_profile_display(parent, profile_id)
+                    break
+    except Exception as e:
+        print(f"Could not load device profile: {e}")
+
+
+def _update_profile_display(parent, profile_id):
+    """Update profile display labels without applying the profile."""
+    try:
+        from ...utils.hardware_profiles import get_profile_manager
+        
+        manager = get_profile_manager()
+        profile = manager.get_profile(profile_id)
+        
+        if profile:
+            parent.profile_details_label.setText(profile.description)
+            
+            features = manager.get_enabled_features()
+            enabled_count = sum(1 for v in features.values() if v)
+            parent.profile_features_label.setText(f"Features enabled: {enabled_count}/14")
+    except ImportError:
+        # Use fallback descriptions
+        descriptions = {
+            "raspberry_pi": "Minimal resources for Pi/embedded. Text-only AI with basic tools.",
+            "phone": "Avatar display only. Connects to PC for AI processing.",
+            "pc_gaming": "AI runs in background while gaming. Limited resources.",
+            "workstation": "Maximum performance with all features enabled.",
+            "balanced": "Good balance for typical desktop use.",
+        }
+        parent.profile_details_label.setText(descriptions.get(profile_id, ""))
+        parent.profile_features_label.setText("")
 
 
 def _update_gpu_label(parent, value):

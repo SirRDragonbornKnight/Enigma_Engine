@@ -9,12 +9,139 @@ Supports loading connection configs from files instead of presets.
 
 from pathlib import Path
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, 
-    QGroupBox, QLineEdit, QSpinBox, QTextEdit, QFileDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QGroupBox, QLineEdit, QSpinBox, QTextEdit, QFileDialog,
+    QDialog, QDialogButtonBox, QCheckBox, QFormLayout, QMessageBox
 )
 import json
 
 from ....config import CONFIG
+from ..shared_components import NoScrollComboBox
+
+
+class CustomGameDialog(QDialog):
+    """Dialog for configuring custom games for AI routing."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Custom Game")
+        self.setMinimumWidth(450)
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Form
+        form = QFormLayout()
+        
+        # Basic info
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("e.g., My Game")
+        form.addRow("Game Name:", self.name_input)
+        
+        self.id_input = QLineEdit()
+        self.id_input.setPlaceholderText("e.g., mygame (lowercase, no spaces)")
+        form.addRow("Game ID:", self.id_input)
+        
+        # Game type
+        self.type_combo = NoScrollComboBox()
+        self.type_combo.addItems([
+            "sandbox", "fps", "rpg", "strategy", "puzzle", 
+            "sports", "simulation", "fighting", "platformer",
+            "moba", "survival", "card", "other"
+        ])
+        self.type_combo.setToolTip("Select the game genre for AI behavior")
+        form.addRow("Game Type:", self.type_combo)
+        
+        # Detection
+        self.process_input = QLineEdit()
+        self.process_input.setPlaceholderText("game.exe (optional)")
+        self.process_input.setToolTip("Process name for auto-detection")
+        form.addRow("Process Name:", self.process_input)
+        
+        self.window_input = QLineEdit()
+        self.window_input.setPlaceholderText("Game Window Title (optional)")
+        self.window_input.setToolTip("Window title for auto-detection")
+        form.addRow("Window Title:", self.window_input)
+        
+        # AI Settings
+        self.model_combo = NoScrollComboBox()
+        self.model_combo.addItems(["nano", "micro", "tiny", "small", "medium", "large"])
+        self.model_combo.setCurrentText("small")
+        self.model_combo.setToolTip("AI model size to use for this game")
+        form.addRow("Model Size:", self.model_combo)
+        
+        self.prompt_input = QTextEdit()
+        self.prompt_input.setPlaceholderText(
+            "Enter a system prompt to customize AI behavior for this game...\n"
+            "e.g., You are a helpful assistant for [Game]. You know about..."
+        )
+        self.prompt_input.setMaximumHeight(100)
+        form.addRow("System Prompt:", self.prompt_input)
+        
+        # Options
+        self.quick_responses = QCheckBox("Quick Responses (shorter replies)")
+        self.quick_responses.setToolTip("Enable for fast-paced games")
+        form.addRow("", self.quick_responses)
+        
+        self.voice_enabled = QCheckBox("Voice Enabled")
+        self.voice_enabled.setChecked(True)
+        self.voice_enabled.setToolTip("Enable voice interaction for this game")
+        form.addRow("", self.voice_enabled)
+        
+        self.multiplayer_aware = QCheckBox("Multiplayer Aware")
+        self.multiplayer_aware.setToolTip("AI considers multiplayer context")
+        form.addRow("", self.multiplayer_aware)
+        
+        # Wiki URL for knowledge
+        self.wiki_input = QLineEdit()
+        self.wiki_input.setPlaceholderText("https://wiki.example.com (optional)")
+        self.wiki_input.setToolTip("Wiki URL for web lookups")
+        form.addRow("Wiki URL:", self.wiki_input)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(self._validate_and_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _validate_and_accept(self):
+        """Validate inputs before accepting."""
+        name = self.name_input.text().strip()
+        game_id = self.id_input.text().strip().lower().replace(" ", "_")
+        
+        if not name:
+            QMessageBox.warning(self, "Validation Error", "Game name is required")
+            return
+        if not game_id:
+            QMessageBox.warning(self, "Validation Error", "Game ID is required")
+            return
+        
+        # Auto-generate ID if empty
+        if not self.id_input.text().strip():
+            self.id_input.setText(game_id)
+        
+        self.accept()
+    
+    def get_config(self) -> dict:
+        """Get the game configuration from dialog inputs."""
+        return {
+            "name": self.name_input.text().strip(),
+            "id": self.id_input.text().strip().lower().replace(" ", "_"),
+            "type": self.type_combo.currentText(),
+            "model": self.model_combo.currentText(),
+            "system_prompt": self.prompt_input.toPlainText().strip(),
+            "process_names": [self.process_input.text().strip()] if self.process_input.text().strip() else [],
+            "window_titles": [self.window_input.text().strip()] if self.window_input.text().strip() else [],
+            "quick_responses": self.quick_responses.isChecked(),
+            "voice_enabled": self.voice_enabled.isChecked(),
+            "multiplayer_aware": self.multiplayer_aware.isChecked(),
+            "wiki_url": self.wiki_input.text().strip(),
+        }
 
 
 # Game configs directory
@@ -56,7 +183,8 @@ def create_game_subtab(parent):
     # Manual game selector
     game_select_row = QHBoxLayout()
     game_select_row.addWidget(QLabel("Active Game:"))
-    parent.game_routing_combo = QComboBox()
+    parent.game_routing_combo = NoScrollComboBox()
+    parent.game_routing_combo.setToolTip("Select the active game for AI routing")
     parent.game_routing_combo.addItem("(None)", "none")
     parent.game_routing_combo.addItem("Blender (Avatar)", "blender")
     parent.game_routing_combo.addItem("Minecraft", "minecraft")
@@ -107,7 +235,8 @@ def create_game_subtab(parent):
     # Config file selector row
     config_row = QHBoxLayout()
     config_row.addWidget(QLabel("Config:"))
-    parent.game_config_combo = QComboBox()
+    parent.game_config_combo = NoScrollComboBox()
+    parent.game_config_combo.setToolTip("Select a game configuration file")
     parent.game_config_combo.currentIndexChanged.connect(
         lambda idx: _on_game_config_changed(parent, idx)
     )
@@ -125,7 +254,8 @@ def create_game_subtab(parent):
     # Connection settings row
     conn_row = QHBoxLayout()
     conn_row.addWidget(QLabel("Protocol:"))
-    parent.game_protocol_combo = QComboBox()
+    parent.game_protocol_combo = NoScrollComboBox()
+    parent.game_protocol_combo.setToolTip("Select the communication protocol")
     parent.game_protocol_combo.addItems(["websocket", "http", "tcp", "udp", "osc"])
     parent.game_protocol_combo.setMaximumWidth(100)
     conn_row.addWidget(parent.game_protocol_combo)
@@ -171,6 +301,9 @@ def create_game_subtab(parent):
     parent.game_connection = None
     GAME_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     _refresh_game_configs(parent)
+    
+    # Load custom games from previous sessions
+    _load_custom_games(parent)
     
     return widget
 
@@ -434,16 +567,65 @@ def _on_game_detected(parent, game_id: str):
 
 def _change_active_game(parent):
     """Manually change active game."""
-    from PyQt5.QtWidgets import QMessageBox
     game_id = parent.game_routing_combo.currentData()
     
     if game_id == "custom":
-        QMessageBox.information(
-            parent, "Custom Game",
-            "Custom game configuration coming soon!\n"
-            "For now, add games in forge_ai/tools/game_router.py"
-        )
-        parent.game_routing_combo.setCurrentIndex(0)
+        dialog = CustomGameDialog(parent)
+        if dialog.exec_() == QDialog.Accepted:
+            config = dialog.get_config()
+            try:
+                from forge_ai.tools.game_router import get_game_router, GameConfig, GameType
+                router = get_game_router()
+                
+                # Create GameConfig from dialog
+                game_config = GameConfig(
+                    name=config["name"],
+                    type=GameType(config["type"]),
+                    model=config["model"],
+                    system_prompt=config["system_prompt"],
+                    process_names=config["process_names"],
+                    window_titles=config["window_titles"],
+                    quick_responses=config["quick_responses"],
+                    voice_enabled=config["voice_enabled"],
+                    multiplayer_aware=config["multiplayer_aware"],
+                    wiki_url=config["wiki_url"],
+                )
+                
+                # Register the custom game
+                router.register_game(config["id"], game_config)
+                
+                # Add to combo box
+                parent.game_routing_combo.insertItem(
+                    parent.game_routing_combo.count() - 1,  # Before "Custom..."
+                    config["name"],
+                    config["id"]
+                )
+                
+                # Select it
+                parent.game_routing_combo.setCurrentIndex(
+                    parent.game_routing_combo.count() - 2
+                )
+                
+                # Set as active
+                router.set_active_game(config["id"])
+                parent.game_routing_status.setText(f"Active: {config['name']}")
+                parent.game_routing_status.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+                
+                # Save to config file
+                _save_custom_game(config)
+                
+                if hasattr(parent, 'game_log'):
+                    parent.game_log.append(f"[OK] Custom game '{config['name']}' registered")
+                    
+            except Exception as e:
+                QMessageBox.warning(
+                    parent, "Error",
+                    f"Failed to register custom game: {e}"
+                )
+        
+        # Reset combo if dialog was cancelled
+        if parent.game_routing_combo.currentData() == "custom":
+            parent.game_routing_combo.setCurrentIndex(0)
         return
     
     try:
@@ -466,3 +648,83 @@ def _change_active_game(parent):
     except Exception as e:
         parent.game_routing_status.setText(f"Error: {str(e)[:30]}")
         parent.game_routing_status.setStyleSheet("color: #ef4444;")
+
+
+def _save_custom_game(config: dict):
+    """Save custom game configuration to file."""
+    custom_games_file = Path(CONFIG["data_dir"]) / "game" / "custom_games.json"
+    custom_games_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Load existing
+    existing = []
+    if custom_games_file.exists():
+        try:
+            with open(custom_games_file, 'r') as f:
+                existing = json.load(f)
+        except Exception:
+            existing = []
+    
+    # Add/update
+    found = False
+    for i, game in enumerate(existing):
+        if game.get("id") == config["id"]:
+            existing[i] = config
+            found = True
+            break
+    
+    if not found:
+        existing.append(config)
+    
+    # Save
+    with open(custom_games_file, 'w') as f:
+        json.dump(existing, f, indent=2)
+
+
+def _load_custom_games(parent):
+    """Load custom games from config file and add to combo."""
+    custom_games_file = Path(CONFIG["data_dir"]) / "game" / "custom_games.json"
+    if not custom_games_file.exists():
+        return
+    
+    try:
+        with open(custom_games_file, 'r') as f:
+            games = json.load(f)
+        
+        for game in games:
+            # Check if not already in combo
+            found = False
+            for i in range(parent.game_routing_combo.count()):
+                if parent.game_routing_combo.itemData(i) == game.get("id"):
+                    found = True
+                    break
+            
+            if not found:
+                # Insert before "Custom..."
+                parent.game_routing_combo.insertItem(
+                    parent.game_routing_combo.count() - 1,
+                    game.get("name", game.get("id")),
+                    game.get("id")
+                )
+                
+                # Also register with router
+                try:
+                    from forge_ai.tools.game_router import get_game_router, GameConfig, GameType
+                    router = get_game_router()
+                    game_config = GameConfig(
+                        name=game.get("name", game.get("id")),
+                        type=GameType(game.get("type", "other")),
+                        model=game.get("model", "small"),
+                        system_prompt=game.get("system_prompt", ""),
+                        process_names=game.get("process_names", []),
+                        window_titles=game.get("window_titles", []),
+                        quick_responses=game.get("quick_responses", False),
+                        voice_enabled=game.get("voice_enabled", True),
+                        multiplayer_aware=game.get("multiplayer_aware", False),
+                        wiki_url=game.get("wiki_url", ""),
+                    )
+                    router.register_game(game.get("id"), game_config)
+                except Exception:
+                    pass  # Router may not be available
+                    
+    except Exception:
+        pass  # File may be corrupted

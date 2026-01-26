@@ -2,9 +2,11 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QListWidget, QTextEdit, QSplitter, QComboBox, QGroupBox, QFrame
+    QListWidget, QTextEdit, QSplitter, QGroupBox, QFrame
 )
 from PyQt5.QtCore import Qt
+
+from .shared_components import NoScrollComboBox
 
 
 
@@ -26,8 +28,9 @@ def create_sessions_tab(parent):
     
     # AI selector
     header_layout.addWidget(QLabel("AI:"))
-    parent.history_ai_selector = QComboBox()
+    parent.history_ai_selector = NoScrollComboBox()
     parent.history_ai_selector.setMinimumWidth(150)
+    parent.history_ai_selector.setToolTip("Select AI model to view chat history")
     parent.history_ai_selector.setStyleSheet("""
         QComboBox {
             padding: 4px 8px;

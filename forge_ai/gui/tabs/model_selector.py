@@ -6,9 +6,11 @@ This widget syncs with the Model Router tab so changes in one place reflect ever
 
 from typing import Optional, List, Dict, Any, Callable
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QComboBox, QPushButton, QMessageBox
+    QWidget, QHBoxLayout, QLabel, QPushButton, QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal, Qt
+
+from .shared_components import NoScrollComboBox
 
 
 # Tool -> List of model options (local + free HuggingFace options)
@@ -103,7 +105,7 @@ class ModelSelector(QWidget):
             layout.addWidget(label)
         
         # Model dropdown
-        self.model_combo = QComboBox()
+        self.model_combo = NoScrollComboBox()
         self.model_combo.setMinimumWidth(200)
         self.model_combo.setToolTip(
             "Select which AI model to use for this task.\n"

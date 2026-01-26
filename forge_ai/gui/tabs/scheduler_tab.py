@@ -16,12 +16,14 @@ from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QTextEdit, QTableWidget, QTableWidgetItem,
-    QGroupBox, QHeaderView, QDialog, QFormLayout, QComboBox,
+    QGroupBox, QHeaderView, QDialog, QFormLayout,
     QSpinBox, QTimeEdit, QDateEdit, QCheckBox, QMessageBox,
     QMenu, QSplitter
 )
 from PyQt5.QtCore import Qt, QTime, QDate, QTimer
 from PyQt5.QtGui import QFont, QColor
+
+from .shared_components import NoScrollComboBox
 
 # Config
 SCHEDULER_FILE = Path.home() / ".forge_ai" / "scheduled_tasks.json"
@@ -50,7 +52,8 @@ class TaskDialog(QDialog):
         layout.addRow("Name:", self.name_input)
         
         # Task type
-        self.type_combo = QComboBox()
+        self.type_combo = NoScrollComboBox()
+        self.type_combo.setToolTip("Select the type of scheduled task")
         self.type_combo.addItems([
             "Run Command",
             "Send Message",
@@ -68,7 +71,8 @@ class TaskDialog(QDialog):
         layout.addRow("Action:", self.action_input)
         
         # Schedule type
-        self.schedule_combo = QComboBox()
+        self.schedule_combo = NoScrollComboBox()
+        self.schedule_combo.setToolTip("Select how often the task should run")
         self.schedule_combo.addItems([
             "Once",
             "Every X Minutes",

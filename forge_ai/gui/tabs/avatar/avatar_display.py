@@ -17,13 +17,15 @@ from pathlib import Path
 from typing import Optional, Any, Dict
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QFileDialog, QComboBox, QCheckBox, QFrame, QSizePolicy,
+    QFileDialog, QCheckBox, QFrame, QSizePolicy,
     QApplication, QOpenGLWidget, QMessageBox, QGroupBox,
     QSlider, QColorDialog, QGridLayout, QScrollArea, QTextEdit,
     QMenu
 )
 from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent, QPen, QBitmap, QRegion
+
+from ..shared_components import NoScrollComboBox
 
 # Optional SVG support - not all PyQt5 installs have it
 try:
@@ -1243,6 +1245,7 @@ class AvatarOverlayWindow(QWidget):
         
         # _size is the TARGET maximum dimension for scaling (not window size!)
         self._size = 300
+        self._last_saved_size = 300  # Track last saved size to avoid redundant saves
         # DON'T call setFixedSize here - let set_avatar do it based on actual image
         self.move(100, 100)
         
@@ -1270,6 +1273,12 @@ class AvatarOverlayWindow(QWidget):
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_ArrowCursor))
         
+        # Auto-save timer for size changes (saves every 2 seconds if changed)
+        from PyQt5.QtCore import QTimer
+        self._save_timer = QTimer(self)
+        self._save_timer.timeout.connect(self._auto_save_size)
+        self._save_timer.start(2000)  # Check every 2 seconds
+        
         # Pixel-based hit testing - transparent areas pass through clicks
         self._use_pixel_hit_test = True
         self._is_dragging = False
@@ -1296,6 +1305,7 @@ class AvatarOverlayWindow(QWidget):
             from ....avatar.persistence import load_avatar_settings
             settings = load_avatar_settings()
             self._size = settings.get_size_for_avatar(path)
+            self._last_saved_size = self._size  # Track loaded size
             # DON'T setFixedSize here - _update_scaled_pixmap will handle it
             x, y = settings.get_position_for_avatar(path)
             self.move(x, y)
@@ -1561,6 +1571,26 @@ class AvatarOverlayWindow(QWidget):
             except Exception:
                 pass
     
+    def _auto_save_size(self):
+        """Auto-save size if it changed (called by timer)."""
+        if not hasattr(self, '_last_saved_size'):
+            self._last_saved_size = self._size
+            return
+        
+        if self._size != self._last_saved_size:
+            try:
+                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                persistence = get_persistence()
+                settings = persistence.load()
+                if self._avatar_path:
+                    settings.set_size_for_avatar(self._avatar_path, self._size)
+                settings.overlay_size = self._size
+                persistence.save(settings)
+                self._last_saved_size = self._size
+                write_avatar_state_for_ai()
+            except Exception:
+                pass
+    
     def hideEvent(self, a0):
         """Save position and size when hidden."""
         super().hideEvent(a0)
@@ -1569,6 +1599,7 @@ class AvatarOverlayWindow(QWidget):
             pos = self.pos()
             save_position(pos.x(), pos.y())
             save_avatar_settings(overlay_size=self._size)
+            self._last_saved_size = self._size  # Update last saved
             write_avatar_state_for_ai()
         except Exception:
             pass
@@ -4809,7 +4840,8 @@ def create_avatar_subtab(parent):
     # Avatar selector
     select_row = QHBoxLayout()
     select_row.addWidget(QLabel("Avatar:"))
-    parent.avatar_combo = QComboBox()
+    parent.avatar_combo = NoScrollComboBox()
+    parent.avatar_combo.setToolTip("Select an avatar from your collection")
     parent.avatar_combo.setMinimumWidth(200)
     parent.avatar_combo.currentIndexChanged.connect(lambda: _on_avatar_selected(parent))
     select_row.addWidget(parent.avatar_combo, stretch=1)

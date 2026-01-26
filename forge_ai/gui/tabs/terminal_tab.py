@@ -3,10 +3,12 @@
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QPlainTextEdit, QCheckBox, QComboBox, QGroupBox, QSpinBox
+    QPlainTextEdit, QCheckBox, QGroupBox, QSpinBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QTextCursor
+
+from .shared_components import NoScrollComboBox
 
 
 def create_terminal_tab(parent):
@@ -30,6 +32,7 @@ def create_terminal_tab(parent):
     
     # Clear button
     clear_btn = QPushButton("Clear")
+    clear_btn.setToolTip("Clear terminal output")
     clear_btn.clicked.connect(lambda: parent._clear_terminal())
     header_layout.addWidget(clear_btn)
     
@@ -95,8 +98,9 @@ def create_terminal_tab(parent):
     
     # Log level
     control_layout.addWidget(QLabel("Log Level:"))
-    parent.terminal_log_level = QComboBox()
+    parent.terminal_log_level = NoScrollComboBox()
     parent.terminal_log_level.addItems(["All", "Info", "Debug", "Tokens", "Errors Only"])
+    parent.terminal_log_level.setToolTip("Filter terminal output by log level")
     parent.terminal_log_level.currentTextChanged.connect(
         lambda: parent._update_terminal_filter()
     )

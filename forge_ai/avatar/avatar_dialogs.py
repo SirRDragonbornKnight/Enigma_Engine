@@ -15,12 +15,13 @@ try:
     from PyQt5.QtWidgets import (
         QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
         QLabel, QPushButton, QFileDialog, QLineEdit,
-        QComboBox, QGroupBox, QScrollArea, QWidget,
+        QGroupBox, QScrollArea, QWidget,
         QFrame, QTextEdit, QProgressBar, QMessageBox,
         QTabWidget, QListWidget, QListWidgetItem, QStackedWidget
     )
     from PyQt5.QtCore import Qt, pyqtSignal, QMimeData, QSize, QTimer
     from PyQt5.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QIcon, QPainter, QColor
+    from ..gui.tabs.shared_components import NoScrollComboBox
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -289,7 +290,8 @@ class AvatarImportWizard(QDialog):
         # Type
         type_layout = QHBoxLayout()
         type_layout.addWidget(QLabel("Type:"))
-        self.type_combo = QComboBox()
+        self.type_combo = NoScrollComboBox()
+        self.type_combo.setToolTip("Select the avatar type category")
         self.type_combo.addItems(["Human", "Animal", "Robot", "Fantasy", "Abstract", "Custom"])
         type_layout.addWidget(self.type_combo)
         settings_layout.addLayout(type_layout)
@@ -559,7 +561,8 @@ class AvatarPickerDialog(QDialog):
         self.search_edit.textChanged.connect(self._filter_avatars)
         filter_layout.addWidget(self.search_edit)
         
-        self.type_filter = QComboBox()
+        self.type_filter = NoScrollComboBox()
+        self.type_filter.setToolTip("Filter avatars by type")
         self.type_filter.addItems(["All Types", "Human", "Animal", "Robot", "Fantasy", "Abstract"])
         self.type_filter.currentTextChanged.connect(self._filter_avatars)
         filter_layout.addWidget(self.type_filter)

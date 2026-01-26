@@ -149,8 +149,9 @@ class PresetSelector(QWidget):
         
         layout.addWidget(QLabel("Preset:"))
         
-        self.combo = QComboBox()
+        self.combo = NoScrollComboBox()
         self.combo.setMinimumWidth(120)
+        self.combo.setToolTip("Select a preset configuration")
         self._update_combo()
         self.combo.currentTextChanged.connect(self._on_selection)
         layout.addWidget(self.combo, stretch=1)
@@ -229,7 +230,8 @@ class ColorCustomizer(QWidget):
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel("Theme:"))
         
-        self.preset_combo = QComboBox()
+        self.preset_combo = NoScrollComboBox()
+        self.preset_combo.setToolTip("Select a color theme preset")
         self.preset_combo.addItems([p.title() for p in COLOR_PRESETS.keys()])
         self.preset_combo.currentTextChanged.connect(self._apply_preset)
         preset_row.addWidget(self.preset_combo, stretch=1)
@@ -539,6 +541,8 @@ class DirectoryWatcher:
 
 # Export all
 __all__ = [
+    'NoScrollComboBox',
+    'disable_scroll_on_combos',
     'STYLE_PRESETS',
     'COLOR_PRESETS',
     'PresetSelector',

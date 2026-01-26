@@ -10,13 +10,14 @@ Allows users to:
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTreeWidget, QTreeWidgetItem, QComboBox, QGroupBox,
+    QTreeWidget, QTreeWidgetItem, QGroupBox,
     QMessageBox, QInputDialog, QSplitter, QTextEdit,
     QCheckBox, QProgressBar, QFrame, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QColor
 
+from .shared_components import NoScrollComboBox
 from forge_ai.tools.tool_manager import (
     ToolManager, get_tool_manager, TOOL_CATEGORIES, 
     TOOL_DEPENDENCIES, PRESETS
@@ -59,8 +60,9 @@ class ToolManagerTab(QWidget):
         preset_layout = QHBoxLayout(preset_group)
         preset_layout.setContentsMargins(6, 6, 6, 6)
         
-        self.preset_combo = QComboBox()
+        self.preset_combo = NoScrollComboBox()
         self.preset_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.preset_combo.setToolTip("Select a preset configuration for quick setup")
         for name, info in PRESETS.items():
             self.preset_combo.addItem(f"{name} - {info['description'][:30]}", name)
         preset_layout.addWidget(self.preset_combo)
@@ -127,9 +129,10 @@ class ToolManagerTab(QWidget):
         
         self.info_text = QTextEdit()
         self.info_text.setReadOnly(True)
-        self.info_text.setMaximumHeight(150)
+        self.info_text.setMinimumHeight(80)
+        self.info_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.info_text.setStyleSheet("font-size: 10px;")
-        right_layout.addWidget(self.info_text)
+        right_layout.addWidget(self.info_text, 1)  # stretch factor 1
         
         # Dependencies section
         deps_label = QLabel("Required Packages:")
@@ -139,12 +142,12 @@ class ToolManagerTab(QWidget):
         self.deps_text = QTextEdit()
         self.deps_text.setReadOnly(True)
         self.deps_text.setStyleSheet("font-size: 10px;")
-        self.deps_text.setMaximumHeight(150)
-        right_layout.addWidget(self.deps_text)
+        self.deps_text.setMinimumHeight(60)
+        self.deps_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        right_layout.addWidget(self.deps_text, 1)  # stretch factor 1
         
         # Profile management - compact
         profile_group = QGroupBox("Profiles")
-        profile_group.setMaximumHeight(70)
         profile_layout = QHBoxLayout(profile_group)
         profile_layout.setContentsMargins(6, 6, 6, 6)
         
@@ -158,12 +161,13 @@ class ToolManagerTab(QWidget):
         
         right_layout.addWidget(profile_group)
         
-        right_layout.addStretch()
-        
         splitter.addWidget(right_widget)
-        splitter.setSizes([300, 200])
+        splitter.setStretchFactor(0, 3)  # Left panel (tools) gets more space
+        splitter.setStretchFactor(1, 2)  # Right panel (info) gets less
+        splitter.setSizes([350, 250])
         
-        layout.addWidget(splitter)
+        # Add splitter with stretch factor so it expands to fill available space
+        layout.addWidget(splitter, 1)
         
         # Bottom buttons - compact
         bottom_layout = QHBoxLayout()

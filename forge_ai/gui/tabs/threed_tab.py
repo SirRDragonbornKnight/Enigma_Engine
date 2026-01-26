@@ -14,7 +14,7 @@ from typing import Optional, Dict, Any
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QComboBox, QTextEdit, QProgressBar,
+        QPushButton, QTextEdit, QProgressBar,
         QMessageBox, QGroupBox, QSpinBox, QDoubleSpinBox,
         QFileDialog, QLineEdit
     )
@@ -25,6 +25,7 @@ except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
+from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "3d"
@@ -358,7 +359,7 @@ class ThreeDTab(QWidget):
         settings_layout = QHBoxLayout()
         
         settings_layout.addWidget(QLabel("Provider:"))
-        self.provider_combo = QComboBox()
+        self.provider_combo = NoScrollComboBox()
         self.provider_combo.addItems(['Local (Shap-E)', 'Replicate (Cloud)'])
         settings_layout.addWidget(self.provider_combo)
         

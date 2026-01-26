@@ -52,7 +52,7 @@ from typing import Optional, Dict, Any
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QComboBox, QTextEdit, QProgressBar,
+        QPushButton, QTextEdit, QProgressBar,
         QMessageBox, QFileDialog, QSpinBox, QGroupBox,
         QDoubleSpinBox, QLineEdit, QCheckBox
     )
@@ -63,6 +63,7 @@ except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
+from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "images"

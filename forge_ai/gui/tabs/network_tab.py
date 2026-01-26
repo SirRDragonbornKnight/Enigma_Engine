@@ -140,13 +140,16 @@ class NetworkTab(QWidget):
         self.port_input = QSpinBox()
         self.port_input.setRange(1024, 65535)
         self.port_input.setValue(8765)
+        self.port_input.setToolTip("Port number for the API server (1024-65535)")
         controls_layout.addWidget(self.port_input)
         
         self.start_server_btn = QPushButton("Start Server")
+        self.start_server_btn.setToolTip("Start the local API server for remote connections")
         self.start_server_btn.clicked.connect(self._toggle_server)
         controls_layout.addWidget(self.start_server_btn)
         
         self.copy_url_btn = QPushButton("Copy URL")
+        self.copy_url_btn.setToolTip("Copy the server URL to clipboard")
         self.copy_url_btn.clicked.connect(self._copy_server_url)
         controls_layout.addWidget(self.copy_url_btn)
         
@@ -164,10 +167,12 @@ class NetworkTab(QWidget):
         scan_layout = QHBoxLayout()
         
         self.scan_btn = QPushButton("Scan Network")
+        self.scan_btn.setToolTip("Scan local network for other ForgeAI instances")
         self.scan_btn.clicked.connect(self._scan_network)
         scan_layout.addWidget(self.scan_btn)
         
         self.add_device_btn = QPushButton("Add Device")
+        self.add_device_btn.setToolTip("Manually add a remote device by IP address")
         self.add_device_btn.clicked.connect(self._add_device_manual)
         scan_layout.addWidget(self.add_device_btn)
         

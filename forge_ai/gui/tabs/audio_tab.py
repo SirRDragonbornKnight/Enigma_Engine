@@ -15,7 +15,7 @@ from typing import Optional, Dict, Any
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QComboBox, QTextEdit, QProgressBar,
+        QPushButton, QTextEdit, QProgressBar,
         QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit, QCheckBox
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
@@ -26,6 +26,7 @@ except ImportError:
 
 from ...config import CONFIG
 from .output_helpers import open_file_in_explorer, open_in_default_viewer, open_folder
+from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "audio"
@@ -438,7 +439,7 @@ class AudioTab(QWidget):
         settings_layout = QHBoxLayout()
         
         settings_layout.addWidget(QLabel("Provider:"))
-        self.provider_combo = QComboBox()
+        self.provider_combo = NoScrollComboBox()
         self.provider_combo.addItems(['Local (pyttsx3)', 'ElevenLabs (Cloud)', 'Replicate (Cloud)'])
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         settings_layout.addWidget(self.provider_combo)
@@ -448,7 +449,7 @@ class AudioTab(QWidget):
         settings_layout.addWidget(self.load_btn)
         
         settings_layout.addWidget(QLabel("Voice:"))
-        self.voice_combo = QComboBox()
+        self.voice_combo = NoScrollComboBox()
         self.voice_combo.currentIndexChanged.connect(self._on_voice_changed)
         self.voice_combo.setToolTip("Select the voice for speech synthesis")
         settings_layout.addWidget(self.voice_combo)

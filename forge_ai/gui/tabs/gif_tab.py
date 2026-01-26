@@ -14,12 +14,14 @@ from typing import Optional, Dict, Any, List
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QComboBox, QTextEdit, QProgressBar,
+    QPushButton, QTextEdit, QProgressBar,
     QMessageBox, QFileDialog, QSpinBox, QGroupBox,
     QDoubleSpinBox, QListWidget, QListWidgetItem, QLineEdit
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap
+
+from .shared_components import NoScrollComboBox
 
 HAS_PYQT = True
 

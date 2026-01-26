@@ -12,12 +12,14 @@ Priority: Higher numbers are tried first. Use 100 for primary, 50 for fallback.
 from typing import Dict, List, Optional, Any
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QLineEdit, QGroupBox, QScrollArea, QFrame,
+    QLineEdit, QGroupBox, QScrollArea, QFrame,
     QListWidget, QListWidgetItem, QSpinBox, QMessageBox,
     QGridLayout, QSizePolicy, QTextEdit
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+
+from .shared_components import NoScrollComboBox
 
 
 # Tool icons/colors - Plain text for professional appearance
@@ -121,11 +123,12 @@ class ToolAssignmentWidget(QFrame):
         add_layout = QHBoxLayout()
         add_layout.setSpacing(4)
         
-        self.model_input = QComboBox()
+        self.model_input = NoScrollComboBox()
         self.model_input.setEditable(True)
         self.model_input.setPlaceholderText("Select model...")
         self.model_input.setMinimumWidth(120)
         self.model_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.model_input.setToolTip("Select or enter a model for this tool")
         self._populate_model_options()
         add_layout.addWidget(self.model_input)
         

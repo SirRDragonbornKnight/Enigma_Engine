@@ -12,12 +12,13 @@ from datetime import datetime
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QListWidget, QGroupBox,
-    QLineEdit, QComboBox, QMessageBox, QTextEdit,
+    QLineEdit, QMessageBox, QTextEdit,
     QApplication, QDialogButtonBox, QCheckBox, QInputDialog,
     QWizard
 )
 from PyQt5.QtCore import Qt
 
+from ..tabs.shared_components import NoScrollComboBox
 from ...core.model_registry import ModelRegistry
 from ...core.model_scaling import grow_model, shrink_model
 
@@ -151,7 +152,8 @@ class ModelManagerDialog(QDialog):
         hf_layout.setSpacing(8)
         
         # Preset dropdown with model sizes and categories
-        self.hf_preset_combo = QComboBox()
+        self.hf_preset_combo = NoScrollComboBox()
+        self.hf_preset_combo.setToolTip("Select a preset HuggingFace model")
         self.hf_preset_combo.addItem("Select a preset model...")
         self.hf_preset_combo.addItem("microsoft/DialoGPT-small (162M) [Small] - Fast chat")
         self.hf_preset_combo.addItem("microsoft/DialoGPT-medium (405M) [Medium] - Conversational")
@@ -191,7 +193,7 @@ class ModelManagerDialog(QDialog):
         tokenizer_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
         tokenizer_layout.addWidget(tokenizer_label)
         
-        self.hf_tokenizer_combo = QComboBox()
+        self.hf_tokenizer_combo = NoScrollComboBox()
         self.hf_tokenizer_combo.addItem("Model's Own (Recommended)")
         self.hf_tokenizer_combo.addItem("Custom Forge Tokenizer")
         self.hf_tokenizer_combo.setToolTip("Choose which tokenizer to use with HuggingFace models")
@@ -1164,7 +1166,8 @@ Checkpoints: {checkpoints}
         
         layout.addWidget(QLabel(message))
         
-        combo = QComboBox()
+        combo = NoScrollComboBox()
+        combo.setToolTip("Select a model size")
         combo.addItems(sizes)
         combo.setStyleSheet("padding: 8px; background: #313244; color: #cdd6f4; border-radius: 4px;")
         layout.addWidget(combo)

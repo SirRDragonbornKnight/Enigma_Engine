@@ -127,6 +127,17 @@ def __getattr__(name: str):
         'create_settings_group': ('.shared_components', 'create_settings_group'),
         'create_action_button': ('.shared_components', 'create_action_button'),
         'DirectoryWatcher': ('.shared_components', 'DirectoryWatcher'),
+        'NoScrollComboBox': ('.shared_components', 'NoScrollComboBox'),
+        'disable_scroll_on_combos': ('.shared_components', 'disable_scroll_on_combos'),
+        
+        # Base generation tab
+        'BaseGenerationTab': ('.base_generation_tab', 'BaseGenerationTab'),
+        'BaseGenerationWorker': ('.base_generation_tab', 'BaseGenerationWorker'),
+        'BUTTON_STYLE_PRIMARY': ('.base_generation_tab', 'BUTTON_STYLE_PRIMARY'),
+        'BUTTON_STYLE_SECONDARY': ('.base_generation_tab', 'BUTTON_STYLE_SECONDARY'),
+        'BUTTON_STYLE_SUCCESS': ('.base_generation_tab', 'BUTTON_STYLE_SUCCESS'),
+        'BUTTON_STYLE_DANGER': ('.base_generation_tab', 'BUTTON_STYLE_DANGER'),
+        'create_group_box': ('.base_generation_tab', 'create_group_box'),
     }
     
     if name not in _imports:
@@ -202,4 +213,14 @@ __all__ = [
     'create_settings_group',
     'create_action_button',
     'DirectoryWatcher',
+    'NoScrollComboBox',
+    'disable_scroll_on_combos',
+    # Base generation tab
+    'BaseGenerationTab',
+    'BaseGenerationWorker',
+    'BUTTON_STYLE_PRIMARY',
+    'BUTTON_STYLE_SECONDARY',
+    'BUTTON_STYLE_SUCCESS',
+    'BUTTON_STYLE_DANGER',
+    'create_group_box',
 ]

@@ -19,10 +19,12 @@ if TYPE_CHECKING:
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
     QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QProgressBar,
-    QSlider, QSpinBox, QComboBox, QStackedWidget, QSizePolicy
+    QSlider, QSpinBox, QStackedWidget, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
+
+from .shared_components import NoScrollComboBox
 
 # Qt enum constants
 NoBrush = Qt.BrushStyle.NoBrush
@@ -592,6 +594,7 @@ class ScalingTab(QWidget):
         btn_layout = QHBoxLayout()
         
         self.create_btn = QPushButton("Create This Model")
+        self.create_btn.setToolTip("Create a new model with selected configuration")
         self.create_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -612,6 +615,7 @@ class ScalingTab(QWidget):
         btn_layout.addWidget(self.create_btn)
         
         self.benchmark_btn = QPushButton("Benchmark")
+        self.benchmark_btn.setToolTip("Run performance benchmark on selected model")
         self.benchmark_btn.setStyleSheet("""
             QPushButton {
                 background: #30363d;

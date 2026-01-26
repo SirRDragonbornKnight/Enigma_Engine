@@ -14,12 +14,14 @@ from pathlib import Path
 from datetime import datetime
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QComboBox, QLineEdit, QGroupBox, QCheckBox,
+    QTextEdit, QLineEdit, QGroupBox, QCheckBox,
     QFileDialog, QSplitter, QListWidget, QListWidgetItem,
-    QTabWidget, QMessageBox
+    QTabWidget, QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer, QFileSystemWatcher
 from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
+
+from .shared_components import NoScrollComboBox
 
 # Log directories
 LOGS_DIR = Path.home() / ".forge_ai" / "logs"
@@ -47,8 +49,9 @@ class LogViewerWidget(QWidget):
         # Controls
         controls = QHBoxLayout()
         
-        self.filter_combo = QComboBox()
+        self.filter_combo = NoScrollComboBox()
         self.filter_combo.addItems(["All", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+        self.filter_combo.setToolTip("Filter logs by level")
         self.filter_combo.currentTextChanged.connect(self._apply_filter)
         controls.addWidget(QLabel("Level:"))
         controls.addWidget(self.filter_combo)
@@ -213,8 +216,10 @@ class LogsTab(QWidget):
         left_layout.addWidget(QLabel("Log Files:"))
         
         self.log_list = QListWidget()
+        self.log_list.setMinimumWidth(150)
+        self.log_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.log_list.currentItemChanged.connect(self._on_log_selected)
-        left_layout.addWidget(self.log_list)
+        left_layout.addWidget(self.log_list, 1)  # stretch factor
         
         refresh_list_btn = QPushButton("Refresh List")
         refresh_list_btn.clicked.connect(self._refresh_log_list)
@@ -242,9 +247,11 @@ class LogsTab(QWidget):
         self.log_tabs.addTab(self.custom_viewer, "Custom")
         
         splitter.addWidget(self.log_tabs)
-        splitter.setSizes([200, 600])
+        splitter.setStretchFactor(0, 1)  # Log list gets less space
+        splitter.setStretchFactor(1, 4)  # Log viewer gets more space
+        splitter.setSizes([180, 620])
         
-        layout.addWidget(splitter)
+        layout.addWidget(splitter, 1)  # Add stretch factor to splitter
         
         # Bottom controls
         bottom = QHBoxLayout()

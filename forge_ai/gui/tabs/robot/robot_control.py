@@ -9,12 +9,13 @@ Supports loading connection configs from files instead of presets.
 
 from pathlib import Path
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QComboBox, 
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QGroupBox, QLineEdit, QTextEdit, QFileDialog
 )
 import json
 
 from ....config import CONFIG
+from ..shared_components import NoScrollComboBox
 
 
 # Robot configs directory
@@ -58,7 +59,8 @@ def create_robot_subtab(parent):
     # Config file selector row
     config_row = QHBoxLayout()
     config_row.addWidget(QLabel("Config:"))
-    parent.robot_config_combo = QComboBox()
+    parent.robot_config_combo = NoScrollComboBox()
+    parent.robot_config_combo.setToolTip("Select a robot configuration file")
     parent.robot_config_combo.currentIndexChanged.connect(
         lambda idx: _on_robot_config_changed(parent, idx)
     )
@@ -76,7 +78,8 @@ def create_robot_subtab(parent):
     # Connection type row
     type_row = QHBoxLayout()
     type_row.addWidget(QLabel("Type:"))
-    parent.robot_type_combo = QComboBox()
+    parent.robot_type_combo = NoScrollComboBox()
+    parent.robot_type_combo.setToolTip("Select the connection type for the robot")
     parent.robot_type_combo.addItems(["serial", "http", "ros", "gpio", "mqtt"])
     parent.robot_type_combo.setMaximumWidth(80)
     parent.robot_type_combo.currentTextChanged.connect(
@@ -88,7 +91,8 @@ def create_robot_subtab(parent):
     parent.robot_port_input.setMaximumWidth(120)
     type_row.addWidget(parent.robot_port_input)
     type_row.addWidget(QLabel("Baud:"))
-    parent.robot_baud_combo = QComboBox()
+    parent.robot_baud_combo = NoScrollComboBox()
+    parent.robot_baud_combo.setToolTip("Select the baud rate for serial connection")
     parent.robot_baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
     parent.robot_baud_combo.setCurrentText("115200")
     parent.robot_baud_combo.setMaximumWidth(80)

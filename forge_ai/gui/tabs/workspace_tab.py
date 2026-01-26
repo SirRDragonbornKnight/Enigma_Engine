@@ -14,13 +14,14 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QLineEdit, QListWidget, QListWidgetItem,
     QSplitter, QGroupBox, QInputDialog, QMessageBox,
-    QTabWidget, QComboBox, QFrame, QPlainTextEdit,
+    QTabWidget, QFrame, QPlainTextEdit,
     QSpinBox, QProgressBar, QFileDialog, QScrollArea,
     QDialogButtonBox, QDialog, QCheckBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
+from .shared_components import NoScrollComboBox
 from ...config import CONFIG
 
 
@@ -286,8 +287,9 @@ def _create_prompts_section(parent):
     selector_row = QHBoxLayout()
     selector_row.addWidget(QLabel("Preset:"))
     
-    parent.workspace_prompt_combo = QComboBox()
+    parent.workspace_prompt_combo = NoScrollComboBox()
     parent.workspace_prompt_combo.setMinimumWidth(250)
+    parent.workspace_prompt_combo.setToolTip("Select a system prompt preset")
     # Load presets AFTER editor is created (below)
     parent.workspace_prompt_combo.currentIndexChanged.connect(
         lambda: _on_preset_changed(parent)

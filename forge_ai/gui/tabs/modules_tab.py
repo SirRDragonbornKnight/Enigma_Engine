@@ -11,10 +11,12 @@ from PyQt5.QtWidgets import (
     QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
     QLineEdit, QProgressBar, QMessageBox, QSplitter,
     QTextEdit, QSizePolicy, QListWidget, QListWidgetItem,
-    QStackedWidget, QComboBox
+    QStackedWidget
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QColor
+
+from .shared_components import NoScrollComboBox
 
 # Qt enum constants
 AlignCenter = Qt.AlignmentFlag.AlignCenter
@@ -207,13 +209,14 @@ class ModulesTab(QWidget):
         filter_layout = QHBoxLayout()
         filter_layout.addWidget(QLabel("Category:"))
         
-        self.category_combo = QComboBox()
+        self.category_combo = NoScrollComboBox()
         self.category_combo.addItem("All Categories", "all")
         for cat_id, cat_info in CATEGORIES.items():
             self.category_combo.addItem(cat_info['name'], cat_id)
         self.category_combo.currentIndexChanged.connect(self._filter_modules)
         self.category_combo.setMinimumWidth(100)
         self.category_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.category_combo.setToolTip("Filter modules by category")
         filter_layout.addWidget(self.category_combo)
         
         filter_layout.addStretch()
@@ -222,11 +225,13 @@ class ModulesTab(QWidget):
         self.enable_all_btn = QPushButton("Enable All")
         self.enable_all_btn.setMinimumWidth(70)
         self.enable_all_btn.clicked.connect(self._enable_all_visible)
+        self.enable_all_btn.setToolTip("Enable all visible modules in the current filter")
         filter_layout.addWidget(self.enable_all_btn)
         
         self.disable_all_btn = QPushButton("Disable All")
         self.disable_all_btn.setMinimumWidth(70)
         self.disable_all_btn.clicked.connect(self._disable_all_visible)
+        self.disable_all_btn.setToolTip("Disable all visible modules in the current filter")
         filter_layout.addWidget(self.disable_all_btn)
         
         left_layout.addLayout(filter_layout)

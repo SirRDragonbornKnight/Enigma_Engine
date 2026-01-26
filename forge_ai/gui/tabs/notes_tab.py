@@ -16,10 +16,12 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QLineEdit, QListWidget, QListWidgetItem,
     QSplitter, QGroupBox, QInputDialog, QMessageBox,
-    QTabWidget, QComboBox, QFrame
+    QTabWidget, QFrame
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
+
+from .shared_components import NoScrollComboBox
 
 # Storage paths
 NOTES_DIR = Path.home() / ".forge_ai" / "notes"
@@ -200,6 +202,7 @@ class NotesTab(QWidget):
         controls.addWidget(self.notes_search)
         
         new_btn = QPushButton("New Note")
+        new_btn.setToolTip("Create a new note")
         new_btn.clicked.connect(self._new_note)
         controls.addWidget(new_btn)
         
@@ -250,10 +253,12 @@ class NotesTab(QWidget):
         btn_layout = QHBoxLayout()
         
         save_btn = QPushButton("Save")
+        save_btn.setToolTip("Save current note")
         save_btn.clicked.connect(self._save_note)
         btn_layout.addWidget(save_btn)
         
         delete_btn = QPushButton("Delete")
+        delete_btn.setToolTip("Delete selected note")
         delete_btn.clicked.connect(self._delete_note)
         btn_layout.addWidget(delete_btn)
         
@@ -280,6 +285,7 @@ class NotesTab(QWidget):
         controls.addWidget(self.bookmarks_search)
         
         add_btn = QPushButton("Add Bookmark")
+        add_btn.setToolTip("Add a new bookmark")
         add_btn.clicked.connect(self._add_bookmark)
         controls.addWidget(add_btn)
         
@@ -301,14 +307,17 @@ class NotesTab(QWidget):
         btn_layout = QHBoxLayout()
         
         open_btn = QPushButton("Open in Browser")
+        open_btn.setToolTip("Open bookmark in default browser")
         open_btn.clicked.connect(self._open_selected_bookmark)
         btn_layout.addWidget(open_btn)
         
         copy_btn = QPushButton("Copy URL")
+        copy_btn.setToolTip("Copy bookmark URL to clipboard")
         copy_btn.clicked.connect(self._copy_bookmark_url)
         btn_layout.addWidget(copy_btn)
         
         delete_bm_btn = QPushButton("Delete")
+        delete_bm_btn.setToolTip("Delete selected bookmark")
         delete_bm_btn.clicked.connect(self._delete_bookmark)
         btn_layout.addWidget(delete_bm_btn)
         

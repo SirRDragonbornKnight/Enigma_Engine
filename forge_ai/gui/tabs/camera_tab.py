@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import Optional
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QSpinBox, QGroupBox, QMessageBox, QSlider,
+    QSpinBox, QGroupBox, QMessageBox, QSlider,
     QCheckBox, QFileDialog, QPlainTextEdit
 )
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
 
+from .shared_components import NoScrollComboBox
 from ...config import CONFIG
 
 # Try to import OpenCV
@@ -123,20 +124,22 @@ class CameraTab(QWidget):
         row1 = QHBoxLayout()
         
         row1.addWidget(QLabel("Camera:"))
-        self.camera_combo = QComboBox()
+        self.camera_combo = NoScrollComboBox()
         self.camera_combo.addItem("Camera 0 (Default)", 0)
         self.camera_combo.addItem("Camera 1", 1)
         self.camera_combo.addItem("Camera 2", 2)
         self.camera_combo.setMinimumWidth(120)
+        self.camera_combo.setToolTip("Select camera device")
         row1.addWidget(self.camera_combo)
         
         row1.addWidget(QLabel("Resolution:"))
-        self.resolution_combo = QComboBox()
+        self.resolution_combo = NoScrollComboBox()
         self.resolution_combo.addItem("640x480", (640, 480))
         self.resolution_combo.addItem("1280x720 (HD)", (1280, 720))
         self.resolution_combo.addItem("320x240 (Low)", (320, 240))
         self.resolution_combo.addItem("800x600", (800, 600))
         self.resolution_combo.setMinimumWidth(140)
+        self.resolution_combo.setToolTip("Select camera resolution")
         row1.addWidget(self.resolution_combo)
         
         row1.addStretch()

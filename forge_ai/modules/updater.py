@@ -13,10 +13,11 @@ Features:
 
 import json
 import logging
+import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urljoin
@@ -24,6 +25,61 @@ from urllib.parse import urljoin
 from .manager import ModuleManager
 
 logger = logging.getLogger(__name__)
+
+
+def parse_version(version_str: str) -> Tuple[int, ...]:
+    """
+    Parse a version string into a tuple for comparison.
+    
+    Handles semantic versioning like 1.0.0, 2.1.3-beta, etc.
+    Falls back to string comparison if parsing fails.
+    
+    Args:
+        version_str: Version string to parse (e.g., "1.2.3" or "1.2.3-beta")
+    
+    Returns:
+        Tuple of integers for comparison
+    """
+    if not version_str:
+        return (0,)
+    
+    # Remove common prefixes
+    version_str = version_str.lstrip('vV')
+    
+    # Extract numeric parts (ignore pre-release suffixes like -beta, -rc1)
+    match = re.match(r'^(\d+(?:\.\d+)*)', version_str)
+    if match:
+        parts = match.group(1).split('.')
+        return tuple(int(p) for p in parts)
+    
+    # Fallback for non-standard versions
+    return (0,)
+
+
+def compare_versions(v1: str, v2: str) -> int:
+    """
+    Compare two version strings.
+    
+    Args:
+        v1: First version
+        v2: Second version
+    
+    Returns:
+        -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+    """
+    parsed1 = parse_version(v1)
+    parsed2 = parse_version(v2)
+    
+    # Pad shorter tuple with zeros
+    max_len = max(len(parsed1), len(parsed2))
+    parsed1 = parsed1 + (0,) * (max_len - len(parsed1))
+    parsed2 = parsed2 + (0,) * (max_len - len(parsed2))
+    
+    if parsed1 < parsed2:
+        return -1
+    elif parsed1 > parsed2:
+        return 1
+    return 0
 
 
 @dataclass
@@ -105,11 +161,9 @@ class ModuleUpdater:
                 if update_info:
                     latest_version = update_info.get('version')
                     
-                    # Compare versions (simple string comparison)
-                    # TODO: Use proper semantic versioning (e.g., packaging.version.parse)
-                    # for production to correctly handle version ordering like:
-                    # 1.0.0 < 2.0.0 < 10.0.0 (not 1.0.0 < 10.0.0 < 2.0.0)
-                    if latest_version and latest_version != current_version:
+                    # Compare versions using semantic versioning
+                    # Returns 1 if latest > current (update available)
+                    if latest_version and compare_versions(latest_version, current_version) > 0:
                         update = ModuleUpdate(
                             module_id=mid,
                             current_version=current_version,

@@ -17,7 +17,7 @@ from typing import Optional, List, Dict, Any
 try:
     from PyQt5.QtWidgets import (
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QComboBox, QTextEdit, QProgressBar,
+        QPushButton, QTextEdit, QProgressBar,
         QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit, 
         QCheckBox, QListWidget, QListWidgetItem, QTabWidget,
         QFrame, QSpinBox, QDoubleSpinBox, QGridLayout, QScrollArea
@@ -27,6 +27,8 @@ try:
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
+
+from .shared_components import NoScrollComboBox
 
 from ...config import CONFIG
 from ...voice.voice_profile import VoiceProfile, VoiceEngine, PROFILES_DIR, get_engine
@@ -300,14 +302,17 @@ class VoiceCloneTab(QWidget):
         
         btn_layout = QHBoxLayout()
         add_btn = QPushButton("+ Add Audio Files")
+        add_btn.setToolTip("Add audio samples of the voice to clone")
         add_btn.clicked.connect(self._on_add_samples)
         btn_layout.addWidget(add_btn)
         
         remove_btn = QPushButton("Remove Selected")
+        remove_btn.setToolTip("Remove selected audio sample from the list")
         remove_btn.clicked.connect(self._on_remove_sample)
         btn_layout.addWidget(remove_btn)
         
         analyze_btn = QPushButton("Analyze")
+        analyze_btn.setToolTip("Analyze the selected audio sample")
         analyze_btn.clicked.connect(self._on_analyze_sample)
         btn_layout.addWidget(analyze_btn)
         
@@ -322,6 +327,7 @@ class VoiceCloneTab(QWidget):
         
         # Clone button
         clone_btn = QPushButton("Create Cloned Voice")
+        clone_btn.setToolTip("Create a new voice profile based on the audio samples")
         clone_btn.setStyleSheet("""
             QPushButton { 
                 background: #a6e3a1; color: #1e1e2e; 
@@ -381,8 +387,9 @@ class VoiceCloneTab(QWidget):
         # Base voice selection
         base_layout = QHBoxLayout()
         base_layout.addWidget(QLabel("Base Voice Type:"))
-        self.base_voice_combo = QComboBox()
+        self.base_voice_combo = NoScrollComboBox()
         self.base_voice_combo.addItems(["default", "male", "female"])
+        self.base_voice_combo.setToolTip("Select base voice type for AI voice generation")
         base_layout.addWidget(self.base_voice_combo)
         base_layout.addStretch()
         layout.addLayout(base_layout)

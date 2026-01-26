@@ -37,6 +37,37 @@ ALERTS_FILE = DASHBOARD_DIR / "alerts.json"
 CUSTOM_ACTIONS_FILE = DASHBOARD_DIR / "custom_actions.json"
 
 
+class QuickActionButton(QPushButton):
+    """A styled quick action button with icon and color."""
+    
+    def __init__(self, text: str, icon_text: str = "", color: str = "#89b4fa", parent=None):
+        super().__init__(parent)
+        # Show both icon and text if icon provided
+        display_text = f"{icon_text} {text}" if icon_text else text
+        self.setText(display_text)
+        self.setToolTip(text)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                color: #1e1e2e;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{
+                background-color: {color};
+                filter: brightness(1.1);
+            }}
+            QPushButton:pressed {{
+                background-color: {color};
+                filter: brightness(0.9);
+            }}
+        """)
+
+
 class CircularGauge(QWidget):
     """A circular gauge widget for displaying percentages."""
     
