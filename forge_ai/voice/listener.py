@@ -58,7 +58,8 @@ def _check_audio_device():
                 if info.get('maxInputChannels', 0) > 0:
                     has_device = True
                     break
-            except:
+            except (IOError, OSError):
+                # Device enumeration can fail for invalid devices
                 continue
         p.terminate()
         return has_device

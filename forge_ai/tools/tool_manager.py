@@ -41,8 +41,11 @@ USAGE:
 
 import os
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 
 # Config path
@@ -644,8 +647,8 @@ class ToolManager:
                         "tool_count": len(profile.get("enabled_tools", [])),
                         "created": profile.get("created", ""),
                     })
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, KeyError) as e:
+                logger.warning(f"Could not load profile {file}: {e}")
         
         return {
             "success": True,

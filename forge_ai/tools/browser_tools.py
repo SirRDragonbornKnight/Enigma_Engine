@@ -236,8 +236,8 @@ class BrowserMediaVolumeTool(Tool):
                         )
                         if result.returncode == 0:
                             return {"success": True, "volume": level, "method": "pactl"}
-                    except:
-                        pass
+                    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+                        pass  # Try alternative method
                     
                     try:
                         result = subprocess.run(
@@ -246,8 +246,8 @@ class BrowserMediaVolumeTool(Tool):
                         )
                         if result.returncode == 0:
                             return {"success": True, "volume": level, "method": "amixer"}
-                    except:
-                        pass
+                    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+                        pass  # amixer not available
                 
                 elif os.name == "nt":
                     # Windows - use nircmd or PowerShell

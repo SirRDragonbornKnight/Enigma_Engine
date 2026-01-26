@@ -14,12 +14,15 @@ Tools:
 import os
 import json
 import time
+import logging
 import threading
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Callable
 from .tool_registry import Tool
+
+logger = logging.getLogger(__name__)
 
 # Storage paths
 SCHEDULE_FILE = Path.home() / ".forge_ai" / "schedules.json"
@@ -60,7 +63,8 @@ class ScheduleManager:
             try:
                 with open(SCHEDULE_FILE, 'r') as f:
                     self.schedules = json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Could not load schedules: {e}")
                 self.schedules = []
     
     def _save_schedules(self):
@@ -277,7 +281,8 @@ class ClipboardHistory:
             try:
                 with open(CLIPBOARD_HISTORY_FILE, 'r') as f:
                     self.history = json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Could not load clipboard history: {e}")
                 self.history = []
     
     def _save_history(self):
@@ -330,8 +335,8 @@ def _get_clipboard() -> str:
             data = ctypes.c_char_p(handle).value
             user32.CloseClipboard()
             return data.decode('utf-8') if data else ""
-        except:
-            pass
+        except (OSError, AttributeError, UnicodeDecodeError) as e:
+            logger.debug(f"Could not read clipboard via Windows API: {e}")
     
     # Linux fallback using xclip/xsel
     if os.name == 'posix':
@@ -504,8 +509,8 @@ class MacroManager:
             try:
                 with open(file, 'r') as f:
                     self.macros[file.stem] = json.load(f)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Could not load macro {file}: {e}")
     
     def save_macro(self, name: str, actions: List[Dict]):
         """Save a macro."""

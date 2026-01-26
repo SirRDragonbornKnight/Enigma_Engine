@@ -27,12 +27,19 @@ Usage:
 """
 
 import json
-import os
+import logging
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_GAME_DETECTION_INTERVAL = 5.0  # seconds
+QUICK_RESPONSE_MAX_TOKENS = 150
+NORMAL_RESPONSE_MAX_TOKENS = 300
 
 
 class GameType(Enum):
@@ -293,14 +300,14 @@ class GameAIRouter:
         
         self._games[game_id] = config
         self._save_configs()
-        print(f"[GameRouter] Registered game: {game_id}")
+        logger.info(f"Registered game: {game_id}")
     
     def unregister_game(self, game_id: str):
         """Remove a game configuration."""
         if game_id in self._games:
             del self._games[game_id]
             self._save_configs()
-            print(f"[GameRouter] Unregistered game: {game_id}")
+            logger.info(f"Unregistered game: {game_id}")
     
     def get_game(self, game_id: str) -> Optional[GameConfig]:
         """Get game configuration."""
@@ -316,9 +323,9 @@ class GameAIRouter:
         if game_id:
             config = self._games.get(game_id)
             if config:
-                print(f"[GameRouter] Active game: {config.name}")
+                logger.debug(f"Active game: {config.name}")
         else:
-            print("[GameRouter] No active game")
+            logger.debug("No active game")
         
         # Notify callbacks
         if old_game != game_id:
@@ -414,9 +421,9 @@ class GameAIRouter:
                     pass
             
         except ImportError:
-            print("[GameRouter] psutil not installed - game detection disabled")
+            logger.warning("psutil not installed - game detection disabled")
         except Exception as e:
-            print(f"[GameRouter] Detection error: {e}")
+            logger.debug(f"Detection error: {e}")
         
         return None
     
@@ -450,12 +457,12 @@ class GameAIRouter:
         
         self._detection_thread = threading.Thread(target=detection_loop, daemon=True)
         self._detection_thread.start()
-        print("[GameRouter] Background detection started")
+        logger.info("Background game detection started")
     
     def stop_detection(self):
         """Stop background game detection."""
         self._detecting = False
-        print("[GameRouter] Background detection stopped")
+        logger.info("Background game detection stopped")
     
     # ===== AI Integration =====
     
@@ -511,7 +518,7 @@ class GameAIRouter:
             
             response = engine.generate(
                 full_prompt,
-                max_gen=150 if model_config["quick_responses"] else 300
+                max_gen=QUICK_RESPONSE_MAX_TOKENS if model_config["quick_responses"] else NORMAL_RESPONSE_MAX_TOKENS
             )
             
             # Clean response
@@ -545,9 +552,9 @@ class GameAIRouter:
                 for game_id, game_data in data.items():
                     self._games[game_id] = GameConfig.from_dict(game_data)
                 
-                print(f"[GameRouter] Loaded {len(data)} game configs")
+                logger.debug(f"Loaded {len(data)} game configs")
             except Exception as e:
-                print(f"[GameRouter] Failed to load configs: {e}")
+                logger.warning(f"Failed to load game configs: {e}")
     
     def _save_configs(self):
         """Save game configs to file."""
@@ -563,7 +570,7 @@ class GameAIRouter:
                 json.dump(data, f, indent=2)
             
         except Exception as e:
-            print(f"[GameRouter] Failed to save configs: {e}")
+            logger.warning(f"Failed to save game configs: {e}")
     
     def export_config(self, game_id: str) -> str:
         """Export game config as JSON string."""
@@ -581,7 +588,7 @@ class GameAIRouter:
             self._save_configs()
             return True
         except Exception as e:
-            print(f"[GameRouter] Import failed: {e}")
+            logger.warning(f"Game config import failed: {e}")
             return False
 
 

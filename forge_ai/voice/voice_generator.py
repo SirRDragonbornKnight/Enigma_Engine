@@ -52,6 +52,7 @@ Generate unique voices that match your AI's character.
 """
 
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -59,6 +60,8 @@ from dataclasses import dataclass
 
 from .voice_profile import VoiceProfile, PROFILES_DIR
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 try:
     from ..core.personality import AIPersonality, PersonalityTraits
@@ -241,7 +244,7 @@ class AIVoiceGenerator:
             profile = analyzer.estimate_voice_profile(stored_samples, name)
             profile.description = f"Cloned voice from {len(stored_samples)} samples"
         except Exception as e:
-            print(f"Warning: Could not analyze audio samples: {e}")
+            logger.warning(f"Could not analyze audio samples: {e}")
             # Fallback to defaults
             profile = VoiceProfile(
                 name=name,
@@ -400,7 +403,7 @@ class AIVoiceGenerator:
             }
             return True
         except Exception as e:
-            print(f"Error loading evolution history: {e}")
+            logger.error(f"Error loading evolution history: {e}")
             return False
 
 

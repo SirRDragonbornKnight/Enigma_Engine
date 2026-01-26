@@ -18,10 +18,13 @@ Tools:
 import os
 import json
 import random
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from .tool_registry import Tool
+
+logger = logging.getLogger(__name__)
 
 # Storage paths
 GAMES_DIR = Path.home() / ".forge_ai" / "games"
@@ -283,8 +286,8 @@ class CharacterManager:
                 with open(file, 'r') as f:
                     char = json.load(f)
                     self.characters[char['name'].lower()] = char
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, KeyError) as e:
+                logger.warning(f"Could not load character {file}: {e}")
     
     def save_character(self, character: Dict):
         name = character['name'].lower()
@@ -437,8 +440,8 @@ class StoryManager:
                 with open(file, 'r') as f:
                     story = json.load(f)
                     self.stories[story['id']] = story
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, KeyError) as e:
+                logger.warning(f"Could not load story {file}: {e}")
     
     def save_story(self, story: Dict):
         self.stories[story['id']] = story
@@ -754,7 +757,8 @@ class DnDRollTool(Tool):
                 font = ImageFont.truetype("arial.ttf", 24)
                 font_large = ImageFont.truetype("arial.ttf", 48)
                 font_small = ImageFont.truetype("arial.ttf", 14)
-            except:
+            except (IOError, OSError):
+                # Font file not found, use default
                 font = ImageFont.load_default()
                 font_large = font
                 font_small = font

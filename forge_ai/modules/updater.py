@@ -14,17 +14,18 @@ Features:
 import json
 import logging
 import re
-import shutil
-import tempfile
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
-from urllib.parse import urljoin
 
 from .manager import ModuleManager
 
 logger = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_REGISTRY_URL = "https://forge-modules.example.com/registry"
+DEFAULT_UPDATE_CHECK_INTERVAL_HOURS = 24
 
 
 def parse_version(version_str: str) -> Tuple[int, ...]:
@@ -112,7 +113,7 @@ class ModuleUpdater:
         self.manager = manager
         self.registry_url = (
             registry_url or 
-            "https://forge-modules.example.com/registry"
+            DEFAULT_REGISTRY_URL
         )
         self.backup_dir = Path("backups/modules")
         self.backup_dir.mkdir(parents=True, exist_ok=True)

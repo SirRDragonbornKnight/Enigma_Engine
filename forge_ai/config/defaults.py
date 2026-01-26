@@ -141,15 +141,15 @@ def _load_user_config() -> None:
                 with open(path, "r", encoding="utf-8") as f:
                     user_config = json.load(f)
                 if not isinstance(user_config, dict):
-                    print(f"Warning: Config in {path} is not a dictionary, skipping")
+                    logger.warning(f"Config in {path} is not a dictionary, skipping")
                     continue
                 CONFIG.update(user_config)
-                print(f"Loaded config from {path}")
+                logger.info(f"Loaded config from {path}")
                 return
             except json.JSONDecodeError as e:
-                print(f"Warning: Invalid JSON in config file {path}: {e}")
+                logger.warning(f"Invalid JSON in config file {path}: {e}")
             except Exception as e:
-                print(f"Warning: Failed to load config from {path}: {e}")
+                logger.warning(f"Failed to load config from {path}: {e}")
 
 
 def _load_env_config() -> None:
@@ -182,10 +182,10 @@ def _load_env_config() -> None:
                 try:
                     value = int(value)
                     if not (1 <= value <= 65535):
-                        print(f"Warning: Invalid port {value}, using default")
+                        logger.warning(f"Invalid port {value}, using default")
                         continue
                 except ValueError:
-                    print(f"Warning: Invalid port value {value}, using default")
+                    logger.warning(f"Invalid port value {value}, using default")
                     continue
             CONFIG[config_key] = value
 

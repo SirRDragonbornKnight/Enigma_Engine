@@ -64,6 +64,7 @@ import re
 import logging
 import signal
 import platform
+import time
 from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
 
@@ -72,7 +73,7 @@ from .tool_definitions import get_tool_definition
 logger = logging.getLogger(__name__)
 
 
-class TimeoutError(Exception):
+class ToolTimeoutError(Exception):
     """Raised when a tool execution times out."""
     pass
 
@@ -88,7 +89,7 @@ def timeout_context(seconds: int):
         seconds: Timeout in seconds
         
     Raises:
-        TimeoutError: If the operation takes longer than specified
+        ToolTimeoutError: If the operation takes longer than specified
         
     Note:
         On Windows, this provides a "soft" timeout that sets a flag.
@@ -96,7 +97,7 @@ def timeout_context(seconds: int):
         For truly interruptible timeouts, use run_with_timeout() instead.
     """
     def timeout_handler(signum, frame):
-        raise TimeoutError(f"Operation timed out after {seconds} seconds")
+        raise ToolTimeoutError(f"Operation timed out after {seconds} seconds")
     
     # Unix systems: use SIGALRM
     if platform.system() != "Windows" and hasattr(signal, 'SIGALRM'):
@@ -123,7 +124,7 @@ def timeout_context(seconds: int):
         try:
             yield
             if timer_expired:
-                raise TimeoutError(f"Operation timed out after {seconds} seconds")
+                raise ToolTimeoutError(f"Operation timed out after {seconds} seconds")
         finally:
             timer.cancel()
 
@@ -144,7 +145,7 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds: int = 30):
         The function's return value
         
     Raises:
-        TimeoutError: If the function takes longer than timeout_seconds
+        ToolTimeoutError: If the function takes longer than timeout_seconds
     """
     import concurrent.futures
     
@@ -156,7 +157,7 @@ def run_with_timeout(func, args=(), kwargs=None, timeout_seconds: int = 30):
         try:
             return future.result(timeout=timeout_seconds)
         except concurrent.futures.TimeoutError:
-            raise TimeoutError(f"Operation timed out after {timeout_seconds} seconds")
+            raise ToolTimeoutError(f"Operation timed out after {timeout_seconds} seconds")
 
 
 class ToolExecutor:
@@ -386,7 +387,7 @@ class ToolExecutor:
         try:
             with timeout_context(timeout):
                 return self.execute_tool(tool_name, params)
-        except TimeoutError as e:
+        except ToolTimeoutError as e:
             logger.warning(f"Tool {tool_name} timed out after {timeout}s")
             return {
                 "success": False,
@@ -874,7 +875,8 @@ class ToolExecutor:
                 if settings_path.exists():
                     try:
                         existing = json.loads(settings_path.read_text())
-                    except:
+                    except (json.JSONDecodeError, IOError) as e:
+                        logger.debug(f"Could not read avatar settings: {e}")
                         existing = {}
                 
                 # Update setting

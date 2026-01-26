@@ -57,6 +57,7 @@ and pushed to a vector database for intelligent semantic search.
     • forge_ai/memory/rag.py        - Retrieval-augmented generation
 """
 import json
+import logging
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -64,6 +65,8 @@ from typing import List, Dict, Any, Optional
 from .vector_db import SimpleVectorDB
 from ..config import CONFIG
 from ..memory.memory_db import add_memory
+
+logger = logging.getLogger(__name__)
 
 # Global fallback directory for conversations (backward compatibility)
 CONV_DIR = Path(CONFIG["data_dir"]) / "conversations"
@@ -215,7 +218,7 @@ class ConversationManager:
                 add_memory(m.get("text", ""), source=m.get("role", "user"), meta={"conv": name})
             except Exception as e:
                 # Log but don't fail the save operation
-                print(f"Warning: Failed to add message to memory DB: {e}")
+                logger.warning(f"Failed to add message to memory DB: {e}")
         
         return str(fname)
 
@@ -278,7 +281,7 @@ class ConversationManager:
                 )
             ]
         except OSError as e:
-            print(f"Warning: Error listing conversations: {e}")
+            logger.warning(f"Error listing conversations: {e}")
             return []
 
     # =========================================================================

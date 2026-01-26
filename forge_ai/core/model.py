@@ -1227,8 +1227,11 @@ class Forge(nn.Module):
 # Aliases (for backwards compatibility)
 # =============================================================================
 
-# Primary alias - 'Forge' is the original name
-Forge = Forge
+# Legacy aliases - these are deprecated, use 'Forge' directly
+# Kept for backwards compatibility with old code
+TinyForge = Forge  # Deprecated: use Forge
+ForgeModel = Forge  # Deprecated: use Forge
+Enigma = Forge  # Deprecated: use Forge
 
 # =============================================================================
 # Factory Functions

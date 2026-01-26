@@ -92,7 +92,8 @@ class HomeAssistantSetupTool(Tool):
                 with urllib.request.urlopen(req, timeout=10) as response:
                     data = json.loads(response.read().decode())
                     message = data.get('message', 'Connected')
-            except:
+            except (urllib.error.URLError, json.JSONDecodeError, TimeoutError) as e:
+                logger.debug(f"Home Assistant connection test failed: {e}")
                 message = "Could not verify connection, but credentials saved"
             
             # Save config
@@ -300,8 +301,8 @@ class GPIOReadTool(Tool):
                 # Export pin
                 with open('/sys/class/gpio/export', 'w') as f:
                     f.write(str(pin))
-            except:
-                pass
+            except IOError:
+                pass  # Pin may already be exported
             
             try:
                 # Set direction
@@ -319,8 +320,8 @@ class GPIOReadTool(Tool):
                     "state": "HIGH" if value else "LOW",
                     "method": "sysfs",
                 }
-            except:
-                pass
+            except IOError:
+                pass  # sysfs not available
             
             return {
                 "success": False,
@@ -434,8 +435,8 @@ class GPIOPWMTool(Tool):
                 if pin in self._pwm_instances:
                     try:
                         self._pwm_instances[pin].stop()
-                    except:
-                        pass
+                    except (RuntimeError, AttributeError):
+                        pass  # PWM instance may be invalid
                 
                 GPIO.setup(pin, GPIO.OUT)
                 pwm = GPIO.PWM(pin, frequency)
@@ -838,8 +839,8 @@ class CameraStreamTool(Tool):
                         "note": "Stream started using motion. Stop with: pkill motion",
                     }
                     
-            except:
-                pass
+            except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
+                logger.debug(f"Camera streaming failed: {e}")
             
             return {
                 "success": False,

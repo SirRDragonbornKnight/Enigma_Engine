@@ -12,6 +12,7 @@ Features:
   - Natural language command execution
 """
 
+import logging
 import sys
 import os
 import time
@@ -19,6 +20,8 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from PyQt5.QtWidgets import QWidget
@@ -1013,7 +1016,7 @@ class QuickCommandOverlay(QWidget):
             import sys
             sys.exit(0)
         except Exception as e:
-            print(f"Error during quit: {e}")
+            logger.error(f"Error during quit: {e}")
             import sys
             sys.exit(1)
     
@@ -1143,8 +1146,6 @@ class QuickCommandOverlay(QWidget):
         """Hide the window but keep AI running in system tray."""
         self.hide()
         self.set_status("Hidden to tray - AI still running")
-        
-        dialog.exec_()
     
     def _open_gui(self):
         """Open the full GUI (keeps Quick Chat open)."""
@@ -1386,7 +1387,7 @@ class QuickCommandOverlay(QWidget):
                             self.set_status("Avatar started")
                         return
                 except Exception as e:
-                    print(f"Avatar module error: {e}")
+                    logger.debug(f"Avatar module error: {e}")
                 
                 # Method 5: Open avatar tab as last resort
                 self._open_avatar_tab()
@@ -1528,7 +1529,7 @@ class QuickCommandOverlay(QWidget):
                 settings.per_avatar_positions.clear()
                 persistence.save(settings)
             except Exception as e:
-                print(f"Could not save position: {e}")
+                logger.debug(f"Could not save position: {e}")
             
             if moved:
                 self.set_status(f"Avatar moved to ({center_x}, {center_y})")
@@ -1621,7 +1622,7 @@ class QuickCommandOverlay(QWidget):
                 from forge_ai.voice import speak
                 speak(clean_text)
         except Exception as e:
-            print(f"[QuickChat] TTS error: {e}")
+            logger.debug(f"TTS error: {e}")
     
     @pyqtSlot(str)
     def set_status(self, text: str):
@@ -2877,7 +2878,7 @@ def create_system_tray(app, main_window=None):
         return None
     
     if not QSystemTrayIcon.isSystemTrayAvailable():
-        print("System tray not available on this system")
+        logger.warning("System tray not available on this system")
         return None
     
     return ForgeSystemTray(app, main_window)

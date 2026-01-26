@@ -390,7 +390,7 @@ class ToolRouter:
                         ModelAssignment(**m) for m in models
                     ]
             except Exception as e:
-                print(f"Error loading tool routing config: {e}")
+                logger.warning(f"Error loading tool routing config: {e}")
                 self.assignments = {}
         else:
             # Default assignments
@@ -985,7 +985,7 @@ class ToolRouter:
             model, config = registry.load_model(name)
             return {"model": model, "config": config, "type": "forge_ai"}
         except Exception as e:
-            print(f"Failed to load Forge model {name}: {e}")
+            logger.warning(f"Failed to load Forge model {name}: {e}")
             return None
             
     def _load_huggingface_model(self, repo_id: str) -> Any:
@@ -1011,7 +1011,7 @@ class ToolRouter:
                 "device": device
             }
         except Exception as e:
-            print(f"Failed to load HuggingFace model {repo_id}: {e}")
+            logger.warning(f"Failed to load HuggingFace model {repo_id}: {e}")
             return None
             
     def _load_local_module(self, name: str) -> Any:
@@ -1045,7 +1045,7 @@ class ToolRouter:
                 if result.get("success"):
                     return result
             except Exception as e:
-                print(f"Model {assignment.model_id} failed: {e}")
+                logger.debug(f"Model {assignment.model_id} failed: {e}")
                 continue
                 
         return {"success": False, "error": "All assigned models failed"}
@@ -1326,7 +1326,7 @@ class ToolRouter:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 
-                print(f"Loading HF image model: {model_id}")
+                logger.info(f"Loading HF image model: {model_id}")
                 pipe = DiffusionPipeline.from_pretrained(
                     model_id,
                     torch_dtype=dtype,
@@ -1454,7 +1454,7 @@ class ToolRouter:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 
-                print(f"Loading HF video model: {model_id}")
+                logger.info(f"Loading HF video model: {model_id}")
                 pipe = DiffusionPipeline.from_pretrained(model_id, torch_dtype=dtype)
                 pipe = pipe.to(device)
                 self._cache_model(model_id, {"pipe": pipe, "type": "hf_video", "device": device})
@@ -1497,7 +1497,7 @@ class ToolRouter:
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 dtype = torch.float16 if device == "cuda" else torch.float32
                 
-                print(f"Loading HF 3D model: {model_id}")
+                logger.info(f"Loading HF 3D model: {model_id}")
                 pipe = ShapEPipeline.from_pretrained(model_id, torch_dtype=dtype)
                 pipe = pipe.to(device)
                 self._cache_model(model_id, {"pipe": pipe, "type": "hf_3d", "device": device})
@@ -1545,7 +1545,7 @@ class ToolRouter:
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             
             if model_id not in self._model_cache:
-                print(f"Loading HF vision model: {model_id}")
+                logger.info(f"Loading HF vision model: {model_id}")
                 pipe = pipeline("image-to-text", model=model_id)
                 self._cache_model(model_id, {"pipe": pipe, "type": "hf_vision"})
             
@@ -1575,7 +1575,7 @@ class ToolRouter:
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             
             if model_id not in self._model_cache:
-                print(f"Loading HF embeddings model: {model_id}")
+                logger.info(f"Loading HF embeddings model: {model_id}")
                 model = SentenceTransformer(model_id)
                 self._cache_model(model_id, {"model": model, "type": "hf_embed"})
             

@@ -25,6 +25,24 @@ from .json_cache import (
     read_json_cached, write_json_cached, invalidate_cache, get_cache_stats
 )
 
+# GPU utilities - common operations to avoid duplication
+from .gpu import (
+    clear_cuda_cache, get_gpu_memory_info, is_cuda_available,
+    is_mps_available, get_best_device
+)
+
+# JSON storage utilities
+from .storage import (
+    JsonStorageMixin, load_json_file, save_json_file
+)
+
+# Constants - centralized magic numbers
+from .constants import (
+    MAX_FILE_SIZE_BYTES, DEFAULT_WEB_TIMEOUT, DEFAULT_API_TIMEOUT,
+    DEFAULT_IMAGE_WIDTH, DEFAULT_IMAGE_HEIGHT, DEFAULT_MAX_NEW_TOKENS,
+    DEFAULT_TEMPERATURE, DEFAULT_TOP_K, DEFAULT_TOP_P
+)
+
 # Battery management for mobile/embedded devices
 from .battery_manager import (
     BatteryManager, PowerState, PowerProfile, POWER_PROFILES,
