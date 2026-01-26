@@ -1566,6 +1566,20 @@ class EnhancedMainWindow(QMainWindow):
         self._setup_shortcuts()
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize UI Settings (global fonts/themes)
+        # ─────────────────────────────────────────────────────────────────
+        try:
+            from .ui_settings import get_ui_settings
+            self.ui_settings = get_ui_settings()
+            # Apply global stylesheet
+            self.setStyleSheet(self.ui_settings.get_global_stylesheet())
+            # Listen for settings changes
+            self.ui_settings.add_listener(self._on_ui_settings_changed)
+        except Exception as e:
+            print(f"Could not load UI settings: {e}")
+            self.ui_settings = None
+        
+        # ─────────────────────────────────────────────────────────────────
         # Initialize the Model Registry
         # This tracks all saved models (local and HuggingFace)
         # ─────────────────────────────────────────────────────────────────
@@ -1725,6 +1739,11 @@ class EnhancedMainWindow(QMainWindow):
                     return
         except Exception as e:
             print(f"Could not set window icon: {e}")
+    
+    def _on_ui_settings_changed(self):
+        """Handle UI settings changes (font scale, theme)."""
+        if self.ui_settings:
+            self.setStyleSheet(self.ui_settings.get_global_stylesheet())
     
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts including emergency close."""
@@ -2669,6 +2688,9 @@ class EnhancedMainWindow(QMainWindow):
             if hasattr(self, 'model_status_btn'):
                 self.model_status_btn.setText(f"Model: {self.current_model_name}  v")
             
+            # Update AI status display
+            self._update_ai_status()
+            
             # Update system tray with model name
             try:
                 tray = get_system_tray()
@@ -2774,6 +2796,21 @@ class EnhancedMainWindow(QMainWindow):
         """)
         self.statusBar().addWidget(self.model_status_btn)
         
+        # AI Connection Status - shows what's loaded
+        self.ai_status_label = QLabel("AI: Connecting...")
+        self.ai_status_label.setStyleSheet("""
+            QLabel {
+                color: #f39c12;
+                padding: 2px 8px;
+                font-size: 11px;
+            }
+        """)
+        self.ai_status_label.setToolTip("AI connection status")
+        self.statusBar().addPermanentWidget(self.ai_status_label)
+        
+        # Schedule initial status update
+        QTimer.singleShot(1000, self._update_ai_status)
+        
         # Apply dark mode by default
         self.setStyleSheet(DARK_STYLE)
         
@@ -2786,7 +2823,7 @@ class EnhancedMainWindow(QMainWindow):
             create_image_tab, create_code_tab, create_video_tab,
             create_audio_tab, create_embeddings_tab, create_threed_tab,
             create_logs_tab, create_notes_tab, create_network_tab,
-            create_analytics_tab, create_scheduler_tab
+            create_analytics_tab
         )
         from .tabs.gif_tab import create_gif_tab
         from .tabs.settings_tab import create_settings_tab
@@ -2851,6 +2888,27 @@ class EnhancedMainWindow(QMainWindow):
         menu_btn.clicked.connect(self._show_options_menu)
         title_layout.addWidget(menu_btn)
         
+        # Show All Tabs button - makes all tabs visible
+        show_all_btn = QPushButton("All")
+        show_all_btn.setFixedSize(32, 28)
+        show_all_btn.setToolTip("Show all tabs (ignore module requirements)")
+        show_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #888;
+                border: 1px solid #333;
+                border-radius: 4px;
+                font-size: 10px;
+            }
+            QPushButton:hover {
+                background-color: #313244;
+                color: #89b4fa;
+                border-color: #89b4fa;
+            }
+        """)
+        show_all_btn.clicked.connect(self.show_all_tabs)
+        title_layout.addWidget(show_all_btn)
+        
         sidebar_layout.addWidget(title_widget)
         
         # Sidebar list widget
@@ -2897,7 +2955,6 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Logs", "logs", "View system logs"),
             ("", "Network", "network", "Multi-device AI networking"),
             ("", "Analytics", "analytics", "Usage statistics and insights"),
-            ("", "Scheduler", "scheduler", "Schedule automated AI tasks"),
             ("", "Examples", "examples", "Code examples and demos"),
             ("", "Settings", "settings", "Configure ForgeAI preferences"),
         ]
@@ -2933,7 +2990,7 @@ class EnhancedMainWindow(QMainWindow):
         self._always_visible_tabs = [
             'chat', 'workspace', 'history', 'scale', 'modules', 'tools', 'router',
             'game', 'robot', 'terminal', 'files', 'logs', 'network',
-            'analytics', 'scheduler', 'examples', 'settings', 'gif', 'voice'
+            'analytics', 'examples', 'settings', 'gif', 'voice'
         ]
         
         for item in nav_items:
@@ -3006,7 +3063,6 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
         self.content_stack.addWidget(wrap_in_scroll(create_network_tab(self)))  # Network
         self.content_stack.addWidget(wrap_in_scroll(create_analytics_tab(self)))  # Analytics
-        self.content_stack.addWidget(wrap_in_scroll(create_scheduler_tab(self)))  # Scheduler
         self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples
         self.content_stack.addWidget(wrap_in_scroll(create_settings_tab(self)))  # Settings
         
@@ -3139,13 +3195,23 @@ class EnhancedMainWindow(QMainWindow):
         # Restore mini chat on top preference
         self._mini_chat_on_top = settings.get("mini_chat_always_on_top", True)
         
-        # ALWAYS start on Chat tab - ignore saved last_tab setting
-        # This ensures predictable behavior when opening the GUI
+        # Restore last tab the user was on
+        last_tab = settings.get("last_tab", "chat")
+        target_tab = last_tab if last_tab else "chat"
+        
+        # Find and select the saved tab
         for i in range(self.sidebar.count()):
             item = self.sidebar.item(i)
-            if item and item.data(Qt.UserRole) == 'chat':
+            if item and item.data(Qt.UserRole) == target_tab:
                 self.sidebar.setCurrentRow(i)
                 break
+        else:
+            # Fallback to chat if saved tab not found
+            for i in range(self.sidebar.count()):
+                item = self.sidebar.item(i)
+                if item and item.data(Qt.UserRole) == 'chat':
+                    self.sidebar.setCurrentRow(i)
+                    break
         
         # Initialize tab visibility based on loaded modules
         self.update_tab_visibility()
@@ -3584,6 +3650,21 @@ class EnhancedMainWindow(QMainWindow):
             self.avatar_action.setChecked(False)
             self.avatar_action.setText("Avatar (OFF)")
             print(f"Avatar toggle error: {e}")
+    
+    def show_all_tabs(self):
+        """Make all sidebar tabs visible (ignore module requirements)."""
+        if not hasattr(self, '_sidebar_items'):
+            return
+        
+        for tab_key, item in self._sidebar_items.items():
+            item.setHidden(False)
+        
+        # Save preference
+        self._gui_settings["show_all_tabs"] = True
+        self._save_gui_settings()
+        
+        if hasattr(self, 'statusBar'):
+            self.statusBar().showMessage("All tabs now visible", 3000)
     
     def update_tab_visibility(self, module_id: str = None, enabled: bool = None):
         """
@@ -5587,6 +5668,49 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                 QMessageBox.information(self, "Success", f"Created model '{result['name']}'{base_msg}")
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
+    
+    def _update_ai_status(self):
+        """Update AI connection status display."""
+        try:
+            status_parts = []
+            color = "#2ecc71"  # Default green
+            
+            # Check if model is loaded
+            if self.model is not None:
+                status_parts.append("Model: Ready")
+            elif self.current_model_name:
+                status_parts.append(f"Model: {self.current_model_name}")
+            else:
+                status_parts.append("No Model")
+                color = "#f39c12"  # Orange
+            
+            # Check loaded modules
+            if self.module_manager:
+                loaded = self.module_manager.list_loaded()
+                if loaded:
+                    # Show count and a few names
+                    count = len(loaded)
+                    if count <= 3:
+                        mod_str = ", ".join(loaded)
+                    else:
+                        mod_str = f"{count} modules"
+                    status_parts.append(f"Modules: {mod_str}")
+            
+            # Build final status
+            status_text = " | ".join(status_parts) if status_parts else "AI: Disconnected"
+            
+            if hasattr(self, 'ai_status_label'):
+                self.ai_status_label.setText(status_text)
+                self.ai_status_label.setStyleSheet(f"""
+                    QLabel {{
+                        color: {color};
+                        padding: 2px 8px;
+                        font-size: 11px;
+                    }}
+                """)
+        except Exception as e:
+            if hasattr(self, 'ai_status_label'):
+                self.ai_status_label.setText(f"AI: Error ({e})")
     
     def _on_open_model(self):
         dialog = ModelManagerDialog(self.registry, self.current_model_name, self)

@@ -1489,70 +1489,68 @@ def create_settings_tab(parent):
     
     layout.addWidget(power_group)
 
-    # === THEME SELECTOR ===
-    theme_group = QGroupBox("Theme")
-    theme_layout = QVBoxLayout(theme_group)
+    # === DISPLAY SETTINGS (using centralized UI settings) ===
+    display_group = QGroupBox("Display Settings")
+    display_layout = QVBoxLayout(display_group)
 
-    theme_desc = QLabel(
-        "Choose a visual theme for the application. "
-        "Changes apply immediately."
+    display_desc = QLabel(
+        "Adjust font size, theme, and overall appearance. "
+        "Changes apply immediately and are saved automatically."
     )
-    theme_desc.setWordWrap(True)
-    theme_layout.addWidget(theme_desc)
+    display_desc.setWordWrap(True)
+    display_layout.addWidget(display_desc)
 
+    # Font scale
+    scale_row = QHBoxLayout()
+    scale_row.addWidget(QLabel("Font Scale:"))
+
+    parent.font_scale_combo = NoScrollComboBox()
+    parent.font_scale_combo.setToolTip("Adjust text size throughout the application")
+    parent.font_scale_combo.addItem("Tiny (75%)", 0.75)
+    parent.font_scale_combo.addItem("Small (90%)", 0.9)
+    parent.font_scale_combo.addItem("Normal (100%)", 1.0)
+    parent.font_scale_combo.addItem("Large (120%)", 1.2)
+    parent.font_scale_combo.addItem("Extra Large (150%)", 1.5)
+    parent.font_scale_combo.addItem("Huge (200%)", 2.0)
+    parent.font_scale_combo.setCurrentIndex(2)  # Default to Normal
+    parent.font_scale_combo.currentIndexChanged.connect(
+        lambda idx: _apply_font_scale(parent)
+    )
+    scale_row.addWidget(parent.font_scale_combo)
+    scale_row.addStretch()
+    display_layout.addLayout(scale_row)
+
+    # Theme selector
     theme_row = QHBoxLayout()
     theme_row.addWidget(QLabel("Theme:"))
 
     parent.theme_combo = NoScrollComboBox()
     parent.theme_combo.setToolTip("Select visual theme")
-    parent.theme_combo.addItem("Dark (Default)", "dark")
-    parent.theme_combo.addItem("Light", "light")
+    parent.theme_combo.addItem("Dark", "dark")
     parent.theme_combo.addItem("Cerulean", "cerulean")
-    parent.theme_combo.addItem("High Contrast", "high_contrast")
+    parent.theme_combo.addItem("Cerulean Light", "cerulean_light")
     parent.theme_combo.addItem("Midnight", "midnight")
-    parent.theme_combo.addItem("Forest", "forest")
-    parent.theme_combo.addItem("Sunset", "sunset")
+    parent.theme_combo.addItem("Shadow", "shadow")
+    parent.theme_combo.addItem("Ocean Cerulean", "ocean_cerulean")
+    parent.theme_combo.setCurrentIndex(1)  # Default to Cerulean
     parent.theme_combo.currentIndexChanged.connect(
-        lambda idx: _apply_theme(parent)
+        lambda idx: _apply_ui_theme(parent)
     )
     theme_row.addWidget(parent.theme_combo)
-
     theme_row.addStretch()
-    theme_layout.addLayout(theme_row)
+    display_layout.addLayout(theme_row)
 
+    # Theme preview/description
     parent.theme_description_label = QLabel(
-        "Dark theme with soft colors (default)"
+        "True Cerulean (#007bb5) with complementary colors"
     )
     parent.theme_description_label.setStyleSheet("color: #888; font-style: italic;")
-    theme_layout.addWidget(parent.theme_description_label)
+    display_layout.addWidget(parent.theme_description_label)
 
-    layout.addWidget(theme_group)
+    # Load current settings from UI settings
+    _init_display_settings(parent)
 
-    # === ZOOM / TEXT SIZE ===
-    zoom_group = QGroupBox("Display Zoom")
-    zoom_layout = QVBoxLayout(zoom_group)
-
-    zoom_row = QHBoxLayout()
-    zoom_row.addWidget(QLabel("Zoom Level:"))
-
-    parent.zoom_spinbox = QSpinBox()
-    parent.zoom_spinbox.setRange(80, 200)
-    parent.zoom_spinbox.setValue(100)
-    parent.zoom_spinbox.setSuffix("%")
-    parent.zoom_spinbox.setSingleStep(5)
-    parent.zoom_spinbox.setMinimumWidth(80)
-    parent.zoom_spinbox.valueChanged.connect(
-        lambda val: _apply_zoom(parent, val)
-    )
-    zoom_row.addWidget(parent.zoom_spinbox)
-
-    reset_zoom_btn = QPushButton("Reset to 100%")
-    reset_zoom_btn.clicked.connect(lambda: _reset_zoom(parent))
-    zoom_row.addWidget(reset_zoom_btn)
-    
-    zoom_row.addStretch()
-    zoom_layout.addLayout(zoom_row)
-    layout.addWidget(zoom_group)
+    layout.addWidget(display_group)
 
     # === CLOUD AI MODE ===
     cloud_group = QGroupBox("Cloud/API AI Mode")
@@ -2628,7 +2626,7 @@ def _load_saved_settings(parent):
 
 
 def _apply_theme(parent):
-    """Apply selected theme to the application."""
+    """Apply selected theme to the application (old system - kept for compatibility)."""
     theme_id = parent.theme_combo.currentData()
 
     # Theme descriptions
@@ -2664,6 +2662,88 @@ def _apply_theme(parent):
         )
     except Exception as e:
         QMessageBox.warning(parent, "Error", f"Failed to apply theme: {e}")
+
+
+def _init_display_settings(parent):
+    """Initialize display settings from the UI settings system."""
+    try:
+        from ..ui_settings import get_ui_settings
+        ui_settings = get_ui_settings()
+        
+        # Set font scale combo to current value
+        current_scale = ui_settings.scale
+        scale_map = {0.75: 0, 0.9: 1, 1.0: 2, 1.2: 3, 1.5: 4, 2.0: 5}
+        closest_index = 2  # Default to Normal
+        for scale_val, idx in scale_map.items():
+            if abs(current_scale - scale_val) < 0.05:
+                closest_index = idx
+                break
+        parent.font_scale_combo.blockSignals(True)
+        parent.font_scale_combo.setCurrentIndex(closest_index)
+        parent.font_scale_combo.blockSignals(False)
+        
+        # Set theme combo to current value
+        current_theme = ui_settings.current_theme
+        theme_map = {"dark": 0, "cerulean": 1, "cerulean_light": 2, "midnight": 3, "shadow": 4, "ocean_cerulean": 5}
+        if current_theme in theme_map:
+            parent.theme_combo.blockSignals(True)
+            parent.theme_combo.setCurrentIndex(theme_map[current_theme])
+            parent.theme_combo.blockSignals(False)
+            
+        # Update description
+        _update_theme_description(parent)
+    except Exception as e:
+        print(f"Could not initialize display settings: {e}")
+
+
+def _apply_font_scale(parent):
+    """Apply font scale to the application."""
+    try:
+        from ..ui_settings import get_ui_settings
+        scale = parent.font_scale_combo.currentData()
+        if scale:
+            ui_settings = get_ui_settings()
+            ui_settings.set_scale(scale)
+            
+            # Apply to main window
+            main_window = parent.window()
+            if main_window:
+                main_window.setStyleSheet(ui_settings.get_global_stylesheet())
+    except Exception as e:
+        print(f"Could not apply font scale: {e}")
+
+
+def _apply_ui_theme(parent):
+    """Apply UI theme using the new centralized settings."""
+    try:
+        from ..ui_settings import get_ui_settings
+        theme_id = parent.theme_combo.currentData()
+        if theme_id:
+            ui_settings = get_ui_settings()
+            ui_settings.set_theme(theme_id)
+            
+            # Apply to main window
+            main_window = parent.window()
+            if main_window:
+                main_window.setStyleSheet(ui_settings.get_global_stylesheet())
+            
+            _update_theme_description(parent)
+    except Exception as e:
+        print(f"Could not apply theme: {e}")
+
+
+def _update_theme_description(parent):
+    """Update the theme description label."""
+    descriptions = {
+        "dark": "Classic dark theme with soft grays",
+        "cerulean": "True Cerulean (#007bb5) primary color",
+        "cerulean_light": "Light theme with Cerulean accents",
+        "midnight": "Deep blue midnight theme",
+        "shadow": "Extra dark with subtle accents",
+        "ocean_cerulean": "Ocean blues with Cerulean highlights"
+    }
+    theme_id = parent.theme_combo.currentData()
+    parent.theme_description_label.setText(descriptions.get(theme_id, ""))
 
 
 def _apply_resource_mode(parent):

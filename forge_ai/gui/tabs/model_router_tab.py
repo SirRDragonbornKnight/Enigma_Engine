@@ -391,37 +391,63 @@ class ModelRouterTab(QWidget):
         
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
-        # Header
+        # Header with title and buttons
         header = QHBoxLayout()
+        header.setSpacing(12)
         
         title = QLabel("Model Router")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #007bb5;")
         header.addWidget(title)
         
         header.addStretch()
         
-        # Save button
-        save_btn = QPushButton("Save Configuration")
+        # Save button - styled
+        save_btn = QPushButton("Save")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background: #007bb5;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: #0095d9;
+            }
+        """)
         save_btn.clicked.connect(self._save_config)
         header.addWidget(save_btn)
         
-        # Reset button
-        reset_btn = QPushButton("Reset to Defaults")
+        # Reset button - subtle
+        reset_btn = QPushButton("Reset")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background: #2d2d2d;
+                color: #888;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background: #3d3d3d;
+                color: #aaa;
+            }
+        """)
         reset_btn.clicked.connect(self._reset_defaults)
         header.addWidget(reset_btn)
         
         layout.addLayout(header)
         
-        # Description
+        # Description - cleaner
         desc = QLabel(
-            "Assign AI models to each tool. Higher priority numbers are tried first. "
-            "Select a model from the dropdown and click + to add, - to remove."
+            "Assign AI models to tools below. Higher priority = tried first."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #888; margin-bottom: 10px;")
+        desc.setStyleSheet("color: #666; font-size: 11px; margin-bottom: 8px;")
         layout.addWidget(desc)
         
         # Scroll area for tools

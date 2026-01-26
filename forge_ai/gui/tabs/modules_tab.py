@@ -46,6 +46,7 @@ class ModuleListItem(QFrame):
         self.module_id = module_id
         self.module_info = module_info
         self.is_loaded = False
+        self.is_processing = False  # Flag to prevent double-clicks
         self._setup_ui()
         
     def _setup_ui(self):
@@ -140,6 +141,21 @@ class ModuleListItem(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     color: #666;
+                    font-size: 10px;
+                    font-weight: bold;
+                }
+            """)
+        self.is_processing = False
+    
+    def set_processing(self, processing: bool):
+        """Set processing state - disables toggle during load/unload."""
+        self.is_processing = processing
+        self.toggle.setEnabled(not processing)
+        if processing:
+            self.status_label.setText("...")
+            self.status_label.setStyleSheet("""
+                QLabel {
+                    color: #f39c12;
                     font-size: 10px;
                     font-weight: bold;
                 }
@@ -455,6 +471,15 @@ class ModulesTab(QWidget):
     
     def _on_toggle(self, module_id: str, state: int):
         """Handle module toggle."""
+        # Check if item exists and is not already processing
+        if module_id in self.module_items:
+            item = self.module_items[module_id]
+            if item.is_processing:
+                # Already processing - ignore this click
+                return
+            # Set processing state to prevent double-clicks
+            item.set_processing(True)
+        
         enabled = state == Checked
         action = "Loading" if enabled else "Unloading"
         self._log(f"{action} {module_id}...")
@@ -480,6 +505,7 @@ class ModulesTab(QWidget):
                         item.toggle.blockSignals(True)
                         item.toggle.setChecked(not enabled)
                         item.toggle.blockSignals(False)
+                        item.set_processing(False)
                     return
                 
                 self._sync_options_menu(module_id, enabled)
