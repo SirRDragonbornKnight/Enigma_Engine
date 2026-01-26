@@ -55,6 +55,12 @@ pyscreenshot>=3.0
 # === MONITORING (Optional) ===
 # For resource monitoring:
 psutil>=5.9.0
+pynvml>=11.0.0            # NVIDIA GPU monitoring
+GPUtil>=1.4.0             # GPU utilization
+
+# === VOICE (Advanced) ===
+# Whisper for high-quality speech recognition:
+openai-whisper>=20230314
 
 # === CAMERA (Recommended) ===
 # For webcam support - install if using Camera tab:
