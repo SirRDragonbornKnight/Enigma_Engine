@@ -172,7 +172,7 @@ class PerformanceMonitor:
         """Initialize GPU monitoring."""
         # Try pynvml for NVIDIA
         try:
-            import pynvml
+            import pynvml  # type: ignore
             pynvml.nvmlInit()
             return {"type": "nvidia", "lib": pynvml}
         except Exception:
@@ -180,7 +180,7 @@ class PerformanceMonitor:
         
         # Try GPUtil as fallback
         try:
-            import GPUtil
+            import GPUtil  # type: ignore
             return {"type": "gputil", "lib": GPUtil}
         except Exception:
             pass

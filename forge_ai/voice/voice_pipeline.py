@@ -281,7 +281,7 @@ class VoicePipeline:
     def _init_whisper(self):
         """Initialize Whisper STT."""
         try:
-            import whisper
+            import whisper  # type: ignore
             model = whisper.load_model("base")
             return {"type": "whisper", "model": model}
         except ImportError:

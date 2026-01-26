@@ -192,7 +192,7 @@ class PiRobotController:
     def _init_gpio(self):
         """Initialize GPIO (with graceful fallback)."""
         try:
-            import RPi.GPIO as GPIO
+            import RPi.GPIO as GPIO  # type: ignore
             self._gpio = GPIO
             GPIO.setmode(GPIO.BCM)
             GPIO.setwarnings(False)
