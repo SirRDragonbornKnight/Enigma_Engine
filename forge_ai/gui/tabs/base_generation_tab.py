@@ -2,10 +2,10 @@
 Base Generation Tab - Shared foundation for all AI generation tabs.
 
 This base class provides:
-  - Consistent header styling
+  - Consistent header styling (device-aware)
   - Standard progress/status layout
   - Provider management patterns
-  - Common button styles
+  - Common button styles (from unified_patterns)
   - Auto-open functionality
   - Standardized error handling
 
@@ -30,13 +30,48 @@ except ImportError:
 from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 from .output_helpers import open_file_in_explorer, open_in_default_viewer, open_folder
 
+# Import unified patterns for device-aware styling
+try:
+    from .unified_patterns import (
+        get_style_config, get_button_style, get_progress_style,
+        get_group_style, Colors
+    )
+    HAS_UNIFIED = True
+except ImportError:
+    HAS_UNIFIED = False
+
 
 # =============================================================================
-# Consistent Style Constants
+# Consistent Style Constants (fallback if unified_patterns unavailable)
 # =============================================================================
 
-# Button styles - use these for consistency across all tabs
-BUTTON_STYLE_PRIMARY = """
+def _get_button_primary():
+    """Get primary button style, using unified_patterns if available."""
+    if HAS_UNIFIED:
+        return get_button_style('primary')
+    return BUTTON_STYLE_PRIMARY_FALLBACK
+
+def _get_button_secondary():
+    """Get secondary button style, using unified_patterns if available."""
+    if HAS_UNIFIED:
+        return get_button_style('secondary')
+    return BUTTON_STYLE_SECONDARY_FALLBACK
+
+def _get_button_success():
+    """Get success button style, using unified_patterns if available."""
+    if HAS_UNIFIED:
+        return get_button_style('success')
+    return BUTTON_STYLE_SUCCESS_FALLBACK
+
+def _get_button_danger():
+    """Get danger button style, using unified_patterns if available."""
+    if HAS_UNIFIED:
+        return get_button_style('danger')
+    return BUTTON_STYLE_DANGER_FALLBACK
+
+
+# Fallback button styles (when unified_patterns is not available)
+BUTTON_STYLE_PRIMARY_FALLBACK = """
     QPushButton {
         background-color: #3498db;
         color: white;
@@ -58,7 +93,7 @@ BUTTON_STYLE_PRIMARY = """
     }
 """
 
-BUTTON_STYLE_SECONDARY = """
+BUTTON_STYLE_SECONDARY_FALLBACK = """
     QPushButton {
         background-color: #45475a;
         color: #cdd6f4;
@@ -79,7 +114,7 @@ BUTTON_STYLE_SECONDARY = """
     }
 """
 
-BUTTON_STYLE_SUCCESS = """
+BUTTON_STYLE_SUCCESS_FALLBACK = """
     QPushButton {
         background-color: #a6e3a1;
         color: #1e1e2e;
@@ -101,7 +136,7 @@ BUTTON_STYLE_SUCCESS = """
     }
 """
 
-BUTTON_STYLE_DANGER = """
+BUTTON_STYLE_DANGER_FALLBACK = """
     QPushButton {
         background-color: #f38ba8;
         color: #1e1e2e;
@@ -122,6 +157,13 @@ BUTTON_STYLE_DANGER = """
         color: #6c7086;
     }
 """
+
+# For backwards compatibility, expose both fallback constants and getter functions
+# Use getter functions for device-aware styles
+BUTTON_STYLE_PRIMARY = BUTTON_STYLE_PRIMARY_FALLBACK
+BUTTON_STYLE_SECONDARY = BUTTON_STYLE_SECONDARY_FALLBACK
+BUTTON_STYLE_SUCCESS = BUTTON_STYLE_SUCCESS_FALLBACK
+BUTTON_STYLE_DANGER = BUTTON_STYLE_DANGER_FALLBACK
 
 HEADER_STYLE = """
     QLabel {

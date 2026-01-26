@@ -134,7 +134,7 @@ def ai_profile_page():
 
 @app.route('/api/status')
 def api_status():
-    """Get system status."""
+    """Get system status with device profile information."""
     engine = get_engine()
     
     status = {
@@ -143,6 +143,24 @@ def api_status():
         'model_name': _model_name,
         'timestamp': datetime.now().isoformat()
     }
+    
+    # Get device profile info
+    try:
+        from ..core.device_profiles import get_device_profiler
+        profiler = get_device_profiler()
+        caps = profiler.detect()
+        status['device'] = {
+            'class': profiler.classify().name,
+            'torch_device': profiler.get_torch_device(),
+            'recommended_model': profiler.get_recommended_model_size(),
+            'cpu_cores': caps.cpu_cores,
+            'ram_mb': caps.ram_total_mb,
+            'has_gpu': caps.has_gpu,
+            'gpu_name': caps.gpu_name if caps.has_gpu else None,
+            'vram_mb': caps.vram_total_mb if caps.has_gpu else None,
+        }
+    except ImportError:
+        pass
     
     # Get instance info
     try:

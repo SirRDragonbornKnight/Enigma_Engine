@@ -1,0 +1,675 @@
+"""
+Unified Tab Patterns - Standard patterns for consistent GUI behavior.
+
+This module provides:
+- Standard styling that works across all themes
+- Common layout patterns for generation tabs
+- Device-aware UI adjustments
+- Shared worker base with proper cleanup
+- Memory-efficient preview handling
+
+All generation tabs should use these patterns for consistency.
+"""
+
+import os
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+import gc
+import logging
+
+try:
+    from PyQt5.QtWidgets import (
+        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+        QPushButton, QProgressBar, QGroupBox, QFrame,
+        QSizePolicy, QSpacerItem, QTextEdit, QSpinBox,
+        QDoubleSpinBox, QCheckBox, QApplication
+    )
+    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer
+    from PyQt5.QtGui import QFont, QPixmap, QImage
+    HAS_PYQT = True
+except ImportError:
+    HAS_PYQT = False
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Device-Aware Style Configuration
+# =============================================================================
+
+class StyleConfig:
+    """
+    Device-aware style configuration.
+    
+    Adjusts UI elements based on device capabilities:
+    - Smaller fonts/buttons on low-res screens
+    - Reduced animations on low-power devices
+    - Memory-efficient preview sizes
+    """
+    
+    def __init__(self):
+        self._device_class = None
+        self._screen_dpi = 96
+        self._detect_device()
+    
+    def _detect_device(self):
+        """Detect device class and screen properties."""
+        try:
+            from ...core.device_profiles import get_device_profiler, DeviceClass
+            profiler = get_device_profiler()
+            self._device_class = profiler.classify()
+        except ImportError:
+            self._device_class = None
+        
+        if HAS_PYQT:
+            try:
+                app = QApplication.instance()
+                if app:
+                    screen = app.primaryScreen()
+                    if screen:
+                        self._screen_dpi = screen.logicalDotsPerInch()
+            except:
+                pass
+    
+    @property
+    def is_low_power(self) -> bool:
+        """Check if running on low-power device."""
+        if self._device_class is None:
+            return False
+        try:
+            from ...core.device_profiles import DeviceClass
+            return self._device_class in {
+                DeviceClass.EMBEDDED,
+                DeviceClass.MOBILE,
+                DeviceClass.LAPTOP_LOW,
+            }
+        except ImportError:
+            return False
+    
+    @property
+    def base_font_size(self) -> int:
+        """Get appropriate base font size."""
+        if self._screen_dpi < 100 or self.is_low_power:
+            return 10
+        elif self._screen_dpi > 150:
+            return 12
+        return 11
+    
+    @property
+    def button_padding(self) -> str:
+        """Get button padding CSS."""
+        if self.is_low_power:
+            return "4px 8px"
+        return "8px 16px"
+    
+    @property
+    def preview_max_size(self) -> int:
+        """Max size for image previews."""
+        if self.is_low_power:
+            return 256
+        return 512
+    
+    @property
+    def enable_animations(self) -> bool:
+        """Whether to enable UI animations."""
+        return not self.is_low_power
+
+
+# Singleton style config
+_style_config: Optional[StyleConfig] = None
+
+def get_style_config() -> StyleConfig:
+    """Get the global style configuration."""
+    global _style_config
+    if _style_config is None:
+        _style_config = StyleConfig()
+    return _style_config
+
+
+# =============================================================================
+# Unified Color Palette
+# =============================================================================
+
+class Colors:
+    """
+    Catppuccin-inspired color palette.
+    
+    These colors work well in both light and dark themes.
+    """
+    # Background colors
+    BG_PRIMARY = "#1e1e2e"
+    BG_SECONDARY = "#313244"
+    BG_TERTIARY = "#45475a"
+    
+    # Text colors
+    TEXT_PRIMARY = "#cdd6f4"
+    TEXT_SECONDARY = "#a6adc8"
+    TEXT_MUTED = "#6c7086"
+    
+    # Accent colors
+    ACCENT_BLUE = "#89b4fa"
+    ACCENT_GREEN = "#a6e3a1"
+    ACCENT_RED = "#f38ba8"
+    ACCENT_YELLOW = "#f9e2af"
+    ACCENT_PURPLE = "#cba6f7"
+    ACCENT_TEAL = "#94e2d5"
+    
+    # Semantic colors
+    SUCCESS = ACCENT_GREEN
+    ERROR = ACCENT_RED
+    WARNING = ACCENT_YELLOW
+    INFO = ACCENT_BLUE
+
+
+# =============================================================================
+# Unified Style Sheets
+# =============================================================================
+
+def get_button_style(style_type: str = "primary") -> str:
+    """Get consistent button stylesheet."""
+    config = get_style_config()
+    padding = config.button_padding
+    font_size = config.base_font_size
+    
+    styles = {
+        "primary": f"""
+            QPushButton {{
+                background-color: {Colors.ACCENT_BLUE};
+                color: {Colors.BG_PRIMARY};
+                border: none;
+                border-radius: 6px;
+                padding: {padding};
+                font-weight: bold;
+                font-size: {font_size}px;
+            }}
+            QPushButton:hover {{
+                background-color: #7aa2f7;
+            }}
+            QPushButton:pressed {{
+                background-color: #5d87e0;
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.BG_TERTIARY};
+                color: {Colors.TEXT_MUTED};
+            }}
+        """,
+        "secondary": f"""
+            QPushButton {{
+                background-color: {Colors.BG_TERTIARY};
+                color: {Colors.TEXT_PRIMARY};
+                border: none;
+                border-radius: 6px;
+                padding: {padding};
+                font-size: {font_size}px;
+            }}
+            QPushButton:hover {{
+                background-color: #585b70;
+            }}
+            QPushButton:pressed {{
+                background-color: {Colors.BG_SECONDARY};
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.BG_SECONDARY};
+                color: {Colors.TEXT_MUTED};
+            }}
+        """,
+        "success": f"""
+            QPushButton {{
+                background-color: {Colors.SUCCESS};
+                color: {Colors.BG_PRIMARY};
+                border: none;
+                border-radius: 6px;
+                padding: {padding};
+                font-weight: bold;
+                font-size: {font_size}px;
+            }}
+            QPushButton:hover {{
+                background-color: {Colors.ACCENT_TEAL};
+            }}
+            QPushButton:pressed {{
+                background-color: #74c7a0;
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.BG_TERTIARY};
+                color: {Colors.TEXT_MUTED};
+            }}
+        """,
+        "danger": f"""
+            QPushButton {{
+                background-color: {Colors.ERROR};
+                color: {Colors.BG_PRIMARY};
+                border: none;
+                border-radius: 6px;
+                padding: {padding};
+                font-weight: bold;
+                font-size: {font_size}px;
+            }}
+            QPushButton:hover {{
+                background-color: #f5c2e7;
+            }}
+            QPushButton:pressed {{
+                background-color: #d06080;
+            }}
+            QPushButton:disabled {{
+                background-color: {Colors.BG_TERTIARY};
+                color: {Colors.TEXT_MUTED};
+            }}
+        """,
+    }
+    
+    return styles.get(style_type, styles["primary"])
+
+
+def get_header_style() -> str:
+    """Get header label stylesheet."""
+    config = get_style_config()
+    return f"""
+        QLabel {{
+            font-size: {config.base_font_size + 4}px;
+            font-weight: bold;
+            color: {Colors.TEXT_PRIMARY};
+            padding: 4px 0;
+        }}
+    """
+
+
+def get_status_style() -> str:
+    """Get status label stylesheet."""
+    config = get_style_config()
+    return f"""
+        QLabel {{
+            color: {Colors.TEXT_SECONDARY};
+            font-size: {config.base_font_size}px;
+            padding: 2px 4px;
+        }}
+    """
+
+
+def get_progress_style() -> str:
+    """Get progress bar stylesheet."""
+    return f"""
+        QProgressBar {{
+            border: 1px solid {Colors.BG_TERTIARY};
+            border-radius: 4px;
+            background-color: {Colors.BG_SECONDARY};
+            height: 8px;
+            text-align: center;
+        }}
+        QProgressBar::chunk {{
+            background-color: {Colors.ACCENT_BLUE};
+            border-radius: 3px;
+        }}
+    """
+
+
+def get_preview_style() -> str:
+    """Get preview area stylesheet."""
+    return f"""
+        QLabel {{
+            background-color: {Colors.BG_SECONDARY};
+            border: 1px solid {Colors.BG_TERTIARY};
+            border-radius: 4px;
+            padding: 8px;
+        }}
+    """
+
+
+def get_group_style() -> str:
+    """Get group box stylesheet."""
+    config = get_style_config()
+    return f"""
+        QGroupBox {{
+            font-weight: bold;
+            font-size: {config.base_font_size}px;
+            border: 1px solid {Colors.BG_TERTIARY};
+            border-radius: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px;
+            color: {Colors.ACCENT_BLUE};
+        }}
+    """
+
+
+def get_input_style() -> str:
+    """Get text input stylesheet."""
+    config = get_style_config()
+    return f"""
+        QTextEdit, QLineEdit {{
+            background-color: {Colors.BG_SECONDARY};
+            color: {Colors.TEXT_PRIMARY};
+            border: 1px solid {Colors.BG_TERTIARY};
+            border-radius: 4px;
+            padding: 4px;
+            font-size: {config.base_font_size}px;
+        }}
+        QTextEdit:focus, QLineEdit:focus {{
+            border-color: {Colors.ACCENT_BLUE};
+        }}
+    """
+
+
+# =============================================================================
+# Memory-Efficient Preview Handling
+# =============================================================================
+
+class PreviewManager:
+    """
+    Memory-efficient preview image management.
+    
+    - Scales images to reasonable preview sizes
+    - Caches pixmaps for quick redisplay
+    - Clears cache on low memory
+    """
+    
+    def __init__(self, max_cache_items: int = 5):
+        self._cache: Dict[str, QPixmap] = {}
+        self._max_cache = max_cache_items
+        self._access_order: List[str] = []
+    
+    def load_preview(
+        self,
+        path: str,
+        max_width: int = None,
+        max_height: int = None
+    ) -> Optional['QPixmap']:
+        """
+        Load an image as a scaled preview.
+        
+        Args:
+            path: Path to image file
+            max_width: Maximum width (default: from style config)
+            max_height: Maximum height (default: same as width)
+            
+        Returns:
+            QPixmap scaled to fit within bounds
+        """
+        if not HAS_PYQT:
+            return None
+        
+        config = get_style_config()
+        max_width = max_width or config.preview_max_size
+        max_height = max_height or max_width
+        
+        cache_key = f"{path}_{max_width}x{max_height}"
+        
+        # Check cache
+        if cache_key in self._cache:
+            # Move to end of access order
+            if cache_key in self._access_order:
+                self._access_order.remove(cache_key)
+            self._access_order.append(cache_key)
+            return self._cache[cache_key]
+        
+        # Load and scale
+        try:
+            pixmap = QPixmap(path)
+            if pixmap.isNull():
+                return None
+            
+            scaled = pixmap.scaled(
+                max_width, max_height,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            
+            # Add to cache
+            self._cache[cache_key] = scaled
+            self._access_order.append(cache_key)
+            
+            # Prune cache if needed
+            while len(self._cache) > self._max_cache:
+                oldest = self._access_order.pop(0)
+                if oldest in self._cache:
+                    del self._cache[oldest]
+            
+            return scaled
+            
+        except Exception as e:
+            logger.warning(f"Could not load preview {path}: {e}")
+            return None
+    
+    def clear_cache(self):
+        """Clear all cached previews."""
+        self._cache.clear()
+        self._access_order.clear()
+        gc.collect()
+
+
+# Singleton preview manager
+_preview_manager: Optional[PreviewManager] = None
+
+def get_preview_manager() -> PreviewManager:
+    """Get the global preview manager."""
+    global _preview_manager
+    if _preview_manager is None:
+        _preview_manager = PreviewManager()
+    return _preview_manager
+
+
+# =============================================================================
+# Unified Worker Base
+# =============================================================================
+
+if HAS_PYQT:
+    class UnifiedWorker(QThread):
+        """
+        Base worker class with proper cleanup and cancellation.
+        
+        All generation workers should inherit from this.
+        """
+        finished = pyqtSignal(dict)
+        progress = pyqtSignal(int)
+        status = pyqtSignal(str)
+        
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._stop_requested = False
+            self._start_time = 0.0
+        
+        def request_stop(self):
+            """Request graceful stop."""
+            self._stop_requested = True
+        
+        def is_stopped(self) -> bool:
+            """Check if stop was requested."""
+            return self._stop_requested
+        
+        def start_timer(self):
+            """Start timing the operation."""
+            import time
+            self._start_time = time.time()
+        
+        def get_duration(self) -> float:
+            """Get elapsed time since start_timer()."""
+            import time
+            return time.time() - self._start_time
+        
+        def emit_success(self, path: str = "", extra: Dict = None):
+            """Emit a successful result."""
+            result = {
+                "success": True,
+                "path": path,
+                "duration": self.get_duration(),
+            }
+            if extra:
+                result.update(extra)
+            self.finished.emit(result)
+        
+        def emit_error(self, error: str):
+            """Emit an error result."""
+            self.finished.emit({
+                "success": False,
+                "error": error,
+                "duration": self.get_duration(),
+            })
+        
+        def emit_cancelled(self):
+            """Emit a cancelled result."""
+            self.finished.emit({
+                "success": False,
+                "error": "Cancelled by user",
+                "cancelled": True,
+                "duration": self.get_duration(),
+            })
+        
+        def run(self):
+            """Override this in subclasses."""
+            raise NotImplementedError("Subclasses must implement run()")
+        
+        def cleanup(self):
+            """
+            Override this for cleanup after run completes.
+            Called automatically via finished signal if connected properly.
+            """
+            gc.collect()
+
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def create_styled_button(
+    text: str,
+    style: str = "primary",
+    tooltip: str = "",
+    min_width: int = 80,
+) -> 'QPushButton':
+    """Create a consistently styled button."""
+    if not HAS_PYQT:
+        return None
+    
+    btn = QPushButton(text)
+    btn.setStyleSheet(get_button_style(style))
+    btn.setMinimumWidth(min_width)
+    if tooltip:
+        btn.setToolTip(tooltip)
+    return btn
+
+
+def create_styled_group(title: str) -> 'QGroupBox':
+    """Create a consistently styled group box."""
+    if not HAS_PYQT:
+        return None
+    
+    group = QGroupBox(title)
+    group.setStyleSheet(get_group_style())
+    return group
+
+
+def create_spinner(
+    min_val: int,
+    max_val: int,
+    default: int,
+    suffix: str = "",
+    tooltip: str = "",
+) -> 'QSpinBox':
+    """Create a consistently styled spin box."""
+    if not HAS_PYQT:
+        return None
+    
+    spinner = QSpinBox()
+    spinner.setRange(min_val, max_val)
+    spinner.setValue(default)
+    if suffix:
+        spinner.setSuffix(suffix)
+    if tooltip:
+        spinner.setToolTip(tooltip)
+    return spinner
+
+
+def create_double_spinner(
+    min_val: float,
+    max_val: float,
+    default: float,
+    step: float = 0.1,
+    decimals: int = 1,
+    suffix: str = "",
+    tooltip: str = "",
+) -> 'QDoubleSpinBox':
+    """Create a consistently styled double spin box."""
+    if not HAS_PYQT:
+        return None
+    
+    spinner = QDoubleSpinBox()
+    spinner.setRange(min_val, max_val)
+    spinner.setValue(default)
+    spinner.setSingleStep(step)
+    spinner.setDecimals(decimals)
+    if suffix:
+        spinner.setSuffix(suffix)
+    if tooltip:
+        spinner.setToolTip(tooltip)
+    return spinner
+
+
+def open_in_explorer(path: str):
+    """Open file location in system file explorer."""
+    import subprocess
+    import sys
+    
+    path = str(path)
+    
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", "/select,", path])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", path])
+    else:
+        subprocess.Popen(["xdg-open", str(Path(path).parent)])
+
+
+def open_in_viewer(path: str):
+    """Open file in default application."""
+    import subprocess
+    import sys
+    
+    path = str(path)
+    
+    if sys.platform == "win32":
+        os.startfile(path)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
+
+# =============================================================================
+# Exports
+# =============================================================================
+
+__all__ = [
+    # Style config
+    'StyleConfig',
+    'get_style_config',
+    'Colors',
+    
+    # Style functions
+    'get_button_style',
+    'get_header_style',
+    'get_status_style',
+    'get_progress_style',
+    'get_preview_style',
+    'get_group_style',
+    'get_input_style',
+    
+    # Preview management
+    'PreviewManager',
+    'get_preview_manager',
+    
+    # Worker base
+    'UnifiedWorker',
+    
+    # Factory functions
+    'create_styled_button',
+    'create_styled_group',
+    'create_spinner',
+    'create_double_spinner',
+    
+    # Utilities
+    'open_in_explorer',
+    'open_in_viewer',
+]

@@ -8,6 +8,16 @@ from .protocol_manager import ProtocolManager, ProtocolConfig, get_protocol_mana
 from .remote_client import RemoteClient
 from .api_server import create_api_server
 
+# Distributed protocol (hardware-aware)
+try:
+    from .distributed import (
+        DistributedNode, NodeRole, MessageType, ProtocolMessage, NodeInfo,
+        create_server, create_client,
+    )
+    HAS_DISTRIBUTED = True
+except ImportError:
+    HAS_DISTRIBUTED = False
+
 # Optional imports (may require Flask)
 try:
     from .mobile_api import MobileAPI, create_mobile_api
@@ -23,6 +33,15 @@ __all__ = [
     "ModelExporter",
     "create_server_node",
     "create_client_node",
+    
+    # Distributed protocol (hardware-aware)
+    "DistributedNode",
+    "NodeRole",
+    "MessageType",
+    "ProtocolMessage",
+    "NodeInfo",
+    "create_server",
+    "create_client",
     
     # Discovery
     "DeviceDiscovery",

@@ -126,16 +126,54 @@ class MobileAPI:
         
         @self.app.route("/status")
         def status():
-            """Lightweight status check."""
-            from ..core.hardware import get_hardware
-            hw = get_hardware()
-            
-            return jsonify({
-                "ok": True,
-                "model": self.model_name or "default",
-                "device": hw.get_device(),
-                "recommended_size": hw.profile["recommended_model_size"],
-            })
+            """Lightweight status check with device-aware info."""
+            # Use device profiles for better hardware detection
+            try:
+                from ..core.device_profiles import get_device_profiler
+                profiler = get_device_profiler()
+                device_class = profiler.classify()
+                caps = profiler.detect()
+                profile = profiler.get_profile()
+                
+                return jsonify({
+                    "ok": True,
+                    "model": self.model_name or "default",
+                    "device_class": device_class.name,
+                    "device": profiler.get_torch_device(),
+                    "recommended_size": profile.recommended_model_size,
+                    "hardware": {
+                        "cpu_cores": caps.cpu_cores,
+                        "ram_mb": caps.ram_total_mb,
+                        "has_gpu": caps.has_cuda or caps.has_mps,
+                        "gpu_name": caps.gpu_name if caps.has_cuda else None,
+                        "vram_mb": caps.vram_total_mb if caps.has_cuda else None,
+                    },
+                    "capabilities": {
+                        "can_serve_inference": profile.can_serve_inference,
+                        "can_serve_training": profile.can_serve_training,
+                        "use_quantization": profile.use_quantization,
+                        "max_batch_size": profile.max_batch_size,
+                        "max_sequence_length": profile.max_sequence_length,
+                    }
+                })
+            except ImportError:
+                # Fallback to old hardware module
+                try:
+                    from ..core.hardware import get_hardware
+                    hw = get_hardware()
+                    return jsonify({
+                        "ok": True,
+                        "model": self.model_name or "default",
+                        "device": hw.get_device(),
+                        "recommended_size": hw.profile.get("recommended_model_size", "tiny"),
+                    })
+                except ImportError:
+                    return jsonify({
+                        "ok": True,
+                        "model": self.model_name or "default",
+                        "device": "cpu",
+                        "recommended_size": "tiny",
+                    })
         
         @self.app.route("/chat", methods=["POST"])
         def chat():

@@ -2856,12 +2856,28 @@ def _apply_device_profile_fallback(parent, profile_id):
 
 
 def _auto_detect_profile(parent):
-    """Auto-detect the best profile for this hardware."""
+    """Auto-detect the best profile for this hardware using device_profiles module."""
     try:
-        from ...utils.hardware_profiles import get_profile_manager
+        # Try the new device_profiles module first (more accurate)
+        from ...core.device_profiles import get_device_profiler, DeviceClass
         
-        manager = get_profile_manager()
-        recommended = manager.auto_detect_profile()
+        profiler = get_device_profiler()
+        device_class = profiler.classify()
+        caps = profiler.detect()
+        
+        # Map DeviceClass to profile ID
+        class_to_profile = {
+            DeviceClass.EMBEDDED: "raspberry_pi",
+            DeviceClass.MOBILE: "phone",
+            DeviceClass.LAPTOP_LOW: "balanced",
+            DeviceClass.LAPTOP_MID: "balanced",
+            DeviceClass.DESKTOP_CPU: "balanced",
+            DeviceClass.DESKTOP_GPU: "pc_gaming" if caps.vram_total_mb < 8000 else "workstation",
+            DeviceClass.WORKSTATION: "workstation",
+            DeviceClass.DATACENTER: "workstation",
+        }
+        
+        recommended = class_to_profile.get(device_class, "balanced")
         
         # Find and select the recommended profile
         for i in range(parent.device_profile_combo.count()):
@@ -2869,14 +2885,37 @@ def _auto_detect_profile(parent):
                 parent.device_profile_combo.setCurrentIndex(i)
                 break
         
-        parent.profile_status_label.setText(f"Auto-detected: {recommended}")
+        # Show detailed detection info
+        detail = f"{device_class.name}"
+        if caps.has_cuda:
+            detail += f" | GPU: {caps.gpu_name[:20]}..." if len(caps.gpu_name) > 20 else f" | GPU: {caps.gpu_name}"
+        if caps.ram_total_mb:
+            detail += f" | RAM: {caps.ram_total_mb // 1024}GB"
+        
+        parent.profile_status_label.setText(f"Detected: {recommended} ({detail})")
         parent.profile_status_label.setStyleSheet("color: #3b82f6; font-style: italic;")
         
     except ImportError:
-        # Fallback auto-detection
-        _auto_detect_profile_fallback(parent)
+        # Fall back to old hardware_profiles module
+        try:
+            from ...utils.hardware_profiles import get_profile_manager
+            
+            manager = get_profile_manager()
+            recommended = manager.auto_detect_profile()
+            
+            for i in range(parent.device_profile_combo.count()):
+                if parent.device_profile_combo.itemData(i) == recommended:
+                    parent.device_profile_combo.setCurrentIndex(i)
+                    break
+            
+            parent.profile_status_label.setText(f"Auto-detected: {recommended}")
+            parent.profile_status_label.setStyleSheet("color: #3b82f6; font-style: italic;")
+            
+        except ImportError:
+            # Ultimate fallback
+            _auto_detect_profile_fallback(parent)
     except Exception as e:
-        parent.profile_status_label.setText(f"Detection failed: {str(e)[:25]}")
+        parent.profile_status_label.setText(f"Detection failed: {str(e)[:30]}")
         parent.profile_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
 
 

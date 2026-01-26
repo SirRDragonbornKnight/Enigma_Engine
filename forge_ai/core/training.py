@@ -166,6 +166,123 @@ class TrainingConfig:
         if self.checkpoint_dir is None:
             self.checkpoint_dir = str(MODELS_DIR / "checkpoints")
 
+    @classmethod
+    def from_device_profile(cls, **overrides) -> 'TrainingConfig':
+        """
+        Create TrainingConfig with device-aware defaults.
+        
+        Automatically adjusts batch_size, max_seq_len, use_amp, and grad_accumulation
+        based on detected hardware capabilities.
+        
+        📐 USAGE:
+            # Auto-detect best settings for your hardware
+            config = TrainingConfig.from_device_profile()
+            
+            # Override specific settings
+            config = TrainingConfig.from_device_profile(epochs=50)
+        
+        🖥️ DEVICE ADJUSTMENTS:
+            EMBEDDED (Pi): batch=1, seq=128, no AMP, high grad_accum
+            MOBILE: batch=2, seq=256, no AMP
+            LAPTOP_LOW: batch=4, seq=256, AMP disabled
+            LAPTOP_MID: batch=4, seq=512, AMP enabled
+            DESKTOP_CPU: batch=4, seq=512, no AMP
+            DESKTOP_GPU: batch=8, seq=512, AMP enabled
+            WORKSTATION: batch=16, seq=1024, AMP enabled
+            DATACENTER: batch=32, seq=2048, AMP enabled
+        
+        Returns:
+            TrainingConfig optimized for current hardware
+        """
+        try:
+            from .device_profiles import get_device_profiler, DeviceClass
+            
+            profiler = get_device_profiler()
+            device_class = profiler.classify()
+            caps = profiler.detect()  # Returns DeviceCapabilities
+            
+            # Device-specific defaults
+            defaults = {
+                DeviceClass.EMBEDDED: {
+                    'batch_size': 1,
+                    'max_seq_len': 128,
+                    'use_amp': False,
+                    'grad_accumulation_steps': 16,  # Simulate larger batch
+                    'save_every': 10,  # Save less often (slow storage)
+                },
+                DeviceClass.MOBILE: {
+                    'batch_size': 2,
+                    'max_seq_len': 256,
+                    'use_amp': False,
+                    'grad_accumulation_steps': 8,
+                },
+                DeviceClass.LAPTOP_LOW: {
+                    'batch_size': 4,
+                    'max_seq_len': 256,
+                    'use_amp': False,
+                    'grad_accumulation_steps': 4,
+                },
+                DeviceClass.LAPTOP_MID: {
+                    'batch_size': 4,
+                    'max_seq_len': 512,
+                    'use_amp': True,
+                    'grad_accumulation_steps': 4,
+                },
+                DeviceClass.DESKTOP_CPU: {
+                    'batch_size': 4,
+                    'max_seq_len': 512,
+                    'use_amp': False,
+                    'grad_accumulation_steps': 4,
+                },
+                DeviceClass.DESKTOP_GPU: {
+                    'batch_size': 8,
+                    'max_seq_len': 512,
+                    'use_amp': True,
+                    'grad_accumulation_steps': 4,
+                },
+                DeviceClass.WORKSTATION: {
+                    'batch_size': 16,
+                    'max_seq_len': 1024,
+                    'use_amp': True,
+                    'grad_accumulation_steps': 2,
+                },
+                DeviceClass.DATACENTER: {
+                    'batch_size': 32,
+                    'max_seq_len': 2048,
+                    'use_amp': True,
+                    'grad_accumulation_steps': 1,
+                },
+            }
+            
+            # Get defaults for detected device
+            device_defaults = defaults.get(device_class, defaults[DeviceClass.LAPTOP_LOW])
+            
+            # Adjust based on actual VRAM if GPU available
+            if caps.has_cuda and caps.vram_total_mb:
+                vram_gb = caps.vram_total_mb / 1024
+                if vram_gb >= 24:
+                    device_defaults['batch_size'] = min(32, device_defaults['batch_size'] * 2)
+                    device_defaults['max_seq_len'] = min(2048, device_defaults['max_seq_len'] * 2)
+                elif vram_gb >= 12:
+                    device_defaults['batch_size'] = min(16, device_defaults['batch_size'])
+                elif vram_gb < 6:
+                    device_defaults['batch_size'] = max(2, device_defaults['batch_size'] // 2)
+                    device_defaults['max_seq_len'] = min(256, device_defaults['max_seq_len'])
+            
+            # Apply user overrides
+            device_defaults.update(overrides)
+            
+            logger.info(f"[Training] Using device-aware config for {device_class.name}: "
+                       f"batch={device_defaults.get('batch_size')}, "
+                       f"seq_len={device_defaults.get('max_seq_len')}, "
+                       f"amp={device_defaults.get('use_amp')}")
+            
+            return cls(**device_defaults)
+            
+        except ImportError:
+            logger.warning("[Training] Device profiles not available, using defaults")
+            return cls(**overrides)
+
 
 # =============================================================================
 # 📊 DATASET CLASSES - How we prepare text for training

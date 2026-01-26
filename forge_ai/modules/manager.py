@@ -77,6 +77,7 @@ logger = logging.getLogger(__name__)
 _TORCH = None
 _TORCH_CHECKED = False
 _TORCH_WARNING_SHOWN = False
+_DEVICE_PROFILER = None
 
 
 def _get_torch():
@@ -93,6 +94,18 @@ def _get_torch():
                 _TORCH_WARNING_SHOWN = True
         _TORCH_CHECKED = True
     return _TORCH
+
+
+def _get_device_profiler():
+    """Get device profiler for hardware-aware decisions."""
+    global _DEVICE_PROFILER
+    if _DEVICE_PROFILER is None:
+        try:
+            from ..core.device_profiles import get_device_profiler
+            _DEVICE_PROFILER = get_device_profiler()
+        except ImportError:
+            _DEVICE_PROFILER = None
+    return _DEVICE_PROFILER
 
 
 # =============================================================================
@@ -459,6 +472,9 @@ class ModuleManager:
         self.config_path = config_path or Path("data/module_config.json")
         self.hardware_profile: Dict[str, Any] = {}    # Detected hardware
         self.local_only = local_only  # Privacy: block cloud modules by default
+        
+        # Device profile integration for smart hardware decisions
+        self._device_profile = None
 
         # ─────────────────────────────────────────────────────────────────────
         # EVENT CALLBACKS: Notify listeners when things happen
@@ -480,6 +496,98 @@ class ModuleManager:
         # DETECT HARDWARE: Figure out what this system can run
         # ─────────────────────────────────────────────────────────────────────
         self._detect_hardware()
+        
+    @property
+    def device_profile(self):
+        """Get device profile for hardware-aware decisions."""
+        if self._device_profile is None:
+            profiler = _get_device_profiler()
+            if profiler:
+                self._device_profile = profiler.get_profile()
+        return self._device_profile
+    
+    def get_recommended_modules(self) -> List[str]:
+        """
+        Get recommended modules based on device capabilities.
+        
+        Returns list of module IDs that should work well on this hardware.
+        """
+        recommended = []
+        profile = self.device_profile
+        
+        if not profile:
+            return ["tokenizer", "model", "inference", "memory"]
+        
+        # Core modules - always recommended
+        recommended.extend(["tokenizer", "memory"])
+        
+        # Model choice based on hardware
+        if profile.use_gpu or profile.recommended_model_size in ["medium", "large", "xl"]:
+            recommended.append("model")
+            recommended.append("inference")
+        else:
+            # Low-power devices might prefer cloud API or GGUF
+            if profile.recommended_model_size in ["nano", "tiny"]:
+                recommended.append("chat_api")  # Ollama or cloud
+            else:
+                recommended.append("model")
+                recommended.append("inference")
+        
+        # Generation modules based on VRAM
+        if self.hardware_profile.get('vram_mb', 0) > 4000:
+            recommended.append("image_gen_local")
+        elif self.hardware_profile.get('vram_mb', 0) > 0:
+            # Some GPU but limited VRAM
+            pass  # No heavy generation
+        
+        # Voice - works on most devices
+        recommended.extend(["voice_input", "voice_output"])
+        
+        return recommended
+    
+    def auto_configure(self, mode: str = "inference") -> Dict[str, bool]:
+        """
+        Automatically configure modules based on hardware.
+        
+        Args:
+            mode: "inference" (default), "training", "server", or "minimal"
+            
+        Returns:
+            Dict of module_id -> success status
+        """
+        results = {}
+        profile = self.device_profile
+        
+        if mode == "minimal":
+            # Bare minimum for chat
+            modules = ["tokenizer"]
+            # Prefer cloud API for minimal setups
+            if self.hardware_profile.get('ram_mb', 0) < 4096:
+                modules.append("chat_api")
+            else:
+                modules.extend(["model", "inference"])
+        elif mode == "inference":
+            modules = self.get_recommended_modules()
+        elif mode == "training":
+            modules = ["tokenizer", "model", "training", "memory"]
+        elif mode == "server":
+            modules = ["tokenizer", "model", "inference", "memory", "api_server"]
+        else:
+            modules = self.get_recommended_modules()
+        
+        # Load modules in dependency order
+        for module_id in modules:
+            if module_id in self.module_classes:
+                can_load, reason = self.can_load(module_id)
+                if can_load:
+                    results[module_id] = self.load(module_id)
+                else:
+                    logger.info(f"Skipping {module_id}: {reason}")
+                    results[module_id] = False
+            else:
+                results[module_id] = False
+        
+        return results
 
     def _detect_hardware(self):
         """
@@ -490,6 +598,7 @@ class ModuleManager:
         - RAM (for model loading)
         - GPU availability and VRAM (for fast inference)
         - Apple MPS (for M1/M2 Macs)
+        - Device class (embedded, mobile, desktop, server)
         """
         # Start with safe defaults
         self.hardware_profile = {
@@ -499,9 +608,37 @@ class ModuleManager:
             'gpu_name': None,
             'vram_mb': 0,
             'mps_available': False,
+            'device_class': 'unknown',
+            'recommended_model_size': 'tiny',
         }
+        
+        # Try to use device profiler for comprehensive detection
+        profiler = _get_device_profiler()
+        if profiler:
+            try:
+                caps = profiler.detect()
+                profile = profiler.get_profile()
+                
+                self.hardware_profile.update({
+                    'cpu_cores': caps.cpu_cores,
+                    'ram_mb': caps.ram_total_mb,
+                    'gpu_available': caps.has_cuda or caps.has_mps,
+                    'gpu_name': caps.gpu_name,
+                    'vram_mb': caps.vram_total_mb,
+                    'mps_available': caps.has_mps,
+                    'device_class': profiler.classify().name,
+                    'recommended_model_size': profile.recommended_model_size,
+                    'is_raspberry_pi': caps.is_raspberry_pi,
+                    'is_android': caps.is_android,
+                    'is_mobile': caps.is_android or caps.is_ios,
+                })
+                logger.info(f"Hardware detected: {self.hardware_profile['device_class']}, "
+                           f"recommended model: {self.hardware_profile['recommended_model_size']}")
+                return
+            except Exception as e:
+                logger.warning(f"Device profiler error: {e}, falling back to basic detection")
 
-        # Try to detect GPU with torch (cached to avoid repeated imports)
+        # Fallback: Try to detect GPU with torch (cached to avoid repeated imports)
         torch = _get_torch()
         if torch:
             try:
@@ -523,6 +660,23 @@ class ModuleManager:
             self.hardware_profile['ram_mb'] = psutil.virtual_memory().total // (1024 * 1024)
         except ImportError:
             pass  # Silently use defaults
+        
+        # Determine recommended model size based on hardware
+        ram_gb = self.hardware_profile['ram_mb'] / 1024
+        vram_gb = self.hardware_profile['vram_mb'] / 1024
+        
+        if vram_gb >= 24 or ram_gb >= 64:
+            self.hardware_profile['recommended_model_size'] = 'xl'
+        elif vram_gb >= 12 or ram_gb >= 32:
+            self.hardware_profile['recommended_model_size'] = 'large'
+        elif vram_gb >= 6 or ram_gb >= 16:
+            self.hardware_profile['recommended_model_size'] = 'medium'
+        elif vram_gb >= 4 or ram_gb >= 8:
+            self.hardware_profile['recommended_model_size'] = 'small'
+        elif ram_gb >= 4:
+            self.hardware_profile['recommended_model_size'] = 'tiny'
+        else:
+            self.hardware_profile['recommended_model_size'] = 'nano'
 
     def register(self, module_class: type) -> bool:
         """

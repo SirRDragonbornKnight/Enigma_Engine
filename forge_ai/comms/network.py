@@ -162,8 +162,21 @@ class ForgeNode:
     
     @property
     def engine(self):
-        """Lazy-load the inference engine."""
+        """Lazy-load the inference engine with device-aware configuration."""
         if self._engine is None:
+            # Use device profiles for optimal device selection
+            device = None
+            try:
+                from ..core.device_profiles import get_device_profiler
+                profiler = get_device_profiler()
+                device = profiler.get_torch_device()
+            except ImportError:
+                pass
+            
+            if device is None:
+                import torch
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+            
             if self.model_name:
                 from ..core.model_registry import ModelRegistry
                 from ..core.inference import ForgeEngine
@@ -173,7 +186,7 @@ class ForgeNode:
                 
                 # Create engine with loaded model
                 self._engine = ForgeEngine.__new__(ForgeEngine)
-                self._engine.device = "cuda" if __import__('torch').cuda.is_available() else "cpu"
+                self._engine.device = device
                 self._engine.model = model
                 self._engine.model.to(self._engine.device)
                 self._engine.model.eval()
@@ -181,7 +194,7 @@ class ForgeNode:
                 self._engine.tokenizer = load_tokenizer()
             else:
                 from ..core.inference import ForgeEngine
-                self._engine = ForgeEngine()
+                self._engine = ForgeEngine(device=str(device))
         return self._engine
     
     # === Server Mode ===
@@ -206,10 +219,29 @@ class ForgeNode:
         
         @app.route("/info")
         def info():
+            # Get device info if available
+            device_info = {"device_class": "unknown", "device": "unknown"}
+            try:
+                from ..core.device_profiles import get_device_profiler
+                profiler = get_device_profiler()
+                caps = profiler.detect()
+                device_info = {
+                    "device_class": profiler.classify().name,
+                    "device": profiler.get_torch_device(),
+                    "cpu_cores": caps.cpu_cores,
+                    "ram_mb": caps.ram_total_mb,
+                    "has_gpu": caps.has_gpu,
+                    "gpu_name": caps.gpu_name,
+                    "vram_mb": caps.vram_total_mb,
+                }
+            except ImportError:
+                pass
+            
             return jsonify({
                 "name": self.name,
                 "model": self.model_name,
                 "peers": list(self.peers.keys()),
+                **device_info,
             })
         
         @app.route("/generate", methods=["POST"])

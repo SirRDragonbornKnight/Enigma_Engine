@@ -7,6 +7,10 @@ Modes:
   - LOW: Minimal resources, slower responses
   - GAMING: Pause most AI functions, minimal CPU/GPU usage
   - BACKGROUND: Run in background with lowest priority
+  - EMBEDDED: Optimized for Raspberry Pi and embedded devices
+  - MOBILE: Optimized for phones/tablets
+
+Supports automatic mode selection based on hardware detection.
 """
 
 import os
@@ -23,6 +27,8 @@ class PowerLevel(Enum):
     LOW = "low"
     GAMING = "gaming"
     BACKGROUND = "background"
+    EMBEDDED = "embedded"  # Raspberry Pi, microcontrollers
+    MOBILE = "mobile"      # Android, iOS
 
 
 @dataclass
@@ -34,6 +40,10 @@ class PowerSettings:
     thread_count: int
     pause_background: bool
     response_delay: float  # Artificial delay to reduce CPU spikes
+    use_quantization: bool = False
+    quantization_bits: int = 8
+    max_memory_mb: int = 0  # 0 = no limit
+    offload_to_cpu: bool = False
 
 
 POWER_PRESETS = {
@@ -43,7 +53,8 @@ POWER_PRESETS = {
         use_gpu=True,
         thread_count=0,  # Use all
         pause_background=False,
-        response_delay=0.0
+        response_delay=0.0,
+        use_quantization=False,
     ),
     PowerLevel.BALANCED: PowerSettings(
         max_batch_size=8,
@@ -51,7 +62,8 @@ POWER_PRESETS = {
         use_gpu=True,
         thread_count=4,
         pause_background=False,
-        response_delay=0.1
+        response_delay=0.1,
+        use_quantization=False,
     ),
     PowerLevel.LOW: PowerSettings(
         max_batch_size=2,
@@ -59,7 +71,9 @@ POWER_PRESETS = {
         use_gpu=False,  # CPU only
         thread_count=2,
         pause_background=True,
-        response_delay=0.5
+        response_delay=0.5,
+        use_quantization=True,
+        quantization_bits=8,
     ),
     PowerLevel.GAMING: PowerSettings(
         max_batch_size=1,
@@ -67,7 +81,9 @@ POWER_PRESETS = {
         use_gpu=False,
         thread_count=1,
         pause_background=True,
-        response_delay=1.0
+        response_delay=1.0,
+        use_quantization=True,
+        quantization_bits=8,
     ),
     PowerLevel.BACKGROUND: PowerSettings(
         max_batch_size=1,
@@ -75,7 +91,32 @@ POWER_PRESETS = {
         use_gpu=False,
         thread_count=1,
         pause_background=True,
-        response_delay=2.0
+        response_delay=2.0,
+        use_quantization=True,
+        quantization_bits=8,
+    ),
+    PowerLevel.EMBEDDED: PowerSettings(
+        max_batch_size=1,
+        max_tokens=32,
+        use_gpu=False,
+        thread_count=2,  # Pi has 4 cores, use 2
+        pause_background=True,
+        response_delay=0.5,
+        use_quantization=True,
+        quantization_bits=4,  # More aggressive quantization
+        max_memory_mb=1024,  # 1GB limit
+        offload_to_cpu=True,
+    ),
+    PowerLevel.MOBILE: PowerSettings(
+        max_batch_size=1,
+        max_tokens=64,
+        use_gpu=False,  # Most phones don't support CUDA
+        thread_count=4,  # Modern phones have good CPUs
+        pause_background=True,
+        response_delay=0.2,
+        use_quantization=True,
+        quantization_bits=8,
+        max_memory_mb=2048,  # 2GB limit for phones
     ),
 }
 
@@ -99,6 +140,38 @@ class PowerManager:
         self._settings = POWER_PRESETS[PowerLevel.FULL]
         self._paused = False
         self._lock = threading.Lock()
+        
+        # Auto-detect optimal level based on hardware
+        self._auto_detected_level = self._detect_optimal_level()
+    
+    def _detect_optimal_level(self) -> PowerLevel:
+        """Detect optimal power level based on hardware."""
+        try:
+            from .device_profiles import get_device_profiler, DeviceClass
+            profiler = get_device_profiler()
+            device_class = profiler.classify()
+            
+            # Map device class to power level
+            level_map = {
+                DeviceClass.EMBEDDED: PowerLevel.EMBEDDED,
+                DeviceClass.MOBILE: PowerLevel.MOBILE,
+                DeviceClass.LAPTOP_LOW: PowerLevel.LOW,
+                DeviceClass.LAPTOP_MID: PowerLevel.BALANCED,
+                DeviceClass.DESKTOP_CPU: PowerLevel.BALANCED,
+                DeviceClass.DESKTOP_GPU: PowerLevel.FULL,
+                DeviceClass.WORKSTATION: PowerLevel.FULL,
+                DeviceClass.DATACENTER: PowerLevel.FULL,
+            }
+            return level_map.get(device_class, PowerLevel.BALANCED)
+        except ImportError:
+            return PowerLevel.BALANCED
+        except Exception:
+            return PowerLevel.BALANCED
+    
+    def auto_configure(self) -> PowerLevel:
+        """Auto-configure based on detected hardware. Returns the selected level."""
+        self.set_level(self._auto_detected_level)
+        return self._auto_detected_level
     
     @property
     def level(self) -> PowerLevel:
@@ -126,8 +199,20 @@ class PowerManager:
                 except ImportError:
                     pass
             
+            # Apply memory limit for embedded/mobile
+            if self._settings.max_memory_mb > 0:
+                try:
+                    import resource
+                    # Set soft limit (Unix only)
+                    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+                    new_limit = self._settings.max_memory_mb * 1024 * 1024
+                    resource.setrlimit(resource.RLIMIT_AS, (new_limit, hard))
+                except (ImportError, ValueError, OSError):
+                    pass  # Not supported on this platform
+            
             # Set process priority
-            if level in (PowerLevel.LOW, PowerLevel.GAMING, PowerLevel.BACKGROUND):
+            if level in (PowerLevel.LOW, PowerLevel.GAMING, PowerLevel.BACKGROUND, 
+                        PowerLevel.EMBEDDED, PowerLevel.MOBILE):
                 try:
                     import psutil
                     p = psutil.Process()
@@ -165,6 +250,14 @@ class PowerManager:
         """Get max tokens for current mode."""
         return self._settings.max_tokens
     
+    def should_quantize(self) -> bool:
+        """Check if quantization should be used."""
+        return self._settings.use_quantization
+    
+    def get_quantization_bits(self) -> int:
+        """Get quantization bits for current mode."""
+        return self._settings.quantization_bits
+    
     def wait_if_needed(self):
         """Wait if in low power mode (to reduce CPU spikes)."""
         if self._settings.response_delay > 0:
@@ -195,3 +288,24 @@ def gaming_mode(enabled: bool = True):
         set_power_mode("gaming")
     else:
         set_power_mode("full")
+
+
+def embedded_mode(enabled: bool = True):
+    """Quick toggle for embedded/Pi mode."""
+    if enabled:
+        set_power_mode("embedded")
+    else:
+        set_power_mode("balanced")
+
+
+def mobile_mode(enabled: bool = True):
+    """Quick toggle for mobile mode."""
+    if enabled:
+        set_power_mode("mobile")
+    else:
+        set_power_mode("balanced")
+
+
+def auto_power_mode():
+    """Auto-detect and set optimal power mode based on hardware."""
+    return get_power_manager().auto_configure()

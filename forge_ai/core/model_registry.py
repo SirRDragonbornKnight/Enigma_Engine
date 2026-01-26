@@ -450,9 +450,14 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         with open(config_path, "r") as f:
             config = json.load(f)
 
-        # Determine device
+        # Determine device using device profiles for smarter selection
         if device is None:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            try:
+                from .device_profiles import get_device_profiler
+                profiler = get_device_profiler()
+                device = profiler.get_torch_device()
+            except ImportError:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
         
         report(f"Creating model architecture ({device})...", 15)
 

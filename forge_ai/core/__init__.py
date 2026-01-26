@@ -72,10 +72,34 @@ except ImportError:
 
 # Quantization (optional)
 try:
-    from .quantization import quantize_model, load_quantized
+    from .quantization import quantize_model, load_quantized, auto_quantize, QuantConfig
 except ImportError:
     quantize_model = None
     load_quantized = None
+    auto_quantize = None
+    QuantConfig = None
+
+# Device Profiles (optional)
+try:
+    from .device_profiles import (
+        DeviceProfiler, DeviceClass, DeviceCapabilities, ProfileSettings,
+        get_device_profiler, get_optimal_settings, get_recommended_model_size,
+    )
+except ImportError:
+    DeviceProfiler = None
+    DeviceClass = None
+    DeviceCapabilities = None
+    ProfileSettings = None
+    get_device_profiler = None
+    get_optimal_settings = None
+    get_recommended_model_size = None
+
+# Low Power Inference (optional)
+try:
+    from .low_power_inference import LowPowerEngine, LowPowerConfig
+except ImportError:
+    LowPowerEngine = None
+    LowPowerConfig = None
 
 # HuggingFace model loading (optional - lazy load to avoid slow imports)
 HuggingFaceModel = None
@@ -224,6 +248,21 @@ __all__ = [
     # Quantization
     "quantize_model",
     "load_quantized",
+    "auto_quantize",
+    "QuantConfig",
+    
+    # Device Profiles
+    "DeviceProfiler",
+    "DeviceClass",
+    "DeviceCapabilities",
+    "ProfileSettings",
+    "get_device_profiler",
+    "get_optimal_settings",
+    "get_recommended_model_size",
+    
+    # Low Power Inference
+    "LowPowerEngine",
+    "LowPowerConfig",
     
     # External model loading
     "HuggingFaceModel",
