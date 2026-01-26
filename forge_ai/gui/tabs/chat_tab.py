@@ -1,4 +1,43 @@
-"""Chat tab for ForgeAI GUI."""
+"""
+================================================================================
+THE CONVERSATION HALL - CHAT TAB INTERFACE
+================================================================================
+
+Welcome, traveler, to the grand Conversation Hall! This is where humans and
+AI meet to exchange words, ideas, and understanding. The hall is adorned with
+comfortable cushions (buttons) and a great speaking scroll (chat display)
+where all conversations are recorded for posterity.
+
+FILE: forge_ai/gui/tabs/chat_tab.py
+TYPE: GUI Component - Chat Interface
+MAIN FUNCTION: create_chat_tab()
+
+    THE HALL'S FEATURES:
+    
+    +--------------------------------------------------+
+    |  [Model: small_forge]      [+New] [Clear] [Save] |  <- The Header Bar
+    +--------------------------------------------------+
+    |                                                  |
+    |  User: Hello, AI!                               |
+    |  AI: Greetings, noble traveler!                 |  <- The Great Scroll
+    |                                                  |
+    +--------------------------------------------------+
+    |  [Thinking...]                                   |  <- Status Panel
+    +--------------------------------------------------+
+    |  [ Type your message here...        ] [Send]     |  <- Input Chamber
+    +--------------------------------------------------+
+
+CONNECTED REALMS:
+    PARENT:     forge_ai/gui/enhanced_window.py - The main castle
+    INVOKES:    forge_ai/core/inference.py - For AI responses
+    STORES IN:  forge_ai/memory/manager.py - Conversation archives
+
+USAGE:
+    from forge_ai.gui.tabs.chat_tab import create_chat_tab
+    
+    chat_widget = create_chat_tab(parent_window)
+    tabs.addTab(chat_widget, "Chat")
+"""
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -8,86 +47,224 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 
-def create_chat_tab(parent):
-    """Create the chat interface tab with improved UX."""
-    w = QWidget()
-    layout = QVBoxLayout()
-    layout.setSpacing(10)
-    layout.setContentsMargins(10, 10, 10, 10)
-    
-    # Header with model info and controls
+# =============================================================================
+# STYLE CONSTANTS
+# =============================================================================
+STYLE_MODEL_LABEL = """
+    QLabel {
+        color: #89b4fa;
+        font-weight: bold;
+        font-size: 13px;
+        padding: 4px 8px;
+        background: rgba(137, 180, 250, 0.1);
+        border-radius: 4px;
+    }
+"""
+
+STYLE_NEW_CHAT_BTN = """
+    QPushButton {
+        background-color: #a6e3a1;
+        color: #1e1e2e;
+        font-weight: bold;
+        padding: 4px 8px;
+    }
+    QPushButton:hover {
+        background-color: #94e2d5;
+    }
+"""
+
+STYLE_SECONDARY_BTN = """
+    QPushButton {
+        background-color: #45475a;
+        padding: 4px 8px;
+    }
+"""
+
+STYLE_THINKING_FRAME = """
+    QFrame {
+        background: rgba(249, 226, 175, 0.15);
+        border: 1px solid #f9e2af;
+        border-radius: 6px;
+        padding: 4px;
+    }
+"""
+
+STYLE_INPUT_FRAME = """
+    QFrame {
+        background: rgba(49, 50, 68, 0.7);
+        border: 1px solid #45475a;
+        border-radius: 8px;
+        padding: 8px;
+    }
+"""
+
+STYLE_CHAT_INPUT = """
+    QLineEdit {
+        background-color: rgba(50, 50, 50, 0.9);
+        border: 1px solid #555;
+        border-radius: 8px;
+        padding: 10px 15px;
+        font-size: 14px;
+        color: white;
+    }
+    QLineEdit:focus {
+        border-color: #3498db;
+    }
+"""
+
+STYLE_SEND_BTN = """
+    QPushButton {
+        background-color: #3498db;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    QPushButton:hover {
+        background-color: #2980b9;
+    }
+    QPushButton:pressed {
+        background-color: #1c5980;
+    }
+"""
+
+STYLE_STOP_BTN = """
+    QPushButton {
+        background-color: #e74c3c;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    QPushButton:hover {
+        background-color: #c0392b;
+    }
+    QPushButton:pressed {
+        background-color: #922b21;
+    }
+"""
+
+STYLE_REC_BTN = """
+    QPushButton {
+        background-color: #444;
+        border: 2px solid #555;
+        border-radius: 8px;
+        color: #888;
+        font-size: 10px;
+        font-weight: bold;
+    }
+    QPushButton:hover {
+        background-color: #555;
+        border-color: #e74c3c;
+        color: #e74c3c;
+    }
+    QPushButton:checked {
+        background-color: #e74c3c;
+        border-color: #c0392b;
+        color: white;
+    }
+    QPushButton:checked:hover {
+        background-color: #c0392b;
+    }
+"""
+
+STYLE_TTS_BTN = """
+    QPushButton {
+        background-color: #cba6f7;
+        color: #1e1e2e;
+        font-weight: bold;
+        font-size: 11px;
+        border-radius: 8px;
+    }
+    QPushButton:hover {
+        background-color: #f5c2e7;
+    }
+"""
+
+STYLE_VOICE_TOGGLE = """
+    QPushButton {
+        background-color: #333;
+        border: 1px solid #555;
+        border-radius: 4px;
+        color: #888;
+        font-size: 9px;
+        font-weight: bold;
+    }
+    QPushButton:hover {
+        background-color: #444;
+        border-color: #2ecc71;
+    }
+    QPushButton:checked {
+        background-color: #2ecc71;
+        border-color: #27ae60;
+        color: white;
+    }
+"""
+
+# Button dimensions
+BUTTON_WIDTH_SMALL = 70
+BUTTON_WIDTH_MEDIUM = 100
+BUTTON_HEIGHT = 40
+VOICE_TOGGLE_SIZE = (45, 24)
+TTS_BTN_SIZE = (50, 40)
+REC_BTN_SIZE = (55, 40)
+
+
+# =============================================================================
+# HELPER FUNCTIONS - Build Individual UI Sections
+# =============================================================================
+
+def _create_header_section(parent, layout):
+    """Build the header bar with model indicator and action buttons."""
     header_layout = QHBoxLayout()
     
-    # Model indicator - check if model is already loaded
+    # Model indicator
     initial_model_text = "No model loaded"
     if hasattr(parent, 'current_model_name') and parent.current_model_name:
         initial_model_text = f"[AI] {parent.current_model_name}"
-    parent.chat_model_label = QLabel(initial_model_text)
-    parent.chat_model_label.setStyleSheet("""
-        QLabel {
-            color: #89b4fa;
-            font-weight: bold;
-            font-size: 13px;
-            padding: 4px 8px;
-            background: rgba(137, 180, 250, 0.1);
-            border-radius: 4px;
-        }
-    """)
-    header_layout.addWidget(parent.chat_model_label)
     
+    parent.chat_model_label = QLabel(initial_model_text)
+    parent.chat_model_label.setStyleSheet(STYLE_MODEL_LABEL)
+    header_layout.addWidget(parent.chat_model_label)
     header_layout.addStretch()
     
-    # Quick action buttons
+    # New Chat button
     parent.btn_new_chat = QPushButton("+ New Chat")
     parent.btn_new_chat.setToolTip("Start a fresh conversation (saves current chat first)")
-    parent.btn_new_chat.setMaximumWidth(100)
+    parent.btn_new_chat.setMaximumWidth(BUTTON_WIDTH_MEDIUM)
     parent.btn_new_chat.clicked.connect(lambda: _new_chat(parent))
-    parent.btn_new_chat.setStyleSheet("""
-        QPushButton {
-            background-color: #a6e3a1;
-            color: #1e1e2e;
-            font-weight: bold;
-            padding: 4px 8px;
-        }
-        QPushButton:hover {
-            background-color: #94e2d5;
-        }
-    """)
+    parent.btn_new_chat.setStyleSheet(STYLE_NEW_CHAT_BTN)
     header_layout.addWidget(parent.btn_new_chat)
     
+    # Clear button
     parent.btn_clear_chat = QPushButton("Clear")
     parent.btn_clear_chat.setToolTip("Clear chat history")
-    parent.btn_clear_chat.setMaximumWidth(70)
+    parent.btn_clear_chat.setMaximumWidth(BUTTON_WIDTH_SMALL)
     parent.btn_clear_chat.clicked.connect(lambda: _clear_chat(parent))
-    parent.btn_clear_chat.setStyleSheet("""
-        QPushButton {
-            background-color: #45475a;
-            padding: 4px 8px;
-        }
-    """)
+    parent.btn_clear_chat.setStyleSheet(STYLE_SECONDARY_BTN)
     header_layout.addWidget(parent.btn_clear_chat)
     
+    # Save button
     parent.btn_save_chat = QPushButton("Save")
     parent.btn_save_chat.setToolTip("Save conversation")
-    parent.btn_save_chat.setMaximumWidth(70)
+    parent.btn_save_chat.setMaximumWidth(BUTTON_WIDTH_SMALL)
     parent.btn_save_chat.clicked.connect(lambda: _save_chat(parent))
-    parent.btn_save_chat.setStyleSheet("""
-        QPushButton {
-            background-color: #45475a;
-            padding: 4px 8px;
-        }
-    """)
+    parent.btn_save_chat.setStyleSheet(STYLE_SECONDARY_BTN)
     header_layout.addWidget(parent.btn_save_chat)
     
     layout.addLayout(header_layout)
-    
-    # Chat display - selectable text with better styling
+
+
+def _create_chat_display(parent, layout):
+    """Build the main chat display area."""
     parent.chat_display = QTextBrowser()
     parent.chat_display.setReadOnly(True)
     parent.chat_display.setTextInteractionFlags(
         Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard | Qt.LinksAccessibleByMouse
     )
-    parent.chat_display.setOpenExternalLinks(False)  # Handle links ourselves
+    parent.chat_display.setOpenExternalLinks(False)
     parent.chat_display.anchorClicked.connect(lambda url: _handle_feedback_link(parent, url))
     parent.chat_display.setPlaceholderText(
         "Start chatting with your AI...\n\n"
@@ -105,39 +282,30 @@ def create_chat_tab(parent):
         }
     """)
     layout.addWidget(parent.chat_display, stretch=1)
-    
-    # Thinking/Status panel (shown during generation) - ABOVE the input
+
+
+def _create_thinking_panel(parent, layout):
+    """Build the thinking indicator panel."""
     parent.thinking_frame = QFrame()
-    parent.thinking_frame.setStyleSheet("""
-        QFrame {
-            background: rgba(249, 226, 175, 0.15);
-            border: 1px solid #f9e2af;
-            border-radius: 6px;
-            padding: 4px;
-        }
-    """)
+    parent.thinking_frame.setStyleSheet(STYLE_THINKING_FRAME)
+    
     thinking_layout = QHBoxLayout(parent.thinking_frame)
     thinking_layout.setContentsMargins(8, 4, 8, 4)
     
     parent.thinking_label = QLabel("Thinking...")
     parent.thinking_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
     thinking_layout.addWidget(parent.thinking_label)
-    
     thinking_layout.addStretch()
     
-    parent.thinking_frame.hide()  # Hidden by default
+    parent.thinking_frame.hide()
     layout.addWidget(parent.thinking_frame)
-    
-    # Input area with better layout - similar style to Quick Chat
+
+
+def _create_input_section(parent, layout):
+    """Build the message input area with all buttons."""
     input_frame = QFrame()
-    input_frame.setStyleSheet("""
-        QFrame {
-            background: rgba(49, 50, 68, 0.7);
-            border: 1px solid #45475a;
-            border-radius: 8px;
-            padding: 8px;
-        }
-    """)
+    input_frame.setStyleSheet(STYLE_INPUT_FRAME)
+    
     input_layout = QHBoxLayout(input_frame)
     input_layout.setContentsMargins(8, 8, 8, 8)
     input_layout.setSpacing(8)
@@ -147,139 +315,65 @@ def create_chat_tab(parent):
     parent.chat_input.setPlaceholderText("Chat here...")
     parent.chat_input.returnPressed.connect(parent._on_send)
     parent.chat_input.setToolTip("Type your message and press Enter or click Send")
-    parent.chat_input.setStyleSheet("""
-        QLineEdit {
-            background-color: rgba(50, 50, 50, 0.9);
-            border: 1px solid #555;
-            border-radius: 8px;
-            padding: 10px 15px;
-            font-size: 14px;
-            color: white;
-        }
-        QLineEdit:focus {
-            border-color: #3498db;
-        }
-    """)
+    parent.chat_input.setStyleSheet(STYLE_CHAT_INPUT)
     input_layout.addWidget(parent.chat_input, stretch=1)
     
-    # Send button - matches Quick Chat style
+    # Send button
     parent.send_btn = QPushButton("Send")
-    parent.send_btn.setFixedSize(70, 40)
+    parent.send_btn.setFixedSize(BUTTON_WIDTH_SMALL, BUTTON_HEIGHT)
     parent.send_btn.clicked.connect(parent._on_send)
     parent.send_btn.setToolTip("Send your message (Enter)")
-    parent.send_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #3498db;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 11px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #2980b9;
-        }
-        QPushButton:pressed {
-            background-color: #1c5980;
-        }
-    """)
+    parent.send_btn.setStyleSheet(STYLE_SEND_BTN)
     input_layout.addWidget(parent.send_btn)
     
-    # Stop button (hidden by default, shown during generation)
+    # Stop button (hidden by default)
     parent.stop_btn = QPushButton("Stop")
     parent.stop_btn.setToolTip("Stop AI generation")
-    parent.stop_btn.setFixedSize(70, 40)
-    parent.stop_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #e74c3c;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-size: 11px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #c0392b;
-        }
-        QPushButton:pressed {
-            background-color: #922b21;
-        }
-    """)
+    parent.stop_btn.setFixedSize(BUTTON_WIDTH_SMALL, BUTTON_HEIGHT)
+    parent.stop_btn.setStyleSheet(STYLE_STOP_BTN)
     parent.stop_btn.clicked.connect(lambda: _stop_generation(parent))
-    parent.stop_btn.hide()  # Hidden by default
+    parent.stop_btn.hide()
     input_layout.addWidget(parent.stop_btn)
     
-    # Voice input button (REC style) - matches Quick Chat
+    # Voice record button
     parent.rec_btn = QPushButton("REC")
-    parent.rec_btn.setFixedSize(55, 40)
+    parent.rec_btn.setFixedSize(*REC_BTN_SIZE)
     parent.rec_btn.setToolTip("Record - Click to speak")
     parent.rec_btn.setCheckable(True)
-    parent.rec_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #444;
-            border: 2px solid #555;
-            border-radius: 8px;
-            color: #888;
-            font-size: 10px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #555;
-            border-color: #e74c3c;
-            color: #e74c3c;
-        }
-        QPushButton:checked {
-            background-color: #e74c3c;
-            border-color: #c0392b;
-            color: white;
-        }
-        QPushButton:checked:hover {
-            background-color: #c0392b;
-        }
-    """)
+    parent.rec_btn.setStyleSheet(STYLE_REC_BTN)
     parent.rec_btn.clicked.connect(lambda: _toggle_voice_input(parent))
     input_layout.addWidget(parent.rec_btn)
     
-    # Speak Last button (for TTS on demand)
+    # TTS button
     parent.btn_speak = QPushButton("TTS")
     parent.btn_speak.setToolTip("Speak last AI response")
-    parent.btn_speak.setFixedSize(50, 40)
-    parent.btn_speak.setStyleSheet("""
-        QPushButton {
-            background-color: #cba6f7;
-            color: #1e1e2e;
-            font-weight: bold;
-            font-size: 11px;
-            border-radius: 8px;
-        }
-        QPushButton:hover {
-            background-color: #f5c2e7;
-        }
-    """)
+    parent.btn_speak.setFixedSize(*TTS_BTN_SIZE)
+    parent.btn_speak.setStyleSheet(STYLE_TTS_BTN)
     parent.btn_speak.clicked.connect(parent._on_speak_last)
     input_layout.addWidget(parent.btn_speak)
     
     layout.addWidget(input_frame)
-    
-    # Bottom row: status + voice toggle (like Quick Chat)
+
+
+def _create_status_bar(parent, layout):
+    """Build the bottom status bar with learning and voice indicators."""
     bottom_layout = QHBoxLayout()
     bottom_layout.setSpacing(8)
     
     parent.chat_status = QLabel("")
     parent.chat_status.setStyleSheet("color: #6c7086; font-size: 11px;")
     bottom_layout.addWidget(parent.chat_status)
-    
     bottom_layout.addStretch()
     
-    # Learning indicator with detailed tooltip
+    # Learning indicator
     parent.learning_indicator = QLabel("Learning: ON")
     parent.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 11px;")
     parent.learning_indicator.setToolTip(
         "When Learning is ON, the AI records your conversations and uses them to improve.\n\n"
         "How it works:\n"
-        "• Each Q&A pair is saved to the model's training data\n"
-        "• After enough interactions, the model can be retrained\n"
-        "• This helps the AI learn your preferences and style\n\n"
+        "- Each Q&A pair is saved to the model's training data\n"
+        "- After enough interactions, the model can be retrained\n"
+        "- This helps the AI learn your preferences and style\n\n"
         "Note: Learning only works with local Forge models.\n"
         "HuggingFace models (GPT-2, Mistral, etc.) don't use this feature.\n\n"
         "Toggle in Settings menu or click here to toggle."
@@ -288,44 +382,56 @@ def create_chat_tab(parent):
     parent.learning_indicator.mousePressEvent = lambda e: _toggle_learning(parent)
     bottom_layout.addWidget(parent.learning_indicator)
     
-    # Voice output toggle - compact style like Quick Chat
+    # Voice toggle button
     parent.voice_toggle_btn = QPushButton("OFF")
-    parent.voice_toggle_btn.setFixedSize(45, 24)
+    parent.voice_toggle_btn.setFixedSize(*VOICE_TOGGLE_SIZE)
     parent.voice_toggle_btn.setCheckable(True)
     parent.voice_toggle_btn.setToolTip("AI Voice: Click to toggle auto-speak")
-    parent.voice_toggle_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #333;
-            border: 1px solid #555;
-            border-radius: 4px;
-            color: #888;
-            font-size: 9px;
-            font-weight: bold;
-        }
-        QPushButton:hover {
-            background-color: #444;
-            border-color: #2ecc71;
-        }
-        QPushButton:checked {
-            background-color: #2ecc71;
-            border-color: #27ae60;
-            color: white;
-        }
-    """)
+    parent.voice_toggle_btn.setStyleSheet(STYLE_VOICE_TOGGLE)
     parent.voice_toggle_btn.clicked.connect(lambda: _toggle_voice_output(parent))
     bottom_layout.addWidget(parent.voice_toggle_btn)
     
     layout.addLayout(bottom_layout)
+
+
+# =============================================================================
+# THE HALL CONSTRUCTION - Main Tab Creation
+# =============================================================================
+
+def create_chat_tab(parent):
+    """
+    Construct the grand Conversation Hall.
     
-    # Initialize voice thread tracking (auto_speak is already set from saved settings)
+    This function assembles the chat interface piece by piece, creating
+    a welcoming space where human and AI may converse freely.
+    
+    Args:
+        parent: The main window that will house this tab.
+    
+    Returns:
+        QWidget: The fully constructed chat tab.
+    """
+    chat_widget = QWidget()
+    main_layout = QVBoxLayout()
+    main_layout.setSpacing(10)
+    main_layout.setContentsMargins(10, 10, 10, 10)
+    
+    # Build each section using helper functions
+    _create_header_section(parent, main_layout)
+    _create_chat_display(parent, main_layout)
+    _create_thinking_panel(parent, main_layout)
+    _create_input_section(parent, main_layout)
+    _create_status_bar(parent, main_layout)
+    
+    # Initialize voice thread tracking
     if not hasattr(parent, '_voice_thread'):
         parent._voice_thread = None
     
     # Update voice button state from saved settings
     _update_voice_button_state(parent)
     
-    w.setLayout(layout)
-    return w
+    chat_widget.setLayout(main_layout)
+    return chat_widget
 
 
 def _toggle_voice_output(parent):
@@ -483,15 +589,15 @@ def _new_chat(parent):
         if hasattr(parent.engine, 'model') and hasattr(parent.engine.model, 'reset_conversation'):
             try:
                 parent.engine.model.reset_conversation()
-            except:
-                pass
+            except (AttributeError, RuntimeError):
+                pass  # Model doesn't support conversation reset
     
     # Clear tool output memory for fresh session
     try:
         from ...tools.history import get_output_memory
         get_output_memory().clear()
-    except:
-        pass
+    except (ImportError, AttributeError):
+        pass  # Tool history module not available
     
     # Show welcome message in main chat
     model_name = parent.current_model_name if hasattr(parent, 'current_model_name') else "AI"

@@ -491,24 +491,44 @@ class GameAIRouter:
         Chat with game-aware AI.
         
         Uses the active game's configuration to route the query.
+        Reuses pooled engine instances for efficiency.
         """
         # Get system prompt
         system_prompt = self.get_system_prompt()
         model_config = self.get_model_config()
         
-        # Build prompt
-        if system_prompt:
-            full_prompt = f"[System: {system_prompt}]\n\nUser: {message}\nAssistant:"
-        else:
-            full_prompt = f"User: {message}\nAssistant:"
+        # Use centralized prompt builder
+        try:
+            from forge_ai.core.prompt_builder import get_prompt_builder
+            builder = get_prompt_builder()
+            full_prompt = builder.build_chat_prompt(
+                message=message,
+                system_prompt=system_prompt,
+                include_generation_prefix=True
+            )
+        except ImportError:
+            # Fallback to basic prompt format
+            if system_prompt:
+                full_prompt = f"[System: {system_prompt}]\n\nUser: {message}\nAssistant:"
+            else:
+                full_prompt = f"User: {message}\nAssistant:"
         
-        # If no engine provided, try to get one
+        # If no engine provided, get from pool (reuses existing engines)
+        release_after = False
         if engine is None:
             try:
-                from forge_ai.core.inference import ForgeEngine
-                engine = ForgeEngine()
-            except Exception:
-                return "[No AI engine available]"
+                from forge_ai.core.engine_pool import get_engine, release_engine, create_fallback_response
+                engine = get_engine()
+                release_after = True
+                if engine is None:
+                    return create_fallback_response("Could not obtain AI engine")
+            except ImportError:
+                # Fallback to direct creation (less efficient)
+                try:
+                    from forge_ai.core.inference import ForgeEngine
+                    engine = ForgeEngine()
+                except Exception:
+                    return "[No AI engine available - check that a model is loaded]"
         
         # Generate response
         try:
@@ -521,14 +541,29 @@ class GameAIRouter:
                 max_gen=QUICK_RESPONSE_MAX_TOKENS if model_config["quick_responses"] else NORMAL_RESPONSE_MAX_TOKENS
             )
             
-            # Clean response
-            if "Assistant:" in response:
-                response = response.split("Assistant:")[-1].strip()
+            # Use prompt builder to extract response if available
+            try:
+                from forge_ai.core.prompt_builder import extract_response
+                response = extract_response(response, full_prompt)
+            except ImportError:
+                # Fallback cleanup
+                if "Assistant:" in response:
+                    response = response.split("Assistant:")[-1].strip()
             
             return response
             
         except Exception as e:
-            return f"[Error: {e}]"
+            logger.error(f"Game router chat error: {e}")
+            return f"[Error generating response: {e}]"
+        
+        finally:
+            # Return engine to pool if we borrowed it
+            if release_after and engine is not None:
+                try:
+                    from forge_ai.core.engine_pool import release_engine
+                    release_engine(engine)
+                except ImportError:
+                    pass
     
     # ===== Callbacks =====
     

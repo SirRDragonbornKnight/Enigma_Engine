@@ -15,8 +15,11 @@ Usage:
 import os
 import json
 import random
+import logging
 from pathlib import Path
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 try:
     from flask import Flask, render_template, jsonify, request
@@ -32,6 +35,20 @@ except ImportError:
     SOCKETIO_AVAILABLE = False
 
 from ..config import CONFIG
+
+
+# =============================================================================
+# Constants
+# =============================================================================
+DEFAULT_HOST = '0.0.0.0'
+DEFAULT_PORT = 8080
+DEFAULT_MAX_TOKENS = 200
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_PERSONALITY_VALUE = 0.5
+BANNER_WIDTH = 60
+HTTP_BAD_REQUEST = 400
+HTTP_SERVER_ERROR = 500
+HTTP_OK = 200
 
 
 # Initialize Flask app
@@ -74,7 +91,7 @@ def get_engine():
             _engine = InferenceEngine(model_name=default_model)
             _model_name = default_model
         except Exception as e:
-            print(f"Warning: Could not load inference engine: {e}")
+            logger.warning(f"Could not load inference engine: {e}")
             _engine = None
     
     return _engine
@@ -167,7 +184,11 @@ def api_status():
         from ..core.instance_manager import get_active_instances
         instances = get_active_instances()
         status['instances'] = len(instances)
-    except Exception:
+    except ImportError:
+        logger.debug("Instance manager not available, defaulting to 1 instance")
+        status['instances'] = 1
+    except Exception as e:
+        logger.warning(f"Could not get active instances: {e}")
         status['instances'] = 1
     
     return jsonify(status)
@@ -204,17 +225,17 @@ def api_list_models():
 @app.route('/api/generate', methods=['POST'])
 def api_generate():
     """Generate text from prompt."""
-    data = request.json
-    prompt = data.get('prompt', '')
-    max_tokens = data.get('max_tokens', 200)
-    temperature = data.get('temperature', 0.7)
+    request_data = request.json
+    prompt = request_data.get('prompt', '')
+    max_tokens = request_data.get('max_tokens', DEFAULT_MAX_TOKENS)
+    temperature = request_data.get('temperature', DEFAULT_TEMPERATURE)
     
     if not prompt:
-        return jsonify({'error': 'No prompt provided'}), 400
+        return jsonify({'error': 'No prompt provided'}), HTTP_BAD_REQUEST
     
     engine = get_engine()
     if engine is None:
-        return jsonify({'error': 'Model not loaded'}), 500
+        return jsonify({'error': 'Model not loaded'}), HTTP_SERVER_ERROR
     
     try:
         response = engine.generate(
@@ -265,20 +286,20 @@ def api_get_personality():
 @app.route('/api/personality', methods=['POST'])
 def api_set_personality():
     """Set user overrides for personality traits."""
-    data = request.json
+    personality_updates = request.json
     
     try:
         # Update personality settings
-        if 'humor' in data:
-            _personality_settings['humor'] = float(data['humor'])
-        if 'formality' in data:
-            _personality_settings['formality'] = float(data['formality'])
-        if 'verbosity' in data:
-            _personality_settings['verbosity'] = float(data['verbosity'])
-        if 'creativity' in data:
-            _personality_settings['creativity'] = float(data['creativity'])
-        if 'user_controlled' in data:
-            _personality_settings['user_controlled'] = bool(data['user_controlled'])
+        if 'humor' in personality_updates:
+            _personality_settings['humor'] = float(personality_updates['humor'])
+        if 'formality' in personality_updates:
+            _personality_settings['formality'] = float(personality_updates['formality'])
+        if 'verbosity' in personality_updates:
+            _personality_settings['verbosity'] = float(personality_updates['verbosity'])
+        if 'creativity' in personality_updates:
+            _personality_settings['creativity'] = float(personality_updates['creativity'])
+        if 'user_controlled' in personality_updates:
+            _personality_settings['user_controlled'] = bool(personality_updates['user_controlled'])
         
         return jsonify({
             'success': True,
@@ -416,8 +437,10 @@ def api_get_memories():
                     'saved_at': data.get('saved_at', 0),
                     'message_count': len(data.get('messages', []))
                 })
-            except Exception:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning(f"Corrupted conversation file {conv_file.name}: {e}")
+            except IOError as e:
+                logger.warning(f"Could not read conversation file {conv_file.name}: {e}")
         
         return jsonify({
             'success': True,
@@ -625,13 +648,13 @@ if SOCKETIO_AVAILABLE and socketio:
     @socketio.on('connect')
     def handle_connect():
         """Handle client connection."""
-        print(f"Client connected: {request.sid}")
+        logger.debug(f"Client connected: {request.sid}")
         emit('status', {'message': 'Connected to ForgeAI'})
     
     @socketio.on('disconnect')
     def handle_disconnect():
         """Handle client disconnection."""
-        print(f"Client disconnected: {request.sid}")
+        logger.debug(f"Client disconnected: {request.sid}")
     
     @socketio.on('message')
     def handle_message(data):

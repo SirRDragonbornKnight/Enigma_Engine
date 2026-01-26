@@ -82,7 +82,7 @@ from PyQt5.QtWidgets import (
     QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar,
     QTextEdit
 )
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QPixmap, QFont, QIcon
 import time
 

@@ -636,8 +636,8 @@ class DashboardTab(QWidget):
             hours, remainder = divmod(int(uptime.total_seconds()), 3600)
             minutes, _ = divmod(remainder, 60)
             self.uptime_label.setText(f"Up {hours}h {minutes}m")
-        except:
-            pass
+        except (OSError, AttributeError):
+            pass  # psutil not available or uptime unavailable
     
     def _update_stats(self):
         """Update system statistics."""
@@ -655,8 +655,8 @@ class DashboardTab(QWidget):
                 cpu_freq = psutil.cpu_freq()
                 if cpu_freq:
                     self.cpu_freq_label.setText(f"Freq: {cpu_freq.current:.0f} MHz")
-            except:
-                self.cpu_freq_label.setText("Freq: N/A")
+            except (AttributeError, OSError):
+                self.cpu_freq_label.setText("Freq: N/A")  # CPU freq not available on this platform
             
             # RAM
             ram = psutil.virtual_memory()
@@ -727,8 +727,8 @@ class DashboardTab(QWidget):
                 for name, entries in temps.items():
                     if entries:
                         return entries[0].current
-        except:
-            pass
+        except (AttributeError, OSError, FileNotFoundError, PermissionError):
+            pass  # Temperature sensors not available on this platform
         return None
     
     def _check_alerts(self, cpu: float, ram: float, disk: float, temp: float):

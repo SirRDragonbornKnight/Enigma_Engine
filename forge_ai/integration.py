@@ -312,14 +312,25 @@ class CrossDeviceSystem:
         if self._adaptive_engine:
             return self._adaptive_engine.generate(prompt, **kwargs)
         
-        # Fallback to basic generation
+        # Fallback to pooled engine (efficient reuse)
         try:
-            from forge_ai.core import ForgeEngine
-            engine = ForgeEngine()
-            return engine.generate(prompt, **kwargs)
-        except Exception as e:
-            logger.error(f"Generation error: {e}")
-            return f"Error: {e}"
+            from forge_ai.core.engine_pool import get_engine, release_engine, create_fallback_response
+            engine = get_engine()
+            if engine is None:
+                return create_fallback_response("No engine available")
+            try:
+                return engine.generate(prompt, **kwargs)
+            finally:
+                release_engine(engine)
+        except ImportError:
+            # Double fallback to direct creation
+            try:
+                from forge_ai.core import ForgeEngine
+                engine = ForgeEngine()
+                return engine.generate(prompt, **kwargs)
+            except Exception as e:
+                logger.error(f"Generation error: {e}")
+                return f"Error: {e}"
     
     def speak(self, text: str):
         """Speak text via voice pipeline."""

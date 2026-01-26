@@ -13,7 +13,10 @@ Also includes "Speed vs Quality" toggle for generation.
 from typing import Dict, Any, Optional
 from pathlib import Path
 import json
+import logging
 import psutil
+
+logger = logging.getLogger(__name__)
 
 
 class ResourceAllocator:
@@ -95,7 +98,11 @@ class ResourceAllocator:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
                 return data.get('mode', 'balanced')
-            except (json.JSONDecodeError, IOError):
+            except json.JSONDecodeError as e:
+                logger.warning(f"Corrupted resource config, using balanced mode: {e}")
+                return 'balanced'
+            except IOError as e:
+                logger.warning(f"Could not read resource config: {e}")
                 return 'balanced'
         return 'balanced'
     
@@ -106,7 +113,11 @@ class ResourceAllocator:
                 with open(self.storage_path, 'r') as f:
                     data = json.load(f)
                 return data.get('preference', 'balanced')
-            except (json.JSONDecodeError, IOError):
+            except json.JSONDecodeError as e:
+                logger.debug(f"Corrupted preference file: {e}")
+                return 'balanced'
+            except IOError as e:
+                logger.debug(f"Could not read preference file: {e}")
                 return 'balanced'
         return 'balanced'
     

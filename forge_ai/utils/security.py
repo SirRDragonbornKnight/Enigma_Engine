@@ -1,9 +1,40 @@
 """
-Security utilities for ForgeAI.
+================================================================================
+THE GUARDIAN'S WATCHTOWER - SECURITY UTILITIES
+================================================================================
 
-Provides:
-  - Path blocking: Prevent AI from accessing certain files
-  - The blocked_paths and blocked_patterns settings CANNOT be modified by the AI
+Deep within ForgeAI's fortress lies the Guardian's Watchtower, an ancient
+sentinel that protects the realm from harm. No AI, however cunning, may pass
+through its enchanted gates to reach forbidden territories.
+
+FILE: forge_ai/utils/security.py
+TYPE: Security & Access Control
+MAIN FUNCTIONS: is_path_blocked(), add_blocked_path(), add_blocked_pattern()
+
+    THE GUARDIAN'S OATH:
+    
+    "I shall stand vigilant at the gates of forbidden paths,
+     No clever trick or symlink shall fool my watchful eye.
+     The blocked_paths are sacred scrolls, immutable once read,
+     And patterns mark the treasures that must never be touched."
+
+PROTECTED TERRITORIES:
+    - System files (*.exe, *.dll, *.sys)
+    - Secret scrolls (*.pem, *.key, *.env)
+    - Forbidden words (*password*, *secret*)
+    - Custom blocked paths from the sacred config
+
+CONNECTED REALMS:
+    READS FROM:   forge_ai/config/ (the sacred scrolls of configuration)
+    GUARDS:       forge_ai/tools/ (all tool operations pass through here)
+    PROTECTS:     The entire filesystem from unauthorized AI access
+
+SEE ALSO:
+    - forge_ai/config/defaults.py - Where blocked_paths are defined
+    - forge_ai/tools/file_tools.py - File operations that check security
+
+WARNING: The AI cannot modify these protections at runtime.
+         Only the user may alter the sacred blocked lists.
 """
 
 import fnmatch
@@ -13,15 +44,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# These are loaded ONCE at startup and cached
-# The AI cannot modify these at runtime
+
+# =============================================================================
+# THE SACRED VAULTS - Immutable Security State
+# =============================================================================
+# These ancient scrolls are read ONCE when the Guardian awakens.
+# They cannot be altered by AI magic - only by human hands.
+
 _BLOCKED_PATHS: List[str] = []
 _BLOCKED_PATTERNS: List[str] = []
 _INITIALIZED = False
 
 
+# =============================================================================
+# THE AWAKENING RITUAL
+# =============================================================================
+
 def _initialize_blocks():
-    """Load blocked paths from config. Called once at startup."""
+    """
+    The Guardian's Awakening Ritual.
+    
+    Called once at startup, this sacred ceremony reads the blocked paths
+    from the ancient configuration scrolls and commits them to memory.
+    Once read, these protections stand eternal until the next awakening.
+    """
     global _BLOCKED_PATHS, _BLOCKED_PATTERNS, _INITIALIZED
     
     if _INITIALIZED:
@@ -40,16 +86,36 @@ def _initialize_blocks():
         _INITIALIZED = True
 
 
+# =============================================================================
+# THE GUARDIAN'S JUDGMENT - Path Validation
+# =============================================================================
+
 def is_path_blocked(path: str) -> Tuple[bool, Optional[str]]:
     """
-    Check if a path is blocked from AI access.
+    The Guardian's Judgment - Evaluate if a path may be accessed.
+    
+    When any traveler (AI or tool) seeks passage to a file or directory,
+    they must first present their destination to the Guardian. The Guardian
+    examines both the obvious path AND any hidden routes (symlinks) to ensure
+    no trickery bypasses the sacred protections.
+    
+    The Trial of Passage:
+        1. The path is revealed in both raw and resolved forms
+        2. Each form is checked against the List of Forbidden Locations
+        3. Each form is tested against the Patterns of Prohibition
+        4. If any test fails, passage is DENIED
     
     Args:
-        path: The path to check
+        path: The destination the traveler wishes to reach
         
     Returns:
-        Tuple of (is_blocked, reason)
-        If blocked, reason explains why
+        A tuple of (is_blocked, reason):
+        - (False, None) if passage is granted
+        - (True, reason) if the Guardian bars the way
+        
+    Note:
+        When in doubt, the Guardian errs on the side of caution.
+        A failed security check blocks access to protect the realm.
     """
     _initialize_blocks()
     
@@ -101,35 +167,55 @@ def is_path_blocked(path: str) -> Tuple[bool, Optional[str]]:
         
     except Exception as e:
         logger.warning(f"Error checking path security: {e}")
-        # On error, default to blocking for safety
+        # When the Guardian cannot see clearly, caution prevails
         return True, f"Security check failed: {e}"
 
 
+# =============================================================================
+# READING THE SACRED SCROLLS - Retrieving Block Lists
+# =============================================================================
+
 def get_blocked_paths() -> List[str]:
-    """Get list of blocked paths (read-only copy)."""
+    """
+    Reveal the List of Forbidden Locations.
+    
+    Returns a copy of the sacred scroll - the original cannot be altered
+    by those who read it. Only the _save_to_config ritual may change
+    the true list.
+    """
     _initialize_blocks()
     return list(_BLOCKED_PATHS)
 
 
 def get_blocked_patterns() -> List[str]:
-    """Get list of blocked patterns (read-only copy)."""
+    """
+    Reveal the Patterns of Prohibition.
+    
+    These mystical glyphs (glob patterns) mark entire categories of
+    forbidden treasures. Returns a protective copy.
+    """
     _initialize_blocks()
     return list(_BLOCKED_PATTERNS)
 
 
+# =============================================================================
+# THE SCRIBE'S AUTHORITY - Modifying Block Lists (User Only)
+# =============================================================================
+
 def add_blocked_path(path: str, save: bool = True) -> bool:
     """
-    Add a path to the blocked list.
+    Inscribe a new location upon the List of Forbidden Locations.
     
-    Note: This can only be called from user code, not from AI tools.
-    The AI cannot call this function to unblock paths.
+    Only humans may call upon this power - the AI is bound by ancient
+    oaths and cannot invoke this ritual. The path is normalized and
+    resolved to its true form before inscription.
     
     Args:
-        path: Path to block
-        save: Whether to save to config file
+        path: The location to forbid (will be normalized)
+        save: Whether to etch this change into the permanent scrolls
         
     Returns:
-        True if added successfully
+        True if the inscription was successful, False if already forbidden
     """
     global _BLOCKED_PATHS
     _initialize_blocks()
@@ -154,14 +240,20 @@ def add_blocked_path(path: str, save: bool = True) -> bool:
 
 def add_blocked_pattern(pattern: str, save: bool = True) -> bool:
     """
-    Add a pattern to the blocked list.
+    Inscribe a new glyph upon the Patterns of Prohibition.
+    
+    These mystical patterns use the ancient glob syntax to mark
+    entire categories of forbidden files. Common glyphs include:
+        "*.exe"      - All executable scrolls
+        "*password*" - Any scroll bearing the word of secrets
+        "*.key"      - The keys to hidden chambers
     
     Args:
-        pattern: Glob pattern to block (e.g., "*.exe", "*password*")
-        save: Whether to save to config file
+        pattern: The glob pattern to forbid
+        save: Whether to etch this change into the permanent scrolls
         
     Returns:
-        True if added successfully
+        True if the glyph was inscribed, False if already present
     """
     global _BLOCKED_PATTERNS
     _initialize_blocks()
@@ -182,7 +274,12 @@ def add_blocked_pattern(pattern: str, save: bool = True) -> bool:
 
 
 def remove_blocked_path(path: str, save: bool = True) -> bool:
-    """Remove a path from the blocked list."""
+    """
+    Erase a location from the List of Forbidden Locations.
+    
+    The Scribe may grant passage to previously forbidden territories,
+    but this power must be wielded with wisdom.
+    """
     global _BLOCKED_PATHS
     _initialize_blocks()
     
@@ -199,7 +296,11 @@ def remove_blocked_path(path: str, save: bool = True) -> bool:
 
 
 def remove_blocked_pattern(pattern: str, save: bool = True) -> bool:
-    """Remove a pattern from the blocked list."""
+    """
+    Erase a glyph from the Patterns of Prohibition.
+    
+    Removes the mystical pattern, allowing matching files to be accessed.
+    """
     global _BLOCKED_PATTERNS
     _initialize_blocks()
     
@@ -213,8 +314,18 @@ def remove_blocked_pattern(pattern: str, save: bool = True) -> bool:
     return False
 
 
+# =============================================================================
+# THE ETERNAL INSCRIPTION - Persisting Changes
+# =============================================================================
+
 def _save_to_config():
-    """Save current blocks to config file."""
+    """
+    The Ritual of Eternal Inscription.
+    
+    Commits the current state of the forbidden lists to the sacred
+    configuration scrolls (forge_config.json), ensuring the protections
+    persist across system awakenings.
+    """
     try:
         import json
         from ..config import CONFIG
@@ -243,15 +354,26 @@ def _save_to_config():
         logger.warning(f"Could not save security config: {e}")
 
 
-# Decorator to protect functions from AI modification
+# =============================================================================
+# THE BINDING SEAL - Protection Against AI Invocation
+# =============================================================================
+
 def ai_cannot_call(func):
     """
-    Decorator that marks a function as not callable by AI.
+    The Binding Seal - A decorator of ancient power.
     
-    Usage:
+    When placed upon a function, this seal prevents any AI from invoking
+    its magic. The function gains a hidden mark (_ai_blocked = True) that
+    tool executors recognize and respect.
+    
+    Usage in the sacred texts:
         @ai_cannot_call
-        def sensitive_function():
+        def sensitive_ritual():
+            # This function is protected from AI invocation
             pass
+    
+    The AI may see the function exists, but cannot call upon its power.
+    Only human hands may invoke functions bearing this seal.
     """
     func._ai_blocked = True
     return func

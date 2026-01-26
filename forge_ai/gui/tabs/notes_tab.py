@@ -44,8 +44,8 @@ class NotesManager:
                 with open(note_file, 'r') as f:
                     note = json.load(f)
                     notes.append(note)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, OSError):
+                pass  # Skip corrupted or unreadable note files
         return notes
     
     def get_note(self, name: str) -> dict:
@@ -73,8 +73,8 @@ class NotesManager:
                 with open(note_file, 'r') as f:
                     existing = json.load(f)
                     note["created"] = existing.get("created", note["created"])
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, OSError):
+                pass  # Keep new creation date if existing file is unreadable
         
         with open(note_file, 'w') as f:
             json.dump(note, f, indent=2)
@@ -114,8 +114,8 @@ class BookmarksManager:
             try:
                 with open(self.bookmarks_file, 'r') as f:
                     return json.load(f)
-            except:
-                pass
+            except (json.JSONDecodeError, IOError, OSError):
+                pass  # Return empty list if bookmarks file is corrupted
         return []
     
     def _save(self, bookmarks: list):

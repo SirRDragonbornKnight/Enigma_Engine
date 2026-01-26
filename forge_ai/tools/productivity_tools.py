@@ -31,22 +31,26 @@ class SystemMonitorTool(Tool):
                     try:
                         u = psutil.disk_usage(p.mountpoint)
                         disks.append({"mount": p.mountpoint, "used_percent": u.percent, "free_gb": round(u.free/1024**3, 2)})
-                    except: pass
+                    except (PermissionError, OSError):
+                        pass  # Skip inaccessible disk partitions
                 result["disks"] = disks
                 try:
                     temps = psutil.sensors_temperatures()
                     if temps: result["temps"] = {k: [{"label": e.label, "temp": e.current} for e in v] for k, v in temps.items()}
-                except: pass
+                except (AttributeError, OSError):
+                    pass  # Temperature sensors not available on all platforms
                 return result
             except ImportError: pass
             
             # Fallback for Linux
             try:
                 with open('/proc/loadavg') as f: result["load"] = f.read().split()[:3]
-            except: pass
+            except (FileNotFoundError, PermissionError):
+                pass  # Linux-specific file not available
             try:
                 with open('/sys/class/thermal/thermal_zone0/temp') as f: result["cpu_temp_c"] = int(f.read())/1000
-            except: pass
+            except (FileNotFoundError, PermissionError, ValueError):
+                pass  # Thermal sensor not available
             result["note"] = "Install psutil for full details"
             return result
         except Exception as e:
@@ -65,8 +69,10 @@ class ProcessListTool(Tool):
                 import psutil
                 procs = []
                 for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
-                    try: procs.append(p.info)
-                    except: pass
+                    try: 
+                        procs.append(p.info)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass  # Process terminated or access denied during iteration
                 key = {'cpu': 'cpu_percent', 'memory': 'memory_percent', 'name': 'name'}.get(sort_by, 'cpu_percent')
                 procs.sort(key=lambda x: x.get(key, 0) or 0, reverse=key != 'name')
                 return {"success": True, "processes": procs[:limit]}

@@ -1396,34 +1396,51 @@ class ForgeEngine:
         Returns:
             Assistant's response
         """
-        # Build prompt from history
-        prompt_parts = []
+        # Use centralized prompt builder for consistent formatting
+        try:
+            from .prompt_builder import get_prompt_builder
+            builder = get_prompt_builder()
+            full_prompt = builder.build_chat_prompt(
+                message=message,
+                history=history,
+                system_prompt=system_prompt,
+                include_generation_prefix=True
+            )
+            stop_strings = builder.get_stop_sequences()
+        except ImportError:
+            # Fallback to inline prompt building
+            prompt_parts = []
 
-        if system_prompt:
-            prompt_parts.append(f"System: {system_prompt}\n")
+            if system_prompt:
+                prompt_parts.append(f"System: {system_prompt}\n")
 
-        if history:
-            for msg in history:
-                role = msg.get("role", "user").capitalize()
-                content = msg.get("content", "")
-                prompt_parts.append(f"{role}: {content}")
+            if history:
+                for msg in history:
+                    role = msg.get("role", "user").capitalize()
+                    content = msg.get("content", "")
+                    prompt_parts.append(f"{role}: {content}")
 
-        prompt_parts.append(f"User: {message}")
-        prompt_parts.append("Assistant:")
+            prompt_parts.append(f"User: {message}")
+            prompt_parts.append("Assistant:")
 
-        full_prompt = "\n".join(prompt_parts)
+            full_prompt = "\n".join(prompt_parts)
+            stop_strings = ["\nUser:", "\n\n", "User:"]
 
         # Generate
         response = self.generate(
             full_prompt,
             max_gen=max_gen,
-            stop_strings=["\nUser:", "\n\n", "User:"],
+            stop_strings=stop_strings,
             **kwargs
         )
 
         # Extract assistant's response
-        if "Assistant:" in response:
-            response = response.split("Assistant:")[-1].strip()
+        try:
+            from .prompt_builder import extract_response
+            response = extract_response(response, full_prompt)
+        except ImportError:
+            if "Assistant:" in response:
+                response = response.split("Assistant:")[-1].strip()
 
         return response
 
@@ -1448,22 +1465,35 @@ class ForgeEngine:
         Yields:
             Generated tokens one at a time
         """
-        # Build prompt
-        prompt_parts = []
+        # Use centralized prompt builder for consistent formatting
+        try:
+            from .prompt_builder import get_prompt_builder
+            builder = get_prompt_builder()
+            full_prompt = builder.build_chat_prompt(
+                message=message,
+                history=history,
+                system_prompt=system_prompt,
+                include_generation_prefix=True
+            )
+            stop_strings = builder.get_stop_sequences()
+        except ImportError:
+            # Fallback to inline prompt building
+            prompt_parts = []
 
-        if system_prompt:
-            prompt_parts.append(f"System: {system_prompt}\n")
+            if system_prompt:
+                prompt_parts.append(f"System: {system_prompt}\n")
 
-        if history:
-            for msg in history:
-                role = msg.get("role", "user").capitalize()
-                content = msg.get("content", "")
-                prompt_parts.append(f"{role}: {content}")
+            if history:
+                for msg in history:
+                    role = msg.get("role", "user").capitalize()
+                    content = msg.get("content", "")
+                    prompt_parts.append(f"{role}: {content}")
 
-        prompt_parts.append(f"User: {message}")
-        prompt_parts.append("Assistant:")
+            prompt_parts.append(f"User: {message}")
+            prompt_parts.append("Assistant:")
 
-        full_prompt = "\n".join(prompt_parts)
+            full_prompt = "\n".join(prompt_parts)
+            stop_strings = ["\nUser:", "\n\n"]
 
         # Stream generation
         buffer = ""
@@ -1471,11 +1501,14 @@ class ForgeEngine:
             buffer += token
 
             # Check for stop conditions
-            if "\nUser:" in buffer or buffer.endswith("\n\n"):
-                # Remove stop string from output
-                for stop in ["\nUser:", "\n\n"]:
-                    if stop in buffer:
-                        buffer = buffer[:buffer.find(stop)]
+            stopped = False
+            for stop in stop_strings:
+                if stop in buffer:
+                    buffer = buffer[:buffer.find(stop)]
+                    stopped = True
+                    break
+            
+            if stopped:
                 break
 
             yield token

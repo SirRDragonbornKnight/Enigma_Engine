@@ -89,7 +89,19 @@ def create_app():
     """Create Flask app without starting it."""
     app = Flask("forge_api")
     CORS(app)
-    engine = ForgeEngine()
+    
+    # Use engine pool for efficient reuse
+    _engine_cache = {"engine": None}
+    
+    def get_cached_engine():
+        """Get or create engine (lazy loading, singleton per app)."""
+        if _engine_cache["engine"] is None:
+            try:
+                from ..core.engine_pool import get_engine
+                _engine_cache["engine"] = get_engine()
+            except ImportError:
+                _engine_cache["engine"] = ForgeEngine()
+        return _engine_cache["engine"]
 
     @app.route("/health")
     def health():
@@ -145,8 +157,16 @@ def create_app():
         except (ValueError, TypeError):
             return jsonify({"error": "Invalid temperature value - must be number"}), 400
         
-        text = engine.generate(prompt, max_gen=max_gen, temperature=temp)
-        return jsonify({"text": text})
+        # Use pooled engine
+        engine = get_cached_engine()
+        if engine is None:
+            return jsonify({"error": "AI engine not available - check model is loaded"}), 503
+        
+        try:
+            text = engine.generate(prompt, max_gen=max_gen, temperature=temp)
+            return jsonify({"text": text})
+        except Exception as e:
+            return jsonify({"error": f"Generation failed: {e}"}), 500
 
     return app
 

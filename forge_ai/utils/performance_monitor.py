@@ -175,15 +175,17 @@ class PerformanceMonitor:
             import pynvml  # type: ignore
             pynvml.nvmlInit()
             return {"type": "nvidia", "lib": pynvml}
-        except Exception:
-            pass
+        except ImportError:
+            logger.debug("pynvml not installed - NVIDIA GPU monitoring unavailable")
+        except Exception as e:
+            logger.debug(f"NVIDIA GPU init failed: {e}")
         
         # Try GPUtil as fallback
         try:
             import GPUtil  # type: ignore
             return {"type": "gputil", "lib": GPUtil}
-        except Exception:
-            pass
+        except ImportError:
+            logger.debug("GPUtil not installed - GPU monitoring limited")
         
         return None
     
@@ -204,8 +206,8 @@ class PerformanceMonitor:
         if self._gpu_reader and self._gpu_reader["type"] == "nvidia":
             try:
                 self._gpu_reader["lib"].nvmlShutdown()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"GPU shutdown cleanup error (non-fatal): {e}")
         
         logger.info("Performance monitor stopped")
     
@@ -356,8 +358,10 @@ class PerformanceMonitor:
                         if entries:
                             metrics.cpu_temp = entries[0].current
                             break
-            except Exception:
-                pass
+            except AttributeError:
+                pass  # sensors_temperatures not available on this OS
+            except Exception as e:
+                logger.debug(f"Could not read CPU temperature: {e}")
                 
         except Exception as e:
             logger.debug(f"CPU metrics error: {e}")
@@ -449,8 +453,10 @@ class PerformanceMonitor:
             metrics.gpu_temp = pynvml.nvmlDeviceGetTemperature(
                 handle, pynvml.NVML_TEMPERATURE_GPU
             )
-        except Exception:
-            pass
+        except pynvml.NVMLError:
+            pass  # Temperature reading not supported
+        except Exception as e:
+            logger.debug(f"Could not read GPU temperature: {e}")
     
     def _collect_gpu_gputil(self, metrics: SystemMetrics):
         """Collect GPU metrics via GPUtil."""

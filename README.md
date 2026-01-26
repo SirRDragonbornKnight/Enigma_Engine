@@ -24,17 +24,26 @@ ForgeAI is a complete framework for building, training, and running your own AI 
 
 ```bash
 # Clone the repository
-git clone https://github.com/SirRDragonbornKnight/AI_Tester.git
-cd AI_Tester
+git clone https://github.com/SirRDragonbornKnight/Forge_AI.git
+cd Forge_AI
 
 # Create virtual environment (recommended)
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Mac/Linux
+
+# Activate virtual environment
+# Windows (Command Prompt):
+venv\Scripts\activate
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# Mac/Linux:
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+> **Note**: If you encounter permission errors on Windows PowerShell, run:
+> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
 ### 2. Launch the GUI
 
@@ -201,7 +210,9 @@ This is normal for a new AI! Go to the Train tab and train it.
 - Train for more epochs
 - Check your data quality
 
-## Privacy & Local-First Design 🔒
+**More solutions**: See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for the complete troubleshooting guide.
+
+## Privacy & Local-First Design
 
 ForgeAI is an **"open black box"** - completely transparent about what runs locally vs what requires cloud services.
 
@@ -256,9 +267,10 @@ See [docs/LOCAL_VS_CLOUD.md](docs/LOCAL_VS_CLOUD.md) for complete details on:
 ## Documentation
 
 - **[Getting Started](GETTING_STARTED.md)** - Quick start guide
+- **[Code Tour](docs/CODE_TOUR.md)** - Navigate the codebase
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues & solutions
 - **[Module System Guide](docs/MODULE_GUIDE.md)** - Complete guide to the module system
 - **[How To Train](docs/HOW_TO_TRAIN.md)** - Training guide and tips
-- **[What NOT To Do](docs/WHAT_NOT_TO_DO.txt)** - Common mistakes to avoid
 
 ## Contributing
 

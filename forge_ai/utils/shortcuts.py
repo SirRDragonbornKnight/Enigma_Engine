@@ -9,7 +9,10 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtCore import Qt
 from typing import Dict, Callable, Optional
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class ShortcutManager:
@@ -108,7 +111,11 @@ class ShortcutManager:
                 shortcuts = self.DEFAULT_SHORTCUTS.copy()
                 shortcuts.update(custom)
                 return shortcuts
-            except (json.JSONDecodeError, IOError):
+            except json.JSONDecodeError as e:
+                logger.warning(f"Corrupted shortcuts file, using defaults: {e}")
+                return self.DEFAULT_SHORTCUTS.copy()
+            except IOError as e:
+                logger.warning(f"Could not read shortcuts file: {e}")
                 return self.DEFAULT_SHORTCUTS.copy()
         return self.DEFAULT_SHORTCUTS.copy()
     

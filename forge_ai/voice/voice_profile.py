@@ -25,13 +25,17 @@ Usage:
 """
 
 import json
+import logging
 import platform
+import shlex
 import shutil
 from pathlib import Path
 from typing import Optional, Dict, List
 from dataclasses import dataclass, asdict
 
 from ..utils.system_messages import warning_msg, error_msg
+
+logger = logging.getLogger(__name__)
 
 # Check available TTS backends
 HAVE_PYTTSX3 = False
@@ -209,7 +213,11 @@ class VoiceEngine:
         if HAVE_PYTTSX3:
             try:
                 self._engine = pyttsx3.init()
-            except Exception:
+            except RuntimeError as e:
+                logger.debug(f"pyttsx3 init failed (no audio device?): {e}")
+                self._engine = None
+            except Exception as e:
+                logger.warning(f"Unexpected error initializing pyttsx3: {e}")
                 self._engine = None
     
     def set_profile(self, profile) -> bool:
@@ -299,8 +307,8 @@ class VoiceEngine:
                         "languages": getattr(voice, 'languages', []),
                         "gender": getattr(voice, 'gender', 'unknown')
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not enumerate voices: {e}")
         return voices
     
     def speak(self, text: str, wait: bool = True):
@@ -366,30 +374,33 @@ class VoiceEngine:
             system = platform.system()
             
             if system == "Darwin":  # macOS
-                # macOS 'say' command with rate
+                # macOS 'say' command with rate (use shlex.quote to prevent injection)
                 rate = int(180 * self.profile.speed)
-                os.system(f'say -r {rate} "{text}"')
+                import subprocess
+                subprocess.run(['say', '-r', str(rate), text], check=False)
                 
             elif system == "Windows":
-                # Windows SAPI with rate
+                # Windows SAPI with rate (escape text to prevent injection)
                 rate = int(10 * (self.profile.speed - 1))  # SAPI rate: -10 to 10
                 rate = max(-10, min(10, rate))
+                # Escape quotes and special chars for PowerShell
+                safe_text = text.replace("'", "''").replace('"', '`"')
                 ps_script = f'''
                 Add-Type -AssemblyName System.speech
                 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
                 $s.Rate = {rate}
                 $s.Volume = {int(self.profile.volume * 100)}
-                $s.Speak("{text}")
+                $s.Speak('{safe_text}')
                 '''
                 subprocess.call(['powershell', '-c', ps_script], 
                               creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
                 
             else:  # Linux
                 if HAVE_ESPEAK:
-                    # espeak with pitch and speed
+                    # espeak with pitch and speed (use subprocess to prevent injection)
                     pitch = int(50 * self.profile.pitch)
                     speed = int(175 * self.profile.speed)
-                    os.system(f'espeak -p {pitch} -s {speed} "{text}"')
+                    subprocess.run(['espeak', '-p', str(pitch), '-s', str(speed), text], check=False)
                 else:
                     print(f"[TTS] {text}")
                     

@@ -63,7 +63,7 @@ if is_hf:
         )
         print(f"Response: {response}")
     else:
-        print("\n>>> Using engine.model.generate() - THIS IS THE BUG PATH!")
+        print("\n>>> Using engine.model.generate() - fallback path")
         response = engine.model.generate(
             "hello",
             max_new_tokens=50,

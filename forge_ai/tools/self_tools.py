@@ -12,10 +12,12 @@ This makes the AI feel alive - it can evolve and personalize itself.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any
 from .tool_registry import Tool
 
+logger = logging.getLogger(__name__)
 
 # Storage for AI's self-configuration
 SELF_CONFIG_PATH = Path(__file__).parent.parent.parent / "data" / "ai_self_config.json"
@@ -26,8 +28,8 @@ def _load_self_config() -> Dict[str, Any]:
     if SELF_CONFIG_PATH.exists():
         try:
             return json.loads(SELF_CONFIG_PATH.read_text())
-        except Exception:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load self-config from {SELF_CONFIG_PATH}: {e}")
     return {
         "personality": {
             "name": "Forge",

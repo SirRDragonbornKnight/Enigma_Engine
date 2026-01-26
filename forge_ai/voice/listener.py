@@ -1,21 +1,56 @@
 # type: ignore
 # pyright: reportGeneralTypeIssues=false
-# type: ignore
-# pyright: reportGeneralTypeIssues=false
 # pyright: reportOptionalMemberAccess=false
 """
-Voice Listener - Wake word detection and continuous listening.
+================================================================================
+THE LISTENER'S CHAMBER - VOICE INPUT SYSTEM
+================================================================================
 
-Allows talking to Forge without the GUI visible:
-  - Wake word: "Hey ForgeAI" or "Forge"
-  - Continuous listening mode
-  - Speech-to-text for commands
+In the quiet depths of ForgeAI lies the Listener's Chamber, where spoken
+words are transformed into text that the AI can understand. The Listener
+waits patiently, ear pressed to the ether, ready to hear the sacred
+wake words that summon the AI to attention.
 
-Requirements:
-  pip install SpeechRecognition pyaudio
-  
-  On Windows, pyaudio should work out of the box.
-  On Linux: sudo apt install python3-pyaudio portaudio19-dev
+FILE: forge_ai/voice/listener.py
+TYPE: Speech-to-Text & Wake Word Detection
+MAIN CLASSES: VoiceListener, VoiceConfig
+
+    THE LISTENER'S VIGIL:
+    
+    [Ambient silence...]
+    User: "Hey ForgeAI!"        <- Wake word detected!
+    [Listener awakens]
+    User: "What's the weather?"  <- Speech captured
+    [Text sent to AI]
+
+WAKE WORD OPTIONS:
+    "Hey ForgeAI" - The primary invocation
+    "Forge"       - A shorter summons
+    Custom words can be added via VoiceConfig
+
+REQUIREMENTS:
+    pip install SpeechRecognition pyaudio
+    
+    Platform Notes:
+    - Windows: pyaudio works out of the box
+    - Linux: sudo apt install python3-pyaudio portaudio19-dev
+    - macOS: brew install portaudio && pip install pyaudio
+
+CONNECTED REALMS:
+    PROVIDES TO:    forge_ai/gui/ - Voice input for chat
+    WORKS WITH:     forge_ai/voice/voice_generator.py - Complete voice I/O
+    USES:           speech_recognition library (Google Speech API)
+
+USAGE:
+    from forge_ai.voice.listener import VoiceListener, VoiceConfig
+    
+    config = VoiceConfig(wake_words=["hey forge"])
+    listener = VoiceListener(config)
+    
+    def on_speech(text):
+        print(f"You said: {text}")
+    
+    listener.start(callback=on_speech)
 """
 
 import threading
@@ -24,7 +59,13 @@ import time
 from typing import Optional, Callable, List
 from dataclasses import dataclass
 
-# Check for speech recognition
+
+# =============================================================================
+# THE EARS OF THE FORGE - Speech Recognition Import
+# =============================================================================
+# We attempt to import the speech recognition library, which provides
+# the magical ability to convert spoken words into written text.
+
 try:
     import speech_recognition as sr
     HAS_SPEECH = True
@@ -33,14 +74,24 @@ except ImportError:
     sr = None
 
 
+# =============================================================================
+# THE DEVICE ORACLE - Audio Hardware Detection
+# =============================================================================
+
 def _check_audio_device():
     """
-    Check if audio input device exists (lazy evaluation).
-    Returns False if no device found, avoiding repeated error spam.
+    Consult the Device Oracle to determine if audio input exists.
+    
+    This sacred ritual probes the system's audio capabilities to find
+    a microphone. It performs the check only once and caches the result
+    to avoid repeatedly disturbing the audio subsystem.
+    
+    Returns:
+        bool: True if an input device is found, False otherwise
     """
     import os
     
-    # Allow skipping audio check for tests/headless environments
+    # Allow the ritual to be bypassed for tests/headless environments
     if os.getenv('FORGE_NO_AUDIO'):
         return False
     
@@ -48,7 +99,7 @@ def _check_audio_device():
         return False
     
     try:
-        # This will spam ALSA errors once, but we cache the result
+        # This may emit ALSA warnings once, but results are cached
         p = sr.Microphone.get_pyaudio().PyAudio()
         device_count = p.get_device_count()
         has_device = False
@@ -59,7 +110,7 @@ def _check_audio_device():
                     has_device = True
                     break
             except (IOError, OSError):
-                # Device enumeration can fail for invalid devices
+                # Some devices fail enumeration - this is normal
                 continue
         p.terminate()
         return has_device
@@ -67,12 +118,18 @@ def _check_audio_device():
         return False
 
 
-# Cache result after first check
+# Cache the oracle's answer - no need to ask twice
 _AUDIO_DEVICE_CHECKED = False
 _HAS_AUDIO_DEVICE = None
 
+
 def has_audio_device():
-    """Check if audio device is available (cached)."""
+    """
+    Query whether the system possesses an audio input device.
+    
+    The answer is cached after the first inquiry, as audio devices
+    rarely appear or vanish during a session.
+    """
     global _AUDIO_DEVICE_CHECKED, _HAS_AUDIO_DEVICE
     if not _AUDIO_DEVICE_CHECKED:
         _HAS_AUDIO_DEVICE = _check_audio_device()
@@ -80,20 +137,41 @@ def has_audio_device():
     return _HAS_AUDIO_DEVICE
 
 
+# =============================================================================
+# THE LISTENER'S CODEX - Configuration Settings
+# =============================================================================
+
 @dataclass
 class VoiceConfig:
-    """Configuration for voice listener."""
+    """
+    Configuration tome for the Voice Listener.
+    
+    These settings control how the Listener perceives and interprets
+    spoken words from the mortal realm.
+    
+    Attributes:
+        wake_words: The sacred phrases that awaken the Listener
+        language: The tongue in which speech shall be understood
+        timeout: Seconds of silence before abandoning a listen attempt
+        phrase_time_limit: Maximum duration of a single utterance
+        energy_threshold: Microphone sensitivity (lower = more sensitive)
+        dynamic_energy: If True, auto-adjusts for ambient noise
+    """
     wake_words: List[str] = None
     language: str = "en-US"
-    timeout: float = 5.0  # Seconds to wait for speech
-    phrase_time_limit: float = 10.0  # Max phrase length
-    energy_threshold: int = 300  # Mic sensitivity (lower = more sensitive)
-    dynamic_energy: bool = True  # Auto-adjust for ambient noise
+    timeout: float = 5.0
+    phrase_time_limit: float = 10.0
+    energy_threshold: int = 300
+    dynamic_energy: bool = True
     
     def __post_init__(self):
         if self.wake_words is None:
             self.wake_words = ["hey ai tester", "forge_ai", "hey engine", "a"]
 
+
+# =============================================================================
+# THE ETERNAL LISTENER - Voice Detection Class
+# =============================================================================
 
 class VoiceListener:
     """

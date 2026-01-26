@@ -61,8 +61,12 @@ class ScreenCapture:
             from PIL import ImageGrab
             ImageGrab.grab()
             return "pillow"
-        except (ImportError, OSError, Exception):
-            pass
+        except ImportError:
+            logger.debug("PIL ImageGrab not available")
+        except OSError as e:
+            logger.debug(f"PIL ImageGrab failed (Wayland?): {e}")
+        except Exception as e:
+            logger.debug(f"PIL ImageGrab test failed: {e}")
         
         try:
             return "mss"

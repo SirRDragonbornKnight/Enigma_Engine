@@ -63,6 +63,36 @@ except ImportError:
 # Model registry
 from .model_registry import ModelRegistry
 
+# Engine Pool (for efficient engine reuse)
+try:
+    from .engine_pool import (
+        EnginePool, EnginePoolConfig, PooledEngine,
+        get_engine, release_engine, get_engine_context,
+        get_pool, create_fallback_response,
+    )
+except ImportError:
+    EnginePool = None
+    EnginePoolConfig = None
+    PooledEngine = None
+    get_engine = None
+    release_engine = None
+    get_engine_context = None
+    get_pool = None
+    create_fallback_response = None
+
+# Prompt Builder (for consistent prompt formatting)
+try:
+    from .prompt_builder import (
+        PromptBuilder, PromptTemplate, get_prompt_builder,
+        build_chat_prompt, extract_response,
+    )
+except ImportError:
+    PromptBuilder = None
+    PromptTemplate = None
+    get_prompt_builder = None
+    build_chat_prompt = None
+    extract_response = None
+
 # Hardware detection
 try:
     from .hardware import get_hardware, HardwareProfile

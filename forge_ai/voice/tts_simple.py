@@ -4,17 +4,20 @@ API:
   - speak(text)
   - HAVE_PYTTSX3, HAVE_ESPEAK, HAVE_FESTIVAL: Check available backends
 """
+import logging
 import platform
 import shutil
 import subprocess
+
+logger = logging.getLogger(__name__)
 
 # Check available backends
 HAVE_PYTTSX3 = False
 try:
     import pyttsx3
     HAVE_PYTTSX3 = True
-except Exception:
-    pass
+except ImportError:
+    logger.debug("pyttsx3 not available, will use platform fallbacks")
 
 HAVE_ESPEAK = shutil.which("espeak") is not None or shutil.which("espeak-ng") is not None
 HAVE_FESTIVAL = shutil.which("festival") is not None
@@ -40,8 +43,8 @@ def speak(text: str):
             engine.say(text)  # pyttsx3 handles its own text safely
             engine.runAndWait()
             return
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"pyttsx3 failed, trying platform fallback: {e}")
     
     # Platform-specific fallbacks
     try:
@@ -81,6 +84,6 @@ def speak(text: str):
                 # Speech-dispatcher
                 subprocess.run(['spd-say', safe_text], check=False)
             else:
-                print(f"TTS: {text}")  # Fallback: just print
+                logger.info(f"No TTS backend available, text: {text}")
     except Exception as e:
-        print(f"TTS failed: {e}")
+        logger.error(f"TTS failed: {e}")

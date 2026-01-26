@@ -35,6 +35,21 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Constants
+# =============================================================================
+DEFAULT_SAMPLE_RATE = 16000
+DEFAULT_AUDIO_CHANNELS = 1
+DEFAULT_CHUNK_SIZE = 1024
+DEFAULT_WAKE_WORD = "hey forge"
+DEFAULT_WAKE_SENSITIVITY = 0.5
+DEFAULT_SILENCE_THRESHOLD_SECONDS = 0.3
+MAX_RECORDING_SECONDS = 30.0
+DEFAULT_TTS_RATE = 150
+DEFAULT_TTS_VOLUME = 1.0
+THREAD_JOIN_TIMEOUT = 2.0
+
+
 class VoiceMode(Enum):
     """Voice pipeline modes."""
     FULL = auto()          # Full voice in/out
@@ -58,26 +73,26 @@ class VoiceConfig:
     """Voice pipeline configuration."""
     # Input settings
     input_device: str = "default"
-    sample_rate: int = 16000
-    channels: int = 1
-    chunk_size: int = 1024
+    sample_rate: int = DEFAULT_SAMPLE_RATE
+    channels: int = DEFAULT_AUDIO_CHANNELS
+    chunk_size: int = DEFAULT_CHUNK_SIZE
     
     # Wake word
-    wake_word: str = "hey forge"
+    wake_word: str = DEFAULT_WAKE_WORD
     wake_word_enabled: bool = True
-    wake_word_sensitivity: float = 0.5
+    wake_word_sensitivity: float = DEFAULT_WAKE_SENSITIVITY
     
     # STT settings
     stt_model: str = "whisper"  # whisper, vosk, google
     stt_language: str = "en"
-    silence_threshold: float = 0.3  # seconds
-    max_recording_time: float = 30.0
+    silence_threshold: float = DEFAULT_SILENCE_THRESHOLD_SECONDS
+    max_recording_time: float = MAX_RECORDING_SECONDS
     
     # TTS settings
     tts_engine: str = "pyttsx3"  # pyttsx3, elevenlabs, espeak
     tts_voice: str = "default"
-    tts_rate: int = 150
-    tts_volume: float = 1.0
+    tts_rate: int = DEFAULT_TTS_RATE
+    tts_volume: float = DEFAULT_TTS_VOLUME
     
     # Output settings
     output_device: str = "default"
@@ -312,19 +327,18 @@ class VoicePipeline:
             engine.setProperty('rate', self.config.tts_rate)
             engine.setProperty('volume', self.config.tts_volume)
             return {"type": "pyttsx3", "engine": engine}
-        except Exception:
-            raise RuntimeError("pyttsx3 not available")
+        except ImportError:
+            raise RuntimeError("pyttsx3 not installed - run: pip install pyttsx3")
+        except Exception as e:
+            raise RuntimeError(f"pyttsx3 initialization failed: {e}")
     
     def _init_elevenlabs(self):
         """Initialize ElevenLabs TTS."""
-        try:
-            import os
-            api_key = os.environ.get("ELEVENLABS_API_KEY", "")
-            if not api_key:
-                raise RuntimeError("No API key")
-            return {"type": "elevenlabs", "api_key": api_key}
-        except Exception:
-            raise RuntimeError("elevenlabs not available")
+        import os
+        api_key = os.environ.get("ELEVENLABS_API_KEY", "")
+        if not api_key:
+            raise RuntimeError("ELEVENLABS_API_KEY environment variable not set")
+        return {"type": "elevenlabs", "api_key": api_key}
     
     def _init_builtin_tts(self):
         """Initialize builtin TTS (limited)."""
@@ -336,8 +350,8 @@ class VoicePipeline:
         if self._tts_engine and self._tts_engine.get("type") == "pyttsx3":
             try:
                 self._tts_engine["engine"].stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"TTS cleanup error (non-fatal): {e}")
     
     def _listen_loop(self):
         """Main listening loop."""
@@ -567,7 +581,11 @@ class VoicePipeline:
         try:
             import keyboard
             return keyboard.is_pressed(self.config.push_to_talk_key)
-        except Exception:
+        except ImportError:
+            logger.debug("keyboard module not available for push-to-talk")
+            return False
+        except Exception as e:
+            logger.debug(f"Push-to-talk check failed: {e}")
             return False
     
     def _interrupt_speech(self):
@@ -575,8 +593,8 @@ class VoicePipeline:
         if self._tts_engine and self._tts_engine.get("type") == "pyttsx3":
             try:
                 self._tts_engine["engine"].stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Speech interrupt error (non-fatal): {e}")
         self._speaking = False
 
 

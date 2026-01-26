@@ -235,7 +235,7 @@ class TestBuiltinFallbacks:
         from forge_ai.builtin import BuiltinChat
         chat = BuiltinChat()
         chat.load()
-        result = chat.respond("hello")
+        result = chat.chat("hello")  # Use chat() method, not respond()
         assert result is not None
         assert len(result) > 0
 
@@ -362,15 +362,15 @@ class TestDeviceProfiles:
         try:
             from forge_ai.core.device_profiles import ProfileSettings, DeviceClass
             
-            # Create settings manually
+            # Create settings manually (use actual dataclass field names)
             settings = ProfileSettings(
-                batch_size=1,
+                max_batch_size=1,
                 max_model_params=1000000,
                 use_quantization=True,
-                cpu_threads=4,
+                num_threads=4,
                 gpu_layers=0,
             )
-            assert settings.batch_size == 1
+            assert settings.max_batch_size == 1
         except ImportError:
             pytest.skip("Device profiles not available")
 

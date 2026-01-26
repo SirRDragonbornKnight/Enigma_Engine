@@ -5,22 +5,27 @@ The API surface:
   - transcribe_from_mic(timeout=10) -> str
   - transcribe_from_file(path) -> str
 """
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 # Try VOSK first (offline)
 try:
     import vosk
     import sounddevice as sd
     HAVE_VOSK = True
-except Exception:
+except ImportError:
     HAVE_VOSK = False
+    logger.debug("VOSK not available for offline STT")
 
 # Try SpeechRecognition (fallback)
 try:
     import speech_recognition as sr
     HAVE_SR = True
-except Exception:
+except ImportError:
     HAVE_SR = False
+    logger.debug("SpeechRecognition not available")
 
 def transcribe_from_mic(timeout=8):
     if HAVE_VOSK:
@@ -80,10 +85,11 @@ def _transcribe_vosk_file(path):
                 j = json.loads(r)
                 if j.get("text"):
                     texts.append(j["text"])
-            except Exception:
-                pass
+            except json.JSONDecodeError:
+                logger.debug(f"Failed to parse VOSK result: {r}")
         return " ".join(texts)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"VOSK file transcription failed: {e}")
         return ""
 
 # SpeechRecognition fallback (online by default)
@@ -94,7 +100,17 @@ def _transcribe_sr_from_mic(timeout):
             r.adjust_for_ambient_noise(source)
             audio = r.listen(source, timeout=timeout)
         return r.recognize_google(audio)  # uses Google Web Speech API (online)
-    except Exception:
+    except sr.WaitTimeoutError:
+        logger.debug("Microphone listen timed out")
+        return ""
+    except sr.UnknownValueError:
+        logger.debug("Speech not recognized")
+        return ""
+    except sr.RequestError as e:
+        logger.warning(f"Google Speech API request failed: {e}")
+        return ""
+    except Exception as e:
+        logger.error(f"Unexpected STT error: {e}")
         return ""
 
 def _transcribe_sr_file(path):
@@ -103,5 +119,15 @@ def _transcribe_sr_file(path):
         with sr.AudioFile(path) as source:
             audio = r.record(source)
         return r.recognize_google(audio)
-    except Exception:
+    except FileNotFoundError:
+        logger.error(f"Audio file not found: {path}")
+        return ""
+    except sr.UnknownValueError:
+        logger.debug(f"Speech not recognized in file: {path}")
+        return ""
+    except sr.RequestError as e:
+        logger.warning(f"Google Speech API request failed: {e}")
+        return ""
+    except Exception as e:
+        logger.error(f"Failed to transcribe file {path}: {e}")
         return ""

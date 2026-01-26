@@ -1,49 +1,66 @@
 # ForgeAI - Code Tour Guide
 
-Welcome! This guide walks you through the codebase so you understand how everything works together.
+**Your map through the ForgeAI realm.** This guide helps you navigate the codebase and find any feature's code in under 5 minutes.
+
+> *"Every great adventure begins with understanding the terrain. This map reveals the paths through ForgeAI's architecture - from the humble entry point to the deepest neural caverns."*
 
 ---
 
-## 🏗️ Project Structure Overview
+## Quick Navigation
+
+| I want to... | Go to... |
+|-------------|----------|
+| Start the application | [run.py](../run.py) |
+| Understand the AI model | [forge_ai/core/model.py](../forge_ai/core/model.py) |
+| See how training works | [forge_ai/core/training.py](../forge_ai/core/training.py) |
+| Modify the chat interface | [forge_ai/gui/tabs/chat_tab.py](../forge_ai/gui/tabs/chat_tab.py) |
+| Add a new tool | [forge_ai/tools/tool_definitions.py](../forge_ai/tools/tool_definitions.py) |
+| Change configuration | [forge_ai/config/defaults.py](../forge_ai/config/defaults.py) |
+| Load/unload modules | [forge_ai/modules/manager.py](../forge_ai/modules/manager.py) |
+
+---
+
+## The Realm Map - Project Structure
 
 ```
 forge_ai/
-├── run.py                  # 🚀 MAIN ENTRY POINT - Start here!
-├── requirements.txt        # Dependencies to install
-├── setup.py               # Package installation config
+├── run.py                  # THE GATEWAY - All journeys begin here
+├── requirements.txt        # The supply manifest
+├── setup.py               # Installation enchantments
 │
-├── forge_ai/                # === THE MAIN PACKAGE ===
-│   ├── __init__.py        # Package exports
-│   ├── config.py          # Global configuration
+├── forge_ai/                # === THE KINGDOM ===
+│   ├── __init__.py        # Royal proclamations (exports)
+│   ├── config/            # The Chamber of Configuration
 │   │
-│   ├── core/              # 🧠 THE BRAIN
-│   ├── memory/            # 💾 STORAGE & RECALL
-│   ├── comms/             # 🌐 NETWORKING
-│   ├── gui/               # 🖥️ USER INTERFACE
-│   ├── voice/             # 🔊 SPEECH
-│   ├── avatar/            # 🤖 VISUAL CHARACTER
-│   ├── tools/             # 🔧 AI CAPABILITIES
-│   └── utils/             # 🛠️ HELPERS
+│   ├── core/              # THE BRAIN - Neural architecture
+│   ├── modules/           # THE ARMORY - Loadable capabilities  
+│   ├── memory/            # THE VAULT - Storage & recall
+│   ├── comms/             # THE MESSENGER - Networking
+│   ├── gui/               # THE THRONE ROOM - User interface
+│   ├── voice/             # THE HERALD - Speech
+│   ├── avatar/            # THE COMPANION - Visual character
+│   ├── tools/             # THE WORKSHOP - AI capabilities
+│   └── utils/             # THE TOOLSHED - Helpers
 │
-├── data/                  # Training data files
-├── models/                # Saved AI models
-├── docs/                  # Documentation
-└── examples/              # Example scripts
+├── data/                  # Training scrolls
+├── models/                # Trained minds
+├── docs/                  # Ancient wisdom
+└── examples/              # Practice quests
 ```
 
 ---
 
-## 🚀 Entry Point: run.py
+## The Gateway: run.py
 
 **File:** [run.py](../run.py)
 
-This is where everything starts. It's a simple command-line interface:
+Every adventure begins at the gateway. This simple sentinel routes travelers to their destination:
 
 ```bash
-python run.py --train    # Train the AI
-python run.py --run      # Chat in terminal
-python run.py --gui      # Open graphical interface
-python run.py --serve    # Start API server
+python run.py --train    # Enter the Training Grounds
+python run.py --run      # Speak with the Oracle (CLI)
+python run.py --gui      # Enter the Throne Room (GUI)
+python run.py --serve    # Summon the API Server
 ```
 
 **What it does:**
@@ -52,14 +69,14 @@ python run.py --serve    # Start API server
 
 ---
 
-## 🧠 Core Package: forge_ai/core/
+## The Brain: forge_ai/core/
 
-This is the **brain** of the AI - where all the neural network magic happens.
+*Deep within ForgeAI's fortress lies the Brain - sacred chambers where neural networks learn to think. Here, mathematics becomes magic, and patterns become understanding.*
 
-### model.py - The Neural Network Architecture
+### model.py - The Neural Architecture
 **File:** [forge_ai/core/model.py](../forge_ai/core/model.py)
 
-Contains `Enigma`, a production-grade transformer language model.
+Contains `Forge`, a production-grade transformer language model - the very mind of your AI.
 
 **Key Features:**
 - **RoPE (Rotary Position Embeddings)** - Better position awareness than learned embeddings
@@ -76,7 +93,7 @@ Contains `Enigma`, a production-grade transformer language model.
 
 **Architecture Components:**
 ```python
-Enigma(
+Forge(
     vocab_size=32000,    # Vocabulary size
     dim=256,             # Hidden dimension
     depth=6,             # Number of transformer layers
@@ -147,7 +164,7 @@ Defines model sizes from mobile to server-scale:
 - `xxl`: ~770M params - Like GPT-2 large
 - `xxxl`: ~1.5B params - Like GPT-2 XL
 
-### trainer.py - Advanced Training
+### trainer.py - The Training Grounds
 **File:** [forge_ai/core/trainer.py](../forge_ai/core/trainer.py)
 
 Full-featured `ForgeTrainer` class:
@@ -158,7 +175,7 @@ Full-featured `ForgeTrainer` class:
 - Learning rate scheduling
 - Comprehensive logging
 
-### model_scaling.py - Grow Your AI
+### model_scaling.py - The Growth Chamber
 **File:** [forge_ai/core/model_scaling.py](../forge_ai/core/model_scaling.py)
 
 Scale models up or down:
@@ -166,7 +183,7 @@ Scale models up or down:
 - `shrink_model()` - Compress for deployment
 - `KnowledgeDistiller` - Train small model to mimic large model
 
-### layers.py - Building Blocks
+### layers.py - The Building Blocks
 **File:** [forge_ai/core/layers.py](../forge_ai/core/layers.py)
 
 Additional neural network components:
@@ -177,18 +194,18 @@ Additional neural network components:
 - `LoRALayer` - Efficient fine-tuning
 - `MixtureOfExperts` - Sparse scaling
 
-### hardware.py - Auto-Detection
+### hardware.py - The Quartermaster
 **File:** [forge_ai/core/hardware.py](../forge_ai/core/hardware.py)
 
 Automatically detects your hardware and recommends optimal settings.
 
 ---
 
-## 💾 Memory Package: forge_ai/memory/
+## The Vault: forge_ai/memory/
 
-Where the AI stores and retrieves information.
+*In the depths of ForgeAI lies the Memory Vault - where conversations are preserved and wisdom is stored for future recall.*
 
-### manager.py - Conversation Storage
+### manager.py - The Archivist
 **File:** [forge_ai/memory/manager.py](../forge_ai/memory/manager.py)
 
 Saves conversations to JSON files:
@@ -197,23 +214,23 @@ manager = ConversationManager()
 manager.save_conversation("chat_with_bob", messages)
 ```
 
-### memory_db.py - SQLite Database
+### memory_db.py - The Deep Archives
 **File:** [forge_ai/memory/memory_db.py](../forge_ai/memory/memory_db.py)
 
 Long-term memory storage with search capabilities.
 
-### vector_utils.py - Semantic Search
+### vector_utils.py - The Oracle's Eye
 **File:** [forge_ai/memory/vector_utils.py](../forge_ai/memory/vector_utils.py)
 
 Find similar memories using cosine similarity (vector math).
 
 ---
 
-## 🌐 Communications Package: forge_ai/comms/
+## The Messenger: forge_ai/comms/
 
-Networking for multi-device setups.
+*Across distant lands, the Messenger carries word between ForgeAI instances - linking PCs to Raspberry Pis, enabling AI-to-AI discourse.*
 
-### api_server.py - REST API
+### api_server.py - The Embassy
 **File:** [forge_ai/comms/api_server.py](../forge_ai/comms/api_server.py)
 
 Flask server with endpoints:
@@ -221,31 +238,31 @@ Flask server with endpoints:
 - `GET /health` - Check server status
 - `GET /models` - List available models
 
-### network.py - Multi-Device Communication
+### network.py - The Courier Network
 **File:** [forge_ai/comms/network.py](../forge_ai/comms/network.py)
 
-`EnigmaNode` class for device-to-device communication:
+`ForgeNode` class for device-to-device communication:
 - PC talks to Raspberry Pi
 - AI-to-AI conversations
 - Memory sync across devices
 
-### discovery.py - Find Other Devices
+### discovery.py - The Scouts
 **File:** [forge_ai/comms/discovery.py](../forge_ai/comms/discovery.py)
 
-Auto-discover other Enigma instances on your network.
+Auto-discover other ForgeAI instances on your network.
 
-### mobile_api.py - Phone Support
+### mobile_api.py - The Swift Runners
 **File:** [forge_ai/comms/mobile_api.py](../forge_ai/comms/mobile_api.py)
 
 Optimized API for mobile apps.
 
 ---
 
-## 🖥️ GUI Package: forge_ai/gui/
+## The Throne Room: forge_ai/gui/
 
-Desktop graphical interfaces.
+*The grand Throne Room where users interact with their AI. PyQt5 provides the ornate decorations; the tabs are doors to different chambers.*
 
-### main_window.py - Basic GUI
+### main_window.py - The Simple Hall
 **File:** [forge_ai/gui/main_window.py](../forge_ai/gui/main_window.py)
 
 Simple PyQt5 window with:
@@ -254,7 +271,7 @@ Simple PyQt5 window with:
 - Training tab
 - Avatar tab
 
-### enhanced_window.py - Full-Featured GUI
+### enhanced_window.py - The Grand Palace
 **File:** [forge_ai/gui/enhanced_window.py](../forge_ai/gui/enhanced_window.py)
 
 Advanced GUI with:
@@ -266,7 +283,7 @@ Advanced GUI with:
 - Terminal output tab
 - History per AI
 
-### gui_state.py - AI ↔ GUI Bridge
+### gui_state.py - The Royal Advisor
 **File:** [forge_ai/gui/gui_state.py](../forge_ai/gui/gui_state.py)
 
 Singleton manager allowing AI tools to control the GUI:
@@ -285,20 +302,20 @@ gui.set_setting("chat_zoom", 14)
 
 ---
 
-## 🔊 Voice Package: forge_ai/voice/
+## The Herald: forge_ai/voice/
 
-Speech capabilities.
+*The Herald gives voice to thoughts - speaking aloud and listening for commands.*
 
-### tts_simple.py - Text-to-Speech
+### tts_simple.py - The Voice
 **File:** [forge_ai/voice/tts_simple.py](../forge_ai/voice/tts_simple.py)
 
 Makes the AI speak using pyttsx3:
 ```python
 from forge_ai.voice import speak
-speak("Hello, I am Enigma!")
+speak("Hello, I am Forge!")
 ```
 
-### stt_simple.py - Speech-to-Text
+### stt_simple.py - The Ears
 **File:** [forge_ai/voice/stt_simple.py](../forge_ai/voice/stt_simple.py)
 
 Listen to user's voice:
@@ -309,16 +326,16 @@ text = listen(timeout=5)
 
 ---
 
-## 🤖 Avatar Package: forge_ai/avatar/
+## The Companion: forge_ai/avatar/
 
-Visual character representation.
+*A loyal companion that lives on your desktop - moving, expressing, and interacting with the world.*
 
-### avatar_api.py - Basic Avatar Control
+### avatar_api.py - Simple Interface
 **File:** [forge_ai/avatar/avatar_api.py](../forge_ai/avatar/avatar_api.py)
 
 Simple avatar interface stub.
 
-### controller.py - Full Avatar System
+### controller.py - Full Avatar Control
 **File:** [forge_ai/avatar/controller.py](../forge_ai/avatar/controller.py)
 
 ```python
@@ -331,11 +348,11 @@ avatar.speak("Hello!")
 
 ---
 
-## 🔧 Tools Package: forge_ai/tools/
+## The Workshop: forge_ai/tools/
 
-AI capabilities to interact with the world.
+*In the Workshop, the AI gains hands - tools to search, read, write, and interact with the world beyond its mind.*
 
-### tool_registry.py - Tool Framework
+### tool_registry.py - The Tool Rack
 **File:** [forge_ai/tools/tool_registry.py](../forge_ai/tools/tool_registry.py)
 
 Register and execute tools:
@@ -343,7 +360,7 @@ Register and execute tools:
 result = execute_tool("web_search", query="Python tutorials")
 ```
 
-### vision.py - Screen Vision
+### vision.py - The All-Seeing Eye
 **File:** [forge_ai/tools/vision.py](../forge_ai/tools/vision.py)
 
 AI can "see" the screen:
@@ -351,24 +368,24 @@ AI can "see" the screen:
 - OCR (read text from images)
 - Find elements on screen
 
-### web_tools.py - Internet Access
+### web_tools.py - The Web Weaver
 **File:** [forge_ai/tools/web_tools.py](../forge_ai/tools/web_tools.py)
 
 Search the web, fetch pages.
 
-### file_tools.py - File Operations
+### file_tools.py - The Scribe's Quill
 **File:** [forge_ai/tools/file_tools.py](../forge_ai/tools/file_tools.py)
 
 Read, write, list, move files.
 
-### document_tools.py - Document Reading
+### document_tools.py - The Scholar's Library
 **File:** [forge_ai/tools/document_tools.py](../forge_ai/tools/document_tools.py)
 
 Read PDF, EPUB, DOCX files.
 
 ---
 
-## 📝 Data Flow: How It All Works Together
+## The Great Circuit: How It All Flows
 
 ```
 User Input
@@ -394,7 +411,7 @@ AI Response
 
 ---
 
-## 🎯 Quick Reference: Common Tasks
+## Quick Spells: Common Tasks
 
 ### Create a new AI
 ```python
@@ -418,42 +435,42 @@ print(engine.generate("Hello!"))
 
 ### Run multiple AIs talking to each other
 ```python
-from forge_ai.comms.network import EnigmaNode
-node = EnigmaNode(name="my_node")
+from forge_ai.comms.network import ForgeNode
+node = ForgeNode(name="my_node")
 node.start_ai_conversation("other_ai", num_turns=5)
 ```
 
 ---
 
-## 🔗 File Relationships
+## The Web of Connections
 
 ```
-run.py
-  └── Uses: forge_ai/core/training.py (--train)
-  └── Uses: forge_ai/core/inference.py (--run)
-  └── Uses: forge_ai/gui/enhanced_window.py (--gui)
-  └── Uses: forge_ai/comms/api_server.py (--serve)
+run.py (The Gateway)
+  └── forge_ai/core/training.py (--train)
+  └── forge_ai/core/inference.py (--run)
+  └── forge_ai/gui/enhanced_window.py (--gui)
+  └── forge_ai/comms/api_server.py (--serve)
 
-enhanced_window.py
-  └── Uses: forge_ai/core/model_registry.py (model management)
-  └── Uses: forge_ai/core/inference.py (chat)
-  └── Uses: forge_ai/memory/manager.py (history)
-  └── Uses: forge_ai/tools/vision.py (screen capture)
-  └── Uses: forge_ai/avatar/controller.py (avatar)
-  └── Uses: forge_ai/voice/ (TTS/STT)
+enhanced_window.py (The Throne Room)
+  └── forge_ai/core/model_registry.py (model management)
+  └── forge_ai/core/inference.py (chat)
+  └── forge_ai/memory/manager.py (history)
+  └── forge_ai/tools/vision.py (screen capture)
+  └── forge_ai/avatar/controller.py (avatar)
+  └── forge_ai/voice/ (TTS/STT)
 
-api_server.py
-  └── Uses: forge_ai/core/inference.py (generate responses)
-  └── Uses: forge_ai/core/model_registry.py (model info)
+api_server.py (The Embassy)
+  └── forge_ai/core/inference.py (generate responses)
+  └── forge_ai/core/model_registry.py (model info)
 ```
 
 ---
 
-## 📚 Next Steps
+## Your Next Quest
 
-1. **Read the HOW_TO_MAKE_AI.txt** for step-by-step training guide
-2. **Check examples/** folder for working code samples
-3. **Edit data/data.txt** to add your training data
-4. **Run `python run.py --gui`** to start the interface
+1. **Read [HOW_TO_TRAIN.md](HOW_TO_TRAIN.md)** - Master the art of training
+2. **Explore [examples/](../examples/)** - See working code in action
+3. **Edit [data/training.txt](../data/training.txt)** - Add your training data
+4. **Run `python run.py --gui`** - Begin your adventure!
 
-Happy coding! 🚀
+> *"The path is now clear, traveler. May your models converge and your loss decrease!"*
