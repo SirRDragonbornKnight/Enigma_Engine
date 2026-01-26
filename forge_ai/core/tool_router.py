@@ -8,7 +8,7 @@ and sends their request to the RIGHT specialized model or tool!
 
 📍 FILE: forge_ai/core/tool_router.py
 🏷️ TYPE: Request Routing & Tool Dispatch
-🎯 MAIN CLASSES: ToolRouter, ToolDefinition, ModelAssignment
+🎯 MAIN CLASSES: ToolRouter, RoutingRule, ModelAssignment
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  ROUTING FLOW:                                                              │
@@ -76,13 +76,15 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ToolDefinition:
+class RoutingRule:
     """
-    Definition of an available tool.
+    Definition of a routing rule for intent-based tool selection.
     
     📖 WHAT THIS IS:
-    A tool is any capability the AI can use - image generation, code writing,
-    web search, etc. This class defines what a tool IS and how to trigger it.
+    A routing rule defines how to detect when a user wants to use
+    a specific capability (image generation, code writing, web search, etc.)
+    This is separate from ToolDefinition in tool_definitions.py which defines
+    the full tool with parameters and versioning.
     
     📐 KEYWORD MATCHING:
     When user says "draw me a cat", the router looks for keywords:
@@ -122,81 +124,81 @@ class ModelAssignment:
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-# Built-in tool definitions
-TOOL_DEFINITIONS = {
-    "chat": ToolDefinition(
+# Built-in routing rules for intent classification
+ROUTING_RULES = {
+    "chat": RoutingRule(
         name="chat",
         description="General conversation and reasoning",
         keywords=["chat", "talk", "explain", "help", "what", "why", "how"],
         parameters={"prompt": "The user message to respond to"}
     ),
-    "image": ToolDefinition(
+    "image": RoutingRule(
         name="image",
         description="Generate images from text descriptions",
         keywords=["draw", "paint", "create image", "generate image", "picture", "photo", "illustration", "artwork"],
         parameters={"prompt": "Description of image to generate", "width": "Image width", "height": "Image height"}
     ),
-    "code": ToolDefinition(
+    "code": RoutingRule(
         name="code",
         description="Generate or analyze code",
         keywords=["code", "program", "script", "function", "debug", "fix code", "write code"],
         parameters={"prompt": "Code task description", "language": "Programming language"}
     ),
-    "video": ToolDefinition(
+    "video": RoutingRule(
         name="video",
         description="Generate video clips",
         keywords=["video", "animate", "animation", "clip", "movie"],
         parameters={"prompt": "Video description", "duration": "Length in seconds"}
     ),
-    "audio": ToolDefinition(
+    "audio": RoutingRule(
         name="audio",
         description="Generate audio or speech",
         keywords=["speak", "say", "voice", "audio", "sound", "music", "song", "read aloud"],
         parameters={"text": "Text to speak or audio description"}
     ),
-    "3d": ToolDefinition(
+    "3d": RoutingRule(
         name="3d",
         description="Generate 3D models",
         keywords=["3d", "model", "mesh", "object", "sculpt"],
         parameters={"prompt": "3D model description"}
     ),
-    "gif": ToolDefinition(
+    "gif": RoutingRule(
         name="gif",
         description="Create animated GIFs",
         keywords=["gif", "animated", "animation loop", "meme"],
         parameters={"prompt": "GIF description", "frames": "Number of frames"}
     ),
-    "web": ToolDefinition(
+    "web": RoutingRule(
         name="web",
         description="Search the web or fetch information",
         keywords=["search", "google", "look up", "find", "website", "browse"],
         parameters={"query": "Search query or URL"}
     ),
-    "memory": ToolDefinition(
+    "memory": RoutingRule(
         name="memory",
         description="Remember or recall information",
         keywords=["remember", "recall", "forget", "memory", "save this"],
         parameters={"action": "save/recall/list", "content": "What to remember"}
     ),
-    "embeddings": ToolDefinition(
+    "embeddings": RoutingRule(
         name="embeddings",
         description="Semantic search and similarity matching",
         keywords=["search", "find similar", "semantic", "embedding", "vector search"],
         parameters={"query": "Text to search for", "top_k": "Number of results"}
     ),
-    "camera": ToolDefinition(
+    "camera": RoutingRule(
         name="camera",
         description="Capture from webcam or camera",
         keywords=["camera", "webcam", "photo", "capture", "take picture", "snap"],
         parameters={"action": "capture/record/analyze"}
     ),
-    "vision": ToolDefinition(
+    "vision": RoutingRule(
         name="vision",
         description="Analyze images or screen captures",
         keywords=["see", "look at", "analyze image", "what's on screen", "screenshot", "describe image"],
         parameters={"image_path": "Path to image or 'screen' for screenshot"}
     ),
-    "avatar": ToolDefinition(
+    "avatar": RoutingRule(
         name="avatar",
         description="Control the AI avatar display",
         keywords=["avatar", "face", "expression", "show me", "look"],
@@ -273,9 +275,9 @@ class ToolRouter:
         self.assignments: Dict[str, List[ModelAssignment]] = {}
         
         # ─────────────────────────────────────────────────────────────────────
-        # TOOL DEFINITIONS: All available tools and their metadata
+        # ROUTING RULES: Define how to detect intent and route to tools
         # ─────────────────────────────────────────────────────────────────────
-        self.tools = TOOL_DEFINITIONS.copy()
+        self.routing_rules = ROUTING_RULES.copy()
         
         # ─────────────────────────────────────────────────────────────────────
         # MODEL CACHE: Keep loaded models in memory for speed
@@ -602,7 +604,7 @@ class ToolRouter:
                     match = re.search(r'\[E:tool\](\w+)', result)
                     if match:
                         intent = match.group(1).lower()
-                        if intent in self.tools:
+                        if intent in self.routing_rules:
                             logger.info(f"Router classified intent: {intent}")
                             return intent
                     
@@ -612,7 +614,7 @@ class ToolRouter:
                         if len(parts) > 1:
                             intent_text = parts[-1].strip()
                             intent = intent_text.split()[0].lower() if intent_text else None
-                            if intent and intent in self.tools:
+                            if intent and intent in self.routing_rules:
                                 logger.info(f"Router classified intent (fallback): {intent}")
                                 return intent
                     
@@ -757,8 +759,8 @@ class ToolRouter:
             priority: Higher = tried first (default 10)
             config: Optional model-specific config
         """
-        if tool_name not in self.tools:
-            raise ValueError(f"Unknown tool: {tool_name}. Available: {list(self.tools.keys())}")
+        if tool_name not in self.routing_rules:
+            raise ValueError(f"Unknown tool: {tool_name}. Available: {list(self.routing_rules.keys())}")
         
         # Parse model type from ID
         if ":" in model_id:
@@ -890,9 +892,9 @@ class ToolRouter:
         text_lower = text.lower()
         
         scores = {}
-        for tool_name, tool_def in self.tools.items():
+        for tool_name, routing_rule in self.routing_rules.items():
             score = 0
-            for keyword in tool_def.keywords:
+            for keyword in routing_rule.keywords:
                 if keyword in text_lower:
                     score += 1
                     # Exact phrase match = bonus
@@ -1030,7 +1032,7 @@ class ToolRouter:
         Returns:
             {"success": bool, "result": Any, "error": Optional[str]}
         """
-        if tool_name not in self.tools:
+        if tool_name not in self.routing_rules:
             return {"success": False, "error": f"Unknown tool: {tool_name}"}
             
         # Get assigned models

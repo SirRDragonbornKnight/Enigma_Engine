@@ -468,8 +468,8 @@ class ModelRouterTab(QWidget):
         
         # Create tool widgets in a single column (responsive)
         try:
-            from forge_ai.core.tool_router import TOOL_DEFINITIONS
-            tools = TOOL_DEFINITIONS
+            from forge_ai.core.tool_router import ROUTING_RULES
+            tools = ROUTING_RULES
         except ImportError:
             tools = {}
             
