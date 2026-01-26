@@ -2114,8 +2114,14 @@ class CameraModule(Module):
     )
 
     def load(self) -> bool:
-        """Load camera module."""
-        return True  # Loaded on demand in the tab
+        """Load camera module - verifies OpenCV is available."""
+        try:
+            import cv2
+            self._cv2 = cv2
+            return True
+        except ImportError:
+            logger.warning("Camera module requires opencv-python: pip install opencv-python")
+            return True  # Still allow load, tab shows install instructions
 
 
 # -----------------------------------------------------------------------------
@@ -2142,8 +2148,14 @@ class GIFGenModule(Module):
     )
 
     def load(self) -> bool:
-        """Load GIF generation module."""
-        return True
+        """Load GIF generation module - verifies PIL is available."""
+        try:
+            from PIL import Image
+            self._pil = Image
+            return True
+        except ImportError:
+            logger.warning("GIF module requires Pillow: pip install Pillow")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2170,8 +2182,13 @@ class VoiceCloneModule(Module):
     )
 
     def load(self) -> bool:
-        """Load voice cloning module."""
-        return True
+        """Load voice cloning module - verifies TTS backend."""
+        try:
+            from forge_ai.gui.tabs.voice_clone_tab import VoiceCloneTab
+            return True
+        except Exception as e:
+            logger.warning(f"Voice clone module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2197,8 +2214,15 @@ class NotesModule(Module):
     )
 
     def load(self) -> bool:
-        """Load notes module."""
-        return True
+        """Load notes module - initializes notes manager."""
+        try:
+            from forge_ai.gui.tabs.notes_tab import NotesManager, NOTES_DIR
+            NOTES_DIR.mkdir(parents=True, exist_ok=True)
+            self._manager = NotesManager()
+            return True
+        except Exception as e:
+            logger.warning(f"Notes module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2252,8 +2276,14 @@ class SchedulerModule(Module):
     )
 
     def load(self) -> bool:
-        """Load scheduler module."""
-        return True
+        """Load scheduler module - initializes task scheduler."""
+        try:
+            from forge_ai.gui.tabs.scheduler_tab import SCHEDULER_FILE
+            SCHEDULER_FILE.parent.mkdir(parents=True, exist_ok=True)
+            return True
+        except Exception as e:
+            logger.warning(f"Scheduler module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2306,8 +2336,14 @@ class TerminalModule(Module):
     )
 
     def load(self) -> bool:
-        """Load terminal module."""
-        return True
+        """Load terminal module - verifies subprocess access."""
+        try:
+            import subprocess
+            self._subprocess = subprocess
+            return True
+        except Exception as e:
+            logger.warning(f"Terminal module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2464,7 +2500,14 @@ class ModelRouterModule(Module):
     )
 
     def load(self) -> bool:
-        return True
+        """Load model router module - initializes routing config."""
+        try:
+            from forge_ai.core.tool_router import get_router
+            self._router = get_router()
+            return True
+        except Exception as e:
+            logger.warning(f"Model router module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2517,7 +2560,14 @@ class GameAIModule(Module):
     )
 
     def load(self) -> bool:
-        return True
+        """Load game AI module - initializes game router."""
+        try:
+            from forge_ai.tools.game_router import get_game_router
+            self._router = get_game_router()
+            return True
+        except Exception as e:
+            logger.warning(f"Game AI module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2543,7 +2593,14 @@ class RobotControlModule(Module):
     )
 
     def load(self) -> bool:
-        return True
+        """Load robot control module - initializes mode controller."""
+        try:
+            from forge_ai.tools.robot_modes import get_mode_controller
+            self._controller = get_mode_controller()
+            return True
+        except Exception as e:
+            logger.warning(f"Robot control module load: {e}")
+            return True
 
 
 # -----------------------------------------------------------------------------
@@ -2595,7 +2652,14 @@ class HuggingFaceModule(Module):
     )
 
     def load(self) -> bool:
-        return True
+        """Load HuggingFace module - verifies transformers is available."""
+        try:
+            from forge_ai.core.huggingface_loader import load_huggingface_model
+            self._loader = load_huggingface_model
+            return True
+        except Exception as e:
+            logger.warning(f"HuggingFace module requires transformers: pip install transformers")
+            return True
 
 
 # =============================================================================
