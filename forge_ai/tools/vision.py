@@ -12,9 +12,18 @@ Works on: Desktop (Windows/Mac/Linux), Mobile (limited)
 
 import base64
 import io
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
+
+logger = logging.getLogger(__name__)
+
+# Constants
+DEFAULT_CAPTURE_MAX_SIZE = 1024
+MAX_VISION_HISTORY = 100
+COMPARISON_THUMBNAIL_SIZE = (200, 200)
+MAX_SCREEN_CONTEXT_TEXT = 1000
 
 
 
@@ -266,7 +275,7 @@ class ScreenVision:
         
         result["success"] = True
         result["size"] = {"width": img.size[0], "height": img.size[1]}
-        result["image_base64"] = self.capture.capture_to_base64(max_size=1024)
+        result["image_base64"] = self.capture.capture_to_base64(max_size=DEFAULT_CAPTURE_MAX_SIZE)
         
         # OCR for text
         if detect_text and self._ocr_available:
@@ -292,8 +301,8 @@ class ScreenVision:
         })
         
         # Keep history limited
-        if len(self.history) > 100:
-            self.history = self.history[-100:]
+        if len(self.history) > MAX_VISION_HISTORY:
+            self.history = self.history[-MAX_VISION_HISTORY:]
         
         return result
     
@@ -352,9 +361,8 @@ class ScreenVision:
             import numpy as np
             
             # Resize for faster comparison
-            size = (200, 200)
-            old_small = old_img.resize(size)
-            new_small = new_img.resize(size)
+            old_small = old_img.resize(COMPARISON_THUMBNAIL_SIZE)
+            new_small = new_img.resize(COMPARISON_THUMBNAIL_SIZE)
             
             old_arr = np.array(old_small, dtype=float)
             new_arr = np.array(new_small, dtype=float)
@@ -429,8 +437,8 @@ class ScreenVision:
         if vision_data.get("text_content"):
             # Truncate if too long
             text = vision_data["text_content"]
-            if len(text) > 1000:
-                text = text[:1000] + "...[truncated]"
+            if len(text) > MAX_SCREEN_CONTEXT_TEXT:
+                text = text[:MAX_SCREEN_CONTEXT_TEXT] + "...[truncated]"
             parts.append(f"Visible text:\n{text}")
         
         return "\n".join(parts)

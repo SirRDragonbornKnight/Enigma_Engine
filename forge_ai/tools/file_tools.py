@@ -13,10 +13,14 @@ Security:
   - AI cannot access files in blocked locations
 """
 
+import logging
+import platform
 import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional
 from .tool_registry import Tool
+
+logger = logging.getLogger(__name__)
 
 # Import security check
 try:
@@ -26,6 +30,9 @@ except ImportError:
     HAS_SECURITY = False
     def is_path_blocked(path):
         return False, None
+
+# Constants
+MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
 
 
 def _check_path_allowed(path: str) -> Dict[str, Any]:
@@ -228,6 +235,14 @@ class MoveFileTool(Tool):
             source = Path(source).expanduser().resolve()
             destination = Path(destination).expanduser().resolve()
             
+            # Security checks for both source and destination
+            blocked = _check_path_allowed(str(source))
+            if blocked:
+                return blocked
+            blocked = _check_path_allowed(str(destination))
+            if blocked:
+                return blocked
+            
             if not source.exists():
                 return {"success": False, "error": f"Source not found: {source}"}
             
@@ -256,11 +271,39 @@ class DeleteFileTool(Tool):
         "confirm": "Must be 'yes' to actually delete (safety check)",
     }
     
-    # Protected paths that cannot be deleted
-    PROTECTED_PATHS = [
+    # Protected paths that cannot be deleted - OS-specific
+    PROTECTED_PATHS_UNIX = [
         "/", "/home", "/usr", "/bin", "/etc", "/var", "/root",
         "/boot", "/lib", "/lib64", "/sbin", "/opt", "/sys", "/proc"
     ]
+    
+    PROTECTED_PATHS_WINDOWS = [
+        "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
+        "C:\\Users\\Public", "C:\\ProgramData", "C:\\",
+    ]
+    
+    @property
+    def protected_paths(self):
+        """Get protected paths for current OS."""
+        if platform.system() == "Windows":
+            return self.PROTECTED_PATHS_WINDOWS
+        return self.PROTECTED_PATHS_UNIX
+    
+    def _is_protected(self, path: Path) -> bool:
+        """Check if path is protected from deletion."""
+        path_str = str(path).lower()
+        for protected in self.protected_paths:
+            protected_lower = protected.lower()
+            # Check exact match or if path is inside protected directory
+            if path_str == protected_lower:
+                return True
+            # Check if it's a direct child of a protected path
+            try:
+                if path.resolve().parent == Path(protected).resolve():
+                    return True
+            except (OSError, ValueError):
+                pass
+        return False
     
     def execute(self, path: str, confirm: str = "no", **kwargs) -> Dict[str, Any]:
         try:
@@ -272,10 +315,15 @@ class DeleteFileTool(Tool):
             
             path = Path(path).expanduser().resolve()
             
-            # Safety check
-            for protected in self.PROTECTED_PATHS:
-                if str(path) == protected or str(path).startswith(protected + "/") and path.parent == Path(protected):
-                    return {"success": False, "error": f"Cannot delete protected path: {path}"}
+            # Safety check - protected paths
+            if self._is_protected(path):
+                logger.warning(f"Attempted deletion of protected path: {path}")
+                return {"success": False, "error": f"Cannot delete protected path: {path}"}
+            
+            # Check security module
+            blocked = _check_path_allowed(str(path))
+            if blocked:
+                return blocked
             
             if not path.exists():
                 return {"success": False, "error": f"File not found: {path}"}

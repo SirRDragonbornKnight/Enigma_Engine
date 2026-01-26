@@ -6,6 +6,7 @@ Tools:
   - fetch_webpage: Get content from a URL
 """
 
+import logging
 import urllib.request
 import urllib.parse
 import json
@@ -13,6 +14,14 @@ import re
 from typing import Dict, Any
 from .tool_registry import Tool
 from .url_safety import URLSafety, ContentFilter
+
+logger = logging.getLogger(__name__)
+
+# Constants
+MAX_SEARCH_RESULTS = 20
+MAX_WEBPAGE_CONTENT_BYTES = 100000  # 100KB
+DEFAULT_REQUEST_TIMEOUT = 10
+DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; ForgeAI/1.0)"
 
 
 class WebSearchTool(Tool):
@@ -50,20 +59,20 @@ class WebSearchTool(Tool):
             if num_results <= 0:
                 return {"success": False, "error": "num_results must be positive"}
             
-            if num_results > 20:
-                num_results = 20  # Reasonable limit
+            if num_results > MAX_SEARCH_RESULTS:
+                num_results = MAX_SEARCH_RESULTS
             
             # Use DuckDuckGo Lite - simpler HTML
             encoded_query = urllib.parse.quote(query.strip())
             url = f"https://lite.duckduckgo.com/lite/?q={encoded_query}"
             
             headers = {
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+                "User-Agent": DEFAULT_USER_AGENT
             }
             
             req = urllib.request.Request(url, headers=headers)
             
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=DEFAULT_REQUEST_TIMEOUT) as response:
                 html = response.read().decode('utf-8')
             
             # Parse results from lite version
@@ -162,7 +171,7 @@ class FetchWebpageTool(Tool):
                 return {"success": False, "error": "max_length must be positive"}
             
             # Limit max_length to prevent memory issues
-            max_length = min(max_length, 100000)  # 100KB limit
+            max_length = min(max_length, MAX_WEBPAGE_CONTENT_BYTES)
             
             headers = {
                 "User-Agent": "Mozilla/5.0 (compatible; ForgeBot/1.0)"
