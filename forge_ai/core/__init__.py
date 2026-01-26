@@ -101,6 +101,31 @@ except ImportError:
     LowPowerEngine = None
     LowPowerConfig = None
 
+# Gaming Mode (optional)
+try:
+    from .gaming_mode import (
+        GamingMode, GamingPriority, GamingProfile, ResourceLimits,
+        get_gaming_mode,
+    )
+except ImportError:
+    GamingMode = None
+    GamingPriority = None
+    GamingProfile = None
+    ResourceLimits = None
+    get_gaming_mode = None
+
+# Adaptive Engine (optional)
+try:
+    from .adaptive_engine import (
+        AdaptiveEngine, AdaptiveConfig, AdaptiveMode,
+        get_adaptive_engine,
+    )
+except ImportError:
+    AdaptiveEngine = None
+    AdaptiveConfig = None
+    AdaptiveMode = None
+    get_adaptive_engine = None
+
 # HuggingFace model loading (optional - lazy load to avoid slow imports)
 HuggingFaceModel = None
 HuggingFaceEngine = None
@@ -263,6 +288,19 @@ __all__ = [
     # Low Power Inference
     "LowPowerEngine",
     "LowPowerConfig",
+    
+    # Gaming Mode
+    "GamingMode",
+    "GamingPriority",
+    "GamingProfile",
+    "ResourceLimits",
+    "get_gaming_mode",
+    
+    # Adaptive Engine
+    "AdaptiveEngine",
+    "AdaptiveConfig",
+    "AdaptiveMode",
+    "get_adaptive_engine",
     
     # External model loading
     "HuggingFaceModel",

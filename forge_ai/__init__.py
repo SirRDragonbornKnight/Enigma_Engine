@@ -61,6 +61,16 @@ DB_PATH = Path(CONFIG["db_path"])
 __version__ = "0.1.0"
 __author__ = "ForgeAI Team"
 
+# Cross-device integration (Pi + Phone + Gaming PC)
+try:
+    from .integration import (
+        CrossDeviceSystem, SystemRole, DeviceEndpoint,
+        quick_setup_gaming_pc, quick_setup_phone, quick_setup_pi,
+    )
+    HAS_INTEGRATION = True
+except ImportError:
+    HAS_INTEGRATION = False
+
 __all__ = [
     # Configuration
     'CONFIG',
@@ -73,4 +83,11 @@ __all__ = [
     'DB_PATH',
     # Version
     '__version__',
+    # Cross-device integration
+    'CrossDeviceSystem',
+    'SystemRole',
+    'DeviceEndpoint',
+    'quick_setup_gaming_pc',
+    'quick_setup_phone',
+    'quick_setup_pi',
 ]

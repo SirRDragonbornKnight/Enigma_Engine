@@ -1,19 +1,32 @@
 """
+================================================================================
 Unified Tab Patterns - Standard patterns for consistent GUI behavior.
+================================================================================
 
 This module provides:
-- Standard styling that works across all themes
-- Common layout patterns for generation tabs
-- Device-aware UI adjustments
-- Shared worker base with proper cleanup
+- Device-aware styling (Pi to 4K monitor)
+- Standard patterns for all generation tabs
 - Memory-efficient preview handling
+- Consistent color theming
+- Unified worker base class
+
+USAGE:
+    from forge_ai.gui.tabs.unified_patterns import (
+        get_style_config, get_button_style, Colors,
+        UnifiedWorker, create_styled_button
+    )
+    
+    # Get device-aware button style
+    btn = QPushButton("Generate")
+    btn.setStyleSheet(get_button_style('primary'))
 
 All generation tabs should use these patterns for consistency.
 """
 
 import os
+import sys
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable
 import gc
 import logging
 
@@ -22,7 +35,7 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QProgressBar, QGroupBox, QFrame,
         QSizePolicy, QSpacerItem, QTextEdit, QSpinBox,
-        QDoubleSpinBox, QCheckBox, QApplication
+        QDoubleSpinBox, QCheckBox, QApplication, QComboBox
     )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer
     from PyQt5.QtGui import QFont, QPixmap, QImage
@@ -37,23 +50,38 @@ logger = logging.getLogger(__name__)
 # Device-Aware Style Configuration
 # =============================================================================
 
+class DeviceUIClass:
+    """Device UI classification for adaptive layouts."""
+    EMBEDDED = "embedded"      # Pi, small screens (< 800px)
+    MOBILE = "mobile"          # Phones, tablets (800-1200px)
+    DESKTOP = "desktop"        # Standard monitors (1200-2560px)
+    HIGHRES = "highres"        # 4K and above (> 2560px)
+
+
 class StyleConfig:
     """
     Device-aware style configuration.
     
     Adjusts UI elements based on device capabilities:
     - Smaller fonts/buttons on low-res screens
+    - Larger touch targets on mobile
     - Reduced animations on low-power devices
     - Memory-efficient preview sizes
+    - Adaptive spacing and margins
     """
     
     def __init__(self):
         self._device_class = None
+        self._ui_class = None
         self._screen_dpi = 96
+        self._screen_width = 1920
+        self._screen_height = 1080
+        self._is_touch = False
         self._detect_device()
     
     def _detect_device(self):
-        """Detect device class and screen properties."""
+        """Detect device class, screen properties, and UI class."""
+        # Hardware detection
         try:
             from ...core.device_profiles import get_device_profiler, DeviceClass
             profiler = get_device_profiler()
@@ -61,6 +89,7 @@ class StyleConfig:
         except ImportError:
             self._device_class = None
         
+        # Screen detection
         if HAS_PYQT:
             try:
                 app = QApplication.instance()
@@ -68,8 +97,24 @@ class StyleConfig:
                     screen = app.primaryScreen()
                     if screen:
                         self._screen_dpi = screen.logicalDotsPerInch()
-            except:
+                        size = screen.size()
+                        self._screen_width = size.width()
+                        self._screen_height = size.height()
+            except Exception:
                 pass
+        
+        # Determine UI class based on screen width
+        if self._screen_width < 800:
+            self._ui_class = DeviceUIClass.EMBEDDED
+        elif self._screen_width < 1200:
+            self._ui_class = DeviceUIClass.MOBILE
+        elif self._screen_width < 2560:
+            self._ui_class = DeviceUIClass.DESKTOP
+        else:
+            self._ui_class = DeviceUIClass.HIGHRES
+        
+        # Touch detection (basic heuristic)
+        self._is_touch = self._ui_class in {DeviceUIClass.EMBEDDED, DeviceUIClass.MOBILE}
     
     @property
     def is_low_power(self) -> bool:
@@ -87,32 +132,116 @@ class StyleConfig:
             return False
     
     @property
+    def is_embedded(self) -> bool:
+        """Check if running on embedded device (Pi, etc.)."""
+        if self._device_class is None:
+            return False
+        try:
+            from ...core.device_profiles import DeviceClass
+            return self._device_class == DeviceClass.EMBEDDED
+        except ImportError:
+            return False
+    
+    @property
+    def ui_class(self) -> str:
+        """Get UI classification for layout decisions."""
+        return self._ui_class or DeviceUIClass.DESKTOP
+    
+    @property
+    def screen_width(self) -> int:
+        """Get screen width in pixels."""
+        return self._screen_width
+    
+    @property
+    def screen_height(self) -> int:
+        """Get screen height in pixels."""
+        return self._screen_height
+    
+    @property
+    def is_touch(self) -> bool:
+        """Check if device likely has touch input."""
+        return self._is_touch
+    
+    @property
     def base_font_size(self) -> int:
         """Get appropriate base font size."""
-        if self._screen_dpi < 100 or self.is_low_power:
-            return 10
-        elif self._screen_dpi > 150:
-            return 12
-        return 11
+        if self._ui_class == DeviceUIClass.EMBEDDED:
+            return 9
+        elif self._ui_class == DeviceUIClass.MOBILE:
+            return 11
+        elif self._ui_class == DeviceUIClass.HIGHRES:
+            return 13
+        return 11  # Desktop default
+    
+    @property
+    def header_font_size(self) -> int:
+        """Get header font size."""
+        return self.base_font_size + 4
     
     @property
     def button_padding(self) -> str:
         """Get button padding CSS."""
+        if self._is_touch:
+            return "10px 16px"  # Larger for touch
         if self.is_low_power:
             return "4px 8px"
         return "8px 16px"
     
     @property
+    def min_button_height(self) -> int:
+        """Minimum button height for touch targets."""
+        if self._is_touch:
+            return 44  # Apple HIG recommendation
+        return 30
+    
+    @property
     def preview_max_size(self) -> int:
         """Max size for image previews."""
-        if self.is_low_power:
-            return 256
-        return 512
+        if self._ui_class == DeviceUIClass.EMBEDDED:
+            return 200
+        elif self._ui_class == DeviceUIClass.MOBILE:
+            return 300
+        elif self._ui_class == DeviceUIClass.HIGHRES:
+            return 800
+        return 512  # Desktop
     
     @property
     def enable_animations(self) -> bool:
         """Whether to enable UI animations."""
         return not self.is_low_power
+    
+    @property
+    def spacing(self) -> int:
+        """Standard spacing between elements."""
+        if self._ui_class == DeviceUIClass.EMBEDDED:
+            return 4
+        elif self._ui_class == DeviceUIClass.MOBILE:
+            return 6
+        return 8
+    
+    @property
+    def margins(self) -> int:
+        """Standard margins for layouts."""
+        if self._ui_class == DeviceUIClass.EMBEDDED:
+            return 4
+        elif self._ui_class == DeviceUIClass.MOBILE:
+            return 6
+        return 10
+    
+    @property
+    def border_radius(self) -> int:
+        """Standard border radius."""
+        if self._ui_class == DeviceUIClass.EMBEDDED:
+            return 3
+        return 6
+    
+    def get_optimal_batch_size(self) -> int:
+        """Get optimal batch size for generation."""
+        if self.is_embedded:
+            return 1
+        if self.is_low_power:
+            return 2
+        return 4
 
 
 # Singleton style config
@@ -637,11 +766,61 @@ def open_in_viewer(path: str):
         subprocess.Popen(["xdg-open", path])
 
 
+def create_no_scroll_combo(
+    items: List[str] = None,
+    tooltip: str = "",
+    min_width: int = 120,
+) -> 'QComboBox':
+    """
+    Create a combo box that doesn't respond to scroll wheel.
+    
+    This prevents accidental value changes when scrolling the page.
+    """
+    if not HAS_PYQT:
+        return None
+    
+    from .shared_components import NoScrollComboBox
+    
+    combo = NoScrollComboBox()
+    if items:
+        combo.addItems(items)
+    if tooltip:
+        combo.setToolTip(tooltip)
+    combo.setMinimumWidth(min_width)
+    return combo
+
+
+def apply_device_aware_layout(layout, widget=None):
+    """
+    Apply device-aware spacing and margins to a layout.
+    
+    Args:
+        layout: QLayout to configure
+        widget: Optional widget to set margins on
+    """
+    config = get_style_config()
+    
+    layout.setSpacing(config.spacing)
+    layout.setContentsMargins(
+        config.margins, config.margins,
+        config.margins, config.margins
+    )
+    
+    if widget and HAS_PYQT:
+        widget.setContentsMargins(
+            config.margins, config.margins,
+            config.margins, config.margins
+        )
+
+
 # =============================================================================
 # Exports
 # =============================================================================
 
 __all__ = [
+    # Device/UI classes
+    'DeviceUIClass',
+    
     # Style config
     'StyleConfig',
     'get_style_config',
@@ -668,6 +847,7 @@ __all__ = [
     'create_styled_group',
     'create_spinner',
     'create_double_spinner',
+    'create_no_scroll_combo',
     
     # Utilities
     'open_in_explorer',

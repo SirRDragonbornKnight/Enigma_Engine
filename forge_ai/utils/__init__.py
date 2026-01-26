@@ -25,6 +25,18 @@ from .json_cache import (
     read_json_cached, write_json_cached, invalidate_cache, get_cache_stats
 )
 
+# Battery management for mobile/embedded devices
+from .battery_manager import (
+    BatteryManager, PowerState, PowerProfile, POWER_PROFILES,
+    get_battery_manager,
+)
+
+# Performance monitoring
+from .performance_monitor import (
+    PerformanceMonitor, SystemMetrics, PerformanceAlert,
+    get_performance_monitor,
+)
+
 
 def progress_bar(
     iterable: Iterator[Any],
@@ -184,4 +196,15 @@ __all__ = [
     'write_json_cached',
     'invalidate_cache',
     'get_cache_stats',
+    # Battery management
+    'BatteryManager',
+    'PowerState',
+    'PowerProfile',
+    'POWER_PROFILES',
+    'get_battery_manager',
+    # Performance monitoring
+    'PerformanceMonitor',
+    'SystemMetrics',
+    'PerformanceAlert',
+    'get_performance_monitor',
 ]

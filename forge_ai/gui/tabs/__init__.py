@@ -138,6 +138,23 @@ def __getattr__(name: str):
         'BUTTON_STYLE_SUCCESS': ('.base_generation_tab', 'BUTTON_STYLE_SUCCESS'),
         'BUTTON_STYLE_DANGER': ('.base_generation_tab', 'BUTTON_STYLE_DANGER'),
         'create_group_box': ('.base_generation_tab', 'create_group_box'),
+        
+        # Provider base
+        'GenerationProvider': ('.provider_base', 'GenerationProvider'),
+        'ProviderRegistry': ('.provider_base', 'ProviderRegistry'),
+        'get_provider_registry': ('.provider_base', 'get_provider_registry'),
+        
+        # Unified patterns
+        'StyleConfig': ('.unified_patterns', 'StyleConfig'),
+        'get_style_config': ('.unified_patterns', 'get_style_config'),
+        'Colors': ('.unified_patterns', 'Colors'),
+        'DeviceUIClass': ('.unified_patterns', 'DeviceUIClass'),
+        'get_button_style': ('.unified_patterns', 'get_button_style'),
+        'get_header_style': ('.unified_patterns', 'get_header_style'),
+        'get_group_style': ('.unified_patterns', 'get_group_style'),
+        'UnifiedWorker': ('.unified_patterns', 'UnifiedWorker'),
+        'create_styled_button': ('.unified_patterns', 'create_styled_button'),
+        'create_styled_group': ('.unified_patterns', 'create_styled_group'),
     }
     
     if name not in _imports:
@@ -223,4 +240,19 @@ __all__ = [
     'BUTTON_STYLE_SUCCESS',
     'BUTTON_STYLE_DANGER',
     'create_group_box',
+    # Provider base
+    'GenerationProvider',
+    'ProviderRegistry',
+    'get_provider_registry',
+    # Unified patterns
+    'StyleConfig',
+    'get_style_config',
+    'Colors',
+    'DeviceUIClass',
+    'get_button_style',
+    'get_header_style',
+    'get_group_style',
+    'UnifiedWorker',
+    'create_styled_button',
+    'create_styled_group',
 ]

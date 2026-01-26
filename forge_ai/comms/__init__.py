@@ -8,6 +8,18 @@ from .protocol_manager import ProtocolManager, ProtocolConfig, get_protocol_mana
 from .remote_client import RemoteClient
 from .api_server import create_api_server
 
+# Network optimizer for low-latency distributed AI
+from .network_optimizer import (
+    NetworkOptimizer, OptimizedRequest, RequestStats, ResponseCache,
+    get_network_optimizer,
+)
+
+# Device sync for real-time state synchronization
+from .device_sync import (
+    DeviceSync, DeviceType, SyncPriority, SyncState, ConnectedDevice,
+    get_device_sync,
+)
+
 # Distributed protocol (hardware-aware)
 try:
     from .distributed import (
@@ -65,6 +77,21 @@ __all__ = [
     # API clients
     "RemoteClient",
     "create_api_server",
+    
+    # Network optimizer
+    "NetworkOptimizer",
+    "OptimizedRequest",
+    "RequestStats",
+    "ResponseCache",
+    "get_network_optimizer",
+    
+    # Device sync
+    "DeviceSync",
+    "DeviceType",
+    "SyncPriority",
+    "SyncState",
+    "ConnectedDevice",
+    "get_device_sync",
 ]
 
 # Add Flask-dependent exports if available

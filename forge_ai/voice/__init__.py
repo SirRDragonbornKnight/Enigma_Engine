@@ -200,5 +200,27 @@ __all__ = [
     # Optional advanced features
     'WhisperSTT',
     'NaturalTTS',
+    
+    # Voice pipeline (unified voice I/O)
+    'VoicePipeline',
+    'VoiceConfig',
+    'VoiceMode',
+    'VoiceDevice',
+    'SpeechSegment',
+    'get_voice_pipeline',
 ]
+
+# Voice pipeline for unified STT/TTS
+try:
+    from .voice_pipeline import (
+        VoicePipeline, VoiceConfig, VoiceMode, VoiceDevice, SpeechSegment,
+        get_voice_pipeline,
+    )
+except ImportError:
+    VoicePipeline = None
+    VoiceConfig = None
+    VoiceMode = None
+    VoiceDevice = None
+    SpeechSegment = None
+    get_voice_pipeline = None
 
