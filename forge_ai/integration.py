@@ -433,7 +433,7 @@ class CrossDeviceSystem:
     def _init_mobile_avatar_server(self):
         """Initialize mobile avatar server."""
         try:
-            from forge_ai.gui.mobile_avatar import MobileAvatarServer
+            from forge_ai.avatar.mobile_avatar import MobileAvatarServer
             # Server is integrated with device sync
             logger.debug("Mobile avatar server initialized")
         except Exception as e:
@@ -442,7 +442,7 @@ class CrossDeviceSystem:
     def _init_mobile_avatar_client(self, host_ip: str, host_port: int):
         """Initialize mobile avatar client."""
         try:
-            from forge_ai.gui.mobile_avatar import MobileAvatar
+            from forge_ai.avatar.mobile_avatar import MobileAvatar
             self._mobile_avatar = MobileAvatar(
                 server_url=f"http://{host_ip}:{host_port}"
             )
