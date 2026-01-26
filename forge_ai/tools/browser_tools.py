@@ -287,9 +287,9 @@ class BrowserMediaInfoTool(Tool):
                         try:
                             info = json.loads(result.stdout.strip())
                             return {"success": True, "media_info": info}
-                        except:
+                        except Exception:
                             return {"success": True, "raw_info": result.stdout.strip()}
-                except Exception as e:
+                except Exception:
                     pass
             
             return {

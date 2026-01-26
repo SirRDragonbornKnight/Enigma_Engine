@@ -214,5 +214,5 @@ def _save_current_image(parent):
                 pixmap.save(str(dest_path))
         
         _refresh_saved_images(parent)
-    except Exception as e:
+    except Exception:
         pass  # Silent fail

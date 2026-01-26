@@ -28,7 +28,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Tuple, List, Any
+from typing import Callable, Dict, Optional, Tuple, List, Any
 from threading import Lock
 import time
 
@@ -154,7 +154,7 @@ class BoneController:
         self._bone_states: Dict[str, BoneState] = {}
         self._custom_limits: Dict[str, BoneLimits] = {}
         self._avatar_bones: List[str] = []
-        self._callbacks: List[callable] = []
+        self._callbacks: List[Callable] = []
         
         # Link to main avatar controller for priority system
         self._avatar_controller = None
@@ -321,11 +321,11 @@ class BoneController:
                 state.roll = 0.0
                 state.last_update = time.time()
     
-    def add_callback(self, callback: callable) -> None:
+    def add_callback(self, callback: Callable) -> None:
         """Add a callback that's called when any bone moves."""
         self._callbacks.append(callback)
     
-    def remove_callback(self, callback: callable) -> None:
+    def remove_callback(self, callback: Callable) -> None:
         """Remove a callback."""
         if callback in self._callbacks:
             self._callbacks.remove(callback)

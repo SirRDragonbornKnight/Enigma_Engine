@@ -5615,7 +5615,7 @@ def _poll_ai_customizations(parent):
         # Clear the file after processing
         settings_path.write_text(json.dumps({"_processed": True}))
         
-    except Exception as e:
+    except Exception:
         pass  # Silently ignore errors in background check
 
 

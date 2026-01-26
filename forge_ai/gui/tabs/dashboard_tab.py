@@ -803,7 +803,7 @@ class DashboardTab(QWidget):
                 if hasattr(self.parent_window, 'engine') and self.parent_window.engine:
                     self.status_cards["Model"].set_status("Loaded", "#a6e3a1")
                 
-        except Exception as e:
+        except Exception:
             pass  # Silently handle errors
     
     def _add_activity(self, message: str, icon: str = ">"):

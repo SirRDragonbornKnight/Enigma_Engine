@@ -76,10 +76,10 @@ class NetworkScanner(QThread):
                         }
                         devices.append(device)
                         self.device_found.emit(device)
-                except:
+                except Exception:
                     pass
         
-        except Exception as e:
+        except Exception:
             pass
         
         self.scan_complete.emit(devices)

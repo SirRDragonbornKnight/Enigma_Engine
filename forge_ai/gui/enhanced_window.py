@@ -4455,7 +4455,7 @@ class EnhancedMainWindow(QMainWindow):
                     dest = avatar_dir / f"neutral{Path(filepath).suffix}"
                     shutil.copy(filepath, dest)
                     filepath = str(dest)
-                except Exception as e:
+                except Exception:
                     pass  # Use original filepath
             
             # Display the image
@@ -5641,7 +5641,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             # Fallback to simple speak
             from ..voice import speak
             speak(clean_text)
-        except Exception as e:
+        except Exception:
             pass  # Silently fail TTS
     
     def _on_speak_last(self):

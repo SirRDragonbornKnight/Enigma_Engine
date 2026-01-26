@@ -754,22 +754,26 @@ class AvatarController:
             
             elif action == "animate":
                 animation = params.get("animation", "wave")
-                self._animation_queue.append({
-                    "type": animation,
-                    "duration": params.get("duration", 1.0),
-                })
+                with self._animation_lock:
+                    self._animation_queue.append({
+                        "type": animation,
+                        "duration": params.get("duration", 1.0),
+                    })
                 return {"success": True, "message": f"Playing animation: {animation}"}
             
             elif action == "wave":
-                self._animation_queue.append({"type": "wave", "duration": 1.5})
+                with self._animation_lock:
+                    self._animation_queue.append({"type": "wave", "duration": 1.5})
                 return {"success": True, "message": "Waving!"}
             
             elif action == "nod":
-                self._animation_queue.append({"type": "nod", "duration": 0.8})
+                with self._animation_lock:
+                    self._animation_queue.append({"type": "nod", "duration": 0.8})
                 return {"success": True, "message": "Nodding"}
             
             elif action == "shake_head":
-                self._animation_queue.append({"type": "shake_head", "duration": 1.0})
+                with self._animation_lock:
+                    self._animation_queue.append({"type": "shake_head", "duration": 1.0})
                 return {"success": True, "message": "Shaking head"}
             
             elif action == "look_at":

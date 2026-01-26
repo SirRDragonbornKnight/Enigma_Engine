@@ -65,7 +65,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
-from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
+from typing import Dict, List, Optional, Callable, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
