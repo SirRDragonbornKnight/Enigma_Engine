@@ -509,7 +509,19 @@ class ChatAPIModule(Module):
             return False
         except Exception as e:
             logger.warning(f"Could not load {provider} client: {e}")
-            return False
+        
+        # Fall back to built-in chat
+        try:
+            from forge_ai.builtin import BuiltinChat
+            self._client = BuiltinChat()
+            if self._client.load():
+                self._provider = 'builtin'
+                logger.info("Using built-in chat (pattern-based)")
+                return True
+        except Exception as e2:
+            logger.warning(f"Built-in chat also failed: {e2}")
+        
+        return False
 
     def chat(self, message: str, history: list = None) -> str:
         """Send a chat message and get a response."""
@@ -633,8 +645,8 @@ class GGUFLoaderModule(Module):
             from forge_ai.core.gguf_loader import GGUFModel
             model_path = self.config.get('model_path', '')
             if not model_path:
-                logger.warning("No GGUF model path specified")
-                return False
+                logger.info("No GGUF model path specified - ready for deferred loading")
+                return True  # Ready to load when user provides path
             
             # Create and load the GGUF model wrapper
             self._instance = GGUFModel(
@@ -1487,10 +1499,22 @@ class ImageGenAPIModule(GenerationModule):
             else:
                 from forge_ai.gui.tabs.image_tab import ReplicateImage
                 self._addon = ReplicateImage(api_key=self.config.get('api_key'))
-            return self._addon.load()
+            if self._addon.load():
+                return True
         except Exception as e:
             logger.warning(f"Could not load cloud image gen: {e}")
-            return False
+        
+        # Fall back to builtin image generator
+        try:
+            from forge_ai.builtin import BuiltinImageGen
+            self._addon = BuiltinImageGen()
+            if self._addon.load():
+                logger.info("Using built-in image generator as fallback")
+                return True
+        except Exception:
+            pass
+        
+        return True  # Module loads, just won't generate
 
 
 # -----------------------------------------------------------------------------
@@ -1577,7 +1601,7 @@ class CodeGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
-        """Load the OpenAI code generation client."""
+        """Load the OpenAI code generation client or fallback."""
         try:
             from forge_ai.gui.tabs.code_tab import OpenAICode
             self._addon = OpenAICode(
@@ -1585,10 +1609,22 @@ class CodeGenAPIModule(GenerationModule):
                 model=self.config.get(
                     'model',
                     'gpt-4'))
-            return self._addon.load()
+            if self._addon.load():
+                return True
         except Exception as e:
             logger.warning(f"Could not load cloud code gen: {e}")
-            return False
+        
+        # Fall back to builtin code generator
+        try:
+            from forge_ai.builtin import BuiltinCodeGen
+            self._addon = BuiltinCodeGen()
+            if self._addon.load():
+                logger.info("Using built-in code generator as fallback")
+                return True
+        except Exception:
+            pass
+        
+        return True  # Module loads, code gen may be limited
 
 
 # -----------------------------------------------------------------------------
@@ -1666,14 +1702,26 @@ class VideoGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
-        """Load the Replicate video client."""
+        """Load the Replicate video client or fallback."""
         try:
             from forge_ai.gui.tabs.video_tab import ReplicateVideo
             self._addon = ReplicateVideo(api_key=self.config.get('api_key'))
-            return self._addon.load()
+            if self._addon.load():
+                return True
         except Exception as e:
             logger.warning(f"Could not load cloud video gen: {e}")
-            return False
+        
+        # Fall back to builtin video generator (animated GIF)
+        try:
+            from forge_ai.builtin import BuiltinVideoGen
+            self._addon = BuiltinVideoGen()
+            if self._addon.load():
+                logger.info("Using built-in video generator as fallback")
+                return True
+        except Exception:
+            pass
+        
+        return True  # Module loads, video gen may be limited
 
 
 # -----------------------------------------------------------------------------
@@ -1767,7 +1815,7 @@ class AudioGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
-        """Load the audio generation provider."""
+        """Load the audio generation provider or fallback."""
         try:
             provider = self.config.get('provider', 'elevenlabs')
             if provider == 'elevenlabs':
@@ -1776,10 +1824,22 @@ class AudioGenAPIModule(GenerationModule):
             else:
                 from forge_ai.gui.tabs.audio_tab import ReplicateAudio
                 self._addon = ReplicateAudio(api_key=self.config.get('api_key'))
-            return self._addon.load()
+            if self._addon.load():
+                return True
         except Exception as e:
             logger.warning(f"Could not load cloud audio gen: {e}")
-            return False
+        
+        # Fall back to builtin TTS
+        try:
+            from forge_ai.builtin import BuiltinTTS
+            self._addon = BuiltinTTS()
+            if self._addon.load():
+                logger.info("Using built-in TTS as fallback")
+                return True
+        except Exception:
+            pass
+        
+        return True  # Module loads, audio gen may be limited
 
 
 # -----------------------------------------------------------------------------
@@ -1877,16 +1937,28 @@ class EmbeddingAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
-        """Load the OpenAI embedding client."""
+        """Load the OpenAI embedding client or fallback to local."""
         try:
             from forge_ai.gui.tabs.embeddings_tab import OpenAIEmbedding
             self._addon = OpenAIEmbedding(
                 api_key=self.config.get('api_key'),
                 model=self.config.get('model'))
-            return self._addon.load()
+            if self._addon.load():
+                return True
         except Exception as e:
             logger.warning(f"Could not load cloud embeddings: {e}")
-            return False
+        
+        # Fall back to local embeddings
+        try:
+            from forge_ai.builtin import BuiltinEmbeddings
+            self._addon = BuiltinEmbeddings()
+            if self._addon.load():
+                logger.info("Using built-in embeddings as fallback")
+                return True
+        except Exception as e2:
+            logger.warning(f"Builtin embeddings also failed: {e2}")
+        
+        return True  # Module loads even without working embeddings
 
 
 # -----------------------------------------------------------------------------
@@ -1994,17 +2066,29 @@ class ThreeDGenAPIModule(GenerationModule):
     )
 
     def load(self) -> bool:
-        """Load the cloud 3D generation client."""
+        """Load the cloud 3D generation client or fallback."""
         try:
             from forge_ai.gui.tabs.threed_tab import Cloud3DGen
             self._addon = Cloud3DGen(
                 api_key=self.config.get('api_key'),
                 service=self.config.get('service', 'replicate')
             )
-            return self._addon.load()
+            if self._addon.load():
+                return True
         except Exception as e:
             logger.warning(f"Could not load cloud 3D gen: {e}")
-            return False
+        
+        # Fall back to builtin 3D generator
+        try:
+            from forge_ai.builtin import Builtin3DGen
+            self._addon = Builtin3DGen()
+            if self._addon.load():
+                logger.info("Using built-in 3D generator as fallback")
+                return True
+        except Exception:
+            pass
+        
+        return True  # Module loads, 3D gen may be limited
 
 
 # -----------------------------------------------------------------------------
@@ -2069,7 +2153,7 @@ class MotionTrackingModule(Module):
     )
 
     def load(self) -> bool:
-        """Load the MediaPipe motion tracker."""
+        """Load the MediaPipe motion tracker or enable deferred loading."""
         try:
             from forge_ai.tools.motion_tracking import MotionTracker
             self._instance = MotionTracker(
@@ -2077,9 +2161,12 @@ class MotionTrackingModule(Module):
                 tracking_mode=self.config.get('tracking_mode', 'holistic')
             )
             return True
+        except ImportError:
+            logger.info("MediaPipe not available - motion tracking disabled. Install: pip install mediapipe")
+            return True  # Module loads, shows install instructions in UI
         except Exception as e:
             logger.warning(f"Could not load motion tracking: {e}")
-            return False
+            return True  # Still load module, UI will show error
 
 
 # -----------------------------------------------------------------------------
