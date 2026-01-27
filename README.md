@@ -144,8 +144,34 @@ python run.py --serve   # Start API server
 - **Avatar** - Visual representation of your AI
 - **Voice** - Text-to-speech responses
 - **Multi-AI** - Run multiple AI models
+- **Multi-Device Network** - Connect multiple ForgeAI instances across devices
 - **Specialized Models** - Train task-specific models (routing, vision, code)
 - **Themes** - Dark, Light, Shadow, Midnight
+
+### Multi-Device Networking 🌐
+
+Connect multiple ForgeAI instances across devices for distributed AI:
+
+- **Auto-Discovery** - Find other ForgeAI nodes on your network (UDP broadcast + network scan)
+- **Remote Connections** - Connect devices on same network or via manual IP entry
+- **AI-to-AI Conversations** - Let different AI instances talk to each other
+- **Model Sharing** - Export/import models across devices
+- **Memory Sync** - Synchronize conversation history
+
+**Quick Example:**
+```bash
+# Device 1: Start as server
+python examples/multi_device_example.py --server --name pc_brain
+
+# Device 2: Discover and connect
+python examples/discovery_example.py  # Find device 1
+python examples/multi_device_example.py --client --connect 192.168.1.100:5000
+
+# Or use the GUI Network tab for easy point-and-click discovery
+python run.py --gui  # Navigate to Network tab
+```
+
+See `docs/multi_device_guide.md` for complete guide.
 
 ### Specialized Model System 🎯
 
