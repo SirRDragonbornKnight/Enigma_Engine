@@ -474,9 +474,9 @@ class AutonomousMode:
             # Analyze feedback patterns and adjust traits accordingly
             feedback_ratio = metrics.feedback_ratio()
             
-            # Evolution rate for adjustments
-            EVOLUTION_RATE = 0.02
-            BALANCE_THRESHOLD = 0.5
+            # Get evolution settings from config
+            evolution_rate = self.config.evolution_rate
+            balance_threshold = self.config.balance_threshold
             
             # If getting positive feedback, reinforce current traits slightly
             if feedback_ratio > 0.6:
@@ -485,9 +485,9 @@ class AutonomousMode:
                 for trait_name in reinforcement_traits:
                     if hasattr(personality.traits, trait_name):
                         current = getattr(personality.traits, trait_name)
-                        if current > BALANCE_THRESHOLD:
+                        if current > balance_threshold:
                             # Increase slightly
-                            new_value = min(1.0, current + EVOLUTION_RATE)
+                            new_value = min(1.0, current + evolution_rate)
                             setattr(personality.traits, trait_name, new_value)
                             logger.debug(f"Increased {trait_name} to {new_value:.2f} (positive feedback)")
             
@@ -497,11 +497,11 @@ class AutonomousMode:
                 for trait_name in balance_traits:
                     if hasattr(personality.traits, trait_name):
                         current = getattr(personality.traits, trait_name)
-                        # Move toward middle (0.5)
-                        if current > BALANCE_THRESHOLD:
-                            new_value = current - EVOLUTION_RATE
+                        # Move toward middle
+                        if current > balance_threshold:
+                            new_value = current - evolution_rate
                         else:
-                            new_value = current + EVOLUTION_RATE
+                            new_value = current + evolution_rate
                         setattr(personality.traits, trait_name, new_value)
                         logger.debug(f"Adjusted {trait_name} to {new_value:.2f} (balancing)")
             

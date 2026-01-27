@@ -45,6 +45,9 @@ STOP_WORDS = {
     'their'
 }
 
+# UI text truncation length
+MAX_DISPLAY_LENGTH = 200
+
 
 # =============================================================================
 # DATA STRUCTURES
@@ -191,6 +194,10 @@ class AutonomousConfig:
     min_quality_for_learning: float = 0.6  # Don't learn from bad responses
     reflection_depth: int = 10  # How many recent conversations to analyze
     
+    # Personality evolution settings
+    evolution_rate: float = 0.02  # How much to adjust traits
+    balance_threshold: float = 0.5  # Threshold for balancing traits
+    
     # Resource limits
     low_power_mode: bool = False  # Reduce activity for gaming
     max_queue_size: int = 1000
@@ -321,8 +328,8 @@ class LearningEngine:
     def save_state(self):
         """Save persistent state to disk."""
         with self._lock:
-            # Save learning queue (append only)
-            # Note: We don't rewrite the whole file, just ensure it exists
+            # Learning queue is persisted incrementally in add_learning_example()
+            # (appended to JSONL file as examples are added)
             
             # Save metrics
             try:

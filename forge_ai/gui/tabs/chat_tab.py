@@ -50,6 +50,10 @@ from PyQt5.QtCore import Qt
 # =============================================================================
 # STYLE CONSTANTS
 # =============================================================================
+
+# UI text truncation length
+MAX_DISPLAY_LENGTH = 200
+
 STYLE_MODEL_LABEL = """
     QLabel {
         color: #89b4fa;
@@ -1005,7 +1009,7 @@ def _show_critique_dialog(parent, response_id, response_data):
             parent.chat_display.append(
                 f'<div style="background-color: #313244; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #89b4fa;">'
                 f'<b style="color: #89b4fa;">Correction saved ({issue}):</b><br>'
-                f'<i style="color: #a6e3a1;">Better response:</i> {correction[:200]}...</div>'
+                f'<i style="color: #a6e3a1;">Better response:</i> {correction[:MAX_DISPLAY_LENGTH]}...</div>'
             )
         
         dialog.accept()
