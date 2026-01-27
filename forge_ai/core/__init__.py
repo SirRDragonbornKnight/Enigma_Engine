@@ -277,6 +277,18 @@ def _lazy_load_learned_generator():
             pass
     return LearnedGenerator
 
+# Persona System
+try:
+    from .persona import (
+        AIPersona,
+        PersonaManager,
+        get_persona_manager,
+    )
+except ImportError:
+    AIPersona = None
+    PersonaManager = None
+    get_persona_manager = None
+
 
 __all__ = [
     # Model
@@ -377,4 +389,9 @@ __all__ = [
     
     # Learned Generator
     "LearnedGenerator",
+    
+    # Persona System
+    "AIPersona",
+    "PersonaManager",
+    "get_persona_manager",
 ]

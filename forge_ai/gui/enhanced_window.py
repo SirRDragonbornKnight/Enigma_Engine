@@ -2842,6 +2842,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.tool_manager_tab import ToolManagerTab
         from .tabs.voice_clone_tab import VoiceCloneTab
         from .tabs.workspace_tab import create_workspace_tab
+        from .tabs.persona_tab import create_persona_tab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -2895,6 +2896,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "History", "history", "View past conversations"),
             # Model
             ("section", "MODEL"),
+            ("", "Persona", "persona", "Create and manage AI personas"),
             ("", "Scale", "scale", "Grow or shrink your AI model"),
             ("", "Modules", "modules", "Enable/disable AI features"),
             ("", "Tools", "tools", "Manage AI tools and capabilities"),
@@ -2956,7 +2958,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
-            'chat', 'workspace', 'history', 'scale', 'modules', 'tools', 'router',
+            'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
             'game', 'robot', 'terminal', 'files', 'logs', 'network',
             'analytics', 'examples', 'settings', 'gif', 'voice'
         ]
@@ -3008,6 +3010,8 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_chat_tab(self)))  # Chat
         self.content_stack.addWidget(wrap_in_scroll(create_workspace_tab(self)))  # Workspace
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
+        self.persona_tab = create_persona_tab(self)  # Store reference for signals
+        self.content_stack.addWidget(wrap_in_scroll(self.persona_tab))  # Persona
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
         self.content_stack.addWidget(wrap_in_scroll(ModulesTab(self, module_manager=self.module_manager)))  # Modules
         self.content_stack.addWidget(wrap_in_scroll(ToolManagerTab(self)))  # Tools

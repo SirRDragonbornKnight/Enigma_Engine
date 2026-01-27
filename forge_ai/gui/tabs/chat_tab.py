@@ -232,6 +232,30 @@ def _create_header_section(parent, layout):
     parent.chat_model_label = QLabel(initial_model_text)
     parent.chat_model_label.setStyleSheet(STYLE_MODEL_LABEL)
     header_layout.addWidget(parent.chat_model_label)
+    
+    # Persona indicator
+    try:
+        from ...core.persona import get_persona_manager
+        manager = get_persona_manager()
+        persona = manager.get_current_persona()
+        persona_text = f"[Persona] {persona.name}"
+    except Exception:
+        persona_text = "[Persona] Default"
+    
+    parent.chat_persona_label = QLabel(persona_text)
+    parent.chat_persona_label.setStyleSheet("""
+        QLabel {
+            color: #a6e3a1;
+            font-weight: bold;
+            font-size: 13px;
+            padding: 4px 8px;
+            background: rgba(166, 227, 161, 0.1);
+            border-radius: 4px;
+        }
+    """)
+    parent.chat_persona_label.setToolTip("Current AI persona - manage in Persona tab")
+    header_layout.addWidget(parent.chat_persona_label)
+    
     header_layout.addStretch()
     
     # New Chat button
