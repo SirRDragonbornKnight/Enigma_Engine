@@ -369,7 +369,7 @@ class WeightMapper:
         
         for key in state_dict.keys():
             # Look for patterns like "layers.0", "h.0", "blocks.0"
-            for pattern in ['layers.', '.h.', 'blocks.', 'layers.']:
+            for pattern in ['model.layers.', 'transformer.h.', 'blocks.']:
                 if pattern in key:
                     parts = key.split('.')
                     for i, part in enumerate(parts):
@@ -468,16 +468,19 @@ class WeightMapper:
             
         Returns:
             Dequantized PyTorch tensor
+            
+        Raises:
+            NotImplementedError: GGUF dequantization not fully implemented yet
         """
         if not HAVE_TORCH:
             raise RuntimeError("torch required for dequantization")
         
-        # This is a placeholder - actual implementation would need
-        # to handle various GGUF quantization formats
-        logger.warning(f"GGUF dequantization for {quant_type} not fully implemented")
-        
-        # For now, return zeros as placeholder
-        return torch.zeros(shape)
+        # Full GGUF dequantization requires implementing various quantization formats
+        # This is a complex task that depends on the gguf library's internal format
+        raise NotImplementedError(
+            f"GGUF dequantization for {quant_type} not yet implemented. "
+            f"Use the gguf library's built-in dequantization instead."
+        )
     
     def validate_mapping(
         self,
