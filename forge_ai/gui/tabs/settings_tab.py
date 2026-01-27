@@ -143,6 +143,72 @@ def _toggle_avatar_autonomous(parent, state):
         parent.avatar_status_label.setStyleSheet("color: #ef4444;")
 
 
+# ===== WEB SERVER CONTROL =====
+def _toggle_web_server(parent, state):
+    """Toggle web server on/off."""
+    enabled = state == 2  # Qt.Checked
+    
+    try:
+        if enabled:
+            # Start web server in background thread
+            import threading
+            from ...web.server import create_web_server
+            from ...config import CONFIG
+            
+            web_config = CONFIG.get("web_interface", {})
+            port = parent.web_port_spin.value()
+            require_auth = parent.web_auth_checkbox.isChecked()
+            
+            def start_server():
+                try:
+                    server = create_web_server(
+                        host="0.0.0.0",
+                        port=port,
+                        require_auth=require_auth
+                    )
+                    parent._web_server = server
+                    server.start()
+                except Exception as e:
+                    parent.web_status_label.setText(f"Error: {str(e)[:50]}")
+                    parent.web_status_label.setStyleSheet("color: #ef4444;")
+            
+            thread = threading.Thread(target=start_server, daemon=True)
+            thread.start()
+            
+            from ...web.discovery import get_local_ip
+            local_ip = get_local_ip()
+            parent.web_status_label.setText(f"Server: http://{local_ip}:{port}")
+            parent.web_status_label.setStyleSheet("color: #22c55e; font-weight: bold;")
+            parent.web_qr_btn.setEnabled(True)
+            
+        else:
+            # Stop web server
+            if hasattr(parent, '_web_server'):
+                parent._web_server = None
+            parent.web_status_label.setText("Server stopped")
+            parent.web_status_label.setStyleSheet("color: #888;")
+            parent.web_qr_btn.setEnabled(False)
+            
+    except Exception as e:
+        parent.web_status_label.setText(f"Error: {str(e)[:50]}")
+        parent.web_status_label.setStyleSheet("color: #ef4444;")
+
+
+def _open_web_qr(parent):
+    """Open QR code for web connection in browser."""
+    try:
+        import webbrowser
+        from ...web.discovery import get_local_ip
+        
+        port = parent.web_port_spin.value()
+        local_ip = get_local_ip()
+        url = f"http://{local_ip}:{port}/qr"
+        webbrowser.open(url)
+    except Exception as e:
+        parent.web_status_label.setText(f"Error opening QR: {str(e)[:50]}")
+        parent.web_status_label.setStyleSheet("color: #ef4444;")
+
+
 # ===== ROBOT MODE CONTROL =====
 def _change_robot_mode(parent):
     """Change robot control mode."""
@@ -1976,6 +2042,56 @@ def create_settings_tab(parent):
     api_layout.addWidget(parent.api_status_label)
     
     layout.addWidget(api_group)
+    
+    # === WEB SERVER ===
+    web_group = QGroupBox("Web Interface - Remote Access")
+    web_layout = QVBoxLayout(web_group)
+    
+    web_desc = QLabel(
+        "Access ForgeAI from any device on your local network. "
+        "Works with phones, tablets, and other computers without cloud services."
+    )
+    web_desc.setWordWrap(True)
+    web_layout.addWidget(web_desc)
+    
+    # Enable checkbox
+    parent.web_server_checkbox = QCheckBox("Enable Web Server")
+    parent.web_server_checkbox.setToolTip("Start web server for remote access")
+    parent.web_server_checkbox.stateChanged.connect(
+        lambda state: _toggle_web_server(parent, state)
+    )
+    web_layout.addWidget(parent.web_server_checkbox)
+    
+    # Port setting
+    port_row = QHBoxLayout()
+    port_row.addWidget(QLabel("Port:"))
+    parent.web_port_spin = QSpinBox()
+    parent.web_port_spin.setRange(1024, 65535)
+    parent.web_port_spin.setValue(8080)
+    parent.web_port_spin.setToolTip("Port for web server (default: 8080)")
+    port_row.addWidget(parent.web_port_spin)
+    port_row.addStretch()
+    web_layout.addLayout(port_row)
+    
+    # Authentication checkbox
+    parent.web_auth_checkbox = QCheckBox("Require Authentication")
+    parent.web_auth_checkbox.setChecked(True)
+    parent.web_auth_checkbox.setToolTip("Require token for access (recommended)")
+    web_layout.addWidget(parent.web_auth_checkbox)
+    
+    # QR code button
+    parent.web_qr_btn = QPushButton("Show QR Code for Mobile")
+    parent.web_qr_btn.setToolTip("Generate QR code for easy phone connection")
+    parent.web_qr_btn.setEnabled(False)
+    parent.web_qr_btn.clicked.connect(lambda: _open_web_qr(parent))
+    web_layout.addWidget(parent.web_qr_btn)
+    
+    # Status label
+    parent.web_status_label = QLabel("Server not running")
+    parent.web_status_label.setStyleSheet("color: #888; font-style: italic;")
+    web_layout.addWidget(parent.web_status_label)
+    
+    layout.addWidget(web_group)
     
     # === SYSTEM PROMPT ===
     prompt_group = QGroupBox("System Prompt")
