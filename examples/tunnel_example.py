@@ -146,23 +146,26 @@ def example_module_system():
         if success:
             print("✓ Tunnel module loaded")
             
-            # Get module instance
+            # Get module instance via proper interface
             tunnel_mod = manager.get_module('tunnel')
-            if tunnel_mod and tunnel_mod.instance:
-                # Start tunnel
-                print("\nStarting tunnel...")
-                url = tunnel_mod.instance.start_tunnel(5000)
-                
-                if url:
-                    print(f"\n✓ Tunnel started!")
-                    print(f"  Public URL: {url}")
-                    print("\n  Press Ctrl+C to stop...\n")
+            if tunnel_mod:
+                # Get the actual tunnel manager instance
+                tunnel_instance = tunnel_mod.get_interface() if hasattr(tunnel_mod, 'get_interface') else tunnel_mod._instance
+                if tunnel_instance:
+                    # Start tunnel
+                    print("\nStarting tunnel...")
+                    url = tunnel_instance.start_tunnel(5000)
                     
-                    try:
-                        while True:
-                            time.sleep(1)
-                    except KeyboardInterrupt:
-                        print("\n\nUnloading module...")
+                    if url:
+                        print(f"\n✓ Tunnel started!")
+                        print(f"  Public URL: {url}")
+                        print("\n  Press Ctrl+C to stop...\n")
+                        
+                        try:
+                            while True:
+                                time.sleep(1)
+                        except KeyboardInterrupt:
+                            print("\n\nUnloading module...")
                         manager.unload('tunnel')
                         print("✓ Done!\n")
             else:

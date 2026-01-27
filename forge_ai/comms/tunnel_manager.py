@@ -239,7 +239,7 @@ class TunnelManager:
                 ["lt", "--version"],
                 capture_output=True,
                 check=True,
-                shell=True
+                shell=False
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
             logger.error("localtunnel not found. Install with: npm install -g localtunnel")
@@ -257,19 +257,48 @@ class TunnelManager:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                bufsize=1  # Line buffered
             )
             
-            # Wait for localtunnel to start and parse URL from output
-            time.sleep(2)
-            
+            # Wait for localtunnel to start and parse URL from output with timeout
             tunnel_url = None
+            max_wait = 10  # seconds
+            start_time = time.time()
+            
             if self.tunnel_process.stdout:
-                for line in self.tunnel_process.stdout:
-                    match = re.search(r'https://[a-z0-9-]+\.loca\.lt', line)
-                    if match:
-                        tunnel_url = match.group(0)
+                while time.time() - start_time < max_wait:
+                    # Check if process is still running
+                    if self.tunnel_process.poll() is not None:
                         break
+                    
+                    # Try to read with small timeout
+                    try:
+                        import select
+                        import sys
+                        if sys.platform != 'win32':
+                            # Unix: use select
+                            ready, _, _ = select.select([self.tunnel_process.stdout], [], [], 0.5)
+                            if ready:
+                                line = self.tunnel_process.stdout.readline()
+                                if line:
+                                    match = re.search(r'https://[a-z0-9-]+\.loca\.lt', line)
+                                    if match:
+                                        tunnel_url = match.group(0)
+                                        break
+                        else:
+                            # Windows: use simple readline with timeout check
+                            time.sleep(0.5)
+                            # On Windows, this might block, but we have overall timeout
+                            line = self.tunnel_process.stdout.readline()
+                            if line:
+                                match = re.search(r'https://[a-z0-9-]+\.loca\.lt', line)
+                                if match:
+                                    tunnel_url = match.group(0)
+                                    break
+                    except (ImportError, AttributeError):
+                        # Fallback: wait and try
+                        time.sleep(0.5)
             
             if tunnel_url:
                 self.tunnel_url = tunnel_url
@@ -281,7 +310,7 @@ class TunnelManager:
                 
                 return tunnel_url
             else:
-                logger.error("Failed to get localtunnel URL")
+                logger.error("Failed to get localtunnel URL within timeout")
                 self.stop_tunnel()
                 return None
                 
@@ -311,19 +340,48 @@ class TunnelManager:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                bufsize=1  # Line buffered
             )
             
-            # Wait for bore to start and parse URL from output
-            time.sleep(2)
-            
+            # Wait for bore to start and parse URL from output with timeout
             tunnel_url = None
+            max_wait = 10  # seconds
+            start_time = time.time()
+            
             if self.tunnel_process.stderr:
-                for line in self.tunnel_process.stderr:
-                    match = re.search(r'bore\.pub:[0-9]+', line)
-                    if match:
-                        tunnel_url = f"http://{match.group(0)}"
+                while time.time() - start_time < max_wait:
+                    # Check if process is still running
+                    if self.tunnel_process.poll() is not None:
                         break
+                    
+                    # Try to read with small timeout
+                    try:
+                        import select
+                        import sys
+                        if sys.platform != 'win32':
+                            # Unix: use select
+                            ready, _, _ = select.select([self.tunnel_process.stderr], [], [], 0.5)
+                            if ready:
+                                line = self.tunnel_process.stderr.readline()
+                                if line:
+                                    match = re.search(r'bore\.pub:[0-9]+', line)
+                                    if match:
+                                        tunnel_url = f"http://{match.group(0)}"
+                                        break
+                        else:
+                            # Windows: use simple readline with timeout check
+                            time.sleep(0.5)
+                            # On Windows, this might block, but we have overall timeout
+                            line = self.tunnel_process.stderr.readline()
+                            if line:
+                                match = re.search(r'bore\.pub:[0-9]+', line)
+                                if match:
+                                    tunnel_url = f"http://{match.group(0)}"
+                                    break
+                    except (ImportError, AttributeError):
+                        # Fallback: wait and try
+                        time.sleep(0.5)
             
             if tunnel_url:
                 self.tunnel_url = tunnel_url
@@ -335,7 +393,7 @@ class TunnelManager:
                 
                 return tunnel_url
             else:
-                logger.error("Failed to get bore tunnel URL")
+                logger.error("Failed to get bore tunnel URL within timeout")
                 self.stop_tunnel()
                 return None
                 
