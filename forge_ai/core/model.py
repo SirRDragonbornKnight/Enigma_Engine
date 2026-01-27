@@ -1,6 +1,6 @@
 """
 ================================================================================
-🧠 FORGE MODEL - THE BRAIN OF FORGEAI
+🧠 FORGE MODEL - THE UNIVERSAL AI MODEL
 ================================================================================
 
 This is the HEART of ForgeAI - a production-grade transformer neural network!
@@ -10,6 +10,17 @@ This is where the actual AI "thinking" happens.
 🏷️ TYPE: Neural Network Architecture
 🎯 MAIN CLASSES: Forge, ForgeConfig
 
+🌟 NEW: UNIVERSAL MODEL FEATURES (Enhanced 2026)
+   • Universal Loading: HuggingFace, Safetensors, GGUF, ONNX support
+   • RoPE Scaling: Linear, Dynamic NTK, YaRN for extended context
+   • Multi-Modal: Vision/Audio encoder integration hooks
+   • LoRA Adapters: Low-rank adaptation for efficient fine-tuning
+   • Speculative Decoding: 2-4x faster generation with draft models
+   • Enhanced KV-Cache: Sliding window, paged attention, quantization
+   • MoE Support: Mixture of Experts configuration
+   
+   See UNIVERSAL_MODEL_GUIDE.md for detailed usage examples!
+
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  ARCHITECTURE DIAGRAM:                                                      │
 │                                                                             │
@@ -17,26 +28,41 @@ This is where the actual AI "thinking" happens.
 │       ↓                                                                     │
 │  [Embedding Layer] - Converts numbers to vectors                           │
 │       ↓                                                                     │
+│  [Multi-Modal Projection] (optional) - Vision/Audio → Text space           │
+│       ↓                                                                     │
 │  [Transformer Blocks] × N layers                                           │
 │    ├── RMSNorm (normalization - faster than LayerNorm)                     │
 │    ├── Self-Attention with RoPE (understanding context)                    │
+│    │   └── Optional: Sliding window, paged attention                       │
 │    ├── SwiGLU Activation (better than ReLU!)                               │
+│    │   └── Optional: MoE expert routing                                    │
 │    └── Residual connections                                                │
 │       ↓                                                                     │
 │  [Output Head] → Next word probabilities                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-⚡ KEY FEATURES:
+⚡ CORE FEATURES:
     • RoPE (Rotary Position Embeddings) - Better position awareness
     • RMSNorm - Faster and more stable than LayerNorm  
     • SwiGLU - Superior activation function
     • GQA (Grouped Query Attention) - Memory efficient
     • KV-Cache - Fast autoregressive generation
+    • Flash Attention - 2-4x speedup (optional, requires CUDA)
 
-📊 MODEL SIZES (15 presets!):
+🌐 UNIVERSAL FEATURES:
+    • Load from any format: HF, Safetensors, GGUF, ONNX
+    • RoPE scaling: Extend context 2x-8x (linear/dynamic/yarn)
+    • Multi-modal: Integrate vision/audio with text
+    • LoRA adapters: Efficient fine-tuning and swapping
+    • Speculative decoding: Faster generation with draft models
+    • Enhanced KV-cache: Sliding window, paging, quantization
+    • MoE configuration: Mixture of experts architecture
+
+📊 MODEL SIZES (17 presets!):
     ┌────────────┬──────────┬────────────────────────────────┐
     │ Size       │ Params   │ Best For                       │
     ├────────────┼──────────┼────────────────────────────────┤
+    │ pi_zero    │ ~500K    │ Raspberry Pi Zero              │
     │ nano       │ ~1M      │ Embedded/Testing               │
     │ tiny       │ ~5M      │ Raspberry Pi                   │
     │ small      │ ~27M     │ Desktop default (RTX 2080)     │
@@ -44,6 +70,7 @@ This is where the actual AI "thinking" happens.
     │ large      │ ~200M    │ Quality focus (RTX 4090)       │
     │ xl         │ ~600M    │ Multi-GPU                      │
     │ xxl        │ ~1.5B    │ Cloud/Datacenter               │
+    │ omega      │ ~70B+    │ Research frontier              │
     └────────────┴──────────┴────────────────────────────────┘
 
 🔗 CONNECTED FILES:
@@ -51,19 +78,51 @@ This is where the actual AI "thinking" happens.
     ← USED BY:   forge_ai/core/inference.py (ForgeEngine loads this)
     ← USED BY:   forge_ai/core/training.py (trains this model)
     ← USED BY:   forge_ai/modules/registry.py (ModelModule wraps this)
+    → SEE ALSO:  UNIVERSAL_MODEL_GUIDE.md (detailed feature guide)
 
-📖 USAGE:
+📖 BASIC USAGE:
     from forge_ai.core.model import create_model, Forge, ForgeConfig
     
-    model = create_model('small')  # Use preset
-    # OR custom:
+    # Simple preset
+    model = create_model('small')
+    
+    # Custom config
     config = ForgeConfig(vocab_size=8000, dim=512, n_layers=8)
-    model = Forge(config)
+    model = Forge(config=config)
+
+📖 UNIVERSAL FEATURES USAGE:
+    # Load from any format
+    model = Forge.from_any("model.gguf")
+    model = Forge.from_huggingface("microsoft/phi-2")
+    
+    # Extended context with RoPE scaling
+    config = ForgeConfig(
+        ..., 
+        max_seq_len=8192,
+        rope_scaling_type="dynamic",
+        rope_scaling_factor=4.0
+    )
+    
+    # Multi-modal
+    logits = model.forward_multimodal(
+        input_ids=text_ids,
+        vision_features=vision_output
+    )
+    
+    # LoRA adapters
+    model.load_lora("adapter.pth")
+    model.merge_lora()
+    
+    # Speculative decoding
+    draft = create_model('tiny')
+    model.enable_speculative_decoding(draft)
+    output = model.generate_speculative(input_ids)
 
 📖 SEE ALSO:
     • forge_ai/core/inference.py - To GENERATE text with this model
     • forge_ai/core/training.py  - To TRAIN this model
     • forge_ai/core/tokenizer.py - Converts text ↔ numbers
+    • UNIVERSAL_MODEL_GUIDE.md   - Comprehensive feature guide
 """
 import math
 import json
