@@ -236,6 +236,60 @@ CONFIG = {
     # =========================================================================
     "log_level": "INFO",
     "log_to_file": False,
+    
+    # =========================================================================
+    # THE FEDERATION - Federated Learning Configuration
+    # =========================================================================
+    "federated_learning": {
+        "enabled": False,                  # Opt-in by default
+        "mode": "peer_to_peer",            # "centralized" or "peer_to_peer"
+        "privacy_level": "high",           # "none", "low", "medium", "high", "maximum"
+        
+        # Differential Privacy
+        "differential_privacy": {
+            "enabled": True,
+            "epsilon": 1.0,                # Privacy budget (lower = more privacy)
+            "delta": 1e-5,                 # Privacy delta
+        },
+        
+        # Data Filtering
+        "data_filtering": {
+            "exclude_private_chats": True,
+            "exclude_keywords": [
+                "password", "passwd", "pwd",
+                "credit card", "creditcard",
+                "ssn", "social security",
+                "api key", "api_key",
+                "secret", "private key",
+            ],
+            "allowed_categories": [],      # Empty = all categories (if filtering by category)
+            "sanitize_pii": True,          # Remove personal info
+            "min_length": 10,              # Minimum text length
+            "max_length": 10000,           # Maximum text length
+        },
+        
+        # Participation
+        "participation": {
+            "auto_join_rounds": True,
+            "max_rounds_per_day": 3,
+            "min_training_samples": 10,    # Need at least this many samples
+            "contribution_limit": None,    # Max data per round (null = no limit)
+        },
+        
+        # Trust & Security
+        "trust": {
+            "verify_signatures": True,
+            "min_reputation": 0.5,         # Only accept from trusted devices
+            "detect_poisoning": True,
+            "max_update_magnitude": 10.0,  # Maximum allowed update size
+        },
+        
+        # Coordinator Settings
+        "coordinator": {
+            "min_participants": 2,         # Minimum devices for a round
+            "round_timeout": 300,          # Seconds to wait for updates
+        },
+    },
 }
 
 

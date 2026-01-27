@@ -2228,6 +2228,27 @@ def create_settings_tab(parent):
     
     layout.addWidget(reset_group)
     
+    # === FEDERATED LEARNING ===
+    try:
+        from ..widgets.federated_widget import FederatedLearningWidget
+        fed_group = QGroupBox("Federated Learning")
+        fed_layout = QVBoxLayout(fed_group)
+        
+        fed_desc = QLabel(
+            "Learn from collective experience without sharing your data. "
+            "Only model improvements are shared, never raw conversations."
+        )
+        fed_desc.setWordWrap(True)
+        fed_desc.setStyleSheet("color: #888; font-style: italic;")
+        fed_layout.addWidget(fed_desc)
+        
+        parent.federated_widget = FederatedLearningWidget(parent)
+        fed_layout.addWidget(parent.federated_widget)
+        
+        layout.addWidget(fed_group)
+    except Exception as e:
+        print(f"Could not load federated learning widget: {e}")
+    
     layout.addStretch()
     
     # Initial status refresh
