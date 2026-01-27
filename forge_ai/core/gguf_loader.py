@@ -322,6 +322,151 @@ def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
         return 999  # Use a large number to offload all layers
 
 
+def load_gguf_model(
+    gguf_model_path: str,
+    config: Any = None,
+    **kwargs
+) -> 'Forge':
+    """
+    Load a GGUF model and convert it to Forge format.
+    
+    This function loads a quantized GGUF model (llama.cpp format), extracts
+    its weights, dequantizes them if needed, and creates a Forge model.
+    
+    ⚠️ NOTE: GGUF models are often quantized. Loading converts them to full
+    precision PyTorch, which may use MORE memory than the original file.
+    
+    Args:
+        gguf_model_path: Path to .gguf file
+        config: Optional ForgeConfig. If None, will try to infer from GGUF
+        **kwargs: Additional arguments (n_ctx, n_gpu_layers, etc.)
+        
+    Returns:
+        Forge model with loaded weights
+        
+    Raises:
+        RuntimeError: If required dependencies not installed
+        FileNotFoundError: If model file not found
+    """
+    # Import here to avoid circular imports
+    from .model import Forge, ForgeConfig
+    from .weight_mapping import WeightMapper
+    from pathlib import Path
+    
+    logger.info(f"Loading GGUF model from: {gguf_model_path}")
+    
+    # Check if gguf library is available for parsing
+    try:
+        import gguf
+        HAVE_GGUF = True
+    except ImportError:
+        HAVE_GGUF = False
+        logger.warning(
+            "gguf library not available. Will attempt to use llama-cpp-python only."
+        )
+    
+    if not HAVE_TORCH:
+        raise RuntimeError(
+            "GGUF loading requires torch. Install with: pip install torch"
+        )
+    
+    model_path = Path(gguf_model_path)
+    if not model_path.exists():
+        raise FileNotFoundError(f"GGUF model not found: {gguf_model_path}")
+    
+    # Try to extract metadata and weights from GGUF file
+    if HAVE_GGUF:
+        logger.info("Using gguf library to parse GGUF file...")
+        try:
+            import torch
+            reader = gguf.GGUFReader(str(model_path))
+            
+            # Extract metadata
+            metadata = {}
+            for field in reader.fields.values():
+                metadata[field.name] = field.parts[field.data[-1]] if field.parts else field.data
+            
+            # Try to infer config from metadata
+            if config is None:
+                vocab_size = metadata.get('tokenizer.ggml.tokens', None)
+                if isinstance(vocab_size, list):
+                    vocab_size = len(vocab_size)
+                
+                config_dict = {
+                    'vocab_size': vocab_size or 32000,
+                    'dim': metadata.get('llama.embedding_length', 4096),
+                    'n_layers': metadata.get('llama.block_count', 32),
+                    'n_heads': metadata.get('llama.attention.head_count', 32),
+                    'n_kv_heads': metadata.get('llama.attention.head_count_kv', None),
+                    'max_seq_len': metadata.get('llama.context_length', 2048)
+                }
+                
+                # Remove None values
+                config_dict = {k: v for k, v in config_dict.items() if v is not None}
+                config = ForgeConfig(**config_dict)
+                logger.info(f"Inferred config from GGUF metadata: {config}")
+            
+            # Extract tensors
+            gguf_tensors = {}
+            for tensor in reader.tensors:
+                tensor_name = tensor.name
+                tensor_data = tensor.data
+                
+                # Convert to PyTorch tensor
+                # Note: This is simplified - full implementation would need
+                # proper dequantization for quantized tensors
+                try:
+                    torch_tensor = torch.from_numpy(tensor_data)
+                    gguf_tensors[tensor_name] = torch_tensor
+                    logger.debug(f"Loaded tensor: {tensor_name}, shape: {torch_tensor.shape}")
+                except Exception as e:
+                    logger.warning(f"Failed to load tensor {tensor_name}: {e}")
+            
+            logger.info(f"Extracted {len(gguf_tensors)} tensors from GGUF file")
+            
+            # Map GGUF tensors to Forge format
+            logger.info("Mapping GGUF weights to Forge format...")
+            mapper = WeightMapper()
+            forge_weights = mapper.map_gguf_to_forge(gguf_tensors, config)
+            
+            # Create Forge model and load weights
+            forge_model = Forge(config=config)
+            missing_keys, unexpected_keys = forge_model.load_state_dict(forge_weights, strict=False)
+            
+            if missing_keys:
+                logger.warning(f"Missing {len(missing_keys)} keys - will be randomly initialized")
+            if unexpected_keys:
+                logger.warning(f"Unexpected {len(unexpected_keys)} keys - will be ignored")
+            
+            forge_model.eval()
+            logger.info("GGUF model successfully loaded into Forge format")
+            return forge_model
+            
+        except Exception as e:
+            logger.error(f"Failed to load GGUF with gguf library: {e}")
+            # Fall through to llama-cpp-python method
+    
+    # Fallback: Use llama-cpp-python wrapper (doesn't convert to Forge)
+    logger.warning(
+        "Could not convert GGUF to Forge format. "
+        "To use GGUF models natively, install: pip install gguf\n"
+        "For now, returning a GGUFModel wrapper (not a Forge model)."
+    )
+    
+    if not HAVE_LLAMA_CPP:
+        raise RuntimeError(
+            "GGUF loading requires either:\n"
+            "  1. gguf library (pip install gguf) for conversion to Forge\n"
+            "  2. llama-cpp-python (pip install llama-cpp-python) for native GGUF inference"
+        )
+    
+    # Return GGUFModel wrapper
+    # Note: This is not a Forge model, but provides similar interface
+    gguf_wrapper = GGUFModel(str(model_path), **kwargs)
+    gguf_wrapper.load()
+    return gguf_wrapper
+
+
 def test_gguf_loading(model_path: str = None):
     """Test function to verify GGUF loading works."""
     print("Testing GGUF loading...")

@@ -1965,9 +1965,9 @@ class Forge(nn.Module):
             model = Forge.from_huggingface("microsoft/phi-2")
         """
         try:
-            from .huggingface_loader import load_huggingface_model
+            from .huggingface_loader import convert_huggingface_to_forge
             logger.info(f"Loading HuggingFace model: {model_id}")
-            return load_huggingface_model(model_id, **kwargs)
+            return convert_huggingface_to_forge(model_id, **kwargs)
         except ImportError:
             logger.error(
                 "HuggingFace model loading requires transformers library. "
@@ -2085,31 +2085,20 @@ class Forge(nn.Module):
         Example:
             model = Forge.from_onnx("model.onnx")
         """
+        logger.info(f"Loading ONNX model from: {path}")
+        
         try:
-            import onnx
-            import onnx2pytorch
+            from .onnx_loader import load_onnx_model
+            return load_onnx_model(str(path), **kwargs)
         except ImportError:
             logger.error(
-                "ONNX model loading requires onnx and onnx2pytorch. "
-                "Install with: pip install onnx onnx2pytorch"
+                "ONNX model loading requires onnx library. "
+                "Install with: pip install onnx"
             )
             raise
-        
-        logger.warning(
-            "ONNX loading is experimental. Some features may not work correctly."
-        )
-        
-        # Load ONNX model
-        onnx_model = onnx.load(str(path))
-        
-        # Convert to PyTorch
-        # Note: This is a simplified conversion. Full conversion would need
-        # to map ONNX ops to Forge architecture, which is complex.
-        logger.error(
-            "ONNX to Forge conversion is not yet fully implemented. "
-            "Please use PyTorch, HuggingFace, or GGUF formats instead."
-        )
-        raise NotImplementedError("ONNX loading is not yet fully implemented")
+        except Exception as e:
+            logger.error(f"Failed to load ONNX model: {e}")
+            raise
     
     # =========================================================================
     # 🎯 LORA & ADAPTER SUPPORT
