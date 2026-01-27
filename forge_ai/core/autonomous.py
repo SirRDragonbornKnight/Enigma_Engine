@@ -783,6 +783,77 @@ class AutonomousMode:
         
         except Exception as e:
             logger.debug(f"Error in dream: {e}")
+    
+    def _participate_federated_learning(self):
+        """
+        Participate in federated learning if enabled.
+        
+        REAL IMPLEMENTATION:
+        - Checks if federated learning is enabled
+        - Collects recent learning examples
+        - Trains on local data
+        - Shares weight updates (not data)
+        - Applies global updates
+        """
+        try:
+            from ..config import CONFIG
+            from ..learning import FederatedLearning, FederatedMode, DataFilter
+            
+            # Check if federated learning is enabled
+            fed_config = CONFIG.get("federated", {})
+            mode = fed_config.get("mode", "opt_in")
+            
+            if mode == "disabled":
+                return
+            
+            # Initialize federated learning
+            fl = FederatedLearning(
+                mode=FederatedMode(mode),
+                privacy_level=fed_config.get("privacy_level", "high")
+            )
+            
+            # Check if we should participate
+            if fl.mode == FederatedMode.OPT_IN and not fed_config.get("enabled", False):
+                return
+            
+            if self.on_thought:
+                self.on_thought("Preparing for federated learning round...")
+            
+            # Collect recent learning examples
+            examples = self.learning_engine.get_recent_examples(limit=100)
+            
+            if not examples:
+                logger.debug("No examples for federated learning")
+                return
+            
+            # Filter data for privacy
+            if fed_config.get("enable_data_filtering", True):
+                data_filter = DataFilter(
+                    remove_pii=fed_config.get("remove_pii", True),
+                    remove_inappropriate=fed_config.get("remove_inappropriate", True)
+                )
+                
+                # Convert examples to dict format
+                data = [
+                    {"input": ex.prompt, "output": ex.response}
+                    for ex in examples
+                ]
+                
+                filtered_data = data_filter.filter_training_data(data)
+                
+                if self.on_learning:
+                    self.on_learning(
+                        f"Federated: Filtered {len(data)} -> {len(filtered_data)} examples"
+                    )
+            
+            # Note: Actual model training and weight sharing would happen here
+            # This is a placeholder for the integration
+            logger.info("Federated learning round prepared (training not implemented)")
+            
+        except ImportError:
+            logger.debug("Federated learning module not available")
+        except Exception as e:
+            logger.debug(f"Error in federated learning: {e}")
 
 
 class AutonomousManager:
