@@ -236,6 +236,47 @@ CONFIG = {
     # =========================================================================
     "log_level": "INFO",
     "log_to_file": False,
+    
+    # =========================================================================
+    # THE FEDERATION - Federated Learning Configuration
+    # =========================================================================
+    # Share model improvements without sharing data. Devices collaborate
+    # by sharing only weight updates (gradients), never raw data.
+    
+    "federated_learning": {
+        "enabled": False,                   # Opt-in only (disabled by default)
+        "role": "participant",              # participant, coordinator, observer
+        "auto_participate": False,          # Auto-join rounds
+        "mode": "private",                  # private, trusted, public, hybrid
+        
+        # Privacy Protection
+        "privacy": {
+            "differential_privacy": True,   # Add noise to protect individual data
+            "epsilon": 1.0,                 # Privacy budget (lower = more private)
+            "secure_aggregation": False,    # Cryptographic privacy (not yet implemented)
+        },
+        
+        # Update Compression
+        "compression": {
+            "enabled": True,                # Compress updates for bandwidth
+            "quantization_bits": 8,         # Bits for weight quantization (8, 16, 32)
+            "sparsity": 0.1,                # Send top 10% of changes by magnitude
+        },
+        
+        # Resource Management
+        "resources": {
+            "max_training_time": 300,       # Max time per round (seconds)
+            "min_samples": 10,              # Min data samples to participate
+            "contribute_only_idle": True,   # Only participate when device idle
+        },
+        
+        # Coordinator Settings (only used if role=coordinator)
+        "coordinator": {
+            "min_participants": 2,          # Min participants required per round
+            "round_timeout": 300,           # Timeout for collecting updates (seconds)
+            "wait_between_rounds": 60,      # Wait time between rounds (seconds)
+        },
+    },
 }
 
 
