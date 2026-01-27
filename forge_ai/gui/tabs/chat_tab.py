@@ -435,7 +435,34 @@ def create_chat_tab(parent):
     
     # Build each section using helper functions
     _create_header_section(parent, main_layout)
+    
+    # Add quick actions bar if GUI mode manager is available
+    if hasattr(parent, 'gui_mode_manager'):
+        from ..widgets.quick_actions import QuickActionsBar
+        quick_actions = QuickActionsBar(parent)
+        # Connect signals to parent methods if they exist
+        if hasattr(parent, '_on_screenshot_clicked'):
+            quick_actions.screenshot_clicked.connect(parent._on_screenshot_clicked)
+        if hasattr(parent, '_on_voice_clicked'):
+            quick_actions.voice_clicked.connect(parent._on_voice_clicked)
+        if hasattr(parent, '_on_game_mode_clicked'):
+            quick_actions.game_mode_clicked.connect(parent._on_game_mode_clicked)
+        if hasattr(parent, 'btn_new_chat'):
+            quick_actions.new_chat_clicked.connect(lambda: parent.btn_new_chat.click())
+        if hasattr(parent, '_on_quick_generate_clicked'):
+            quick_actions.quick_generate_clicked.connect(parent._on_quick_generate_clicked)
+        main_layout.addWidget(quick_actions)
+    
     _create_chat_display(parent, main_layout)
+    
+    # Add feedback buttons below chat display if GUI mode manager is available
+    if hasattr(parent, 'gui_mode_manager'):
+        from ..widgets.quick_actions import FeedbackButtons
+        parent.feedback_buttons = FeedbackButtons(parent)
+        parent.feedback_buttons.good_feedback.connect(lambda: _on_feedback(parent, True))
+        parent.feedback_buttons.bad_feedback.connect(lambda: _on_feedback(parent, False))
+        main_layout.addWidget(parent.feedback_buttons)
+    
     _create_thinking_panel(parent, main_layout)
     _create_input_section(parent, main_layout)
     _create_status_bar(parent, main_layout)
@@ -449,6 +476,14 @@ def create_chat_tab(parent):
     
     chat_widget.setLayout(main_layout)
     return chat_widget
+
+
+def _on_feedback(parent, is_positive):
+    """Handle feedback button clicks."""
+    feedback_type = "positive" if is_positive else "negative"
+    print(f"User feedback: {feedback_type}")
+    # TODO: Store feedback in memory/analytics system
+    # For now, just log it
 
 
 def _toggle_voice_output(parent):
