@@ -20,7 +20,7 @@ def create_terminal_tab(parent):
     header_layout = QHBoxLayout()
     
     title = QLabel("AI Processing Terminal")
-    title.setStyleSheet("font-weight: bold; font-size: 14px;")
+    title.setStyleSheet("font-weight: bold; font-size: 16px;")
     header_layout.addWidget(title)
     
     header_layout.addStretch()

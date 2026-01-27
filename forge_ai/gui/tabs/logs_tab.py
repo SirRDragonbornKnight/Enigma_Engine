@@ -200,7 +200,7 @@ class LogsTab(QWidget):
         header_row.addWidget(header)
         
         desc = QLabel("View training, system, and error logs")
-        desc.setStyleSheet("color: #888; font-size: 10px;")
+        desc.setStyleSheet("color: #888; font-size: 12px;")
         header_row.addWidget(desc)
         header_row.addStretch()
         layout.addLayout(header_row)

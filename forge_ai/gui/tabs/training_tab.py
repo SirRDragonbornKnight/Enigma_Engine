@@ -29,7 +29,7 @@ def create_training_tab(parent):
     
     header = QLabel("Train Your AI")
     header.setObjectName("header")
-    header.setStyleSheet("font-size: 16px; font-weight: bold;")
+    header.setStyleSheet("font-size: 18px; font-weight: bold;")
     header_layout.addWidget(header)
     
     header_layout.addStretch()
@@ -138,7 +138,7 @@ def create_training_tab(parent):
             border-radius: 4px;
             padding: 4px;
             font-family: monospace;
-            font-size: 13px;
+            font-size: 14px;
             color: #aaa;
         }
     """)

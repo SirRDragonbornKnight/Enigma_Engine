@@ -19,6 +19,20 @@ from .shared_components import NoScrollComboBox
 Checked = Qt.CheckState.Checked
 
 
+def _go_to_tab(parent, tab_name: str):
+    """Navigate to a specific tab by name."""
+    try:
+        # Find the tab widget
+        if hasattr(parent, 'tabs'):
+            tabs = parent.tabs
+            for i in range(tabs.count()):
+                if tabs.tabText(i) == tab_name:
+                    tabs.setCurrentIndex(i)
+                    return
+    except Exception as e:
+        print(f"Could not navigate to tab '{tab_name}': {e}")
+
+
 def _get_env_key(key_name: str) -> str:
     """Get an environment variable value, return empty string if not set."""
     return os.environ.get(key_name, "")
@@ -541,6 +555,36 @@ def _move_to_monitor(parent, monitor_index):
             pass
     
     _update_display_info(parent)
+
+
+def _save_startup_position_mode(parent):
+    """Save the startup position mode preference."""
+    mode = parent.startup_position_combo.currentData()
+    
+    main_window = parent.window()
+    if main_window and hasattr(main_window, '_gui_settings'):
+        main_window._gui_settings["startup_position_mode"] = mode
+        # Save immediately
+        try:
+            from pathlib import Path
+            import json
+            settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
+            with open(settings_path, 'w') as f:
+                json.dump(main_window._gui_settings, f, indent=2)
+        except Exception:
+            pass
+
+
+def _load_startup_position_mode(parent):
+    """Load the startup position mode from settings."""
+    main_window = parent.window()
+    if main_window and hasattr(main_window, '_gui_settings'):
+        mode = main_window._gui_settings.get("startup_position_mode", "center")
+        # Find and select the matching item
+        for i in range(parent.startup_position_combo.count()):
+            if parent.startup_position_combo.itemData(i) == mode:
+                parent.startup_position_combo.setCurrentIndex(i)
+                break
 
 
 def _toggle_cloud_mode(parent, state):
@@ -1374,7 +1418,7 @@ def create_settings_tab(parent):
     # Features enabled info
     parent.profile_features_label = QLabel("")
     parent.profile_features_label.setWordWrap(True)
-    parent.profile_features_label.setStyleSheet("color: #6b7280; font-size: 13px;")
+    parent.profile_features_label.setStyleSheet("color: #6b7280; font-size: 14px;")
     profile_layout.addWidget(parent.profile_features_label)
     
     # Profile status
@@ -1611,6 +1655,15 @@ def create_settings_tab(parent):
     parent.cloud_status_label.setWordWrap(True)
     cloud_layout.addWidget(parent.cloud_status_label)
     
+    # Link to Modules tab
+    cloud_link_row = QHBoxLayout()
+    go_to_modules_btn = QPushButton("Open Modules Tab")
+    go_to_modules_btn.setToolTip("Manage all AI modules and providers")
+    go_to_modules_btn.clicked.connect(lambda: _go_to_tab(parent, "Modules"))
+    cloud_link_row.addWidget(go_to_modules_btn)
+    cloud_link_row.addStretch()
+    cloud_layout.addLayout(cloud_link_row)
+    
     layout.addWidget(cloud_group)
 
     # === CHAT NAMES ===
@@ -1645,15 +1698,15 @@ def create_settings_tab(parent):
     
     layout.addWidget(names_group)
 
-    # === DISPLAY SETTINGS ===
-    display_group = QGroupBox("Display Settings")
-    display_layout = QVBoxLayout(display_group)
+    # === WINDOW OPTIONS ===
+    window_group = QGroupBox("Window Options")
+    window_layout = QVBoxLayout(window_group)
     
-    display_desc = QLabel(
-        "Configure display options for multi-monitor setups."
+    window_desc = QLabel(
+        "Configure window behavior and multi-monitor options."
     )
-    display_desc.setWordWrap(True)
-    display_layout.addWidget(display_desc)
+    window_desc.setWordWrap(True)
+    window_layout.addWidget(window_desc)
     
     # Always on top checkbox
     parent.always_on_top_check = QCheckBox("Always on Top (Main Window)")
@@ -1661,7 +1714,7 @@ def create_settings_tab(parent):
     parent.always_on_top_check.stateChanged.connect(
         lambda state: _toggle_always_on_top(parent, state)
     )
-    display_layout.addWidget(parent.always_on_top_check)
+    window_layout.addWidget(parent.always_on_top_check)
     
     # Quick Chat always on top checkbox
     parent.mini_chat_on_top_check = QCheckBox("Quick Chat Always on Top")
@@ -1670,7 +1723,7 @@ def create_settings_tab(parent):
     parent.mini_chat_on_top_check.stateChanged.connect(
         lambda state: _toggle_mini_chat_on_top(parent, state)
     )
-    display_layout.addWidget(parent.mini_chat_on_top_check)
+    window_layout.addWidget(parent.mini_chat_on_top_check)
     
     # Monitor selection row
     monitor_row = QHBoxLayout()
@@ -1690,15 +1743,37 @@ def create_settings_tab(parent):
     monitor_row.addWidget(refresh_monitors_btn)
     
     monitor_row.addStretch()
-    display_layout.addLayout(monitor_row)
+    window_layout.addLayout(monitor_row)
+    
+    # Startup position mode
+    startup_row = QHBoxLayout()
+    startup_row.addWidget(QLabel("Startup Position:"))
+    parent.startup_position_combo = NoScrollComboBox()
+    parent.startup_position_combo.setToolTip(
+        "Where the main window appears when ForgeAI starts\n"
+        "- Center on Display: Always center on selected monitor\n"
+        "- Remember Last: Open where you last closed it\n"
+        "Does NOT affect the avatar pop-out position"
+    )
+    parent.startup_position_combo.addItem("Center on Display", "center")
+    parent.startup_position_combo.addItem("Remember Last Position", "remember")
+    parent.startup_position_combo.currentIndexChanged.connect(
+        lambda idx: _save_startup_position_mode(parent)
+    )
+    startup_row.addWidget(parent.startup_position_combo)
+    startup_row.addStretch()
+    window_layout.addLayout(startup_row)
+    
+    # Load current startup position setting
+    _load_startup_position_mode(parent)
     
     # Current display info
     parent.display_info_label = QLabel("")
     parent.display_info_label.setStyleSheet("color: #888; font-style: italic;")
     _update_display_info(parent)
-    display_layout.addWidget(parent.display_info_label)
+    window_layout.addWidget(parent.display_info_label)
     
-    layout.addWidget(display_group)
+    layout.addWidget(window_group)
 
     # === AUDIO DEVICE SETTINGS ===
     audio_group = QGroupBox("Audio Devices")
@@ -1762,112 +1837,19 @@ def create_settings_tab(parent):
     # Populate audio devices
     _refresh_audio_devices(parent)
     
+    # Link to Audio tab
+    audio_link_row = QHBoxLayout()
+    go_to_audio_btn = QPushButton("Open Audio Tab")
+    go_to_audio_btn.setToolTip("Generate speech and audio in the Audio tab")
+    go_to_audio_btn.clicked.connect(lambda: _go_to_tab(parent, "Audio"))
+    audio_link_row.addWidget(go_to_audio_btn)
+    audio_link_row.addStretch()
+    audio_layout.addLayout(audio_link_row)
+    
     layout.addWidget(audio_group)
 
-    # === AVATAR CONTROL ===
-    avatar_group = QGroupBox("Avatar Control")
-    avatar_layout = QVBoxLayout(avatar_group)
-    
-    avatar_desc = QLabel(
-        "Avatar can react to screen content and behave autonomously."
-    )
-    avatar_desc.setWordWrap(True)
-    avatar_layout.addWidget(avatar_desc)
-    
-    # Avatar auto expressions
-    parent.auto_avatar_check = QCheckBox("Auto Expressions (from AI text)")
-    parent.auto_avatar_check.setChecked(True)
-    parent.auto_avatar_check.stateChanged.connect(
-        lambda state: setattr(parent, 'auto_avatar_enabled', state == 2)
-    )
-    parent.auto_avatar_enabled = True
-    avatar_layout.addWidget(parent.auto_avatar_check)
-    
-    # Avatar autonomous mode
-    parent.avatar_autonomous_check = QCheckBox("Autonomous Mode (react to screen)")
-    parent.avatar_autonomous_check.setChecked(False)
-    parent.avatar_autonomous_check.stateChanged.connect(
-        lambda state: _toggle_avatar_autonomous(parent, state)
-    )
-    avatar_layout.addWidget(parent.avatar_autonomous_check)
-    
-    # Avatar behavior settings
-    avatar_behavior_row = QHBoxLayout()
-    avatar_behavior_row.addWidget(QLabel("Activity:"))
-    parent.avatar_activity_slider = QSlider(Qt.Orientation.Horizontal)
-    parent.avatar_activity_slider.setRange(1, 10)
-    parent.avatar_activity_slider.setValue(5)
-    parent.avatar_activity_slider.setMaximumWidth(100)
-    parent.avatar_activity_slider.setToolTip("How active the avatar is (1=calm, 10=energetic)")
-    avatar_behavior_row.addWidget(parent.avatar_activity_slider)
-    avatar_behavior_row.addWidget(QLabel("Slow"))
-    avatar_behavior_row.addStretch()
-    avatar_behavior_row.addWidget(QLabel("Fast"))
-    avatar_layout.addLayout(avatar_behavior_row)
-    
-    parent.avatar_status_label = QLabel("Avatar: Idle")
-    parent.avatar_status_label.setStyleSheet("color: #888; font-style: italic;")
-    avatar_layout.addWidget(parent.avatar_status_label)
-    
-    layout.addWidget(avatar_group)
-    
-    # === ROBOT CONTROL ===
-    robot_group = QGroupBox("Robot Control")
-    robot_layout = QVBoxLayout(robot_group)
-    
-    robot_desc = QLabel(
-        "Control robot with safety modes. AUTO = AI controls, MANUAL = you control."
-    )
-    robot_desc.setWordWrap(True)
-    robot_layout.addWidget(robot_desc)
-    
-    # Robot mode selector
-    robot_mode_row = QHBoxLayout()
-    robot_mode_row.addWidget(QLabel("Mode:"))
-    parent.robot_mode_combo = NoScrollComboBox()
-    parent.robot_mode_combo.setToolTip("Select robot control mode")
-    parent.robot_mode_combo.addItem("DISABLED", "disabled")
-    parent.robot_mode_combo.addItem("MANUAL (User)", "manual")
-    parent.robot_mode_combo.addItem("AUTO (AI)", "auto")
-    parent.robot_mode_combo.addItem("SAFE (Limited)", "safe")
-    parent.robot_mode_combo.currentIndexChanged.connect(
-        lambda: _change_robot_mode(parent)
-    )
-    robot_mode_row.addWidget(parent.robot_mode_combo)
-    robot_mode_row.addStretch()
-    robot_layout.addLayout(robot_mode_row)
-    
-    # E-STOP button
-    parent.estop_btn = QPushButton("EMERGENCY STOP")
-    parent.estop_btn.setStyleSheet("""
-        QPushButton {
-            background-color: #dc2626;
-            color: white;
-            font-weight: bold;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        QPushButton:hover {
-            background-color: #b91c1c;
-        }
-    """)
-    parent.estop_btn.clicked.connect(lambda: _robot_estop(parent))
-    robot_layout.addWidget(parent.estop_btn)
-    
-    # Camera toggle
-    parent.robot_camera_check = QCheckBox("Enable Camera Feed")
-    parent.robot_camera_check.stateChanged.connect(
-        lambda state: _toggle_robot_camera(parent, state)
-    )
-    robot_layout.addWidget(parent.robot_camera_check)
-    
-    # Robot status
-    parent.robot_status_label = QLabel("Robot: Disabled")
-    parent.robot_status_label.setStyleSheet("color: #888; font-style: italic;")
-    robot_layout.addWidget(parent.robot_status_label)
-    
-    layout.addWidget(robot_group)
-    
+    # NOTE: Avatar Control moved to Avatar tab for better organization
+    # NOTE: Robot Control moved to Robot tab for better E-STOP access
     # NOTE: Game AI Routing moved to Game tab for better organization
 
     # === AUTONOMOUS MODE ===
@@ -1904,85 +1886,27 @@ def create_settings_tab(parent):
     
     layout.addWidget(autonomous_group)
     
-    # === PERSONALITY SETTINGS (COMPACT) ===
+    # === AI PERSONALITY (Link to full tab) ===
     personality_group = QGroupBox("AI Personality")
     personality_layout = QVBoxLayout(personality_group)
     personality_layout.setSpacing(6)
     
-    # Preset row
-    preset_row = QHBoxLayout()
-    preset_row.addWidget(QLabel("Preset:"))
-    parent.settings_personality_combo = NoScrollComboBox()
-    parent.settings_personality_combo.setToolTip("Select AI personality preset")
-    parent.settings_personality_combo.addItem("Balanced (Default)", "balanced")
-    parent.settings_personality_combo.addItem("Professional", "professional")
-    parent.settings_personality_combo.addItem("Friendly", "friendly")
-    parent.settings_personality_combo.addItem("Creative", "creative")
-    parent.settings_personality_combo.addItem("Analytical", "analytical")
-    parent.settings_personality_combo.addItem("Teacher", "teacher")
-    parent.settings_personality_combo.currentIndexChanged.connect(
-        lambda: _apply_personality_preset(parent)
+    personality_desc = QLabel(
+        "Configure AI personality traits, presets, and evolution settings."
     )
-    preset_row.addWidget(parent.settings_personality_combo)
-    preset_row.addStretch()
-    personality_layout.addLayout(preset_row)
+    personality_desc.setWordWrap(True)
+    personality_layout.addWidget(personality_desc)
     
-    # Quick trait sliders (compact - most important ones)
-    trait_row1 = QHBoxLayout()
-    trait_row1.addWidget(QLabel("Formal"))
-    parent.formality_slider = QSlider(Qt.Orientation.Horizontal)
-    parent.formality_slider.setRange(0, 100)
-    parent.formality_slider.setValue(50)
-    parent.formality_slider.setMaximumWidth(150)
-    parent.formality_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'formality', v))
-    trait_row1.addWidget(parent.formality_slider)
-    trait_row1.addWidget(QLabel("Casual"))
-    trait_row1.addSpacing(20)
-    trait_row1.addWidget(QLabel("Brief"))
-    parent.verbosity_slider = QSlider(Qt.Orientation.Horizontal)
-    parent.verbosity_slider.setRange(0, 100)
-    parent.verbosity_slider.setValue(50)
-    parent.verbosity_slider.setMaximumWidth(150)
-    parent.verbosity_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'verbosity', v))
-    trait_row1.addWidget(parent.verbosity_slider)
-    trait_row1.addWidget(QLabel("Detailed"))
-    trait_row1.addStretch()
-    personality_layout.addLayout(trait_row1)
-    
-    trait_row2 = QHBoxLayout()
-    trait_row2.addWidget(QLabel("Serious"))
-    parent.humor_slider = QSlider(Qt.Orientation.Horizontal)
-    parent.humor_slider.setRange(0, 100)
-    parent.humor_slider.setValue(50)
-    parent.humor_slider.setMaximumWidth(150)
-    parent.humor_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'humor_level', v))
-    trait_row2.addWidget(parent.humor_slider)
-    trait_row2.addWidget(QLabel("Humorous"))
-    trait_row2.addSpacing(20)
-    trait_row2.addWidget(QLabel("Factual"))
-    parent.creativity_slider = QSlider(Qt.Orientation.Horizontal)
-    parent.creativity_slider.setRange(0, 100)
-    parent.creativity_slider.setValue(50)
-    parent.creativity_slider.setMaximumWidth(150)
-    parent.creativity_slider.valueChanged.connect(lambda v: _update_personality_trait(parent, 'creativity', v))
-    trait_row2.addWidget(parent.creativity_slider)
-    trait_row2.addWidget(QLabel("Creative"))
-    trait_row2.addStretch()
-    personality_layout.addLayout(trait_row2)
-    
-    # Evolution toggle
-    evolution_row = QHBoxLayout()
-    parent.settings_evolution_check = QCheckBox("Allow personality evolution from conversations")
-    parent.settings_evolution_check.setChecked(True)
-    parent.settings_evolution_check.stateChanged.connect(
-        lambda state: _toggle_personality_evolution(parent, state)
-    )
-    evolution_row.addWidget(parent.settings_evolution_check)
-    evolution_row.addStretch()
-    personality_layout.addLayout(evolution_row)
+    personality_btn_row = QHBoxLayout()
+    go_to_personality_btn = QPushButton("Open Personality Tab")
+    go_to_personality_btn.setToolTip("Configure detailed personality settings in the Personality tab")
+    go_to_personality_btn.clicked.connect(lambda: _go_to_tab(parent, "Personality"))
+    personality_btn_row.addWidget(go_to_personality_btn)
+    personality_btn_row.addStretch()
+    personality_layout.addLayout(personality_btn_row)
     
     layout.addWidget(personality_group)
-    
+
     # === API KEYS ===
     api_group = QGroupBox("API Keys")
     api_layout = QVBoxLayout(api_group)
@@ -2191,7 +2115,7 @@ def create_settings_tab(parent):
     cache_layout.addWidget(parent.cache_size_label)
     
     parent.cache_path_label = QLabel("")
-    parent.cache_path_label.setStyleSheet("color: #888; font-size: 13px;")
+    parent.cache_path_label.setStyleSheet("color: #888; font-size: 14px;")
     parent.cache_path_label.setWordWrap(True)
     cache_layout.addWidget(parent.cache_path_label)
     
@@ -2289,7 +2213,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 12px;
+            font-size: 14px;
         }
         QPushButton:hover {
             background: #b91c1c;
@@ -2383,7 +2307,7 @@ def _refresh_connections(parent):
     try:
         # First check if we have a model assigned via ToolRouter
         active_ai_text = "Active AI: Not configured"
-        active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #888;"
+        active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #888;"
         
         try:
             from ...core.tool_router import get_router
@@ -2400,7 +2324,7 @@ def _refresh_connections(parent):
                 # Parse model type for display
                 if model_type == "huggingface":
                     active_ai_text = f"Active AI: [HF] {model_name}"
-                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #f59e0b;"
+                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #f59e0b;"
                     
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")
@@ -2414,7 +2338,7 @@ def _refresh_connections(parent):
                         
                 elif model_type == "forge_ai":
                     active_ai_text = f"Active AI: Forge - {model_name}"
-                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #22c55e;"
+                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #22c55e;"
                     
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")
@@ -2427,14 +2351,14 @@ def _refresh_connections(parent):
                         
                 elif model_type == "api":
                     active_ai_text = f"Active AI: [API] {model_name.upper()} API"
-                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #3b82f6;"
+                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #3b82f6;"
                     _update_status_indicator(parent.model_status, "connected")
                     _update_status_indicator(parent.tokenizer_status, "connected")
                     _update_status_indicator(parent.inference_status, "connected")
                     
                 elif model_type == "local":
                     active_ai_text = f"Active AI: [Local] {model_name}"
-                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #a855f7;"
+                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #a855f7;"
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")
                         _update_status_indicator(parent.tokenizer_status, "connected")

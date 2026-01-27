@@ -36,7 +36,7 @@ def create_workspace_tab(parent):
     header_layout = QHBoxLayout()
     header_layout.setContentsMargins(10, 10, 10, 5)
     header = QLabel("Workspace")
-    header.setStyleSheet("font-size: 16px; font-weight: bold;")
+    header.setStyleSheet("font-size: 18px; font-weight: bold;")
     header_layout.addWidget(header)
     header_layout.addStretch()
     

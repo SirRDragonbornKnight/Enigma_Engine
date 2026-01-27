@@ -21,7 +21,7 @@ def create_sessions_tab(parent):
     header_layout = QHBoxLayout()
     
     header = QLabel("Chat History")
-    header.setStyleSheet("font-size: 16px; font-weight: bold;")
+    header.setStyleSheet("font-size: 18px; font-weight: bold;")
     header_layout.addWidget(header)
     
     header_layout.addStretch()
@@ -157,7 +157,7 @@ def create_sessions_tab(parent):
         QTextEdit {
             border: none;
             background: transparent;
-            font-size: 13px;
+            font-size: 14px;
         }
     """)
     right_layout.addWidget(parent.session_viewer)

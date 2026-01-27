@@ -54,7 +54,7 @@ class StatCard(QFrame):
         layout.setContentsMargins(12, 10, 12, 10)
         
         title_label = QLabel(title)
-        title_label.setStyleSheet("color: #bac2de; font-size: 11px;")
+        title_label.setStyleSheet("color: #bac2de; font-size: 13px;")
         layout.addWidget(title_label)
         
         self.value_label = QLabel(value)
@@ -63,7 +63,7 @@ class StatCard(QFrame):
         
         if subtitle:
             self.subtitle_label = QLabel(subtitle)
-            self.subtitle_label.setStyleSheet("color: #6c7086; font-size: 10px;")
+            self.subtitle_label.setStyleSheet("color: #6c7086; font-size: 12px;")
             layout.addWidget(self.subtitle_label)
         else:
             self.subtitle_label = None

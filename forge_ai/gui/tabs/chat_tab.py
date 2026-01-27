@@ -152,7 +152,7 @@ STYLE_REC_BTN = """
         border: 2px solid #555;
         border-radius: 8px;
         color: #888;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: bold;
     }
     QPushButton:hover {
@@ -189,7 +189,7 @@ STYLE_VOICE_TOGGLE = """
         border: 1px solid #555;
         border-radius: 4px;
         color: #888;
-        font-size: 9px;
+        font-size: 12px;
         font-weight: bold;
     }
     QPushButton:hover {
@@ -204,12 +204,16 @@ STYLE_VOICE_TOGGLE = """
 """
 
 # Button dimensions
-BUTTON_WIDTH_SMALL = 70
-BUTTON_WIDTH_MEDIUM = 100
-BUTTON_HEIGHT = 40
-VOICE_TOGGLE_SIZE = (45, 24)
-TTS_BTN_SIZE = (50, 40)
-REC_BTN_SIZE = (55, 40)
+BUTTON_WIDTH_SMALL = 80
+BUTTON_WIDTH_MEDIUM = 110
+BUTTON_HEIGHT = 36
+VOICE_TOGGLE_SIZE = (50, 28)
+TTS_BTN_SIZE = (55, 36)
+REC_BTN_SIZE = (60, 36)
+
+# TTS state tracking to prevent multiple runs
+_tts_is_speaking = False
+_tts_stop_requested = False
 
 
 # =============================================================================
@@ -349,8 +353,17 @@ def _create_input_section(parent, layout):
     parent.btn_speak.setToolTip("Speak last AI response")
     parent.btn_speak.setFixedSize(*TTS_BTN_SIZE)
     parent.btn_speak.setStyleSheet(STYLE_TTS_BTN)
-    parent.btn_speak.clicked.connect(parent._on_speak_last)
+    parent.btn_speak.clicked.connect(lambda: _on_speak_last_safe(parent))
     input_layout.addWidget(parent.btn_speak)
+    
+    # TTS Stop button (hidden by default)
+    parent.btn_stop_tts = QPushButton("Stop")
+    parent.btn_stop_tts.setToolTip("Stop speech")
+    parent.btn_stop_tts.setFixedSize(*TTS_BTN_SIZE)
+    parent.btn_stop_tts.setStyleSheet(STYLE_STOP_BTN)
+    parent.btn_stop_tts.clicked.connect(lambda: _stop_tts(parent))
+    parent.btn_stop_tts.hide()
+    input_layout.addWidget(parent.btn_stop_tts)
     
     layout.addWidget(input_frame)
 
@@ -495,7 +508,7 @@ def _toggle_voice_input(parent):
 
 
 def _do_voice_input(parent):
-    """Background voice recognition."""
+    """Background voice recognition - automatically sends message after capture."""
     try:
         import speech_recognition as sr
         recognizer = sr.Recognizer()
@@ -506,28 +519,145 @@ def _do_voice_input(parent):
         
         text = recognizer.recognize_google(audio)
         
-        # Update UI from main thread
-        from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
-        QMetaObject.invokeMethod(
-            parent.chat_input, "setText",
-            Qt.QueuedConnection, Q_ARG(str, text)
-        )
-        # Un-check the button and reset status
+        # Auto-send the voice input (more alive, don't put in chat box)
         from PyQt5.QtCore import QTimer
-        QTimer.singleShot(0, lambda: _voice_input_done(parent))
+        QTimer.singleShot(0, lambda: _voice_input_and_send(parent, text))
         
     except Exception as e:
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(0, lambda: _voice_input_error(parent, str(e)))
 
 
-def _voice_input_done(parent):
-    """Called when voice input completes successfully."""
+def _voice_input_and_send(parent, text: str):
+    """Process voice input and automatically send to AI."""
     parent.rec_btn.setChecked(False)
     parent.rec_btn.setToolTip("Record - Click to speak")
-    parent.chat_status.setText("Voice captured - press Enter to send")
+    parent._voice_thread = None
+    
+    if not text or not text.strip():
+        parent.chat_status.setText("No speech detected")
+        return
+    
+    parent.chat_status.setText(f"Heard: {text[:50]}..." if len(text) > 50 else f"Heard: {text}")
+    
+    # Don't put in chat box - send directly for a more alive feel
+    # This triggers the AI to respond immediately
+    if hasattr(parent, '_on_send'):
+        # Temporarily set the input text and send
+        parent.chat_input.setText(text)
+        parent._on_send()  # This will read from chat_input and process
+
+
+def _voice_input_done(parent):
+    """Called when voice input completes successfully (legacy - not used with auto-send)."""
+    parent.rec_btn.setChecked(False)
+    parent.rec_btn.setToolTip("Record - Click to speak")
+    parent.chat_status.setText("Voice captured")
     parent._voice_thread = None
     parent.chat_input.setFocus()
+
+
+def _on_speak_last_safe(parent):
+    """Speak last AI response with double-click protection."""
+    global _tts_is_speaking, _tts_stop_requested
+    
+    # Prevent double-clicks while TTS is running
+    if _tts_is_speaking:
+        parent.chat_status.setText("Already speaking - click Stop to cancel")
+        return
+    
+    if not hasattr(parent, 'last_response') or not parent.last_response:
+        parent.chat_status.setText("No response to speak")
+        return
+    
+    _tts_is_speaking = True
+    _tts_stop_requested = False
+    
+    # Update UI
+    parent.btn_speak.setEnabled(False)
+    parent.btn_speak.setText("...")
+    parent.btn_stop_tts.show()
+    parent.chat_status.setText("Speaking...")
+    
+    # Run TTS in background thread
+    import threading
+    thread = threading.Thread(target=lambda: _do_tts(parent, parent.last_response), daemon=True)
+    thread.start()
+
+
+def _do_tts(parent, text: str):
+    """Perform TTS in background thread with better voice quality."""
+    global _tts_is_speaking, _tts_stop_requested
+    
+    try:
+        import re
+        # Clean text for TTS
+        clean_text = re.sub(r'<[^>]+>', '', text)  # Remove HTML
+        clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
+        clean_text = re.sub(r'```[\s\S]*?```', '', clean_text)  # Remove code blocks
+        clean_text = clean_text.strip()[:500]  # Limit length
+        
+        if not clean_text or clean_text.startswith("[Warning]"):
+            return
+        
+        if _tts_stop_requested:
+            return
+        
+        # Try to use voice profile system for better quality
+        try:
+            from ..voice.voice_profile import get_engine
+            engine = get_engine()
+            
+            # Check if avatar has a custom voice
+            if hasattr(parent, 'avatar') and parent.avatar:
+                avatar_voice = getattr(parent.avatar, 'voice_profile', None)
+                if avatar_voice:
+                    engine.set_profile(avatar_voice)
+            
+            engine.speak(clean_text)
+        except Exception:
+            # Fallback to simple speak
+            try:
+                from ..voice import speak
+                speak(clean_text)
+            except Exception:
+                pass
+    finally:
+        # Reset state from main thread
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(0, lambda: _tts_finished(parent))
+
+
+def _tts_finished(parent):
+    """Called when TTS finishes."""
+    global _tts_is_speaking
+    _tts_is_speaking = False
+    
+    parent.btn_speak.setEnabled(True)
+    parent.btn_speak.setText("TTS")
+    parent.btn_stop_tts.hide()
+    parent.chat_status.setText("Ready")
+
+
+def _stop_tts(parent):
+    """Stop TTS playback."""
+    global _tts_stop_requested, _tts_is_speaking
+    _tts_stop_requested = True
+    
+    # Try to stop the TTS engine
+    try:
+        from ..voice.voice_profile import get_engine
+        engine = get_engine()
+        if hasattr(engine, '_engine') and engine._engine:
+            engine._engine.stop()
+    except Exception:
+        pass
+    
+    _tts_is_speaking = False
+    parent.btn_speak.setEnabled(True)
+    parent.btn_speak.setText("TTS")
+    parent.btn_stop_tts.hide()
+    parent.chat_status.setText("Speech stopped")
 
 
 def _voice_input_error(parent, error: str):

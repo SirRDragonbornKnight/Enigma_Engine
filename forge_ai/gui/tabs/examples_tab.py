@@ -140,22 +140,22 @@ class ExamplesTab(QWidget):
         
         # Compact info section (not in a group box)
         self.title_label = QLabel("Select an example")
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         right_layout.addWidget(self.title_label)
         
         self.desc_label = QLabel("")
         self.desc_label.setWordWrap(True)
-        self.desc_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        self.desc_label.setStyleSheet("color: #aaa; font-size: 13px;")
         self.desc_label.setMaximumHeight(40)
         right_layout.addWidget(self.desc_label)
         
         self.category_label = QLabel("")
-        self.category_label.setStyleSheet("color: #89b4fa; font-size: 10px;")
+        self.category_label.setStyleSheet("color: #89b4fa; font-size: 12px;")
         right_layout.addWidget(self.category_label)
         
         # Code preview (main area)
         code_label = QLabel("Code Preview:")
-        code_label.setStyleSheet("font-size: 11px; color: #888;")
+        code_label.setStyleSheet("font-size: 13px; color: #888;")
         right_layout.addWidget(code_label)
         
         self.code_view = QTextEdit()

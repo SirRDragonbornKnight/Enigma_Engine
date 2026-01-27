@@ -77,25 +77,25 @@ class ToolAssignmentWidget(QFrame):
         header.setSpacing(4)
         
         icon_label = QLabel(style['icon'])
-        icon_label.setStyleSheet("font-size: 16px;")
+        icon_label.setStyleSheet("font-size: 18px;")
         header.addWidget(icon_label)
         
         name_label = QLabel(self.tool_name.upper())
-        name_label.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {style['color']};")
+        name_label.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {style['color']};")
         header.addWidget(name_label)
         
         header.addStretch()
         
         # Status indicator
         self.status_label = QLabel("No model")
-        self.status_label.setStyleSheet("color: #888; font-size: 10px;")
+        self.status_label.setStyleSheet("color: #888; font-size: 13px;")
         header.addWidget(self.status_label)
         
         layout.addLayout(header)
         
         # Description (hidden when small to save space)
         desc_label = QLabel(self.tool_def.description[:60] + "..." if len(self.tool_def.description) > 60 else self.tool_def.description)
-        desc_label.setStyleSheet("color: #aaa; font-size: 9px;")
+        desc_label.setStyleSheet("color: #aaa; font-size: 12px;")
         desc_label.setWordWrap(True)
         desc_label.setMaximumHeight(30)
         layout.addWidget(desc_label)

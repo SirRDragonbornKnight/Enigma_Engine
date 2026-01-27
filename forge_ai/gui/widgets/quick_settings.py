@@ -451,22 +451,22 @@ class ResourceMonitor(QWidget):
         
         # CPU
         self.cpu_label = QLabel("CPU: --%")
-        self.cpu_label.setStyleSheet("color: #a6e3a1; font-size: 13px;")
+        self.cpu_label.setStyleSheet("color: #a6e3a1; font-size: 14px;")
         layout.addWidget(self.cpu_label)
         
         # RAM
         self.ram_label = QLabel("RAM: --MB")
-        self.ram_label.setStyleSheet("color: #89b4fa; font-size: 13px;")
+        self.ram_label.setStyleSheet("color: #89b4fa; font-size: 14px;")
         layout.addWidget(self.ram_label)
         
         # VRAM (if GPU)
         self.vram_label = QLabel("")
-        self.vram_label.setStyleSheet("color: #cba6f7; font-size: 13px;")
+        self.vram_label.setStyleSheet("color: #cba6f7; font-size: 14px;")
         layout.addWidget(self.vram_label)
         
         # Mode indicator
         self.mode_label = QLabel("Mode: Full")
-        self.mode_label.setStyleSheet("color: #f9e2af; font-size: 13px;")
+        self.mode_label.setStyleSheet("color: #f9e2af; font-size: 14px;")
         layout.addWidget(self.mode_label)
         
         layout.addStretch()
@@ -491,7 +491,7 @@ class ResourceMonitor(QWidget):
             cpu = psutil.cpu_percent()
             cpu_color = "#a6e3a1" if cpu < 70 else "#f9e2af" if cpu < 90 else "#f38ba8"
             self.cpu_label.setText(f"CPU: {cpu:.0f}%")
-            self.cpu_label.setStyleSheet(f"color: {cpu_color}; font-size: 10px;")
+            self.cpu_label.setStyleSheet(f"color: {cpu_color}; font-size: 14px;")
             
             # RAM
             mem = psutil.virtual_memory()
@@ -499,7 +499,7 @@ class ResourceMonitor(QWidget):
             ram_pct = mem.percent
             ram_color = "#89b4fa" if ram_pct < 70 else "#f9e2af" if ram_pct < 90 else "#f38ba8"
             self.ram_label.setText(f"RAM: {ram_mb:.0f}MB ({ram_pct:.0f}%)")
-            self.ram_label.setStyleSheet(f"color: {ram_color}; font-size: 10px;")
+            self.ram_label.setStyleSheet(f"color: {ram_color}; font-size: 14px;")
             
         except ImportError:
             self.cpu_label.setText("CPU: N/A")
@@ -514,7 +514,7 @@ class ResourceMonitor(QWidget):
                 vram_pct = (vram_used / vram_total) * 100 if vram_total > 0 else 0
                 vram_color = "#cba6f7" if vram_pct < 70 else "#f9e2af" if vram_pct < 90 else "#f38ba8"
                 self.vram_label.setText(f"VRAM: {vram_used:.0f}MB")
-                self.vram_label.setStyleSheet(f"color: {vram_color}; font-size: 10px;")
+                self.vram_label.setStyleSheet(f"color: {vram_color}; font-size: 14px;")
             else:
                 self.vram_label.setText("")
         except ImportError:
@@ -526,10 +526,10 @@ class ResourceMonitor(QWidget):
             gm = get_gaming_mode()
             if gm.active_game:
                 self.mode_label.setText(f"Mode: Gaming")
-                self.mode_label.setStyleSheet("color: #f38ba8; font-size: 10px;")
+                self.mode_label.setStyleSheet("color: #f38ba8; font-size: 14px;")
             else:
                 self.mode_label.setText("Mode: Full")
-                self.mode_label.setStyleSheet("color: #a6e3a1; font-size: 10px;")
+                self.mode_label.setStyleSheet("color: #a6e3a1; font-size: 14px;")
         except Exception:
             pass
     
@@ -543,7 +543,7 @@ class ResourceMonitor(QWidget):
         }
         color = colors.get(mode.lower(), "#cdd6f4")
         self.mode_label.setText(f"Mode: {mode.title()}")
-        self.mode_label.setStyleSheet(f"color: {color}; font-size: 10px;")
+        self.mode_label.setStyleSheet(f"color: {color}; font-size: 14px;")
 
 
 __all__ = [

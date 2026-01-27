@@ -1555,9 +1555,9 @@ class EnhancedMainWindow(QMainWindow):
         """
         super().__init__()
         self.setWindowTitle("ForgeAI")
-        # Allow window to resize freely (no fixed constraints)
-        self.setMinimumSize(600, 400)  # Reasonable minimum
-        self.resize(1000, 700)
+        # Set reasonable minimum size to prevent UI becoming unusable
+        self.setMinimumSize(800, 600)  # Larger minimum for better usability
+        self.resize(1100, 750)  # Default size
         
         # Set window icon
         self._set_window_icon()
@@ -1571,13 +1571,22 @@ class EnhancedMainWindow(QMainWindow):
         try:
             from .ui_settings import get_ui_settings
             self.ui_settings = get_ui_settings()
-            # Apply global stylesheet
-            self.setStyleSheet(self.ui_settings.get_global_stylesheet())
+            # Apply global stylesheet (with text selection support)
+            base_stylesheet = self.ui_settings.get_global_stylesheet()
+            # Add global styles for better text selection and button sizing
+            from .styles import GLOBAL_BASE_STYLE
+            self.setStyleSheet(base_stylesheet + "\n" + GLOBAL_BASE_STYLE)
             # Listen for settings changes
             self.ui_settings.add_listener(self._on_ui_settings_changed)
         except Exception as e:
             print(f"Could not load UI settings: {e}")
             self.ui_settings = None
+            # Apply fallback styles for text selection
+            try:
+                from .styles import GLOBAL_BASE_STYLE
+                self.setStyleSheet(GLOBAL_BASE_STYLE)
+            except Exception:
+                pass
         
         # ─────────────────────────────────────────────────────────────────
         # Initialize the Model Registry
@@ -2864,50 +2873,9 @@ class EnhancedMainWindow(QMainWindow):
             font-weight: bold;
             letter-spacing: 2px;
         """)
+        app_title.setToolTip("Right-click anywhere for options menu")
         title_layout.addWidget(app_title)
         title_layout.addStretch()
-        
-        # Menu button - shows options menu (right-click menu)
-        menu_btn = QPushButton("=")  # Hamburger-like icon
-        menu_btn.setFixedSize(28, 28)
-        menu_btn.setToolTip("Options Menu (or right-click anywhere)")
-        menu_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #89b4fa;
-                border: 1px solid #45475a;
-                border-radius: 4px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #313244;
-                border-color: #89b4fa;
-            }
-        """)
-        menu_btn.clicked.connect(self._show_options_menu)
-        title_layout.addWidget(menu_btn)
-        
-        # Show All Tabs button - makes all tabs visible
-        show_all_btn = QPushButton("All")
-        show_all_btn.setFixedSize(32, 28)
-        show_all_btn.setToolTip("Show all tabs (ignore module requirements)")
-        show_all_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #888;
-                border: 1px solid #333;
-                border-radius: 4px;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #313244;
-                color: #89b4fa;
-                border-color: #89b4fa;
-            }
-        """)
-        show_all_btn.clicked.connect(self.show_all_tabs)
-        title_layout.addWidget(show_all_btn)
         
         sidebar_layout.addWidget(title_widget)
         
@@ -3122,14 +3090,32 @@ class EnhancedMainWindow(QMainWindow):
             combo.installEventFilter(self._combo_scroll_filter)
     
     def _enable_text_selection(self):
-        """Enable text selection on all QLabel widgets in the GUI."""
+        """Enable text selection on all QLabel and text widgets in the GUI."""
         from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QTextBrowser, QTextEdit
+        
+        # Enable selection on all QLabel widgets
         for label in self.findChildren(QLabel):
-            # Enable text selection (but not links, which need different flags)
             current_flags = label.textInteractionFlags()
-            # Add text selection flag if not already set
-            if not (current_flags & Qt.TextSelectableByMouse):
-                label.setTextInteractionFlags(current_flags | Qt.TextSelectableByMouse)
+            # Add text selection by mouse and keyboard
+            new_flags = current_flags | Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            if current_flags != new_flags:
+                label.setTextInteractionFlags(new_flags)
+        
+        # Enable selection on QTextBrowser widgets (chat displays, logs, etc.)
+        for browser in self.findChildren(QTextBrowser):
+            current_flags = browser.textInteractionFlags()
+            new_flags = current_flags | Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            if current_flags != new_flags:
+                browser.setTextInteractionFlags(new_flags)
+        
+        # QTextEdit widgets are already selectable by default, but ensure it
+        for text_edit in self.findChildren(QTextEdit):
+            if text_edit.isReadOnly():
+                current_flags = text_edit.textInteractionFlags()
+                new_flags = current_flags | Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+                if current_flags != new_flags:
+                    text_edit.setTextInteractionFlags(new_flags)
     
     def _restore_gui_settings(self):
         """Restore GUI settings from saved file."""
@@ -3137,29 +3123,43 @@ class EnhancedMainWindow(QMainWindow):
         
         settings = self._gui_settings
         
-        # Restore window position and monitor
+        # Restore window position based on startup_position_mode setting
         monitor_index = settings.get("monitor_index", 0)
+        startup_mode = settings.get("startup_position_mode", "center")  # Default to center
         screens = QGuiApplication.screens()
         
         if monitor_index < len(screens):
             screen = screens[monitor_index]
             screen_geo = screen.geometry()
             
-            # Restore position if saved, otherwise center on screen
-            x = settings.get("window_x")
-            y = settings.get("window_y")
-            
-            if x is not None and y is not None:
-                # Verify the position is on a valid screen
-                from PyQt5.QtCore import QPoint
-                if QGuiApplication.screenAt(QPoint(x, y)):
-                    self.move(x, y)
+            if startup_mode == "remember":
+                # Remember Last Position - use saved x/y if available
+                x = settings.get("window_x")
+                y = settings.get("window_y")
+                
+                if x is not None and y is not None:
+                    # Verify the position is on a valid screen
+                    from PyQt5.QtCore import QPoint
+                    if QGuiApplication.screenAt(QPoint(x, y)):
+                        self.move(x, y)
+                    else:
+                        # Position is off-screen, fall back to center
+                        self.move(
+                            screen_geo.x() + (screen_geo.width() - self.width()) // 2,
+                            screen_geo.y() + (screen_geo.height() - self.height()) // 2
+                        )
                 else:
-                    # Position is off-screen, center on target monitor
+                    # No saved position, center on screen
                     self.move(
                         screen_geo.x() + (screen_geo.width() - self.width()) // 2,
                         screen_geo.y() + (screen_geo.height() - self.height()) // 2
                     )
+            else:
+                # Center on Display (default) - always center on selected monitor
+                self.move(
+                    screen_geo.x() + (screen_geo.width() - self.width()) // 2,
+                    screen_geo.y() + (screen_geo.height() - self.height()) // 2
+                )
         
         # Restore always on top - defer to after window is shown
         # Using QTimer to ensure window is fully loaded first
@@ -3235,6 +3235,8 @@ class EnhancedMainWindow(QMainWindow):
             key = current.data(Qt.UserRole)
             if key and key in self._nav_map:
                 self.content_stack.setCurrentIndex(self._nav_map[key])
+                # Re-enable text selection for any new widgets in this tab
+                self._enable_text_selection()
     
     def _switch_to_tab(self, tab_name: str):
         """Switch to a specific tab by name (for chat commands)."""
@@ -5218,7 +5220,7 @@ class EnhancedMainWindow(QMainWindow):
             return "You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful."
     
     def _build_tool_enabled_system_prompt(self) -> str:
-        """Build system prompt with all available tools the AI can use."""
+        """Build system prompt with all available tools the AI can use and GUI knowledge."""
         try:
             from ..tools.tool_registry import ToolRegistry
             registry = ToolRegistry()
@@ -5241,7 +5243,12 @@ class EnhancedMainWindow(QMainWindow):
 - screenshot: Take a screenshot
 - run_command: Run a system command (requires permission)"""
         
-        return f"""You are ForgeAI, an intelligent AI assistant with access to various tools and capabilities.
+        # Build GUI knowledge - what modules are loaded/available
+        gui_knowledge = self._build_gui_knowledge()
+        
+        return f"""You are ForgeAI, an intelligent AI assistant running inside the ForgeAI GUI application.
+
+{gui_knowledge}
 
 ## Tool Usage
 When you need to perform an action (generate media, access files, etc.), use this format:
@@ -5255,6 +5262,7 @@ When you need to perform an action (generate media, access files, etc.), use thi
 - Always explain what you're about to do before using a tool
 - Be helpful, accurate, and respect user privacy
 - For creative tasks, be imaginative and detailed
+- If a module/feature is disabled, tell the user they can enable it in the Modules tab
 
 ## Examples
 User: "Create an image of a sunset"
@@ -5266,6 +5274,69 @@ You: Let me check that folder for you.
 <tool_call>{{"tool": "list_directory", "params": {{"path": "/home/user/Documents"}}}}</tool_call>
 
 Be friendly, concise, and proactive in helping users accomplish their goals."""
+
+    def _build_gui_knowledge(self) -> str:
+        """Build knowledge about the ForgeAI GUI and enabled/disabled modules."""
+        lines = ["## ForgeAI GUI Knowledge"]
+        lines.append("You are running in the ForgeAI desktop application with the following tabs and features:")
+        lines.append("")
+        
+        # Tab information
+        lines.append("**GUI Tabs:**")
+        lines.append("- Chat: Main conversation interface (this tab)")
+        lines.append("- Image: Generate images with Stable Diffusion or DALL-E")
+        lines.append("- Code: Generate and run code")
+        lines.append("- Video: Create videos and GIFs")
+        lines.append("- Audio: Text-to-speech and audio generation")
+        lines.append("- 3D: Generate 3D models")
+        lines.append("- Vision: Analyze images and screenshots")
+        lines.append("- Camera: Webcam capture and analysis")
+        lines.append("- Training: Train/fine-tune AI models")
+        lines.append("- Modules: Enable/disable features (important for troubleshooting)")
+        lines.append("- Settings: Configure the application")
+        lines.append("")
+        
+        # Module status
+        lines.append("**Module Status:**")
+        if self.module_manager:
+            try:
+                loaded = self.module_manager.list_loaded()
+                if loaded:
+                    enabled_str = ", ".join(sorted(loaded)[:15])
+                    if len(loaded) > 15:
+                        enabled_str += f" (+{len(loaded)-15} more)"
+                    lines.append(f"- Enabled: {enabled_str}")
+                else:
+                    lines.append("- Enabled: None (enable modules in Modules tab)")
+                
+                # Check key features
+                has_image = any('image' in m for m in loaded)
+                has_voice = 'voice_output' in loaded or 'voice_input' in loaded
+                has_avatar = 'avatar' in loaded
+                has_vision = 'vision' in loaded
+                
+                if not has_image:
+                    lines.append("- Image generation: DISABLED - enable 'image_gen_local' or 'image_gen_api' in Modules tab")
+                if not has_voice:
+                    lines.append("- Voice: DISABLED - enable 'voice_output' or 'voice_input' in Modules tab")
+                if not has_avatar:
+                    lines.append("- Avatar: DISABLED - enable 'avatar' in Modules tab")
+                if not has_vision:
+                    lines.append("- Vision: DISABLED - enable 'vision' in Modules tab")
+            except Exception:
+                lines.append("- Could not determine module status")
+        else:
+            lines.append("- Module manager not available")
+        
+        lines.append("")
+        lines.append("**How to help users:**")
+        lines.append("- If a feature doesn't work, tell them to enable the module in the Modules tab")
+        lines.append("- The TTS button speaks the last response, Stop button cancels speech")
+        lines.append("- The REC button records voice input and automatically sends it")
+        lines.append("- Users can toggle auto-speak with the ON/OFF button at bottom")
+        lines.append("- All text in the app can be selected and copied")
+        
+        return "\n".join(lines)
 
     def _on_ai_error(self, error_msg: str):
         """Handle AI generation error."""

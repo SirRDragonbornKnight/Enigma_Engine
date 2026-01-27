@@ -432,6 +432,48 @@ HINT_LABEL = f"""
     }}
 """
 
+# =============================================================================
+# TEXT SELECTION STYLE - Makes all text selectable
+# =============================================================================
+
+SELECTABLE_LABEL = f"""
+    QLabel {{
+        color: {COLORS['text']};
+    }}
+"""
+
+# Global base style that makes text selectable and sets sensible defaults
+GLOBAL_BASE_STYLE = f"""
+    /* Make QLabel text selectable by default */
+    QLabel {{
+        color: {COLORS['text']};
+    }}
+    
+    /* Ensure text widgets allow selection */
+    QTextEdit, QTextBrowser, QPlainTextEdit {{
+        selection-background-color: {COLORS['blue']};
+        selection-color: {COLORS['crust']};
+    }}
+    
+    /* Standard button sizes - prevent tiny buttons */
+    QPushButton {{
+        min-height: 28px;
+        min-width: 60px;
+        padding: 6px 12px;
+        font-size: 12px;
+    }}
+    
+    /* Checkboxes - larger click target */
+    QCheckBox {{
+        spacing: 8px;
+        min-height: 24px;
+    }}
+    QCheckBox::indicator {{
+        width: 18px;
+        height: 18px;
+    }}
+"""
+
 
 # =============================================================================
 # CHAT MESSAGE STYLES (HTML)

@@ -204,7 +204,7 @@ class ModelManagerDialog(QDialog):
         
         # Info label
         hf_info = QLabel("Note: Large models need good GPU & HF token for gated models")
-        hf_info.setStyleSheet("color: #6c7086; font-size: 10px;")
+        hf_info.setStyleSheet("color: #6c7086; font-size: 12px;")
         hf_info.setWordWrap(True)
         hf_layout.addWidget(hf_info)
         

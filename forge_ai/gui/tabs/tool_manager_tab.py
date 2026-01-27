@@ -47,12 +47,12 @@ class ToolManagerTab(QWidget):
         desc = QLabel("Enable/disable AI tools to customize your Forge installation. "
                      "Disable unused tools to save memory and speed up responses.")
         desc.setWordWrap(True)
-        desc.setStyleSheet("font-size: 13px; color: #888;")
+        desc.setStyleSheet("font-size: 14px; color: #888;")
         layout.addWidget(desc)
         
         # Stats bar
         self.stats_label = QLabel()
-        self.stats_label.setStyleSheet("color: #888; font-style: italic; font-size: 13px;")
+        self.stats_label.setStyleSheet("color: #888; font-style: italic; font-size: 14px;")
         layout.addWidget(self.stats_label)
         
         # Preset selector - more compact
@@ -131,7 +131,7 @@ class ToolManagerTab(QWidget):
         self.info_text.setReadOnly(True)
         self.info_text.setMinimumHeight(80)
         self.info_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.info_text.setStyleSheet("font-size: 13px;")
+        self.info_text.setStyleSheet("font-size: 14px;")
         right_layout.addWidget(self.info_text, 1)  # stretch factor 1
         
         # Dependencies section
@@ -141,7 +141,7 @@ class ToolManagerTab(QWidget):
         
         self.deps_text = QTextEdit()
         self.deps_text.setReadOnly(True)
-        self.deps_text.setStyleSheet("font-size: 13px;")
+        self.deps_text.setStyleSheet("font-size: 14px;")
         self.deps_text.setMinimumHeight(60)
         self.deps_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         right_layout.addWidget(self.deps_text, 1)  # stretch factor 1

@@ -2846,20 +2846,62 @@ class ForgeSystemTray(QObject):
         )
     
     def _exit_app(self):
-        """Exit the ForgeAI application completely."""
-        # Hide overlay and tray
-        if hasattr(self, 'overlay') and self.overlay:
-            self.overlay.hide()
-        if hasattr(self, 'tray_icon') and self.tray_icon:
-            self.tray_icon.hide()
+        """Exit the ForgeAI application completely with proper cleanup."""
+        # Cleanup: explicitly hide and destroy tray icon to prevent ghost icons
+        try:
+            if hasattr(self, 'overlay') and self.overlay:
+                self.overlay.hide()
+                self.overlay.close()
+                self.overlay.deleteLater()
+            
+            if hasattr(self, 'tray_icon') and self.tray_icon:
+                # Explicitly hide, set invisible, and remove from system
+                self.tray_icon.hide()
+                self.tray_icon.setVisible(False)
+                self.tray_icon.setIcon(QIcon())  # Clear icon
+                self.tray_icon.deleteLater()
+            
+            # Close help window if open
+            if hasattr(self, 'help_window') and self.help_window:
+                self.help_window.close()
+            
+            # Stop voice listener
+            if hasattr(self, 'voice_commander') and self.voice_commander:
+                self.voice_commander.stop()
+            
+            # Stop recording
+            if hasattr(self, 'is_recording') and self.is_recording:
+                self._stop_recording()
+        except Exception as e:
+            logger.error(f"Error during tray cleanup: {e}")
         
         # Close main window
         if self.main_window:
-            self.main_window.close()
+            try:
+                self.main_window.close()
+            except Exception:
+                pass
+        
+        # Process any pending events before quitting
+        from PyQt5.QtWidgets import QApplication
+        QApplication.processEvents()
         
         # Quit the application
         if self.app:
             self.app.quit()
+    
+    def cleanup(self):
+        """Clean up resources when the tray is being destroyed."""
+        try:
+            if hasattr(self, 'tray_icon') and self.tray_icon:
+                self.tray_icon.hide()
+                self.tray_icon.setVisible(False)
+            if hasattr(self, 'overlay') and self.overlay:
+                self.overlay.hide()
+            if hasattr(self, 'refresh_timer') and self.refresh_timer:
+                self.refresh_timer.stop()
+        except Exception:
+            pass
     
     def set_status(self, text: str):
         """Update the status in the tray menu."""
@@ -2872,8 +2914,14 @@ class ForgeSystemTray(QObject):
         self.tray_icon.showMessage(title, message, icon_type, 3000)
 
 
+# Global reference to track tray instances for cleanup
+_tray_instances = []
+
+
 def create_system_tray(app, main_window=None):
-    """Create and return the system tray instance."""
+    """Create and return the system tray instance with proper cleanup registration."""
+    global _tray_instances
+    
     if not HAS_PYQT:
         return None
     
@@ -2881,4 +2929,32 @@ def create_system_tray(app, main_window=None):
         logger.warning("System tray not available on this system")
         return None
     
-    return ForgeSystemTray(app, main_window)
+    tray = ForgeSystemTray(app, main_window)
+    _tray_instances.append(tray)
+    
+    # Register cleanup on app quit
+    def cleanup_all_trays():
+        global _tray_instances
+        for instance in _tray_instances:
+            try:
+                instance.cleanup()
+            except Exception:
+                pass
+        _tray_instances.clear()
+    
+    app.aboutToQuit.connect(cleanup_all_trays)
+    
+    return tray
+
+
+def cleanup_all_system_trays():
+    """Manually cleanup all system tray instances (call on crash/force quit)."""
+    global _tray_instances
+    for instance in _tray_instances:
+        try:
+            if hasattr(instance, 'tray_icon') and instance.tray_icon:
+                instance.tray_icon.hide()
+                instance.tray_icon.setVisible(False)
+        except Exception:
+            pass
+    _tray_instances.clear()

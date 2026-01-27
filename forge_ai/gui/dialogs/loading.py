@@ -178,7 +178,7 @@ class ModelLoadingDialog(QDialog):
         
         # Status text at bottom (for backwards compatibility)
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("font-size: 9px; color: #6c7086;")
+        self.status_label.setStyleSheet("font-size: 12px; color: #6c7086;")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
@@ -227,13 +227,13 @@ class ModelLoadingDialog(QDialog):
         
         # Name
         name_label = QLabel(item['name'])
-        name_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #cdd6f4;")
+        name_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #cdd6f4;")
         name_label.setMinimumWidth(100)
         row_layout.addWidget(name_label, 1)
         
         # Status text
         status_label = QLabel(item['status'])
-        status_label.setStyleSheet("font-size: 9px; color: #a6adc8;")
+        status_label.setStyleSheet("font-size: 12px; color: #a6adc8;")
         status_label.setAlignment(Qt.AlignRight)
         row_layout.addWidget(status_label)
         
@@ -247,7 +247,7 @@ class ModelLoadingDialog(QDialog):
         
         # Done checkmark (hidden until complete)
         done_label = QLabel("OK")
-        done_label.setStyleSheet("font-size: 10px; color: #a6e3a1; font-weight: bold;")
+        done_label.setStyleSheet("font-size: 12px; color: #a6e3a1; font-weight: bold;")
         done_label.setFixedWidth(20)
         done_label.setVisible(False)
         row_layout.addWidget(done_label)
@@ -296,7 +296,7 @@ class ModelLoadingDialog(QDialog):
         """Mark a loading item as complete."""
         if 0 <= index < len(self._item_widgets):
             self._item_widgets[index]['status'].setText("Ready")
-            self._item_widgets[index]['status'].setStyleSheet("font-size: 9px; color: #a6e3a1;")
+            self._item_widgets[index]['status'].setStyleSheet("font-size: 12px; color: #a6e3a1;")
             self._item_widgets[index]['progress'].setValue(100)
             self._item_widgets[index]['progress'].hide()
             self._item_widgets[index]['done'].setVisible(True)

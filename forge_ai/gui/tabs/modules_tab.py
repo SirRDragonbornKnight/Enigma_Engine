@@ -50,8 +50,8 @@ class ModuleListItem(QFrame):
         self._setup_ui()
         
     def _setup_ui(self):
-        self.setMinimumHeight(40)
-        self.setMaximumHeight(50)
+        self.setMinimumHeight(50)
+        self.setMaximumHeight(60)
         self.setFrameStyle(QFrame.NoFrame)
         
         category = self.module_info.get('category', 'extension').lower()
@@ -60,52 +60,68 @@ class ModuleListItem(QFrame):
         self.setStyleSheet(f"""
             ModuleListItem {{
                 background: transparent;
-                border-left: 3px solid {color};
-                padding-left: 6px;
+                border-left: 4px solid {color};
+                padding-left: 8px;
             }}
             ModuleListItem:hover {{
-                background: rgba(255,255,255,0.05);
+                background: rgba(255,255,255,0.08);
             }}
         """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(12)
         
-        # Toggle checkbox
+        # Toggle checkbox - larger for easier clicking
         self.toggle = QCheckBox()
-        self.toggle.setFixedWidth(18)
+        self.toggle.setFixedSize(24, 24)
+        self.toggle.setStyleSheet("""
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #2ecc71;
+                border: 2px solid #27ae60;
+                border-radius: 4px;
+            }
+            QCheckBox::indicator:unchecked {
+                background-color: #333;
+                border: 2px solid #555;
+                border-radius: 4px;
+            }
+        """)
         self.toggle.setToolTip("Enable or disable this module")
         layout.addWidget(self.toggle)
         
         # Name and description
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(1)
+        info_layout.setSpacing(2)
         info_layout.setContentsMargins(0, 0, 0, 0)
         
         name = self.module_info.get('name', self.module_id)
         self.name_label = QLabel(name)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 11px;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         info_layout.addWidget(self.name_label)
         
         desc = self.module_info.get('description', '')
         # Truncate long descriptions
-        if len(desc) > 50:
-            desc = desc[:50] + "..."
+        if len(desc) > 60:
+            desc = desc[:60] + "..."
         self.desc_label = QLabel(desc)
-        self.desc_label.setStyleSheet("color: #888; font-size: 9px;")
+        self.desc_label.setStyleSheet("color: #888; font-size: 13px;")
         info_layout.addWidget(self.desc_label)
         
         layout.addLayout(info_layout, stretch=1)
         
         # Status indicator
         self.status_label = QLabel("OFF")
-        self.status_label.setFixedWidth(30)
+        self.status_label.setFixedWidth(40)
         self.status_label.setAlignment(AlignCenter)
         self.status_label.setStyleSheet("""
             QLabel {
                 color: #666;
-                font-size: 9px;
+                font-size: 13px;
                 font-weight: bold;
             }
         """)
@@ -120,8 +136,8 @@ class ModuleListItem(QFrame):
         
         if needs:
             req_label = QLabel("|".join(needs))
-            req_label.setStyleSheet("color: #f39c12; font-size: 8px;")
-            req_label.setFixedWidth(35)
+            req_label.setStyleSheet("color: #f39c12; font-size: 12px;")
+            req_label.setFixedWidth(45)
             layout.addWidget(req_label)
     
     def set_loaded(self, loaded: bool):
@@ -132,7 +148,7 @@ class ModuleListItem(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     color: #2ecc71;
-                    font-size: 10px;
+                    font-size: 14px;
                     font-weight: bold;
                 }
             """)
@@ -141,7 +157,7 @@ class ModuleListItem(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     color: #666;
-                    font-size: 10px;
+                    font-size: 14px;
                     font-weight: bold;
                 }
             """)
@@ -156,7 +172,7 @@ class ModuleListItem(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     color: #f39c12;
-                    font-size: 10px;
+                    font-size: 14px;
                     font-weight: bold;
                 }
             """)
@@ -178,14 +194,14 @@ class ModulesTab(QWidget):
         
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 12)
         
         # Header
         header_layout = QHBoxLayout()
         
         title = QLabel("Module Manager")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title.setStyleSheet("font-size: 22px; font-weight: bold;")
         header_layout.addWidget(title)
         
         header_layout.addStretch()
@@ -193,21 +209,30 @@ class ModulesTab(QWidget):
         # Search
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search...")
-        self.search_input.setFixedWidth(200)
+        self.search_input.setFixedWidth(220)
+        self.search_input.setMinimumHeight(32)
         self.search_input.textChanged.connect(self._filter_modules)
         self.search_input.setToolTip("Search modules by name or description")
         self.search_input.setStyleSheet("""
             QLineEdit {
-                padding: 6px 10px;
-                border-radius: 4px;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 14px;
             }
         """)
         header_layout.addWidget(self.search_input)
         
         refresh_btn = QPushButton("Refresh")
-        refresh_btn.setMinimumWidth(80)
+        refresh_btn.setMinimumWidth(90)
+        refresh_btn.setMinimumHeight(32)
         refresh_btn.clicked.connect(self._refresh_status)
         refresh_btn.setToolTip("Refresh module status and resource usage")
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+        """)
         header_layout.addWidget(refresh_btn)
         
         layout.addLayout(header_layout)
@@ -219,7 +244,7 @@ class ModulesTab(QWidget):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(10)
+        left_layout.setSpacing(12)
         
         # Category filter
         filter_layout = QHBoxLayout()
@@ -230,24 +255,53 @@ class ModulesTab(QWidget):
         for cat_id, cat_info in CATEGORIES.items():
             self.category_combo.addItem(cat_info['name'], cat_id)
         self.category_combo.currentIndexChanged.connect(self._filter_modules)
-        self.category_combo.setMinimumWidth(100)
+        self.category_combo.setMinimumWidth(120)
+        self.category_combo.setMinimumHeight(30)
         self.category_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.category_combo.setToolTip("Filter modules by category")
         filter_layout.addWidget(self.category_combo)
         
         filter_layout.addStretch()
         
-        # Quick actions
+        # Quick actions - improved button styling
         self.enable_all_btn = QPushButton("Enable All")
-        self.enable_all_btn.setMinimumWidth(70)
+        self.enable_all_btn.setMinimumWidth(90)
+        self.enable_all_btn.setMinimumHeight(32)
         self.enable_all_btn.clicked.connect(self._enable_all_visible)
         self.enable_all_btn.setToolTip("Enable all visible modules in the current filter")
+        self.enable_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2ecc71;
+                color: #1e1e2e;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+            }
+        """)
         filter_layout.addWidget(self.enable_all_btn)
         
         self.disable_all_btn = QPushButton("Disable All")
-        self.disable_all_btn.setMinimumWidth(70)
+        self.disable_all_btn.setMinimumWidth(90)
+        self.disable_all_btn.setMinimumHeight(32)
         self.disable_all_btn.clicked.connect(self._disable_all_visible)
         self.disable_all_btn.setToolTip("Disable all visible modules in the current filter")
+        self.disable_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                font-weight: bold;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
         filter_layout.addWidget(self.disable_all_btn)
         
         left_layout.addLayout(filter_layout)
@@ -258,16 +312,16 @@ class ModulesTab(QWidget):
         scroll.setHorizontalScrollBarPolicy(ScrollBarAlwaysOff)
         scroll.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #333;
-                border-radius: 4px;
+                border: 1px solid #444;
+                border-radius: 6px;
                 background: transparent;
             }
         """)
         
         self.modules_container = QWidget()
         self.modules_layout = QVBoxLayout(self.modules_container)
-        self.modules_layout.setSpacing(2)
-        self.modules_layout.setContentsMargins(5, 5, 5, 5)
+        self.modules_layout.setSpacing(4)
+        self.modules_layout.setContentsMargins(8, 8, 8, 8)
         
         scroll.setWidget(self.modules_container)
         left_layout.addWidget(scroll)
@@ -276,12 +330,12 @@ class ModulesTab(QWidget):
         
         # Right side - Status panel (collapsible on small screens)
         right_panel = QWidget()
-        right_panel.setMinimumWidth(180)
-        right_panel.setMaximumWidth(300)
+        right_panel.setMinimumWidth(200)
+        right_panel.setMaximumWidth(320)
         right_panel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(8, 0, 0, 0)
-        right_layout.setSpacing(10)
+        right_layout.setContentsMargins(10, 0, 0, 0)
+        right_layout.setSpacing(12)
         
         # Stats box
         stats_box = QGroupBox("Status")
@@ -306,15 +360,15 @@ class ModulesTab(QWidget):
         conn_layout.setSpacing(4)
         
         conn_title = QLabel("AI Status")
-        conn_title.setStyleSheet("font-weight: bold; font-size: 11px;")
+        conn_title.setStyleSheet("font-weight: bold; font-size: 14px;")
         conn_layout.addWidget(conn_title)
         
         self.ai_status_indicator = QLabel("[OFF] Disconnected")
-        self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
+        self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 14px;")
         conn_layout.addWidget(self.ai_status_indicator)
         
         self.ai_status_detail = QLabel("No modules loaded")
-        self.ai_status_detail.setStyleSheet("color: #888; font-size: 10px;")
+        self.ai_status_detail.setStyleSheet("color: #888; font-size: 13px;")
         self.ai_status_detail.setWordWrap(True)
         conn_layout.addWidget(self.ai_status_detail)
         
@@ -634,7 +688,7 @@ class ModulesTab(QWidget):
             item.setVisible(cat_match and search_match)
     
     def _enable_all_visible(self):
-        """Enable all visible modules with progress feedback."""
+        """Enable all visible modules with progress feedback and failure handling."""
         # Collect modules to enable
         to_enable = []
         for mod_id, item in self.module_items.items():
@@ -648,8 +702,8 @@ class ModulesTab(QWidget):
         # Warn user this may take a while
         reply = QMessageBox.question(
             self, "Enable All Modules",
-            f"This will load {len(to_enable)} modules.\n"
-            "Some modules (image gen, 3D gen) may take 10-30 seconds each.\n"
+            f"This will attempt to load {len(to_enable)} modules.\n"
+            "Some modules may fail if dependencies are missing.\n"
             "The UI may freeze during loading.\n\n"
             "Continue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
@@ -660,14 +714,27 @@ class ModulesTab(QWidget):
         
         self._log(f"Enabling {len(to_enable)} modules...")
         
+        # Track failures for summary
+        self._enable_failures = []
+        self._enable_successes = []
+        
         # Use a list to track progress through modules
         self._enable_queue = to_enable.copy()
         self._enable_next_module()
     
     def _enable_next_module(self):
-        """Enable the next module in the queue."""
+        """Enable the next module in the queue with error handling."""
         if not hasattr(self, '_enable_queue') or not self._enable_queue:
-            self._log("All modules enabled")
+            # Done - show summary
+            successes = len(getattr(self, '_enable_successes', []))
+            failures = getattr(self, '_enable_failures', [])
+            
+            if failures:
+                self._log(f"Completed: {successes} enabled, {len(failures)} failed")
+                for mod_id, reason in failures:
+                    self._log(f"  FAILED: {mod_id} - {reason}")
+            else:
+                self._log(f"All {successes} modules enabled successfully")
             return
         
         mod_id = self._enable_queue.pop(0)
@@ -678,11 +745,31 @@ class ModulesTab(QWidget):
                 # Process events so the log updates
                 from PyQt5.QtWidgets import QApplication
                 QApplication.processEvents()
-                item.toggle.setChecked(True)
+                
+                # Check if module can be loaded first
+                if self.module_manager:
+                    can_load, reason = self.module_manager.can_load(mod_id)
+                    if not can_load:
+                        self._log(f"  Skipping {mod_id}: {reason}")
+                        self._enable_failures.append((mod_id, reason))
+                    else:
+                        # Try to enable
+                        item.toggle.setChecked(True)
+                        # Check if it actually loaded
+                        if item.is_loaded:
+                            self._enable_successes.append(mod_id)
+                        else:
+                            self._enable_failures.append((mod_id, "Load failed"))
+                else:
+                    item.toggle.setChecked(True)
+                    self._enable_successes.append(mod_id)
         
         # Schedule next module with a small delay to allow UI to update
         if self._enable_queue:
             QTimer.singleShot(100, self._enable_next_module)
+        else:
+            # Final summary after last module
+            QTimer.singleShot(200, self._enable_next_module)
     
     def _disable_all_visible(self):
         """Disable all visible modules."""
@@ -704,19 +791,19 @@ class ModulesTab(QWidget):
         
         if core_loaded and gen_loaded:
             self.ai_status_indicator.setText("[ON] Connected (Full)")
-            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
+            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 14px; font-weight: bold;")
             self.ai_status_detail.setText("Core AI + generation ready")
         elif core_loaded:
             self.ai_status_indicator.setText("[ON] Connected (Core)")
-            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
+            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 14px; font-weight: bold;")
             self.ai_status_detail.setText("Chat available, enable gen modules for more")
         elif loaded > 0:
             self.ai_status_indicator.setText("[...] Partial")
-            self.ai_status_indicator.setStyleSheet("color: #f59e0b; font-size: 12px; font-weight: bold;")
+            self.ai_status_indicator.setStyleSheet("color: #f59e0b; font-size: 14px; font-weight: bold;")
             self.ai_status_detail.setText(f"{loaded} modules loaded, enable core for chat")
         else:
             self.ai_status_indicator.setText("[OFF] Disconnected")
-            self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
+            self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 14px;")
             self.ai_status_detail.setText("Enable modules to start")
     
     def _refresh_status(self):

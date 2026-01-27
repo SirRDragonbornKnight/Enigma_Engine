@@ -29,15 +29,15 @@ logger = logging.getLogger(__name__)
 @dataclass
 class FontSizes:
     """Font sizes for different UI elements (base values before scaling)."""
-    tiny: int = 9
-    small: int = 10
-    normal: int = 11
-    medium: int = 12
-    large: int = 14
-    xlarge: int = 16
-    title: int = 18
-    header: int = 20
-    huge: int = 24
+    tiny: int = 13
+    small: int = 14
+    normal: int = 16
+    medium: int = 17
+    large: int = 19
+    xlarge: int = 21
+    title: int = 24
+    header: int = 26
+    huge: int = 30
 
 
 @dataclass
@@ -589,18 +589,89 @@ class UISettings:
     
     def get_header_style(self) -> str:
         """Get style for header labels."""
-        fs = self.get_font_size("header")
+        fs = self.get_font_size("large")
         return f"font-size: {fs}px; font-weight: bold;"
+    
+    def get_section_header_style(self) -> str:
+        """Get style for section headers inside panels."""
+        fs = self.get_font_size("medium")
+        return f"font-size: {fs}px; font-weight: bold; color: {self._theme.text};"
+    
+    def get_label_style(self) -> str:
+        """Get style for normal labels."""
+        fs = self.get_font_size("normal")
+        return f"font-size: {fs}px; color: {self._theme.text};"
     
     def get_subtitle_style(self) -> str:
         """Get style for subtitle/secondary text."""
-        fs = self.get_font_size("small")
+        fs = self.get_font_size("normal")
         return f"font-size: {fs}px; color: {self._theme.text_secondary};"
     
     def get_muted_style(self) -> str:
         """Get style for muted/hint text."""
-        fs = self.get_font_size("tiny")
+        fs = self.get_font_size("small")
         return f"font-size: {fs}px; color: {self._theme.text_muted};"
+    
+    def get_status_style(self, status: str = "normal") -> str:
+        """Get style for status labels (success, warning, error, info)."""
+        fs = self.get_font_size("normal")
+        colors = {
+            "success": self._theme.success,
+            "warning": self._theme.warning,
+            "error": self._theme.error,
+            "info": self._theme.info,
+            "normal": self._theme.text,
+            "muted": self._theme.text_muted,
+        }
+        color = colors.get(status, self._theme.text)
+        return f"font-size: {fs}px; color: {color};"
+    
+    def get_bold_label_style(self) -> str:
+        """Get style for bold labels."""
+        fs = self.get_font_size("normal")
+        return f"font-size: {fs}px; font-weight: bold; color: {self._theme.text};"
+    
+    def get_card_style(self) -> str:
+        """Get style for card/panel containers."""
+        return f"""
+            background-color: {self._theme.surface};
+            border: 1px solid {self._theme.border};
+            border-radius: 8px;
+            padding: 12px;
+        """
+    
+    def get_button_style(self, variant: str = "primary") -> str:
+        """Get style for buttons (primary, secondary, danger)."""
+        fs = self.get_font_size("normal")
+        if variant == "secondary":
+            return f"""
+                background-color: {self._theme.surface};
+                color: {self._theme.text};
+                border: 1px solid {self._theme.border};
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: {fs}px;
+            """
+        elif variant == "danger":
+            return f"""
+                background-color: {self._theme.error};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: {fs}px;
+                font-weight: bold;
+            """
+        else:  # primary
+            return f"""
+                background-color: {self._theme.primary};
+                color: {self._theme.background};
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: {fs}px;
+                font-weight: bold;
+            """
     
     # Listener management
     

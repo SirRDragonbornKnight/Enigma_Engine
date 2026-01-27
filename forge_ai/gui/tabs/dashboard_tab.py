@@ -281,11 +281,11 @@ class StatusCard(QFrame):
         text_layout.setSpacing(1)
         
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: #cdd6f4; font-size: 11px; font-weight: bold;")
+        self.title_label.setStyleSheet("color: #cdd6f4; font-size: 13px; font-weight: bold;")
         text_layout.addWidget(self.title_label)
         
         self.status_label = QLabel(status)
-        self.status_label.setStyleSheet(f"color: {color}; font-size: 9px;")
+        self.status_label.setStyleSheet(f"color: {color}; font-size: 12px;")
         text_layout.addWidget(self.status_label)
         
         layout.addLayout(text_layout)
@@ -309,7 +309,7 @@ class StatusCard(QFrame):
         if color:
             self.color = color
             self.icon_label.setStyleSheet(f"color: {color}; font-size: 14px;")
-            self.status_label.setStyleSheet(f"color: {color}; font-size: 9px;")
+            self.status_label.setStyleSheet(f"color: {color}; font-size: 12px;")
             self._update_style()
         self.status_label.setText(status)
     
@@ -339,12 +339,12 @@ class ActivityItem(QFrame):
         layout.addWidget(icon_label)
         
         msg_label = QLabel(message)
-        msg_label.setStyleSheet("color: #cdd6f4; font-size: 10px;")
+        msg_label.setStyleSheet("color: #cdd6f4; font-size: 12px;")
         msg_label.setWordWrap(True)
         layout.addWidget(msg_label, stretch=1)
         
         time_label = QLabel(timestamp)
-        time_label.setStyleSheet("color: #6c7086; font-size: 8px;")
+        time_label.setStyleSheet("color: #6c7086; font-size: 11px;")
         layout.addWidget(time_label)
 
 
@@ -395,7 +395,7 @@ class DashboardTab(QWidget):
         
         # Uptime
         self.uptime_label = QLabel("Up: --")
-        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 10px;")
+        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 12px;")
         header_layout.addWidget(self.uptime_label)
         
         header_layout.addSpacing(15)
@@ -424,25 +424,25 @@ class DashboardTab(QWidget):
         info_layout.setContentsMargins(12, 8, 12, 8)
         
         self.hostname_label = QLabel(f"Host: {platform.node()}")
-        self.hostname_label.setStyleSheet("color: #89b4fa; font-size: 11px; font-weight: bold;")
+        self.hostname_label.setStyleSheet("color: #89b4fa; font-size: 13px; font-weight: bold;")
         info_layout.addWidget(self.hostname_label)
         
         info_layout.addSpacing(20)
         
         self.os_label = QLabel(f"OS: {platform.system()} {platform.release()[:20]}")
-        self.os_label.setStyleSheet("color: #a6e3a1; font-size: 10px;")
+        self.os_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
         info_layout.addWidget(self.os_label)
         
         info_layout.addSpacing(20)
         
         self.python_label = QLabel(f"Python {platform.python_version()}")
-        self.python_label.setStyleSheet("color: #f9e2af; font-size: 10px;")
+        self.python_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
         info_layout.addWidget(self.python_label)
         
         info_layout.addStretch()
         
         self.time_label = QLabel("")
-        self.time_label.setStyleSheet("color: #6c7086; font-size: 10px;")
+        self.time_label.setStyleSheet("color: #6c7086; font-size: 12px;")
         info_layout.addWidget(self.time_label)
         
         layout.addWidget(info_banner)
@@ -601,7 +601,7 @@ class DashboardTab(QWidget):
     def _detail_label(self, text: str) -> QLabel:
         """Create a styled detail label."""
         label = QLabel(text)
-        label.setStyleSheet("color: #bac2de; font-size: 10px;")
+        label.setStyleSheet("color: #bac2de; font-size: 12px;")
         return label
     
     def _start_monitoring(self):
@@ -700,7 +700,7 @@ class DashboardTab(QWidget):
                 
                 temp_color = "#a6e3a1" if temp < 60 else "#f9e2af" if temp < 75 else "#f38ba8"
                 self.temp_label.setText(f"Temp: {temp:.1f} C")
-                self.temp_label.setStyleSheet(f"color: {temp_color}; font-size: 10px;")
+                self.temp_label.setStyleSheet(f"color: {temp_color}; font-size: 12px;")
             else:
                 self.temp_gauge.set_value(0)
                 self.temp_label.setText("Temp: N/A")

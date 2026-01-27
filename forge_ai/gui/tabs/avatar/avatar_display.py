@@ -4893,6 +4893,53 @@ def create_avatar_subtab(parent):
     actions_group.setLayout(actions_layout)
     right_panel.addWidget(actions_group)
     
+    # === Behavior Controls ===
+    behavior_group = QGroupBox("Behavior Controls")
+    behavior_layout = QVBoxLayout()
+    behavior_layout.setSpacing(8)
+    
+    # Auto expressions from AI text
+    parent.auto_avatar_check = QCheckBox("Auto Expressions (from AI text)")
+    parent.auto_avatar_check.setChecked(True)
+    parent.auto_avatar_check.setToolTip("Avatar changes expression based on AI responses")
+    parent.auto_avatar_check.stateChanged.connect(
+        lambda state: setattr(parent, 'auto_avatar_enabled', state == 2)
+    )
+    parent.auto_avatar_enabled = True
+    behavior_layout.addWidget(parent.auto_avatar_check)
+    
+    # Autonomous mode (react to screen)
+    parent.avatar_autonomous_check = QCheckBox("Autonomous Mode (react to screen)")
+    parent.avatar_autonomous_check.setChecked(False)
+    parent.avatar_autonomous_check.setToolTip("Avatar watches screen and reacts to content")
+    parent.avatar_autonomous_check.stateChanged.connect(
+        lambda state: _toggle_avatar_autonomous(parent, state)
+    )
+    behavior_layout.addWidget(parent.avatar_autonomous_check)
+    
+    # Activity level slider
+    activity_row = QHBoxLayout()
+    activity_row.addWidget(QLabel("Activity:"))
+    parent.avatar_activity_slider = QSlider(Qt.Horizontal)
+    parent.avatar_activity_slider.setRange(1, 10)
+    parent.avatar_activity_slider.setValue(5)
+    parent.avatar_activity_slider.setToolTip("How active the avatar is (1=calm, 10=energetic)")
+    activity_row.addWidget(parent.avatar_activity_slider)
+    parent.activity_value_label = QLabel("5")
+    parent.avatar_activity_slider.valueChanged.connect(
+        lambda v: parent.activity_value_label.setText(str(v))
+    )
+    activity_row.addWidget(parent.activity_value_label)
+    behavior_layout.addLayout(activity_row)
+    
+    # Behavior status
+    parent.avatar_behavior_status = QLabel("Mode: Manual")
+    parent.avatar_behavior_status.setStyleSheet("color: #888; font-style: italic;")
+    behavior_layout.addWidget(parent.avatar_behavior_status)
+    
+    behavior_group.setLayout(behavior_layout)
+    right_panel.addWidget(behavior_group)
+
     # === Avatar Gallery ===
     gallery_group = QGroupBox("Avatar Gallery")
     gallery_layout = QVBoxLayout()
@@ -5988,6 +6035,34 @@ def _toggle_avatar(parent, enabled):
         parent._avatar_controller.disable()
         parent.avatar_status.setText("Avatar disabled")
         parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _toggle_avatar_autonomous(parent, state):
+    """Toggle avatar autonomous mode (react to screen content)."""
+    enabled = state == 2  # Qt.Checked
+    
+    try:
+        from ....avatar import get_avatar
+        from ....avatar.autonomous import get_autonomous_avatar
+        
+        avatar = get_avatar()
+        autonomous = get_autonomous_avatar(avatar)
+        
+        if enabled:
+            avatar.enable()
+            autonomous.start()
+            if hasattr(parent, 'avatar_behavior_status'):
+                parent.avatar_behavior_status.setText("Mode: Autonomous (watching screen)")
+                parent.avatar_behavior_status.setStyleSheet("color: #22c55e; font-weight: bold;")
+        else:
+            autonomous.stop()
+            if hasattr(parent, 'avatar_behavior_status'):
+                parent.avatar_behavior_status.setText("Mode: Manual")
+                parent.avatar_behavior_status.setStyleSheet("color: #888; font-style: italic;")
+    except Exception as e:
+        if hasattr(parent, 'avatar_behavior_status'):
+            parent.avatar_behavior_status.setText(f"Error: {e}")
+            parent.avatar_behavior_status.setStyleSheet("color: #ef4444;")
 
 
 def _toggle_overlay(parent):

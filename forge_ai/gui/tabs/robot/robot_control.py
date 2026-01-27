@@ -10,7 +10,7 @@ Supports loading connection configs from files instead of presets.
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QGroupBox, QLineEdit, QTextEdit, QFileDialog
+    QGroupBox, QLineEdit, QTextEdit, QFileDialog, QCheckBox, QMessageBox
 )
 import json
 
@@ -34,7 +34,59 @@ def create_robot_subtab(parent):
     layout.setSpacing(8)
     layout.setContentsMargins(10, 10, 10, 10)
     
-    # === OUTPUT AT TOP ===
+    # === SAFETY CONTROLS AT TOP (Easy Access) ===
+    safety_group = QGroupBox("Safety Controls")
+    safety_layout = QVBoxLayout(safety_group)
+    safety_layout.setSpacing(8)
+    
+    # E-STOP button - BIG and prominent
+    parent.estop_btn = QPushButton("EMERGENCY STOP")
+    parent.estop_btn.setMinimumHeight(50)
+    parent.estop_btn.setStyleSheet("""
+        QPushButton {
+            background-color: #dc2626;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            padding: 15px;
+            border-radius: 8px;
+            border: 3px solid #991b1b;
+        }
+        QPushButton:hover {
+            background-color: #b91c1c;
+        }
+        QPushButton:pressed {
+            background-color: #7f1d1d;
+        }
+    """)
+    parent.estop_btn.clicked.connect(lambda: _robot_estop(parent))
+    safety_layout.addWidget(parent.estop_btn)
+    
+    # Mode and Camera row
+    mode_row = QHBoxLayout()
+    mode_row.addWidget(QLabel("Mode:"))
+    parent.robot_mode_combo = NoScrollComboBox()
+    parent.robot_mode_combo.setToolTip("Select robot control mode")
+    parent.robot_mode_combo.addItem("DISABLED", "disabled")
+    parent.robot_mode_combo.addItem("MANUAL (User)", "manual")
+    parent.robot_mode_combo.addItem("AUTO (AI)", "auto")
+    parent.robot_mode_combo.addItem("SAFE (Limited)", "safe")
+    parent.robot_mode_combo.currentIndexChanged.connect(
+        lambda: _change_robot_mode(parent)
+    )
+    mode_row.addWidget(parent.robot_mode_combo)
+    
+    parent.robot_camera_check = QCheckBox("Camera Feed")
+    parent.robot_camera_check.stateChanged.connect(
+        lambda state: _toggle_robot_camera(parent, state)
+    )
+    mode_row.addWidget(parent.robot_camera_check)
+    mode_row.addStretch()
+    safety_layout.addLayout(mode_row)
+    
+    layout.addWidget(safety_group)
+    
+    # === OUTPUT ===
     # Log (main output area)
     parent.robot_log = QTextEdit()
     parent.robot_log.setReadOnly(True)
@@ -416,3 +468,96 @@ def _send_robot_command(parent):
             parent.robot_log.append(f"[X] Send failed: {e}")
     else:
         parent.robot_log.append("[!] Not connected - command logged only")
+
+
+# ===== SAFETY CONTROLS =====
+
+def _change_robot_mode(parent):
+    """Change robot control mode."""
+    mode = parent.robot_mode_combo.currentData()
+    
+    try:
+        from forge_ai.tools.robot_modes import get_mode_controller, RobotMode
+        
+        controller = get_mode_controller()
+        
+        mode_map = {
+            "disabled": RobotMode.DISABLED,
+            "manual": RobotMode.MANUAL,
+            "auto": RobotMode.AUTO,
+            "safe": RobotMode.SAFE,
+        }
+        
+        robot_mode = mode_map.get(mode, RobotMode.DISABLED)
+        success = controller.set_mode(robot_mode)
+        
+        if success:
+            status_map = {
+                "disabled": ("Status: Disabled", "#888"),
+                "manual": ("Status: MANUAL - User control", "#22c55e"),
+                "auto": ("Status: AUTO - AI control enabled", "#3b82f6"),
+                "safe": ("Status: SAFE - Limited AI control", "#f59e0b"),
+            }
+            text, color = status_map.get(mode, ("Status: Unknown", "#888"))
+            parent.robot_status_label.setText(text)
+            parent.robot_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+            parent.robot_log.append(f"[MODE] Changed to {mode.upper()}")
+        else:
+            parent.robot_status_label.setText("Status: Failed to change mode")
+            parent.robot_status_label.setStyleSheet("color: #ef4444;")
+    except ImportError:
+        parent.robot_status_label.setText("Status: Mode controller not configured")
+        parent.robot_status_label.setStyleSheet("color: #888;")
+    except Exception as e:
+        parent.robot_status_label.setText(f"Status: Error - {e}")
+        parent.robot_status_label.setStyleSheet("color: #ef4444;")
+
+
+def _robot_estop(parent):
+    """Emergency stop the robot."""
+    try:
+        from forge_ai.tools.robot_modes import get_mode_controller
+        
+        controller = get_mode_controller()
+        controller.emergency_stop("User pressed E-STOP button")
+        
+        parent.robot_status_label.setText("Status: E-STOP ACTIVE")
+        parent.robot_status_label.setStyleSheet("color: #ef4444; font-weight: bold;")
+        parent.robot_mode_combo.setCurrentIndex(0)  # Set to disabled
+        parent.robot_log.append("[E-STOP] Emergency stop activated!")
+        
+        QMessageBox.critical(
+            parent, "Emergency Stop",
+            "Robot has been emergency stopped!\n\n"
+            "To resume, set robot to DISABLED mode first, then re-enable."
+        )
+    except Exception as e:
+        parent.robot_log.append(f"[E-STOP] Error: {e}")
+        QMessageBox.warning(parent, "E-STOP Error", f"Could not E-STOP: {e}")
+
+
+def _toggle_robot_camera(parent, state):
+    """Toggle robot camera feed."""
+    enabled = state == 2
+    
+    try:
+        from forge_ai.tools.robot_modes import get_mode_controller, CameraConfig
+        
+        controller = get_mode_controller()
+        
+        if enabled:
+            controller.setup_camera(CameraConfig(enabled=True, device_id=0))
+            controller.start_camera()
+            parent.robot_log.append("[CAMERA] Camera feed enabled")
+        else:
+            controller.stop_camera()
+            parent.robot_log.append("[CAMERA] Camera feed disabled")
+    except ImportError:
+        parent.robot_camera_check.setChecked(False)
+        QMessageBox.information(
+            parent, "OpenCV Required",
+            "Camera requires OpenCV. Install with:\npip install opencv-python"
+        )
+    except Exception as e:
+        parent.robot_camera_check.setChecked(False)
+        QMessageBox.warning(parent, "Camera Error", f"Could not enable camera: {e}")
