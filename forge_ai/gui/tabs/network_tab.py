@@ -30,57 +30,70 @@ NETWORK_CONFIG.parent.mkdir(parents=True, exist_ok=True)
 
 
 class NetworkScanner(QThread):
-    """Background thread for scanning network devices."""
+    """Background thread for scanning network devices using DeviceDiscovery."""
     
     device_found = pyqtSignal(dict)
     scan_complete = pyqtSignal(list)
+    progress_update = pyqtSignal(str)
     
-    def __init__(self, port: int = 8765):
+    def __init__(self, port: int = 8765, scan_mode: str = "broadcast"):
         super().__init__()
         self.port = port
+        self.scan_mode = scan_mode  # "broadcast" or "full_scan"
         self._running = True
     
     def run(self):
-        """Scan local network for Forge instances."""
+        """Scan local network for Forge instances using DeviceDiscovery."""
+        from forge_ai.comms.discovery import DeviceDiscovery
+        
         devices = []
         
         try:
-            # Get local IP
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
+            # Create discovery instance
+            discovery = DeviceDiscovery(node_name="gui_scanner", node_port=self.port)
             
-            # Get subnet (simple approach)
-            base_ip = ".".join(local_ip.split(".")[:3])
+            if self.scan_mode == "broadcast":
+                # Fast UDP broadcast discovery
+                self.progress_update.emit("Broadcasting discovery message...")
+                discovered = discovery.broadcast_discover(timeout=3.0)
+                
+                # Convert to device format
+                for name, info in discovered.items():
+                    device = {
+                        "ip": info["ip"],
+                        "port": info["port"],
+                        "name": name,
+                        "status": "online",
+                        "is_self": False,
+                        "last_seen": info.get("last_seen"),
+                    }
+                    devices.append(device)
+                    self.device_found.emit(device)
+                
+                if not discovered:
+                    self.progress_update.emit("No devices found via broadcast. Try full scan.")
             
-            # Scan common IPs
-            for i in range(1, 255):
-                if not self._running:
-                    break
+            elif self.scan_mode == "full_scan":
+                # Full network scan (slower but more thorough)
+                self.progress_update.emit("Scanning network (this may take a while)...")
+                discovered = discovery.scan_network(port=self.port, timeout=0.3)
                 
-                ip = f"{base_ip}.{i}"
-                
-                try:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(0.1)
-                    result = sock.connect_ex((ip, self.port))
-                    sock.close()
-                    
-                    if result == 0:
-                        device = {
-                            "ip": ip,
-                            "port": self.port,
-                            "status": "online",
-                            "is_self": ip == local_ip,
-                        }
-                        devices.append(device)
-                        self.device_found.emit(device)
-                except Exception:
-                    pass
+                # Convert to device format
+                for name, info in discovered.items():
+                    device = {
+                        "ip": info["ip"],
+                        "port": info["port"],
+                        "name": name,
+                        "status": "online",
+                        "is_self": False,
+                        "last_seen": info.get("last_seen"),
+                        "model": info.get("model"),
+                    }
+                    devices.append(device)
+                    self.device_found.emit(device)
         
-        except Exception:
-            pass
+        except Exception as e:
+            self.progress_update.emit(f"Error during scan: {e}")
         
         self.scan_complete.emit(devices)
     
@@ -96,6 +109,7 @@ class NetworkTab(QWidget):
         self.main_window = parent
         self.scanner = None
         self.api_process = None
+        self.discovery_listener = None
         self._setup_ui()
         self._load_config()
         self._start_status_timer()
@@ -171,6 +185,15 @@ class NetworkTab(QWidget):
         self.scan_btn.clicked.connect(self._scan_network)
         scan_layout.addWidget(self.scan_btn)
         
+        # Scan mode selector
+        from PyQt5.QtWidgets import QComboBox
+        scan_layout.addWidget(QLabel("Mode:"))
+        self.scan_mode_combo = QComboBox()
+        self.scan_mode_combo.addItem("Broadcast", "broadcast")
+        self.scan_mode_combo.addItem("Full Scan", "full_scan")
+        self.scan_mode_combo.setToolTip("Broadcast: Fast UDP discovery\nFull Scan: Thorough network scan")
+        scan_layout.addWidget(self.scan_mode_combo)
+        
         self.add_device_btn = QPushButton("Add Device")
         self.add_device_btn.setToolTip("Manually add a remote device by IP address")
         self.add_device_btn.clicked.connect(self._add_device_manual)
@@ -187,8 +210,8 @@ class NetworkTab(QWidget):
         
         # Devices table
         self.devices_table = QTableWidget()
-        self.devices_table.setColumnCount(5)
-        self.devices_table.setHorizontalHeaderLabels(["IP", "Port", "Status", "Name", "Actions"])
+        self.devices_table.setColumnCount(6)
+        self.devices_table.setHorizontalHeaderLabels(["IP", "Port", "Status", "Name", "Model", "Actions"])
         self.devices_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.devices_table.setSelectionBehavior(QTableWidget.SelectRows)
         devices_layout.addWidget(self.devices_table)
@@ -296,13 +319,25 @@ class NetworkTab(QWidget):
             self._stop_server()
     
     def _start_server(self):
-        """Start the API server."""
+        """Start the API server and discovery listener."""
         port = self.port_input.value()
         
         try:
+            from forge_ai.comms.discovery import DeviceDiscovery
+            
             # Try to start the API server
             # This would normally use forge_ai.comms.api_server
             self._log(f"Starting API server on port {port}...")
+            
+            # Start discovery listener
+            import socket
+            hostname = socket.gethostname()
+            self.discovery_listener = DeviceDiscovery(
+                node_name=f"forge_{hostname}",
+                node_port=port
+            )
+            self.discovery_listener.start_listener()
+            self._log("Discovery listener started - other devices can find this node")
             
             # For now, just update status (actual server would be started here)
             self.server_status.setText(f"[RUNNING] on port {port}")
@@ -317,8 +352,14 @@ class NetworkTab(QWidget):
             QMessageBox.warning(self, "Error", f"Failed to start server: {e}")
     
     def _stop_server(self):
-        """Stop the API server."""
+        """Stop the API server and discovery listener."""
         self._log("Stopping API server...")
+        
+        # Stop discovery listener
+        if self.discovery_listener:
+            self.discovery_listener.stop_listener()
+            self.discovery_listener = None
+            self._log("Discovery listener stopped")
         
         self.server_status.setText("Stopped")
         self.server_status.setStyleSheet("color: #f44336; font-weight: bold;")
@@ -347,17 +388,23 @@ class NetworkTab(QWidget):
         self.scan_progress.setVisible(True)
         self.scan_progress.setRange(0, 0)  # Indeterminate
         
-        self._log("Scanning network for Forge instances...")
+        # Get selected scan mode
+        scan_mode = self.scan_mode_combo.currentData()
         
-        self.scanner = NetworkScanner(self.port_input.value())
+        mode_name = "broadcast" if scan_mode == "broadcast" else "full network"
+        self._log(f"Starting {mode_name} scan for Forge instances...")
+        
+        self.scanner = NetworkScanner(self.port_input.value(), scan_mode=scan_mode)
         self.scanner.device_found.connect(self._on_device_found)
         self.scanner.scan_complete.connect(self._on_scan_complete)
+        self.scanner.progress_update.connect(self._log)
         self.scanner.start()
     
     def _on_device_found(self, device: dict):
         """Handle found device."""
         self._add_device_to_table(device)
-        self._log(f"Found device: {device['ip']}:{device['port']}")
+        device_name = device.get('name', device['ip'])
+        self._log(f"Found device: {device_name} at {device['ip']}:{device['port']}")
     
     def _on_scan_complete(self, devices: list):
         """Handle scan completion."""
@@ -371,6 +418,9 @@ class NetworkTab(QWidget):
         # Check if already exists
         for row in range(self.devices_table.rowCount()):
             if self.devices_table.item(row, 0).text() == device["ip"]:
+                # Update existing row
+                self.devices_table.setItem(row, 3, QTableWidgetItem(device.get("name", "")))
+                self.devices_table.setItem(row, 4, QTableWidgetItem(device.get("model", "")))
                 return
         
         row = self.devices_table.rowCount()
@@ -386,6 +436,7 @@ class NetworkTab(QWidget):
         self.devices_table.setItem(row, 2, status_item)
         
         self.devices_table.setItem(row, 3, QTableWidgetItem(device.get("name", "")))
+        self.devices_table.setItem(row, 4, QTableWidgetItem(device.get("model", "")))
         
         # Actions
         actions_widget = QWidget()
@@ -404,7 +455,7 @@ class NetworkTab(QWidget):
         remove_btn.clicked.connect(lambda: self._remove_device(row))
         actions_layout.addWidget(remove_btn)
         
-        self.devices_table.setCellWidget(row, 4, actions_widget)
+        self.devices_table.setCellWidget(row, 5, actions_widget)
     
     def _add_device_manual(self):
         """Manually add a device."""
