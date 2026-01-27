@@ -224,13 +224,24 @@ class ToolRouter:
         │            TOOL ROUTER                            │
         │  1. Analyze: "draw" keyword detected              │
         │  2. Classify: This is an IMAGE request            │
-        │  3. Find: Get assigned model for IMAGE tool       │
-        │  4. Execute: Run Stable Diffusion                 │
-        │  5. Return: Image path to user                    │
+        │  3. Check: Can we handle locally?                 │
+        │  4. If not: Check remote peers                    │
+        │  5. Execute: Run best available handler           │
+        │  6. Return: Result to user                        │
         └───────────────────────────────────────────────────┘
                 │
                 ▼
         🎨 sunset_image.png
+    
+    📐 AI-TO-AI COLLABORATION:
+    When enabled, the router can delegate tasks to connected AI instances:
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │  Local (Pi)              Remote (Desktop)           Remote (Cloud)      │
+    │  ┌─────────────┐        ┌─────────────────┐        ┌───────────────┐   │
+    │  │ chat, code  │◄──────►│ image, audio    │◄──────►│ video, 3d     │   │
+    │  │ (pi_5 model)│        │ (large + GPU)   │        │ (xl model)    │   │
+    │  └─────────────┘        └─────────────────┘        └───────────────┘   │
+    └─────────────────────────────────────────────────────────────────────────┘
     
     📐 SPECIALIZED MODELS:
     For even smarter routing, you can train specialized models:
@@ -245,6 +256,7 @@ class ToolRouter:
     🔗 CONNECTS TO:
       → Uses tool_executor.py to run tools
       → Uses generation tabs for image/video/audio
+      → Uses ai_collaboration.py for remote execution
       ← Called by inference.py when enable_tools=True
       ← Configured in GUI via model_router_tab.py
     """
@@ -255,13 +267,15 @@ class ToolRouter:
     MAX_CACHE_SIZE = 5              # Main model cache
     MAX_SPECIALIZED_CACHE_SIZE = 3  # Specialized model cache
     
-    def __init__(self, config_path: Optional[Path] = None, use_specialized: bool = False):
+    def __init__(self, config_path: Optional[Path] = None, use_specialized: bool = False,
+                 enable_networking: bool = False):
         """
         Initialize the Tool Router.
         
         Args:
             config_path: Where to save/load routing configuration
             use_specialized: Enable specialized models (router, vision, code)
+            enable_networking: Enable AI-to-AI collaboration over network
         """
         from ..config import CONFIG
         
@@ -278,6 +292,18 @@ class ToolRouter:
         # ROUTING RULES: Define how to detect intent and route to tools
         # ─────────────────────────────────────────────────────────────────────
         self.routing_rules = ROUTING_RULES.copy()
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # AI-TO-AI NETWORKING: For distributed task execution
+        # ─────────────────────────────────────────────────────────────────────
+        self._network_node: Optional[Any] = None
+        self._remote_peers: Dict[str, dict] = {}  # peer_name -> {url, capabilities}
+        self._collaboration_protocol: Optional[Any] = None
+        self._routing_preference: str = "local_first"  # local_first, fastest, quality_first, distributed
+        self._networking_enabled = enable_networking
+        
+        if enable_networking:
+            self._init_networking()
         
         # ─────────────────────────────────────────────────────────────────────
         # MODEL CACHE: Keep loaded models in memory for speed
@@ -1605,13 +1631,411 @@ class ToolRouter:
             "model": assignment.model_id
         }
     
+    # =========================================================================
+    # AI-TO-AI NETWORKING - Distributed Task Execution
+    # =========================================================================
+    
+    def _init_networking(self):
+        """Initialize networking for AI collaboration."""
+        try:
+            from ..comms.ai_collaboration import get_collaboration_protocol
+            self._collaboration_protocol = get_collaboration_protocol()
+            logger.info("AI collaboration protocol initialized")
+        except ImportError as e:
+            logger.warning(f"AI collaboration not available: {e}")
+            self._collaboration_protocol = None
+    
+    def connect_to_ai(self, url: str, name: str = None) -> bool:
+        """
+        Connect to another ForgeAI instance for collaboration.
+        
+        📖 WHAT THIS DOES:
+        Establishes a connection to another ForgeAI instance running on the
+        network. Once connected, you can delegate tasks to this peer.
+        
+        📐 EXAMPLE:
+            router = get_router(enable_networking=True)
+            router.connect_to_ai("192.168.1.100:5000", "desktop_pc")
+            
+            # Now "desktop_pc" is available for task delegation
+        
+        Args:
+            url: URL of the remote ForgeAI instance (e.g., "192.168.1.100:5000")
+            name: Friendly name for this peer (auto-detected if not provided)
+        
+        Returns:
+            True if connection successful
+        """
+        if not self._networking_enabled:
+            logger.warning("Networking not enabled. Initialize with enable_networking=True")
+            return False
+        
+        # Ensure network node exists
+        if self._network_node is None:
+            try:
+                from ..comms.network import ForgeNode
+                self._network_node = ForgeNode(name="tool_router_node")
+                self._network_node.start_server(blocking=False)
+            except Exception as e:
+                logger.error(f"Failed to start network node: {e}")
+                return False
+        
+        # Connect to peer
+        success = self._network_node.connect_to(url, name)
+        
+        if success:
+            peer_name = name or url.split(":")[0]
+            self._remote_peers[peer_name] = {
+                "url": url if url.startswith("http") else f"http://{url}",
+                "connected_at": datetime.now().isoformat(),
+                "capabilities": None,  # Fetched lazily
+            }
+            
+            # Connect collaboration protocol
+            if self._collaboration_protocol:
+                self._collaboration_protocol.connect_to_network(self._network_node)
+                self._collaboration_protocol.announce_capabilities()
+            
+            logger.info(f"Connected to AI peer: {peer_name} at {url}")
+        
+        return success
+    
+    def disconnect_from_ai(self, name: str):
+        """
+        Disconnect from a remote AI peer.
+        
+        Args:
+            name: Name of the peer to disconnect from
+        """
+        if name in self._remote_peers:
+            del self._remote_peers[name]
+            if self._network_node and name in self._network_node.peers:
+                del self._network_node.peers[name]
+            logger.info(f"Disconnected from AI peer: {name}")
+    
+    def list_connected_ais(self) -> List[str]:
+        """
+        List all connected AI peers.
+        
+        Returns:
+            List of peer names
+        """
+        return list(self._remote_peers.keys())
+    
+    def _can_handle_locally(self, tool_name: str) -> bool:
+        """
+        Check if this router can handle a tool locally.
+        
+        Args:
+            tool_name: Name of the tool to check
+        
+        Returns:
+            True if local execution is possible
+        """
+        # Check if we have local assignments for this tool
+        assignments = self.get_assignments(tool_name)
+        if not assignments:
+            return False
+        
+        # Check if any assignment is actually available locally
+        for assignment in assignments:
+            model_type = assignment.model_type
+            
+            # Local modules are always available (they may fail, but we can try)
+            if model_type == "local":
+                return True
+            
+            # Check if Forge model is loaded or loadable
+            if model_type == "forge_ai":
+                try:
+                    # Just check if model exists, don't load it
+                    from .model_registry import ModelRegistry
+                    registry = ModelRegistry()
+                    model_name = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
+                    models = registry.list_models()
+                    if model_name == "default" or model_name in models:
+                        return True
+                except Exception:
+                    pass
+        
+        return False
+    
+    def _find_best_peer_for_task(self, tool_name: str) -> Optional[str]:
+        """
+        Find the most capable connected peer for a task.
+        
+        📖 WHAT THIS DOES:
+        Queries all connected peers to find who can best handle
+        the given tool, based on routing preference.
+        
+        Args:
+            tool_name: Tool to find a handler for
+        
+        Returns:
+            Name of best peer, or None if no peer available
+        """
+        if not self._collaboration_protocol:
+            return None
+        
+        return self._collaboration_protocol.request_task_handling(tool_name, {})
+    
+    def _execute_remote(self, peer_name: str, tool_name: str, params: dict) -> dict:
+        """
+        Execute a tool on a remote AI peer.
+        
+        Args:
+            peer_name: Name of the peer to execute on
+            tool_name: Tool to execute
+            params: Tool parameters
+        
+        Returns:
+            Execution result dictionary
+        """
+        if not self._collaboration_protocol:
+            return {"success": False, "error": "Collaboration protocol not initialized"}
+        
+        if peer_name not in self._remote_peers:
+            return {"success": False, "error": f"Unknown peer: {peer_name}"}
+        
+        logger.info(f"Executing {tool_name} remotely on {peer_name}")
+        
+        try:
+            result = self._collaboration_protocol.delegate_task(peer_name, tool_name, params)
+            result["executed_by"] = peer_name
+            result["remote"] = True
+            return result
+        except Exception as e:
+            logger.error(f"Remote execution failed: {e}")
+            return {"success": False, "error": str(e)}
+    
+    def _get_peer_capabilities(self, peer_name: str) -> dict:
+        """
+        Get capabilities of a connected peer.
+        
+        Args:
+            peer_name: Name of the peer
+        
+        Returns:
+            Capability dictionary or empty dict if unavailable
+        """
+        if not self._collaboration_protocol:
+            return {}
+        
+        capability = self._collaboration_protocol.get_peer_capabilities(peer_name)
+        if capability:
+            return capability.to_dict()
+        return {}
+    
+    def route_intelligently(self, tool_name: str, params: dict) -> dict:
+        """
+        Intelligently route a task to the best available handler.
+        
+        📖 WHAT THIS DOES:
+        Smart routing that considers local capability, peer capabilities,
+        current load, and routing preference to find the best handler.
+        
+        📐 ROUTING FLOW:
+        ┌─────────────────────────────────────────────────────────────────────┐
+        │  1. Check local capability and load                                 │
+        │     └─► If local can handle and not overloaded → Execute locally   │
+        │                                                                     │
+        │  2. Check routing preference                                        │
+        │     ├─► local_first: Only use peers if local fails                 │
+        │     ├─► fastest: Use lowest-latency option                         │
+        │     ├─► quality_first: Use most capable option                     │
+        │     └─► distributed: Balance load across all                       │
+        │                                                                     │
+        │  3. Find best peer if needed                                        │
+        │     └─► Query peers, score by capability, pick best                │
+        │                                                                     │
+        │  4. Execute on chosen handler                                       │
+        │                                                                     │
+        │  5. Fallback chain: local → fastest_peer → capable_peer → cloud    │
+        └─────────────────────────────────────────────────────────────────────┘
+        
+        Args:
+            tool_name: Tool to execute
+            params: Tool parameters
+        
+        Returns:
+            Execution result dictionary
+        """
+        # Check local capability first
+        can_local = self._can_handle_locally(tool_name)
+        
+        # If local_first preference or no networking, try local first
+        if self._routing_preference == "local_first" or not self._networking_enabled:
+            if can_local:
+                result = self.execute_tool(tool_name, params)
+                if result.get("success"):
+                    result["routed_to"] = "local"
+                    return result
+            
+            # Local failed, try peers
+            if self._networking_enabled:
+                best_peer = self._find_best_peer_for_task(tool_name)
+                if best_peer:
+                    result = self._execute_remote(best_peer, tool_name, params)
+                    if result.get("success"):
+                        return result
+            
+            # Everything failed
+            return {"success": False, "error": f"No handler available for {tool_name}"}
+        
+        # For fastest/quality_first, evaluate all options
+        if self._routing_preference in ("fastest", "quality_first"):
+            candidates = []
+            
+            # Score local
+            if can_local:
+                local_score = 10 if self._routing_preference == "fastest" else 5
+                candidates.append(("local", local_score))
+            
+            # Score peers
+            if self._collaboration_protocol:
+                all_caps = self._collaboration_protocol.list_all_capabilities()
+                for peer_name, cap in all_caps.items():
+                    from ..comms.ai_collaboration import RoutingPreference
+                    pref = RoutingPreference.FASTEST if self._routing_preference == "fastest" else RoutingPreference.QUALITY_FIRST
+                    score = cap.get_score(tool_name, pref)
+                    if score > 0:
+                        candidates.append((peer_name, score))
+            
+            # Sort by score
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            
+            # Try in order
+            for handler, score in candidates:
+                if handler == "local":
+                    result = self.execute_tool(tool_name, params)
+                else:
+                    result = self._execute_remote(handler, tool_name, params)
+                
+                if result.get("success"):
+                    result["routed_to"] = handler
+                    result["routing_score"] = score
+                    return result
+            
+            return {"success": False, "error": f"All handlers failed for {tool_name}"}
+        
+        # Distributed: round-robin or load-based
+        if self._routing_preference == "distributed":
+            # Simple implementation: pick least loaded
+            candidates = []
+            
+            if can_local:
+                candidates.append(("local", 0.5))  # Assume 50% local load
+            
+            if self._collaboration_protocol:
+                all_caps = self._collaboration_protocol.list_all_capabilities()
+                for peer_name, cap in all_caps.items():
+                    if cap.can_handle(tool_name):
+                        candidates.append((peer_name, cap.current_load))
+            
+            # Sort by load (lowest first)
+            candidates.sort(key=lambda x: x[1])
+            
+            for handler, load in candidates:
+                if handler == "local":
+                    result = self.execute_tool(tool_name, params)
+                else:
+                    result = self._execute_remote(handler, tool_name, params)
+                
+                if result.get("success"):
+                    result["routed_to"] = handler
+                    return result
+            
+            return {"success": False, "error": f"No handlers available for {tool_name}"}
+        
+        # Default: local execution
+        return self.execute_tool(tool_name, params)
+    
+    def set_routing_preference(self, preference: str):
+        """
+        Set the routing preference for task distribution.
+        
+        Args:
+            preference: One of "local_first", "fastest", "quality_first", "distributed"
+        """
+        valid = {"local_first", "fastest", "quality_first", "distributed"}
+        if preference not in valid:
+            logger.warning(f"Invalid routing preference: {preference}. Valid: {valid}")
+            return
+        
+        self._routing_preference = preference
+        
+        if self._collaboration_protocol:
+            self._collaboration_protocol.set_routing_preference(preference)
+        
+        logger.info(f"Routing preference set to: {preference}")
+    
+    def negotiate_task(self, tool_name: str, params: dict) -> str:
+        """
+        Ask connected AIs who can best handle a task.
+        
+        Args:
+            tool_name: Tool to execute
+            params: Task parameters
+        
+        Returns:
+            Name of best handler ("local" or peer name)
+        """
+        if not self._collaboration_protocol:
+            return "local"
+        
+        return self._collaboration_protocol.negotiate_task(tool_name, params)
+    
+    def broadcast_capability_update(self):
+        """
+        Inform all peers when local capabilities change.
+        
+        Call this after adding/removing tools or changing model assignments.
+        """
+        if self._collaboration_protocol:
+            self._collaboration_protocol.announce_capabilities()
+            logger.info("Broadcasted capability update to peers")
+    
+    def request_collaboration(self, task: str, sub_tasks: List[dict]) -> dict:
+        """
+        Split a complex task across multiple AIs.
+        
+        Args:
+            task: Parent task description
+            sub_tasks: List of subtask dictionaries
+        
+        Returns:
+            Combined results from all collaborating AIs
+        """
+        if not self._collaboration_protocol:
+            # Execute all locally
+            results = []
+            for subtask in sub_tasks:
+                result = self.execute_tool(
+                    subtask.get("tool_name", "chat"),
+                    subtask.get("params", {})
+                )
+                results.append(result)
+            
+            return {
+                "success": any(r.get("success") for r in results),
+                "results": results,
+                "distributed": False,
+            }
+        
+        return self._collaboration_protocol.request_collaboration(task, sub_tasks)
+    
+    # =========================================================================
+    # AUTO ROUTING
+    # =========================================================================
+    
     def auto_route(self, user_input: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Automatically route a user request to the appropriate tool.
         
         1. Detect which tool should handle this (using specialized router if available)
-        2. Execute the tool
-        3. Return result
+        2. If networking enabled, use intelligent routing
+        3. Execute the tool
+        4. Return result
         """
         # Detect tool using specialized model or keyword matching
         tool_name = self.classify_intent(user_input) if self.use_specialized else self.detect_tool(user_input)
@@ -1625,8 +2049,12 @@ class ToolRouter:
         params = {"prompt": user_input}
         if context:
             params.update(context)
+        
+        # Use intelligent routing if networking enabled
+        if self._networking_enabled and self._remote_peers:
+            return self.route_intelligently(tool_name, params)
             
-        # Execute
+        # Standard local execution
         return self.execute_tool(tool_name, params)
 
 
@@ -1634,17 +2062,21 @@ class ToolRouter:
 _router_instance: Optional[ToolRouter] = None
 
 
-def get_router(use_specialized: bool = False) -> ToolRouter:
+def get_router(use_specialized: bool = False, enable_networking: bool = False) -> ToolRouter:
     """
     Get the global ToolRouter instance.
     
     Args:
         use_specialized: Enable specialized models for routing
+        enable_networking: Enable AI-to-AI collaboration
     
     Returns:
         ToolRouter instance
     """
     global _router_instance
     if _router_instance is None:
-        _router_instance = ToolRouter(use_specialized=use_specialized)
+        _router_instance = ToolRouter(
+            use_specialized=use_specialized,
+            enable_networking=enable_networking
+        )
     return _router_instance

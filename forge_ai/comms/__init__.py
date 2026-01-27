@@ -30,6 +30,21 @@ try:
 except ImportError:
     HAS_DISTRIBUTED = False
 
+# AI Collaboration Protocol (AI-to-AI communication)
+try:
+    from .ai_collaboration import (
+        AICollaborationProtocol,
+        AICapability,
+        TaskRequest,
+        TaskStatus,
+        RoutingPreference,
+        get_collaboration_protocol,
+        reset_protocol,
+    )
+    HAS_AI_COLLABORATION = True
+except ImportError:
+    HAS_AI_COLLABORATION = False
+
 # Optional imports (may require Flask)
 try:
     from .mobile_api import MobileAPI, create_mobile_api
@@ -54,6 +69,15 @@ __all__ = [
     "NodeInfo",
     "create_server",
     "create_client",
+    
+    # AI Collaboration Protocol
+    "AICollaborationProtocol",
+    "AICapability",
+    "TaskRequest",
+    "TaskStatus",
+    "RoutingPreference",
+    "get_collaboration_protocol",
+    "reset_protocol",
     
     # Discovery
     "DeviceDiscovery",

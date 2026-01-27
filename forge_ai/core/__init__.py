@@ -100,6 +100,22 @@ except ImportError:
     get_hardware = None
     HardwareProfile = None
 
+# Advanced hardware detection (Pi, edge devices)
+try:
+    from .hardware_detection import (
+        detect_hardware,
+        recommend_model_size,
+        get_optimal_config,
+        estimate_memory_usage,
+        HardwareProfile as AdvancedHardwareProfile,
+    )
+except ImportError:
+    detect_hardware = None
+    recommend_model_size = None
+    get_optimal_config = None
+    estimate_memory_usage = None
+    AdvancedHardwareProfile = None
+
 # Quantization (optional)
 try:
     from .quantization import quantize_model, load_quantized, auto_quantize, QuantConfig
@@ -299,6 +315,13 @@ __all__ = [
     # Hardware
     "get_hardware",
     "HardwareProfile",
+    
+    # Advanced hardware detection (Pi, edge devices)
+    "detect_hardware",
+    "recommend_model_size",
+    "get_optimal_config",
+    "estimate_memory_usage",
+    "AdvancedHardwareProfile",
 
     # Quantization
     "quantize_model",

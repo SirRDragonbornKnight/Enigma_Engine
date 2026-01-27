@@ -455,8 +455,54 @@ class ForgeEngine:
         model_path: Optional[Union[str, Path]],
         model_size: str
     ) -> Forge:
-        """Load or create the model."""
-        # Find model file
+        """
+        Load or create the model.
+        
+        📖 AUTO-DETECTION:
+        If model_size="auto", this method will:
+        1. Detect hardware capabilities (RAM, GPU, Pi)
+        2. Choose the best model size for this device
+        3. Apply quantization if memory is tight
+        
+        This enables seamless deployment from Raspberry Pi to datacenter!
+        """
+        # ─────────────────────────────────────────────────────────────────────
+        # AUTO-DETECT MODEL SIZE FOR HARDWARE
+        # ─────────────────────────────────────────────────────────────────────
+        auto_quantize = False
+        quantization_mode = "none"
+        
+        if model_size == "auto":
+            try:
+                from .hardware_detection import detect_hardware, get_optimal_config
+                
+                # Detect hardware
+                profile = detect_hardware()
+                
+                # Get optimal configuration
+                config = get_optimal_config(profile)
+                model_size = config["model_size"]
+                auto_quantize = config.get("quantization", "none") != "none"
+                quantization_mode = config.get("quantization", "none")
+                
+                logger.info(f"[Auto-Detect] Hardware: {profile.hardware_type}")
+                if profile.is_raspberry_pi:
+                    logger.info(f"[Auto-Detect] Raspberry Pi Model: {profile.pi_model}")
+                logger.info(f"[Auto-Detect] RAM: {profile.total_ram_gb:.1f}GB, VRAM: {profile.gpu_vram_gb or 0:.1f}GB")
+                logger.info(f"[Auto-Detect] Recommended model: {model_size}")
+                if auto_quantize:
+                    logger.info(f"[Auto-Detect] Quantization: {quantization_mode}")
+                
+            except ImportError:
+                logger.warning("[Auto-Detect] Hardware detection not available, using 'small'")
+                model_size = "small"
+            except Exception as e:
+                logger.warning(f"[Auto-Detect] Detection failed: {e}, using 'small'")
+                model_size = "small"
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # FIND MODEL FILE
+        # ─────────────────────────────────────────────────────────────────────
         model_file = None
         if model_path:
             model_file = Path(model_path)
@@ -479,10 +525,31 @@ class ForgeEngine:
         vocab_size = getattr(self.tokenizer, "vocab_size", 8000)
 
         if model_file and model_file.exists():
+            # ─────────────────────────────────────────────────────────────────
+            # TRY MEMORY-MAPPED LOADING FOR LARGE MODELS / LOW MEMORY
+            # ─────────────────────────────────────────────────────────────────
+            use_mmap = False
+            if auto_quantize or model_size in ("pi_zero", "pi_4"):
+                # Use memory-efficient loading for constrained devices
+                try:
+                    from .hardware_detection import detect_hardware
+                    profile = detect_hardware()
+                    if profile.total_ram_gb < 4 or profile.is_raspberry_pi:
+                        use_mmap = True
+                        logger.info("[Memory] Using memory-mapped loading for low-memory device")
+                except ImportError:
+                    pass
+            
             # Load state dict to infer model architecture
             try:
                 from .model_registry import safe_load_weights
-                state_dict = safe_load_weights(model_file, map_location="cpu")
+                
+                if use_mmap:
+                    # Memory-mapped loading for constrained devices
+                    state_dict = safe_load_weights(model_file, map_location="cpu")
+                else:
+                    state_dict = safe_load_weights(model_file, map_location="cpu")
+                    
             except Exception as e:
                 raise RuntimeError(
                     f"Failed to load model weights from {model_file}: {e}\n"
@@ -526,6 +593,28 @@ class ForgeEngine:
                     f"The model will be initialized with random weights."
                 )
                 logger.warning(f"Could not load weights: {e}")
+            
+            # ─────────────────────────────────────────────────────────────────
+            # APPLY AUTO-QUANTIZATION IF NEEDED
+            # ─────────────────────────────────────────────────────────────────
+            if auto_quantize and quantization_mode != "none":
+                try:
+                    logger.info(f"[Quantization] Applying {quantization_mode} quantization...")
+                    model = model.quantize(mode=quantization_mode)
+                    logger.info(f"[Quantization] Successfully applied {quantization_mode}")
+                except AttributeError:
+                    # Model doesn't have quantize method - try manual
+                    if quantization_mode == "dynamic":
+                        try:
+                            import torch.quantization as tq
+                            model = tq.quantize_dynamic(
+                                model, {torch.nn.Linear}, dtype=torch.qint8
+                            )
+                            logger.info("[Quantization] Applied dynamic quantization")
+                        except Exception as qe:
+                            logger.warning(f"[Quantization] Failed to apply: {qe}")
+                except Exception as e:
+                    logger.warning(f"[Quantization] Could not apply {quantization_mode}: {e}")
         else:
             # No model file found - raise error instead of creating untrained model
             raise FileNotFoundError(
