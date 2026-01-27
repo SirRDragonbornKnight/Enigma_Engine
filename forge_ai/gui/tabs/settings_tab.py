@@ -117,6 +117,28 @@ def _toggle_key_visibility(parent):
             inp.setEchoMode(QLineEdit.Password)
 
 
+def _toggle_hotkeys(parent, state):
+    """Toggle global hotkeys on/off."""
+    enabled = state == 2  # Qt.Checked
+    
+    try:
+        from ...core.hotkey_manager import get_hotkey_manager
+        manager = get_hotkey_manager()
+        
+        if enabled:
+            manager.start()
+            parent.hotkeys_status_label.setText("Hotkeys active")
+            parent.hotkeys_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+        else:
+            manager.stop()
+            parent.hotkeys_status_label.setText("Hotkeys disabled")
+            parent.hotkeys_status_label.setStyleSheet("color: #888; font-style: italic;")
+            
+    except Exception as e:
+        parent.hotkeys_status_label.setText(f"Error: {e}")
+        parent.hotkeys_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
+
 # ===== AVATAR AUTONOMOUS CONTROL =====
 def _toggle_avatar_autonomous(parent, state):
     """Toggle avatar autonomous mode."""
@@ -2227,6 +2249,42 @@ def create_settings_tab(parent):
     reset_layout.addLayout(reset_buttons)
     
     layout.addWidget(reset_group)
+    
+    # === HOTKEY CONFIGURATION ===
+    hotkey_group = QGroupBox("Global Hotkeys")
+    hotkey_layout = QVBoxLayout(hotkey_group)
+    
+    hotkey_desc = QLabel(
+        "Configure global keyboard shortcuts that work even when ForgeAI is not focused.\n"
+        "These work in fullscreen games and other applications."
+    )
+    hotkey_desc.setWordWrap(True)
+    hotkey_layout.addWidget(hotkey_desc)
+    
+    # Enable/disable hotkeys
+    hotkey_enable_row = QHBoxLayout()
+    parent.hotkeys_enabled_check = QCheckBox("Enable global hotkeys")
+    parent.hotkeys_enabled_check.setChecked(True)
+    parent.hotkeys_enabled_check.stateChanged.connect(
+        lambda state: _toggle_hotkeys(parent, state)
+    )
+    hotkey_enable_row.addWidget(parent.hotkeys_enabled_check)
+    
+    parent.hotkeys_status_label = QLabel("")
+    parent.hotkeys_status_label.setStyleSheet("color: #888; font-style: italic;")
+    hotkey_enable_row.addWidget(parent.hotkeys_status_label)
+    hotkey_enable_row.addStretch()
+    hotkey_layout.addLayout(hotkey_enable_row)
+    
+    # Import and add hotkey configuration widget
+    try:
+        from ..widgets.hotkey_config import HotkeyConfigWidget
+        parent.hotkey_config_widget = HotkeyConfigWidget()
+        hotkey_layout.addWidget(parent.hotkey_config_widget)
+    except ImportError:
+        hotkey_layout.addWidget(QLabel("Hotkey configuration widget not available"))
+    
+    layout.addWidget(hotkey_group)
     
     layout.addStretch()
     

@@ -166,6 +166,7 @@ CONFIG = {
     "enable_voice": True,
     "enable_vision": True,
     "enable_avatar": True,
+    "enable_hotkeys": True,  # Enable global hotkey system
 
     # =========================================================================
     # THE COUNCIL CHAMBER - Multi-Model Support
@@ -236,6 +237,18 @@ CONFIG = {
     # =========================================================================
     "log_level": "INFO",
     "log_to_file": False,
+    
+    # =========================================================================
+    # THE HOTKEY BINDINGS - Global Keyboard Shortcuts
+    # =========================================================================
+    "hotkeys": {
+        "summon_ai": "Ctrl+Shift+Space",        # Open AI overlay
+        "dismiss_ai": "Escape",                  # Close AI overlay
+        "push_to_talk": "Ctrl+Shift+T",          # Hold to speak
+        "toggle_game_mode": "Ctrl+Shift+G",      # Toggle game mode
+        "quick_command": "Ctrl+Shift+C",         # Quick command input
+        "screenshot_to_ai": "Ctrl+Shift+S",      # Screenshot and ask AI
+    },
 }
 
 

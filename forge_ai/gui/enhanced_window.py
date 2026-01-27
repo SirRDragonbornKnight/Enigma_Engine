@@ -1693,6 +1693,12 @@ class EnhancedMainWindow(QMainWindow):
         self._apply_saved_settings_to_ui()
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize global hotkeys
+        # This allows summoning AI from anywhere (even fullscreen games)
+        # ─────────────────────────────────────────────────────────────────
+        self._init_global_hotkeys()
+        
+        # ─────────────────────────────────────────────────────────────────
         # First-run check or model selection
         # ─────────────────────────────────────────────────────────────────
         if not self.registry.registry.get("models"):
@@ -1907,6 +1913,57 @@ class EnhancedMainWindow(QMainWindow):
             )
             return False
         return True
+    
+    def _init_global_hotkeys(self):
+        """
+        Initialize global hotkey system.
+        
+        This sets up hotkeys that work even when ForgeAI is not focused,
+        including in fullscreen games.
+        """
+        try:
+            from ..config import CONFIG
+            
+            # Check if hotkeys are enabled
+            if not CONFIG.get("enable_hotkeys", True):
+                print("Global hotkeys disabled in config")
+                return
+            
+            from ..core.hotkey_manager import get_hotkey_manager, DEFAULT_HOTKEYS
+            from ..core.hotkey_actions import get_hotkey_actions
+            
+            # Get manager and actions
+            self.hotkey_manager = get_hotkey_manager()
+            self.hotkey_actions = get_hotkey_actions(self)
+            
+            # Get hotkey config
+            hotkey_config = CONFIG.get("hotkeys", DEFAULT_HOTKEYS)
+            
+            # Register hotkeys
+            registered_count = 0
+            for name, hotkey in hotkey_config.items():
+                # Get the action method
+                action_method = getattr(self.hotkey_actions, name, None)
+                if action_method:
+                    success = self.hotkey_manager.register(
+                        hotkey=hotkey,
+                        callback=action_method,
+                        name=name
+                    )
+                    if success:
+                        registered_count += 1
+            
+            # Start listening
+            if registered_count > 0:
+                self.hotkey_manager.start()
+                print(f"Registered {registered_count} global hotkeys")
+            else:
+                print("No hotkeys registered")
+                
+        except Exception as e:
+            print(f"Could not initialize global hotkeys: {e}")
+            self.hotkey_manager = None
+            self.hotkey_actions = None
     
     def _apply_saved_settings_to_ui(self):
         """Apply saved settings to UI widgets after building the UI."""
