@@ -7,13 +7,17 @@ cannot reconstruct the original training examples.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, TYPE_CHECKING
 
-try:
+if TYPE_CHECKING:
     import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
+else:
+    try:
+        import numpy as np
+        HAS_NUMPY = True
+    except ImportError:
+        HAS_NUMPY = False
+        np = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +111,7 @@ class DifferentialPrivacy:
         
         return noisy_weights
     
-    def _calculate_sensitivity(self, weight: np.ndarray) -> float:
+    def _calculate_sensitivity(self, weight) -> float:
         """
         Calculate L2 sensitivity for weight array.
         
@@ -120,6 +124,8 @@ class DifferentialPrivacy:
         Returns:
             L2 sensitivity (scalar)
         """
+        if not HAS_NUMPY:
+            return 1.0
         return float(np.linalg.norm(weight))
     
     def compose_privacy_budget(self, num_queries: int) -> float:
