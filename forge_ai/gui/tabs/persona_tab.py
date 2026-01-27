@@ -469,7 +469,12 @@ class PersonaTab(QWidget):
         
         if file_path:
             # Ask for optional name override
-            name, ok = QLineEdit().text(), True
+            from PyQt5.QtWidgets import QInputDialog
+            name, ok = QInputDialog.getText(
+                self,
+                "Import Persona",
+                "Enter a new name (or leave empty to keep original):"
+            )
             
             persona = self.manager.import_persona(Path(file_path), name if ok and name else None)
             
