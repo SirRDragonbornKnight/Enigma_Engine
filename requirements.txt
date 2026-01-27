@@ -134,3 +134,9 @@ flask-socketio>=5.0.0
 huggingface-hub>=0.20.0
 # transformers already included above (>=4.20.0)
 
+# === TUNNELING (Optional) ===
+# Uncomment to enable public internet tunneling (for remote access):
+# pyngrok>=5.0.0  # Python wrapper for ngrok
+# For localtunnel: npm install -g localtunnel
+# For bore: Install from https://github.com/ekzhang/bore
+

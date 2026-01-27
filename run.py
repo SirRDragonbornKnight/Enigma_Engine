@@ -17,6 +17,7 @@ Your journey through ForgeAI starts here.
 │    python run.py --train   → Train your AI model                           │
 │    python run.py --run     → Chat in terminal (CLI)                        │
 │    python run.py --serve   → Start REST API server                         │
+│    python run.py --tunnel  → Expose server to internet (public access)     │
 │    python run.py --build   → Build new model from scratch                  │
 └─────────────────────────────────────────────────────────────────────────────┘
 
@@ -127,6 +128,9 @@ Examples:
   python run.py --build                  Build new model from scratch
   python run.py --run                    Simple CLI chat
   python run.py --serve                  Start API server on localhost:5000
+  python run.py --tunnel                 Expose server to internet via ngrok
+  python run.py --tunnel --tunnel-provider localtunnel  Use localtunnel instead
+  python run.py --tunnel --tunnel-token YOUR_TOKEN      Use ngrok with auth token
   python run.py --background             Run in system tray only (background mode)
         """
     )
@@ -137,10 +141,24 @@ Examples:
     parser.add_argument("--gui", action="store_true", help="Start the GUI (recommended)")
     parser.add_argument("--web", action="store_true", help="Start web dashboard")
     parser.add_argument("--background", action="store_true", help="Run in system tray (background mode)")
+    parser.add_argument("--tunnel", action="store_true", help="Start tunnel for public access")
     
     # Multi-instance options
     parser.add_argument("--instance", type=str, default=None, help="Instance ID (for multi-instance)")
     parser.add_argument("--new-instance", action="store_true", help="Force new instance")
+    
+    # Tunnel options
+    parser.add_argument("--tunnel-provider", type=str, default="ngrok",
+                        choices=["ngrok", "localtunnel", "bore"],
+                        help="Tunnel provider (default: ngrok)")
+    parser.add_argument("--tunnel-port", type=int, default=5000,
+                        help="Port to tunnel (default: 5000)")
+    parser.add_argument("--tunnel-token", type=str, default=None,
+                        help="Tunnel auth token (required for ngrok)")
+    parser.add_argument("--tunnel-region", type=str, default=None,
+                        help="Tunnel region (ngrok only): us, eu, ap, au, sa, jp, in")
+    parser.add_argument("--tunnel-subdomain", type=str, default=None,
+                        help="Custom subdomain (requires paid plan)")
     
     # Training options
     parser.add_argument("--model", type=str, default="small",
@@ -154,7 +172,7 @@ Examples:
     args = parser.parse_args()
 
     # If no arguments, show help and suggest GUI
-    if not any([args.train, args.build, args.serve, args.run, args.gui, args.web, args.background]):
+    if not any([args.train, args.build, args.serve, args.run, args.gui, args.web, args.background, args.tunnel]):
         print("\n" + "=" * 60)
         print("  AI TESTER - Build Your Own AI")
         print("=" * 60)
@@ -230,6 +248,63 @@ Examples:
         if results.get('status') != 'skipped':
             print(f"\nTraining complete!")
             print(f"  Final loss: {results.get('final_loss', 'N/A')}")
+
+    if args.tunnel:
+        from forge_ai.comms.tunnel_manager import TunnelManager
+        
+        print("\n" + "=" * 60)
+        print("  ForgeAI Tunnel Manager")
+        print("=" * 60)
+        
+        # Create tunnel manager
+        manager = TunnelManager(
+            provider=args.tunnel_provider,
+            auth_token=args.tunnel_token,
+            region=args.tunnel_region,
+            subdomain=args.tunnel_subdomain
+        )
+        
+        print(f"\nStarting {args.tunnel_provider} tunnel on port {args.tunnel_port}...")
+        print("This will expose your local server to the internet.\n")
+        
+        if args.tunnel_provider == "ngrok" and not args.tunnel_token:
+            print("⚠️  Warning: ngrok requires an auth token for best results.")
+            print("   Sign up at https://ngrok.com and get your token.")
+            print("   Then use: --tunnel-token YOUR_TOKEN\n")
+        
+        # Start tunnel
+        tunnel_url = manager.start_tunnel(args.tunnel_port)
+        
+        if tunnel_url:
+            print("\n✓ Tunnel started successfully!")
+            print(f"\n  Public URL: {tunnel_url}")
+            print(f"  Local Port: {args.tunnel_port}")
+            print(f"\n  Share this URL to give others access to your ForgeAI server.")
+            print(f"  Press Ctrl+C to stop the tunnel.\n")
+            
+            # Keep running
+            try:
+                import time
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\n\nStopping tunnel...")
+                manager.stop_tunnel()
+                print("✓ Tunnel stopped.\n")
+        else:
+            print("\n✗ Failed to start tunnel.")
+            print(f"\nTroubleshooting:")
+            print(f"  1. Make sure {args.tunnel_provider} is installed")
+            if args.tunnel_provider == "ngrok":
+                print(f"     Download from: https://ngrok.com/download")
+                print(f"     Or install with: snap install ngrok")
+            elif args.tunnel_provider == "localtunnel":
+                print(f"     Install with: npm install -g localtunnel")
+            elif args.tunnel_provider == "bore":
+                print(f"     Install from: https://github.com/ekzhang/bore")
+            print(f"  2. Check that port {args.tunnel_port} is available")
+            print(f"  3. Verify your internet connection\n")
+            return
 
     if args.serve:
         from forge_ai.comms.api_server import create_app
