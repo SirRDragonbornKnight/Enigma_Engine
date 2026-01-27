@@ -274,6 +274,55 @@ class DeviceDiscovery:
             info = self.discovered[name]
             return f"http://{info['ip']}:{info['port']}"
         return None
+    
+    def discover_federated_peers(
+        self, 
+        timeout: float = 3.0,
+        min_trust_score: float = 0.5
+    ) -> Dict[str, Dict]:
+        """
+        Discover peers available for federated learning.
+        
+        This extends the standard discovery to identify which nodes
+        support federated learning and are accepting updates.
+        
+        Args:
+            timeout: How long to wait for responses
+            min_trust_score: Minimum trust score required (if available)
+            
+        Returns:
+            Dict of federated-capable devices with their capabilities
+        """
+        # First do standard discovery
+        all_nodes = self.broadcast_discover(timeout)
+        
+        # Filter for federated learning support
+        federated_peers = {}
+        
+        for name, info in all_nodes.items():
+            # Check if node supports federated learning
+            # This would query an endpoint like /federated/info
+            try:
+                import urllib.request
+                url = f"http://{info['ip']}:{info['port']}/federated/info"
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=2.0) as response:
+                    fed_info = json.loads(response.read().decode())
+                    
+                    # Check if federated learning is enabled
+                    if fed_info.get("enabled", False):
+                        # Check trust score if available
+                        trust_score = fed_info.get("trust_score", 1.0)
+                        if trust_score >= min_trust_score:
+                            federated_peers[name] = {
+                                **info,
+                                "federated": fed_info,
+                            }
+            except Exception:
+                # Node doesn't support federated learning or endpoint not available
+                pass
+        
+        return federated_peers
 
 
 # Convenience function
@@ -290,6 +339,26 @@ def discover_forge_ai_nodes(node_name: str = "scanner", timeout: float = 3.0) ->
     """
     discovery = DeviceDiscovery(node_name)
     return discovery.broadcast_discover(timeout)
+
+
+def discover_federated_learning_peers(
+    node_name: str = "scanner",
+    timeout: float = 3.0,
+    min_trust_score: float = 0.5
+) -> Dict[str, Dict]:
+    """
+    Quick function to discover federated learning capable peers.
+    
+    Args:
+        node_name: Name for this scanner (to avoid self-discovery)
+        timeout: How long to wait for responses
+        min_trust_score: Minimum trust score required
+        
+    Returns:
+        Dict of federated-capable devices
+    """
+    discovery = DeviceDiscovery(node_name)
+    return discovery.discover_federated_peers(timeout, min_trust_score)
 
 
 if __name__ == "__main__":
