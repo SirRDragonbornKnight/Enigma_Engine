@@ -8,6 +8,7 @@ Contains the core components of the ForgeAI AI framework:
 - Training system (AMP, gradient accumulation, cosine warmup)
 - Inference engine (KV-cache, streaming, chat)
 - Tokenization (BPE, character-level)
+- Self-Improvement & Autonomous Learning
 """
 
 # Model
@@ -32,6 +33,33 @@ from .training import (
     TextDataset,
     QADataset,
 )
+
+# Self-Improvement System (NEW)
+try:
+    from .self_improvement import (
+        LearningEngine,
+        LearningExample,
+        LearningSource,
+        Priority,
+        PerformanceMetrics,
+        AutonomousConfig,
+        get_learning_engine,
+    )
+except ImportError:
+    LearningEngine = None
+    LearningExample = None
+    LearningSource = None
+    Priority = None
+    PerformanceMetrics = None
+    AutonomousConfig = None
+    get_learning_engine = None
+
+# Autonomous Mode (UPDATED with real implementations)
+try:
+    from .autonomous import AutonomousMode, AutonomousManager
+except ImportError:
+    AutonomousMode = None
+    AutonomousManager = None
 
 # Tokenizers
 from .tokenizer import (
@@ -298,6 +326,19 @@ __all__ = [
     "load_trained_model",
     "TextDataset",
     "QADataset",
+    
+    # Self-Improvement System (NEW)
+    "LearningEngine",
+    "LearningExample",
+    "LearningSource",
+    "Priority",
+    "PerformanceMetrics",
+    "AutonomousConfig",
+    "get_learning_engine",
+    
+    # Autonomous Mode (UPDATED)
+    "AutonomousMode",
+    "AutonomousManager",
 
     # Tokenizers
     "get_tokenizer",
