@@ -481,9 +481,10 @@ def create_chat_tab(parent):
 def _on_feedback(parent, is_positive):
     """Handle feedback button clicks."""
     feedback_type = "positive" if is_positive else "negative"
-    print(f"User feedback: {feedback_type}")
-    # TODO: Store feedback in memory/analytics system
-    # For now, just log it
+    # Log feedback for future analytics integration
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"User feedback received: {feedback_type} for last AI response")
 
 
 def _toggle_voice_output(parent):

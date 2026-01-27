@@ -2333,18 +2333,12 @@ class EnhancedMainWindow(QMainWindow):
                 self._switch_to_tab('chat')
                 return
             elif event.key() == Qt.Key_2:
-                # Switch to Image/Create tab depending on mode
-                if self.gui_mode_manager.mode == GUIMode.STANDARD:
-                    self._switch_to_tab('image')
-                else:
-                    self._switch_to_tab('image')
+                # Switch to Image tab
+                self._switch_to_tab('image')
                 return
             elif event.key() == Qt.Key_3:
-                # Switch to Avatar/AI tab depending on mode
-                if self.gui_mode_manager.mode == GUIMode.STANDARD:
-                    self._switch_to_tab('avatar')
-                else:
-                    self._switch_to_tab('avatar')
+                # Switch to Avatar tab
+                self._switch_to_tab('avatar')
                 return
             elif event.key() == Qt.Key_Comma:
                 self._switch_to_tab('settings')
@@ -6372,8 +6366,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
     
     def _on_screenshot_clicked(self):
         """Handle screenshot quick action."""
-        # TODO: Implement screenshot capture and send to AI
-        print("Screenshot quick action clicked")
+        logger.info("Screenshot quick action triggered")
         QMessageBox.information(self, "Screenshot", "Screenshot feature coming soon!")
     
     def _on_voice_clicked(self):
@@ -6382,12 +6375,11 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         if hasattr(self, 'mic_toggle_btn') and self.mic_toggle_btn:
             self.mic_toggle_btn.click()
         else:
-            print("Voice input quick action clicked")
+            logger.info("Voice input quick action triggered")
     
     def _on_game_mode_clicked(self):
         """Handle game mode toggle quick action."""
-        # TODO: Implement game mode toggle
-        print("Game mode quick action clicked")
+        logger.info("Game mode quick action triggered")
         QMessageBox.information(self, "Game Mode", "Game mode feature coming soon!")
     
     def _on_quick_generate_clicked(self):
