@@ -442,6 +442,11 @@ class PersonaManager:
             with open(file_path, 'r') as f:
                 data = json.load(f)
             
+            # Remove export metadata that's not part of the dataclass
+            data.pop('exported_at', None)
+            data.pop('exported_from', None)
+            data.pop('format_version', None)
+            
             # Generate new ID
             new_id = str(uuid.uuid4())[:8]
             data['id'] = new_id
