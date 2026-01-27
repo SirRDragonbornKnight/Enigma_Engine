@@ -2327,21 +2327,18 @@ class EnhancedMainWindow(QMainWindow):
         """Handle key press events - Escape stops all generations."""
         from PyQt5.QtCore import Qt
         
-        # Mode switching shortcuts (Ctrl+1, Ctrl+2, Ctrl+3)
+        # Mode switching shortcuts
         if event.modifiers() == Qt.ControlModifier:
-            if event.key() == Qt.Key_1:
-                self._switch_to_tab('chat')
-                return
-            elif event.key() == Qt.Key_2:
-                # Switch to Image tab
-                self._switch_to_tab('image')
-                return
-            elif event.key() == Qt.Key_3:
-                # Switch to Avatar tab
-                self._switch_to_tab('avatar')
-                return
-            elif event.key() == Qt.Key_Comma:
-                self._switch_to_tab('settings')
+            # Tab shortcuts (Ctrl+1/2/3)
+            tab_shortcuts = {
+                Qt.Key_1: 'chat',
+                Qt.Key_2: 'image',
+                Qt.Key_3: 'avatar',
+                Qt.Key_Comma: 'settings',
+            }
+            
+            if event.key() in tab_shortcuts:
+                self._switch_to_tab(tab_shortcuts[event.key()])
                 return
             elif event.key() == Qt.Key_N:
                 # New conversation
