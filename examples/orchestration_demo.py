@@ -227,6 +227,70 @@ def demo_standalone_tools():
     print('   use_tool("code", prompt="sort function")')
 
 
+def demo_task_offloading():
+    """Demonstrate task offloading (async execution)."""
+    print("\n" + "="*70)
+    print("6. TASK OFFLOADING - Async & Parallel Execution")
+    print("="*70)
+    
+    from forge_ai.core import get_orchestrator, TaskStatus
+    
+    orchestrator = get_orchestrator()
+    
+    print("\n🔄 Async task execution:")
+    print("   Submit tasks to background workers for parallel processing")
+    print()
+    
+    # Submit async task
+    print("   # Submit task asynchronously")
+    print('   task_id = orchestrator.submit_async_task(')
+    print('       capability="text_generation",')
+    print('       task="Tell me a joke",')
+    print('       priority=5,')
+    print('       callback=lambda result: print(f"Done: {result}")')
+    print('   )')
+    print()
+    
+    # Check status
+    print("   # Check task status")
+    print('   status = orchestrator.get_async_task_status(task_id)')
+    print(f'   # Returns: "{TaskStatus.PENDING.value}", "{TaskStatus.RUNNING.value}", etc.')
+    print()
+    
+    # Wait for result
+    print("   # Wait for completion")
+    print('   result = orchestrator.wait_for_async_task(task_id, timeout=30)')
+    print()
+    
+    # Parallel execution
+    print("\n⚡ Parallel execution:")
+    print("   # Submit multiple tasks")
+    print("   task_ids = []")
+    print("   for i in range(5):")
+    print('       task_id = orchestrator.submit_async_task(...)')
+    print("       task_ids.append(task_id)")
+    print()
+    print("   # All tasks execute in parallel on background workers")
+    print()
+    
+    # Prioritization
+    print("\n🎯 Task prioritization:")
+    print("   # Higher priority tasks execute first")
+    print('   urgent_task = orchestrator.submit_async_task(..., priority=1)')
+    print('   normal_task = orchestrator.submit_async_task(..., priority=5)')
+    print('   low_task = orchestrator.submit_async_task(..., priority=10)')
+    print()
+    
+    # Status
+    print("\n📊 Monitor offloader status:")
+    print("   status = orchestrator.get_status()")
+    print("   offloader_status = status['task_offloader']")
+    print("   print(f\"Workers: {offloader_status['num_workers']}\")")
+    print("   print(f\"Pending: {offloader_status['tasks']['pending']}\")")
+    print("   print(f\"Running: {offloader_status['tasks']['running']}\")")
+    print("   print(f\"Completed: {offloader_status['tasks']['completed']}\")")
+
+
 def main():
     """Run all demonstrations."""
     print("\n" + "="*70)
@@ -241,6 +305,7 @@ def main():
         demo_collaboration()
         demo_orchestrator()
         demo_standalone_tools()
+        demo_task_offloading()
         
         print("\n" + "="*70)
         print("✅ DEMO COMPLETE!")
@@ -248,6 +313,8 @@ def main():
         print("\n📚 For more information, see:")
         print("   docs/ORCHESTRATION_GUIDE.md")
         print("   forge_ai/core/orchestrator.py")
+        print("   forge_ai/core/task_offloader.py")
+        print("   examples/task_offloading_example.py")
         print("   forge_ai/core/standalone_tools.py")
         print()
         
