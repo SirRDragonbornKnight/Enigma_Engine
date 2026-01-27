@@ -298,6 +298,73 @@ def _on_game_detected(parent, game_id: str):
 
 
 def _change_active_game(parent):
+
+
+# ===== OVERLAY CONTROL =====
+def _toggle_overlay(parent):
+    """Toggle the AI overlay visibility."""
+    try:
+        # Access main window's overlay
+        if not hasattr(parent, '_overlay') or not parent._overlay:
+            QMessageBox.information(
+                parent, "Overlay Not Available",
+                "The overlay is not initialized. It may be disabled in config."
+            )
+            return
+        
+        # Toggle visibility
+        if parent._overlay.isVisible():
+            parent._overlay.hide()
+            parent.overlay_toggle_btn.setText("Show Overlay")
+            parent.overlay_status_label.setText("Overlay: Hidden")
+            parent.overlay_status_label.setStyleSheet("color: #888; font-style: italic;")
+        else:
+            parent._overlay.show()
+            parent.overlay_toggle_btn.setText("Hide Overlay")
+            parent.overlay_status_label.setText("Overlay: Visible")
+            parent.overlay_status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+    except Exception as e:
+        QMessageBox.warning(parent, "Overlay Error", f"Could not toggle overlay: {e}")
+
+
+def _configure_overlay(parent):
+    """Open overlay configuration dialog."""
+    try:
+        from ..overlay.overlay_settings import OverlaySettingsWidget
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton
+        
+        # Check if overlay exists
+        if not hasattr(parent, '_overlay') or not parent._overlay:
+            QMessageBox.information(
+                parent, "Overlay Not Available",
+                "The overlay is not initialized. It may be disabled in config."
+            )
+            return
+        
+        # Create dialog
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("Overlay Settings")
+        dialog.setModal(True)
+        dialog.resize(400, 600)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Add settings widget
+        settings_widget = OverlaySettingsWidget(parent._overlay, dialog)
+        layout.addWidget(settings_widget)
+        
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.exec_()
+        
+    except Exception as e:
+        QMessageBox.warning(parent, "Configuration Error", f"Could not open overlay settings: {e}")
+
+
+def _change_active_game(parent):
     """Manually change active game."""
     if not hasattr(parent, 'game_combo'):
         return
@@ -2227,6 +2294,64 @@ def create_settings_tab(parent):
     reset_layout.addLayout(reset_buttons)
     
     layout.addWidget(reset_group)
+    
+    # === OVERLAY SETTINGS ===
+    overlay_group = QGroupBox("AI Overlay - Gaming & Multitasking Interface")
+    overlay_layout = QVBoxLayout(overlay_group)
+    
+    overlay_desc = QLabel(
+        "The AI overlay floats on top of games and other apps, providing quick AI access without leaving your current application."
+    )
+    overlay_desc.setWordWrap(True)
+    overlay_layout.addWidget(overlay_desc)
+    
+    # Show/Hide Overlay button
+    overlay_toggle_row = QHBoxLayout()
+    parent.overlay_toggle_btn = QPushButton("Show Overlay")
+    parent.overlay_toggle_btn.setStyleSheet("""
+        QPushButton {
+            background: #3b82f6;
+            color: white;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        QPushButton:hover {
+            background: #2563eb;
+        }
+    """)
+    parent.overlay_toggle_btn.setToolTip("Show/hide the AI overlay window")
+    parent.overlay_toggle_btn.clicked.connect(lambda: _toggle_overlay(parent))
+    overlay_toggle_row.addWidget(parent.overlay_toggle_btn)
+    
+    # Configure button
+    parent.overlay_config_btn = QPushButton("Configure Overlay")
+    parent.overlay_config_btn.setStyleSheet("""
+        QPushButton {
+            background: #6366f1;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        QPushButton:hover {
+            background: #4f46e5;
+        }
+    """)
+    parent.overlay_config_btn.setToolTip("Open overlay settings")
+    parent.overlay_config_btn.clicked.connect(lambda: _configure_overlay(parent))
+    overlay_toggle_row.addWidget(parent.overlay_config_btn)
+    
+    overlay_toggle_row.addStretch()
+    overlay_layout.addLayout(overlay_toggle_row)
+    
+    # Overlay status
+    parent.overlay_status_label = QLabel("Overlay: Ready")
+    parent.overlay_status_label.setStyleSheet("color: #888; font-style: italic;")
+    overlay_layout.addWidget(parent.overlay_status_label)
+    
+    layout.addWidget(overlay_group)
     
     layout.addStretch()
     

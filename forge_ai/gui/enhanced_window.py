@@ -1659,6 +1659,29 @@ class EnhancedMainWindow(QMainWindow):
         self._chat_sync.generation_finished.connect(self._on_chat_sync_finished)
         self._chat_sync.generation_stopped.connect(self._on_chat_sync_stopped)
         
+        # ─────────────────────────────────────────────────────────────────
+        # Initialize AI Overlay
+        # This is the transparent always-on-top gaming interface
+        # ─────────────────────────────────────────────────────────────────
+        self._overlay = None
+        try:
+            from ..config import CONFIG
+            if CONFIG.get("overlay", {}).get("enabled", True):
+                from .overlay import AIOverlay
+                self._overlay = AIOverlay()
+                # Connect overlay to engine when loaded
+                if self.engine:
+                    self._overlay.set_engine(self.engine)
+                # Show on startup if configured
+                if CONFIG.get("overlay", {}).get("show_on_startup", False):
+                    self._overlay.show()
+                else:
+                    self._overlay.hide()
+                print("AI Overlay initialized")
+        except Exception as e:
+            print(f"Could not initialize AI Overlay: {e}")
+            self._overlay = None
+        
         # Training state
         self._is_training = False   # True while training is running
         self._stop_training = False # Set to True to stop training
@@ -2713,6 +2736,11 @@ class EnhancedMainWindow(QMainWindow):
                 self._chat_sync.set_engine(self.engine)
                 self._chat_sync.set_model_name(self.current_model_name)
             
+            # Sync engine to overlay for AI responses
+            if hasattr(self, '_overlay') and self._overlay:
+                self._overlay.set_engine(self.engine)
+                print("Overlay synced with engine")
+            
             # Refresh notes files for new model
             if hasattr(self, 'notes_file_combo'):
                 self._refresh_notes_files()
@@ -3353,6 +3381,29 @@ class EnhancedMainWindow(QMainWindow):
                 QMessageBox.information(self, "Quick Chat", "Quick Chat is not available.\nStart Forge from run.py to enable system tray features.")
         except Exception as e:
             print(f"Error opening Quick Chat: {e}")
+    
+    def _toggle_overlay(self):
+        """Toggle the AI overlay visibility."""
+        if not self._overlay:
+            try:
+                from .overlay import AIOverlay
+                self._overlay = AIOverlay()
+                if self.engine:
+                    self._overlay.set_engine(self.engine)
+                print("AI Overlay created")
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Overlay Error",
+                    f"Could not create overlay: {e}"
+                )
+                return
+        
+        # Toggle visibility
+        if self._overlay.isVisible():
+            self._overlay.hide()
+        else:
+            self._overlay.show()
     
     def _toggle_learning(self, checked):
         """Toggle learn-while-chatting mode."""

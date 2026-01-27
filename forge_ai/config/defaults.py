@@ -166,6 +166,22 @@ CONFIG = {
     "enable_voice": True,
     "enable_vision": True,
     "enable_avatar": True,
+    
+    # =========================================================================
+    # THE OVERLAY WINDOW - Gaming and Multitasking Interface
+    # =========================================================================
+    "overlay": {
+        "enabled": True,
+        "mode": "compact",                    # "minimal", "compact", "full", "hidden"
+        "position": "top_right",              # "top_left", "top_right", "bottom_left", "bottom_right", "center", "custom"
+        "opacity": 0.9,                       # 0.0 to 1.0
+        "click_through": False,               # Pass clicks through to game
+        "always_on_top": True,                # Float above all windows
+        "theme": "gaming",                    # "dark", "light", "gaming", "minimal", "cyberpunk", "stealth"
+        "hotkey": "Ctrl+Shift+A",            # Hotkey to show/hide overlay
+        "remember_position": True,            # Remember window position
+        "show_on_startup": False,             # Show overlay when ForgeAI starts
+    },
 
     # =========================================================================
     # THE COUNCIL CHAMBER - Multi-Model Support
