@@ -200,6 +200,19 @@ CONFIG = {
     "low_priority": False,
     
     # =========================================================================
+    # THE GAME MODE - Zero Lag Gaming with AI Companion
+    # =========================================================================
+    "game_mode": {
+        "auto_detect": True,          # Automatically detect games
+        "aggressive": False,          # False = balanced, True = maximum performance
+        "custom_games": [],           # User-defined game executables
+        "excluded_games": [],         # Games where AI can stay active
+        "hotkey_toggle": "Ctrl+Shift+G",  # Hotkey to toggle game mode
+        "show_notification": True,    # Show notification when game detected
+        "resume_delay_seconds": 5,    # Wait before resuming after game closes
+    },
+    
+    # =========================================================================
     # THE BRIDGE BETWEEN WORLDS - Device Offloading
     # =========================================================================
     "enable_offloading": False,   # Enable CPU+GPU layer offloading

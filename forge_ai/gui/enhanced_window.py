@@ -2817,8 +2817,33 @@ class EnhancedMainWindow(QMainWindow):
         self.ai_status_label.setToolTip("AI connection status")
         self.statusBar().addPermanentWidget(self.ai_status_label)
         
+        # Game Mode Indicator
+        self.game_mode_indicator = QLabel("Game Mode: OFF")
+        self.game_mode_indicator.setStyleSheet("""
+            QLabel {
+                color: #6c7086;
+                padding: 2px 8px;
+                font-size: 14px;
+            }
+        """)
+        self.game_mode_indicator.setToolTip("Game Mode auto-reduces AI resources when gaming")
+        self.game_mode_indicator.setCursor(Qt.PointingHandCursor)
+        self.game_mode_indicator.mousePressEvent = lambda e: self._quick_toggle_game_mode()
+        self.statusBar().addPermanentWidget(self.game_mode_indicator)
+        
+        # Register game mode callbacks
+        try:
+            from forge_ai.core.game_mode import get_game_mode
+            game_mode = get_game_mode()
+            game_mode.on_game_detected(self._on_game_detected)
+            game_mode.on_game_ended(self._on_game_ended)
+            game_mode.on_limits_changed(self._on_game_limits_changed)
+        except Exception as e:
+            print(f"Could not register game mode callbacks: {e}")
+        
         # Schedule initial status update
         QTimer.singleShot(1000, self._update_ai_status)
+        QTimer.singleShot(1500, self._update_game_mode_status)
         
         # Apply dark mode by default
         self.setStyleSheet(DARK_STYLE)
@@ -5782,6 +5807,81 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         except Exception as e:
             if hasattr(self, 'ai_status_label'):
                 self.ai_status_label.setText(f"AI: Error ({e})")
+    
+    def _update_game_mode_status(self):
+        """Update the game mode indicator in the status bar."""
+        try:
+            from forge_ai.core.game_mode import get_game_mode
+            game_mode = get_game_mode()
+            
+            if game_mode.is_active():
+                self.game_mode_indicator.setText("Game Mode: ACTIVE")
+                self.game_mode_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #22c55e;
+                        padding: 2px 8px;
+                        font-size: 14px;
+                        font-weight: bold;
+                    }
+                """)
+            elif game_mode.is_enabled():
+                self.game_mode_indicator.setText("Game Mode: Watching")
+                self.game_mode_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #3b82f6;
+                        padding: 2px 8px;
+                        font-size: 14px;
+                    }
+                """)
+            else:
+                self.game_mode_indicator.setText("Game Mode: OFF")
+                self.game_mode_indicator.setStyleSheet("""
+                    QLabel {
+                        color: #6c7086;
+                        padding: 2px 8px;
+                        font-size: 14px;
+                    }
+                """)
+        except Exception:
+            pass
+    
+    def _quick_toggle_game_mode(self):
+        """Quick toggle game mode from status bar click."""
+        try:
+            from forge_ai.core.game_mode import get_game_mode
+            game_mode = get_game_mode()
+            
+            if game_mode.is_enabled():
+                game_mode.disable()
+            else:
+                game_mode.enable(aggressive=False)
+            
+            self._update_game_mode_status()
+        except Exception as e:
+            print(f"Could not toggle game mode: {e}")
+    
+    def _on_game_detected(self, game_name: str):
+        """Called when a game is detected."""
+        try:
+            self._update_game_mode_status()
+            print(f"Game detected: {game_name}")
+        except Exception:
+            pass
+    
+    def _on_game_ended(self):
+        """Called when game ends."""
+        try:
+            self._update_game_mode_status()
+            print("Game ended")
+        except Exception:
+            pass
+    
+    def _on_game_limits_changed(self, limits):
+        """Called when game mode limits change."""
+        try:
+            self._update_game_mode_status()
+        except Exception:
+            pass
     
     def _on_open_model(self):
         dialog = ModelManagerDialog(self.registry, self.current_model_name, self)

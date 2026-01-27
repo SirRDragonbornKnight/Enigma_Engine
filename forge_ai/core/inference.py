@@ -748,6 +748,26 @@ class ForgeEngine:
             TypeError: If prompt is not a string
         """
         # ─────────────────────────────────────────────────────────────────────
+        # STEP 0: Check game mode and apply resource limits
+        # ─────────────────────────────────────────────────────────────────────
+        try:
+            from .game_mode import get_game_mode
+            game_mode = get_game_mode()
+            
+            if game_mode.is_active():
+                limits = game_mode.get_resource_limits()
+                
+                # Check if inference is allowed
+                if not limits.inference_allowed:
+                    return "AI is paused during game mode."
+                
+                # Apply token limit for faster responses
+                if limits.max_response_tokens > 0:
+                    max_gen = min(max_gen, limits.max_response_tokens)
+        except Exception as e:
+            logger.debug(f"Could not check game mode: {e}")
+        
+        # ─────────────────────────────────────────────────────────────────────
         # STEP 1: Determine if tools should be executed
         # ─────────────────────────────────────────────────────────────────────
         if execute_tools is None:
