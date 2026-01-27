@@ -107,14 +107,11 @@ self.addEventListener('sync', (event) => {
     console.log('Background sync:', event.tag);
     
     if (event.tag === 'sync-messages') {
-        event.waitUntil(syncMessages());
+        // Future: Implement message synchronization
+        // For now, just log that sync was requested
+        console.log('Message sync requested but not yet implemented');
     }
 });
-
-async function syncMessages() {
-    // TODO: Implement message synchronization
-    console.log('Syncing messages...');
-}
 
 // Push notifications (future feature)
 self.addEventListener('push', (event) => {

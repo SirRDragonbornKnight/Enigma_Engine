@@ -7,7 +7,7 @@ Provides full REST API and mobile-responsive interface.
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 import asyncio
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, status
@@ -67,7 +67,7 @@ class ConnectionManager:
     """Manages WebSocket connections."""
     
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: List[WebSocket] = []
     
     async def connect(self, websocket: WebSocket):
         """Accept and store a new connection."""

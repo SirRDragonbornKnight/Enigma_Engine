@@ -167,6 +167,7 @@ def _toggle_web_server(parent, state):
                         require_auth=require_auth
                     )
                     parent._web_server = server
+                    parent._web_server_thread = threading.current_thread()
                     server.start()
                 except Exception as e:
                     parent.web_status_label.setText(f"Error: {str(e)[:50]}")
@@ -184,7 +185,11 @@ def _toggle_web_server(parent, state):
         else:
             # Stop web server
             if hasattr(parent, '_web_server'):
-                parent._web_server = None
+                try:
+                    # Mark server for cleanup
+                    parent._web_server = None
+                except Exception:
+                    pass
             parent.web_status_label.setText("Server stopped")
             parent.web_status_label.setStyleSheet("color: #888;")
             parent.web_qr_btn.setEnabled(False)
