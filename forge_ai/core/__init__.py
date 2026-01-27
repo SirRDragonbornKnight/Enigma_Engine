@@ -363,6 +363,19 @@ except ImportError:
     get_orchestrator = None
 
 try:
+    from .task_offloader import (
+        TaskOffloader,
+        OffloaderConfig,
+        TaskStatus,
+        get_offloader,
+    )
+except ImportError:
+    TaskOffloader = None
+    OffloaderConfig = None
+    TaskStatus = None
+    get_offloader = None
+
+try:
     from .standalone_tools import (
         use_tool,
         list_available_tools,
@@ -506,6 +519,10 @@ __all__ = [
     "Task",
     "TaskResult",
     "get_orchestrator",
+    "TaskOffloader",
+    "OffloaderConfig",
+    "TaskStatus",
+    "get_offloader",
     "use_tool",
     "list_available_tools",
     "get_tool_info",

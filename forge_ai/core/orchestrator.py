@@ -52,6 +52,7 @@ from typing import Dict, List, Optional, Any, Callable
 from .capability_registry import CapabilityRegistry, get_capability_registry
 from .model_pool import ModelPool, get_model_pool, ModelPoolConfig
 from .collaboration import ModelCollaboration, get_collaboration
+from .task_offloader import TaskOffloader, OffloaderConfig, get_offloader
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +81,13 @@ class OrchestratorConfig:
     enable_auto_fallback: bool = True
     fallback_to_cpu: bool = True
     enable_hot_swap: bool = True
+    enable_task_offloading: bool = True
     
     # Model pool config
     model_pool_config: Optional[ModelPoolConfig] = None
+    
+    # Task offloader config
+    offloader_config: Optional[OffloaderConfig] = None
 
 
 # =============================================================================
@@ -158,6 +163,14 @@ class ModelOrchestrator:
         # Initialize collaboration manager
         self.collaboration = get_collaboration()
         self.collaboration.set_orchestrator(self)
+        
+        # Initialize task offloader
+        if self.config.enable_task_offloading:
+            offloader_config = self.config.offloader_config or OffloaderConfig()
+            self.task_offloader = get_offloader(offloader_config, self)
+            logger.info("Task offloading enabled")
+        else:
+            self.task_offloader = None
         
         # Model assignments (capability -> preferred model)
         self._model_assignments: Dict[str, List[str]] = {}
@@ -361,6 +374,10 @@ class ModelOrchestrator:
         context: Optional[Dict[str, Any]] = None,
         parameters: Optional[Dict[str, Any]] = None,
         model_id: Optional[str] = None,
+        async_execution: bool = False,
+        priority: int = 5,
+        callback: Optional[Callable[[Any], None]] = None,
+        error_callback: Optional[Callable[[Exception], None]] = None,
         **kwargs,
     ) -> Any:
         """
@@ -372,11 +389,30 @@ class ModelOrchestrator:
             context: Optional context
             parameters: Optional parameters
             model_id: Optional specific model to use
+            async_execution: Execute asynchronously in background
+            priority: Priority for async tasks (0=highest, 10=lowest)
+            callback: Callback on async task completion
+            error_callback: Callback on async task error
             **kwargs: Additional arguments
             
         Returns:
-            Task result
+            Task result (or task ID if async_execution=True)
         """
+        # Use async offloading if requested and enabled
+        if async_execution and self.task_offloader:
+            return self.task_offloader.submit_task(
+                capability=capability,
+                task=task,
+                context=context,
+                parameters=parameters,
+                model_id=model_id,
+                priority=priority,
+                callback=callback,
+                error_callback=error_callback,
+                **kwargs,
+            )
+        
+        # Otherwise execute synchronously
         start_time = time.time()
         
         # Merge kwargs into task if task is None
@@ -444,6 +480,104 @@ class ModelOrchestrator:
                     )
             
             raise
+    
+    def submit_async_task(
+        self,
+        capability: str,
+        task: Any = None,
+        context: Optional[Dict[str, Any]] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+        model_id: Optional[str] = None,
+        priority: int = 5,
+        callback: Optional[Callable[[Any], None]] = None,
+        error_callback: Optional[Callable[[Exception], None]] = None,
+        **kwargs,
+    ) -> str:
+        """
+        Submit a task for asynchronous execution.
+        
+        This is a convenience method that always uses async execution.
+        
+        Args:
+            capability: Required capability
+            task: Task data
+            context: Optional context
+            parameters: Optional parameters
+            model_id: Optional specific model to use
+            priority: Task priority (0=highest, 10=lowest)
+            callback: Callback on completion
+            error_callback: Callback on error
+            **kwargs: Additional arguments
+            
+        Returns:
+            Task ID for tracking
+            
+        Raises:
+            RuntimeError: If task offloading is not enabled
+        """
+        if not self.task_offloader:
+            raise RuntimeError(
+                "Task offloading is not enabled. Set enable_task_offloading=True in config."
+            )
+        
+        return self.task_offloader.submit_task(
+            capability=capability,
+            task=task,
+            context=context,
+            parameters=parameters,
+            model_id=model_id,
+            priority=priority,
+            callback=callback,
+            error_callback=error_callback,
+            **kwargs,
+        )
+    
+    def wait_for_async_task(self, task_id: str, timeout: Optional[float] = None) -> Any:
+        """
+        Wait for an async task to complete.
+        
+        Args:
+            task_id: Task identifier
+            timeout: Maximum time to wait in seconds
+            
+        Returns:
+            Task result
+        """
+        if not self.task_offloader:
+            raise RuntimeError("Task offloading is not enabled")
+        
+        return self.task_offloader.wait_for_task(task_id, timeout)
+    
+    def cancel_async_task(self, task_id: str) -> bool:
+        """
+        Cancel an async task.
+        
+        Args:
+            task_id: Task identifier
+            
+        Returns:
+            True if task was cancelled
+        """
+        if not self.task_offloader:
+            raise RuntimeError("Task offloading is not enabled")
+        
+        return self.task_offloader.cancel_task(task_id)
+    
+    def get_async_task_status(self, task_id: str) -> Optional[str]:
+        """
+        Get status of an async task.
+        
+        Args:
+            task_id: Task identifier
+            
+        Returns:
+            Task status string or None
+        """
+        if not self.task_offloader:
+            return None
+        
+        status = self.task_offloader.get_task_status(task_id)
+        return status.value if status else None
     
     def _execute_on_model(
         self,
@@ -697,7 +831,7 @@ class ModelOrchestrator:
     
     def get_status(self) -> Dict[str, Any]:
         """Get orchestrator status."""
-        return {
+        status = {
             "registered_models": self.capability_registry.list_models(),
             "loaded_models": self.model_pool.list_models(),
             "memory_usage": self.model_pool.get_memory_usage(),
@@ -709,6 +843,12 @@ class ModelOrchestrator:
             ),
             "execution_stats": self._get_execution_stats(),
         }
+        
+        # Add task offloader status if enabled
+        if self.task_offloader:
+            status["task_offloader"] = self.task_offloader.get_status()
+        
+        return status
     
     def _get_execution_stats(self) -> Dict[str, Any]:
         """Get task execution statistics."""
@@ -780,6 +920,7 @@ def get_orchestrator(config: Optional[OrchestratorConfig] = None) -> ModelOrches
                 gpu_memory_limit_mb=CONFIG.get("gpu_memory_limit_mb", 8000),
                 enable_collaboration=CONFIG.get("enable_collaboration", True),
                 fallback_to_cpu=CONFIG.get("fallback_to_cpu", True),
+                enable_task_offloading=CONFIG.get("enable_task_offloading", True),
             )
         
         _global_orchestrator = ModelOrchestrator(config)

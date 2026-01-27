@@ -7,6 +7,7 @@ The Unified Orchestration System enables ForgeAI to coordinate multiple AI model
 - Running everything on a single PC with models cooperating
 - Models handing off tasks to each other automatically
 - Using individual tools/modules WITH or WITHOUT an LLM
+- Asynchronous task execution with background workers
 
 ## Architecture
 
@@ -24,10 +25,16 @@ The Unified Orchestration System enables ForgeAI to coordinate multiple AI model
 │  └──────────────────┘  └──────────────────┘               │
 │                                                             │
 │  ┌──────────────────┐  ┌──────────────────┐               │
-│  │ COLLABORATION    │  │ STANDALONE       │               │
-│  │ (Model-to-Model  │  │ TOOLS            │               │
-│  │  Communication)  │  │ ("Without LLM")  │               │
+│  │ COLLABORATION    │  │ TASK OFFLOADER   │               │
+│  │ (Model-to-Model  │  │ (Async Tasks &   │               │
+│  │  Communication)  │  │  Parallel Exec)  │               │
 │  └──────────────────┘  └──────────────────┘               │
+│                                                             │
+│  ┌──────────────────┐                                      │
+│  │ STANDALONE       │                                      │
+│  │ TOOLS            │                                      │
+│  │ ("Without LLM")  │                                      │
+│  └──────────────────┘                                      │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -166,11 +173,34 @@ orchestrator.register_model(
     load_args={"device": "cuda"}
 )
 
-# Execute a task (auto-selects best model)
+# Execute a task synchronously
 result = orchestrator.execute_task(
     capability="vision",
     task="What's in this image?",
     parameters={"image_path": "photo.jpg"}
+)
+
+# Execute a task asynchronously (returns task ID)
+task_id = orchestrator.execute_task(
+    capability="code_generation",
+    task="Write a Python function to sort a list",
+    async_execution=True,
+    priority=5,
+    callback=lambda result: print(f"Code: {result}")
+)
+
+# Check async task status
+status = orchestrator.get_async_task_status(task_id)
+print(f"Task status: {status}")
+
+# Wait for async task to complete
+result = orchestrator.wait_for_async_task(task_id, timeout=30)
+
+# Or use the convenience method
+task_id = orchestrator.submit_async_task(
+    capability="text_generation",
+    task="Tell me a story",
+    priority=3
 )
 
 # Set fallback chain
@@ -189,9 +219,66 @@ orchestrator.hot_swap_model(
 status = orchestrator.get_status()
 print(f"Loaded models: {status['loaded_models']}")
 print(f"Memory usage: {status['memory_usage']}")
+print(f"Async tasks: {status.get('task_offloader', {})}")
 ```
 
-### 5. Standalone Tools (`standalone_tools.py`)
+### 5. Task Offloader (`task_offloader.py`)
+
+Enables asynchronous and parallel task execution with background workers.
+
+**Features:**
+- Priority-based task queue
+- Background worker threads
+- Progress tracking and callbacks
+- Task cancellation
+- Results caching
+
+**Example:**
+```python
+from forge_ai.core import get_offloader, get_orchestrator
+
+offloader = get_offloader()
+orchestrator = get_orchestrator()
+offloader.set_orchestrator(orchestrator)
+
+# Submit async task
+task_id = offloader.submit_task(
+    capability="code_generation",
+    task="Write a sorting function",
+    priority=5,
+    callback=lambda result: print(f"Done: {result}"),
+    error_callback=lambda error: print(f"Error: {error}")
+)
+
+# Check task status
+from forge_ai.core import TaskStatus
+status = offloader.get_task_status(task_id)
+if status == TaskStatus.COMPLETED:
+    task = offloader.get_task(task_id)
+    print(f"Result: {task.result}")
+
+# Wait for completion
+result = offloader.wait_for_task(task_id, timeout=30)
+
+# Cancel a task
+offloader.cancel_task(task_id)
+
+# Get offloader status
+status = offloader.get_status()
+print(f"Workers: {status['num_workers']}")
+print(f"Queue size: {status['queue_size']}")
+print(f"Pending: {status['tasks']['pending']}")
+print(f"Running: {status['tasks']['running']}")
+print(f"Completed: {status['tasks']['completed']}")
+
+# Clear pending tasks
+cleared = offloader.clear_queue()
+
+# Shutdown cleanly
+offloader.shutdown(wait=True, timeout=10)
+```
+
+### 6. Standalone Tools (`standalone_tools.py`)
 
 Use ForgeAI capabilities WITHOUT needing a full chat/LLM system.
 
@@ -249,7 +336,18 @@ Add to `forge_config.json` or use environment variables:
     "enable_collaboration": true,
     "enable_auto_fallback": true,
     "fallback_to_cpu": true,
-    "enable_hot_swap": true
+    "enable_hot_swap": true,
+    "enable_task_offloading": true
+  },
+  "task_offloader": {
+    "num_workers": 2,
+    "max_queue_size": 100,
+    "enable_prioritization": true,
+    "keep_history": true,
+    "max_history_size": 1000,
+    "auto_cleanup_seconds": 300,
+    "enable_caching": false,
+    "cache_ttl": 3600
   }
 }
 ```
