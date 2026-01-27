@@ -868,7 +868,12 @@ class ModuleManager:
                 self.modules[module_id] = module
 
                 # ─────────────────────────────────────────────────────────────
-                # STEP 3: Notify any listeners (GUI, etc.)
+                # STEP 3: Register with capability registry (orchestrator)
+                # ─────────────────────────────────────────────────────────────
+                self._register_module_capabilities(module_id, module_info)
+
+                # ─────────────────────────────────────────────────────────────
+                # STEP 4: Notify any listeners (GUI, etc.)
                 # ─────────────────────────────────────────────────────────────
                 for callback in self._on_load:
                     callback(module_id)
@@ -1542,6 +1547,92 @@ class ModuleManager:
             True if health monitor is active
         """
         return self._health_monitor_running
+    
+    # =========================================================================
+    # 🎯 ORCHESTRATOR INTEGRATION - Capability Registration
+    # =========================================================================
+    
+    def _register_module_capabilities(self, module_id: str, module_info: 'ModuleInfo') -> None:
+        """
+        Register module capabilities with the orchestrator.
+        
+        Maps module types to capabilities and registers them with the
+        capability registry for intelligent routing.
+        
+        Args:
+            module_id: Module identifier
+            module_info: Module information
+        """
+        try:
+            from ..core.capability_registry import get_capability_registry
+            
+            registry = get_capability_registry()
+            
+            # Map module categories to capabilities
+            capabilities = []
+            
+            if module_info.category == ModuleCategory.CORE:
+                if "model" in module_id:
+                    capabilities.extend(["text_generation", "reasoning"])
+                elif "inference" in module_id:
+                    capabilities.extend(["text_generation"])
+                elif "code" in module_id:
+                    capabilities.extend(["code_generation"])
+            
+            elif module_info.category == ModuleCategory.GENERATION:
+                if "image_gen" in module_id:
+                    capabilities.append("image_generation")
+                elif "code_gen" in module_id:
+                    capabilities.append("code_generation")
+                elif "video_gen" in module_id:
+                    capabilities.append("video_generation")
+                elif "audio_gen" in module_id:
+                    capabilities.append("audio_generation")
+                elif "threed_gen" in module_id:
+                    capabilities.append("3d_generation")
+                elif "embedding" in module_id:
+                    capabilities.append("embedding")
+            
+            elif module_info.category == ModuleCategory.PERCEPTION:
+                if "vision" in module_id:
+                    capabilities.append("vision")
+                elif "camera" in module_id:
+                    capabilities.append("vision")
+            
+            elif module_info.category == ModuleCategory.OUTPUT:
+                if "tts" in module_id or "voice_output" in module_id:
+                    capabilities.append("text_to_speech")
+            
+            elif module_info.category == ModuleCategory.INTERFACE:
+                if "stt" in module_id or "voice_input" in module_id:
+                    capabilities.append("speech_to_text")
+            
+            # Register if we found any capabilities
+            if capabilities:
+                metadata = {
+                    "module_id": module_id,
+                    "category": module_info.category.value,
+                    "is_local": not module_info.is_cloud_service,
+                    "description": module_info.description,
+                }
+                
+                # Use "local:" prefix for local modules, module_id otherwise
+                model_id = f"module:{module_id}"
+                
+                registry.register_model(
+                    model_id=model_id,
+                    capabilities=capabilities,
+                    metadata=metadata,
+                    auto_detect=False,
+                )
+                
+                logger.debug(f"Registered {module_id} with capabilities: {capabilities}")
+        
+        except ImportError:
+            # Orchestrator not available - that's OK
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to register module {module_id} with orchestrator: {e}")
 
     def on_load(self, callback: Callable):
         """Register callback for module load events."""
