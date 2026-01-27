@@ -208,6 +208,26 @@ CONFIG = {
     "max_gpu_layers": None,       # Max layers on GPU (None = auto)
     
     # =========================================================================
+    # THE LEARNING COLLECTIVE - Federated Learning
+    # =========================================================================
+    # Privacy-preserving distributed learning where devices share only
+    # model improvements (weight updates), never raw data.
+    "federated": {
+        "mode": "opt_in",                    # "opt_in", "opt_out", "disabled"
+        "privacy_level": "high",             # "none", "low", "medium", "high", "maximum"
+        "epsilon": 1.0,                      # Privacy budget (lower = more private)
+        "delta": 1e-5,                       # Privacy parameter
+        "min_devices": 2,                    # Minimum devices for aggregation
+        "round_duration": 300,               # Training round duration in seconds (5 min)
+        "aggregation_method": "weighted",    # "simple", "weighted", "median", "secure"
+        "min_trust_score": 0.3,              # Minimum trust score to accept updates
+        "byzantine_threshold": 3.0,          # Std devs for Byzantine detection
+        "enable_data_filtering": True,       # Filter training data for privacy
+        "remove_pii": True,                  # Remove personally identifiable info
+        "remove_inappropriate": True,        # Remove inappropriate content
+    },
+    
+    # =========================================================================
     # THE GUARDIAN'S DECREE - Security Settings
     # =========================================================================
     # These sacred protections CANNOT be modified by the AI.
