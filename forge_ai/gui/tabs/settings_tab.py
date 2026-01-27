@@ -297,8 +297,6 @@ def _on_game_detected(parent, game_id: str):
         pass
 
 
-def _change_active_game(parent):
-
 
 # ===== OVERLAY CONTROL =====
 def _toggle_overlay(parent):

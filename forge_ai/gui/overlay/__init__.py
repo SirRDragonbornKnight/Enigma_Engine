@@ -11,16 +11,28 @@ Main Components:
 - OverlayChatBridge: Integration with chat system
 """
 
-from .overlay_window import AIOverlay
+# Import base classes that don't require PyQt5
 from .overlay_modes import OverlayMode, OverlayPosition
 from .overlay_themes import OverlayTheme, OVERLAY_THEMES
-from .overlay_chat import OverlayChatBridge
+
+# Try to import PyQt5-dependent classes
+try:
+    from .overlay_window import AIOverlay
+    from .overlay_chat import OverlayChatBridge
+    HAS_PYQT = True
+except ImportError:
+    AIOverlay = None
+    OverlayChatBridge = None
+    HAS_PYQT = False
 
 __all__ = [
-    'AIOverlay',
     'OverlayMode',
     'OverlayPosition',
     'OverlayTheme',
     'OVERLAY_THEMES',
-    'OverlayChatBridge',
+    'HAS_PYQT',
 ]
+
+# Only export PyQt5-dependent classes if available
+if HAS_PYQT:
+    __all__.extend(['AIOverlay', 'OverlayChatBridge'])
