@@ -474,28 +474,36 @@ class AutonomousMode:
             # Analyze feedback patterns and adjust traits accordingly
             feedback_ratio = metrics.feedback_ratio()
             
+            # Evolution rate for adjustments
+            EVOLUTION_RATE = 0.02
+            BALANCE_THRESHOLD = 0.5
+            
             # If getting positive feedback, reinforce current traits slightly
             if feedback_ratio > 0.6:
                 # Slightly increase traits that are already strong
-                for trait_name in ['humor_level', 'empathy', 'creativity', 'playfulness']:
-                    current = getattr(personality.traits, trait_name)
-                    if current > 0.5:
-                        # Increase slightly
-                        new_value = min(1.0, current + 0.02)
-                        setattr(personality.traits, trait_name, new_value)
-                        logger.debug(f"Increased {trait_name} to {new_value:.2f} (positive feedback)")
+                reinforcement_traits = ['humor_level', 'empathy', 'creativity', 'playfulness']
+                for trait_name in reinforcement_traits:
+                    if hasattr(personality.traits, trait_name):
+                        current = getattr(personality.traits, trait_name)
+                        if current > BALANCE_THRESHOLD:
+                            # Increase slightly
+                            new_value = min(1.0, current + EVOLUTION_RATE)
+                            setattr(personality.traits, trait_name, new_value)
+                            logger.debug(f"Increased {trait_name} to {new_value:.2f} (positive feedback)")
             
             elif feedback_ratio < 0.4:
                 # Try to be more balanced
-                for trait_name in ['formality', 'verbosity']:
-                    current = getattr(personality.traits, trait_name)
-                    # Move toward middle (0.5)
-                    if current > 0.5:
-                        new_value = current - 0.02
-                    else:
-                        new_value = current + 0.02
-                    setattr(personality.traits, trait_name, new_value)
-                    logger.debug(f"Adjusted {trait_name} to {new_value:.2f} (balancing)")
+                balance_traits = ['formality', 'verbosity']
+                for trait_name in balance_traits:
+                    if hasattr(personality.traits, trait_name):
+                        current = getattr(personality.traits, trait_name)
+                        # Move toward middle (0.5)
+                        if current > BALANCE_THRESHOLD:
+                            new_value = current - EVOLUTION_RATE
+                        else:
+                            new_value = current + EVOLUTION_RATE
+                        setattr(personality.traits, trait_name, new_value)
+                        logger.debug(f"Adjusted {trait_name} to {new_value:.2f} (balancing)")
             
             # Adjust verbosity based on average conversation length
             if metrics.avg_conversation_length > 0:

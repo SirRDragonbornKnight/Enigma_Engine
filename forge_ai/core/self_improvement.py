@@ -31,6 +31,22 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Common stop words for text analysis
+STOP_WORDS = {
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+    'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 
+    'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 
+    'could', 'should', 'can', 'may', 'might', 'must', 'shall', 'this', 
+    'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 
+    'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 
+    'their'
+}
+
+
+# =============================================================================
 # DATA STRUCTURES
 # =============================================================================
 
@@ -389,9 +405,8 @@ class LearningEngine:
         output_words = set(output_text.lower().split())
         
         # Remove common stop words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should'}
-        input_keywords = input_words - stop_words
-        output_keywords = output_words - stop_words
+        input_keywords = input_words - STOP_WORDS
+        output_keywords = output_words - STOP_WORDS
         
         if not input_keywords:
             return 0.5  # Neutral if no keywords in input
@@ -498,9 +513,7 @@ class LearningEngine:
         words = text.lower().split()
         
         # Remove stop words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might', 'must', 'shall', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their'}
-        
-        keywords = [w for w in words if w not in stop_words and len(w) > 2]
+        keywords = [w for w in words if w not in STOP_WORDS and len(w) > 2]
         
         # Count frequencies
         freq = defaultdict(int)

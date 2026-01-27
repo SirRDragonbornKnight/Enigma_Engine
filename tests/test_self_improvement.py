@@ -127,9 +127,9 @@ class TestAutonomousConfig:
     def test_create_config(self):
         """Test creating configuration."""
         config = AutonomousConfig()
-        assert config.enabled == False
+        assert not config.enabled
         assert config.interval == 300
-        assert config.low_power_mode == False
+        assert not config.low_power_mode
     
     def test_effective_interval(self):
         """Test getting effective interval based on power mode."""
