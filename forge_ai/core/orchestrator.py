@@ -631,12 +631,37 @@ class ModelOrchestrator:
         """
         Hot-swap one model for another without restart.
         
+        This replaces one model with another for all its capabilities
+        without requiring a system restart. The old model is unloaded
+        and the new model is preloaded.
+        
+        **Important Notes:**
+        - Any ongoing tasks using the old model will complete with the old model
+        - New tasks will automatically use the new model
+        - The new model must already be registered with the orchestrator
+        - If hot-swap is disabled in config, this will return False
+        - The old model is immediately unloaded after capability transfer
+        
+        **Thread Safety:**
+        This method uses internal locking to ensure thread-safe operation.
+        However, ongoing task execution is not interrupted.
+        
+        **Side Effects:**
+        - Old model is unloaded from memory
+        - CUDA cache is cleared if GPU was used
+        - All capability assignments are updated
+        - New model is preloaded into memory
+        
         Args:
             old_model_id: Model to replace
             new_model_id: New model to use
             
         Returns:
-            True if successful
+            True if hot-swap successful, False otherwise
+            
+        Example:
+            >>> orchestrator.hot_swap_model("forge:small", "forge:medium")
+            True
         """
         if not self.config.enable_hot_swap:
             logger.warning("Hot-swap is disabled in configuration")
