@@ -172,6 +172,23 @@ CONFIG = {
     # =========================================================================
     "allow_multiple_models": True,
     "max_concurrent_models": 4,
+    
+    # =========================================================================
+    # THE ORCHESTRATOR - Deep Multi-Model Integration
+    # =========================================================================
+    "orchestrator": {
+        "default_chat_model": "auto",           # Auto-select best available
+        "default_code_model": "auto",           # Auto-select best available
+        "default_vision_model": "auto",         # Auto-select best available
+        "default_image_gen_model": "auto",      # Auto-select best available
+        "max_loaded_models": 3,                 # Maximum models loaded at once
+        "gpu_memory_limit_mb": 8000,            # GPU memory limit
+        "cpu_memory_limit_mb": 16000,           # CPU memory limit
+        "enable_collaboration": True,           # Enable model-to-model communication
+        "enable_auto_fallback": True,           # Enable automatic fallback chains
+        "fallback_to_cpu": True,                # Fallback to CPU if GPU full
+        "enable_hot_swap": True,                # Allow hot-swapping models
+    },
 
     # =========================================================================
     # THE RESOURCE WARDEN - Memory and CPU Limits

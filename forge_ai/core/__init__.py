@@ -305,6 +305,74 @@ def _lazy_load_learned_generator():
             pass
     return LearnedGenerator
 
+# Orchestration System (optional)
+try:
+    from .capability_registry import (
+        CapabilityRegistry,
+        Capability,
+        ModelCapabilityEntry,
+        get_capability_registry,
+    )
+except ImportError:
+    CapabilityRegistry = None
+    Capability = None
+    ModelCapabilityEntry = None
+    get_capability_registry = None
+
+try:
+    from .model_pool import (
+        ModelPool,
+        ModelPoolConfig,
+        ModelEntry,
+        get_model_pool,
+    )
+except ImportError:
+    ModelPool = None
+    ModelPoolConfig = None
+    ModelEntry = None
+    get_model_pool = None
+
+try:
+    from .collaboration import (
+        ModelCollaboration,
+        CollaborationType,
+        CollaborationRequest,
+        CollaborationResponse,
+        get_collaboration,
+    )
+except ImportError:
+    ModelCollaboration = None
+    CollaborationType = None
+    CollaborationRequest = None
+    CollaborationResponse = None
+    get_collaboration = None
+
+try:
+    from .orchestrator import (
+        ModelOrchestrator,
+        OrchestratorConfig,
+        Task,
+        TaskResult,
+        get_orchestrator,
+    )
+except ImportError:
+    ModelOrchestrator = None
+    OrchestratorConfig = None
+    Task = None
+    TaskResult = None
+    get_orchestrator = None
+
+try:
+    from .standalone_tools import (
+        use_tool,
+        list_available_tools,
+        get_tool_info,
+    )
+except ImportError:
+    use_tool = None
+    list_available_tools = None
+    get_tool_info = None
+
 
 __all__ = [
     # Model
@@ -418,4 +486,27 @@ __all__ = [
     
     # Learned Generator
     "LearnedGenerator",
+    
+    # Orchestration System
+    "CapabilityRegistry",
+    "Capability",
+    "ModelCapabilityEntry",
+    "get_capability_registry",
+    "ModelPool",
+    "ModelPoolConfig",
+    "ModelEntry",
+    "get_model_pool",
+    "ModelCollaboration",
+    "CollaborationType",
+    "CollaborationRequest",
+    "CollaborationResponse",
+    "get_collaboration",
+    "ModelOrchestrator",
+    "OrchestratorConfig",
+    "Task",
+    "TaskResult",
+    "get_orchestrator",
+    "use_tool",
+    "list_available_tools",
+    "get_tool_info",
 ]
