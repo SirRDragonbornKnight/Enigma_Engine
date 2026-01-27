@@ -807,13 +807,9 @@ def _handle_feedback_link(parent, url):
     
     if feedback_type == 'good':
         parent.chat_status.setText("Thanks for the positive feedback!")
-        # Save good example with high quality score
-        if hasattr(parent, 'brain') and parent.brain and response_data:
-            parent.brain.record_interaction(
-                response_data['user_input'],
-                response_data['ai_response'],
-                quality=1.0  # High quality
-            )
+        # Integrate with learning engine for real learning
+        if response_data:
+            _record_positive_feedback(parent, response_data)
             parent.chat_status.setText("Feedback saved - AI will learn from this good example!")
     
     elif feedback_type == 'bad':
@@ -828,18 +824,74 @@ def _handle_feedback_link(parent, url):
         )
         if ok and reason:
             parent.chat_status.setText(f"Feedback noted: {reason}")
-            # Don't save this as training data (or save with low quality)
-            if hasattr(parent, 'brain') and parent.brain and response_data:
-                # Record with low quality so it's deprioritized
-                parent.brain.add_memory(
-                    f"BAD RESPONSE - {reason}: Q: {response_data['user_input'][:100]}",
-                    importance=0.3,
-                    category="negative_feedback"
-                )
+            if response_data:
+                _record_negative_feedback(parent, response_data, reason)
     
     elif feedback_type == 'critique':
         # Open detailed critique dialog
         _show_critique_dialog(parent, response_id, response_data)
+
+
+def _record_positive_feedback(parent, response_data):
+    """Record positive feedback using the learning engine."""
+    try:
+        from forge_ai.core.self_improvement import get_learning_engine
+        
+        model_name = getattr(parent, 'current_model_name', None)
+        if not model_name:
+            return
+        
+        engine = get_learning_engine(model_name)
+        engine.record_feedback(
+            input_text=response_data['user_input'],
+            output_text=response_data['ai_response'],
+            feedback='positive',
+            metadata={'source': 'chat_ui', 'timestamp': response_data.get('timestamp')}
+        )
+        
+        # Also save to brain if available (legacy support)
+        if hasattr(parent, 'brain') and parent.brain:
+            parent.brain.record_interaction(
+                response_data['user_input'],
+                response_data['ai_response'],
+                quality=1.0  # High quality
+            )
+    except Exception as e:
+        import logging
+        logging.error(f"Error recording positive feedback: {e}")
+
+
+def _record_negative_feedback(parent, response_data, reason):
+    """Record negative feedback using the learning engine."""
+    try:
+        from forge_ai.core.self_improvement import get_learning_engine
+        
+        model_name = getattr(parent, 'current_model_name', None)
+        if not model_name:
+            return
+        
+        engine = get_learning_engine(model_name)
+        engine.record_feedback(
+            input_text=response_data['user_input'],
+            output_text=response_data['ai_response'],
+            feedback='negative',
+            metadata={
+                'source': 'chat_ui',
+                'reason': reason,
+                'timestamp': response_data.get('timestamp')
+            }
+        )
+        
+        # Also save to brain if available (legacy support)
+        if hasattr(parent, 'brain') and parent.brain:
+            parent.brain.add_memory(
+                f"BAD RESPONSE - {reason}: Q: {response_data['user_input'][:100]}",
+                importance=0.3,
+                category="negative_feedback"
+            )
+    except Exception as e:
+        import logging
+        logging.error(f"Error recording negative feedback: {e}")
 
 
 def _show_critique_dialog(parent, response_id, response_data):
@@ -905,7 +957,45 @@ def _show_critique_dialog(parent, response_id, response_data):
         issue = issue_combo.currentText()
         
         if correction and response_data:
-            # Save corrected example as training data
+            # Save corrected example using learning engine
+            try:
+                from forge_ai.core.self_improvement import get_learning_engine, LearningExample, LearningSource, Priority
+                
+                model_name = getattr(parent, 'current_model_name', None)
+                if model_name:
+                    engine = get_learning_engine(model_name)
+                    
+                    # Evaluate the correction quality
+                    quality_metrics = engine.evaluate_response_quality(
+                        response_data['user_input'],
+                        correction
+                    )
+                    
+                    # Create a high-priority learning example from the correction
+                    example = LearningExample(
+                        input_text=response_data['user_input'],
+                        output_text=correction,
+                        source=LearningSource.CORRECTION,
+                        priority=Priority.CRITICAL,  # User corrections are most important!
+                        quality_score=quality_metrics['overall'],
+                        relevance=quality_metrics['relevance'],
+                        coherence=quality_metrics['coherence'],
+                        repetition=quality_metrics['repetition'],
+                        metadata={
+                            'original_response': response_data['ai_response'][:200],
+                            'issue_type': issue,
+                            'source': 'user_correction'
+                        }
+                    )
+                    engine.add_learning_example(example)
+                    
+                    parent.chat_status.setText(f"Correction saved! AI will prioritize learning this better response.")
+            except Exception as e:
+                import logging
+                logging.error(f"Error saving correction: {e}")
+                parent.chat_status.setText("Error saving correction, but continuing...")
+            
+            # Also save to brain if available (legacy support)
             if hasattr(parent, 'brain') and parent.brain:
                 # Save the corrected version with high quality
                 parent.brain.record_interaction(
@@ -913,7 +1003,6 @@ def _show_critique_dialog(parent, response_id, response_data):
                     correction,
                     quality=1.0
                 )
-                parent.chat_status.setText(f"Correction saved! AI will learn the better response.")
             
             # Show in chat
             parent.chat_display.append(
