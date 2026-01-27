@@ -1894,9 +1894,17 @@ class Forge(nn.Module):
         """
         path = Path(path) if not isinstance(path, Path) else path
         
-        # Check if it's a HuggingFace model ID (no slashes in path, or starts with org/)
+        # Check if it's a HuggingFace model ID (format: org/model, no file extensions)
         path_str = str(path)
-        if not os.path.exists(path_str) and ('/' in path_str or not any(c in path_str for c in ['.', os.sep])):
+        # HF IDs: don't exist as files, contain exactly one '/', no file extension
+        is_hf_id = (
+            not os.path.exists(path_str) and 
+            '/' in path_str and 
+            path_str.count('/') == 1 and  # org/model format
+            not path_str.startswith('/') and  # not absolute path
+            '.' not in Path(path_str).name  # no file extension
+        )
+        if is_hf_id:
             logger.info(f"Detected HuggingFace model ID: {path_str}")
             return cls.from_huggingface(path_str, **kwargs)
         

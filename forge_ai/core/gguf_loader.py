@@ -355,6 +355,18 @@ def load_gguf_model(
     
     logger.info(f"Loading GGUF model from: {gguf_model_path}")
     
+    # Check if torch is available
+    try:
+        import torch
+        HAVE_TORCH_LOCAL = True
+    except ImportError:
+        HAVE_TORCH_LOCAL = False
+    
+    if not HAVE_TORCH_LOCAL:
+        raise RuntimeError(
+            "GGUF loading requires torch. Install with: pip install torch"
+        )
+    
     # Check if gguf library is available for parsing
     try:
         import gguf
@@ -363,11 +375,6 @@ def load_gguf_model(
         HAVE_GGUF = False
         logger.warning(
             "gguf library not available. Will attempt to use llama-cpp-python only."
-        )
-    
-    if not HAVE_TORCH:
-        raise RuntimeError(
-            "GGUF loading requires torch. Install with: pip install torch"
         )
     
     model_path = Path(gguf_model_path)
