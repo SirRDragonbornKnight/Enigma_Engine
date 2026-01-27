@@ -160,7 +160,10 @@ class FederationDiscovery:
             # Create UDP socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(('', self.discovery_port))
+            
+            # Bind to localhost only for security
+            # Only listen on localhost to prevent external access
+            sock.bind(('127.0.0.1', self.discovery_port))
             sock.settimeout(1.0)
             
             logger.debug("Listening for federation broadcasts")

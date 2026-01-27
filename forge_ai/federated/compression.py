@@ -273,21 +273,22 @@ class UpdateCompressor:
         
         # Avoid division by zero
         if max_val == min_val:
-            scale = 1.0
+            # All values are the same, no need to quantize
+            return weights, {}
+        
+        # Calculate scale and zero point
+        if bits == 8:
+            qmin, qmax = 0, 255
+            dtype = np.uint8
+        elif bits == 16:
+            qmin, qmax = 0, 65535
+            dtype = np.uint16
         else:
-            # Calculate scale and zero point
-            if bits == 8:
-                qmin, qmax = 0, 255
-                dtype = np.uint8
-            elif bits == 16:
-                qmin, qmax = 0, 65535
-                dtype = np.uint16
-            else:
-                # 32-bit, no quantization needed
-                return weights, {}
-            
-            scale = (max_val - min_val) / (qmax - qmin)
-            zero_point = qmin - min_val / scale
+            # 32-bit, no quantization needed
+            return weights, {}
+        
+        scale = (max_val - min_val) / (qmax - qmin)
+        zero_point = qmin - min_val / scale
         
         # Quantize
         quantized = np.round(weights / scale + zero_point).clip(qmin, qmax).astype(dtype)

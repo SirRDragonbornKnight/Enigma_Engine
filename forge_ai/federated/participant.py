@@ -130,8 +130,9 @@ class FederatedParticipant:
         logger.info(f"Participating in round {round_number}")
         
         # Check if we have minimum samples
-        if dataset and len(dataset) < self.min_samples:
-            logger.warning(f"Insufficient samples ({len(dataset)} < {self.min_samples}), skipping")
+        dataset_size = self._get_dataset_size(dataset)
+        if dataset and dataset_size < self.min_samples:
+            logger.warning(f"Insufficient samples ({dataset_size} < {self.min_samples}), skipping")
             return {
                 'status': 'skipped',
                 'reason': 'insufficient_samples',
@@ -235,11 +236,12 @@ class FederatedParticipant:
             return None
         
         # Create update
+        dataset_size = self._get_dataset_size(dataset)
         update = ModelUpdate(
             device_id=self.device_id,
             round_number=round_number,
             weight_deltas=weight_deltas,
-            num_samples=len(dataset) if dataset else 0,
+            num_samples=dataset_size,
             loss=loss,
         )
         
@@ -284,6 +286,36 @@ class FederatedParticipant:
         
         # In real implementation, apply to local model
         # For now, just log
+    
+    def _get_dataset_size(self, dataset) -> int:
+        """
+        Get size of dataset safely.
+        
+        Args:
+            dataset: Dataset object
+        
+        Returns:
+            Size of dataset, or 0 if unknown
+        """
+        if dataset is None:
+            return 0
+        
+        # Try __len__ first
+        if hasattr(dataset, '__len__'):
+            try:
+                return len(dataset)
+            except Exception:
+                pass
+        
+        # Try size attribute
+        if hasattr(dataset, 'size'):
+            try:
+                return dataset.size
+            except Exception:
+                pass
+        
+        # Unknown size
+        return 0
     
     def get_stats(self) -> Dict:
         """

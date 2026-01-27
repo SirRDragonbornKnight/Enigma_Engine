@@ -343,8 +343,18 @@ class FederationTab(QWidget):
         """Handle role change."""
         if self.federated_learning:
             # Need to reinitialize with new role
-            self._toggle_federated_learning()
-            self._toggle_federated_learning()
+            self._reinitialize_with_new_role()
+    
+    def _reinitialize_with_new_role(self):
+        """Reinitialize federated learning with new role."""
+        # Disable current instance
+        if self.discovery:
+            self.discovery.stop()
+        self.federated_learning = None
+        self.discovery = None
+        
+        # Re-enable with new role
+        self._initialize_federated_learning()
     
     def _on_privacy_changed(self):
         """Handle privacy setting change."""
