@@ -153,6 +153,26 @@ CONFIG = {
     "forgeai_api_key": None,       # Set via env FORGEAI_API_KEY or forge_config.json
 
     # =========================================================================
+    # THE WEB INTERFACE - Remote Access Configuration
+    # =========================================================================
+    # Modern web interface for accessing ForgeAI from any device.
+    # Built with FastAPI and WebSocket for real-time communication.
+    
+    "web_interface": {
+        "enabled": True,
+        "host": "0.0.0.0",              # 0.0.0.0 = accessible from network
+        "port": 8080,
+        "auto_start": False,            # Start web server automatically with GUI
+        "require_auth": True,           # Require authentication token
+        "allow_training": False,        # Disable training from web (security)
+        "allow_settings_change": True,  # Allow changing settings from web
+        "cors_origins": ["*"],          # CORS allowed origins (* = all)
+        "max_connections": 10,          # Maximum concurrent connections
+        "enable_discovery": True,       # Enable mDNS/Bonjour local discovery
+        "token_lifetime_hours": 720     # Token expiration (30 days)
+    },
+
+    # =========================================================================
     # THE FORGE'S HEART - Hardware Configuration
     # =========================================================================
     # What powers drive the forge? CPU, GPU, or the mystical MPS of Apple?

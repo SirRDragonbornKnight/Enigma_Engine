@@ -129,6 +129,12 @@ psutil>=5.9.0             # For power mode CPU/memory monitoring
 
 # === WEB DASHBOARD & MOBILE ===
 flask-socketio>=5.0.0
+fastapi>=0.104.0          # Modern async web framework
+uvicorn[standard]>=0.24.0 # ASGI server for FastAPI
+websockets>=12.0          # WebSocket support
+qrcode[pil]>=7.4.0        # QR code generation
+zeroconf>=0.131.0         # mDNS/Bonjour local network discovery
+python-multipart>=0.0.6   # For file uploads in FastAPI
 
 # === HUGGINGFACE INTEGRATION ===
 huggingface-hub>=0.20.0

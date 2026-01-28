@@ -101,103 +101,104 @@ def get_engine():
 # Routes
 # =============================================================================
 
-@app.route('/')
-def index():
-    """Main dashboard."""
-    return render_template('dashboard.html')
+if FLASK_AVAILABLE and app is not None:
+    @app.route('/')
+    def index():
+        """Main dashboard."""
+        return render_template('dashboard.html')
 
 
-@app.route('/chat')
-def chat_page():
-    """Chat interface."""
-    return render_template('chat.html')
+    @app.route('/chat')
+    def chat_page():
+        """Chat interface."""
+        return render_template('chat.html')
 
 
-@app.route('/train')
-def train_page():
-    """Training interface."""
-    return render_template('train.html')
+    @app.route('/train')
+    def train_page():
+        """Training interface."""
+        return render_template('train.html')
 
 
-@app.route('/settings')
-def settings_page():
-    """Settings interface."""
-    return render_template('settings.html')
+    @app.route('/settings')
+    def settings_page():
+        """Settings interface."""
+        return render_template('settings.html')
 
 
-@app.route('/personality')
-def personality_page():
-    """Personality dashboard."""
-    return render_template('personality.html')
+    @app.route('/personality')
+    def personality_page():
+        """Personality dashboard."""
+        return render_template('personality.html')
 
 
-@app.route('/voice')
-def voice_studio_page():
-    """Voice studio interface."""
-    return render_template('voice_studio.html')
+    @app.route('/voice')
+    def voice_studio_page():
+        """Voice studio interface."""
+        return render_template('voice_studio.html')
 
 
-@app.route('/memory')
-def memory_page():
-    """Memory & learning viewer."""
-    return render_template('memory.html')
+    @app.route('/memory')
+    def memory_page():
+        """Memory & learning viewer."""
+        return render_template('memory.html')
 
 
-@app.route('/ai_profile')
-def ai_profile_page():
-    """AI self-expression page."""
-    return render_template('ai_profile.html')
+    @app.route('/ai_profile')
+    def ai_profile_page():
+        """AI self-expression page."""
+        return render_template('ai_profile.html')
 
 
-@app.route('/api/status')
-def api_status():
-    """Get system status with device profile information."""
-    engine = get_engine()
-    
-    status = {
-        'status': 'running',
-        'model_loaded': engine is not None,
-        'model_name': _model_name,
-        'timestamp': datetime.now().isoformat()
-    }
-    
-    # Get device profile info
-    try:
-        from ..core.device_profiles import get_device_profiler
-        profiler = get_device_profiler()
-        caps = profiler.detect()
-        status['device'] = {
-            'class': profiler.classify().name,
-            'torch_device': profiler.get_torch_device(),
-            'recommended_model': profiler.get_recommended_model_size(),
-            'cpu_cores': caps.cpu_cores,
-            'ram_mb': caps.ram_total_mb,
-            'has_gpu': caps.has_gpu,
-            'gpu_name': caps.gpu_name if caps.has_gpu else None,
-            'vram_mb': caps.vram_total_mb if caps.has_gpu else None,
+    @app.route('/api/status')
+    def api_status():
+        """Get system status with device profile information."""
+        engine = get_engine()
+        
+        status = {
+            'status': 'running',
+            'model_loaded': engine is not None,
+            'model_name': _model_name,
+            'timestamp': datetime.now().isoformat()
         }
-    except ImportError:
-        pass
-    
-    # Get instance info
-    try:
-        from ..core.instance_manager import get_active_instances
-        instances = get_active_instances()
-        status['instances'] = len(instances)
-    except ImportError:
-        logger.debug("Instance manager not available, defaulting to 1 instance")
-        status['instances'] = 1
-    except Exception as e:
-        logger.warning(f"Could not get active instances: {e}")
-        status['instances'] = 1
-    
-    return jsonify(status)
+        
+        # Get device profile info
+        try:
+            from ..core.device_profiles import get_device_profiler
+            profiler = get_device_profiler()
+            caps = profiler.detect()
+            status['device'] = {
+                'class': profiler.classify().name,
+                'torch_device': profiler.get_torch_device(),
+                'recommended_model': profiler.get_recommended_model_size(),
+                'cpu_cores': caps.cpu_cores,
+                'ram_mb': caps.ram_total_mb,
+                'has_gpu': caps.has_gpu,
+                'gpu_name': caps.gpu_name if caps.has_gpu else None,
+                'vram_mb': caps.vram_total_mb if caps.has_gpu else None,
+            }
+        except ImportError:
+            pass
+        
+        # Get instance info
+        try:
+            from ..core.instance_manager import get_active_instances
+            instances = get_active_instances()
+            status['instances'] = len(instances)
+        except ImportError:
+            logger.debug("Instance manager not available, defaulting to 1 instance")
+            status['instances'] = 1
+        except Exception as e:
+            logger.warning(f"Could not get active instances: {e}")
+            status['instances'] = 1
+        
+        return jsonify(status)
 
 
-@app.route('/api/models')
-def api_list_models():
-    """List available models."""
-    try:
+    @app.route('/api/models')
+    def api_list_models():
+        """List available models."""
+        try:
         models_dir = Path(CONFIG["models_dir"])
         models = []
         
