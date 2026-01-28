@@ -616,14 +616,128 @@ def _use_gif_generation(
         prompt: Description of animation
         frames: Number of frames
         output_path: Optional path to save GIF
-        **kwargs: Additional arguments
+        **kwargs: Additional arguments (width, height, fps, loop)
         
     Returns:
         Path to generated GIF
     """
-    # GIF generation typically uses image generation in sequence
-    # This is a simplified implementation
-    raise NotImplementedError("GIF generation not yet fully implemented")
+    try:
+        from PIL import Image
+        import time
+        import os
+        
+        # Get dimensions and other params
+        width = kwargs.get("width", 256)
+        height = kwargs.get("height", 256)
+        fps = kwargs.get("fps", 5)
+        loop = kwargs.get("loop", 0)  # 0 = infinite loop
+        
+        # Determine output path
+        if output_path is None:
+            outputs_dir = Path.cwd() / "outputs"
+            outputs_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = int(time.time())
+            output_path = str(outputs_dir / f"animation_{timestamp}.gif")
+        
+        # Check for image generation capability
+        try:
+            from ..modules import get_module_manager
+            manager = get_module_manager()
+            
+            # Try to get image generation module
+            image_gen = None
+            for name in ["image_gen_local", "image_gen_api", "image_gen"]:
+                if manager.is_loaded(name):
+                    image_gen = manager.get_module(name)
+                    break
+            
+            if image_gen is not None:
+                # Generate frames using image generation
+                frame_images = []
+                
+                for i in range(frames):
+                    # Modify prompt with frame number for animation effect
+                    frame_prompt = f"{prompt}, frame {i+1} of {frames}"
+                    
+                    # Generate frame
+                    if hasattr(image_gen, "generate"):
+                        result = image_gen.generate(
+                            prompt=frame_prompt,
+                            width=width,
+                            height=height
+                        )
+                    else:
+                        result = image_gen(frame_prompt, width=width, height=height)
+                    
+                    # Handle result
+                    if isinstance(result, (str, Path)):
+                        img = Image.open(result)
+                    elif hasattr(result, 'images') and len(result.images) > 0:
+                        img = result.images[0]
+                    elif isinstance(result, Image.Image):
+                        img = result
+                    else:
+                        raise ValueError(f"Unknown image result type: {type(result)}")
+                    
+                    # Resize if needed
+                    if img.size != (width, height):
+                        img = img.resize((width, height), Image.Resampling.LANCZOS)
+                    
+                    frame_images.append(img)
+                
+                # Save as GIF
+                duration_ms = int(1000 / fps)
+                frame_images[0].save(
+                    output_path,
+                    save_all=True,
+                    append_images=frame_images[1:],
+                    duration=duration_ms,
+                    loop=loop,
+                    optimize=False
+                )
+                
+                return output_path
+        except ImportError:
+            pass
+        
+        # Fallback: Create simple procedural animation
+        # This creates a gradient animation without AI image generation
+        frame_images = []
+        
+        for i in range(frames):
+            # Create frame with shifting colors
+            img = Image.new("RGB", (width, height))
+            pixels = img.load()
+            
+            # Simple gradient animation
+            phase = i / frames
+            for x in range(width):
+                for y in range(height):
+                    # Animated gradient pattern
+                    import math
+                    r = int(127 + 127 * math.sin(2 * math.pi * (x / width + phase)))
+                    g = int(127 + 127 * math.sin(2 * math.pi * (y / height + phase)))
+                    b = int(127 + 127 * math.sin(2 * math.pi * ((x + y) / (width + height) + phase)))
+                    pixels[x, y] = (r, g, b)
+            
+            frame_images.append(img)
+        
+        # Save as GIF
+        duration_ms = int(1000 / fps)
+        frame_images[0].save(
+            output_path,
+            save_all=True,
+            append_images=frame_images[1:],
+            duration=duration_ms,
+            loop=loop,
+            optimize=True
+        )
+        
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"GIF generation error: {e}")
+        raise RuntimeError(f"GIF generation failed: {e}")
 
 
 # =============================================================================

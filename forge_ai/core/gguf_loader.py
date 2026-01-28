@@ -592,16 +592,36 @@ def parse_gguf_tensors(
             tensor = torch.from_numpy(data.reshape(dims))
             if dequantize:
                 tensor = tensor.float()
-        elif tensor_type in [GGML_TYPE_Q4_0, GGML_TYPE_Q4_1, GGML_TYPE_Q5_0, 
-                              GGML_TYPE_Q5_1, GGML_TYPE_Q8_0]:
-            # Quantized types - not fully implemented
+        elif tensor_type == GGML_TYPE_Q4_0:
+            # Q4_0 quantized
             if dequantize:
-                raise NotImplementedError(
-                    f"Dequantization of GGML type {tensor_type} not yet implemented. "
-                    f"Use the gguf library or llama-cpp-python for quantized model loading."
-                )
+                block_size = 32
+                bytes_per_block = 18
+                n_blocks = (n_elements + block_size - 1) // block_size
+                n_bytes = n_blocks * bytes_per_block
+                raw_data = f.read(n_bytes)
+                tensor = dequantize_q4_0(raw_data, tuple(dims))
             else:
-                # Skip quantized tensors if not dequantizing
+                logger.warning(f"Skipping quantized tensor (no dequantize): {name}")
+                continue
+        elif tensor_type == GGML_TYPE_Q8_0:
+            # Q8_0 quantized
+            if dequantize:
+                block_size = 32
+                bytes_per_block = 34
+                n_blocks = (n_elements + block_size - 1) // block_size
+                n_bytes = n_blocks * bytes_per_block
+                raw_data = f.read(n_bytes)
+                tensor = dequantize_q8_0(raw_data, tuple(dims))
+            else:
+                logger.warning(f"Skipping quantized tensor (no dequantize): {name}")
+                continue
+        elif tensor_type in [GGML_TYPE_Q4_1, GGML_TYPE_Q5_0, GGML_TYPE_Q5_1]:
+            # Other quantized types - not yet implemented
+            if dequantize:
+                logger.warning(f"Dequantization of GGML type {tensor_type} not yet implemented, skipping: {name}")
+                continue
+            else:
                 logger.warning(f"Skipping quantized tensor: {name}")
                 continue
         else:
@@ -686,15 +706,49 @@ def dequantize_q4_0(data: bytes, shape: tuple) -> 'torch.Tensor':
         
     Returns:
         Dequantized PyTorch tensor
-        
-    Raises:
-        NotImplementedError: Full Q4_0 dequantization not yet implemented
     """
-    raise NotImplementedError(
-        "Q4_0 dequantization requires complex bit manipulation. "
-        "Use the gguf library or llama-cpp-python for quantized models. "
-        "For Forge models, use full-precision weights or convert externally."
-    )
+    import numpy as np
+    
+    if not HAVE_TORCH:
+        raise RuntimeError("PyTorch required for dequantization")
+    
+    block_size = 32
+    bytes_per_block = 18  # 2 (scale) + 16 (data)
+    
+    # Convert to numpy array
+    data_array = np.frombuffer(data, dtype=np.uint8)
+    n_blocks = len(data_array) // bytes_per_block
+    
+    # Calculate total elements
+    n_elements = n_blocks * block_size
+    output = np.zeros(n_elements, dtype=np.float32)
+    
+    for i in range(n_blocks):
+        block_start = i * bytes_per_block
+        
+        # Extract scale (float16)
+        scale_bytes = data_array[block_start:block_start + 2]
+        scale = np.frombuffer(scale_bytes.tobytes(), dtype=np.float16)[0]
+        
+        # Extract packed 4-bit values
+        packed = data_array[block_start + 2:block_start + 18]
+        
+        # Unpack 4-bit values (2 per byte)
+        for j in range(16):
+            byte_val = packed[j]
+            low = (byte_val & 0xF) - 8  # Signed 4-bit (-8 to 7)
+            high = ((byte_val >> 4) & 0xF) - 8
+            
+            output[i * block_size + j * 2] = float(scale) * low
+            output[i * block_size + j * 2 + 1] = float(scale) * high
+    
+    # Reshape to original shape
+    total_elements = 1
+    for dim in shape:
+        total_elements *= dim
+    
+    output = output[:total_elements]
+    return torch.from_numpy(output.reshape(shape))
 
 
 def dequantize_q8_0(data: bytes, shape: tuple) -> 'torch.Tensor':
@@ -712,15 +766,43 @@ def dequantize_q8_0(data: bytes, shape: tuple) -> 'torch.Tensor':
         
     Returns:
         Dequantized PyTorch tensor
-        
-    Raises:
-        NotImplementedError: Full Q8_0 dequantization not yet implemented
     """
-    raise NotImplementedError(
-        "Q8_0 dequantization requires careful block-based processing. "
-        "Use the gguf library or llama-cpp-python for quantized models. "
-        "For Forge models, use full-precision weights or convert externally."
-    )
+    import numpy as np
+    
+    if not HAVE_TORCH:
+        raise RuntimeError("PyTorch required for dequantization")
+    
+    block_size = 32
+    bytes_per_block = 34  # 2 (scale) + 32 (data)
+    
+    # Convert to numpy array
+    data_array = np.frombuffer(data, dtype=np.uint8)
+    n_blocks = len(data_array) // bytes_per_block
+    
+    # Calculate total elements
+    n_elements = n_blocks * block_size
+    output = np.zeros(n_elements, dtype=np.float32)
+    
+    for i in range(n_blocks):
+        block_start = i * bytes_per_block
+        
+        # Extract scale (float16)
+        scale_bytes = data_array[block_start:block_start + 2]
+        scale = np.frombuffer(scale_bytes.tobytes(), dtype=np.float16)[0]
+        
+        # Extract 8-bit signed values
+        values = data_array[block_start + 2:block_start + 34].astype(np.int8)
+        
+        # Dequantize: value * scale
+        output[i * block_size:(i + 1) * block_size] = values.astype(np.float32) * float(scale)
+    
+    # Reshape to original shape
+    total_elements = 1
+    for dim in shape:
+        total_elements *= dim
+    
+    output = output[:total_elements]
+    return torch.from_numpy(output.reshape(shape))
 
 
 def load_gguf_model(
