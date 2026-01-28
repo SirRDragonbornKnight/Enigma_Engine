@@ -328,7 +328,7 @@ class LearningTab(QWidget):
             model_name = getattr(self.parent_window, 'current_model_name', 'forge_ai')
             
             # Get learning engine
-            from ..core.self_improvement import get_learning_engine
+            from forge_ai.core.self_improvement import get_learning_engine
             engine = get_learning_engine(model_name)
             
             # Get metrics

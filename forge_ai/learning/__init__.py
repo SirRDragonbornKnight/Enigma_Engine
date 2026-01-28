@@ -17,6 +17,9 @@ from .coordinator import FederatedCoordinator, CoordinatorMode
 from .data_filter import FederatedDataFilter, TrainingExample
 from .trust import TrustManager
 
+# Alias for backwards compatibility
+DataFilter = FederatedDataFilter
+
 __all__ = [
     "FederatedLearning",
     "WeightUpdate",
@@ -28,6 +31,7 @@ __all__ = [
     "FederatedCoordinator",
     "CoordinatorMode",
     "FederatedDataFilter",
+    "DataFilter",  # Alias
     "TrainingExample",
     "TrustManager",
 ]

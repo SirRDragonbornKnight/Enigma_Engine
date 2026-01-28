@@ -124,6 +124,24 @@ class WeightUpdate:
         self.signature = saved_sig
         
         return saved_sig == expected_sig
+    
+    def get_size(self) -> int:
+        """
+        Get the size of the weight update in bytes.
+        
+        Returns:
+            Approximate size in bytes
+        """
+        total_size = 0
+        for name, delta in self.weight_deltas.items():
+            if np is not None and isinstance(delta, np.ndarray):
+                total_size += delta.nbytes
+            elif isinstance(delta, list):
+                # Rough estimate for list
+                total_size += len(str(delta))
+            else:
+                total_size += 8  # Assume 8 bytes for scalar
+        return total_size
 
 
 class FederatedLearning:
