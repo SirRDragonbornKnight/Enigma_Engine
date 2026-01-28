@@ -408,11 +408,45 @@ class LearningTab(QWidget):
         try:
             model_name = getattr(self.parent_window, 'current_model_name', 'forge_ai')
             
-            # TODO: Enable/disable autonomous learning mode
-            # This would interact with forge_ai/core/autonomous.py
+            # Import and control autonomous learning system
+            try:
+                from ..core.autonomous import (
+                    get_autonomous_learner,
+                    AutonomousLearner,
+                    AutonomousConfig
+                )
+                
+                learner = get_autonomous_learner(model_name)
+                
+                if enabled:
+                    # Start autonomous learning
+                    if not learner.is_active():
+                        config = AutonomousConfig(
+                            enable_reflection=True,
+                            enable_practice=True,
+                            enable_dreaming=False,  # Can be resource intensive
+                            practice_interval_s=300,  # 5 minutes
+                        )
+                        learner.start(config)
+                        self.log_activity("Autonomous learning enabled - learner started")
+                    else:
+                        self.log_activity("Autonomous learning already active")
+                else:
+                    # Stop autonomous learning
+                    if learner.is_active():
+                        learner.stop()
+                        self.log_activity("Autonomous learning disabled - learner stopped")
+                    else:
+                        self.log_activity("Autonomous learning already inactive")
+                        
+            except ImportError:
+                # Fallback: just log the state change
+                if enabled:
+                    self.log_activity("Autonomous learning enabled (core module not loaded)")
+                else:
+                    self.log_activity("Autonomous learning disabled")
             
             if enabled:
-                self.log_activity("Autonomous learning enabled")
                 QMessageBox.information(
                     self,
                     "Autonomous Learning",
@@ -423,8 +457,6 @@ class LearningTab(QWidget):
                     "- Learn from feedback\n"
                     "- Evolve personality based on interactions"
                 )
-            else:
-                self.log_activity("Autonomous learning disabled")
         
         except Exception as e:
             logger.error(f"Error toggling learning: {e}")

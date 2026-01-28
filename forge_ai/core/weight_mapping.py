@@ -566,24 +566,47 @@ class WeightMapper:
         
         Args:
             tensor_data: Raw tensor bytes
-            quant_type: Quantization type (Q4_0, Q8_0, etc.)
+            quant_type: Quantization type (Q4_0, Q8_0, F32, F16, etc.)
             shape: Tensor shape
             
         Returns:
             Dequantized PyTorch tensor
-            
-        Raises:
-            NotImplementedError: GGUF dequantization not fully implemented yet
         """
         if not HAVE_TORCH:
             raise RuntimeError("torch required for dequantization")
         
-        # Full GGUF dequantization requires implementing various quantization formats
-        # This is a complex task that depends on the gguf library's internal format
-        raise NotImplementedError(
-            f"GGUF dequantization for {quant_type} not yet implemented. "
-            f"Use the gguf library's built-in dequantization instead."
-        )
+        import torch
+        
+        # Route to appropriate dequantization function from gguf_loader
+        try:
+            from .gguf_loader import dequantize_q4_0, dequantize_q8_0
+        except ImportError:
+            raise RuntimeError("gguf_loader module required for dequantization")
+        
+        quant_upper = quant_type.upper()
+        
+        if quant_upper == "Q4_0":
+            return dequantize_q4_0(tensor_data, shape)
+        elif quant_upper == "Q8_0":
+            return dequantize_q8_0(tensor_data, shape)
+        elif quant_upper == "F32":
+            # Float32 - direct conversion
+            import numpy as np
+            arr = np.frombuffer(tensor_data, dtype=np.float32).reshape(shape)
+            return torch.from_numpy(arr.copy())
+        elif quant_upper == "F16":
+            # Float16 - direct conversion
+            import numpy as np
+            arr = np.frombuffer(tensor_data, dtype=np.float16).reshape(shape)
+            return torch.from_numpy(arr.copy()).float()  # Convert to float32
+        elif quant_upper in ("Q4_1", "Q5_0", "Q5_1", "Q6_K", "Q4_K", "Q5_K", "Q8_1"):
+            # Additional quantization formats - try gguf library's built-in
+            raise NotImplementedError(
+                f"GGUF dequantization for {quant_type} requires external gguf library. "
+                f"Supported types: Q4_0, Q8_0, F32, F16"
+            )
+        else:
+            raise ValueError(f"Unknown quantization type: {quant_type}")
     
     def validate_mapping(
         self,

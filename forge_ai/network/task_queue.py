@@ -253,7 +253,7 @@ class NetworkTaskQueue:
         
         try:
             # Import here to avoid circular imports
-            from .load_balancer import LoadBalancer
+            from .load_balancer import LoadBalancer, BalancingStrategy
             from ..comms.remote_client import RemoteClient
             
             # Get server (use specific or load balance)
@@ -261,9 +261,33 @@ class NetworkTaskQueue:
                 address, port = task.target_server.split(":")
                 port = int(port)
             else:
-                # Would use load balancer here
-                # For now, use first available
-                raise NotImplementedError("Auto server selection not implemented")
+                # Auto server selection using load balancer
+                if not hasattr(self, '_load_balancer') or self._load_balancer is None:
+                    self._load_balancer = LoadBalancer(strategy=BalancingStrategy.ADAPTIVE)
+                
+                # Check if we have servers registered
+                server = self._load_balancer.get_server()
+                if server is None:
+                    # Try to discover servers from network discovery
+                    try:
+                        from .discovery import ServiceDiscovery
+                        discovery = ServiceDiscovery()
+                        services = discovery.find_services("forge_inference")
+                        for svc in services[:5]:  # Add up to 5 discovered servers
+                            self._load_balancer.add_server(svc.address, svc.port)
+                        server = self._load_balancer.get_server()
+                    except Exception:
+                        pass
+                
+                if server is None:
+                    # Fall back to localhost default
+                    address = "localhost"
+                    port = 5000
+                    logger.warning(f"No servers available, falling back to {address}:{port}")
+                else:
+                    address = server.address
+                    port = server.port
+                    self._load_balancer.mark_request_start(server)
             
             # Create client and execute
             client = RemoteClient(address, port)

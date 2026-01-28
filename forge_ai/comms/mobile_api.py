@@ -91,15 +91,62 @@ class MobileAPI:
                         speak(text)
                     
                     def save_to_file(self, text, filepath):
-                        """Save TTS output to file."""
+                        """Save TTS output to file with multiple engine fallbacks."""
+                        import tempfile
+                        import os
+                        
+                        # Try pyttsx3 first (most common)
                         try:
-                            from ..voice.voice_profile import get_engine
-                            engine = get_engine()
+                            import pyttsx3
+                            engine = pyttsx3.init()
                             engine.save_to_file(text, filepath)
+                            engine.runAndWait()
+                            return True
                         except Exception:
-                            # Fallback: just speak (no file save)
-                            self.speak(text)
-                            raise NotImplementedError("Voice engine doesn't support save_to_file")
+                            pass
+                        
+                        # Try gTTS (Google TTS) - outputs MP3
+                        try:
+                            from gtts import gTTS
+                            tts = gTTS(text=text, lang='en')
+                            # gTTS outputs MP3, convert if needed
+                            if filepath.endswith('.wav'):
+                                mp3_path = filepath.replace('.wav', '.mp3')
+                                tts.save(mp3_path)
+                                # Try to convert with pydub
+                                try:
+                                    from pydub import AudioSegment
+                                    audio = AudioSegment.from_mp3(mp3_path)
+                                    audio.export(filepath, format='wav')
+                                    os.remove(mp3_path)
+                                except ImportError:
+                                    # pydub not available, keep as MP3
+                                    os.rename(mp3_path, filepath)
+                            else:
+                                tts.save(filepath)
+                            return True
+                        except Exception:
+                            pass
+                        
+                        # Try edge-tts (Microsoft Edge TTS)
+                        try:
+                            import asyncio
+                            import edge_tts
+                            
+                            async def save_edge_tts():
+                                communicate = edge_tts.Communicate(text, "en-US-AriaNeural")
+                                await communicate.save(filepath)
+                            
+                            asyncio.run(save_edge_tts())
+                            return True
+                        except Exception:
+                            pass
+                        
+                        # No TTS engine available
+                        raise RuntimeError(
+                            "No TTS engine available for save_to_file. "
+                            "Install one of: pyttsx3, gtts, edge-tts"
+                        )
                 
                 self._voice = SimpleVoice()
             except ImportError as e:

@@ -391,8 +391,15 @@ class MobileAvatar:
         self._is_background = is_background
         
         if is_background and self.config.reduce_when_background:
-            # Reduce update rate
-            pass  # TODO: Implement rate reduction
+            # Reduce update rate to save battery (4x slower)
+            self._background_update_rate = self.config.update_rate_ms * 4
+            self._original_update_rate = self.config.update_rate_ms
+            self.config.update_rate_ms = self._background_update_rate
+            logger.debug(f"Background mode: reduced update rate to {self._background_update_rate}ms")
+        elif not is_background and hasattr(self, '_original_update_rate'):
+            # Restore normal update rate when returning to foreground
+            self.config.update_rate_ms = self._original_update_rate
+            logger.debug(f"Foreground mode: restored update rate to {self._original_update_rate}ms")
     
     def get_battery_stats(self) -> Dict[str, Any]:
         """Get battery usage statistics."""
@@ -487,9 +494,34 @@ class MobileAvatarServer:
             logger.error("Flask not installed, mobile avatar server unavailable")
     
     def broadcast_state(self, state: Dict[str, Any]):
-        """Broadcast state update to all connected clients."""
-        # TODO: Implement WebSocket broadcast
-        pass
+        """Broadcast state update to all connected clients via WebSocket."""
+        if not hasattr(self, '_websocket_clients'):
+            self._websocket_clients = set()
+        
+        # Try WebSocket broadcast (flask-socketio or websockets)
+        try:
+            from flask_socketio import emit
+            emit('avatar_state', state, broadcast=True, namespace='/avatar')
+            return
+        except ImportError:
+            pass
+        
+        # Fallback: HTTP Server-Sent Events (SSE) style
+        # Store state for polling clients
+        self._last_broadcast_state = state
+        self._last_broadcast_time = time.time()
+        
+        # Also try simple socket broadcast for any raw WebSocket clients
+        dead_clients = set()
+        for ws_client in self._websocket_clients:
+            try:
+                import json
+                ws_client.send(json.dumps({'type': 'avatar_state', 'data': state}))
+            except Exception:
+                dead_clients.add(ws_client)
+        
+        # Remove dead clients
+        self._websocket_clients -= dead_clients
 
 
 def create_mobile_avatar_server(avatar_controller, port: int = 5001) -> MobileAvatarServer:

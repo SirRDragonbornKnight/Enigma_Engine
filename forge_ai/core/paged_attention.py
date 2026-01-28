@@ -420,6 +420,277 @@ class PagedKVCache:
 
 
 # =============================================================================
+# Quantized KV Cache
+# =============================================================================
+
+class QuantizedKVCache:
+    """
+    KV-cache with INT8 quantization for memory efficiency.
+    
+    Quantizes keys and values to INT8 with per-tensor scale factors,
+    reducing memory usage by ~50% compared to FP16.
+    
+    Usage:
+        cache = QuantizedKVCache(
+            num_layers=12,
+            num_heads=8,
+            head_dim=64,
+            max_seq_len=2048
+        )
+        
+        # Write with automatic quantization
+        cache.write(seq_id=0, layer=0, keys=k, values=v)
+        
+        # Read with automatic dequantization
+        k, v = cache.read(seq_id=0, layer=0)
+    """
+    
+    def __init__(
+        self,
+        num_layers: int,
+        num_heads: int,
+        head_dim: int,
+        max_seq_len: int = 2048,
+        device: Optional[torch.device] = None,
+        quantize_keys: bool = True,
+        quantize_values: bool = True,
+    ):
+        """
+        Initialize quantized KV cache.
+        
+        Args:
+            num_layers: Number of transformer layers
+            num_heads: Number of attention heads
+            head_dim: Dimension per head
+            max_seq_len: Maximum sequence length
+            device: Device for cache
+            quantize_keys: Whether to quantize keys
+            quantize_values: Whether to quantize values
+        """
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.head_dim = head_dim
+        self.max_seq_len = max_seq_len
+        self.device = device
+        self.quantize_keys = quantize_keys
+        self.quantize_values = quantize_values
+        
+        # Quantized cache storage (INT8)
+        if quantize_keys:
+            self.key_cache = torch.zeros(
+                (num_layers, max_seq_len, num_heads, head_dim),
+                dtype=torch.int8, device=device
+            )
+            self.key_scale = torch.zeros(
+                (num_layers, max_seq_len), dtype=torch.float32, device=device
+            )
+        else:
+            self.key_cache = torch.zeros(
+                (num_layers, max_seq_len, num_heads, head_dim),
+                dtype=torch.float16, device=device
+            )
+            self.key_scale = None
+        
+        if quantize_values:
+            self.value_cache = torch.zeros(
+                (num_layers, max_seq_len, num_heads, head_dim),
+                dtype=torch.int8, device=device
+            )
+            self.value_scale = torch.zeros(
+                (num_layers, max_seq_len), dtype=torch.float32, device=device
+            )
+        else:
+            self.value_cache = torch.zeros(
+                (num_layers, max_seq_len, num_heads, head_dim),
+                dtype=torch.float16, device=device
+            )
+            self.value_scale = None
+        
+        # Track sequence lengths
+        self.seq_lengths: Dict[int, int] = {}
+        
+        # Offset for each sequence in the cache
+        self.seq_offsets: Dict[int, int] = {}
+        self._next_offset = 0
+        
+        logger.info(f"[QuantizedKV] Initialized {num_layers}L x {max_seq_len}T "
+                   f"({self._get_cache_size_mb():.1f} MB)")
+    
+    def _get_cache_size_mb(self) -> float:
+        """Get total cache size in MB."""
+        # INT8 = 1 byte, FP32 scale = 4 bytes per position
+        bytes_per_element_q = 1  # INT8
+        bytes_per_element_f = 2  # FP16
+        
+        key_bytes = (
+            self.num_layers * self.max_seq_len * self.num_heads * self.head_dim *
+            (bytes_per_element_q if self.quantize_keys else bytes_per_element_f)
+        )
+        value_bytes = (
+            self.num_layers * self.max_seq_len * self.num_heads * self.head_dim *
+            (bytes_per_element_q if self.quantize_values else bytes_per_element_f)
+        )
+        
+        # Add scale storage
+        scale_bytes = 0
+        if self.quantize_keys:
+            scale_bytes += self.num_layers * self.max_seq_len * 4
+        if self.quantize_values:
+            scale_bytes += self.num_layers * self.max_seq_len * 4
+        
+        return (key_bytes + value_bytes + scale_bytes) / (1024 * 1024)
+    
+    def _quantize(self, tensor: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Quantize tensor to INT8 with per-row scale."""
+        # Compute scale for each position (row)
+        # Shape: [seq_len, num_heads, head_dim] -> scale: [seq_len]
+        flat = tensor.view(tensor.shape[0], -1)
+        scale = flat.abs().max(dim=-1).values / 127.0
+        scale = torch.where(scale == 0, torch.ones_like(scale), scale)
+        
+        # Quantize
+        quantized = (tensor / scale.view(-1, 1, 1)).round().to(torch.int8)
+        
+        return quantized, scale
+    
+    def _dequantize(self, quantized: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+        """Dequantize INT8 tensor back to FP16."""
+        return (quantized.float() * scale.view(-1, 1, 1)).half()
+    
+    def allocate(self, seq_id: int, num_tokens: int) -> bool:
+        """Allocate space for a sequence."""
+        if self._next_offset + num_tokens > self.max_seq_len:
+            logger.warning(f"[QuantizedKV] Cannot allocate {num_tokens} tokens")
+            return False
+        
+        self.seq_offsets[seq_id] = self._next_offset
+        self.seq_lengths[seq_id] = 0
+        self._next_offset += num_tokens
+        
+        return True
+    
+    def free(self, seq_id: int):
+        """Free a sequence (soft delete - just mark as unused)."""
+        if seq_id in self.seq_offsets:
+            del self.seq_offsets[seq_id]
+            del self.seq_lengths[seq_id]
+    
+    def write(self, seq_id: int, layer: int, keys: torch.Tensor, values: torch.Tensor):
+        """
+        Write keys and values to cache with quantization.
+        
+        Args:
+            seq_id: Sequence ID
+            layer: Layer index
+            keys: Key tensor [seq_len, num_heads, head_dim]
+            values: Value tensor [seq_len, num_heads, head_dim]
+        """
+        if seq_id not in self.seq_offsets:
+            # Auto-allocate with some buffer
+            self.allocate(seq_id, keys.shape[0] + 128)
+        
+        offset = self.seq_offsets[seq_id]
+        length = self.seq_lengths.get(seq_id, 0)
+        new_len = keys.shape[0]
+        
+        start_idx = offset + length
+        end_idx = start_idx + new_len
+        
+        if end_idx > self.max_seq_len:
+            logger.warning(f"[QuantizedKV] Cache overflow for seq {seq_id}")
+            return
+        
+        # Quantize and store
+        if self.quantize_keys:
+            q_keys, k_scale = self._quantize(keys)
+            self.key_cache[layer, start_idx:end_idx] = q_keys
+            self.key_scale[layer, start_idx:end_idx] = k_scale
+        else:
+            self.key_cache[layer, start_idx:end_idx] = keys.half()
+        
+        if self.quantize_values:
+            q_values, v_scale = self._quantize(values)
+            self.value_cache[layer, start_idx:end_idx] = q_values
+            self.value_scale[layer, start_idx:end_idx] = v_scale
+        else:
+            self.value_cache[layer, start_idx:end_idx] = values.half()
+        
+        self.seq_lengths[seq_id] = length + new_len
+    
+    def read(self, seq_id: int, layer: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Read and dequantize keys and values from cache.
+        
+        Args:
+            seq_id: Sequence ID
+            layer: Layer index
+            
+        Returns:
+            (keys, values) as FP16 tensors
+        """
+        if seq_id not in self.seq_offsets:
+            return (
+                torch.empty(0, self.num_heads, self.head_dim, 
+                           dtype=torch.float16, device=self.device),
+                torch.empty(0, self.num_heads, self.head_dim,
+                           dtype=torch.float16, device=self.device)
+            )
+        
+        offset = self.seq_offsets[seq_id]
+        length = self.seq_lengths.get(seq_id, 0)
+        
+        if length == 0:
+            return (
+                torch.empty(0, self.num_heads, self.head_dim,
+                           dtype=torch.float16, device=self.device),
+                torch.empty(0, self.num_heads, self.head_dim,
+                           dtype=torch.float16, device=self.device)
+            )
+        
+        end_idx = offset + length
+        
+        # Dequantize
+        if self.quantize_keys:
+            keys = self._dequantize(
+                self.key_cache[layer, offset:end_idx],
+                self.key_scale[layer, offset:end_idx]
+            )
+        else:
+            keys = self.key_cache[layer, offset:end_idx]
+        
+        if self.quantize_values:
+            values = self._dequantize(
+                self.value_cache[layer, offset:end_idx],
+                self.value_scale[layer, offset:end_idx]
+            )
+        else:
+            values = self.value_cache[layer, offset:end_idx]
+        
+        return keys, values
+    
+    def get_length(self, seq_id: int) -> int:
+        """Get current length of a sequence."""
+        return self.seq_lengths.get(seq_id, 0)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        used_tokens = sum(self.seq_lengths.values())
+        return {
+            "max_seq_len": self.max_seq_len,
+            "used_tokens": used_tokens,
+            "free_tokens": self.max_seq_len - self._next_offset,
+            "utilization": used_tokens / self.max_seq_len if self.max_seq_len > 0 else 0,
+            "active_sequences": len(self.seq_lengths),
+            "cache_size_mb": self._get_cache_size_mb(),
+            "quantize_keys": self.quantize_keys,
+            "quantize_values": self.quantize_values,
+        }
+
+
+# =============================================================================
 # Paged Attention Layer
 # =============================================================================
 

@@ -192,11 +192,14 @@ class ModelCollaboration:
                 success=True,
             )
             
+            # Extract confidence from result if available
+            confidence = self._extract_confidence(result)
+            
             return CollaborationResponse(
                 success=True,
                 responding_model=target_model,
                 result=result,
-                confidence=1.0,  # TODO: Extract from result if available
+                confidence=confidence,
                 processing_time=time.time() - start_time,
             )
         
@@ -209,6 +212,49 @@ class ModelCollaboration:
                 error=str(e),
                 processing_time=time.time() - start_time,
             )
+    
+    def _extract_confidence(self, result: Any) -> float:
+        """
+        Extract confidence score from model result.
+        
+        Looks for confidence in various formats:
+        - Direct 'confidence' key in dict result
+        - 'metadata.confidence' nested in dict
+        - Object with confidence attribute
+        - Logprobs-based calculation
+        
+        Returns:
+            Float confidence between 0.0 and 1.0
+        """
+        if result is None:
+            return 0.0
+        
+        # Dict result with confidence key
+        if isinstance(result, dict):
+            if 'confidence' in result:
+                return float(result['confidence'])
+            if 'metadata' in result and isinstance(result['metadata'], dict):
+                if 'confidence' in result['metadata']:
+                    return float(result['metadata']['confidence'])
+            # Try logprobs-based confidence
+            if 'logprobs' in result and result['logprobs']:
+                import math
+                # Average probability of tokens
+                probs = [math.exp(lp) for lp in result['logprobs'] if lp is not None]
+                if probs:
+                    return sum(probs) / len(probs)
+            # Perplexity to confidence conversion
+            if 'perplexity' in result:
+                # Lower perplexity = higher confidence
+                ppl = float(result['perplexity'])
+                return max(0.0, min(1.0, 1.0 / (1.0 + math.log(ppl) / 10)))
+        
+        # Object with confidence attribute
+        if hasattr(result, 'confidence'):
+            return float(result.confidence)
+        
+        # Default confidence
+        return 1.0
     
     # -------------------------------------------------------------------------
     # CONFIDENCE-BASED HANDOFF

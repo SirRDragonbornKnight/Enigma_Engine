@@ -524,6 +524,8 @@ def api_start_training():
     model_name = data.get('model_name', 'forge_ai')
     model_size = data.get('model_size', 'small')
     epochs = data.get('epochs', 30)
+    learning_rate = data.get('learning_rate', 0.0001)
+    batch_size = data.get('batch_size', 8)
     
     # Update training state
     _training_state['running'] = True
@@ -532,13 +534,75 @@ def api_start_training():
     _training_state['total_epochs'] = epochs
     _training_state['status'] = 'starting'
     
-    # Note: Actual training would be done in a background thread
-    # For now, this is a placeholder
+    def run_training():
+        """Background training thread."""
+        try:
+            # Import training components
+            from forge_ai.core.training import Trainer, TrainingConfig
+            from forge_ai.core.model_registry import get_model_registry
+            
+            registry = get_model_registry()
+            
+            # Create or load model
+            _training_state['status'] = 'loading_model'
+            if not registry.model_exists(model_name):
+                registry.create_model(model_name, size=model_size)
+            model = registry.load_model(model_name)
+            
+            # Load training data
+            _training_state['status'] = 'loading_data'
+            from pathlib import Path
+            data_path = Path('data/training.txt')
+            if not data_path.exists():
+                _training_state['status'] = 'error'
+                _training_state['error'] = 'No training data found'
+                _training_state['running'] = False
+                return
+            
+            # Configure training
+            config = TrainingConfig(
+                epochs=epochs,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                model_name=model_name,
+            )
+            
+            # Progress callback
+            def on_progress(epoch, loss, progress):
+                _training_state['epoch'] = epoch
+                _training_state['loss'] = loss
+                _training_state['progress'] = int(progress * 100)
+                _training_state['status'] = f'training_epoch_{epoch}'
+            
+            # Train
+            _training_state['status'] = 'training'
+            trainer = Trainer(model, config)
+            trainer.on_progress = on_progress
+            trainer.train(str(data_path))
+            
+            # Save model
+            _training_state['status'] = 'saving'
+            registry.save_model(model_name, model)
+            
+            _training_state['status'] = 'completed'
+            _training_state['progress'] = 100
+            
+        except Exception as e:
+            _training_state['status'] = 'error'
+            _training_state['error'] = str(e)
+        finally:
+            _training_state['running'] = False
+    
+    # Start training in background thread
+    import threading
+    thread = threading.Thread(target=run_training, daemon=True)
+    thread.start()
     
     return jsonify({
         'success': True,
-        'message': 'Training started',
-        'note': 'Background training not yet implemented'
+        'message': 'Training started in background',
+        'model_name': model_name,
+        'epochs': epochs,
     })
 
 

@@ -102,40 +102,194 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
-// Background sync (future feature)
+// Background sync for offline messages
 self.addEventListener('sync', (event) => {
     console.log('Background sync:', event.tag);
     
     if (event.tag === 'sync-messages') {
-        // Future: Implement message synchronization
-        // For now, just log that sync was requested
-        console.log('Message sync requested but not yet implemented');
+        event.waitUntil(syncOfflineMessages());
+    } else if (event.tag === 'sync-settings') {
+        event.waitUntil(syncSettings());
     }
 });
 
-// Push notifications (future feature)
+// Sync offline messages to server
+async function syncOfflineMessages() {
+    try {
+        // Open IndexedDB for offline messages
+        const db = await openOfflineDB();
+        const messages = await getAllOfflineMessages(db);
+        
+        for (const message of messages) {
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: message.content,
+                        timestamp: message.timestamp
+                    })
+                });
+                
+                if (response.ok) {
+                    // Remove synced message from offline storage
+                    await deleteOfflineMessage(db, message.id);
+                    console.log('Synced offline message:', message.id);
+                }
+            } catch (error) {
+                console.error('Failed to sync message:', message.id, error);
+            }
+        }
+    } catch (error) {
+        console.error('Background sync failed:', error);
+    }
+}
+
+// Sync settings
+async function syncSettings() {
+    try {
+        const settings = await getLocalSettings();
+        if (settings) {
+            await fetch('/api/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ settings })
+            });
+            console.log('Settings synced');
+        }
+    } catch (error) {
+        console.error('Settings sync failed:', error);
+    }
+}
+
+// IndexedDB helpers for offline storage
+function openOfflineDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('ForgeAI_Offline', 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('messages')) {
+                db.createObjectStore('messages', { keyPath: 'id', autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains('settings')) {
+                db.createObjectStore('settings', { keyPath: 'key' });
+            }
+        };
+    });
+}
+
+function getAllOfflineMessages(db) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('messages', 'readonly');
+        const store = tx.objectStore('messages');
+        const request = store.getAll();
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+    });
+}
+
+function deleteOfflineMessage(db, id) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('messages', 'readwrite');
+        const store = tx.objectStore('messages');
+        const request = store.delete(id);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+    });
+}
+
+function getLocalSettings() {
+    return new Promise((resolve) => {
+        try {
+            const settings = localStorage.getItem('forgeai_settings');
+            resolve(settings ? JSON.parse(settings) : null);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+// Push notifications with proper data handling
 self.addEventListener('push', (event) => {
     console.log('Push notification received');
     
-    const options = {
-        body: event.data ? event.data.text() : 'New message from ForgeAI',
+    let notificationData = {
+        title: 'ForgeAI',
+        body: 'New message from ForgeAI',
         icon: '/static/icons/icon-192.png',
         badge: '/static/icons/badge.png',
-        vibrate: [200, 100, 200]
+        vibrate: [200, 100, 200],
+        tag: 'forge-notification',
+        requireInteraction: false,
+        data: { url: '/' }
     };
     
+    // Parse push data if available
+    if (event.data) {
+        try {
+            const pushData = event.data.json();
+            notificationData = {
+                ...notificationData,
+                title: pushData.title || notificationData.title,
+                body: pushData.body || pushData.message || notificationData.body,
+                data: { 
+                    url: pushData.url || '/',
+                    action: pushData.action,
+                    payload: pushData.payload
+                }
+            };
+        } catch (e) {
+            // Plain text fallback
+            notificationData.body = event.data.text() || notificationData.body;
+        }
+    }
+    
     event.waitUntil(
-        self.registration.showNotification('ForgeAI', options)
+        self.registration.showNotification(notificationData.title, {
+            body: notificationData.body,
+            icon: notificationData.icon,
+            badge: notificationData.badge,
+            vibrate: notificationData.vibrate,
+            tag: notificationData.tag,
+            requireInteraction: notificationData.requireInteraction,
+            data: notificationData.data,
+            actions: [
+                { action: 'open', title: 'Open' },
+                { action: 'dismiss', title: 'Dismiss' }
+            ]
+        })
     );
 });
 
-// Notification click
+// Notification click with action handling
 self.addEventListener('notificationclick', (event) => {
-    console.log('Notification clicked');
+    console.log('Notification clicked:', event.action);
     
     event.notification.close();
     
+    if (event.action === 'dismiss') {
+        return;
+    }
+    
+    const url = event.notification.data?.url || '/';
+    
     event.waitUntil(
-        clients.openWindow('/')
+        clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then((windowClients) => {
+                // Focus existing window if available
+                for (const client of windowClients) {
+                    if (client.url.includes(self.location.origin) && 'focus' in client) {
+                        return client.focus();
+                    }
+                }
+                // Open new window
+                return clients.openWindow(url);
+            })
     );
 });

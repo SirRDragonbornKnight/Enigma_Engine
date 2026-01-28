@@ -399,19 +399,71 @@ class ModuleUpdater:
             
         Returns:
             Module data, or None if failed
-            
-        Note: Stub implementation
         """
-        # Stub - would download from registry in production
-        logger.debug(f"Downloading '{module_id}' version {version}")
+        logger.info(f"Downloading '{module_id}' version {version}")
         
-        # Would make HTTP request and download files
-        # For now, return dummy data
-        return {
-            'module_id': module_id,
-            'version': version,
-            'data': b'<module data>'
-        }
+        try:
+            import urllib.request
+            import urllib.error
+            import tempfile
+            import zipfile
+            import hashlib
+            
+            # Try to get download URL from registry
+            update_info = self.check_for_update(module_id)
+            if not update_info or not update_info.download_url:
+                # Construct default URL from module registry
+                base_url = "https://github.com/ForgeAI/modules/releases/download"
+                download_url = f"{base_url}/{module_id}/{version}/{module_id}-{version}.zip"
+            else:
+                download_url = update_info.download_url
+            
+            # Download to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                
+                logger.debug(f"Downloading from {download_url}")
+                
+                try:
+                    with urllib.request.urlopen(download_url, timeout=60) as response:
+                        data = response.read()
+                        tmp_file.write(data)
+                except urllib.error.HTTPError as e:
+                    logger.error(f"HTTP error downloading module: {e.code}")
+                    return None
+                except urllib.error.URLError as e:
+                    logger.error(f"URL error downloading module: {e.reason}")
+                    return None
+            
+            # Read and parse the downloaded file
+            module_data = {
+                'module_id': module_id,
+                'version': version,
+                'file_path': str(tmp_path),
+                'checksum': hashlib.sha256(data).hexdigest(),
+            }
+            
+            # Try to extract and read module info
+            try:
+                with zipfile.ZipFile(tmp_path, 'r') as zf:
+                    # Look for module.json in the archive
+                    if 'module.json' in zf.namelist():
+                        with zf.open('module.json') as f:
+                            import json
+                            info = json.load(f)
+                            module_data['info'] = info
+                    
+                    module_data['files'] = zf.namelist()
+            except zipfile.BadZipFile:
+                # Not a zip file, might be raw Python module
+                module_data['data'] = data
+            
+            logger.info(f"Downloaded {len(data)} bytes for '{module_id}'")
+            return module_data
+            
+        except Exception as e:
+            logger.error(f"Download failed for '{module_id}': {e}")
+            return None
     
     def _verify_module(self, module_data: Dict[str, Any]) -> bool:
         """
@@ -449,14 +501,73 @@ class ModuleUpdater:
         Returns:
             True if successful
         """
-        # Stub - would copy files and update registry in production
-        logger.debug(f"Installing module '{module_id}'")
+        logger.info(f"Installing module '{module_id}'")
         
-        # Would extract files to proper location
-        # Update module registry
-        # Re-register with manager
-        
-        return True
+        try:
+            import shutil
+            import zipfile
+            
+            # Determine installation directory
+            from ..config import CONFIG
+            modules_dir = Path(CONFIG.BASE_DIR) / "forge_ai" / "modules" / "installed"
+            modules_dir.mkdir(parents=True, exist_ok=True)
+            
+            install_dir = modules_dir / module_id
+            
+            # Remove existing installation if present
+            if install_dir.exists():
+                shutil.rmtree(install_dir)
+            
+            install_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Install from zip file or raw data
+            if 'file_path' in module_data and Path(module_data['file_path']).exists():
+                file_path = Path(module_data['file_path'])
+                
+                try:
+                    # Extract zip file
+                    with zipfile.ZipFile(file_path, 'r') as zf:
+                        zf.extractall(install_dir)
+                    
+                    # Clean up temp file
+                    file_path.unlink()
+                    
+                except zipfile.BadZipFile:
+                    # Copy raw file instead
+                    shutil.copy(file_path, install_dir / f"{module_id}.py")
+                    file_path.unlink()
+                    
+            elif 'data' in module_data:
+                # Write raw data to module file
+                module_file = install_dir / f"{module_id}.py"
+                module_file.write_bytes(module_data['data'])
+            
+            # Update module registry
+            registry_file = modules_dir / "registry.json"
+            registry = {}
+            
+            if registry_file.exists():
+                import json
+                with open(registry_file) as f:
+                    registry = json.load(f)
+            
+            registry[module_id] = {
+                'version': module_data.get('version', '1.0.0'),
+                'install_dir': str(install_dir),
+                'installed_at': __import__('time').time(),
+                'checksum': module_data.get('checksum'),
+            }
+            
+            import json
+            with open(registry_file, 'w') as f:
+                json.dump(registry, f, indent=2)
+            
+            logger.info(f"Successfully installed '{module_id}' to {install_dir}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Installation failed for '{module_id}': {e}")
+            return False
     
     def _restore_backup(self, module_id: str, backup_path: Path) -> bool:
         """

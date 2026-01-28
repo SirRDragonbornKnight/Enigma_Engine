@@ -466,8 +466,60 @@ class GamingMode:
         
         def process():
             for task in tasks:
-                # TODO: Dispatch to appropriate handler
-                logger.debug(f"Processing deferred: {task['type']}")
+                task_type = task.get('type', 'unknown')
+                task_data = task.get('data', {})
+                
+                try:
+                    # Dispatch to appropriate handler based on task type
+                    if task_type == 'text_generation':
+                        # Deferred text generation
+                        from .inference import ForgeEngine
+                        engine = ForgeEngine()
+                        if 'prompt' in task_data:
+                            result = engine.generate(task_data['prompt'], max_tokens=task_data.get('max_tokens', 100))
+                            logger.debug(f"Completed deferred text generation: {len(result)} chars")
+                    
+                    elif task_type == 'embedding':
+                        # Deferred embedding computation
+                        from ..memory.vector_db import get_embedding_function
+                        embed_fn = get_embedding_function()
+                        if 'texts' in task_data:
+                            embeddings = embed_fn(task_data['texts'])
+                            logger.debug(f"Computed {len(embeddings)} deferred embeddings")
+                    
+                    elif task_type == 'memory_save':
+                        # Deferred memory operations
+                        from ..memory.manager import ConversationManager
+                        if 'conversation_id' in task_data and 'messages' in task_data:
+                            manager = ConversationManager()
+                            for msg in task_data['messages']:
+                                manager.add_message(task_data['conversation_id'], msg['role'], msg['content'])
+                            logger.debug(f"Saved {len(task_data['messages'])} deferred messages")
+                    
+                    elif task_type == 'training_example':
+                        # Deferred training data collection
+                        from ..learning.training_scheduler import get_training_scheduler
+                        scheduler = get_training_scheduler()
+                        if 'example' in task_data:
+                            scheduler.add_example(task_data['example'])
+                            logger.debug("Added deferred training example")
+                    
+                    elif task_type == 'notification':
+                        # Deferred notification
+                        try:
+                            from ..utils.notifications import send_notification
+                            send_notification(
+                                task_data.get('title', 'ForgeAI'),
+                                task_data.get('message', '')
+                            )
+                        except ImportError:
+                            logger.debug(f"Deferred notification: {task_data.get('message', '')}")
+                    
+                    else:
+                        logger.warning(f"Unknown deferred task type: {task_type}")
+                        
+                except Exception as e:
+                    logger.error(f"Error processing deferred task {task_type}: {e}")
         
         threading.Thread(target=process, daemon=True).start()
     

@@ -129,7 +129,7 @@ class ForgeWebClient {
         
         // Voice button (placeholder)
         this.voiceBtn.addEventListener('click', () => {
-            this.addMessage('Voice input not yet implemented', 'system');
+            this.startVoiceInput();
         });
         
         // Menu
@@ -337,6 +337,91 @@ Disk: ${data.disk_percent}%`;
             } catch (error) {
                 console.error('Failed to load settings:', error);
             }
+        }
+    }
+    
+    startVoiceInput() {
+        // Check for Web Speech API support
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            this.addMessage('Voice input not supported in this browser. Try Chrome or Edge.', 'system');
+            return;
+        }
+        
+        // Create recognition instance
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        
+        // Visual feedback
+        this.voiceBtn.classList.add('listening');
+        this.voiceBtn.style.backgroundColor = '#ff4444';
+        this.addMessage('Listening...', 'system');
+        
+        let finalTranscript = '';
+        
+        recognition.onresult = (event) => {
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+            
+            // Show interim results in input field
+            if (interimTranscript) {
+                this.messageInput.value = finalTranscript + interimTranscript;
+            }
+        };
+        
+        recognition.onend = () => {
+            // Reset visual feedback
+            this.voiceBtn.classList.remove('listening');
+            this.voiceBtn.style.backgroundColor = '';
+            
+            if (finalTranscript) {
+                this.messageInput.value = finalTranscript;
+                // Auto-send the message
+                this.sendMessage();
+            } else {
+                this.addMessage('No speech detected. Try again.', 'system');
+            }
+        };
+        
+        recognition.onerror = (event) => {
+            this.voiceBtn.classList.remove('listening');
+            this.voiceBtn.style.backgroundColor = '';
+            
+            let errorMsg = 'Voice recognition error';
+            switch (event.error) {
+                case 'no-speech':
+                    errorMsg = 'No speech detected. Try again.';
+                    break;
+                case 'audio-capture':
+                    errorMsg = 'No microphone found. Check your device.';
+                    break;
+                case 'not-allowed':
+                    errorMsg = 'Microphone access denied. Allow access in browser settings.';
+                    break;
+                default:
+                    errorMsg = `Voice error: ${event.error}`;
+            }
+            this.addMessage(errorMsg, 'system');
+        };
+        
+        // Start recognition
+        try {
+            recognition.start();
+        } catch (error) {
+            this.addMessage('Could not start voice recognition: ' + error.message, 'system');
+            this.voiceBtn.classList.remove('listening');
+            this.voiceBtn.style.backgroundColor = '';
         }
     }
     

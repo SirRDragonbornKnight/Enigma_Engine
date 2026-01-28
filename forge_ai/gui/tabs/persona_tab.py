@@ -246,12 +246,16 @@ class PersonaTab(QWidget):
         details_layout.addRow("Response Style:", self.style_combo)
         
         self.voice_combo = QComboBox()
-        self.voice_combo.addItems(["default"])  # TODO: Load from voice profiles
+        self.voice_combo.addItems(["default"])
+        # Load voice profiles from data directory
+        self._load_voice_profiles()
         self.voice_combo.currentTextChanged.connect(self.on_details_changed)
         details_layout.addRow("Voice Profile:", self.voice_combo)
         
         self.avatar_combo = QComboBox()
-        self.avatar_combo.addItems(["default"])  # TODO: Load from avatar presets
+        self.avatar_combo.addItems(["default"])
+        # Load avatar presets from data directory
+        self._load_avatar_presets()
         self.avatar_combo.currentTextChanged.connect(self.on_details_changed)
         details_layout.addRow("Avatar Preset:", self.avatar_combo)
         
@@ -314,6 +318,57 @@ class PersonaTab(QWidget):
                 item.setForeground(Qt.green)
             
             self.persona_list.addItem(item)
+    
+    def _load_voice_profiles(self):
+        """Load voice profiles from data directory."""
+        import os
+        from pathlib import Path
+        
+        # Voice profiles directory
+        voice_dir = Path("data/voice_profiles")
+        if voice_dir.exists():
+            for profile_file in voice_dir.glob("*.json"):
+                profile_name = profile_file.stem
+                if profile_name not in [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]:
+                    self.voice_combo.addItem(profile_name)
+        
+        # Also try to get system voices if pyttsx3 is available
+        try:
+            import pyttsx3
+            engine = pyttsx3.init()
+            voices = engine.getProperty('voices')
+            for voice in voices[:10]:  # Limit to first 10
+                voice_name = voice.name.split()[-1] if voice.name else voice.id
+                if voice_name not in [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]:
+                    self.voice_combo.addItem(voice_name)
+        except Exception:
+            pass
+    
+    def _load_avatar_presets(self):
+        """Load avatar presets from data directory."""
+        import os
+        from pathlib import Path
+        
+        # Avatar presets directory
+        avatar_dir = Path("data/avatar")
+        if avatar_dir.exists():
+            # Load .png, .jpg images as presets
+            for img_file in avatar_dir.glob("*.png"):
+                preset_name = img_file.stem
+                if preset_name not in [self.avatar_combo.itemText(i) for i in range(self.avatar_combo.count())]:
+                    self.avatar_combo.addItem(preset_name)
+            for img_file in avatar_dir.glob("*.jpg"):
+                preset_name = img_file.stem
+                if preset_name not in [self.avatar_combo.itemText(i) for i in range(self.avatar_combo.count())]:
+                    self.avatar_combo.addItem(preset_name)
+        
+        # Also load VRM models if any
+        vrm_dir = Path("data/avatar/vrm")
+        if vrm_dir.exists():
+            for vrm_file in vrm_dir.glob("*.vrm"):
+                preset_name = f"vrm:{vrm_file.stem}"
+                if preset_name not in [self.avatar_combo.itemText(i) for i in range(self.avatar_combo.count())]:
+                    self.avatar_combo.addItem(preset_name)
     
     def on_persona_selected(self, item):
         """Handle persona selection."""

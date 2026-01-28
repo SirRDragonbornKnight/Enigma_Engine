@@ -102,7 +102,69 @@ def main():
         print(f"Created {output_name}")
     
     elif args.to == "onnx":
-        print("ONNX export not yet implemented")
+        import torch
+        
+        try:
+            import onnx
+        except ImportError:
+            print("Error: ONNX not installed. Run: pip install onnx")
+            sys.exit(1)
+        
+        print(f"Exporting {args.model} to ONNX format...")
+        
+        model = registry.load_model(args.model)
+        model.eval()
+        
+        # Get model info for dynamic axes
+        vocab_size = model.vocab_size
+        
+        # Create dummy input (batch_size=1, seq_len=10)
+        dummy_input = torch.randint(0, vocab_size, (1, 10))
+        
+        output_path = args.output or f"{args.model}.onnx"
+        
+        # Export to ONNX
+        try:
+            torch.onnx.export(
+                model,
+                dummy_input,
+                output_path,
+                export_params=True,
+                opset_version=14,
+                do_constant_folding=True,
+                input_names=['input_ids'],
+                output_names=['logits'],
+                dynamic_axes={
+                    'input_ids': {0: 'batch_size', 1: 'sequence_length'},
+                    'logits': {0: 'batch_size', 1: 'sequence_length'}
+                },
+                verbose=False
+            )
+            
+            # Validate the exported model
+            onnx_model = onnx.load(output_path)
+            onnx.checker.check_model(onnx_model)
+            
+            print(f"Saved ONNX model to {output_path}")
+            print(f"Model inputs: {[inp.name for inp in onnx_model.graph.input]}")
+            print(f"Model outputs: {[out.name for out in onnx_model.graph.output]}")
+            
+            # Try to simplify if onnx-simplifier is available
+            try:
+                import onnxsim
+                simplified_model, check = onnxsim.simplify(onnx_model)
+                if check:
+                    simplified_path = output_path.replace('.onnx', '_simplified.onnx')
+                    onnx.save(simplified_model, simplified_path)
+                    print(f"Saved simplified model to {simplified_path}")
+            except ImportError:
+                pass
+            
+        except Exception as e:
+            print(f"ONNX export failed: {e}")
+            print("Tip: Some model operations may not be supported by ONNX.")
+            print("     Try using TorchScript export instead.")
+            sys.exit(1)
     
     elif args.to == "torchscript":
         import torch

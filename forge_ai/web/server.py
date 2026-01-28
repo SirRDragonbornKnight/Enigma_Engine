@@ -137,10 +137,40 @@ class ForgeWebServer:
             self.app.mount("/static", StaticFiles(directory=str(self.static_dir)), name="static")
     
     def _setup_cors(self):
-        """Configure CORS."""
+        """Configure CORS with configurable origins."""
+        # Get CORS origins from config
+        try:
+            from ..config import CONFIG
+            
+            # Check for CORS configuration in config
+            if hasattr(CONFIG, 'CORS_ORIGINS') and CONFIG.CORS_ORIGINS:
+                origins = CONFIG.CORS_ORIGINS
+            elif hasattr(CONFIG, 'WEB_CORS_ORIGINS') and CONFIG.WEB_CORS_ORIGINS:
+                origins = CONFIG.WEB_CORS_ORIGINS
+            else:
+                # Try to load from environment variable
+                import os
+                env_origins = os.environ.get('FORGE_CORS_ORIGINS', '')
+                if env_origins:
+                    origins = [o.strip() for o in env_origins.split(',') if o.strip()]
+                else:
+                    # Try to load from settings file
+                    settings_file = CONFIG.DATA_DIR / "web_settings.json"
+                    if settings_file.exists():
+                        import json
+                        with open(settings_file) as f:
+                            settings = json.load(f)
+                            origins = settings.get('cors_origins', ["*"])
+                    else:
+                        # Default: allow all in development
+                        origins = ["*"]
+        except Exception:
+            # Fallback to allow all
+            origins = ["*"]
+        
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],  # TODO: Make configurable
+            allow_origins=origins,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
