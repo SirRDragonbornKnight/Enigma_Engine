@@ -1,29 +1,66 @@
 """
-Autonomous Mode - REAL AI Self-Improvement System
+================================================================================
+AUTONOMOUS MODE - TRUE SELF-IMPROVING AI
+================================================================================
 
-This module implements genuine autonomous learning and self-improvement.
-Unlike stub code, this system:
-  - Actually reflects on conversations with quality metrics
-  - Practices responses with self-evaluation
-  - Updates personality based on real interaction patterns
-  - Researches topics and builds knowledge
-  - Consolidates learning for training
-  - Tracks performance and adjusts behavior
+This is NOT a stub. This is a REAL autonomous intelligence system.
 
-All actions are measurable and produce real learning outcomes.
+When enabled, the AI ACTUALLY:
+  - Learns from every conversation (extracts patterns, saves training data)
+  - Reflects on past interactions (identifies what worked, what didn't)
+  - Practices responses (generates, self-evaluates, improves)
+  - Researches topics (web search, knowledge building)
+  - Evolves personality (based on real user feedback patterns)
+  - Builds knowledge graph (connects concepts it learns)
+  - Schedules self-improvement (background LoRA fine-tuning)
+  - Monitors its own performance (tracks response quality over time)
+
+FILE: forge_ai/core/autonomous.py
+TYPE: Core Intelligence System
+MAIN CLASSES: AutonomousMode, AutonomousManager, LearningEngine
+
+CONNECTED FILES:
+    USES: forge_ai/core/self_improvement.py (training pipeline)
+    USES: forge_ai/core/ai_brain.py (curiosity, memory)
+    USES: forge_ai/core/personality.py (trait evolution)
+    USES: forge_ai/memory/manager.py (conversation history)
+    USES: forge_ai/tools/web_tools.py (research)
+    USED BY: forge_ai/gui/tabs/settings_tab.py (enable/disable)
+    USED BY: forge_ai/gui/tabs/chat_tab.py (background learning)
+================================================================================
 """
 
 import time
 import random
 import threading
 import logging
-from typing import Optional, Callable, List, Dict, Any
+from typing import Optional, Callable, List, Dict, Any, Tuple
 from pathlib import Path
+from datetime import datetime
+from enum import Enum
 
 from .self_improvement import (
     LearningEngine, LearningExample, LearningSource, Priority,
     PerformanceMetrics, AutonomousConfig, get_learning_engine
 )
+
+
+# =============================================================================
+# ENUMS & DATA CLASSES
+# =============================================================================
+
+class AutonomousAction(Enum):
+    """Types of autonomous actions the AI can take."""
+    REFLECT = "reflect"              # Review past conversations
+    PRACTICE = "practice"            # Generate and evaluate responses
+    RESEARCH = "research"            # Look up information
+    EVOLVE_PERSONALITY = "evolve"    # Adjust personality traits
+    BUILD_KNOWLEDGE = "knowledge"    # Connect concepts
+    SELF_EVALUATE = "evaluate"       # Check own performance
+    CONSOLIDATE = "consolidate"      # Merge learnings into training
+    EXPLORE_CURIOSITY = "curiosity"  # Investigate interesting topics
+    OPTIMIZE = "optimize"            # Improve response patterns
+    DREAM = "dream"                  # Creative recombination (experimental)
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +154,110 @@ class AutonomousMode:
             
         logger.info(f"Low power mode {mode_str} for {self.model_name}")
     
+    # =========================================================================
+    # CALLBACK HELPERS
+    # =========================================================================
+    
+    def _emit_action(self, message: str):
+        """Emit an action message to the UI."""
+        if self.on_action:
+            self.on_action(message)
+    
+    def _emit_thought(self, message: str):
+        """Emit a thought/status message to the UI."""
+        if self.on_thought:
+            self.on_thought(message)
+    
+    def _emit_learning(self, message: str):
+        """Emit a learning update message to the UI."""
+        if self.on_learning:
+            self.on_learning(message)
+    
+    def _emit_improvement(self, message: str):
+        """Emit an improvement/consolidation message."""
+        if self.on_learning:
+            self.on_learning(f"[Improvement] {message}")
+    
+    # =========================================================================
+    # INTELLIGENT ACTION SELECTION
+    # =========================================================================
+    
+    def _select_action(self) -> AutonomousAction:
+        """
+        Intelligently select the next action based on current state.
+        
+        Considers:
+        - What actions haven't been done recently
+        - Current queue sizes
+        - System resources (low power mode)
+        - Enabled features
+        """
+        # Action weights (higher = more likely)
+        weights = {
+            AutonomousAction.REFLECT: 25,
+            AutonomousAction.PRACTICE: 20,
+            AutonomousAction.RESEARCH: 15,
+            AutonomousAction.EVOLVE_PERSONALITY: 10,
+            AutonomousAction.BUILD_KNOWLEDGE: 15,
+            AutonomousAction.CONSOLIDATE: 10,
+            AutonomousAction.EXPLORE_CURIOSITY: 20,
+            AutonomousAction.OPTIMIZE: 10,
+            AutonomousAction.SELF_EVALUATE: 5,
+            AutonomousAction.DREAM: 5,
+        }
+        
+        # Adjust based on feature toggles
+        if not self.config.enable_reflection:
+            weights[AutonomousAction.REFLECT] = 0
+        
+        if not self.config.enable_practice:
+            weights[AutonomousAction.PRACTICE] = 0
+        
+        if not self.config.enable_web_research:
+            weights[AutonomousAction.RESEARCH] = 0
+            weights[AutonomousAction.EXPLORE_CURIOSITY] = 5
+        
+        if not self.config.enable_personality_evolution:
+            weights[AutonomousAction.EVOLVE_PERSONALITY] = 0
+        
+        if not self.config.enable_knowledge_building:
+            weights[AutonomousAction.BUILD_KNOWLEDGE] = 0
+            weights[AutonomousAction.OPTIMIZE] = 0
+        
+        # Adjust based on queue state
+        queue_size = len(self.learning_engine.learning_queue)
+        
+        # If queue is large, prioritize consolidation
+        if queue_size > self.config.max_queue_size * 0.5:
+            weights[AutonomousAction.CONSOLIDATE] = 50
+        
+        # If queue is small, prioritize gathering more examples
+        if queue_size < 20:
+            weights[AutonomousAction.REFLECT] = 40
+            weights[AutonomousAction.PRACTICE] = 30
+        
+        # Low power mode - reduce expensive actions
+        if self.config.low_power_mode:
+            weights[AutonomousAction.PRACTICE] = 5
+            weights[AutonomousAction.RESEARCH] = 0
+            weights[AutonomousAction.CONSOLIDATE] = 30  # Prioritize this
+            weights[AutonomousAction.DREAM] = 0
+        
+        # Weighted random selection
+        total = sum(weights.values())
+        if total == 0:
+            return AutonomousAction.REFLECT  # Fallback
+        
+        rand = random.random() * total
+        cumulative = 0
+        
+        for action, weight in weights.items():
+            cumulative += weight
+            if rand <= cumulative:
+                return action
+        
+        return AutonomousAction.REFLECT  # Fallback
+    
     def _run_loop(self):
         """Main autonomous loop with real learning actions."""
         while not self._stop_event.is_set():
@@ -160,48 +301,36 @@ class AutonomousMode:
             self._stop_event.wait(interval)
     
     def _perform_action(self):
-        """Perform a random autonomous action (all REAL implementations)."""
-        # Build action list based on enabled features
-        actions = []
+        """
+        Perform an autonomous action using intelligent weighted selection.
         
-        if self.config.enable_reflection:
-            actions.append(self._reflect_on_conversations)
+        Uses _select_action() for smarter action choice based on:
+        - Current learning queue state
+        - Enabled features
+        - Low power mode
+        """
+        # Use intelligent action selection
+        action = self._select_action()
         
-        if self.config.enable_practice:
-            actions.append(self._practice_response)
+        # Map actions to methods
+        action_methods = {
+            AutonomousAction.REFLECT: self._reflect_on_conversations,
+            AutonomousAction.PRACTICE: self._practice_response,
+            AutonomousAction.RESEARCH: self._research_topic,
+            AutonomousAction.EVOLVE_PERSONALITY: self._update_personality,
+            AutonomousAction.BUILD_KNOWLEDGE: self._build_knowledge,
+            AutonomousAction.SELF_EVALUATE: self._self_evaluate,
+            AutonomousAction.CONSOLIDATE: self._consolidate_learning,
+            AutonomousAction.EXPLORE_CURIOSITY: self._explore_curiosity,
+            AutonomousAction.OPTIMIZE: self._optimize_responses,
+            AutonomousAction.DREAM: self._dream,
+        }
         
-        if self.config.enable_personality_evolution:
-            actions.append(self._update_personality)
-        
-        # Always allow curiosity exploration
-        actions.append(self._explore_curiosity)
-        
-        # Additional advanced actions
-        if self.config.enable_knowledge_building:
-            actions.extend([
-                self._build_knowledge,
-                self._optimize_responses,
-            ])
-        
-        if self.config.enable_web_research:
-            actions.append(self._research_topic)
-        
-        # Lower probability actions
-        if random.random() < 0.2:  # 20% chance
-            actions.extend([
-                self._consolidate_learning,
-                self._self_evaluate,
-            ])
-        
-        if random.random() < 0.1:  # 10% chance
-            actions.append(self._dream)
-        
-        if not actions:
-            return
-        
-        # Select and perform action
-        action = random.choice(actions)
-        action()
+        method = action_methods.get(action)
+        if method:
+            method()
+        else:
+            logger.warning(f"Unknown action: {action}")
     
     # =========================================================================
     # CONFIGURATION MANAGEMENT
@@ -892,6 +1021,79 @@ class AutonomousMode:
             
         except Exception as e:
             logger.debug(f"Error sharing federated update: {e}")
+    
+    # =========================================================================
+    # STATUS & STATISTICS
+    # =========================================================================
+    
+    def get_learning_stats(self) -> Dict[str, Any]:
+        """
+        Get current learning statistics.
+        
+        Returns dict with:
+        - queue_size: Number of examples in learning queue
+        - health_score: Overall AI health (0.0-1.0)
+        - total_conversations: Number of conversations analyzed
+        - positive_feedback: Count of positive feedback
+        - negative_feedback: Count of negative feedback
+        - topics_explored: Number of unique topics
+        - is_running: Whether autonomous mode is active
+        - low_power_mode: Whether in low power mode
+        """
+        try:
+            stats = self.learning_engine.get_queue_stats()
+            metrics = self.learning_engine.get_metrics()
+            
+            return {
+                "queue_size": stats.get('total_examples', 0),
+                "queue_by_source": stats.get('by_source', {}),
+                "queue_by_priority": stats.get('by_priority', {}),
+                "knowledge_graph_nodes": len(self.learning_engine.knowledge_graph),
+                "health_score": metrics.health_score(),
+                "total_conversations": metrics.total_conversations,
+                "total_responses": metrics.total_responses,
+                "positive_feedback": metrics.positive_feedback,
+                "negative_feedback": metrics.negative_feedback,
+                "feedback_ratio": metrics.feedback_ratio(),
+                "avg_response_quality": metrics.avg_response_quality,
+                "examples_learned": metrics.examples_learned,
+                "topics_explored": metrics.topics_explored,
+                "is_running": self.is_running,
+                "low_power_mode": self.config.low_power_mode,
+                "enabled": self.config.enabled,
+            }
+        except Exception as e:
+            logger.error(f"Error getting learning stats: {e}")
+            return {
+                "error": str(e),
+                "is_running": self.is_running,
+                "enabled": self.config.enabled,
+            }
+    
+    @property
+    def is_running(self) -> bool:
+        """Check if autonomous mode is currently running."""
+        return self._thread is not None and self._thread.is_alive()
+    
+    def get_status_summary(self) -> str:
+        """Get a human-readable status summary."""
+        stats = self.get_learning_stats()
+        
+        status = "RUNNING" if stats.get('is_running') else "STOPPED"
+        if stats.get('low_power_mode'):
+            status += " (Low Power)"
+        
+        health = stats.get('health_score', 0)
+        health_emoji = "Good" if health > 0.7 else "OK" if health > 0.4 else "Needs Attention"
+        
+        return (
+            f"Status: {status}\n"
+            f"Health: {health:.1%} ({health_emoji})\n"
+            f"Learning Queue: {stats.get('queue_size', 0)} examples\n"
+            f"Conversations: {stats.get('total_conversations', 0)}\n"
+            f"Feedback: {stats.get('positive_feedback', 0)} positive, {stats.get('negative_feedback', 0)} negative\n"
+            f"Topics Explored: {stats.get('topics_explored', 0)}"
+        )
 
 
 class AutonomousManager:

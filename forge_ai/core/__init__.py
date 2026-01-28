@@ -56,10 +56,11 @@ except ImportError:
 
 # Autonomous Mode (UPDATED with real implementations)
 try:
-    from .autonomous import AutonomousMode, AutonomousManager
+    from .autonomous import AutonomousMode, AutonomousManager, AutonomousAction
 except ImportError:
     AutonomousMode = None
     AutonomousManager = None
+    AutonomousAction = None
 
 # Tokenizers
 from .tokenizer import (
@@ -432,6 +433,7 @@ __all__ = [
     # Autonomous Mode (UPDATED)
     "AutonomousMode",
     "AutonomousManager",
+    "AutonomousAction",
 
     # Tokenizers
     "get_tokenizer",
