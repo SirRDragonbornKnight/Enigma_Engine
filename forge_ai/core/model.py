@@ -1894,9 +1894,17 @@ class Forge(nn.Module):
         """
         path = Path(path) if not isinstance(path, Path) else path
         
-        # Check if it's a HuggingFace model ID (no slashes in path, or starts with org/)
+        # Check if it's a HuggingFace model ID (format: org/model, no file extensions)
         path_str = str(path)
-        if not os.path.exists(path_str) and ('/' in path_str or not any(c in path_str for c in ['.', os.sep])):
+        # HF IDs: don't exist as files, contain exactly one '/', no file extension
+        is_hf_id = (
+            not os.path.exists(path_str) and 
+            '/' in path_str and 
+            path_str.count('/') == 1 and  # org/model format
+            not path_str.startswith('/') and  # not absolute path
+            '.' not in Path(path_str).name  # no file extension
+        )
+        if is_hf_id:
             logger.info(f"Detected HuggingFace model ID: {path_str}")
             return cls.from_huggingface(path_str, **kwargs)
         
@@ -1965,9 +1973,9 @@ class Forge(nn.Module):
             model = Forge.from_huggingface("microsoft/phi-2")
         """
         try:
-            from .huggingface_loader import load_huggingface_model
+            from .huggingface_loader import convert_huggingface_to_forge
             logger.info(f"Loading HuggingFace model: {model_id}")
-            return load_huggingface_model(model_id, **kwargs)
+            return convert_huggingface_to_forge(model_id, **kwargs)
         except ImportError:
             logger.error(
                 "HuggingFace model loading requires transformers library. "
@@ -2085,31 +2093,20 @@ class Forge(nn.Module):
         Example:
             model = Forge.from_onnx("model.onnx")
         """
+        logger.info(f"Loading ONNX model from: {path}")
+        
         try:
-            import onnx
-            import onnx2pytorch
+            from .onnx_loader import load_onnx_model
+            return load_onnx_model(str(path), **kwargs)
         except ImportError:
             logger.error(
-                "ONNX model loading requires onnx and onnx2pytorch. "
-                "Install with: pip install onnx onnx2pytorch"
+                "ONNX model loading requires onnx library. "
+                "Install with: pip install onnx"
             )
             raise
-        
-        logger.warning(
-            "ONNX loading is experimental. Some features may not work correctly."
-        )
-        
-        # Load ONNX model
-        onnx_model = onnx.load(str(path))
-        
-        # Convert to PyTorch
-        # Note: This is a simplified conversion. Full conversion would need
-        # to map ONNX ops to Forge architecture, which is complex.
-        logger.error(
-            "ONNX to Forge conversion is not yet fully implemented. "
-            "Please use PyTorch, HuggingFace, or GGUF formats instead."
-        )
-        raise NotImplementedError("ONNX loading is not yet fully implemented")
+        except Exception as e:
+            logger.error(f"Failed to load ONNX model: {e}")
+            raise
     
     # =========================================================================
     # 🎯 LORA & ADAPTER SUPPORT

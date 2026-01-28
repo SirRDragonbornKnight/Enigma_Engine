@@ -799,6 +799,108 @@ def load_huggingface_model(
     return model
 
 
+def convert_huggingface_to_forge(
+    model_id: str,
+    **kwargs
+) -> 'Forge':
+    """
+    Load a HuggingFace model and convert it to Forge format.
+    
+    This function downloads a HuggingFace model, extracts its weights,
+    and maps them to Forge architecture.
+    
+    Args:
+        model_id: HuggingFace model ID (e.g., "gpt2") or local path
+        **kwargs: Additional arguments
+        
+    Returns:
+        Forge model with HuggingFace weights loaded
+        
+    Raises:
+        RuntimeError: If transformers not installed
+        ValueError: If model incompatible with Forge
+    """
+    if not HAVE_TRANSFORMERS:
+        raise RuntimeError(
+            "HuggingFace conversion requires transformers. "
+            "Install with: pip install transformers"
+        )
+    
+    # Import Forge components
+    from .model import Forge, ForgeConfig
+    from .weight_mapping import WeightMapper
+    
+    logger.info(f"Loading HuggingFace model: {model_id}")
+    
+    # Load HuggingFace model and tokenizer
+    try:
+        hf_model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=kwargs.get('torch_dtype', torch.float32),
+            device_map=kwargs.get('device_map', None),
+            trust_remote_code=kwargs.get('trust_remote_code', False)
+        )
+        hf_tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=kwargs.get('trust_remote_code', False))
+        
+        logger.info(f"HuggingFace model loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load HuggingFace model: {e}")
+        raise
+    
+    # Get HuggingFace config
+    hf_config = hf_model.config
+    
+    # Create Forge config from HuggingFace config
+    forge_config_dict = {
+        'vocab_size': hf_config.vocab_size,
+        'dim': getattr(hf_config, 'hidden_size', getattr(hf_config, 'n_embd', 768)),
+        'n_layers': getattr(hf_config, 'num_hidden_layers', getattr(hf_config, 'n_layer', 12)),
+        'n_heads': getattr(hf_config, 'num_attention_heads', getattr(hf_config, 'n_head', 12)),
+        'max_seq_len': getattr(hf_config, 'max_position_embeddings', getattr(hf_config, 'n_positions', 1024))
+    }
+    
+    # Handle GQA if present
+    if hasattr(hf_config, 'num_key_value_heads'):
+        forge_config_dict['n_kv_heads'] = hf_config.num_key_value_heads
+    
+    logger.info(f"Creating Forge config: {forge_config_dict}")
+    forge_config = ForgeConfig(**forge_config_dict)
+    
+    # Create Forge model
+    forge_model = Forge(config=forge_config)
+    
+    # Get HuggingFace state dict
+    hf_state_dict = hf_model.state_dict()
+    logger.info(f"HuggingFace model has {len(hf_state_dict)} parameters")
+    
+    # Map HuggingFace weights to Forge
+    mapper = WeightMapper()
+    forge_state_dict = mapper.map_huggingface_to_forge(hf_state_dict, forge_config)
+    
+    # Load weights into Forge model
+    logger.info("Loading mapped weights into Forge model...")
+    try:
+        missing_keys, unexpected_keys = forge_model.load_state_dict(forge_state_dict, strict=False)
+        
+        if missing_keys:
+            logger.warning(f"Missing {len(missing_keys)} keys - will be randomly initialized")
+            logger.debug(f"Missing keys: {missing_keys[:10]}")
+        
+        if unexpected_keys:
+            logger.warning(f"Unexpected {len(unexpected_keys)} keys - will be ignored")
+            logger.debug(f"Unexpected keys: {unexpected_keys[:10]}")
+        
+        logger.info("HuggingFace model successfully converted to Forge format")
+    except Exception as e:
+        logger.error(f"Failed to load weights: {e}")
+        raise ValueError(f"Weight conversion failed: {e}")
+    
+    # Set to eval mode
+    forge_model.eval()
+    
+    return forge_model
+
+
 if __name__ == "__main__":
     # Demo
     print("HuggingFace Model Loader Demo")
