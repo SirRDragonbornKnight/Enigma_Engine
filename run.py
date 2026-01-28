@@ -143,6 +143,13 @@ Examples:
     parser.add_argument("--background", action="store_true", help="Run in system tray (background mode)")
     parser.add_argument("--tunnel", action="store_true", help="Start tunnel for public access")
     
+    # API server options
+    parser.add_argument("--api-type", type=str, default="openai",
+                        choices=["openai", "simple"],
+                        help="API type: openai (compatible) or simple (default: openai)")
+    parser.add_argument("--port", type=int, default=None,
+                        help="Port for API server (default: 8000 for openai, 5000 for simple)")
+    
     # Multi-instance options
     parser.add_argument("--instance", type=str, default=None, help="Instance ID (for multi-instance)")
     parser.add_argument("--new-instance", action="store_true", help="Force new instance")
@@ -307,11 +314,32 @@ Examples:
             return
 
     if args.serve:
-        from forge_ai.comms.api_server import create_app
-        app = create_app()
-        print("\nStarting API server at http://127.0.0.1:5000")
-        print("Press Ctrl+C to stop\n")
-        app.run(host="127.0.0.1", port=5000, debug=True)
+        api_type = getattr(args, 'api_type', 'openai')
+        port = getattr(args, 'port', None)
+        
+        if api_type == "openai":
+            # OpenAI-compatible API (recommended)
+            from forge_ai.comms.openai_api import create_openai_server
+            port = port or 8000
+            print("\n" + "=" * 60)
+            print("  ForgeAI OpenAI-Compatible API Server")
+            print("=" * 60)
+            print("\nThis server is compatible with:")
+            print("  - OpenAI Python SDK")
+            print("  - LangChain")
+            print("  - LlamaIndex")
+            print("  - Any OpenAI-compatible tool")
+            print(f"\nBase URL: http://localhost:{port}/v1")
+            print("\nPress Ctrl+C to stop\n")
+            create_openai_server(host="0.0.0.0", port=port)
+        else:
+            # Simple API (original)
+            from forge_ai.comms.api_server import create_app
+            port = port or 5000
+            app = create_app()
+            print(f"\nStarting API server at http://127.0.0.1:{port}")
+            print("Press Ctrl+C to stop\n")
+            app.run(host="127.0.0.1", port=port, debug=True)
 
     if args.run:
         from forge_ai.core.inference import ForgeEngine

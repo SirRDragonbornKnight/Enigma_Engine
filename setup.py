@@ -93,6 +93,9 @@ setup(
     },
     entry_points={
         "console_scripts": [
+            # Main CLI (Ollama-style)
+            "forge=forge_ai.cli.main:main",
+            # Legacy commands
             "forge-ai=run:main",
             "forge-ai-train=run:train",
             "forge-ai-serve=run:serve",
