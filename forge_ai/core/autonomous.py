@@ -620,7 +620,7 @@ class AutonomousMode:
                 evaluations = []
                 
                 for i in range(num_candidates):
-                    temperature = 0.7 + (i * 0.1)  # 0.7, 0.8, 0.9, 1.0, 1.1
+                    temperature = 0.5 + (i * 0.1)  # 0.5, 0.6, 0.7, 0.8, 0.9
                     try:
                         response = engine.generate(prompt, max_length=200, temperature=temperature)
                         candidates.append(response)
@@ -647,15 +647,16 @@ class AutonomousMode:
                     
                     # Save best response as positive example
                     if best_score >= self.config.min_quality_for_learning:
+                        best_metrics = self.learning_engine.evaluate_response_quality(prompt, best_response)
                         example = LearningExample(
                             input_text=prompt,
                             output_text=best_response,
                             source=LearningSource.PRACTICE,
                             priority=Priority.LOW,
                             quality_score=best_score,
-                            relevance=0.8,
-                            coherence=0.8,
-                            repetition=0.2,
+                            relevance=best_metrics.get('relevance', 0.8),
+                            coherence=best_metrics.get('coherence', 0.8),
+                            repetition=best_metrics.get('repetition', 0.2),
                             metadata={"type": "practice_positive"}
                         )
                         self.learning_engine.add_learning_example(example)
@@ -663,15 +664,16 @@ class AutonomousMode:
                     # Save worst response as negative example (what NOT to do)
                     # Only if it's significantly worse than best
                     if worst_score < best_score - 0.3 and len(worst_response) > 0:
+                        worst_metrics = self.learning_engine.evaluate_response_quality(prompt, worst_response)
                         example = LearningExample(
                             input_text=prompt,
                             output_text=worst_response,
                             source=LearningSource.PRACTICE,
                             priority=Priority.LOW,
                             quality_score=worst_score,
-                            relevance=0.3,
-                            coherence=0.3,
-                            repetition=0.8,
+                            relevance=worst_metrics.get('relevance', 0.3),
+                            coherence=worst_metrics.get('coherence', 0.3),
+                            repetition=worst_metrics.get('repetition', 0.8),
                             metadata={"type": "practice_negative", "is_negative_example": True}
                         )
                         self.learning_engine.add_learning_example(example)
@@ -739,15 +741,27 @@ class AutonomousMode:
                         if len(messages) < 2:
                             continue
                         
-                        # Estimate conversation quality from message characteristics
-                        avg_length = sum(len(m.get('text', '')) for m in messages) / len(messages)
-                        has_long_responses = any(len(m.get('text', '')) > 100 for m in messages if m.get('role') == 'ai')
+                        # Use actual quality metrics instead of simple heuristics
+                        total_quality = 0.0
+                        quality_count = 0
                         
-                        # Simple heuristic: longer, more engaging conversations are "positive"
-                        if len(messages) > 4 and has_long_responses and avg_length > 50:
-                            positive_convos.append(messages)
-                        elif len(messages) < 3 or avg_length < 20:
-                            negative_convos.append(messages)
+                        for i in range(len(messages) - 1):
+                            if messages[i].get('role') == 'user' and messages[i+1].get('role') == 'ai':
+                                user_text = messages[i].get('text', '')
+                                ai_text = messages[i+1].get('text', '')
+                                
+                                if user_text and ai_text:
+                                    metrics = self.learning_engine.evaluate_response_quality(user_text, ai_text)
+                                    total_quality += metrics.get('overall', 0.0)
+                                    quality_count += 1
+                        
+                        # Determine if conversation was successful based on average quality
+                        if quality_count > 0:
+                            avg_quality = total_quality / quality_count
+                            if avg_quality >= 0.6:
+                                positive_convos.append(messages)
+                            elif avg_quality < 0.4:
+                                negative_convos.append(messages)
                     except Exception as e:
                         logger.debug(f"Error loading conversation {conv_name}: {e}")
                 
@@ -784,22 +798,14 @@ class AutonomousMode:
                         new_value = current_value + adjustment
                         setattr(personality.traits, trait_name, new_value)
                         logger.debug(f"Moved {trait_name} away from failure: {current_value:.2f} -> {new_value:.2f}")
-                    
-                    # Clamp to valid range [0, 1]
-                    clamped = max(0.0, min(1.0, getattr(personality.traits, trait_name)))
-                    setattr(personality.traits, trait_name, clamped)
                 
-                # Also apply original feedback-based adjustments
-                feedback_ratio = metrics.feedback_ratio()
-                
-                # If getting positive feedback, reinforce current traits slightly
-                if feedback_ratio > 0.6:
-                    for trait_name in ['humor_level', 'empathy', 'creativity', 'playfulness']:
-                        if hasattr(personality.traits, trait_name):
-                            current = getattr(personality.traits, trait_name)
-                            if current > 0.5:
-                                new_value = min(1.0, current + evolution_rate)
-                                setattr(personality.traits, trait_name, new_value)
+                # Clamp all trait values to valid range [0, 1] after all adjustments
+                for trait_name in ['humor_level', 'empathy', 'creativity', 'playfulness', 
+                                  'formality', 'verbosity', 'curiosity', 'technical_depth', 'enthusiasm']:
+                    if hasattr(personality.traits, trait_name):
+                        current = getattr(personality.traits, trait_name)
+                        clamped = max(0.0, min(1.0, current))
+                        setattr(personality.traits, trait_name, clamped)
                 
                 # Adjust verbosity based on average conversation length
                 if metrics.avg_conversation_length > 0:
@@ -857,7 +863,7 @@ class AutonomousMode:
             Dictionary with quality metrics
         """
         if not messages:
-            return {"quality": 0.0, "engagement": 0.0}
+            return {"quality": 0.0, "engagement": 0.0, "length": 0}
         
         # Calculate basic metrics
         total_length = sum(len(m.get('text', '')) for m in messages)
@@ -945,7 +951,7 @@ class AutonomousMode:
                 traits["formality"].append(formality)
                 
                 # Humor (presence of jokes, emojis, laughter)
-                humor_markers = ["😄", "😂", "lol", "haha", "😊", "!", "funny", "joke"]
+                humor_markers = ["😄", "😂", "lol", "haha", "😊", "funny", "joke"]
                 humor_count = sum(1 for marker in humor_markers if marker in response)
                 humor_val = min(1.0, humor_count / 2)
                 traits["humor"].append(humor_val)

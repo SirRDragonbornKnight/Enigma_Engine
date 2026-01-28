@@ -25,12 +25,11 @@ class TestEnhancedReflection:
     @pytest.fixture
     def autonomous_mode(self):
         """Create a temporary autonomous mode instance."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            model_name = f"test_model_{int(time.time())}"
-            mode = AutonomousMode(model_name)
-            mode.config.reflection_depth = 5
-            mode.config.min_quality_for_learning = 0.5
-            yield mode
+        model_name = f"test_model_{int(time.time())}"
+        mode = AutonomousMode(model_name)
+        mode.config.reflection_depth = 5
+        mode.config.min_quality_for_learning = 0.5
+        yield mode
     
     @pytest.fixture
     def mock_conversations(self, autonomous_mode):
@@ -68,8 +67,7 @@ class TestEnhancedReflection:
         """Test that reflection runs without errors."""
         try:
             autonomous_mode._reflect_on_conversations()
-            # Should not raise exceptions
-            assert True
+            # No assertion needed - if no exception is raised, test passes
         except Exception as e:
             pytest.fail(f"Reflection raised exception: {e}")
     
@@ -108,18 +106,16 @@ class TestEnhancedPractice:
     @pytest.fixture
     def autonomous_mode(self):
         """Create a temporary autonomous mode instance."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            model_name = f"test_model_{int(time.time())}"
-            mode = AutonomousMode(model_name)
-            mode.config.min_quality_for_learning = 0.4
-            yield mode
+        model_name = f"test_model_{int(time.time())}"
+        mode = AutonomousMode(model_name)
+        mode.config.min_quality_for_learning = 0.4
+        yield mode
     
     def test_practice_response_basic(self, autonomous_mode):
         """Test that practice runs without errors (may not generate if engine unavailable)."""
         try:
             autonomous_mode._practice_response()
-            # Should not raise exceptions even if generation fails
-            assert True
+            # No assertion needed - if no exception is raised, test passes
         except Exception as e:
             pytest.fail(f"Practice raised unexpected exception: {e}")
 
@@ -130,10 +126,9 @@ class TestPersonalityTraitExtraction:
     @pytest.fixture
     def autonomous_mode(self):
         """Create a temporary autonomous mode instance."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            model_name = f"test_model_{int(time.time())}"
-            mode = AutonomousMode(model_name)
-            yield mode
+        model_name = f"test_model_{int(time.time())}"
+        mode = AutonomousMode(model_name)
+        yield mode
     
     def test_extract_personality_traits_empty(self, autonomous_mode):
         """Test trait extraction with empty conversations."""
@@ -210,17 +205,15 @@ class TestEnhancedPersonalityUpdate:
     @pytest.fixture
     def autonomous_mode(self):
         """Create a temporary autonomous mode instance."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            model_name = f"test_model_{int(time.time())}"
-            mode = AutonomousMode(model_name)
-            yield mode
+        model_name = f"test_model_{int(time.time())}"
+        mode = AutonomousMode(model_name)
+        yield mode
     
     def test_update_personality_basic(self, autonomous_mode):
         """Test that personality update runs without errors."""
         try:
             autonomous_mode._update_personality()
-            # Should not raise exceptions
-            assert True
+            # No assertion needed - if no exception is raised, test passes
         except Exception as e:
             # If it fails due to insufficient data, that's expected
             if "Not enough interaction data" not in str(e):
