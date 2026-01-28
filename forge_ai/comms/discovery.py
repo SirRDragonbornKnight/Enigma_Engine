@@ -274,6 +274,48 @@ class DeviceDiscovery:
             info = self.discovered[name]
             return f"http://{info['ip']}:{info['port']}"
         return None
+    
+    def discover_federated_peers(self, timeout: float = 3.0) -> List[Dict]:
+        """
+        Discover devices that support federated learning.
+        
+        Scans the network for Forge nodes with federated learning enabled.
+        
+        Args:
+            timeout: How long to wait for responses
+        
+        Returns:
+            List of peer devices with federated learning capabilities
+        """
+        import urllib.request
+        
+        # First, discover all nodes
+        self.broadcast_discover(timeout)
+        
+        peers = []
+        
+        # Check which nodes have federated learning enabled
+        for name, info in self.discovered.items():
+            try:
+                url = f"http://{info['ip']}:{info['port']}/federated/info"
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=1.0) as response:
+                    data = json.loads(response.read().decode())
+                    if data.get("enabled", False):
+                        peers.append({
+                            "name": name,
+                            "ip": info["ip"],
+                            "port": info["port"],
+                            "device_id": data.get("device_id"),
+                            "privacy_level": data.get("privacy_level"),
+                            "current_round": data.get("current_round", 0),
+                        })
+                        print(f"Found federated peer: {name} (privacy: {data.get('privacy_level')})")
+            except (urllib.error.URLError, json.JSONDecodeError, socket.timeout):
+                # Node doesn't support federated learning or is unreachable
+                pass
+        
+        return peers
 
 
 # Convenience function
@@ -290,6 +332,21 @@ def discover_forge_ai_nodes(node_name: str = "scanner", timeout: float = 3.0) ->
     """
     discovery = DeviceDiscovery(node_name)
     return discovery.broadcast_discover(timeout)
+
+
+def discover_federated_peers(node_name: str = "scanner", timeout: float = 3.0) -> List[Dict]:
+    """
+    Quick function to discover federated learning peers.
+    
+    Args:
+        node_name: Name for this scanner
+        timeout: How long to wait for responses
+    
+    Returns:
+        List of peer devices with federated learning enabled
+    """
+    discovery = DeviceDiscovery(node_name)
+    return discovery.discover_federated_peers(timeout)
 
 
 if __name__ == "__main__":
