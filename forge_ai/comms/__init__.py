@@ -1,24 +1,67 @@
 # comms package - Multi-device communication for Forge
 
-from .network import ForgeNode, Message, ModelExporter, create_server_node, create_client_node
+# Discovery can be imported without torch dependency
 from .discovery import DeviceDiscovery, discover_forge_ai_nodes
-from .memory_sync import MemorySync, OfflineSync, add_sync_routes
-from .multi_ai import AIConversation, AIParticipant, quick_ai_chat
-from .protocol_manager import ProtocolManager, ProtocolConfig, get_protocol_manager
-from .remote_client import RemoteClient
-from .api_server import create_api_server
+
+# Other imports that may require torch - use lazy loading
+try:
+    from .network import ForgeNode, Message, ModelExporter, create_server_node, create_client_node
+    from .memory_sync import MemorySync, OfflineSync, add_sync_routes
+    from .multi_ai import AIConversation, AIParticipant, quick_ai_chat
+    from .protocol_manager import ProtocolManager, ProtocolConfig, get_protocol_manager
+    from .remote_client import RemoteClient
+    from .api_server import create_api_server
+    HAS_CORE = True
+except ImportError as e:
+    HAS_CORE = False
+    # These will be None if torch is not available
+    ForgeNode = None
+    Message = None
+    ModelExporter = None
+    create_server_node = None
+    create_client_node = None
+    MemorySync = None
+    OfflineSync = None
+    add_sync_routes = None
+    AIConversation = None
+    AIParticipant = None
+    quick_ai_chat = None
+    ProtocolManager = None
+    ProtocolConfig = None
+    get_protocol_manager = None
+    RemoteClient = None
+    create_api_server = None
 
 # Network optimizer for low-latency distributed AI
-from .network_optimizer import (
-    NetworkOptimizer, OptimizedRequest, RequestStats, ResponseCache,
-    get_network_optimizer,
-)
+try:
+    from .network_optimizer import (
+        NetworkOptimizer, OptimizedRequest, RequestStats, ResponseCache,
+        get_network_optimizer,
+    )
+    HAS_NETWORK_OPTIMIZER = True
+except ImportError:
+    HAS_NETWORK_OPTIMIZER = False
+    NetworkOptimizer = None
+    OptimizedRequest = None
+    RequestStats = None
+    ResponseCache = None
+    get_network_optimizer = None
 
 # Device sync for real-time state synchronization
-from .device_sync import (
-    DeviceSync, DeviceType, SyncPriority, SyncState, ConnectedDevice,
-    get_device_sync,
-)
+try:
+    from .device_sync import (
+        DeviceSync, DeviceType, SyncPriority, SyncState, ConnectedDevice,
+        get_device_sync,
+    )
+    HAS_DEVICE_SYNC = True
+except ImportError:
+    HAS_DEVICE_SYNC = False
+    DeviceSync = None
+    DeviceType = None
+    SyncPriority = None
+    SyncState = None
+    ConnectedDevice = None
+    get_device_sync = None
 
 # Distributed protocol (hardware-aware)
 try:
