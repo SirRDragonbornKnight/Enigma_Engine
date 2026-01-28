@@ -233,6 +233,109 @@ def _toggle_robot_camera(parent, state):
         QMessageBox.warning(parent, "Camera Error", f"Could not enable camera: {e}")
 
 
+# ===== GAME MODE CONTROL =====
+def _toggle_game_mode(parent, state):
+    """Toggle game mode auto-detection."""
+    enabled = state == 2
+    
+    try:
+        from forge_ai.core.game_mode import get_game_mode
+        
+        game_mode = get_game_mode()
+        
+        if enabled:
+            aggressive = parent.game_mode_aggressive_checkbox.isChecked()
+            game_mode.enable(aggressive=aggressive)
+            parent.game_mode_status_label.setText("Game Mode: Watching for games")
+            parent.game_mode_status_label.setStyleSheet("color: #3b82f6;")
+            _update_game_mode_limits(parent)
+        else:
+            game_mode.disable()
+            parent.game_mode_status_label.setText("Game Mode: Disabled")
+            parent.game_mode_status_label.setStyleSheet("color: #888;")
+            _update_game_mode_limits(parent)
+    except Exception as e:
+        parent.game_mode_status_label.setText(f"Error: {e}")
+        parent.game_mode_status_label.setStyleSheet("color: #ef4444;")
+
+
+def _toggle_aggressive_mode(parent, state):
+    """Toggle aggressive game mode."""
+    aggressive = state == 2
+    
+    try:
+        from forge_ai.core.game_mode import get_game_mode
+        
+        game_mode = get_game_mode()
+        
+        if game_mode.is_enabled():
+            # Re-enable with new aggressive setting
+            game_mode.disable()
+            game_mode.enable(aggressive=aggressive)
+            
+            mode_text = "Aggressive" if aggressive else "Balanced"
+            parent.game_mode_status_label.setText(f"Game Mode: {mode_text}")
+            _update_game_mode_limits(parent)
+    except Exception as e:
+        parent.game_mode_status_label.setText(f"Error: {e}")
+        parent.game_mode_status_label.setStyleSheet("color: #ef4444;")
+
+
+def _manual_toggle_game_mode(parent):
+    """Manually toggle game mode activation."""
+    try:
+        from forge_ai.core.game_mode import get_game_mode
+        
+        game_mode = get_game_mode()
+        
+        if not game_mode.is_enabled():
+            QMessageBox.information(
+                parent, "Game Mode Disabled",
+                "Please enable Game Mode first using the checkbox above."
+            )
+            return
+        
+        if game_mode.is_active():
+            # Deactivate
+            game_mode._deactivate_game_mode()
+            parent.game_mode_status_label.setText("Game Mode: Watching for games")
+            parent.game_mode_status_label.setStyleSheet("color: #3b82f6;")
+        else:
+            # Activate manually
+            game_mode._activate_game_mode("Manual activation")
+            parent.game_mode_status_label.setText("Game Mode: ACTIVE (Manual)")
+            parent.game_mode_status_label.setStyleSheet("color: #22c55e; font-weight: bold;")
+        
+        _update_game_mode_limits(parent)
+    except Exception as e:
+        QMessageBox.warning(parent, "Game Mode Error", f"Could not toggle game mode: {e}")
+
+
+def _update_game_mode_limits(parent):
+    """Update the game mode limits display."""
+    try:
+        from forge_ai.core.game_mode import get_game_mode
+        
+        game_mode = get_game_mode()
+        limits = game_mode.get_resource_limits()
+        
+        cpu_text = f"<{limits.max_cpu_percent}%" if limits.max_cpu_percent < 100 else "Unlimited"
+        gpu_text = "Allowed" if limits.gpu_allowed else "Disabled"
+        bg_text = "Enabled" if limits.background_tasks else "Disabled"
+        
+        parent.game_mode_limits_label.setText(
+            f"CPU: {cpu_text}, GPU: {gpu_text}, Background Tasks: {bg_text}"
+        )
+        
+        if game_mode.is_active():
+            parent.game_mode_limits_label.setStyleSheet("color: #22c55e; font-size: 14px; font-weight: bold;")
+        else:
+            parent.game_mode_limits_label.setStyleSheet("color: #6b7280; font-size: 14px;")
+    except Exception as e:
+        parent.game_mode_limits_label.setText(f"Error: {e}")
+        parent.game_mode_limits_label.setStyleSheet("color: #ef4444; font-size: 14px;")
+
+
 # ===== GAME AI ROUTING =====
 def _toggle_game_detection(parent, state):
     """Toggle automatic game detection."""
@@ -1532,6 +1635,70 @@ def create_settings_tab(parent):
     power_layout.addWidget(rec_frame)
     
     layout.addWidget(power_group)
+    
+    # === GAME MODE ===
+    game_mode_group = QGroupBox("Game Mode - Zero Lag Gaming")
+    game_mode_layout = QVBoxLayout(game_mode_group)
+    
+    # Description
+    game_mode_desc = QLabel(
+        "Game Mode automatically detects when you're gaming and reduces AI resource usage "
+        "to prevent frame drops. AI stays responsive but uses minimal CPU/GPU."
+    )
+    game_mode_desc.setWordWrap(True)
+    game_mode_layout.addWidget(game_mode_desc)
+    
+    # Enable game mode
+    enable_row = QHBoxLayout()
+    parent.game_mode_checkbox = QCheckBox("Enable Game Mode")
+    parent.game_mode_checkbox.setToolTip("Auto-detect games and reduce AI resource usage")
+    parent.game_mode_checkbox.stateChanged.connect(
+        lambda state: _toggle_game_mode(parent, state)
+    )
+    enable_row.addWidget(parent.game_mode_checkbox)
+    
+    parent.game_mode_status_label = QLabel("Game Mode: Disabled")
+    parent.game_mode_status_label.setStyleSheet("color: #888; font-style: italic;")
+    enable_row.addWidget(parent.game_mode_status_label)
+    enable_row.addStretch()
+    game_mode_layout.addLayout(enable_row)
+    
+    # Aggressive mode option
+    aggressive_row = QHBoxLayout()
+    parent.game_mode_aggressive_checkbox = QCheckBox("Aggressive Mode (maximum performance)")
+    parent.game_mode_aggressive_checkbox.setToolTip(
+        "Maximum performance: AI uses absolute minimum resources.\n"
+        "Balanced: AI can do light background tasks."
+    )
+    parent.game_mode_aggressive_checkbox.stateChanged.connect(
+        lambda state: _toggle_aggressive_mode(parent, state)
+    )
+    aggressive_row.addWidget(parent.game_mode_aggressive_checkbox)
+    aggressive_row.addStretch()
+    game_mode_layout.addLayout(aggressive_row)
+    
+    # Current limits display
+    limits_frame = QGroupBox("Current Limits")
+    limits_layout = QVBoxLayout(limits_frame)
+    
+    parent.game_mode_limits_label = QLabel(
+        "CPU: <100%, GPU: Allowed, Background Tasks: Enabled"
+    )
+    parent.game_mode_limits_label.setStyleSheet("color: #6b7280; font-size: 14px;")
+    limits_layout.addWidget(parent.game_mode_limits_label)
+    
+    game_mode_layout.addWidget(limits_frame)
+    
+    # Manual toggle button
+    manual_row = QHBoxLayout()
+    parent.game_mode_manual_btn = QPushButton("Toggle Game Mode Manually")
+    parent.game_mode_manual_btn.setToolTip("Manually enable/disable game mode without auto-detection")
+    parent.game_mode_manual_btn.clicked.connect(lambda: _manual_toggle_game_mode(parent))
+    manual_row.addWidget(parent.game_mode_manual_btn)
+    manual_row.addStretch()
+    game_mode_layout.addLayout(manual_row)
+    
+    layout.addWidget(game_mode_group)
 
     # === DISPLAY SETTINGS (using centralized UI settings) ===
     display_group = QGroupBox("Display Settings")

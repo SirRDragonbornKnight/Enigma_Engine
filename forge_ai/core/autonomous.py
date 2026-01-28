@@ -113,6 +113,21 @@ class AutonomousMode:
     def _run_loop(self):
         """Main autonomous loop with real learning actions."""
         while not self._stop_event.is_set():
+            # Check game mode - pause if game is active
+            try:
+                from .game_mode import get_game_mode
+                game_mode = get_game_mode()
+                
+                if game_mode.is_active():
+                    # Game is running - pause autonomous actions
+                    limits = game_mode.get_resource_limits()
+                    if not limits.background_tasks:
+                        # Wait and check again
+                        self._stop_event.wait(30)
+                        continue
+            except Exception as e:
+                logger.debug(f"Could not check game mode: {e}")
+            
             # Reset action count every hour
             if time.time() - self._last_reset > 3600:
                 self._action_count = 0
