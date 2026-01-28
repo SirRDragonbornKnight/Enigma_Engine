@@ -2985,6 +2985,7 @@ class EnhancedMainWindow(QMainWindow):
             create_image_tab, create_code_tab, create_video_tab,
             create_audio_tab, create_embeddings_tab, create_threed_tab,
             create_logs_tab, create_notes_tab, create_network_tab,
+            create_federation_tab,
             create_analytics_tab
         )
         from .tabs.gif_tab import create_gif_tab
@@ -3077,6 +3078,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Files", "files", "Edit training data and settings"),
             ("", "Logs", "logs", "View system logs"),
             ("", "Network", "network", "Multi-device AI networking"),
+            ("", "Federation", "federation", "Federated learning - share improvements without sharing data"),
             ("", "Analytics", "analytics", "Usage statistics and insights"),
             ("", "Examples", "examples", "Code examples and demos"),
             ("", "Settings", "settings", "Configure ForgeAI preferences"),
@@ -3111,8 +3113,13 @@ class EnhancedMainWindow(QMainWindow):
         
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
+<<<<<<< HEAD
             'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
             'game', 'robot', 'terminal', 'files', 'logs', 'network',
+=======
+            'chat', 'workspace', 'history', 'scale', 'modules', 'tools', 'router',
+            'game', 'robot', 'terminal', 'files', 'logs', 'network', 'federation',
+>>>>>>> origin/copilot/create-federated-learning-system
             'analytics', 'examples', 'settings', 'gif', 'voice'
         ]
         
@@ -3187,6 +3194,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
         self.content_stack.addWidget(wrap_in_scroll(create_network_tab(self)))  # Network
+        self.content_stack.addWidget(wrap_in_scroll(create_federation_tab(self)))  # Federation
         self.content_stack.addWidget(wrap_in_scroll(create_analytics_tab(self)))  # Analytics
         self.content_stack.addWidget(wrap_in_scroll(create_examples_tab(self)))  # Examples
         self.content_stack.addWidget(wrap_in_scroll(create_settings_tab(self)))  # Settings
