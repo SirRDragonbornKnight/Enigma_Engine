@@ -131,7 +131,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, Dict, Any, List, Union
+from typing import Optional, Tuple, Dict, Any, List, Union, Generator, Literal
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -290,6 +290,11 @@ class ForgeConfig:
     kv_cache_dtype: Optional[str] = None  # "int8", "fp16", None (same as model)
 
     # ─────────────────────────────────────────────────────────────────────────
+    # MEMORY OPTIMIZATION
+    # ─────────────────────────────────────────────────────────────────────────
+    use_gradient_checkpointing: bool = False  # Trade compute for memory during training
+
+    # ─────────────────────────────────────────────────────────────────────────
     # MULTI-MODAL SUPPORT
     # ─────────────────────────────────────────────────────────────────────────
     vision_hidden_size: Optional[int] = None  # Vision encoder dimension
@@ -364,9 +369,15 @@ class ForgeConfig:
         
         # dim must be divisible by n_heads (each head gets dim/n_heads dimensions)
         if self.dim % self.n_heads != 0:
+            # Calculate helpful suggestions
+            head_dim = self.dim // self.n_heads
+            suggested_dim = self.n_heads * (head_dim + 1)
+            suggested_heads = self.dim // (head_dim + 1) if head_dim + 1 > 0 else self.n_heads
             raise ValueError(
                 f"n_heads ({self.n_heads}) must divide evenly into dim ({self.dim}). "
-                f"Got remainder: {self.dim % self.n_heads}"
+                f"Got remainder: {self.dim % self.n_heads}. "
+                f"Try: dim={suggested_dim} (with {self.n_heads} heads) or "
+                f"n_heads={suggested_heads} (with dim={self.dim})"
             )
         
         # n_heads must be divisible by n_kv_heads (for GQA grouping)
@@ -427,6 +438,7 @@ class ForgeConfig:
             'sliding_window': self.sliding_window,
             'use_paged_attn': self.use_paged_attn,
             'kv_cache_dtype': self.kv_cache_dtype,
+            'use_gradient_checkpointing': self.use_gradient_checkpointing,
             'vision_hidden_size': self.vision_hidden_size,
             'audio_hidden_size': self.audio_hidden_size,
         }
@@ -441,7 +453,8 @@ class ForgeConfig:
             # New parameters
             'rope_scaling_type', 'rope_scaling_factor', 'use_moe', 'num_experts',
             'num_experts_per_token', 'moe_load_balancing', 'sliding_window',
-            'use_paged_attn', 'kv_cache_dtype', 'vision_hidden_size', 'audio_hidden_size'
+            'use_paged_attn', 'kv_cache_dtype', 'use_gradient_checkpointing',
+            'vision_hidden_size', 'audio_hidden_size'
         }
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -1102,6 +1115,125 @@ class FeedForward(nn.Module):
         return self.down(self.dropout(F.gelu(self.up(x))))
 
 
+class MoEFeedForward(nn.Module):
+    """
+    Mixture of Experts Feed-Forward layer.
+    
+    📖 WHAT THIS DOES:
+    Routes each token to top-k experts for specialized processing.
+    Different experts can specialize in different types of content
+    (e.g., one for code, one for math, one for creative writing).
+    
+    📐 MOE ARCHITECTURE:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │  Input x                                                               │
+    │      ↓                                                                 │
+    │  [Router/Gate] → Selects top-k experts                                │
+    │      ↓                                                                 │
+    │  ┌─────────┬─────────┬─────────┬─────────┐                            │
+    │  │Expert 1 │Expert 2 │Expert 3 │Expert N │  (only top-k activated)    │
+    │  └─────────┴─────────┴─────────┴─────────┘                            │
+    │      ↓                                                                 │
+    │  [Weighted Sum] → Combined output                                      │
+    └────────────────────────────────────────────────────────────────────────┘
+    
+    💡 WHY MOE?
+    - More parameters without proportional compute increase
+    - Experts can specialize in different domains
+    - Scales to very large models efficiently (GPT-4, Mixtral)
+    
+    ⚠️ TRAINING CONSIDERATIONS:
+    - Load balancing loss prevents all tokens going to same expert
+    - Auxiliary loss weight (moe_load_balancing) controls this
+    """
+
+    def __init__(self, config: ForgeConfig):
+        """
+        Args:
+            config: Model configuration with MoE settings
+        """
+        super().__init__()
+        self.num_experts = config.num_experts
+        self.num_experts_per_token = config.num_experts_per_token
+        self.aux_loss_weight = config.moe_load_balancing
+        
+        # Router: determines which experts to use for each token
+        self.gate = nn.Linear(config.dim, config.num_experts, bias=False)
+        
+        # Expert networks (each is a standard FeedForward)
+        self.experts = nn.ModuleList([
+            FeedForward(config) for _ in range(config.num_experts)
+        ])
+        
+        # Track load balancing loss for training
+        self.load_balancing_loss = 0.0
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through MoE layer.
+        
+        Args:
+            x: Input tensor [batch, seq_len, dim]
+        
+        Returns:
+            Output tensor [batch, seq_len, dim]
+        """
+        B, T, D = x.shape
+        
+        # Flatten batch and sequence dimensions for routing
+        x_flat = x.view(-1, D)  # [B*T, D]
+        
+        # Compute router scores
+        router_logits = self.gate(x_flat)  # [B*T, num_experts]
+        router_probs = F.softmax(router_logits, dim=-1)
+        
+        # Select top-k experts for each token
+        top_k_probs, top_k_indices = torch.topk(
+            router_probs, self.num_experts_per_token, dim=-1
+        )
+        
+        # Normalize selected expert weights
+        top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
+        
+        # Compute load balancing loss for training
+        if self.training:
+            # Count how many tokens go to each expert
+            expert_counts = torch.zeros(self.num_experts, device=x.device)
+            for i in range(self.num_experts_per_token):
+                expert_counts.scatter_add_(
+                    0, 
+                    top_k_indices[:, i], 
+                    torch.ones_like(top_k_indices[:, i], dtype=torch.float)
+                )
+            
+            # Ideal distribution is uniform
+            ideal_count = (B * T * self.num_experts_per_token) / self.num_experts
+            # Loss is variance from ideal (encourages balance)
+            self.load_balancing_loss = ((expert_counts - ideal_count) ** 2).mean()
+        
+        # Compute weighted output from selected experts
+        output = torch.zeros_like(x_flat)
+        
+        for i in range(self.num_experts_per_token):
+            expert_idx = top_k_indices[:, i]  # [B*T]
+            expert_weight = top_k_probs[:, i:i+1]  # [B*T, 1]
+            
+            # Process tokens for each expert
+            for e in range(self.num_experts):
+                mask = (expert_idx == e)
+                if mask.any():
+                    expert_input = x_flat[mask]
+                    expert_output = self.experts[e](expert_input)
+                    output[mask] += expert_weight[mask] * expert_output
+        
+        # Reshape back to [B, T, D]
+        return output.view(B, T, D)
+    
+    def get_aux_loss(self) -> torch.Tensor:
+        """Get the auxiliary load balancing loss for training."""
+        return self.load_balancing_loss * self.aux_loss_weight
+
+
 class TransformerBlock(nn.Module):
     """
     Single Transformer block with pre-norm architecture.
@@ -1123,6 +1255,11 @@ class TransformerBlock(nn.Module):
     ⚡ RESIDUAL CONNECTIONS (the + signs):
     Skip connections let gradients flow directly through the network.
     Without them, deep networks are nearly impossible to train.
+    
+    ⚡ GRADIENT CHECKPOINTING:
+    When enabled, recomputes activations during backward pass instead of
+    storing them. Trades ~30% compute for ~50% memory savings - essential
+    for training large models on limited hardware.
     """
 
     def __init__(self, config: ForgeConfig, layer_id: int):
@@ -1133,6 +1270,7 @@ class TransformerBlock(nn.Module):
         """
         super().__init__()
         self.layer_id = layer_id
+        self.use_checkpoint = getattr(config, 'use_gradient_checkpointing', False)
 
         # Choose normalization type based on config
         Norm = RMSNorm if config.use_rms_norm else nn.LayerNorm
@@ -1145,12 +1283,25 @@ class TransformerBlock(nn.Module):
         self.attention = Attention(config)
         self.feed_forward = FeedForward(config)
 
+    def _forward_impl(
+        self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
+        mask: Optional[torch.Tensor] = None, use_cache: bool = False, start_pos: int = 0
+    ) -> torch.Tensor:
+        """Internal forward implementation (used by checkpointing)."""
+        # Attention sub-layer with residual connection
+        h = x + self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)
+        # FFN sub-layer with residual connection
+        return h + self.feed_forward(self.ffn_norm(h))
+
     def forward(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
         mask: Optional[torch.Tensor] = None, use_cache: bool = False, start_pos: int = 0
     ) -> torch.Tensor:
         """
         Forward pass: Norm → Attention → Add → Norm → FFN → Add
+        
+        Uses gradient checkpointing during training if enabled, which
+        recomputes activations during backward pass to save memory.
         
         Args:
             x: Input [batch, seq_len, dim]
@@ -1162,12 +1313,15 @@ class TransformerBlock(nn.Module):
         Returns:
             Output tensor, same shape as input
         """
-        # Attention sub-layer with residual connection
-        # h = x + Attention(Norm(x))
-        h = x + self.attention(self.attention_norm(x), freqs_cis, mask, use_cache, start_pos)
-        # FFN sub-layer with residual connection
-        # output = h + FFN(Norm(h))
-        return h + self.feed_forward(self.ffn_norm(h))
+        # Use gradient checkpointing during training if enabled
+        # Don't use with KV-cache as it doesn't make sense (inference only)
+        if self.use_checkpoint and self.training and not use_cache:
+            return torch.utils.checkpoint.checkpoint(
+                self._forward_impl,
+                x, freqs_cis, mask, use_cache, start_pos,
+                use_reentrant=False  # Recommended for newer PyTorch
+            )
+        return self._forward_impl(x, freqs_cis, mask, use_cache, start_pos)
 
     def clear_cache(self):
         """Clear KV-cache in the attention layer."""
@@ -1566,6 +1720,115 @@ class Forge(nn.Module):
             logits = self.forward(next_token, use_cache=True, start_pos=generated.shape[1] - 1)
 
         return generated
+
+    @torch.no_grad()
+    def generate_stream(
+        self,
+        input_ids: torch.Tensor,
+        max_new_tokens: int = 100,
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.1,
+        stop_tokens: Optional[List[int]] = None
+    ) -> Generator[torch.Tensor, None, None]:
+        """
+        Streaming token generation - yields tokens as they're generated.
+        
+        📖 WHAT THIS DOES:
+        Instead of waiting for all tokens to be generated, this yields each
+        token as soon as it's produced. Essential for real-time chat UX!
+        
+        📐 STREAMING FLOW:
+        ┌────────────────────────────────────────────────────────────────────┐
+        │  User: "Tell me a story"                                           │
+        │                                                                    │
+        │  [Model starts generating]                                         │
+        │       ↓                                                            │
+        │  yield "Once"    ← User sees this immediately                      │
+        │       ↓                                                            │
+        │  yield " upon"   ← And this...                                     │
+        │       ↓                                                            │
+        │  yield " a"      ← And this...                                     │
+        │       ↓                                                            │
+        │  yield " time"   ← Progressive display!                            │
+        └────────────────────────────────────────────────────────────────────┘
+        
+        💡 ADVANTAGES:
+        - Better user experience (see output immediately)
+        - Can cancel generation early
+        - Works great with chat interfaces
+        
+        Args:
+            input_ids: Input token IDs [batch, seq_len]
+            max_new_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (higher = more random)
+            top_k: Keep only top-k tokens for sampling
+            top_p: Nucleus sampling threshold
+            repetition_penalty: Penalty for repeating tokens
+            stop_tokens: Token IDs that stop generation
+        
+        Yields:
+            Individual tokens as they're generated [1] tensor
+        
+        Example:
+            for token in model.generate_stream(input_ids):
+                print(tokenizer.decode([token.item()]), end='', flush=True)
+        """
+        self.clear_cache()
+        stop_tokens = stop_tokens or [2]
+        
+        generated = input_ids
+        logits = self.forward(input_ids, use_cache=True)
+        vocab_size = logits.shape[-1]
+        
+        for _ in range(max_new_tokens):
+            next_logits = logits[:, -1, :] / temperature
+            
+            # Repetition penalty
+            if repetition_penalty != 1.0:
+                # Efficient penalty for shorter sequences using set lookup
+                if generated.shape[1] < 1000:
+                    unique_tokens = set(generated[0].tolist())
+                    for token_id in unique_tokens:
+                        if 0 <= token_id < vocab_size:
+                            next_logits[0, token_id] /= repetition_penalty
+                else:
+                    # Bincount for longer sequences
+                    token_ids = generated[0].clamp(0, vocab_size - 1)
+                    token_counts = torch.bincount(token_ids, minlength=vocab_size)
+                    appeared_mask = token_counts > 0
+                    next_logits[0, appeared_mask] /= repetition_penalty
+            
+            # Top-k filtering
+            if top_k > 0:
+                v, _ = torch.topk(next_logits, min(top_k, vocab_size))
+                next_logits[next_logits < v[:, [-1]]] = float('-inf')
+            
+            # Top-p (nucleus) filtering
+            if top_p < 1.0:
+                sorted_logits, sorted_idx = torch.sort(next_logits, descending=True)
+                cumsum = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                mask = cumsum > top_p
+                mask[:, 1:] = mask[:, :-1].clone()
+                mask[:, 0] = False
+                indices_to_remove = mask.scatter(1, sorted_idx, mask)
+                next_logits[indices_to_remove] = float('-inf')
+            
+            # Sample next token
+            probs = F.softmax(next_logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            
+            # Yield the token immediately
+            yield next_token.squeeze()
+            
+            # Check for stop tokens
+            if next_token.item() in stop_tokens:
+                break
+            
+            # Update generated sequence and get next logits
+            generated = torch.cat([generated, next_token], dim=1)
+            logits = self.forward(next_token, use_cache=True, start_pos=generated.shape[1] - 1)
 
     @property
     def num_parameters(self) -> int:
@@ -2202,7 +2465,144 @@ class Forge(nn.Module):
             logger.info(f"Merged LoRA adapter: {adapter_name}")
     
     # =========================================================================
-    # 🚀 SPECULATIVE DECODING
+    # � MODEL EXPORT METHODS
+    # =========================================================================
+    
+    def export_to_safetensors(self, path: Union[str, Path]) -> None:
+        """
+        Export model to Safetensors format.
+        
+        📖 WHAT THIS DOES:
+        Saves the model weights in Safetensors format, which is:
+        - Faster to load than pickle-based formats
+        - Safer (no arbitrary code execution)
+        - Compatible with many frameworks (HuggingFace, etc.)
+        
+        Args:
+            path: Output path for .safetensors file
+        
+        Example:
+            model.export_to_safetensors("model.safetensors")
+            # Also creates model.json with config
+        """
+        try:
+            from safetensors.torch import save_file
+        except ImportError:
+            raise ImportError(
+                "Safetensors export requires safetensors library. "
+                "Install with: pip install safetensors"
+            )
+        
+        path = Path(path)
+        
+        # Save weights
+        save_file(self.state_dict(), str(path))
+        logger.info(f"Exported weights to: {path}")
+        
+        # Save config alongside
+        config_path = path.with_suffix('.json')
+        with open(config_path, 'w') as f:
+            json.dump(self.config.to_dict(), f, indent=2)
+        logger.info(f"Exported config to: {config_path}")
+    
+    def export_to_onnx(
+        self, 
+        path: Union[str, Path], 
+        opset_version: int = 14,
+        input_names: Optional[List[str]] = None,
+        output_names: Optional[List[str]] = None,
+        dynamic_axes: Optional[Dict[str, Dict[int, str]]] = None
+    ) -> None:
+        """
+        Export model to ONNX format for deployment.
+        
+        📖 WHAT THIS DOES:
+        Exports the model to ONNX format, enabling:
+        - Cross-platform deployment (C++, mobile, web)
+        - Hardware-specific optimizations (TensorRT, OpenVINO)
+        - Framework-agnostic inference
+        
+        ⚠️ NOTES:
+        - KV-cache based generation is not directly supported in ONNX
+        - Export captures the model at a fixed sequence length
+        - Dynamic axes allow variable batch/sequence sizes
+        
+        Args:
+            path: Output path for .onnx file
+            opset_version: ONNX opset version (14 is widely supported)
+            input_names: Names for input tensors
+            output_names: Names for output tensors
+            dynamic_axes: Dict specifying variable dimensions
+        
+        Example:
+            model.export_to_onnx("model.onnx")
+            # Use with ONNX Runtime for fast inference
+        """
+        path = Path(path)
+        
+        # Default configurations
+        input_names = input_names or ['input_ids']
+        output_names = output_names or ['logits']
+        dynamic_axes = dynamic_axes or {
+            'input_ids': {0: 'batch', 1: 'sequence'},
+            'logits': {0: 'batch', 1: 'sequence'}
+        }
+        
+        # Create dummy input (representative of actual input)
+        dummy_input = torch.randint(
+            0, self.vocab_size, 
+            (1, min(128, self.max_len)),
+            device=next(self.parameters()).device
+        )
+        
+        # Export
+        logger.info(f"Exporting to ONNX (opset {opset_version})...")
+        torch.onnx.export(
+            self,
+            dummy_input,
+            str(path),
+            opset_version=opset_version,
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+            do_constant_folding=True,  # Optimize constants
+        )
+        logger.info(f"Exported to ONNX: {path}")
+        
+        # Save config alongside
+        config_path = path.with_suffix('.json')
+        with open(config_path, 'w') as f:
+            json.dump(self.config.to_dict(), f, indent=2)
+        logger.info(f"Exported config to: {config_path}")
+    
+    def export_to_pytorch(self, path: Union[str, Path]) -> None:
+        """
+        Export model to standard PyTorch format (.pth).
+        
+        📖 WHAT THIS DOES:
+        Saves model weights and config in native PyTorch format.
+        This is the default format used by ForgeAI.
+        
+        Args:
+            path: Output path for .pth file
+        
+        Example:
+            model.export_to_pytorch("models/my_model.pth")
+        """
+        path = Path(path)
+        
+        # Save weights
+        torch.save(self.state_dict(), path)
+        logger.info(f"Exported weights to: {path}")
+        
+        # Save config alongside
+        config_path = path.with_suffix('.json')
+        with open(config_path, 'w') as f:
+            json.dump(self.config.to_dict(), f, indent=2)
+        logger.info(f"Exported config to: {config_path}")
+    
+    # =========================================================================
+    # �🚀 SPECULATIVE DECODING
     # =========================================================================
     
     def enable_speculative_decoding(
