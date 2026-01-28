@@ -717,6 +717,65 @@ class RMSNorm(nn.Module):
 
 
 # =============================================================================
+# 🔄 REPETITION PENALTY HELPER - Efficient penalty application
+# =============================================================================
+
+def apply_repetition_penalty(
+    logits: torch.Tensor,
+    generated_tokens: torch.Tensor,
+    penalty: float
+) -> torch.Tensor:
+    """
+    Apply repetition penalty to logits based on previously generated tokens.
+    
+    📖 WHAT THIS DOES:
+    Reduces the probability of tokens that have already been generated,
+    encouraging the model to produce more diverse output.
+    
+    📐 HYBRID APPROACH:
+    - For short sequences (<1000 tokens): Uses set-based lookup (lower overhead)
+    - For longer sequences: Uses bincount (better vectorization)
+    
+    Args:
+        logits: Logits tensor [batch, vocab_size] or [vocab_size]
+        generated_tokens: Previously generated token IDs
+        penalty: Penalty factor (>1.0 reduces repetition, 1.0 = no penalty)
+    
+    Returns:
+        Modified logits with repetition penalty applied
+    
+    Example:
+        logits = apply_repetition_penalty(logits, generated_ids, penalty=1.2)
+    """
+    if penalty == 1.0:
+        return logits
+    
+    vocab_size = logits.shape[-1]
+    seq_len = generated_tokens.numel()
+    
+    if seq_len < 1000:
+        # Set-based for short sequences (lower overhead)
+        unique_tokens = set(generated_tokens.view(-1).tolist())
+        for token_id in unique_tokens:
+            if 0 <= token_id < vocab_size:
+                if logits.dim() == 1:
+                    logits[token_id] /= penalty
+                else:
+                    logits[..., token_id] /= penalty
+    else:
+        # Bincount for longer sequences (better vectorization)
+        flat_tokens = generated_tokens.view(-1).clamp(0, vocab_size - 1)
+        token_counts = torch.bincount(flat_tokens, minlength=vocab_size)
+        appeared_mask = token_counts > 0
+        if logits.dim() == 1:
+            logits[appeared_mask] /= penalty
+        else:
+            logits[..., appeared_mask] /= penalty
+    
+    return logits
+
+
+# =============================================================================
 # 🌀 ROTARY POSITION EMBEDDINGS (RoPE) - How the model knows word order
 # =============================================================================
 # Without position info, "dog bites man" = "man bites dog" to the model!
@@ -1271,6 +1330,7 @@ class TransformerBlock(nn.Module):
         super().__init__()
         self.layer_id = layer_id
         self.use_checkpoint = getattr(config, 'use_gradient_checkpointing', False)
+        self.use_moe = getattr(config, 'use_moe', False)
 
         # Choose normalization type based on config
         Norm = RMSNorm if config.use_rms_norm else nn.LayerNorm
@@ -1281,7 +1341,11 @@ class TransformerBlock(nn.Module):
         
         # The actual computation modules
         self.attention = Attention(config)
-        self.feed_forward = FeedForward(config)
+        # Use MoE feed-forward if enabled, otherwise standard feed-forward
+        if self.use_moe:
+            self.feed_forward = MoEFeedForward(config)
+        else:
+            self.feed_forward = FeedForward(config)
 
     def _forward_impl(
         self, x: torch.Tensor, freqs_cis: Optional[torch.Tensor] = None,
@@ -1326,6 +1390,12 @@ class TransformerBlock(nn.Module):
     def clear_cache(self):
         """Clear KV-cache in the attention layer."""
         self.attention.clear_cache()
+
+    def get_moe_aux_loss(self) -> torch.Tensor:
+        """Get MoE auxiliary loss for load balancing during training."""
+        if self.use_moe and hasattr(self.feed_forward, 'get_aux_loss'):
+            return self.feed_forward.get_aux_loss()
+        return torch.tensor(0.0)
 
 
 # =============================================================================
@@ -1580,6 +1650,30 @@ class Forge(nn.Module):
         for layer in self.layers:
             layer.clear_cache()
 
+    def get_moe_aux_loss(self) -> torch.Tensor:
+        """
+        Get total MoE auxiliary loss from all layers.
+        
+        📖 WHAT THIS DOES:
+        Collects load balancing losses from all MoE layers to encourage
+        even distribution of tokens across experts during training.
+        
+        ⚠️ TRAINING ONLY:
+        This loss should be added to the main training loss:
+            total_loss = ce_loss + model.get_moe_aux_loss()
+        
+        Returns:
+            Scalar tensor with combined auxiliary loss from all MoE layers.
+            Returns 0.0 if MoE is not enabled.
+        """
+        if not self.config.use_moe:
+            return torch.tensor(0.0, device=next(self.parameters()).device)
+        
+        aux_loss = torch.tensor(0.0, device=next(self.parameters()).device)
+        for layer in self.layers:
+            aux_loss = aux_loss + layer.get_moe_aux_loss()
+        return aux_loss
+
     def forward_multimodal(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -1666,33 +1760,71 @@ class Forge(nn.Module):
 
     @torch.no_grad()
     def generate(
-        self, input_ids: torch.Tensor, max_new_tokens: int = 100,
-        temperature: float = 0.8, top_k: int = 50, top_p: float = 0.9,
-        repetition_penalty: float = 1.1, stop_tokens: Optional[List[int]] = None
-    ) -> torch.Tensor:
-        """Generate tokens autoregressively."""
+        self,
+        input_ids: torch.Tensor,
+        max_new_tokens: int = 100,
+        temperature: float = 0.8,
+        top_k: int = 50,
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.1,
+        stop_tokens: Optional[List[int]] = None,
+        *,  # Force keyword-only args after this
+        return_logits: bool = False,
+        stream: bool = False,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Generate tokens autoregressively.
+        
+        Args:
+            input_ids: Input token IDs [batch, seq_len]
+            max_new_tokens: Maximum number of tokens to generate
+            temperature: Sampling temperature (higher = more random)
+            top_k: Keep only top-k tokens for sampling
+            top_p: Nucleus sampling threshold
+            repetition_penalty: Penalty for repeating tokens (1.0 = no penalty)
+            stop_tokens: Token IDs that stop generation
+            return_logits: If True, also return the final logits
+            stream: If True, use streaming generation (returns generator)
+        
+        Returns:
+            Generated token IDs, or (token_ids, logits) if return_logits=True,
+            or generator if stream=True
+        """
+        # Delegate to streaming generator if requested
+        if stream:
+            return self.generate_stream(
+                input_ids, max_new_tokens, temperature, top_k, top_p,
+                repetition_penalty, stop_tokens
+            )
+        
         self.clear_cache()
         stop_tokens = stop_tokens or [2]
 
         generated = input_ids
         logits = self.forward(input_ids, use_cache=True)
+        final_logits = logits  # Track for return_logits option
 
         for _ in range(max_new_tokens):
             next_logits = logits[:, -1, :] / temperature
 
-            # Repetition penalty - O(vocabulary) instead of O(n²)
-            # Uses vectorized operations for efficient penalty application
+            # Repetition penalty - Hybrid approach for optimal performance
+            # Uses set-based lookup for short sequences, bincount for longer ones
             if repetition_penalty != 1.0:
-                # Get unique tokens that have been generated
                 vocab_size = next_logits.shape[-1]
                 for i in range(input_ids.shape[0]):
-                    # Use bincount for O(n) counting instead of set() iteration
-                    token_ids = generated[i].clamp(0, vocab_size - 1)
-                    token_counts = torch.bincount(token_ids, minlength=vocab_size)
-                    # Create mask for tokens that appeared at least once
-                    appeared_mask = token_counts > 0
-                    # Apply penalty only to appeared tokens (vectorized)
-                    next_logits[i, appeared_mask] = next_logits[i, appeared_mask] / repetition_penalty
+                    seq_len = generated[i].shape[0]
+                    if seq_len < 1000:
+                        # Set-based for short sequences (lower overhead)
+                        unique_tokens = set(generated[i].tolist())
+                        for token_id in unique_tokens:
+                            if 0 <= token_id < vocab_size:
+                                next_logits[i, token_id] /= repetition_penalty
+                    else:
+                        # Bincount for longer sequences (better vectorization)
+                        token_ids = generated[i].clamp(0, vocab_size - 1)
+                        token_counts = torch.bincount(token_ids, minlength=vocab_size)
+                        appeared_mask = token_counts > 0
+                        next_logits[i, appeared_mask] /= repetition_penalty
 
             # Top-k
             if top_k > 0:
@@ -1718,7 +1850,11 @@ class Forge(nn.Module):
                 break
 
             logits = self.forward(next_token, use_cache=True, start_pos=generated.shape[1] - 1)
+            final_logits = logits  # Update for return_logits
 
+        # Return based on options
+        if return_logits:
+            return generated, final_logits
         return generated
 
     @torch.no_grad()
