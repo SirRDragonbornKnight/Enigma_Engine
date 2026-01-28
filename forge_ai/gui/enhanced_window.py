@@ -2996,6 +2996,7 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.voice_clone_tab import VoiceCloneTab
         from .tabs.workspace_tab import create_workspace_tab
         from .tabs.persona_tab import create_persona_tab
+        from .tabs.learning_tab import LearningTab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -3073,6 +3074,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Camera", "camera", "Live webcam AI analysis"),
             # Tools
             ("section", "SYSTEM"),
+            ("", "Learning", "learning", "Self-improvement metrics and training"),
             ("", "Terminal", "terminal", "View AI internal processing"),
             ("", "Files", "files", "Edit training data and settings"),
             ("", "Logs", "logs", "View system logs"),
@@ -3112,7 +3114,7 @@ class EnhancedMainWindow(QMainWindow):
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
             'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
-            'game', 'robot', 'terminal', 'files', 'logs', 'network',
+            'game', 'robot', 'learning', 'terminal', 'files', 'logs', 'network',
             'analytics', 'examples', 'settings', 'gif', 'voice'
         ]
         
@@ -3183,6 +3185,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(create_robot_subtab(self)))  # Robot
         self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision
         self.content_stack.addWidget(wrap_in_scroll(create_camera_tab(self)))  # Camera
+        self.content_stack.addWidget(wrap_in_scroll(LearningTab(self)))  # Learning
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
