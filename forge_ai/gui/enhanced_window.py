@@ -1683,6 +1683,45 @@ class EnhancedMainWindow(QMainWindow):
         self._chat_sync.generation_stopped.connect(self._on_chat_sync_stopped)
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize Avatar-AI Bridge
+        # This connects AI responses to avatar expressions and gestures
+        # ─────────────────────────────────────────────────────────────────
+        self._avatar_bridge = None
+        try:
+            from ..avatar import get_avatar, AIAvatarBridge, create_avatar_bridge
+            avatar = get_avatar()
+            if avatar:
+                self._avatar_bridge = create_avatar_bridge(avatar, enable_explicit=True)
+                # Connect bridge signals
+                if hasattr(self._avatar_bridge, 'emotion_detected'):
+                    self._avatar_bridge.emotion_detected.connect(self._on_avatar_emotion)
+                if hasattr(self._avatar_bridge, 'gesture_triggered'):
+                    self._avatar_bridge.gesture_triggered.connect(self._on_avatar_gesture)
+                print("Avatar-AI Bridge initialized")
+        except Exception as e:
+            print(f"Could not initialize Avatar-AI Bridge: {e}")
+            self._avatar_bridge = None
+        
+        # ─────────────────────────────────────────────────────────────────
+        # Initialize Federated Learning Integration
+        # This connects training to the federated learning system
+        # ─────────────────────────────────────────────────────────────────
+        self._federated_learning = None
+        try:
+            from ..config import CONFIG
+            if CONFIG.get("federated_learning", {}).get("enabled", False):
+                from ..federated import FederatedLearning, FederationMode
+                model_name = self._gui_settings.get("last_model", "forge_ai")
+                self._federated_learning = FederatedLearning(
+                    model_name=model_name,
+                    mode=FederationMode.OPT_IN,
+                )
+                print("Federated Learning integration initialized")
+        except Exception as e:
+            print(f"Could not initialize Federated Learning: {e}")
+            self._federated_learning = None
+        
+        # ─────────────────────────────────────────────────────────────────
         # Initialize AI Overlay
         # This is the transparent always-on-top gaming interface
         # ─────────────────────────────────────────────────────────────────
@@ -1783,6 +1822,39 @@ class EnhancedMainWindow(QMainWindow):
     def _on_chat_sync_stopped(self):
         """Handle when shared ChatSync generation is stopped."""
         self._on_chat_sync_finished("")
+    
+    def _on_avatar_emotion(self, emotion: str):
+        """Handle emotion detected by avatar bridge."""
+        logger.debug(f"Avatar emotion: {emotion}")
+        # The bridge already sets the avatar expression, but we can log or react here
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText(f"Emotion: {emotion}")
+    
+    def _on_avatar_gesture(self, gesture: str):
+        """Handle gesture triggered by avatar bridge."""
+        logger.debug(f"Avatar gesture: {gesture}")
+    
+    def _notify_avatar_response_start(self):
+        """Notify avatar bridge that AI is starting to respond."""
+        if self._avatar_bridge:
+            self._avatar_bridge.on_response_start()
+    
+    def _notify_avatar_response_chunk(self, text: str) -> str:
+        """Process response chunk through avatar bridge, returns cleaned text."""
+        if self._avatar_bridge:
+            return self._avatar_bridge.on_response_chunk(text)
+        return text
+    
+    def _notify_avatar_response_end(self):
+        """Notify avatar bridge that AI finished responding."""
+        if self._avatar_bridge:
+            self._avatar_bridge.on_response_end()
+    
+    def _on_federated_round_complete(self, round_num: int, improvement: float):
+        """Handle when a federated learning round completes."""
+        logger.info(f"Federated round {round_num} complete, improvement: {improvement:.4f}")
+        if hasattr(self, 'statusBar'):
+            self.statusBar().showMessage(f"Federated round {round_num}: +{improvement:.2%} improvement", 5000)
     
     def _set_window_icon(self):
         """Set the window icon from file or create a default."""
@@ -4924,6 +4996,9 @@ class EnhancedMainWindow(QMainWindow):
                     system_prompt = f"{system_prompt}\n\n{motivation_prompt}"
                     self.log_terminal("Added AI motivation context to prompt", "debug")
         
+        # Notify avatar bridge that we're starting generation
+        self._notify_avatar_response_start()
+        
         # Start background worker
         self._ai_worker = AIGenerationWorker(
             self.engine, text, is_hf, history, system_prompt, custom_tok, parent_window=self
@@ -5290,6 +5365,12 @@ class EnhancedMainWindow(QMainWindow):
     
     def _on_ai_response(self, response: str):
         """Handle AI response from background worker."""
+        # Notify avatar bridge that response is complete
+        self._notify_avatar_response_end()
+        
+        # Process response through avatar bridge (strips explicit commands)
+        response = self._notify_avatar_response_chunk(response)
+        
         # Hide thinking panel and stop button
         if hasattr(self, 'thinking_frame'):
             self.thinking_frame.hide()
@@ -5315,6 +5396,7 @@ class EnhancedMainWindow(QMainWindow):
                 quick_chat.stop_responding()
         
         # AUTO-CONTROL: Automatically control avatar/robot/game based on response
+        self._auto_control_from_response(response)
         self._auto_control_from_response(response)
         
         # Check for tool calls in response and execute them
@@ -6251,6 +6333,16 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             update_ui(training=False, progress=100)
             self._is_training = False
             self._stop_training = False
+            
+            # Notify federated learning that local training completed
+            if hasattr(self, '_federated_learning') and self._federated_learning:
+                try:
+                    # Share local model update with federation (if configured)
+                    if hasattr(self._federated_learning, 'share_local_update'):
+                        self._federated_learning.share_local_update()
+                        self.log_terminal("Federated learning: shared local training update", "info")
+                except Exception as fed_err:
+                    self.log_terminal(f"Federated learning error: {fed_err}", "warning")
             
             if stopped_early:
                 QMessageBox.information(self, "Stopped", f"Training stopped after epoch {epoch + 1}. Progress saved!")

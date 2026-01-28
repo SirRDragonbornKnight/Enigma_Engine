@@ -274,6 +274,11 @@ class AvatarController:
             # Initialize renderer
             self._init_renderer()
             
+            # Initialize animator (if not already created)
+            if self._animator is None:
+                self._animator = AvatarAnimator(self)
+                logger.debug("Avatar animator initialized")
+            
             # Start animation thread
             self._running = True
             self._animation_thread = threading.Thread(target=self._animation_loop, daemon=True)
