@@ -279,6 +279,11 @@ def validate_loaded_model(model: 'Forge') -> None:
         return
     
     try:
+        # Verify model has required attributes
+        if not hasattr(model, 'vocab_size'):
+            logger.warning("Model missing vocab_size attribute, cannot validate")
+            return
+        
         # Test forward pass with random input
         batch_size = 1
         seq_len = 10

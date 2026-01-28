@@ -723,33 +723,6 @@ def dequantize_q8_0(data: bytes, shape: tuple) -> 'torch.Tensor':
     )
 
 
-def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
-    """
-    Recommend number of GPU layers based on model size and available VRAM.
-    
-    Args:
-        model_size_gb: Model file size in GB
-        vram_gb: Available VRAM in GB
-        
-    Returns:
-        Recommended number of layers to offload
-    """
-    # Rough heuristic: each layer uses about 5% of model size in VRAM
-    # Leave some VRAM for context and other operations
-    usable_vram = vram_gb * 0.8  # Use 80% of VRAM
-    
-    # Estimate layers that fit
-    if model_size_gb >= usable_vram:
-        # Can't fit entire model
-        ratio = usable_vram / model_size_gb
-        # Rough estimate: 32 layers for 7B model, scale from there
-        estimated_layers = int(32 * ratio)
-        return max(0, estimated_layers)
-    else:
-        # Can fit entire model - use all layers
-        return 999  # Use a large number to offload all layers
-
-
 def load_gguf_model(
     gguf_model_path: str,
     config: Any = None,

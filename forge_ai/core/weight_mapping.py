@@ -15,6 +15,7 @@ Usage:
 """
 
 import logging
+import re
 from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
@@ -82,7 +83,6 @@ class WeightMapper:
             if '{}' in forge_key_template:
                 for pattern in source_patterns:
                     # Extract layer number from source name
-                    import re
                     pattern_regex = pattern.replace('.{}', r'\.(\d+)')
                     match = re.match(pattern_regex, source_name)
                     if match:
@@ -134,12 +134,8 @@ class WeightMapper:
         
         # GPT-2 style models: combined QKV needs splitting
         if 'c_attn' in source_name and source_format == 'huggingface':
-            # Split into Q, K, V based on target name
-            if '.wq.' in target_name:
-                return self._split_qkv(tensor, target_name)
-            elif '.wk.' in target_name:
-                return self._split_qkv(tensor, target_name)
-            elif '.wv.' in target_name:
+            # Check if this is a Q, K, or V weight
+            if any(x in target_name for x in ['.wq.', '.wk.', '.wv.']):
                 return self._split_qkv(tensor, target_name)
         
         # GPT-NeoX style: combined query_key_value

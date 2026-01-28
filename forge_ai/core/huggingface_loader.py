@@ -983,7 +983,6 @@ def convert_huggingface_to_forge(
     
     # Import Forge components
     from .model import Forge, ForgeConfig
-    from .weight_mapping import WeightMapper
     
     logger.info(f"Loading HuggingFace model: {model_id}")
     
