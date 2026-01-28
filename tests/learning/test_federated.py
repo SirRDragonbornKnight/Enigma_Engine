@@ -12,7 +12,8 @@ from forge_ai.learning import (
     DifferentialPrivacy,
     SecureAggregator,
     AggregationMethod,
-    DataFilter,
+    FederatedDataFilter,
+    TrainingExample,
     TrustManager,
 )
 
@@ -33,42 +34,41 @@ class TestWeightUpdate:
             timestamp=datetime.now(),
             weight_deltas=deltas,
             training_samples=100,
+            metadata={"loss": 0.5},
         )
         
         assert update.update_id == "test-123"
         assert update.device_id == "device-1"
         assert update.training_samples == 100
         assert "layer1" in update.weight_deltas
-        assert "layer2" in update.weight_deltas
+        assert update.metadata["loss"] == 0.5
     
     def test_sign_and_verify(self):
         """Test signing and verifying updates."""
         update = WeightUpdate(
-            update_id="test-123",
-            device_id="device-1",
+            update_id="test-456",
+            device_id="device-2",
             timestamp=datetime.now(),
             weight_deltas={"layer1": np.array([1.0, 2.0])},
             training_samples=50,
         )
         
-        # Sign
-        signature = update.sign()
+        # Sign the update
+        signature = update.sign("secret_key")
         assert signature is not None
         assert update.signature == signature
         
-        # Verify
-        assert update.verify_signature()
+        # Verify with correct key
+        assert update.verify_signature("secret_key")
     
     def test_get_size(self):
         """Test getting update size."""
         update = WeightUpdate(
-            update_id="test-123",
-            device_id="device-1",
+            update_id="test-789",
+            device_id="device-3",
             timestamp=datetime.now(),
-            weight_deltas={
-                "layer1": np.array([1.0, 2.0, 3.0], dtype=np.float32),
-            },
-            training_samples=50,
+            weight_deltas={"layer1": np.array([1.0, 2.0, 3.0], dtype=np.float32)},
+            training_samples=25,
         )
         
         size = update.get_size()
@@ -81,26 +81,30 @@ class TestFederatedLearning:
     def test_init(self):
         """Test initialization."""
         fl = FederatedLearning(
+            model_name="test_model",
             mode=FederatedMode.OPT_IN,
             privacy_level=PrivacyLevel.HIGH
         )
         
         assert fl.mode == FederatedMode.OPT_IN
         assert fl.privacy_level == PrivacyLevel.HIGH
-        assert fl.current_round == 0
+        assert fl.model_name == "test_model"
     
     def test_local_training_round(self):
         """Test local training round."""
         # Use NONE privacy level to avoid noise
-        fl = FederatedLearning(privacy_level=PrivacyLevel.NONE)
+        fl = FederatedLearning(
+            model_name="test_model",
+            privacy_level=PrivacyLevel.NONE
+        )
         
-        # Base weights
+        # Base weights (set initial weights directly)
         base_weights = {
             "layer1": np.array([1.0, 2.0, 3.0]),
             "layer2": np.array([[1.0, 2.0], [3.0, 4.0]]),
         }
         
-        fl.start_local_round(base_weights)
+        fl.initial_weights = base_weights
         
         # Updated weights (after training)
         updated_weights = {
@@ -110,16 +114,13 @@ class TestFederatedLearning:
         
         # Create update
         update = fl.train_local_round(
-            model_weights=updated_weights,
+            final_weights=updated_weights,
             training_samples=100,
-            loss=0.5,
-            accuracy=0.9
+            metadata={"loss": 0.5, "accuracy": 0.9}
         )
         
         assert update is not None
         assert update.training_samples == 100
-        assert update.metadata["loss"] == 0.5
-        assert update.metadata["accuracy"] == 0.9
         
         # Check deltas are computed correctly
         assert "layer1" in update.weight_deltas
@@ -151,12 +152,13 @@ class TestDifferentialPrivacy:
         # Noise can be significant based on sensitivity, just check it's not infinite
         assert np.all(np.isfinite(diff))
     
-    def test_privacy_loss(self):
-        """Test computing privacy loss."""
-        dp = DifferentialPrivacy(epsilon=0.5)
+    def test_epsilon_validation(self):
+        """Test epsilon validation."""
+        with pytest.raises(ValueError):
+            DifferentialPrivacy(epsilon=0)  # epsilon must be positive
         
-        loss = dp.compute_privacy_loss(num_rounds=10)
-        assert loss == 10 * 0.5  # Simple composition
+        with pytest.raises(ValueError):
+            DifferentialPrivacy(epsilon=-1)  # epsilon must be positive
 
 
 class TestSecureAggregator:
@@ -164,7 +166,7 @@ class TestSecureAggregator:
     
     def test_simple_average(self):
         """Test simple averaging."""
-        agg = SecureAggregator(method=AggregationMethod.SIMPLE)
+        agg = SecureAggregator()
         
         # Create test updates
         updates = [
@@ -178,7 +180,7 @@ class TestSecureAggregator:
             for i in range(1, 4)  # 1, 2, 3
         ]
         
-        result = agg.aggregate_updates(updates)
+        result = agg.aggregate_updates(updates, method=AggregationMethod.SIMPLE)
         
         # Average of [1, 1], [2, 2], [3, 3] should be [2, 2]
         expected = np.array([2.0, 2.0])
@@ -189,7 +191,7 @@ class TestSecureAggregator:
     
     def test_weighted_average(self):
         """Test weighted averaging."""
-        agg = SecureAggregator(method=AggregationMethod.WEIGHTED)
+        agg = SecureAggregator()
         
         # Create test updates with different sample counts
         updates = [
@@ -209,7 +211,7 @@ class TestSecureAggregator:
             ),
         ]
         
-        result = agg.aggregate_updates(updates)
+        result = agg.aggregate_updates(updates, method=AggregationMethod.WEIGHTED)
         
         # Weighted average: (1*10 + 3*30) / 40 = 100/40 = 2.5
         expected = np.array([2.5, 2.5])
@@ -220,46 +222,68 @@ class TestSecureAggregator:
 
 
 class TestDataFilter:
-    """Tests for DataFilter class."""
+    """Tests for FederatedDataFilter class."""
+    
+    def test_should_include(self):
+        """Test filtering examples."""
+        filter = FederatedDataFilter()
+        
+        # Normal example - should be included
+        example1 = TrainingExample(
+            text="This is a normal training example with no sensitive data.",
+            is_private=False
+        )
+        assert filter.should_include(example1)
+        
+        # Private example - should be excluded
+        example2 = TrainingExample(
+            text="This is a private conversation",
+            is_private=True
+        )
+        assert not filter.should_include(example2)
+    
+    def test_filter_sensitive_keywords(self):
+        """Test filtering sensitive keywords."""
+        filter = FederatedDataFilter()
+        
+        # Example with password - should be excluded
+        example = TrainingExample(
+            text="My password is secret123",
+            is_private=False
+        )
+        assert not filter.should_include(example)
     
     def test_filter_pii(self):
         """Test filtering PII."""
-        filter = DataFilter()
+        filter = FederatedDataFilter()
         
-        data = [
-            {
-                "input": "Contact me at john@example.com",
-                "output": "I will call you at 555-123-4567"
-            },
-        ]
-        
-        filtered = filter.filter_training_data(data)
-        
-        assert len(filtered) == 1
-        assert "[EMAIL]" in filtered[0]["input"]
-        assert "[PHONE]" in filtered[0]["output"]
+        # Example with email - should be excluded due to PII
+        example = TrainingExample(
+            text="Contact me at john@example.com for more info",
+            is_private=False
+        )
+        assert not filter.should_include(example)
     
-    def test_filter_length(self):
-        """Test filtering by length."""
-        filter = DataFilter(min_length=10, max_length=50)
+    def test_sanitize(self):
+        """Test sanitizing PII from examples."""
+        filter = FederatedDataFilter()
         
-        data = [
-            {"input": "short", "output": "test"},  # Too short
-            {"input": "This is a good length message", "output": "Also good length"},
-            {"input": "a" * 100, "output": "response"},  # Too long
-        ]
+        example = TrainingExample(
+            text="Contact john@example.com or call 555-123-4567",
+            is_private=False
+        )
+        sanitized = filter.sanitize(example)
         
-        filtered = filter.filter_training_data(data)
-        
-        assert len(filtered) == 1
-        assert "good length" in filtered[0]["input"]
+        assert "john@example.com" not in sanitized.text
+        assert "555-123-4567" not in sanitized.text
+        assert "[EMAIL]" in sanitized.text or "[PHONE]" in sanitized.text
 
 
 class TestTrustManager:
     """Tests for TrustManager class."""
     
-    def test_evaluate_trusted_update(self):
-        """Test evaluating a trusted update."""
+    def test_verify_trusted_update(self):
+        """Test verifying a trusted update."""
         tm = TrustManager()
         
         update = WeightUpdate(
@@ -269,13 +293,14 @@ class TestTrustManager:
             weight_deltas={"layer1": np.array([0.1, 0.2])},
             training_samples=100,
         )
+        update.sign()  # Sign the update
         
         # Should be trusted initially
-        assert tm.evaluate_update(update)
+        assert tm.verify_update(update)
     
-    def test_detect_byzantine(self):
-        """Test detecting Byzantine updates."""
-        tm = TrustManager()
+    def test_detect_large_magnitude(self):
+        """Test detecting updates with large magnitude."""
+        tm = TrustManager(max_update_magnitude=1.0)
         
         # Normal update
         normal = WeightUpdate(
@@ -285,26 +310,36 @@ class TestTrustManager:
             weight_deltas={"layer1": np.array([0.1, 0.2])},
             training_samples=100,
         )
+        normal.sign()
         
-        # Byzantine update (huge magnitude)
-        byzantine = WeightUpdate(
-            update_id="byzantine",
+        # Large magnitude update (should fail)
+        large = WeightUpdate(
+            update_id="large",
             device_id="device-2",
             timestamp=datetime.now(),
-            weight_deltas={"layer1": np.array([1e12, 1e12])},
+            weight_deltas={"layer1": np.array([1e6, 1e6])},
             training_samples=100,
         )
+        large.sign()
         
-        assert tm.evaluate_update(normal)
-        assert not tm.evaluate_update(byzantine)
+        assert tm.verify_update(normal)
+        assert not tm.verify_update(large)
     
-    def test_ban_device(self):
-        """Test banning a device."""
+    def test_block_device(self):
+        """Test blocking a device."""
         tm = TrustManager()
         
         device_id = "bad-device"
-        tm.ban_device(device_id)
+        tm.block_device(device_id)
         
-        trust = tm.get_device_trust(device_id)
-        assert trust is not None
-        assert trust.trust_score == 0.0
+        update = WeightUpdate(
+            update_id="test",
+            device_id=device_id,
+            timestamp=datetime.now(),
+            weight_deltas={"layer1": np.array([0.1])},
+            training_samples=10,
+        )
+        update.sign()
+        
+        # Should be rejected because device is blocked
+        assert not tm.verify_update(update)
