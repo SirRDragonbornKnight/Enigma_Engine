@@ -382,6 +382,49 @@ CONFIG = {
             "round_timeout": 300,          # Seconds to wait for updates
         },
     },
+    
+    # =========================================================================
+    # THE SELF-IMPROVEMENT ENGINE - Learning and Growth
+    # =========================================================================
+    "self_improvement": {
+        "enabled": True,                    # Enable self-improvement system
+        "autonomous_learning": False,       # Autonomous learning mode (off by default)
+        "feedback_learning": True,          # Learn from user feedback
+        
+        # Automatic Training
+        "auto_training": {
+            "enabled": True,                # Automatically trigger LoRA training
+            "min_examples": 100,            # Min examples before training
+            "interval_hours": 24,           # Min hours between training runs
+            "min_quality_score": 0.6,       # Only use high-quality examples
+            "max_examples_per_training": 1000,  # Max examples per training run
+        },
+        
+        # LoRA Configuration
+        "lora_config": {
+            "rank": 8,                      # LoRA rank (lower = faster, higher = better)
+            "alpha": 16,                    # LoRA alpha scaling
+            "dropout": 0.1,                 # Dropout rate
+            "target_modules": ["q_proj", "v_proj"],  # Which layers to adapt
+        },
+        
+        # Storage Limits
+        "storage": {
+            "max_examples": 10000,          # Maximum learning examples to keep
+            "max_feedback_entries": 5000,   # Maximum feedback entries
+            "cleanup_old_data_days": 30,    # Remove data older than N days
+        },
+        
+        # Autonomous Learning Settings
+        "autonomous": {
+            "interval": 300,                # Seconds between autonomous actions
+            "max_actions_per_hour": 12,     # Rate limit
+            "min_quality_for_learning": 0.6,  # Quality threshold
+            "reflection_depth": 10,         # How many conversations to analyze
+            "evolution_rate": 0.02,         # Personality evolution rate
+            "balance_threshold": 0.5,       # Personality balance threshold
+        },
+    },
 }
 
 
