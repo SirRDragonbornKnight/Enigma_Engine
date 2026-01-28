@@ -15,6 +15,7 @@ Usage:
 """
 
 import logging
+import re
 from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
@@ -47,6 +48,108 @@ class WeightMapper:
             'gguf': self._get_gguf_mappings(),
             'onnx': self._get_onnx_mappings()
         }
+    
+    def map_name(self, source_name: str, source_format: str = 'huggingface') -> Optional[str]:
+        """
+        Map a single weight name from source format to Forge format.
+        
+        Args:
+            source_name: Original weight name (e.g., "transformer.wte.weight")
+            source_format: Source format ("huggingface", "gguf", "onnx")
+            
+        Returns:
+            Mapped Forge weight name, or None if no mapping found
+            
+        Example:
+            >>> mapper = WeightMapper()
+            >>> mapper.map_name("transformer.wte.weight", "huggingface")
+            'tok_embeddings.weight'
+        """
+        if source_format not in self.mappings:
+            logger.warning(f"Unknown source format: {source_format}")
+            return None
+        
+        mappings = self.mappings[source_format]
+        
+        # Try direct mappings first (non-layer weights)
+        for forge_key, source_patterns in mappings.items():
+            if '{}' not in forge_key:
+                for pattern in source_patterns:
+                    if pattern == source_name:
+                        return forge_key
+        
+        # Try layer-based mappings
+        for forge_key_template, source_patterns in mappings.items():
+            if '{}' in forge_key_template:
+                for pattern in source_patterns:
+                    # Extract layer number from source name
+                    pattern_regex = pattern.replace('.{}', r'\.(\d+)')
+                    match = re.match(pattern_regex, source_name)
+                    if match:
+                        layer_num = match.group(1)
+                        return forge_key_template.format(layer_num)
+        
+        return None
+    
+    def transform_tensor(
+        self,
+        tensor: Any,
+        source_name: str,
+        target_name: str,
+        source_format: str = 'huggingface'
+    ) -> Any:
+        """
+        Transform tensor if needed (transpose, reshape, split, etc.).
+        
+        Different model formats may require:
+        - Transposition (Conv1D weights in GPT-2)
+        - Splitting (combined QKV in GPT-2/GPT-NeoX)
+        - Reshaping (different dimension orders)
+        
+        Args:
+            tensor: Source tensor
+            source_name: Original weight name
+            target_name: Target weight name
+            source_format: Source format
+            
+        Returns:
+            Transformed tensor
+            
+        Example:
+            >>> # GPT-2 has combined QKV that needs splitting
+            >>> qkv_tensor = torch.randn(2304, 768)  # 3 * 768 = 2304
+            >>> q_tensor = mapper.transform_tensor(
+            ...     qkv_tensor, 
+            ...     "transformer.h.0.attn.c_attn.weight",
+            ...     "layers.0.attention.wq.weight",
+            ...     "huggingface"
+            ... )
+            >>> q_tensor.shape
+            torch.Size([768, 768])
+        """
+        if not HAVE_TORCH:
+            return tensor
+        
+        import torch
+        
+        # GPT-2 style models: combined QKV needs splitting
+        if 'c_attn' in source_name and source_format == 'huggingface':
+            # Check if this is a Q, K, or V weight
+            if any(x in target_name for x in ['.wq.', '.wk.', '.wv.']):
+                return self._split_qkv(tensor, target_name)
+        
+        # GPT-NeoX style: combined query_key_value
+        if 'query_key_value' in source_name and source_format == 'huggingface':
+            return self._split_qkv(tensor, target_name)
+        
+        # GPT-2 uses Conv1D which needs transposition
+        if source_format == 'huggingface' and 'gpt2' in source_name.lower():
+            if tensor.dim() == 2 and 'weight' in source_name:
+                # Conv1D stores weights transposed
+                return tensor.transpose(0, 1).contiguous()
+        
+        # No transformation needed
+        return tensor
     
     def _get_hf_mappings(self) -> Dict[str, List[str]]:
         """
@@ -514,4 +617,37 @@ class WeightMapper:
 
 def create_mapper() -> WeightMapper:
     """Create a WeightMapper instance."""
+    return WeightMapper()
+
+
+def create_weight_mapper(source_format: str = 'huggingface', target_format: str = 'forge') -> WeightMapper:
+    """
+    Factory function to create a weight mapper.
+    
+    This is the primary way to create weight mappers for model conversion.
+    
+    Args:
+        source_format: Source model format ("huggingface", "gguf", "onnx")
+        target_format: Target format (currently only "forge" is supported)
+        
+    Returns:
+        Configured WeightMapper instance
+        
+    Raises:
+        ValueError: If target_format is not "forge"
+        
+    Example:
+        >>> mapper = create_weight_mapper(source_format="onnx", target_format="forge")
+        >>> forge_weights = mapper.map_onnx_to_forge(onnx_weights, config)
+    """
+    if target_format != 'forge':
+        raise ValueError(f"Only 'forge' target format is supported, got: {target_format}")
+    
+    if source_format not in ['huggingface', 'gguf', 'onnx']:
+        logger.warning(
+            f"Source format '{source_format}' may not be fully supported. "
+            f"Supported formats: huggingface, gguf, onnx"
+        )
+    
+    logger.info(f"Creating WeightMapper: {source_format} → {target_format}")
     return WeightMapper()

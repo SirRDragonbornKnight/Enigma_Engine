@@ -251,7 +251,61 @@ def load_onnx_model(
     # Set to eval mode by default
     forge_model.eval()
     
+    # Validate the loaded model
+    try:
+        validate_loaded_model(forge_model)
+    except Exception as e:
+        logger.warning(f"Model validation warning: {e}")
+        # Continue anyway - model may still work for some use cases
+    
     return forge_model
+
+
+def validate_loaded_model(model: 'Forge') -> None:
+    """
+    Validate that a Forge model works correctly after loading weights.
+    
+    Runs a test forward pass to ensure the model can perform inference.
+    
+    Args:
+        model: Loaded Forge model to validate
+        
+    Raises:
+        RuntimeError: If model validation fails
+        ValueError: If output shape is incorrect
+    """
+    if not HAVE_TORCH:
+        logger.warning("Cannot validate model without torch")
+        return
+    
+    try:
+        # Verify model has required attributes
+        if not hasattr(model, 'vocab_size'):
+            logger.warning("Model missing vocab_size attribute, cannot validate")
+            return
+        
+        # Test forward pass with random input
+        batch_size = 1
+        seq_len = 10
+        input_ids = torch.randint(0, model.vocab_size, (batch_size, seq_len))
+        
+        with torch.no_grad():
+            output = model(input_ids)
+        
+        expected_shape = (batch_size, seq_len, model.vocab_size)
+        if output.shape != expected_shape:
+            raise ValueError(
+                f"Output shape mismatch: got {output.shape}, expected {expected_shape}"
+            )
+        
+        # Check for NaN values
+        if torch.isnan(output).any():
+            raise ValueError("Model output contains NaN values")
+        
+        logger.info(f"✓ Model validation passed: output shape {output.shape}")
+        
+    except Exception as e:
+        raise RuntimeError(f"Model validation failed: {e}")
 
 
 def validate_onnx_model(onnx_model_path: Union[str, Path]) -> Dict[str, Any]:

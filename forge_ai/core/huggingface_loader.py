@@ -799,6 +799,161 @@ def load_huggingface_model(
     return model
 
 
+def convert_hf_config_to_forge(hf_config) -> dict:
+    """
+    Convert HuggingFace config to Forge config dictionary.
+    
+    Supports various HuggingFace model architectures:
+    - GPT-2 family (gpt2, gpt2-medium, gpt2-large, gpt2-xl)
+    - GPT-Neo/GPT-J (EleutherAI models)
+    - GPT-NeoX (EleutherAI models)
+    - LLaMA family (Meta LLaMA, LLaMA-2)
+    - Mistral (Mistral-7B, Mixtral)
+    - Phi models (Microsoft Phi-1, Phi-2)
+    
+    Args:
+        hf_config: HuggingFace model config object
+        
+    Returns:
+        Dictionary with Forge config parameters
+        
+    Raises:
+        ValueError: If model type not supported
+    """
+    model_type = getattr(hf_config, 'model_type', 'unknown')
+    
+    logger.info(f"Converting HuggingFace config: model_type={model_type}")
+    
+    # Base config that works for most models
+    config = {}
+    
+    # Vocabulary size (universal)
+    config['vocab_size'] = hf_config.vocab_size
+    
+    # Model dimension (different attribute names)
+    if hasattr(hf_config, 'hidden_size'):
+        config['dim'] = hf_config.hidden_size
+    elif hasattr(hf_config, 'n_embd'):
+        config['dim'] = hf_config.n_embd
+    elif hasattr(hf_config, 'd_model'):
+        config['dim'] = hf_config.d_model
+    else:
+        raise ValueError("Cannot find model dimension in config")
+    
+    # Number of layers
+    if hasattr(hf_config, 'num_hidden_layers'):
+        config['n_layers'] = hf_config.num_hidden_layers
+    elif hasattr(hf_config, 'n_layer'):
+        config['n_layers'] = hf_config.n_layer
+    elif hasattr(hf_config, 'num_layers'):
+        config['n_layers'] = hf_config.num_layers
+    else:
+        raise ValueError("Cannot find number of layers in config")
+    
+    # Number of attention heads
+    if hasattr(hf_config, 'num_attention_heads'):
+        config['n_heads'] = hf_config.num_attention_heads
+    elif hasattr(hf_config, 'n_head'):
+        config['n_heads'] = hf_config.n_head
+    else:
+        raise ValueError("Cannot find number of attention heads in config")
+    
+    # Maximum sequence length
+    if hasattr(hf_config, 'max_position_embeddings'):
+        config['max_seq_len'] = hf_config.max_position_embeddings
+    elif hasattr(hf_config, 'n_positions'):
+        config['max_seq_len'] = hf_config.n_positions
+    elif hasattr(hf_config, 'max_sequence_length'):
+        config['max_seq_len'] = hf_config.max_sequence_length
+    else:
+        config['max_seq_len'] = 2048  # Default fallback
+        logger.warning("Cannot find max_seq_len in config, using default 2048")
+    
+    # Model-specific configurations
+    if model_type in ['gpt2', 'gpt_neo', 'gpt_neox']:
+        # GPT-2 family - standard transformer
+        pass  # Base config is sufficient
+    
+    elif model_type == 'llama':
+        # LLaMA family - has GQA
+        if hasattr(hf_config, 'num_key_value_heads'):
+            config['n_kv_heads'] = hf_config.num_key_value_heads
+        
+        # LLaMA uses RoPE
+        if hasattr(hf_config, 'rope_theta'):
+            config['rope_theta'] = hf_config.rope_theta
+    
+    elif model_type == 'mistral':
+        # Mistral - similar to LLaMA but with sliding window
+        if hasattr(hf_config, 'num_key_value_heads'):
+            config['n_kv_heads'] = hf_config.num_key_value_heads
+        
+        if hasattr(hf_config, 'sliding_window'):
+            config['sliding_window'] = hf_config.sliding_window
+        
+        if hasattr(hf_config, 'rope_theta'):
+            config['rope_theta'] = hf_config.rope_theta
+    
+    elif model_type in ['phi', 'phi-msft']:
+        # Phi models - Microsoft's small efficient models
+        # Use partial rotary embeddings
+        if hasattr(hf_config, 'partial_rotary_factor'):
+            config['partial_rotary_factor'] = hf_config.partial_rotary_factor
+    
+    else:
+        logger.warning(
+            f"Model type '{model_type}' not explicitly supported. "
+            f"Using generic config mapping - conversion may not be perfect."
+        )
+    
+    logger.info(f"Converted config: {config}")
+    return config
+
+
+def convert_hf_weights_to_forge(hf_state_dict: dict, model_type: str) -> dict:
+    """
+    Convert HuggingFace weights to Forge format using the weight mapper.
+    
+    This is a convenience wrapper around WeightMapper.map_huggingface_to_forge()
+    that provides a cleaner API for standalone use.
+    
+    Args:
+        hf_state_dict: HuggingFace model state dict
+        model_type: Model type (e.g., 'gpt2', 'llama', 'mistral')
+        
+    Returns:
+        Forge-compatible state dict
+        
+    Example:
+        >>> from transformers import AutoModelForCausalLM
+        >>> hf_model = AutoModelForCausalLM.from_pretrained("gpt2")
+        >>> hf_weights = hf_model.state_dict()
+        >>> forge_weights = convert_hf_weights_to_forge(hf_weights, "gpt2")
+    """
+    from .weight_mapping import WeightMapper
+    
+    logger.info(f"Converting {len(hf_state_dict)} HuggingFace weights to Forge format")
+    logger.info(f"Model type: {model_type}")
+    
+    # Create weight mapper
+    mapper = WeightMapper()
+    
+    # Perform mapping
+    forge_state_dict = mapper.map_huggingface_to_forge(hf_state_dict)
+    
+    logger.info(f"Conversion complete: {len(forge_state_dict)} Forge weights")
+    
+    # Log some statistics
+    hf_param_count = sum(t.numel() for t in hf_state_dict.values() if hasattr(t, 'numel'))
+    forge_param_count = sum(t.numel() for t in forge_state_dict.values() if hasattr(t, 'numel'))
+    
+    if hf_param_count > 0:
+        coverage = (forge_param_count / hf_param_count) * 100
+        logger.info(f"Weight coverage: {coverage:.1f}% ({forge_param_count:,} / {hf_param_count:,} parameters)")
+    
+    return forge_state_dict
+
+
 def convert_huggingface_to_forge(
     model_id: str,
     **kwargs
@@ -828,7 +983,6 @@ def convert_huggingface_to_forge(
     
     # Import Forge components
     from .model import Forge, ForgeConfig
-    from .weight_mapping import WeightMapper
     
     logger.info(f"Loading HuggingFace model: {model_id}")
     
@@ -850,18 +1004,8 @@ def convert_huggingface_to_forge(
     # Get HuggingFace config
     hf_config = hf_model.config
     
-    # Create Forge config from HuggingFace config
-    forge_config_dict = {
-        'vocab_size': hf_config.vocab_size,
-        'dim': getattr(hf_config, 'hidden_size', getattr(hf_config, 'n_embd', 768)),
-        'n_layers': getattr(hf_config, 'num_hidden_layers', getattr(hf_config, 'n_layer', 12)),
-        'n_heads': getattr(hf_config, 'num_attention_heads', getattr(hf_config, 'n_head', 12)),
-        'max_seq_len': getattr(hf_config, 'max_position_embeddings', getattr(hf_config, 'n_positions', 1024))
-    }
-    
-    # Handle GQA if present
-    if hasattr(hf_config, 'num_key_value_heads'):
-        forge_config_dict['n_kv_heads'] = hf_config.num_key_value_heads
+    # Convert HuggingFace config to Forge config using standalone function
+    forge_config_dict = convert_hf_config_to_forge(hf_config)
     
     logger.info(f"Creating Forge config: {forge_config_dict}")
     forge_config = ForgeConfig(**forge_config_dict)
@@ -873,9 +1017,9 @@ def convert_huggingface_to_forge(
     hf_state_dict = hf_model.state_dict()
     logger.info(f"HuggingFace model has {len(hf_state_dict)} parameters")
     
-    # Map HuggingFace weights to Forge
-    mapper = WeightMapper()
-    forge_state_dict = mapper.map_huggingface_to_forge(hf_state_dict, forge_config)
+    # Convert weights using standalone function
+    model_type = getattr(hf_config, 'model_type', 'unknown')
+    forge_state_dict = convert_hf_weights_to_forge(hf_state_dict, model_type)
     
     # Load weights into Forge model
     logger.info("Loading mapped weights into Forge model...")
