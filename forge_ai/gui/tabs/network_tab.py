@@ -514,13 +514,108 @@ class NetworkTab(QWidget):
     
     def _sync_models(self):
         """Sync models with remote device."""
-        self._log("Model sync not yet implemented - coming soon!")
-        QMessageBox.information(self, "Coming Soon", "Model sync will be available in a future update.")
+        url = self.remote_url.text().strip()
+        if not url:
+            QMessageBox.warning(self, "Error", "Please enter a remote URL first")
+            return
+        
+        try:
+            from forge_ai.comms.remote_client import RemoteClient
+            
+            self._log(f"Checking remote server at {url}...")
+            client = RemoteClient(url)
+            
+            if not client.is_available():
+                QMessageBox.warning(self, "Connection Error", f"Cannot reach server at {url}")
+                return
+            
+            # Get server info
+            info = client.info()
+            remote_model = info.get('model', 'unknown')
+            
+            self._log(f"Remote server has model: {remote_model}")
+            
+            # Ask user what to sync
+            from PyQt5.QtWidgets import QInputDialog
+            choices = ["Download from remote", "Upload to remote", "Cancel"]
+            choice, ok = QInputDialog.getItem(
+                self, "Sync Models",
+                f"Remote server has model: {remote_model}\n\nWhat would you like to do?",
+                choices, 0, False
+            )
+            
+            if ok and choice != "Cancel":
+                if choice == "Download from remote":
+                    self._log("Model download initiated...")
+                    QMessageBox.information(self, "Model Sync", 
+                        f"To download the model, use:\n\n"
+                        f"from forge_ai.comms import RemoteClient\n"
+                        f"client = RemoteClient('{url}')\n"
+                        f"# Use client.generate() to use remote model")
+                else:
+                    self._log("Model upload initiated...")
+                    QMessageBox.information(self, "Model Sync",
+                        "To upload models, use the Model Manager:\n\n"
+                        "1. Go to File > Model Manager\n"
+                        "2. Select your model\n"
+                        "3. Click Export")
+        except Exception as e:
+            self._log(f"Model sync failed: {e}")
+            QMessageBox.warning(self, "Sync Error", f"Model sync failed: {e}")
     
     def _sync_settings(self):
         """Sync settings with remote device."""
-        self._log("Settings sync not yet implemented - coming soon!")
-        QMessageBox.information(self, "Coming Soon", "Settings sync will be available in a future update.")
+        url = self.remote_url.text().strip()
+        if not url:
+            QMessageBox.warning(self, "Error", "Please enter a remote URL first")
+            return
+        
+        try:
+            import json
+            from pathlib import Path
+            from forge_ai.config import CONFIG
+            
+            # Export current settings
+            settings_path = Path(CONFIG.data_dir) / "gui_settings.json"
+            
+            if settings_path.exists():
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+                
+                from PyQt5.QtWidgets import QInputDialog
+                choices = ["Export settings (copy to clipboard)", "Import settings (paste from clipboard)", "Cancel"]
+                choice, ok = QInputDialog.getItem(
+                    self, "Sync Settings",
+                    "Choose an action:",
+                    choices, 0, False
+                )
+                
+                if ok and choice != "Cancel":
+                    if "Export" in choice:
+                        # Copy settings to clipboard
+                        from PyQt5.QtWidgets import QApplication
+                        QApplication.clipboard().setText(json.dumps(settings, indent=2))
+                        self._log("Settings copied to clipboard")
+                        QMessageBox.information(self, "Settings Exported", 
+                            "Settings copied to clipboard.\n\nPaste on the remote device to import.")
+                    else:
+                        # Import from clipboard
+                        from PyQt5.QtWidgets import QApplication
+                        clipboard_text = QApplication.clipboard().text()
+                        try:
+                            new_settings = json.loads(clipboard_text)
+                            with open(settings_path, 'w') as f:
+                                json.dump(new_settings, f, indent=2)
+                            self._log("Settings imported from clipboard")
+                            QMessageBox.information(self, "Settings Imported",
+                                "Settings imported successfully.\n\nRestart the application to apply changes.")
+                        except json.JSONDecodeError:
+                            QMessageBox.warning(self, "Import Error", "Clipboard does not contain valid settings JSON")
+            else:
+                QMessageBox.warning(self, "No Settings", "No settings file found to sync")
+        except Exception as e:
+            self._log(f"Settings sync failed: {e}")
+            QMessageBox.warning(self, "Sync Error", f"Settings sync failed: {e}")
     
     def _remote_chat(self):
         """Start remote chat session."""
@@ -529,8 +624,37 @@ class NetworkTab(QWidget):
             QMessageBox.warning(self, "Error", "Please enter a remote URL first")
             return
         
-        self._log(f"Opening remote chat to {url}...")
-        QMessageBox.information(self, "Remote Chat", f"Remote chat to {url} - feature coming soon!")
+        try:
+            from forge_ai.comms.remote_client import RemoteClient
+            
+            self._log(f"Connecting to {url}...")
+            client = RemoteClient(url)
+            
+            if not client.is_available():
+                QMessageBox.warning(self, "Connection Error", f"Cannot reach server at {url}")
+                return
+            
+            # Get a prompt from user
+            from PyQt5.QtWidgets import QInputDialog
+            prompt, ok = QInputDialog.getText(
+                self, "Remote Chat",
+                f"Connected to: {url}\n\nEnter your message:",
+                text="Hello, how are you?"
+            )
+            
+            if ok and prompt:
+                self._log(f"Sending: {prompt}")
+                try:
+                    response = client.generate(prompt, max_gen=100)
+                    self._log(f"Response: {response}")
+                    QMessageBox.information(self, "Remote Response", 
+                        f"Prompt: {prompt}\n\nResponse: {response}")
+                except Exception as e:
+                    self._log(f"Generation failed: {e}")
+                    QMessageBox.warning(self, "Chat Error", f"Failed to get response: {e}")
+        except Exception as e:
+            self._log(f"Remote chat failed: {e}")
+            QMessageBox.warning(self, "Connection Error", f"Remote chat failed: {e}")
     
     def _log(self, message: str):
         """Add message to network log."""

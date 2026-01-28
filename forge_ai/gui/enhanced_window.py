@@ -6582,7 +6582,20 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
     def _on_screenshot_clicked(self):
         """Handle screenshot quick action."""
         logger.info("Screenshot quick action triggered")
-        QMessageBox.information(self, "Screenshot", "Screenshot feature coming soon!")
+        # Use existing capture screen functionality
+        if hasattr(self, '_capture_screen'):
+            self._capture_screen()
+        else:
+            # Fallback: try using the vision tools
+            try:
+                from forge_ai.tools.vision import capture_screen
+                result = capture_screen()
+                if result.get('success'):
+                    QMessageBox.information(self, "Screenshot", f"Screenshot saved to: {result.get('path', 'outputs/')}")
+                else:
+                    QMessageBox.warning(self, "Screenshot", f"Screenshot failed: {result.get('error', 'Unknown error')}")
+            except Exception as e:
+                QMessageBox.warning(self, "Screenshot", f"Screenshot failed: {e}")
     
     def _on_voice_clicked(self):
         """Handle voice input quick action."""
@@ -6595,7 +6608,23 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
     def _on_game_mode_clicked(self):
         """Handle game mode toggle quick action."""
         logger.info("Game mode quick action triggered")
-        QMessageBox.information(self, "Game Mode", "Game mode feature coming soon!")
+        # Use existing game mode toggle functionality
+        if hasattr(self, '_quick_toggle_game_mode'):
+            self._quick_toggle_game_mode()
+        else:
+            # Fallback: try using the game_mode module directly
+            try:
+                from forge_ai.core.game_mode import get_game_mode
+                game_mode = get_game_mode()
+                
+                if game_mode.is_enabled():
+                    game_mode.disable()
+                    QMessageBox.information(self, "Game Mode", "Game Mode disabled")
+                else:
+                    game_mode.enable(aggressive=False)
+                    QMessageBox.information(self, "Game Mode", "Game Mode enabled")
+            except Exception as e:
+                QMessageBox.warning(self, "Game Mode", f"Could not toggle game mode: {e}")
     
     def _on_quick_generate_clicked(self):
         """Handle quick image generation action."""

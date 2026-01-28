@@ -711,13 +711,168 @@ class ScalingTab(QWidget):
                 )
             
     def run_benchmark(self):
-        QMessageBox.information(
+        """Run performance benchmark on selected model size."""
+        model = self.selected_model
+        
+        # Ask for confirmation
+        reply = QMessageBox.question(
             self,
-            "Benchmark",
-            " Benchmark feature coming soon!\n\n"
-            "This will test your hardware and\n"
-            "recommend the best model size for you."
+            "Run Benchmark",
+            f"Run benchmark for {model.upper()} model?\n\n"
+            "This will:\n"
+            "- Test forward pass speed\n"
+            "- Test generation speed\n"
+            "- Check memory usage\n\n"
+            "This may take a few minutes.",
+            QMessageBox.Yes | QMessageBox.No
         )
+        
+        if reply != QMessageBox.Yes:
+            return
+        
+        try:
+            import torch
+            import time
+            from forge_ai.core.model import create_model
+            from forge_ai.core.model_config import get_model_config
+            
+            # Setup device
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+                device_name = torch.cuda.get_device_name(0)
+            else:
+                device = torch.device("cpu")
+                device_name = "CPU"
+            
+            # Create progress dialog
+            from PyQt5.QtWidgets import QProgressDialog
+            from PyQt5.QtCore import Qt
+            progress = QProgressDialog("Running benchmark...", "Cancel", 0, 100, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setWindowTitle("Benchmark")
+            progress.show()
+            
+            results = []
+            results.append(f"Device: {device_name}")
+            results.append(f"Model: {model.upper()}")
+            results.append("-" * 40)
+            
+            progress.setValue(10)
+            progress.setLabelText("Creating model...")
+            
+            # Create model
+            config = get_model_config(model)
+            test_model = create_model(size=model, vocab_size=32000)
+            test_model.to(device)
+            test_model.eval()
+            
+            params = sum(p.numel() for p in test_model.parameters())
+            results.append(f"Parameters: {params:,}")
+            
+            progress.setValue(30)
+            progress.setLabelText("Testing forward pass...")
+            
+            # Benchmark forward pass
+            seq_len = 128
+            input_ids = torch.randint(0, 32000, (1, seq_len), device=device)
+            
+            # Warmup
+            with torch.no_grad():
+                for _ in range(3):
+                    _ = test_model(input_ids, use_cache=False)
+            
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            
+            # Measure
+            times = []
+            with torch.no_grad():
+                for _ in range(5):
+                    start = time.perf_counter()
+                    _ = test_model(input_ids, use_cache=False)
+                    if device.type == "cuda":
+                        torch.cuda.synchronize()
+                    times.append(time.perf_counter() - start)
+            
+            avg_forward = sum(times) / len(times)
+            tokens_per_sec = seq_len / avg_forward
+            results.append(f"\nForward Pass ({seq_len} tokens):")
+            results.append(f"  Time: {avg_forward*1000:.1f} ms")
+            results.append(f"  Speed: {tokens_per_sec:.0f} tokens/sec")
+            
+            progress.setValue(60)
+            progress.setLabelText("Testing generation...")
+            
+            # Benchmark generation
+            gen_len = 20
+            gen_input = torch.randint(0, 32000, (1, 10), device=device)
+            
+            # Warmup
+            with torch.no_grad():
+                for _ in range(2):
+                    _ = test_model.generate(gen_input.clone(), max_new_tokens=gen_len, use_cache=True)
+            
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            
+            # Measure
+            times = []
+            with torch.no_grad():
+                for _ in range(3):
+                    start = time.perf_counter()
+                    _ = test_model.generate(gen_input.clone(), max_new_tokens=gen_len, use_cache=True)
+                    if device.type == "cuda":
+                        torch.cuda.synchronize()
+                    times.append(time.perf_counter() - start)
+            
+            avg_gen = sum(times) / len(times)
+            gen_tokens_per_sec = gen_len / avg_gen
+            results.append(f"\nGeneration ({gen_len} tokens):")
+            results.append(f"  Time: {avg_gen*1000:.1f} ms")
+            results.append(f"  Speed: {gen_tokens_per_sec:.1f} tokens/sec")
+            results.append(f"  Per token: {(avg_gen/gen_len)*1000:.1f} ms")
+            
+            progress.setValue(80)
+            progress.setLabelText("Checking memory...")
+            
+            # Memory usage
+            results.append(f"\nMemory Usage:")
+            if device.type == "cuda":
+                mem_alloc = torch.cuda.memory_allocated() / 1024**2
+                mem_reserved = torch.cuda.memory_reserved() / 1024**2
+                results.append(f"  GPU Allocated: {mem_alloc:.0f} MB")
+                results.append(f"  GPU Reserved: {mem_reserved:.0f} MB")
+            else:
+                try:
+                    import psutil
+                    process = psutil.Process()
+                    ram = process.memory_info().rss / 1024**2
+                    results.append(f"  RAM Used: {ram:.0f} MB")
+                except:
+                    results.append("  RAM: Unable to measure")
+            
+            # Cleanup
+            del test_model
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+            
+            progress.setValue(100)
+            progress.close()
+            
+            # Show results
+            QMessageBox.information(
+                self,
+                "Benchmark Results",
+                "\n".join(results)
+            )
+            
+        except Exception as e:
+            progress.close() if 'progress' in dir() else None
+            QMessageBox.warning(
+                self,
+                "Benchmark Error",
+                f"Benchmark failed: {e}"
+            )
 
 
 def create_scaling_tab(window) -> QWidget:
