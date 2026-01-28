@@ -155,6 +155,10 @@ def __getattr__(name: str):
         'UnifiedWorker': ('.unified_patterns', 'UnifiedWorker'),
         'create_styled_button': ('.unified_patterns', 'create_styled_button'),
         'create_styled_group': ('.unified_patterns', 'create_styled_group'),
+        
+        # Consolidated tabs (for Standard mode)
+        'create_create_tab': ('.create_tab', 'create_create_tab'),
+        'create_ai_tab': ('.ai_tab', 'create_ai_tab'),
     }
     
     if name not in _imports:
@@ -255,4 +259,7 @@ __all__ = [
     'UnifiedWorker',
     'create_styled_button',
     'create_styled_group',
+    # Consolidated tabs
+    'create_create_tab',
+    'create_ai_tab',
 ]

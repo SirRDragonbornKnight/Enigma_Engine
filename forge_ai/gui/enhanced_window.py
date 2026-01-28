@@ -80,11 +80,15 @@ from PyQt5.QtWidgets import (
     QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
     QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter, QWidget,
     QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar,
-    QTextEdit
+    QTextEdit, QMenu, QAction
 )
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QPixmap, QFont, QIcon
+from PyQt5.QtGui import QPixmap, QFont, QIcon, QKeySequence
 import time
+
+# Import GUI mode system
+from .gui_modes import GUIMode, GUIModeManager
+from .widgets.quick_actions import QuickActionsBar, FeedbackButtons
 
 
 # === AI Generation Worker Thread ===
@@ -1627,6 +1631,25 @@ class EnhancedMainWindow(QMainWindow):
             self.module_manager = None
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize GUI Mode Manager
+        # Controls which tabs are visible based on user preference
+        # ─────────────────────────────────────────────────────────────────
+        try:
+            saved_mode = self._gui_settings.get("gui_mode", "standard")
+            mode_map = {
+                "simple": GUIMode.SIMPLE,
+                "standard": GUIMode.STANDARD,
+                "advanced": GUIMode.ADVANCED,
+                "gaming": GUIMode.GAMING
+            }
+            initial_mode = mode_map.get(saved_mode, GUIMode.STANDARD)
+            self.gui_mode_manager = GUIModeManager(initial_mode)
+            print(f"GUI Mode: {self.gui_mode_manager.get_mode_name()}")
+        except Exception as e:
+            print(f"Could not initialize GUIModeManager: {e}")
+            self.gui_mode_manager = GUIModeManager(GUIMode.STANDARD)
+        
+        # ─────────────────────────────────────────────────────────────────
         # Initialize state variables
         # ─────────────────────────────────────────────────────────────────
         self.auto_speak = self._gui_settings.get("auto_speak", False)
@@ -2383,6 +2406,27 @@ class EnhancedMainWindow(QMainWindow):
     def keyPressEvent(self, event):
         """Handle key press events - Escape stops all generations."""
         from PyQt5.QtCore import Qt
+        
+        # Mode switching shortcuts
+        if event.modifiers() == Qt.ControlModifier:
+            # Tab shortcuts (Ctrl+1/2/3)
+            tab_shortcuts = {
+                Qt.Key_1: 'chat',
+                Qt.Key_2: 'image',
+                Qt.Key_3: 'avatar',
+                Qt.Key_Comma: 'settings',
+            }
+            
+            if event.key() in tab_shortcuts:
+                self._switch_to_tab(tab_shortcuts[event.key()])
+                return
+            elif event.key() == Qt.Key_N:
+                # New conversation
+                if hasattr(self, 'btn_new_chat'):
+                    self.btn_new_chat.click()
+                return
+        
+        # Escape stops all generations
         if event.key() == Qt.Key_Escape:
             self._stop_all_generations()
         else:
@@ -2859,10 +2903,9 @@ class EnhancedMainWindow(QMainWindow):
         13. Settings - Configuration
         """
         # ─────────────────────────────────────────────────────────────────
-        # Menu bar - HIDDEN (features moved to Settings tab and context menus)
-        # The menus were causing click issues and duplicated Settings tab features
+        # Menu bar - Create View menu for mode switching
         # ─────────────────────────────────────────────────────────────────
-        self.menuBar().setVisible(False)
+        self._create_view_menu()
         
         # Initialize toggle state variables (previously in menu, now in Settings)
         self.learn_while_chatting = True
@@ -3167,6 +3210,9 @@ class EnhancedMainWindow(QMainWindow):
         # Store reference for compatibility (tabs -> content_stack)
         self.tabs = self.content_stack
         
+        # Apply tab visibility based on GUI mode
+        self._apply_tab_visibility()
+        
         self.setCentralWidget(main_widget)
         
         # Enable text selection on all QLabels in the GUI
@@ -3386,6 +3432,87 @@ class EnhancedMainWindow(QMainWindow):
                 if item and item.data(Qt.UserRole) == key:
                     self.sidebar.setCurrentRow(i)
                     break
+    
+    def _create_view_menu(self):
+        """Create the View menu with mode switching options."""
+        view_menu = self.menuBar().addMenu("&View")
+        
+        # Mode selection submenu
+        mode_menu = view_menu.addMenu("GUI Mode")
+        
+        # Create action group for exclusive selection
+        mode_group = QActionGroup(self)
+        mode_group.setExclusive(True)
+        
+        # Add mode options
+        modes = [
+            (GUIMode.SIMPLE, "Simple", "Essential features only"),
+            (GUIMode.STANDARD, "Standard", "Balanced feature set (recommended)"),
+            (GUIMode.ADVANCED, "Advanced", "All features visible"),
+            (GUIMode.GAMING, "Gaming", "Minimal interface for gaming")
+        ]
+        
+        for mode, name, description in modes:
+            action = QAction(name, self)
+            action.setToolTip(description)
+            action.setCheckable(True)
+            action.setChecked(self.gui_mode_manager.mode == mode)
+            action.triggered.connect(lambda checked, m=mode: self._switch_gui_mode(m))
+            mode_group.addAction(action)
+            mode_menu.addAction(action)
+        
+        # Store reference for updates
+        self._mode_actions = mode_group
+        
+        view_menu.addSeparator()
+        
+        # Add keyboard shortcuts info
+        shortcuts_action = QAction("Keyboard Shortcuts", self)
+        shortcuts_action.triggered.connect(self._show_shortcuts_dialog)
+        view_menu.addAction(shortcuts_action)
+    
+    def _switch_gui_mode(self, mode: GUIMode):
+        """Switch to a different GUI mode."""
+        self.gui_mode_manager.set_mode(mode)
+        self._apply_tab_visibility()
+        
+        # Save the preference
+        self._gui_settings["gui_mode"] = mode.value
+        self._save_gui_settings()
+        
+        # Show notification
+        QMessageBox.information(
+            self,
+            "Mode Changed",
+            f"GUI Mode changed to {self.gui_mode_manager.get_mode_name()}\n\n"
+            f"{self.gui_mode_manager.get_mode_description()}"
+        )
+    
+    def _apply_tab_visibility(self):
+        """Apply tab visibility based on current GUI mode."""
+        if not hasattr(self, '_sidebar_items'):
+            return
+        
+        visible_tabs = self.gui_mode_manager.get_visible_tabs()
+        
+        for tab_key, item in self._sidebar_items.items():
+            should_be_visible = self.gui_mode_manager.is_tab_visible(tab_key)
+            item.setHidden(not should_be_visible)
+    
+    def _show_shortcuts_dialog(self):
+        """Show dialog with keyboard shortcuts."""
+        from .gui_modes import KEYBOARD_SHORTCUTS
+        
+        shortcuts_text = "<h3>Keyboard Shortcuts</h3><table>"
+        for shortcut, description in KEYBOARD_SHORTCUTS.items():
+            shortcuts_text += f"<tr><td><b>{shortcut}</b></td><td>{description}</td></tr>"
+        shortcuts_text += "</table>"
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Keyboard Shortcuts")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(shortcuts_text)
+        msg.exec_()
     
     def _set_theme(self, theme_name):
         """Set the application theme."""
@@ -6441,6 +6568,34 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
     def ai_is_locked(self):
         """Check if controls are currently locked."""
         return getattr(self, '_ai_control_locked', False)
+    
+    # ═════════════════════════════════════════════════════════════════════
+    # Quick Actions Handlers
+    # ═════════════════════════════════════════════════════════════════════
+    
+    def _on_screenshot_clicked(self):
+        """Handle screenshot quick action."""
+        logger.info("Screenshot quick action triggered")
+        QMessageBox.information(self, "Screenshot", "Screenshot feature coming soon!")
+    
+    def _on_voice_clicked(self):
+        """Handle voice input quick action."""
+        # Toggle microphone if available
+        if hasattr(self, 'mic_toggle_btn') and self.mic_toggle_btn:
+            self.mic_toggle_btn.click()
+        else:
+            logger.info("Voice input quick action triggered")
+    
+    def _on_game_mode_clicked(self):
+        """Handle game mode toggle quick action."""
+        logger.info("Game mode quick action triggered")
+        QMessageBox.information(self, "Game Mode", "Game mode feature coming soon!")
+    
+    def _on_quick_generate_clicked(self):
+        """Handle quick image generation action."""
+        # Switch to image tab
+        self._switch_to_tab('image')
+
 
 
 # Global system tray instance

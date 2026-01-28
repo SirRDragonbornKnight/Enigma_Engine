@@ -170,6 +170,15 @@ CONFIG = {
     "enable_hotkeys": True,  # Enable global hotkey system
     
     # =========================================================================
+    # THE INTERFACE REALM - GUI Configuration
+    # =========================================================================
+    "gui_mode": "standard",  # "simple", "standard", "advanced", "gaming"
+    "gui_theme": "dark",      # "dark", "light", "shadow", "midnight", "gaming"
+    "enable_quick_actions": True,
+    "enable_feedback_buttons": True,
+    "show_game_mode_indicator": True,
+    
+    # =========================================================================
     # THE OVERLAY WINDOW - Gaming and Multitasking Interface
     # =========================================================================
     "overlay": {
