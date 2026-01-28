@@ -89,6 +89,7 @@ CONFIG = {
     "db_path": str(BASE_DIR / "memory" / "memory.db"),
     "vocab_dir": str(BASE_DIR / "forge_ai" / "vocab_model"),
     "logs_dir": str(BASE_DIR / "logs"),
+    "personas_dir": str(BASE_DIR / "data" / "personas"),  # AI persona storage
 
     # =========================================================================
     # THE ARCHITECT'S BLUEPRINT - Model Architecture

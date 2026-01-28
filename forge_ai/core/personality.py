@@ -625,3 +625,37 @@ def load_personality(model_name: str) -> AIPersonality:
 def save_personality(personality: AIPersonality):
     """Save personality to file."""
     personality.save()
+
+
+def personality_from_persona(persona_name: str) -> AIPersonality:
+    """
+    Create an AIPersonality from a persona.
+    
+    This is a convenience function for loading a personality that matches
+    the current persona's traits.
+    
+    Args:
+        persona_name: Name to use for the personality
+        
+    Returns:
+        AIPersonality instance configured from current persona
+        
+    Example:
+        from forge_ai.core.persona import get_persona_manager
+        from forge_ai.core.personality import personality_from_persona
+        
+        manager = get_persona_manager()
+        persona = manager.get_current_persona()
+        personality = personality_from_persona(persona.name)
+    """
+    try:
+        from .persona import get_persona_manager
+        
+        manager = get_persona_manager()
+        persona = manager.get_current_persona()
+        
+        return manager.integrate_with_personality(persona)
+    except Exception as e:
+        # Fallback to basic personality if persona system not available
+        print(f"Warning: Could not load from persona: {e}")
+        return AIPersonality(persona_name)

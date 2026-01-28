@@ -373,6 +373,18 @@ except ImportError:
     list_available_tools = None
     get_tool_info = None
 
+# Persona System
+try:
+    from .persona import (
+        AIPersona,
+        PersonaManager,
+        get_persona_manager,
+    )
+except ImportError:
+    AIPersona = None
+    PersonaManager = None
+    get_persona_manager = None
+
 
 __all__ = [
     # Model
@@ -509,4 +521,9 @@ __all__ = [
     "use_tool",
     "list_available_tools",
     "get_tool_info",
+    
+    # Persona System
+    "AIPersona",
+    "PersonaManager",
+    "get_persona_manager",
 ]
