@@ -146,6 +146,33 @@ python run.py --serve   # Start API server
 - **Multi-AI** - Run multiple AI models
 - **Specialized Models** - Train task-specific models (routing, vision, code)
 - **Themes** - Dark, Light, Shadow, Midnight
+- **🌐 Tunnel Management** - Expose your AI to the internet for remote access
+
+### Remote Access with Tunnels 🌐
+
+Expose your ForgeAI server to the internet for remote access from anywhere:
+
+```bash
+# Quick start with ngrok
+python run.py --tunnel --tunnel-token YOUR_NGROK_TOKEN
+
+# Or use localtunnel (no account needed)
+python run.py --tunnel --tunnel-provider localtunnel
+
+# Start API server in one terminal
+python run.py --serve
+
+# Expose it in another terminal
+python run.py --tunnel --tunnel-port 5000
+```
+
+Perfect for:
+- Access your AI from mobile devices
+- Share demos with colleagues
+- Remote training monitoring
+- API integrations
+
+See `docs/TUNNEL_SETUP.md` for complete guide.
 
 ### Specialized Model System 🎯
 

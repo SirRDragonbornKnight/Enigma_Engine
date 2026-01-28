@@ -1260,6 +1260,130 @@ class NetworkModule(Module):
             return False
 
 
+class TunnelModule(Module):
+    """
+    Tunnel module - expose server to internet via ngrok/localtunnel.
+    
+    📖 WHAT THIS DOES:
+    Creates secure tunnels to expose ForgeAI to the internet using services
+    like ngrok, localtunnel, or bore. Perfect for:
+    - Remote access from anywhere
+    - Mobile app connections
+    - Demos and presentations
+    - Team collaboration
+    
+    📐 TUNNEL PROVIDERS:
+    ┌────────────────────────────────────────────────────────────────────┐
+    │ ngrok        │ Most reliable, requires account (free tier)        │
+    │ localtunnel  │ Simple, no account needed (less stable)            │
+    │ bore         │ Rust-based, fast, no account                       │
+    └────────────────────────────────────────────────────────────────────┘
+    
+    🔗 WRAPS: forge_ai/comms/tunnel_manager.py → TunnelManager class
+    """
+
+    INFO = ModuleInfo(
+        id="tunnel",
+        name="Tunnel Manager",
+        description="Expose server to internet via ngrok/localtunnel/bore for remote access",
+        category=ModuleCategory.NETWORK,
+        version="1.0.0",
+        requires=[],  # Can work standalone
+        optional=[
+            "api_server",  # Usually tunnel the API
+            "web_server"], # Or tunnel the web UI
+        provides=[
+            "public_access",   # Exposes server publicly
+            "remote_tunnel"],  # Creates secure tunnel
+        config_schema={
+            "provider": {
+                "type": "choice",
+                "options": [
+                    "ngrok",       # Most reliable
+                    "localtunnel", # No account needed
+                    "bore"],       # Rust-based
+                "default": "ngrok"},
+            "auth_token": {
+                "type": "string",
+                "default": "",  # Required for ngrok
+                "description": "Tunnel provider auth token (ngrok requires this)"},
+            "region": {
+                "type": "choice",
+                "options": [
+                    "us",  # United States
+                    "eu",  # Europe
+                    "ap",  # Asia Pacific
+                    "au",  # Australia
+                    "sa",  # South America
+                    "jp",  # Japan
+                    "in"], # India
+                "default": "us",
+                "description": "Server region (ngrok only)"},
+            "subdomain": {
+                "type": "string",
+                "default": "",
+                "description": "Custom subdomain (requires paid plan)"},
+            "auto_start": {
+                "type": "bool",
+                "default": False,
+                "description": "Auto-start tunnel when module loads"},
+            "port": {
+                "type": "int",
+                "min": 1,
+                "max": 65535,
+                "default": 5000,
+                "description": "Local port to expose"},
+        },
+    )
+
+    def load(self) -> bool:
+        """Load the tunnel manager."""
+        try:
+            from forge_ai.comms.tunnel_manager import TunnelManager
+            
+            provider = self.config.get('provider', 'ngrok')
+            auth_token = self.config.get('auth_token', None)
+            region = self.config.get('region', None)
+            subdomain = self.config.get('subdomain', None)
+            
+            # Create tunnel manager instance
+            self._instance = TunnelManager(
+                provider=provider,
+                auth_token=auth_token,
+                region=region,
+                subdomain=subdomain,
+                auto_reconnect=True
+            )
+            
+            # Auto-start if configured
+            if self.config.get('auto_start', False):
+                port = self.config.get('port', 5000)
+                tunnel_url = self._instance.start_tunnel(port)
+                if tunnel_url:
+                    logger.info(f"Tunnel auto-started: {tunnel_url}")
+                else:
+                    logger.warning("Failed to auto-start tunnel")
+            
+            return True
+        except ImportError as e:
+            logger.error(f"TunnelManager not available: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"TunnelManager failed to initialize: {e}")
+            return False
+    
+    def unload(self) -> bool:
+        """Unload and stop tunnel."""
+        if self._instance is not None:
+            try:
+                self._instance.stop_tunnel()
+            except Exception as e:
+                logger.warning(f"Error stopping tunnel: {e}")
+            finally:
+                self._instance = None
+        return True
+
+
 class GUIModule(Module):
     """
     GUI module - graphical interface.
@@ -2841,6 +2965,7 @@ MODULE_REGISTRY: Dict[str, Type[Module]] = {
     # ─────────────────────────────────────────────────────────────────────
     'api_server': APIServerModule,  # REST API server
     'network': NetworkModule,       # Multi-device networking
+    'tunnel': TunnelModule,         # Public internet tunneling
 
     # ─────────────────────────────────────────────────────────────────────
     # Interface modules - User interaction
