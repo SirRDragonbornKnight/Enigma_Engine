@@ -22,8 +22,29 @@ Checked = Qt.CheckState.Checked
 def _go_to_tab(parent, tab_name: str):
     """Navigate to a specific tab by name."""
     try:
-        # Find the tab widget
-        if hasattr(parent, 'tabs'):
+        # Use the new navigation system with content_stack
+        if hasattr(parent, '_nav_map') and hasattr(parent, 'content_stack'):
+            # Map common tab names to keys
+            key_map = {
+                'Chat': 'chat', 'Workspace': 'workspace', 'History': 'history',
+                'Persona': 'persona', 'Scale': 'scale', 'Modules': 'modules',
+                'Tools': 'tools', 'Router': 'router', 'Image': 'image',
+                'Code': 'code', 'Video': 'video', 'Audio': 'audio',
+                'Voice': 'voice', '3D': '3d', 'GIF': 'gif', 'Search': 'search',
+                'Avatar': 'avatar', 'Game': 'game', 'Robot': 'robot',
+                'Vision': 'vision', 'Camera': 'camera', 'Terminal': 'terminal',
+                'Files': 'files', 'Logs': 'logs', 'Network': 'network',
+                'Analytics': 'analytics', 'Examples': 'examples', 'Settings': 'settings',
+            }
+            key = key_map.get(tab_name, tab_name.lower())
+            if key in parent._nav_map:
+                parent.content_stack.setCurrentIndex(parent._nav_map[key])
+                # Also update sidebar selection
+                if hasattr(parent, '_sidebar_items') and key in parent._sidebar_items:
+                    parent.sidebar.setCurrentItem(parent._sidebar_items[key])
+                return
+        # Fallback for legacy QTabWidget
+        elif hasattr(parent, 'tabs') and hasattr(parent.tabs, 'tabText'):
             tabs = parent.tabs
             for i in range(tabs.count()):
                 if tabs.tabText(i) == tab_name:
