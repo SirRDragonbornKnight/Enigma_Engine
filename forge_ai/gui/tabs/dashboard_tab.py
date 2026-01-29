@@ -274,14 +274,14 @@ class StatusCard(QFrame):
         layout.setContentsMargins(10, 8, 10, 8)
         
         self.icon_label = QLabel(icon)
-        self.icon_label.setStyleSheet(f"color: {color}; font-size: 14px;")
+        self.icon_label.setStyleSheet(f"color: {color}; font-size: 12px;")
         layout.addWidget(self.icon_label)
         
         text_layout = QVBoxLayout()
         text_layout.setSpacing(1)
         
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: #cdd6f4; font-size: 13px; font-weight: bold;")
+        self.title_label.setStyleSheet("color: #cdd6f4; font-size: 11px; font-weight: bold;")
         text_layout.addWidget(self.title_label)
         
         self.status_label = QLabel(status)
@@ -308,7 +308,7 @@ class StatusCard(QFrame):
         self.status = status
         if color:
             self.color = color
-            self.icon_label.setStyleSheet(f"color: {color}; font-size: 14px;")
+            self.icon_label.setStyleSheet(f"color: {color}; font-size: 12px;")
             self.status_label.setStyleSheet(f"color: {color}; font-size: 12px;")
             self._update_style()
         self.status_label.setText(status)
@@ -388,14 +388,14 @@ class DashboardTab(QWidget):
         header_layout = QHBoxLayout()
         
         title = QLabel("Dashboard")
-        title.setStyleSheet("color: #cdd6f4; font-size: 22px; font-weight: bold;")
+        title.setStyleSheet("color: #cdd6f4; font-size: 12px; font-weight: bold;")
         header_layout.addWidget(title)
         
         header_layout.addStretch()
         
         # Uptime
         self.uptime_label = QLabel("Up: --")
-        self.uptime_label.setStyleSheet("color: #6c7086; font-size: 12px;")
+        self.uptime_label.setStyleSheet("color: #bac2de; font-size: 12px;")
         header_layout.addWidget(self.uptime_label)
         
         header_layout.addSpacing(15)
@@ -424,7 +424,7 @@ class DashboardTab(QWidget):
         info_layout.setContentsMargins(12, 8, 12, 8)
         
         self.hostname_label = QLabel(f"Host: {platform.node()}")
-        self.hostname_label.setStyleSheet("color: #89b4fa; font-size: 13px; font-weight: bold;")
+        self.hostname_label.setStyleSheet("color: #89b4fa; font-size: 11px; font-weight: bold;")
         info_layout.addWidget(self.hostname_label)
         
         info_layout.addSpacing(20)
@@ -442,7 +442,7 @@ class DashboardTab(QWidget):
         info_layout.addStretch()
         
         self.time_label = QLabel("")
-        self.time_label.setStyleSheet("color: #6c7086; font-size: 12px;")
+        self.time_label.setStyleSheet("color: #bac2de; font-size: 12px;")
         info_layout.addWidget(self.time_label)
         
         layout.addWidget(info_banner)

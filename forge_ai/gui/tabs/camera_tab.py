@@ -100,7 +100,7 @@ class CameraTab(QWidget):
         # Header
         header = QLabel("Camera")
         header.setObjectName("header")
-        header.setStyleSheet("font-size: 18px; font-weight: bold; color: #f9e2af;")
+        header.setStyleSheet("font-size: 12px; font-weight: bold; color: #f9e2af;")
         layout.addWidget(header)
         
         # Preview area
@@ -112,7 +112,7 @@ class CameraTab(QWidget):
             border: 2px solid #45475a; 
             border-radius: 8px; 
             background: #1e1e2e;
-            color: #6c7086;
+            color: #bac2de;
         """)
         layout.addWidget(self.preview_label, stretch=1)
         
@@ -194,7 +194,7 @@ class CameraTab(QWidget):
         
         # Status/Analysis output
         self.status_label = QLabel("Status: Camera stopped")
-        self.status_label.setStyleSheet("color: #6c7086;")
+        self.status_label.setStyleSheet("color: #bac2de;")
         layout.addWidget(self.status_label)
         
         # Analysis output

@@ -143,12 +143,12 @@ class ModelLoadingDialog(QDialog):
         title_row = QHBoxLayout()
         
         self.spinner_label = QLabel(".")
-        self.spinner_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #89b4fa;")
+        self.spinner_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #89b4fa;")
         self.spinner_label.setFixedWidth(24)
         title_row.addWidget(self.spinner_label)
         
         self.title_label = QLabel("Loading")
-        self.title_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #89b4fa;")
+        self.title_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #89b4fa;")
         title_row.addWidget(self.title_label)
         
         title_row.addStretch()
@@ -221,13 +221,13 @@ class ModelLoadingDialog(QDialog):
         
         # Icon
         icon_label = QLabel(item['icon'])
-        icon_label.setStyleSheet("font-size: 14px;")
+        icon_label.setStyleSheet("font-size: 12px;")
         icon_label.setFixedWidth(20)
         row_layout.addWidget(icon_label)
         
         # Name
         name_label = QLabel(item['name'])
-        name_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #cdd6f4;")
+        name_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #cdd6f4;")
         name_label.setMinimumWidth(100)
         row_layout.addWidget(name_label, 1)
         

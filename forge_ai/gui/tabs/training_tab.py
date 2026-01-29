@@ -29,7 +29,7 @@ def create_training_tab(parent):
     
     header = QLabel("Train Your AI")
     header.setObjectName("header")
-    header.setStyleSheet("font-size: 18px; font-weight: bold;")
+    header.setStyleSheet("font-size: 12px; font-weight: bold;")
     header_layout.addWidget(header)
     
     header_layout.addStretch()
@@ -138,7 +138,7 @@ def create_training_tab(parent):
             border-radius: 4px;
             padding: 4px;
             font-family: monospace;
-            font-size: 14px;
+            font-size: 12px;
             color: #aaa;
         }
     """)
@@ -179,7 +179,7 @@ def create_training_tab(parent):
     parent.training_editor.setStyleSheet("""
         QPlainTextEdit {
             font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
+            font-size: 12px;
             line-height: 1.4;
         }
     """)
@@ -193,7 +193,7 @@ def create_training_tab(parent):
     # Epochs
     epochs_layout = QVBoxLayout()
     epochs_label = QLabel("Epochs")
-    epochs_label.setStyleSheet("font-size: 14px; color: #6c7086;")
+    epochs_label.setStyleSheet("font-size: 12px; color: #bac2de;")
     epochs_layout.addWidget(epochs_label)
     parent.epochs_spin = QSpinBox()
     parent.epochs_spin.setRange(1, 10000)
@@ -206,7 +206,7 @@ def create_training_tab(parent):
     # Batch size
     batch_layout = QVBoxLayout()
     batch_label = QLabel("Batch Size")
-    batch_label.setStyleSheet("font-size: 14px; color: #6c7086;")
+    batch_label.setStyleSheet("font-size: 12px; color: #bac2de;")
     batch_layout.addWidget(batch_label)
     parent.batch_spin = QSpinBox()
     parent.batch_spin.setRange(1, 64)
@@ -219,7 +219,7 @@ def create_training_tab(parent):
     # Learning rate
     lr_layout = QVBoxLayout()
     lr_label = QLabel("Learning Rate")
-    lr_label.setStyleSheet("font-size: 14px; color: #6c7086;")
+    lr_label.setStyleSheet("font-size: 12px; color: #bac2de;")
     lr_layout.addWidget(lr_label)
     parent.lr_input = QLineEdit("0.0001")
     parent.lr_input.setToolTip("How fast AI learns (lower = slower but stable)")
@@ -236,7 +236,7 @@ def create_training_tab(parent):
     # Progress bar with label
     progress_header = QHBoxLayout()
     parent.training_progress_label = QLabel("Ready to train")
-    parent.training_progress_label.setStyleSheet("color: #6c7086;")
+    parent.training_progress_label.setStyleSheet("color: #bac2de;")
     progress_header.addWidget(parent.training_progress_label)
     progress_header.addStretch()
     progress_layout.addLayout(progress_header)
@@ -268,7 +268,7 @@ def create_training_tab(parent):
     parent.btn_train.setStyleSheet("""
         QPushButton {
             padding: 12px 24px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             background-color: #a6e3a1;
             color: #1e1e2e;
@@ -286,13 +286,14 @@ def create_training_tab(parent):
     parent.btn_stop_train.setStyleSheet("""
         QPushButton {
             padding: 12px 24px;
-            font-size: 14px;
+            font-size: 12px;
             background-color: #f38ba8;
             color: #1e1e2e;
         }
         QPushButton:disabled {
-            background-color: #45475a;
-            color: #6c7086;
+            background-color: #313244;
+            color: #f38ba8;
+            border: 2px dashed #f38ba8;
         }
     """)
     btn_layout.addWidget(parent.btn_stop_train)

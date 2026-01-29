@@ -147,12 +147,12 @@ body {
 }
 
 .btn-secondary {
-    background: var(--text-light);
-    color: white;
+    background: #89b4fa;
+    color: #1e1e2e;
 }
 
 .btn-secondary:hover {
-    background: var(--text);
+    background: #b4befe;
 }
 
 /* Chat */

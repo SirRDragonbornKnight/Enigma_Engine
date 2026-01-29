@@ -58,7 +58,7 @@ class DeviceItem(QWidget):
             details.append(self.device_info["role"])
         
         self.details_label = QLabel(" | ".join(details) if details else "No details")
-        self.details_label.setStyleSheet("color: #888;")
+        self.details_label.setStyleSheet("color: #bac2de;")
         info_layout.addWidget(self.details_label)
         
         layout.addLayout(info_layout, 1)
@@ -66,7 +66,7 @@ class DeviceItem(QWidget):
         # Latency
         latency = self.device_info.get("latency_ms", 0)
         self.latency_label = QLabel(f"{latency:.0f}ms")
-        self.latency_label.setStyleSheet("color: #888; font-size: 9pt;")
+        self.latency_label.setStyleSheet("color: #bac2de; font-size: 9pt;")
         layout.addWidget(self.latency_label)
         
         self.setCursor(Qt.PointingHandCursor)

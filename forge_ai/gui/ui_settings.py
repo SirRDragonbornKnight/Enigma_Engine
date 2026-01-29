@@ -380,7 +380,8 @@ class UISettings:
             }}
             QPushButton:disabled {{
                 background-color: {t.surface};
-                color: {t.text_muted};
+                color: #f38ba8;
+                border: 2px dashed #f38ba8;
             }}
             
             /* Input fields */

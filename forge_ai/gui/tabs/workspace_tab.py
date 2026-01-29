@@ -36,7 +36,7 @@ def create_workspace_tab(parent):
     header_layout = QHBoxLayout()
     header_layout.setContentsMargins(10, 10, 10, 5)
     header = QLabel("Workspace")
-    header.setStyleSheet("font-size: 18px; font-weight: bold;")
+    header.setStyleSheet("font-size: 12px; font-weight: bold;")
     header_layout.addWidget(header)
     header_layout.addStretch()
     
@@ -139,28 +139,6 @@ def _create_training_section(parent):
     
     layout.addWidget(file_group)
     
-    # Quick templates row
-    template_row = QHBoxLayout()
-    template_row.addWidget(QLabel("Quick Insert:"))
-    
-    btn_qa = QPushButton("Q&A")
-    btn_qa.setToolTip("Insert Q:/A: template")
-    btn_qa.clicked.connect(lambda: _insert_template(parent, "qa"))
-    template_row.addWidget(btn_qa)
-    
-    btn_conv = QPushButton("Conversation")
-    btn_conv.setToolTip("Insert User:/Assistant: template")
-    btn_conv.clicked.connect(lambda: _insert_template(parent, "conversation"))
-    template_row.addWidget(btn_conv)
-    
-    btn_wrap = QPushButton("Wrap as Q&A")
-    btn_wrap.setToolTip("Wrap selected text in Q&A format")
-    btn_wrap.clicked.connect(lambda: _wrap_selection_qa(parent))
-    template_row.addWidget(btn_wrap)
-    
-    template_row.addStretch()
-    layout.addLayout(template_row)
-    
     # File content editor
     parent.workspace_training_editor = QPlainTextEdit()
     parent.workspace_training_editor.setPlaceholderText(
@@ -172,7 +150,7 @@ def _create_training_section(parent):
     parent.workspace_training_editor.setStyleSheet("""
         QPlainTextEdit {
             font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 14px;
+            font-size: 12px;
         }
     """)
     layout.addWidget(parent.workspace_training_editor, stretch=1)
@@ -215,7 +193,7 @@ def _create_training_section(parent):
     
     # Progress section
     parent.workspace_progress_label = QLabel("Ready to train")
-    parent.workspace_progress_label.setStyleSheet("color: #6c7086;")
+    parent.workspace_progress_label.setStyleSheet("color: #bac2de;")
     layout.addWidget(parent.workspace_progress_label)
     
     parent.workspace_train_progress = QProgressBar()
@@ -247,8 +225,9 @@ def _create_training_section(parent):
             color: #1e1e2e;
         }
         QPushButton:disabled {
-            background-color: #45475a;
-            color: #6c7086;
+            background-color: #313244;
+            color: #f38ba8;
+            border: 2px dashed #f38ba8;
         }
     """)
     btn_layout.addWidget(parent.workspace_btn_stop)
@@ -276,7 +255,7 @@ def _create_prompts_section(parent):
         "Create presets for different use cases."
     )
     desc.setWordWrap(True)
-    desc.setStyleSheet("color: #888; margin-bottom: 8px;")
+    desc.setStyleSheet("color: #bac2de; margin-bottom: 8px;")
     layout.addWidget(desc)
     
     # Preset management
@@ -317,7 +296,7 @@ def _create_prompts_section(parent):
     parent.workspace_prompt_editor.setStyleSheet("""
         QTextEdit {
             font-family: monospace;
-            font-size: 14px;
+            font-size: 12px;
             background-color: #2d2d2d;
             border: 1px solid #444;
             border-radius: 4px;
@@ -359,7 +338,7 @@ def _create_prompts_section(parent):
     editor_layout.addLayout(btn_row)
     
     parent.workspace_prompt_status = QLabel("")
-    parent.workspace_prompt_status.setStyleSheet("color: #888; font-style: italic;")
+    parent.workspace_prompt_status.setStyleSheet("color: #bac2de; font-style: italic;")
     editor_layout.addWidget(parent.workspace_prompt_status)
     
     layout.addWidget(editor_group, stretch=1)
@@ -384,62 +363,172 @@ def _create_notes_section(parent):
     # Left: Notes list
     list_widget = QWidget()
     list_layout = QVBoxLayout(list_widget)
-    list_layout.setContentsMargins(0, 0, 0, 0)
+    list_layout.setContentsMargins(0, 0, 5, 0)
+    list_layout.setSpacing(8)
     
-    list_header = QHBoxLayout()
-    list_header.addWidget(QLabel("Notes"))
-    
-    btn_new_note = QPushButton("+")
-    btn_new_note.setFixedSize(28, 28)
-    btn_new_note.setToolTip("Create new note")
-    btn_new_note.clicked.connect(lambda: _create_new_note(parent))
-    list_header.addWidget(btn_new_note)
-    
-    list_layout.addLayout(list_header)
+    list_header = QLabel("Notes")
+    list_header.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px 0;")
+    list_layout.addWidget(list_header)
     
     parent.workspace_notes_list = QListWidget()
+    parent.workspace_notes_list.setStyleSheet("""
+        QListWidget {
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px;
+        }
+        QListWidget::item {
+            padding: 6px;
+            border-radius: 4px;
+        }
+        QListWidget::item:selected {
+            background-color: #89b4fa;
+            color: #1e1e2e;
+        }
+        QListWidget::item:hover:!selected {
+            background-color: #3d3d3d;
+        }
+    """)
     parent.workspace_notes_list.itemClicked.connect(
         lambda item: _load_note(parent, item)
     )
     list_layout.addWidget(parent.workspace_notes_list)
+    
+    # New note button below list
+    btn_new_note = QPushButton("New Note")
+    btn_new_note.setToolTip("Create a new note")
+    btn_new_note.setStyleSheet("""
+        QPushButton {
+            padding: 8px;
+            background-color: #3d3d3d;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+        QPushButton:hover {
+            background-color: #4d4d4d;
+            border-color: #89b4fa;
+        }
+    """)
+    btn_new_note.clicked.connect(lambda: _create_new_note(parent))
+    list_layout.addWidget(btn_new_note)
     
     splitter.addWidget(list_widget)
     
     # Right: Note editor
     editor_widget = QWidget()
     editor_layout = QVBoxLayout(editor_widget)
-    editor_layout.setContentsMargins(0, 0, 0, 0)
+    editor_layout.setContentsMargins(5, 0, 0, 0)
+    editor_layout.setSpacing(8)
     
     # Note title
-    title_row = QHBoxLayout()
-    title_row.addWidget(QLabel("Title:"))
+    title_label = QLabel("Title")
+    title_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px 0;")
+    editor_layout.addWidget(title_label)
+    
     parent.workspace_note_title = QLineEdit()
-    parent.workspace_note_title.setPlaceholderText("Note title...")
-    title_row.addWidget(parent.workspace_note_title)
-    editor_layout.addLayout(title_row)
+    parent.workspace_note_title.setPlaceholderText("Enter note title...")
+    parent.workspace_note_title.setStyleSheet("""
+        QLineEdit {
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        QLineEdit:focus {
+            border-color: #89b4fa;
+        }
+    """)
+    editor_layout.addWidget(parent.workspace_note_title)
+    
+    # Note content label
+    content_label = QLabel("Content")
+    content_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px 0;")
+    editor_layout.addWidget(content_label)
     
     # Note content
     parent.workspace_note_editor = QTextEdit()
     parent.workspace_note_editor.setPlaceholderText("Write your note here...")
+    parent.workspace_note_editor.setStyleSheet("""
+        QTextEdit {
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 12px;
+        }
+        QTextEdit:focus {
+            border-color: #89b4fa;
+        }
+    """)
     editor_layout.addWidget(parent.workspace_note_editor)
     
-    # Note actions
+    # Note actions - uniform button row
     note_btns = QHBoxLayout()
+    note_btns.setSpacing(8)
     
-    btn_save_note = QPushButton("Save Note")
+    button_style = """
+        QPushButton {
+            padding: 8px 16px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #3d3d3d;
+            min-width: 80px;
+        }
+        QPushButton:hover {
+            background-color: #4d4d4d;
+            border-color: #89b4fa;
+        }
+    """
+    
+    btn_save_note = QPushButton("Save")
+    btn_save_note.setToolTip("Save changes to this note")
+    btn_save_note.setStyleSheet(button_style)
     btn_save_note.clicked.connect(lambda: _save_note(parent))
     note_btns.addWidget(btn_save_note)
     
+    btn_save_as = QPushButton("Save As")
+    btn_save_as.setToolTip("Save as a new note with a different name")
+    btn_save_as.setStyleSheet(button_style)
+    btn_save_as.clicked.connect(lambda: _save_note_as(parent))
+    note_btns.addWidget(btn_save_as)
+    
     btn_delete_note = QPushButton("Delete")
+    btn_delete_note.setToolTip("Delete this note")
+    btn_delete_note.setStyleSheet("""
+        QPushButton {
+            padding: 8px 16px;
+            border: 1px solid #f38ba8;
+            border-radius: 4px;
+            background-color: #3d3d3d;
+            min-width: 80px;
+        }
+        QPushButton:hover {
+            background-color: rgba(243, 139, 168, 0.3);
+            border-color: #f38ba8;
+        }
+    """)
     btn_delete_note.clicked.connect(lambda: _delete_note(parent))
     note_btns.addWidget(btn_delete_note)
     
+    note_btns.addStretch()
+    
     btn_copy_to_training = QPushButton("Copy to Training")
     btn_copy_to_training.setToolTip("Add this note's content to training data")
+    btn_copy_to_training.setStyleSheet("""
+        QPushButton {
+            padding: 8px 16px;
+            border: 1px solid #a6e3a1;
+            border-radius: 4px;
+            background-color: #3d3d3d;
+            min-width: 80px;
+        }
+        QPushButton:hover {
+            background-color: rgba(166, 227, 161, 0.3);
+            border-color: #a6e3a1;
+        }
+    """)
     btn_copy_to_training.clicked.connect(lambda: _copy_note_to_training(parent))
     note_btns.addWidget(btn_copy_to_training)
     
-    note_btns.addStretch()
     editor_layout.addLayout(note_btns)
     
     splitter.addWidget(editor_widget)
@@ -881,6 +970,53 @@ def _save_note(parent):
     
     parent._workspace_current_note = str(note_path)
     _refresh_notes_list(parent)
+
+
+def _save_note_as(parent):
+    """Save the current note with a new name."""
+    content = parent.workspace_note_editor.toPlainText()
+    
+    # Ask for new name
+    new_title, ok = QInputDialog.getText(
+        parent, "Save As", "Enter new note name:",
+        text=parent.workspace_note_title.text()
+    )
+    
+    if not ok or not new_title.strip():
+        return
+    
+    new_title = new_title.strip()
+    
+    # Create safe filename
+    safe_name = "".join(c for c in new_title if c.isalnum() or c in " -_").strip()[:50]
+    notes_dir = _get_notes_dir()
+    
+    note_path = notes_dir / f"{safe_name}.json"
+    
+    # Check if already exists
+    if note_path.exists():
+        reply = QMessageBox.question(
+            parent, "Overwrite?",
+            f"A note named '{new_title}' already exists. Overwrite?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+    
+    note_data = {
+        "title": new_title,
+        "content": content,
+        "modified": datetime.now().isoformat()
+    }
+    
+    with open(note_path, 'w') as f:
+        json.dump(note_data, f, indent=2)
+    
+    parent._workspace_current_note = str(note_path)
+    parent.workspace_note_title.setText(new_title)
+    _refresh_notes_list(parent)
+    
+    QMessageBox.information(parent, "Saved", f"Note saved as '{new_title}'")
 
 
 def _delete_note(parent):

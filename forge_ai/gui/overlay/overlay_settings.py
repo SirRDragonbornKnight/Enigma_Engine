@@ -45,7 +45,7 @@ class OverlaySettingsWidget(QWidget):
         
         # Title
         title = QLabel("Overlay Settings")
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold;")
         layout.addWidget(title)
         
         # Display Mode Group

@@ -77,7 +77,7 @@ def create_ai_tab(parent):
     header.setObjectName("header")
     header.setStyleSheet("""
         QLabel#header {
-            font-size: 18px;
+            font-size: 12px;
             font-weight: bold;
             color: #6366f1;
             padding: 8px 0;

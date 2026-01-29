@@ -335,7 +335,7 @@ class HelpWindow(QWidget):
         
         # Title
         title = QLabel("ForgeAI Help")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #3498db; margin-bottom: 10px;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold; color: #3498db; margin-bottom: 10px;")
         layout.addWidget(title)
         
         # Content area
@@ -516,14 +516,14 @@ class QuickCommandOverlay(QWidget):
         header_layout.setSpacing(8)
         
         self.title_label = QLabel(get_current_model_name())
-        self.title_label.setStyleSheet("color: #3498db; font-size: 14px; font-weight: bold;")
+        self.title_label.setStyleSheet("color: #3498db; font-size: 12px; font-weight: bold;")
         header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
         
         # Status label
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #888; font-size: 11px;")
+        self.status_label.setStyleSheet("color: #bac2de; font-size: 11px;")
         header_layout.addWidget(self.status_label)
         
         # New Chat button
@@ -535,8 +535,8 @@ class QuickCommandOverlay(QWidget):
                 background-color: transparent;
                 border: 1px solid #555;
                 border-radius: 4px;
-                color: #888;
-                font-size: 14px;
+                color: #bac2de;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -556,8 +556,8 @@ class QuickCommandOverlay(QWidget):
                 background-color: transparent;
                 border: 1px solid #555;
                 border-radius: 4px;
-                color: #888;
-                font-size: 14px;
+                color: #bac2de;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -587,7 +587,7 @@ class QuickCommandOverlay(QWidget):
                 border: 1px solid #444;
                 border-radius: 8px;
                 padding: 8px;
-                font-size: 13px;
+                font-size: 12px;
                 color: #ccc;
             }
         """)
@@ -606,7 +606,7 @@ class QuickCommandOverlay(QWidget):
                 border: 1px solid #555;
                 border-radius: 8px;
                 padding: 10px 15px;
-                font-size: 14px;
+                font-size: 12px;
                 color: white;
             }
             QLineEdit:focus {
@@ -673,7 +673,7 @@ class QuickCommandOverlay(QWidget):
         self.hint_label = QLabel("Right-click for options")
         self.hint_label.setStyleSheet("""
             QLabel {
-                color: #666;
+                color: #bac2de;
                 font-size: 10px;
             }
         """)
@@ -881,7 +881,7 @@ class QuickCommandOverlay(QWidget):
         self.response_area.append(
             f"<div style='color: #2ecc71; padding: 4px;'>"
             f"<b>New conversation started with {model_name}</b><br>"
-            f"<span style='color: #888;'>Type a message to begin.</span></div>"
+            f"<span style='color: #bac2de;'>Type a message to begin.</span></div>"
         )
         self.set_status("New conversation started")
     
@@ -1043,7 +1043,7 @@ class QuickCommandOverlay(QWidget):
             }
             QLabel {
                 color: #ecf0f1;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton {
@@ -1937,7 +1937,7 @@ class ForgeSystemTray(QObject):
         
         # Model label on left
         model_label = QLabel(f"Model: {self.current_model}")
-        model_label.setStyleSheet("color: #888; font-size: 11px;")
+        model_label.setStyleSheet("color: #bac2de; font-size: 11px;")
         header_layout.addWidget(model_label)
         self.model_label = model_label
         
@@ -1951,8 +1951,8 @@ class ForgeSystemTray(QObject):
             QPushButton {
                 background-color: transparent;
                 border: none;
-                color: #888;
-                font-size: 14px;
+                color: #bac2de;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {

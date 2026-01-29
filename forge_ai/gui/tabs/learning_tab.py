@@ -52,7 +52,7 @@ class LearningTab(QWidget):
         # Header
         header = QLabel("Self-Improvement System")
         header.setStyleSheet("""
-            font-size: 18px;
+            font-size: 12px;
             font-weight: bold;
             color: #89b4fa;
             padding: 8px;
@@ -229,8 +229,9 @@ class LearningTab(QWidget):
                 background-color: #74c7ec;
             }
             QPushButton:disabled {
-                background-color: #45475a;
-                color: #6c7086;
+                background-color: #313244;
+                color: #f38ba8;
+                border: 2px dashed #f38ba8;
             }
         """)
         self.train_now_button.clicked.connect(self.on_train_now)
@@ -312,7 +313,7 @@ class LearningTab(QWidget):
         value_widget.setObjectName("value")
         value_widget.setStyleSheet(f"""
             color: #cdd6f4;
-            font-size: 16px;
+            font-size: 12px;
             font-weight: bold;
         """)
         value_widget.setAlignment(Qt.AlignCenter)
@@ -325,7 +326,9 @@ class LearningTab(QWidget):
         """Refresh all metrics displays."""
         try:
             # Get model name from parent window
-            model_name = getattr(self.parent_window, 'current_model_name', 'forge_ai')
+            model_name = getattr(self.parent_window, 'current_model_name', None)
+            if not model_name:
+                model_name = 'forge_ai'  # Default fallback
             
             # Get learning engine
             from forge_ai.core.self_improvement import get_learning_engine
@@ -343,7 +346,7 @@ class LearningTab(QWidget):
             self._update_metric('avg_quality', f"{metrics.avg_response_quality:.2f}")
             
             # Update training progress
-            from ..learning.training_scheduler import get_training_scheduler
+            from forge_ai.learning.training_scheduler import get_training_scheduler
             scheduler = get_training_scheduler(model_name)
             status = scheduler.get_status()
             
@@ -467,7 +470,7 @@ class LearningTab(QWidget):
         try:
             model_name = getattr(self.parent_window, 'current_model_name', 'forge_ai')
             
-            from ..learning.training_scheduler import get_training_scheduler
+            from forge_ai.learning.training_scheduler import get_training_scheduler
             scheduler = get_training_scheduler(model_name)
             
             # Confirm with user

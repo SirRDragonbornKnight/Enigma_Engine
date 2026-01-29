@@ -153,7 +153,7 @@ def _toggle_hotkeys(parent, state):
         else:
             manager.stop()
             parent.hotkeys_status_label.setText("Hotkeys disabled")
-            parent.hotkeys_status_label.setStyleSheet("color: #888; font-style: italic;")
+            parent.hotkeys_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
             
     except Exception as e:
         parent.hotkeys_status_label.setText(f"Error: {e}")
@@ -180,7 +180,7 @@ def _toggle_avatar_autonomous(parent, state):
         else:
             autonomous.stop()
             parent.avatar_status_label.setText("Avatar: Manual mode")
-            parent.avatar_status_label.setStyleSheet("color: #888;")
+            parent.avatar_status_label.setStyleSheet("color: #bac2de;")
     except Exception as e:
         parent.avatar_status_label.setText(f"Avatar: Error - {e}")
         parent.avatar_status_label.setStyleSheet("color: #ef4444;")
@@ -234,7 +234,7 @@ def _toggle_web_server(parent, state):
                 except Exception:
                     pass
             parent.web_status_label.setText("Server stopped")
-            parent.web_status_label.setStyleSheet("color: #888;")
+            parent.web_status_label.setStyleSheet("color: #bac2de;")
             parent.web_qr_btn.setEnabled(False)
             
     except Exception as e:
@@ -279,12 +279,12 @@ def _change_robot_mode(parent):
         
         if success:
             status_map = {
-                "disabled": ("Robot: Disabled", "#888"),
+                "disabled": ("Robot: Disabled", "#bac2de"),
                 "manual": ("Robot: MANUAL - User control", "#22c55e"),
                 "auto": ("Robot: AUTO - AI control enabled", "#3b82f6"),
                 "safe": ("Robot: SAFE - Limited AI control", "#f59e0b"),
             }
-            text, color = status_map.get(mode, ("Robot: Unknown", "#888"))
+            text, color = status_map.get(mode, ("Robot: Unknown", "#bac2de"))
             parent.robot_status_label.setText(text)
             parent.robot_status_label.setStyleSheet(f"color: {color};")
         else:
@@ -292,7 +292,7 @@ def _change_robot_mode(parent):
             parent.robot_status_label.setStyleSheet("color: #ef4444;")
     except ImportError:
         parent.robot_status_label.setText("Robot: Not configured")
-        parent.robot_status_label.setStyleSheet("color: #888;")
+        parent.robot_status_label.setStyleSheet("color: #bac2de;")
     except Exception as e:
         parent.robot_status_label.setText(f"Robot: Error - {e}")
         parent.robot_status_label.setStyleSheet("color: #ef4444;")
@@ -366,7 +366,7 @@ def _toggle_game_mode(parent, state):
         else:
             game_mode.disable()
             parent.game_mode_status_label.setText("Game Mode: Disabled")
-            parent.game_mode_status_label.setStyleSheet("color: #888;")
+            parent.game_mode_status_label.setStyleSheet("color: #bac2de;")
             _update_game_mode_limits(parent)
     except Exception as e:
         parent.game_mode_status_label.setText(f"Error: {e}")
@@ -442,12 +442,12 @@ def _update_game_mode_limits(parent):
         )
         
         if game_mode.is_active():
-            parent.game_mode_limits_label.setStyleSheet("color: #22c55e; font-size: 14px; font-weight: bold;")
+            parent.game_mode_limits_label.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
         else:
-            parent.game_mode_limits_label.setStyleSheet("color: #6b7280; font-size: 14px;")
+            parent.game_mode_limits_label.setStyleSheet("color: #bac2de; font-size: 12px;")
     except Exception as e:
         parent.game_mode_limits_label.setText(f"Error: {e}")
-        parent.game_mode_limits_label.setStyleSheet("color: #ef4444; font-size: 14px;")
+        parent.game_mode_limits_label.setStyleSheet("color: #ef4444; font-size: 12px;")
 
 
 # ===== GAME AI ROUTING =====
@@ -474,7 +474,7 @@ def _toggle_game_detection(parent, state):
                 parent.game_combo.setEnabled(True)
             if hasattr(parent, 'game_status_label'):
                 parent.game_status_label.setText("Auto-detection disabled")
-                parent.game_status_label.setStyleSheet("color: #888;")
+                parent.game_status_label.setStyleSheet("color: #bac2de;")
     except ImportError:
         if hasattr(parent, 'auto_game_check'):
             parent.auto_game_check.setChecked(False)
@@ -532,7 +532,7 @@ def _toggle_overlay(parent):
             parent._overlay.hide()
             parent.overlay_toggle_btn.setText("Show Overlay")
             parent.overlay_status_label.setText("Overlay: Hidden")
-            parent.overlay_status_label.setStyleSheet("color: #888; font-style: italic;")
+            parent.overlay_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
         else:
             parent._overlay.show()
             parent.overlay_toggle_btn.setText("Hide Overlay")
@@ -652,7 +652,7 @@ def _change_active_game(parent):
             router.set_active_game(None)
             if hasattr(parent, 'game_status_label'):
                 parent.game_status_label.setText("No game active - using default AI")
-                parent.game_status_label.setStyleSheet("color: #888;")
+                parent.game_status_label.setStyleSheet("color: #bac2de;")
         else:
             router.set_active_game(game_id)
             config = router.get_game(game_id)
@@ -942,7 +942,7 @@ def _toggle_cloud_mode(parent, state):
             parent.cloud_status_label.setStyleSheet("color: #ef4444;")
     else:
         parent.cloud_status_label.setText("Cloud AI disabled - using local model")
-        parent.cloud_status_label.setStyleSheet("color: #888;")
+        parent.cloud_status_label.setStyleSheet("color: #bac2de;")
         
         # Try to switch back to local inference
         try:
@@ -1597,7 +1597,7 @@ def create_settings_tab(parent):
     lock_row.addWidget(parent.ai_lock_checkbox)
     
     parent.ai_lock_status = QLabel("")
-    parent.ai_lock_status.setStyleSheet("color: #888; font-style: italic;")
+    parent.ai_lock_status.setStyleSheet("color: #bac2de; font-style: italic;")
     lock_row.addWidget(parent.ai_lock_status)
     lock_row.addStretch()
     lock_layout.addLayout(lock_row)
@@ -1694,13 +1694,13 @@ def create_settings_tab(parent):
         "Balanced: Moderate resource usage. Good for normal desktop use."
     )
     parent.profile_details_label.setWordWrap(True)
-    parent.profile_details_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.profile_details_label.setStyleSheet("color: #bac2de; font-style: italic;")
     profile_layout.addWidget(parent.profile_details_label)
     
     # Features enabled info
     parent.profile_features_label = QLabel("")
     parent.profile_features_label.setWordWrap(True)
-    parent.profile_features_label.setStyleSheet("color: #6b7280; font-size: 14px;")
+    parent.profile_features_label.setStyleSheet("color: #bac2de; font-size: 12px;")
     profile_layout.addWidget(parent.profile_features_label)
     
     # Profile status
@@ -1744,7 +1744,7 @@ def create_settings_tab(parent):
     parent.power_mode_details_label = QLabel(
         "Balanced: Moderate resource usage. Good for normal use."
     )
-    parent.power_mode_details_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.power_mode_details_label.setStyleSheet("color: #bac2de; font-style: italic;")
     power_layout.addWidget(parent.power_mode_details_label)
     
     # Custom resource settings
@@ -1777,7 +1777,7 @@ def create_settings_tab(parent):
     cpu_row.addWidget(parent.cpu_spinbox)
     
     cpu_info = QLabel(f"(max: {max_threads})")
-    cpu_info.setStyleSheet("color: #888;")
+    cpu_info.setStyleSheet("color: #bac2de;")
     cpu_row.addWidget(cpu_info)
     cpu_row.addStretch()
     custom_layout.addLayout(cpu_row)
@@ -1791,7 +1791,7 @@ def create_settings_tab(parent):
     custom_layout.addLayout(apply_row)
     
     parent.resource_status_label = QLabel("")
-    parent.resource_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.resource_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     custom_layout.addWidget(parent.resource_status_label)
     
     power_layout.addWidget(custom_frame)
@@ -1807,7 +1807,7 @@ def create_settings_tab(parent):
         "<b>Gaming while using AI:</b> Use 'Gaming' mode (GPU 40%, 2 threads)<br>"
         "<b>Best AI performance:</b> Use 'Maximum' mode (GPU 95%, all threads)"
     )
-    rec_info.setStyleSheet("color: #bac2de; font-size: 14px; padding: 4px;")
+    rec_info.setStyleSheet("color: #bac2de; font-size: 12px; padding: 4px;")
     rec_info.setWordWrap(True)
     rec_layout.addWidget(rec_info)
     
@@ -1837,7 +1837,7 @@ def create_settings_tab(parent):
     enable_row.addWidget(parent.game_mode_checkbox)
     
     parent.game_mode_status_label = QLabel("Game Mode: Disabled")
-    parent.game_mode_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.game_mode_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     enable_row.addWidget(parent.game_mode_status_label)
     enable_row.addStretch()
     game_mode_layout.addLayout(enable_row)
@@ -1863,7 +1863,7 @@ def create_settings_tab(parent):
     parent.game_mode_limits_label = QLabel(
         "CPU: <100%, GPU: Allowed, Background Tasks: Enabled"
     )
-    parent.game_mode_limits_label.setStyleSheet("color: #6b7280; font-size: 14px;")
+    parent.game_mode_limits_label.setStyleSheet("color: #bac2de; font-size: 12px;")
     limits_layout.addWidget(parent.game_mode_limits_label)
     
     game_mode_layout.addWidget(limits_frame)
@@ -1934,7 +1934,7 @@ def create_settings_tab(parent):
     parent.theme_description_label = QLabel(
         "True Cerulean (#007bb5) with complementary colors"
     )
-    parent.theme_description_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.theme_description_label.setStyleSheet("color: #bac2de; font-style: italic;")
     display_layout.addWidget(parent.theme_description_label)
 
     # Load current settings from UI settings
@@ -1997,7 +1997,7 @@ def create_settings_tab(parent):
     
     # Status
     parent.cloud_status_label = QLabel("For Ollama: Install from https://ollama.ai then run: ollama run llama3.2:1b")
-    parent.cloud_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.cloud_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     parent.cloud_status_label.setWordWrap(True)
     cloud_layout.addWidget(parent.cloud_status_label)
     
@@ -2038,7 +2038,7 @@ def create_settings_tab(parent):
     _load_chat_names(parent)
     
     names_note = QLabel("The AI's display name is automatically set to the loaded model name.")
-    names_note.setStyleSheet("color: #888; font-style: italic; font-size: 14px;")
+    names_note.setStyleSheet("color: #bac2de; font-style: italic; font-size: 12px;")
     names_note.setWordWrap(True)
     names_layout.addWidget(names_note)
     
@@ -2115,7 +2115,7 @@ def create_settings_tab(parent):
     
     # Current display info
     parent.display_info_label = QLabel("")
-    parent.display_info_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.display_info_label.setStyleSheet("color: #bac2de; font-style: italic;")
     _update_display_info(parent)
     window_layout.addWidget(parent.display_info_label)
     
@@ -2175,7 +2175,7 @@ def create_settings_tab(parent):
     mic_test_row.addWidget(parent.mic_level_bar)
     
     parent.mic_status_label = QLabel("Not tested")
-    parent.mic_status_label.setStyleSheet("color: #888;")
+    parent.mic_status_label.setStyleSheet("color: #bac2de;")
     mic_test_row.addWidget(parent.mic_status_label)
     mic_test_row.addStretch()
     audio_layout.addLayout(mic_test_row)
@@ -2318,7 +2318,7 @@ def create_settings_tab(parent):
     api_layout.addLayout(api_buttons)
     
     parent.api_status_label = QLabel("")
-    parent.api_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.api_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     api_layout.addWidget(parent.api_status_label)
     
     layout.addWidget(api_group)
@@ -2368,7 +2368,7 @@ def create_settings_tab(parent):
     
     # Status label
     parent.web_status_label = QLabel("Server not running")
-    parent.web_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.web_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     web_layout.addWidget(parent.web_status_label)
     
     layout.addWidget(web_group)
@@ -2447,7 +2447,7 @@ def create_settings_tab(parent):
     prompt_layout.addLayout(prompt_buttons)
     
     parent.prompt_status_label = QLabel("")
-    parent.prompt_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.prompt_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     prompt_layout.addWidget(parent.prompt_status_label)
     
     layout.addWidget(prompt_group)
@@ -2465,7 +2465,7 @@ def create_settings_tab(parent):
     
     # Active AI Model display
     parent.active_ai_label = QLabel("Active AI: Not configured")
-    parent.active_ai_label.setStyleSheet("font-weight: bold; font-size: 15px; padding: 5px; background: #1e1e2e; border-radius: 4px;")
+    parent.active_ai_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px;")
     connection_layout.addWidget(parent.active_ai_label)
     
     # Connection indicators
@@ -2511,7 +2511,7 @@ def create_settings_tab(parent):
     cache_layout.addWidget(parent.cache_size_label)
     
     parent.cache_path_label = QLabel("")
-    parent.cache_path_label.setStyleSheet("color: #888; font-size: 14px;")
+    parent.cache_path_label.setStyleSheet("color: #bac2de; font-size: 12px;")
     parent.cache_path_label.setWordWrap(True)
     cache_layout.addWidget(parent.cache_path_label)
     
@@ -2574,7 +2574,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 12px;
         }
         QPushButton:hover {
             background: #2563eb;
@@ -2592,7 +2592,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 12px;
         }
         QPushButton:hover {
             background: #7c3aed;
@@ -2609,7 +2609,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 12px;
         }
         QPushButton:hover {
             background: #b91c1c;
@@ -2645,7 +2645,7 @@ def create_settings_tab(parent):
     hotkey_enable_row.addWidget(parent.hotkeys_enabled_check)
     
     parent.hotkeys_status_label = QLabel("")
-    parent.hotkeys_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.hotkeys_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     hotkey_enable_row.addWidget(parent.hotkeys_status_label)
     hotkey_enable_row.addStretch()
     hotkey_layout.addLayout(hotkey_enable_row)
@@ -2680,7 +2680,7 @@ def create_settings_tab(parent):
             font-weight: bold;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 12px;
         }
         QPushButton:hover {
             background: #2563eb;
@@ -2698,7 +2698,7 @@ def create_settings_tab(parent):
             color: white;
             padding: 8px 16px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 12px;
         }
         QPushButton:hover {
             background: #4f46e5;
@@ -2713,7 +2713,7 @@ def create_settings_tab(parent):
     
     # Overlay status
     parent.overlay_status_label = QLabel("Overlay: Ready")
-    parent.overlay_status_label.setStyleSheet("color: #888; font-style: italic;")
+    parent.overlay_status_label.setStyleSheet("color: #bac2de; font-style: italic;")
     overlay_layout.addWidget(parent.overlay_status_label)
     
     layout.addWidget(overlay_group)
@@ -2729,7 +2729,7 @@ def create_settings_tab(parent):
             "Only model improvements are shared, never raw conversations."
         )
         fed_desc.setWordWrap(True)
-        fed_desc.setStyleSheet("color: #888; font-style: italic;")
+        fed_desc.setStyleSheet("color: #bac2de; font-style: italic;")
         fed_layout.addWidget(fed_desc)
         
         parent.federated_widget = FederatedLearningWidget(parent)
@@ -2818,7 +2818,7 @@ def _refresh_connections(parent):
     try:
         # First check if we have a model assigned via ToolRouter
         active_ai_text = "Active AI: Not configured"
-        active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #888;"
+        active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #bac2de;"
         
         try:
             from ...core.tool_router import get_router
@@ -2835,7 +2835,7 @@ def _refresh_connections(parent):
                 # Parse model type for display
                 if model_type == "huggingface":
                     active_ai_text = f"Active AI: [HF] {model_name}"
-                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #f59e0b;"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #f59e0b;"
                     
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")
@@ -2849,7 +2849,7 @@ def _refresh_connections(parent):
                         
                 elif model_type == "forge_ai":
                     active_ai_text = f"Active AI: Forge - {model_name}"
-                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #22c55e;"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #22c55e;"
                     
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")
@@ -2862,14 +2862,14 @@ def _refresh_connections(parent):
                         
                 elif model_type == "api":
                     active_ai_text = f"Active AI: [API] {model_name.upper()} API"
-                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #3b82f6;"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #3b82f6;"
                     _update_status_indicator(parent.model_status, "connected")
                     _update_status_indicator(parent.tokenizer_status, "connected")
                     _update_status_indicator(parent.inference_status, "connected")
                     
                 elif model_type == "local":
                     active_ai_text = f"Active AI: [Local] {model_name}"
-                    active_ai_style = "font-weight: bold; font-size: 14px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #a855f7;"
+                    active_ai_style = "font-weight: bold; font-size: 12px; padding: 5px; background: #1e1e2e; border-radius: 4px; color: #a855f7;"
                     if is_loaded:
                         _update_status_indicator(parent.model_status, "connected")
                         _update_status_indicator(parent.tokenizer_status, "connected")
@@ -3981,7 +3981,7 @@ def _test_microphone(parent):
                 parent.mic_test_btn.setText("Test Microphone")
                 if getattr(parent, '_mic_test_stop_requested', False):
                     parent.mic_status_label.setText("Test stopped")
-                    parent.mic_status_label.setStyleSheet("color: #888;")
+                    parent.mic_status_label.setStyleSheet("color: #bac2de;")
                 elif max_level > 10:
                     parent.mic_status_label.setText(f"Working (peak: {max_level}%)")
                     parent.mic_status_label.setStyleSheet("color: #22c55e;")

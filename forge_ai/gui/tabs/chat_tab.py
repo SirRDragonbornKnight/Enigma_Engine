@@ -58,7 +58,7 @@ STYLE_MODEL_LABEL = """
     QLabel {
         color: #89b4fa;
         font-weight: bold;
-        font-size: 13px;
+        font-size: 12px;
         padding: 4px 8px;
         background: rgba(137, 180, 250, 0.1);
         border-radius: 4px;
@@ -79,8 +79,20 @@ STYLE_NEW_CHAT_BTN = """
 
 STYLE_SECONDARY_BTN = """
     QPushButton {
-        background-color: #45475a;
+        background-color: #89b4fa;
+        color: #1e1e2e;
+        font-weight: bold;
         padding: 4px 8px;
+        border-radius: 4px;
+        border: none;
+    }
+    QPushButton:hover {
+        background-color: #b4befe;
+    }
+    QPushButton:disabled {
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
@@ -108,7 +120,7 @@ STYLE_CHAT_INPUT = """
         border: 1px solid #555;
         border-radius: 8px;
         padding: 10px 15px;
-        font-size: 14px;
+        font-size: 12px;
         color: white;
     }
     QLineEdit:focus {
@@ -155,7 +167,7 @@ STYLE_REC_BTN = """
         background-color: #444;
         border: 2px solid #555;
         border-radius: 8px;
-        color: #888;
+        color: #bac2de;
         font-size: 12px;
         font-weight: bold;
     }
@@ -192,7 +204,7 @@ STYLE_VOICE_TOGGLE = """
         background-color: #333;
         border: 1px solid #555;
         border-radius: 4px;
-        color: #888;
+        color: #bac2de;
         font-size: 12px;
         font-weight: bold;
     }
@@ -251,7 +263,7 @@ def _create_header_section(parent, layout):
         QLabel {
             color: #a6e3a1;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 12px;
             padding: 4px 8px;
             background: rgba(166, 227, 161, 0.1);
             border-radius: 4px;
@@ -308,7 +320,7 @@ def _create_chat_display(parent, layout):
     )
     parent.chat_display.setStyleSheet("""
         QTextEdit {
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1.5;
             padding: 10px;
         }
@@ -402,7 +414,7 @@ def _create_status_bar(parent, layout):
     bottom_layout.setSpacing(8)
     
     parent.chat_status = QLabel("")
-    parent.chat_status.setStyleSheet("color: #6c7086; font-size: 11px;")
+    parent.chat_status.setStyleSheet("color: #bac2de; font-size: 11px;")
     bottom_layout.addWidget(parent.chat_status)
     bottom_layout.addStretch()
     
@@ -743,7 +755,7 @@ def _toggle_learning(parent):
         parent.chat_status.setText("Learning enabled - AI will learn from conversations")
     else:
         parent.learning_indicator.setText("Learning: OFF")
-        parent.learning_indicator.setStyleSheet("color: #6c7086; font-size: 11px;")
+        parent.learning_indicator.setStyleSheet("color: #bac2de; font-size: 11px;")
         parent.chat_status.setText("Learning disabled - conversations won't be saved for training")
     
     # Update brain if available

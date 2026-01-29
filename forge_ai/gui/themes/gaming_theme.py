@@ -101,7 +101,8 @@ def get_gaming_stylesheet() -> str:
     
     QPushButton:disabled {{
         background-color: {theme['surface']};
-        color: {theme['text_dim']};
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }}
     
     /* Buttons - Secondary (use property) */
@@ -392,7 +393,7 @@ def get_gaming_stylesheet() -> str:
     
     QLabel#header {{
         color: {theme['primary']};
-        font-size: 14px;
+        font-size: 12px;
         font-weight: bold;
     }}
     

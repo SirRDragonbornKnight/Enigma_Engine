@@ -82,13 +82,13 @@ def create_personality_tab(parent):
         # Trait name
         name_lbl = QLabel(trait_name)
         name_lbl.setFixedWidth(85)
-        name_lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        name_lbl.setStyleSheet("font-weight: bold; font-size: 12px;")
         trait_row.addWidget(name_lbl)
         
         # Low label
         low_lbl = QLabel(low_label)
         low_lbl.setFixedWidth(60)
-        low_lbl.setStyleSheet("color: #888; font-size: 13px;")
+        low_lbl.setStyleSheet("color: #bac2de; font-size: 11px;")
         low_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         trait_row.addWidget(low_lbl)
 
@@ -102,7 +102,7 @@ def create_personality_tab(parent):
         # High label
         high_lbl = QLabel(high_label)
         high_lbl.setFixedWidth(60)
-        high_lbl.setStyleSheet("color: #888; font-size: 13px;")
+        high_lbl.setStyleSheet("color: #bac2de; font-size: 11px;")
         trait_row.addWidget(high_lbl)
 
         # Numeric spinbox
@@ -122,7 +122,7 @@ def create_personality_tab(parent):
         # Lock checkbox
         override_check = QCheckBox("Lock")
         override_check.setToolTip("Lock trait to prevent evolution")
-        override_check.setStyleSheet("font-size: 13px;")
+        override_check.setStyleSheet("font-size: 12px;")
         override_check.stateChanged.connect(
             lambda state, key=trait_key: _toggle_trait_override(parent, key, state)
         )
@@ -178,7 +178,7 @@ def create_personality_tab(parent):
     parent.personality_status = QTextEdit()
     parent.personality_status.setReadOnly(True)
     parent.personality_status.setMaximumHeight(80)
-    parent.personality_status.setStyleSheet("font-family: Consolas, monospace; font-size: 13px;")
+    parent.personality_status.setStyleSheet("font-family: Consolas, monospace; font-size: 12px;")
     parent.personality_status.setPlaceholderText("Personality status...")
     layout.addWidget(parent.personality_status)
 

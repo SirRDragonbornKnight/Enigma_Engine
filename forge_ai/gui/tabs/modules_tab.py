@@ -101,7 +101,7 @@ class ModuleListItem(QFrame):
         
         name = self.module_info.get('name', self.module_id)
         self.name_label = QLabel(name)
-        self.name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         info_layout.addWidget(self.name_label)
         
         desc = self.module_info.get('description', '')
@@ -109,7 +109,7 @@ class ModuleListItem(QFrame):
         if len(desc) > 60:
             desc = desc[:60] + "..."
         self.desc_label = QLabel(desc)
-        self.desc_label.setStyleSheet("color: #888; font-size: 13px;")
+        self.desc_label.setStyleSheet("color: #bac2de; font-size: 11px;")
         info_layout.addWidget(self.desc_label)
         
         layout.addLayout(info_layout, stretch=1)
@@ -120,8 +120,8 @@ class ModuleListItem(QFrame):
         self.status_label.setAlignment(AlignCenter)
         self.status_label.setStyleSheet("""
             QLabel {
-                color: #666;
-                font-size: 13px;
+                color: #bac2de;
+                font-size: 12px;
                 font-weight: bold;
             }
         """)
@@ -148,7 +148,7 @@ class ModuleListItem(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     color: #2ecc71;
-                    font-size: 14px;
+                    font-size: 12px;
                     font-weight: bold;
                 }
             """)
@@ -156,8 +156,8 @@ class ModuleListItem(QFrame):
             self.status_label.setText("OFF")
             self.status_label.setStyleSheet("""
                 QLabel {
-                    color: #666;
-                    font-size: 14px;
+                    color: #bac2de;
+                    font-size: 12px;
                     font-weight: bold;
                 }
             """)
@@ -172,7 +172,7 @@ class ModuleListItem(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     color: #f39c12;
-                    font-size: 14px;
+                    font-size: 12px;
                     font-weight: bold;
                 }
             """)
@@ -201,7 +201,7 @@ class ModulesTab(QWidget):
         header_layout = QHBoxLayout()
         
         title = QLabel("Module Manager")
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold;")
         header_layout.addWidget(title)
         
         header_layout.addStretch()
@@ -217,7 +217,7 @@ class ModulesTab(QWidget):
             QLineEdit {
                 padding: 8px 12px;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 12px;
             }
         """)
         header_layout.addWidget(self.search_input)
@@ -230,7 +230,7 @@ class ModulesTab(QWidget):
         refresh_btn.setStyleSheet("""
             QPushButton {
                 padding: 6px 12px;
-                font-size: 13px;
+                font-size: 12px;
             }
         """)
         header_layout.addWidget(refresh_btn)
@@ -276,7 +276,7 @@ class ModulesTab(QWidget):
                 font-weight: bold;
                 padding: 6px 12px;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #27ae60;
@@ -296,7 +296,7 @@ class ModulesTab(QWidget):
                 font-weight: bold;
                 padding: 6px 12px;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #c0392b;
@@ -343,7 +343,7 @@ class ModulesTab(QWidget):
         stats_layout.setSpacing(10)
         
         self.loaded_label = QLabel("Loaded: 0 / 0")
-        self.loaded_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.loaded_label.setStyleSheet("font-size: 12px; font-weight: bold;")
         stats_layout.addWidget(self.loaded_label)
         
         # AI Connection indicator
@@ -360,15 +360,15 @@ class ModulesTab(QWidget):
         conn_layout.setSpacing(4)
         
         conn_title = QLabel("AI Status")
-        conn_title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        conn_title.setStyleSheet("font-weight: bold; font-size: 12px;")
         conn_layout.addWidget(conn_title)
         
         self.ai_status_indicator = QLabel("[OFF] Disconnected")
-        self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 14px;")
+        self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
         conn_layout.addWidget(self.ai_status_indicator)
         
         self.ai_status_detail = QLabel("No modules loaded")
-        self.ai_status_detail.setStyleSheet("color: #888; font-size: 13px;")
+        self.ai_status_detail.setStyleSheet("color: #bac2de; font-size: 11px;")
         self.ai_status_detail.setWordWrap(True)
         conn_layout.addWidget(self.ai_status_detail)
         
@@ -791,19 +791,19 @@ class ModulesTab(QWidget):
         
         if core_loaded and gen_loaded:
             self.ai_status_indicator.setText("[ON] Connected (Full)")
-            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 14px; font-weight: bold;")
+            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
             self.ai_status_detail.setText("Core AI + generation ready")
         elif core_loaded:
             self.ai_status_indicator.setText("[ON] Connected (Core)")
-            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 14px; font-weight: bold;")
+            self.ai_status_indicator.setStyleSheet("color: #22c55e; font-size: 12px; font-weight: bold;")
             self.ai_status_detail.setText("Chat available, enable gen modules for more")
         elif loaded > 0:
             self.ai_status_indicator.setText("[...] Partial")
-            self.ai_status_indicator.setStyleSheet("color: #f59e0b; font-size: 14px; font-weight: bold;")
+            self.ai_status_indicator.setStyleSheet("color: #f59e0b; font-size: 12px; font-weight: bold;")
             self.ai_status_detail.setText(f"{loaded} modules loaded, enable core for chat")
         else:
             self.ai_status_indicator.setText("[OFF] Disconnected")
-            self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 14px;")
+            self.ai_status_indicator.setStyleSheet("color: #ef4444; font-size: 12px;")
             self.ai_status_detail.setText("Enable modules to start")
     
     def _refresh_status(self):

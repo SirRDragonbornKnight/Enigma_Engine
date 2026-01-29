@@ -47,7 +47,7 @@ def create_robot_subtab(parent):
             background-color: #dc2626;
             color: white;
             font-weight: bold;
-            font-size: 18px;
+            font-size: 12px;
             padding: 15px;
             border-radius: 8px;
             border: 3px solid #991b1b;
@@ -493,12 +493,12 @@ def _change_robot_mode(parent):
         
         if success:
             status_map = {
-                "disabled": ("Status: Disabled", "#888"),
+                "disabled": ("Status: Disabled", "#bac2de"),
                 "manual": ("Status: MANUAL - User control", "#22c55e"),
                 "auto": ("Status: AUTO - AI control enabled", "#3b82f6"),
                 "safe": ("Status: SAFE - Limited AI control", "#f59e0b"),
             }
-            text, color = status_map.get(mode, ("Status: Unknown", "#888"))
+            text, color = status_map.get(mode, ("Status: Unknown", "#bac2de"))
             parent.robot_status_label.setText(text)
             parent.robot_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
             parent.robot_log.append(f"[MODE] Changed to {mode.upper()}")
@@ -507,7 +507,7 @@ def _change_robot_mode(parent):
             parent.robot_status_label.setStyleSheet("color: #ef4444;")
     except ImportError:
         parent.robot_status_label.setText("Status: Mode controller not configured")
-        parent.robot_status_label.setStyleSheet("color: #888;")
+        parent.robot_status_label.setStyleSheet("color: #bac2de;")
     except Exception as e:
         parent.robot_status_label.setText(f"Status: Error - {e}")
         parent.robot_status_label.setStyleSheet("color: #ef4444;")

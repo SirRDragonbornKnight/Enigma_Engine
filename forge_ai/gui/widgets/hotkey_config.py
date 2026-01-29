@@ -49,7 +49,7 @@ class HotkeyRecordDialog(QDialog):
         self.display_label = QLabel("Waiting for input...")
         self.display_label.setAlignment(Qt.AlignCenter)
         self.display_label.setStyleSheet(
-            "font-size: 14px; font-weight: bold; padding: 10px; "
+            "font-size: 12px; font-weight: bold; padding: 10px; "
             "background-color: #2a2a2a; border-radius: 5px;"
         )
         layout.addWidget(self.display_label)
@@ -157,7 +157,7 @@ class HotkeyConfigWidget(QWidget):
         
         # Title
         title = QLabel("Global Hotkey Configuration")
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold;")
         layout.addWidget(title)
         
         # Description
@@ -166,7 +166,7 @@ class HotkeyConfigWidget(QWidget):
             "These work in fullscreen games and other applications."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("font-style: italic; color: #888;")
+        desc.setStyleSheet("font-style: italic; color: #bac2de;")
         layout.addWidget(desc)
         
         # Hotkey list

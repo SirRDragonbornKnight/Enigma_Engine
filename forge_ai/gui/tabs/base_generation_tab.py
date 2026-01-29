@@ -88,29 +88,32 @@ BUTTON_STYLE_PRIMARY_FALLBACK = """
         background-color: #1c5980;
     }
     QPushButton:disabled {
-        background-color: #45475a;
-        color: #6c7086;
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
 BUTTON_STYLE_SECONDARY_FALLBACK = """
     QPushButton {
-        background-color: #45475a;
-        color: #cdd6f4;
+        background-color: #89b4fa;
+        color: #1e1e2e;
+        font-weight: bold;
         border: none;
         border-radius: 6px;
         padding: 6px 12px;
         font-size: 11px;
     }
     QPushButton:hover {
-        background-color: #585b70;
+        background-color: #b4befe;
     }
     QPushButton:pressed {
-        background-color: #313244;
+        background-color: #74c7ec;
     }
     QPushButton:disabled {
         background-color: #313244;
-        color: #6c7086;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
@@ -131,8 +134,9 @@ BUTTON_STYLE_SUCCESS_FALLBACK = """
         background-color: #74c7a0;
     }
     QPushButton:disabled {
-        background-color: #45475a;
-        color: #6c7086;
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
@@ -153,8 +157,9 @@ BUTTON_STYLE_DANGER_FALLBACK = """
         background-color: #d06080;
     }
     QPushButton:disabled {
-        background-color: #45475a;
-        color: #6c7086;
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
@@ -167,7 +172,7 @@ BUTTON_STYLE_DANGER = BUTTON_STYLE_DANGER_FALLBACK
 
 HEADER_STYLE = """
     QLabel {
-        font-size: 16px;
+        font-size: 12px;
         font-weight: bold;
         color: #cdd6f4;
         padding: 4px 0;

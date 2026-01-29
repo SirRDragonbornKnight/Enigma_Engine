@@ -79,7 +79,7 @@ class Theme:
         QMainWindow, QWidget {{
             background-color: {c.bg_primary};
             color: {c.text_primary};
-            font-size: 14px;
+            font-size: 12px;
         }}
         
         QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {{
@@ -88,7 +88,7 @@ class Theme:
             border: 1px solid {c.border_primary};
             border-radius: 4px;
             padding: 4px;
-            font-size: 15px;
+            font-size: 12px;
             selection-background-color: {c.accent_primary};
             selection-color: {c.bg_primary};
         }}
@@ -99,7 +99,7 @@ class Theme:
             border: none;
             border-radius: 4px;
             padding: 8px 16px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
         }}
         
@@ -112,8 +112,9 @@ class Theme:
         }}
         
         QPushButton:disabled {{
-            background-color: {c.bg_tertiary};
-            color: {c.text_disabled};
+            background-color: {c.bg_secondary};
+            color: #f38ba8;
+            border: 2px dashed #f38ba8;
         }}
         
         QGroupBox {{
@@ -140,7 +141,7 @@ class Theme:
             background-color: {c.bg_secondary};
             color: {c.text_primary};
             padding: 8px 16px;
-            font-size: 14px;
+            font-size: 12px;
             border-top-left-radius: 4px;
             border-top-right-radius: 4px;
             margin-right: 2px;
@@ -174,7 +175,7 @@ class Theme:
             border: 1px solid {c.border_primary};
             border-radius: 4px;
             padding: 4px 8px;
-            font-size: 14px;
+            font-size: 12px;
         }}
         
         QComboBox:hover {{
@@ -214,7 +215,7 @@ class Theme:
         QCheckBox {{
             color: {c.text_primary};
             spacing: 8px;
-            font-size: 14px;
+            font-size: 12px;
         }}
         
         QCheckBox::indicator {{
@@ -231,7 +232,7 @@ class Theme:
         
         QLabel {{
             color: {c.text_primary};
-            font-size: 14px;
+            font-size: 12px;
         }}
         
         QScrollBar:vertical {{
@@ -259,7 +260,7 @@ class Theme:
         QMenuBar {{
             background-color: {c.bg_secondary};
             color: {c.text_primary};
-            font-size: 14px;
+            font-size: 12px;
         }}
         
         QMenuBar::item:selected {{
@@ -271,7 +272,7 @@ class Theme:
             background-color: {c.bg_secondary};
             color: {c.text_primary};
             border: 1px solid {c.border_primary};
-            font-size: 14px;
+            font-size: 12px;
         }}
         
         QMenu::item:selected {{

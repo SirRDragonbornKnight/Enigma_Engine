@@ -364,11 +364,11 @@ class SpecsPanel(QFrame):
         perf_layout = QVBoxLayout(perf_group)
         
         self.perf_label = QLabel("~50 tokens/sec on RTX 3060")
-        self.perf_label.setStyleSheet("color: #69db7c; font-size: 14px;")
+        self.perf_label.setStyleSheet("color: #69db7c; font-size: 12px;")
         perf_layout.addWidget(self.perf_label)
         
         self.quality_label = QLabel("Good for: Conversations, basic tasks, learning")
-        self.quality_label.setStyleSheet("color: #8b949e; font-size: 13px;")
+        self.quality_label.setStyleSheet("color: #bac2de; font-size: 11px;")
         self.quality_label.setWordWrap(True)
         perf_layout.addWidget(self.quality_label)
         
@@ -496,7 +496,7 @@ class CompareWidget(QFrame):
         header.setSpacing(8)
         for col in ["Model", "Params", "Context", "RAM", "Speed"]:
             lbl = QLabel(col)
-            lbl.setStyleSheet("color: #8b949e; font-weight: bold; font-size: 14px;")
+            lbl.setStyleSheet("color: #bac2de; font-weight: bold; font-size: 12px;")
             lbl.setMinimumWidth(60)
             header.addWidget(lbl, 1)
         layout.addLayout(header)
@@ -523,27 +523,27 @@ class CompareWidget(QFrame):
             colors = TIER_COLORS[MODEL_SPECS[model]['tier']]
             
             name_lbl = QLabel(model.upper())
-            name_lbl.setStyleSheet(f"color: {colors[0]}; font-weight: bold; font-size: 14px;")
+            name_lbl.setStyleSheet(f"color: {colors[0]}; font-weight: bold; font-size: 12px;")
             name_lbl.setMinimumWidth(60)
             row.addWidget(name_lbl, 1)
             
             params_lbl = QLabel(params)
-            params_lbl.setStyleSheet("color: #ffffff; font-size: 14px;")
+            params_lbl.setStyleSheet("color: #ffffff; font-size: 12px;")
             params_lbl.setMinimumWidth(60)
             row.addWidget(params_lbl, 1)
             
             ctx_lbl = QLabel(ctx)
-            ctx_lbl.setStyleSheet("color: #8b949e; font-size: 14px;")
+            ctx_lbl.setStyleSheet("color: #bac2de; font-size: 12px;")
             ctx_lbl.setMinimumWidth(60)
             row.addWidget(ctx_lbl, 1)
             
             ram_lbl = QLabel(ram)
-            ram_lbl.setStyleSheet("color: #74c0fc; font-size: 14px;")
+            ram_lbl.setStyleSheet("color: #74c0fc; font-size: 12px;")
             ram_lbl.setMinimumWidth(60)
             row.addWidget(ram_lbl, 1)
             
             speed_lbl = QLabel(speed)
-            speed_lbl.setStyleSheet("font-size: 14px;")
+            speed_lbl.setStyleSheet("font-size: 12px;")
             speed_lbl.setMinimumWidth(60)
             row.addWidget(speed_lbl, 1)
             
@@ -603,7 +603,7 @@ class ScalingTab(QWidget):
                 border: none;
                 border-radius: 8px;
                 padding: 15px 25px;
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {

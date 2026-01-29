@@ -332,7 +332,7 @@ class VoiceCloneTab(QWidget):
             QPushButton { 
                 background: #a6e3a1; color: #1e1e2e; 
                 padding: 12px; font-weight: bold; 
-                border-radius: 8px; font-size: 14px;
+                border-radius: 8px; font-size: 12px;
             }
             QPushButton:hover { background: #94e2d5; }
         """)
@@ -400,7 +400,7 @@ class VoiceCloneTab(QWidget):
             QPushButton { 
                 background: #89b4fa; color: #1e1e2e; 
                 padding: 12px; font-weight: bold; 
-                border-radius: 8px; font-size: 14px;
+                border-radius: 8px; font-size: 12px;
             }
             QPushButton:hover { background: #74c7ec; }
         """)

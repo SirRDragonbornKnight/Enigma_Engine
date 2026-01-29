@@ -24,10 +24,8 @@ class ProcessMonitor:
     - GPU usage patterns
     """
     
-    # Known game executables and launchers
+    # Known game executables (actual games, NOT launchers)
     KNOWN_GAMES = [
-        # Steam
-        "steam.exe", "steamwebhelper.exe",
         # Common games
         "minecraft.exe", "javaw.exe",  # Minecraft
         "FortniteClient-Win64-Shipping.exe", "fortnite.exe",
@@ -40,12 +38,6 @@ class ProcessMonitor:
         "witcher3.exe",
         "starfield.exe",
         "skyrim.exe", "fallout4.exe",
-        # Launchers
-        "EpicGamesLauncher.exe",
-        "Battle.net.exe",
-        "Origin.exe",
-        "upc.exe",  # Ubisoft
-        "EADesktop.exe",
         # VR
         "vrchat.exe",
         "boneworks.exe",
@@ -67,6 +59,18 @@ class ProcessMonitor:
         "aoe4.exe",
     ]
     
+    # Launchers to IGNORE (they're not actual games)
+    LAUNCHER_EXCLUSIONS = [
+        "steam.exe", "steamwebhelper.exe", "steamservice.exe",
+        "EpicGamesLauncher.exe", "EpicWebHelper.exe",
+        "Battle.net.exe", "Agent.exe",  # Blizzard
+        "Origin.exe", "OriginWebHelperService.exe",
+        "upc.exe", "UbisoftConnect.exe",  # Ubisoft
+        "EADesktop.exe", "EABackgroundService.exe",
+        "GalaxyClient.exe",  # GOG
+        "nw.exe",  # Common game launcher wrapper
+    ]
+    
     def __init__(self, custom_games: Optional[List[str]] = None):
         """
         Initialize process monitor.
@@ -76,6 +80,7 @@ class ProcessMonitor:
         """
         self.custom_games = custom_games or []
         self.all_games = set(g.lower() for g in self.KNOWN_GAMES + self.custom_games)
+        self.launcher_exclusions = set(g.lower() for g in self.LAUNCHER_EXCLUSIONS)
         self._system = platform.system()
     
     def get_fullscreen_app(self) -> Optional[str]:
@@ -85,13 +90,18 @@ class ProcessMonitor:
         Returns:
             Process name if fullscreen app detected, None otherwise
         """
+        result = None
         if self._system == "Windows":
-            return self._get_fullscreen_windows()
+            result = self._get_fullscreen_windows()
         elif self._system == "Linux":
-            return self._get_fullscreen_linux()
+            result = self._get_fullscreen_linux()
         elif self._system == "Darwin":
-            return self._get_fullscreen_macos()
-        return None
+            result = self._get_fullscreen_macos()
+        
+        # Exclude launcher processes from fullscreen detection
+        if result and result.lower() in self.launcher_exclusions:
+            return None
+        return result
     
     def _get_fullscreen_windows(self) -> Optional[str]:
         """Get fullscreen app on Windows."""

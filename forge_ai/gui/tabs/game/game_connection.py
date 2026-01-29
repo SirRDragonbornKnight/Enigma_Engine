@@ -205,7 +205,7 @@ def create_game_subtab(parent):
     
     # Game routing status
     parent.game_routing_status = QLabel("No game active - using default AI")
-    parent.game_routing_status.setStyleSheet("color: #888; font-style: italic;")
+    parent.game_routing_status.setStyleSheet("color: #bac2de; font-style: italic;")
     routing_layout.addWidget(parent.game_routing_status)
     
     layout.addWidget(routing_group)
@@ -530,7 +530,7 @@ def _toggle_game_detection(parent, state):
             router.stop_detection()
             parent.game_routing_combo.setEnabled(True)
             parent.game_routing_status.setText("Auto-detection disabled")
-            parent.game_routing_status.setStyleSheet("color: #888;")
+            parent.game_routing_status.setStyleSheet("color: #bac2de;")
     except ImportError:
         parent.auto_game_check.setChecked(False)
         QMessageBox.information(
@@ -635,7 +635,7 @@ def _change_active_game(parent):
         if game_id == "none":
             router.set_active_game(None)
             parent.game_routing_status.setText("No game active - using default AI")
-            parent.game_routing_status.setStyleSheet("color: #888; font-style: italic;")
+            parent.game_routing_status.setStyleSheet("color: #bac2de; font-style: italic;")
         else:
             router.set_active_game(game_id)
             config = router.get_game(game_id)

@@ -54,7 +54,7 @@ class ModelManagerDialog(QDialog):
                 border: 1px solid #45475a;
                 border-radius: 8px;
                 padding: 8px;
-                font-size: 13px;
+                font-size: 12px;
             }
             QListWidget::item {
                 padding: 8px;
@@ -68,8 +68,8 @@ class ModelManagerDialog(QDialog):
                 background-color: #45475a;
             }
             QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
+                background-color: #89b4fa;
+                color: #1e1e2e;
                 border: none;
                 border-radius: 6px;
                 padding: 10px 16px;
@@ -77,14 +77,15 @@ class ModelManagerDialog(QDialog):
                 min-width: 80px;
             }
             QPushButton:hover {
-                background-color: #585b70;
+                background-color: #b4befe;
             }
             QPushButton:pressed {
-                background-color: #313244;
+                background-color: #74c7ec;
             }
             QPushButton:disabled {
                 background-color: #313244;
-                color: #6c7086;
+                color: #f38ba8;
+                border: 2px dashed #f38ba8;
             }
             QGroupBox {
                 border: 1px solid #45475a;
@@ -114,7 +115,7 @@ class ModelManagerDialog(QDialog):
         # Header with refresh
         header = QHBoxLayout()
         title = QLabel("Your Models")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold; color: #89b4fa;")
         header.addWidget(title)
         header.addStretch()
         
@@ -220,7 +221,7 @@ class ModelManagerDialog(QDialog):
         info_layout = QVBoxLayout(info_group)
         
         self.info_name = QLabel("Select a model")
-        self.info_name.setStyleSheet("font-size: 18px; font-weight: bold; color: #f9e2af;")
+        self.info_name.setStyleSheet("font-size: 12px; font-weight: bold; color: #f9e2af;")
         info_layout.addWidget(self.info_name)
         
         self.info_details = QLabel("Click a model from the list to see its details")
@@ -757,7 +758,7 @@ Checkpoints: {checkpoints}
         layout = QVBoxLayout(test_dialog)
         
         title = QLabel(f"Model Test: {name}")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold; color: #89b4fa;")
         layout.addWidget(title)
         
         # Test results area

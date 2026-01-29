@@ -73,7 +73,7 @@ class AvatarGalleryItem(QFrame):
         avatar_type = self.avatar_info.get("type", "").lower()
         type_label = QLabel(avatar_type[:10])
         type_label.setAlignment(Qt.AlignCenter)
-        type_label.setStyleSheet("font-size: 10px; color: #888;")
+                type_label.setStyleSheet("font-size: 10px; color: #bac2de;")
         layout.addWidget(type_label)
     
     def _load_thumbnail(self):
@@ -199,7 +199,7 @@ class AvatarManagementPanel(QWidget):
         if not avatars:
             no_avatars = QLabel("No avatars found.\nClick 'Generate Samples' to create some!")
             no_avatars.setAlignment(Qt.AlignCenter)
-            no_avatars.setStyleSheet("color: #888; padding: 20px;")
+            no_avatars.setStyleSheet("color: #bac2de; padding: 20px;")
             self.gallery_layout.addWidget(no_avatars, 0, 0, 1, cols)
     
     def _on_avatar_clicked(self, avatar_info: Dict):

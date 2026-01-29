@@ -120,7 +120,7 @@ class ModelSelector(QWidget):
         # Status indicator
         self.status_label = QLabel("[*]")
         self.status_label.setToolTip("Model status")
-        self.status_label.setStyleSheet("color: #888; font-size: 14px;")
+        self.status_label.setStyleSheet("color: #bac2de; font-size: 12px;")
         layout.addWidget(self.status_label)
         
         # Apply button
@@ -234,7 +234,7 @@ class ModelSelector(QWidget):
         
         # Visual feedback - show pending
         self.status_label.setText("[...]")
-        self.status_label.setStyleSheet("color: #f39c12; font-size: 14px;")
+        self.status_label.setStyleSheet("color: #f39c12; font-size: 12px;")
         self.status_label.setToolTip("Selection pending - click Apply")
     
     def _apply_selection(self):
@@ -271,11 +271,11 @@ class ModelSelector(QWidget):
         """Update the status indicator."""
         if is_set:
             self.status_label.setText("[OK]")
-            self.status_label.setStyleSheet("color: #2ecc71; font-size: 14px;")
+            self.status_label.setStyleSheet("color: #2ecc71; font-size: 12px;")
             self.status_label.setToolTip("Model assigned")
         else:
             self.status_label.setText("[*]")
-            self.status_label.setStyleSheet("color: #888; font-size: 14px;")
+            self.status_label.setStyleSheet("color: #bac2de; font-size: 12px;")
             self.status_label.setToolTip("No model assigned")
     
     def get_current_model(self) -> Optional[str]:

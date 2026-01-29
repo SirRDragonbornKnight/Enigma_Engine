@@ -95,7 +95,7 @@ class LogViewerWidget(QWidget):
         
         # Stats
         self.stats_label = QLabel("Lines: 0")
-        self.stats_label.setStyleSheet("color: #888;")
+        self.stats_label.setStyleSheet("color: #bac2de;")
         layout.addWidget(self.stats_label)
     
     def _load_log(self):
@@ -200,7 +200,7 @@ class LogsTab(QWidget):
         header_row.addWidget(header)
         
         desc = QLabel("View training, system, and error logs")
-        desc.setStyleSheet("color: #888; font-size: 12px;")
+        desc.setStyleSheet("color: #bac2de; font-size: 12px;")
         header_row.addWidget(desc)
         header_row.addStretch()
         layout.addLayout(header_row)
@@ -267,7 +267,7 @@ class LogsTab(QWidget):
         bottom.addStretch()
         
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: #888;")
+        self.status_label.setStyleSheet("color: #bac2de;")
         bottom.addWidget(self.status_label)
         
         layout.addLayout(bottom)

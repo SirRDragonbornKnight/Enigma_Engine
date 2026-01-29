@@ -4934,7 +4934,7 @@ def create_avatar_subtab(parent):
     
     # Behavior status
     parent.avatar_behavior_status = QLabel("Mode: Manual")
-    parent.avatar_behavior_status.setStyleSheet("color: #888; font-style: italic;")
+    parent.avatar_behavior_status.setStyleSheet("color: #bac2de; font-style: italic;")
     behavior_layout.addWidget(parent.avatar_behavior_status)
     
     behavior_group.setLayout(behavior_layout)
@@ -6058,7 +6058,7 @@ def _toggle_avatar_autonomous(parent, state):
             autonomous.stop()
             if hasattr(parent, 'avatar_behavior_status'):
                 parent.avatar_behavior_status.setText("Mode: Manual")
-                parent.avatar_behavior_status.setStyleSheet("color: #888; font-style: italic;")
+                parent.avatar_behavior_status.setStyleSheet("color: #bac2de; font-style: italic;")
     except Exception as e:
         if hasattr(parent, 'avatar_behavior_status'):
             parent.avatar_behavior_status.setText(f"Error: {e}")

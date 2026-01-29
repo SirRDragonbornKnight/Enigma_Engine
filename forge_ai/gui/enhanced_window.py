@@ -340,7 +340,7 @@ class GenerationPreviewPopup(QDialog):
         header = QHBoxLayout()
         
         title_label = QLabel(f"{title}")
-        title_label.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 16px; border: none;")
+        title_label.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 12px; border: none;")
         header.addWidget(title_label)
         
         header.addStretch()
@@ -432,7 +432,7 @@ class GenerationPreviewPopup(QDialog):
         
         # Path display
         path_label = QLabel(f"Path: {self.result_path}")
-        path_label.setStyleSheet("color: #6c7086; font-size: 13px; border: none;")
+        path_label.setStyleSheet("color: #bac2de; font-size: 12px; border: none;")
         path_label.setWordWrap(True)
         container_layout.addWidget(path_label)
         
@@ -457,13 +457,14 @@ class GenerationPreviewPopup(QDialog):
         folder_btn = QPushButton("Open Folder")
         folder_btn.setStyleSheet("""
             QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                font-weight: bold;
                 border: none;
                 border-radius: 4px;
                 padding: 8px 16px;
             }
-            QPushButton:hover { background-color: #585b70; }
+            QPushButton:hover { background-color: #b4befe; }
         """)
         folder_btn.clicked.connect(self._open_folder)
         btn_layout.addWidget(folder_btn)
@@ -570,8 +571,9 @@ QPushButton:pressed {
     background-color: #74c7ec;
 }
 QPushButton:disabled {
-    background-color: #45475a;
-    color: #6c7086;
+    background-color: #313244;
+    color: #f38ba8;
+    border: 2px dashed #f38ba8;
 }
 QGroupBox {
     border: 1px solid #45475a;
@@ -650,7 +652,7 @@ QScrollBar::handle:vertical {
     border-radius: 6px;
 }
 QLabel#header {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: bold;
     color: #89b4fa;
 }
@@ -664,7 +666,7 @@ QListWidget#sidebar {
     border: none;
     border-right: 2px solid #1e1e2e;
     outline: none;
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 500;
     padding: 8px 0;
 }
@@ -739,8 +741,9 @@ QPushButton:pressed {
     background-color: #04a5e5;
 }
 QPushButton:disabled {
-    background-color: #ccd0da;
-    color: #9ca0b0;
+    background-color: #e6e9ef;
+    color: #d20f39;
+    border: 2px dashed #d20f39;
 }
 QGroupBox {
     border: 1px solid #ccd0da;
@@ -811,7 +814,7 @@ QSlider::handle:horizontal {
     border-radius: 8px;
 }
 QLabel#header {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: bold;
     color: #1e66f5;
 }
@@ -825,7 +828,7 @@ QListWidget#sidebar {
     border: none;
     border-right: 2px solid #ccd0da;
     outline: none;
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 500;
     padding: 8px 0;
 }
@@ -883,8 +886,9 @@ QPushButton:pressed {
     background-color: #581c87;
 }
 QPushButton:disabled {
-    background-color: #2a2a2a;
-    color: #4a4a4a;
+    background-color: #1a1a1a;
+    color: #f43f5e;
+    border: 2px dashed #f43f5e;
 }
 QGroupBox {
     border: 1px solid #2a2a2a;
@@ -963,7 +967,7 @@ QScrollBar::handle:vertical {
     border-radius: 6px;
 }
 QLabel#header {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: bold;
     color: #9333ea;
 }
@@ -1002,7 +1006,8 @@ QPushButton:pressed {
 }
 QPushButton:disabled {
     background-color: #1e293b;
-    color: #475569;
+    color: #fb7185;
+    border: 2px dashed #fb7185;
 }
 QGroupBox {
     border: 1px solid #1e293b;
@@ -1081,7 +1086,7 @@ QScrollBar::handle:vertical {
     border-radius: 6px;
 }
 QLabel#header {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: bold;
     color: #22d3ee;
 }
@@ -1722,6 +1727,20 @@ class EnhancedMainWindow(QMainWindow):
             self._federated_learning = None
         
         # ─────────────────────────────────────────────────────────────────
+        # Initialize Learning Chat Integration
+        # Detects corrections, teaching, and feedback in real-time
+        # ─────────────────────────────────────────────────────────────────
+        self._learning_integration = None
+        try:
+            from ..learning import LearningChatIntegration
+            # Will be properly initialized once a model is loaded
+            self._learning_integration_enabled = self._gui_settings.get("learning_integration", True)
+            print(f"Learning integration: {'enabled' if self._learning_integration_enabled else 'disabled'}")
+        except Exception as e:
+            print(f"Could not initialize Learning integration: {e}")
+            self._learning_integration_enabled = False
+        
+        # ─────────────────────────────────────────────────────────────────
         # Initialize AI Overlay
         # This is the transparent always-on-top gaming interface
         # ─────────────────────────────────────────────────────────────────
@@ -1903,27 +1922,15 @@ class EnhancedMainWindow(QMainWindow):
         pass
     
     def _force_quit(self):
-        """Hide GUI to tray (Alt+F4). Use Quick Chat to fully quit ForgeAI."""
-        try:
-            # Try to save any unsaved state
-            self._save_gui_settings()
-            # Just hide, don't exit
-            self.hide()
-            print("Main GUI hidden. Use Quick Chat's 'Quit Forge' to exit completely.")
-        except Exception as e:
-            print(f"Error hiding GUI: {e}")
-            self.hide()
+        """Force quit ForgeAI (Alt+F4)."""
+        self._save_gui_settings()
+        self._cleanup_and_quit()
     
     def _emergency_quit(self):
-        """Emergency hide - force hide the GUI window."""
-        import sys
-        print("[EMERGENCY] Force hiding main GUI window...")
-        # Also try to hide tray
-        try:
-            self.hide()
-            print("Use Quick Chat to quit ForgeAI completely.")
-        except:
-            pass
+        """Emergency quit - force terminate immediately."""
+        import os
+        print("[EMERGENCY] Force quitting ForgeAI...")
+        os._exit(0)
     
     def _is_huggingface_model(self) -> bool:
         """Check if the currently loaded model is a HuggingFace model."""
@@ -1939,7 +1946,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.btn_train.setStyleSheet("""
                     QPushButton {
                         padding: 12px 24px;
-                        font-size: 14px;
+                        font-size: 12px;
                         font-weight: bold;
                         background-color: #45475a;
                         color: #6c7086;
@@ -1950,7 +1957,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.btn_train.setStyleSheet("""
                     QPushButton {
                         padding: 12px 24px;
-                        font-size: 14px;
+                        font-size: 12px;
                         font-weight: bold;
                         background-color: #a6e3a1;
                         color: #1e1e2e;
@@ -1977,7 +1984,7 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'learning_indicator'):
             if is_huggingface:
                 self.learning_indicator.setText("Learning: N/A")
-                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
+                self.learning_indicator.setStyleSheet("color: #bac2de; font-size: 12px;")
                 self.learning_indicator.setToolTip(
                     "Learning is not available for HuggingFace models.\n\n"
                     "HuggingFace models are pre-trained and cannot be fine-tuned locally.\n"
@@ -1993,10 +2000,10 @@ class EnhancedMainWindow(QMainWindow):
                 # Restore current state
                 if getattr(self, 'learn_while_chatting', True):
                     self.learning_indicator.setText("Learning: ON")
-                    self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 14px;")
+                    self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 12px;")
                 else:
                     self.learning_indicator.setText("Learning: OFF")
-                    self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
+                    self.learning_indicator.setStyleSheet("color: #bac2de; font-size: 12px;")
                 self.learning_indicator.setToolTip(
                     "When Learning is ON, the AI records your conversations and uses them to improve.\n\n"
                     "How it works:\n"
@@ -2117,10 +2124,10 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'learning_indicator'):
             if self.learn_while_chatting:
                 self.learning_indicator.setText("Learning: ON")
-                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 14px;")
+                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 12px;")
             else:
                 self.learning_indicator.setText("Learning: OFF")
-                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
+                self.learning_indicator.setStyleSheet("color: #bac2de; font-size: 12px;")
         
         # Apply window position and size
         if self._gui_settings.get("window_width") and self._gui_settings.get("window_height"):
@@ -2231,12 +2238,12 @@ class EnhancedMainWindow(QMainWindow):
             }
             QLabel {
                 color: #cdd6f4;
-                font-size: 15px;
+                font-size: 12px;
             }
             QPushButton {
                 padding: 8px 16px;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: bold;
             }
         """)
@@ -2256,12 +2263,15 @@ class EnhancedMainWindow(QMainWindow):
         hide_btn = QPushButton("Hide")
         hide_btn.setStyleSheet("""
             QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                font-weight: bold;
                 border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
             }
             QPushButton:hover {
-                background-color: #585b70;
+                background-color: #b4befe;
             }
         """)
         hide_btn.setToolTip("Hide window to system tray")
@@ -2317,18 +2327,103 @@ class EnhancedMainWindow(QMainWindow):
             # Close GUI but keep tray running
             self.hide()
         elif action == 'quit':
-            # Quit everything
-            from PyQt5.QtWidgets import QApplication
-            QApplication.instance().quit()
+            # Quit everything - properly terminate all processes
+            self._cleanup_and_quit()
+    
+    def _cleanup_and_quit(self):
+        """Clean up all resources and quit the application."""
+        import sys
+        import os
+        
+        print("[ForgeAI] Shutting down all components...")
+        
+        try:
+            # Stop voice systems
+            try:
+                from ..voice.voice_pipeline import get_voice_pipeline
+                pipeline = get_voice_pipeline()
+                if pipeline:
+                    pipeline.stop()
+                    print("  - Voice pipeline stopped")
+            except:
+                pass
+            
+            # Stop voice listener
+            try:
+                from ..voice.listener import get_listener
+                listener = get_listener()
+                if listener:
+                    listener.stop()
+                    print("  - Voice listener stopped")
+            except:
+                pass
+            
+            # Stop performance monitor
+            try:
+                from ..utils.performance_monitor import get_monitor
+                monitor = get_monitor()
+                if monitor:
+                    monitor.stop()
+                    print("  - Performance monitor stopped")
+            except:
+                pass
+            
+            # Stop any web server
+            try:
+                from ..web.app import shutdown_server
+                shutdown_server()
+                print("  - Web server stopped")
+            except:
+                pass
+            
+            # Clear model from memory
+            try:
+                if self.engine:
+                    self.engine = None
+                    print("  - Model unloaded")
+            except:
+                pass
+            
+            print("[ForgeAI] Cleanup complete. Exiting...")
+            
+        except Exception as e:
+            print(f"[ForgeAI] Error during cleanup: {e}")
+        
+        # Force quit the application
+        from PyQt5.QtWidgets import QApplication
+        QApplication.instance().quit()
+        
+        # If Qt quit doesn't work, force exit
+        import threading
+        def force_exit():
+            import time
+            time.sleep(0.5)
+            os._exit(0)
+        
+        threading.Thread(target=force_exit, daemon=True).start()
     
     def closeEvent(self, event):
-        """Handle window close - show close options dialog.
+        """Handle window close with confirmation dialog.
         
         This is triggered by clicking the window X button or Alt+F4.
-        Shows a dialog letting user choose: hide, close, or quit.
+        Shows a confirmation dialog before quitting.
         """
-        event.ignore()  # Don't close yet
-        self._show_close_dialog()  # Show the close options
+        from PyQt5.QtWidgets import QMessageBox
+        
+        reply = QMessageBox.question(
+            self,
+            "Quit ForgeAI",
+            "Are you sure you want to quit?\n\nAll background processes will be stopped.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            event.accept()
+            self._save_gui_settings()
+            self._cleanup_and_quit()
+        else:
+            event.ignore()
     
     def contextMenuEvent(self, event):
         """Show right-click context menu with common options."""
@@ -2914,6 +3009,22 @@ class EnhancedMainWindow(QMainWindow):
                 self._overlay.set_engine(self.engine)
                 print("Overlay synced with engine")
             
+            # Initialize learning integration (real-time learning from conversation)
+            if getattr(self, '_learning_integration_enabled', False) and not is_huggingface:
+                try:
+                    from ..learning import LearningChatIntegration
+                    self._learning_integration = LearningChatIntegration(
+                        model=self.engine.model,
+                        model_name=self.current_model_name,
+                        auto_learn=True,
+                        on_learning_detected=self._on_learning_detected,
+                    )
+                    print("Learning integration connected to model")
+                    self.log_terminal("Real-time learning integration enabled", "info")
+                except Exception as e:
+                    print(f"Could not connect learning integration: {e}")
+                    self._learning_integration = None
+            
             # Refresh notes files for new model
             if hasattr(self, 'notes_file_combo'):
                 self._refresh_notes_files()
@@ -3011,7 +3122,7 @@ class EnhancedMainWindow(QMainWindow):
             QLabel {
                 color: #f39c12;
                 padding: 2px 8px;
-                font-size: 14px;
+                font-size: 12px;
             }
         """)
         self.ai_status_label.setToolTip("AI connection status")
@@ -3021,9 +3132,9 @@ class EnhancedMainWindow(QMainWindow):
         self.game_mode_indicator = QLabel("Game Mode: OFF")
         self.game_mode_indicator.setStyleSheet("""
             QLabel {
-                color: #6c7086;
+                color: #bac2de;
                 padding: 2px 8px;
-                font-size: 14px;
+                font-size: 12px;
             }
         """)
         self.game_mode_indicator.setToolTip("Game Mode auto-reduces AI resources when gaming")
@@ -3097,7 +3208,7 @@ class EnhancedMainWindow(QMainWindow):
         app_title = QLabel("FORGE AI")
         app_title.setStyleSheet("""
             color: #89b4fa;
-            font-size: 16px;
+            font-size: 12px;
             font-weight: bold;
             letter-spacing: 2px;
         """)
@@ -3723,10 +3834,10 @@ class EnhancedMainWindow(QMainWindow):
         if hasattr(self, 'learning_indicator'):
             if checked:
                 self.learning_indicator.setText("Learning: ON")
-                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 14px;")
+                self.learning_indicator.setStyleSheet("color: #a6e3a1; font-size: 12px;")
             else:
                 self.learning_indicator.setText("Learning: OFF")
-                self.learning_indicator.setStyleSheet("color: #6c7086; font-size: 14px;")
+                self.learning_indicator.setStyleSheet("color: #bac2de; font-size: 12px;")
         
         # Update brain if loaded
         if hasattr(self, 'brain') and self.brain:
@@ -4940,6 +5051,17 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
+        # ─────────────────────────────────────────────────────────────────
+        # LEARNING DETECTION: Check if user is correcting/teaching the AI
+        # ─────────────────────────────────────────────────────────────────
+        if hasattr(self, '_learning_integration') and self._learning_integration:
+            try:
+                detected = self._learning_integration.before_response(text)
+                if detected:
+                    self._show_learning_indicator(detected.type, detected.confidence)
+            except Exception as e:
+                self.log_terminal(f"Learning detection error: {e}", "warning")
+        
         # Sync to Quick Chat (so it shows in both places)
         if hasattr(self, '_chat_sync') and self._chat_sync:
             quick_chat = self._chat_sync._quick_chat
@@ -5049,6 +5171,83 @@ class EnhancedMainWindow(QMainWindow):
         self.chat_display.append(
             '<div style="color: #f9e2af; padding: 4px;"><i>Generation stopped</i></div>'
         )
+    
+    def _add_ai_response(self, text: str):
+        """Add an AI response to the chat display (for screenshot analysis, etc.)."""
+        if not hasattr(self, 'chat_display'):
+            return
+            
+        # Format the response nicely
+        if HAVE_TEXT_FORMATTER:
+            formatted_text = TextFormatter.to_html(text)
+        else:
+            formatted_text = text
+            
+        # Add to chat display with AI styling
+        html = f'''
+        <div style="background: #313244; border-radius: 8px; padding: 12px; margin: 8px 0;">
+            <div style="color: #94e2d5; font-weight: bold; margin-bottom: 6px;">AI Analysis</div>
+            <div style="color: #cdd6f4;">{formatted_text}</div>
+        </div>
+        '''
+        self.chat_display.append(html)
+        
+        # Also store in chat history
+        if hasattr(self, 'chat_messages'):
+            self.chat_messages.append({
+                "role": "assistant",
+                "text": text
+            })
+            
+        # Scroll to bottom
+        if hasattr(self.chat_display, 'verticalScrollBar'):
+            self.chat_display.verticalScrollBar().setValue(
+                self.chat_display.verticalScrollBar().maximum()
+            )
+    
+    # =========================================================================
+    # LEARNING INTEGRATION UI METHODS
+    # =========================================================================
+    
+    def _on_learning_detected(self, detected):
+        """Callback when learning integration detects a learning opportunity."""
+        self._show_learning_indicator(detected.type, detected.confidence)
+    
+    def _show_learning_indicator(self, learning_type: str, confidence: float):
+        """
+        Show a brief indicator that learning was detected.
+        
+        Args:
+            learning_type: Type of learning (correction, teaching, positive_feedback, negative_feedback)
+            confidence: Confidence level 0.0-1.0
+        """
+        # Map type to display info
+        type_info = {
+            'correction': ('Correction detected', '#f38ba8'),  # Red/pink
+            'teaching': ('Learning from you', '#89b4fa'),      # Blue
+            'positive_feedback': ('Noted: Good', '#a6e3a1'),   # Green
+            'negative_feedback': ('Noted: Needs work', '#f9e2af'),  # Yellow
+        }
+        
+        label, color = type_info.get(learning_type, ('Learning...', '#89b4fa'))
+        
+        # Show in status bar briefly
+        if hasattr(self, 'statusBar'):
+            confidence_pct = int(confidence * 100)
+            self.statusBar().showMessage(f"[LEARNING] {label} ({confidence_pct}% confidence)", 3000)
+        
+        # Also show in chat status if available
+        if hasattr(self, 'chat_status'):
+            self.chat_status.setText(f"[LEARNING] {label}")
+        
+        # Log to terminal
+        self.log_terminal(f"Learning detected: {learning_type} (confidence: {confidence:.2f})", "info")
+    
+    def get_learning_stats(self) -> dict:
+        """Get current learning statistics."""
+        if hasattr(self, '_learning_integration') and self._learning_integration:
+            return self._learning_integration.get_learning_stats()
+        return {'error': 'Learning integration not available'}
     
     def _detect_generation_intent(self, text: str):
         """
@@ -5261,21 +5460,18 @@ class EnhancedMainWindow(QMainWindow):
             }
             QMessageBox QLabel {
                 color: #cdd6f4;
-                font-size: 14px;
+                font-size: 12px;
             }
             QPushButton {
-                background-color: #45475a;
-                color: #cdd6f4;
+                background-color: #89b4fa;
+                color: #1e1e2e;
+                font-weight: bold;
                 padding: 6px 12px;
                 border-radius: 4px;
                 min-width: 80px;
             }
             QPushButton:hover {
-                background-color: #585b70;
-            }
-            QPushButton:default {
-                background-color: #89b4fa;
-                color: #1e1e2e;
+                background-color: #b4befe;
             }
         """)
         
@@ -5435,7 +5631,7 @@ class EnhancedMainWindow(QMainWindow):
         thinking_time = ""
         if hasattr(self, '_generation_start_time'):
             elapsed = time.time() - self._generation_start_time
-            thinking_time = f'<span style="color: #6c7086; font-size: 13px; float: right;">{elapsed:.1f}s</span>'
+            thinking_time = f'<span style="color: #bac2de; font-size: 12px; float: right;">{elapsed:.1f}s</span>'
         
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
@@ -5457,7 +5653,7 @@ class EnhancedMainWindow(QMainWindow):
                 f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
                 f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
                 f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
-                f'<span style="color: #6c7086; font-size: 14px;">Rate this response: </span>'
+                f'<span style="color: #bac2de; font-size: 12px;">Rate this response: </span>'
                 f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">Good</a>'
                 f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">Bad</a>'
                 f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">Critique</a>'
@@ -5512,6 +5708,15 @@ class EnhancedMainWindow(QMainWindow):
             "text": response,
             "ts": time.time()
         })
+        
+        # ─────────────────────────────────────────────────────────────────
+        # LEARNING INTEGRATION: Track AI response for future corrections
+        # ─────────────────────────────────────────────────────────────────
+        if hasattr(self, '_learning_integration') and self._learning_integration:
+            try:
+                self._learning_integration.after_response(response)
+            except Exception as e:
+                self.log_terminal(f"Learning tracking error: {e}", "warning")
         
         # Sync AI response to Quick Chat (so it shows in both places)
         if hasattr(self, '_chat_sync') and self._chat_sync:
@@ -6128,7 +6333,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                     QLabel {{
                         color: {color};
                         padding: 2px 8px;
-                        font-size: 14px;
+                        font-size: 12px;
                     }}
                 """)
         except Exception as e:
@@ -6147,7 +6352,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                     QLabel {
                         color: #22c55e;
                         padding: 2px 8px;
-                        font-size: 14px;
+                        font-size: 12px;
                         font-weight: bold;
                     }
                 """)
@@ -6157,16 +6362,16 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                     QLabel {
                         color: #3b82f6;
                         padding: 2px 8px;
-                        font-size: 14px;
+                        font-size: 12px;
                     }
                 """)
             else:
                 self.game_mode_indicator.setText("Game Mode: OFF")
                 self.game_mode_indicator.setStyleSheet("""
                     QLabel {
-                        color: #6c7086;
+                        color: #bac2de;
                         padding: 2px 8px;
-                        font-size: 14px;
+                        font-size: 12px;
                     }
                 """)
         except Exception:
@@ -6672,22 +6877,55 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
     # ═════════════════════════════════════════════════════════════════════
     
     def _on_screenshot_clicked(self):
-        """Handle screenshot quick action."""
+        """Handle screenshot quick action - capture screen and have AI analyze it."""
         logger.info("Screenshot quick action triggered")
-        # Use existing capture screen functionality
-        if hasattr(self, '_capture_screen'):
-            self._capture_screen()
-        else:
-            # Fallback: try using the vision tools
-            try:
-                from forge_ai.tools.vision import capture_screen
-                result = capture_screen()
-                if result.get('success'):
-                    QMessageBox.information(self, "Screenshot", f"Screenshot saved to: {result.get('path', 'outputs/')}")
-                else:
-                    QMessageBox.warning(self, "Screenshot", f"Screenshot failed: {result.get('error', 'Unknown error')}")
-            except Exception as e:
-                QMessageBox.warning(self, "Screenshot", f"Screenshot failed: {e}")
+        
+        try:
+            # Step 1: Capture the screen using vision system
+            self.statusBar().showMessage("Capturing screen...", 2000)
+            
+            from forge_ai.tools.vision import get_screen_vision
+            vision = get_screen_vision()
+            
+            # Capture and analyze with description
+            result = vision.see(describe=True, detect_text=True)
+            
+            if result.get('success'):
+                # Build description from vision results
+                description_parts = []
+                
+                # Add basic info
+                if result.get('description'):
+                    description_parts.append(result['description'])
+                
+                # Add OCR text if found
+                if result.get('text_content'):
+                    text = result['text_content'][:500]  # Limit length
+                    if len(result['text_content']) > 500:
+                        text += "..."
+                    description_parts.append(f"\n\nText I can see on screen:\n{text}")
+                
+                full_description = "\n".join(description_parts)
+                self._add_ai_response(f"I captured your screen. Here's what I see:\n\n{full_description}")
+                self.statusBar().showMessage("Screenshot analyzed", 3000)
+                
+                # SPEAK the analysis if voice is available
+                speak_text = f"I captured your screen. {result.get('description', 'Screenshot taken.')}"
+                self._speak_text(speak_text)
+                
+                # Also update the Vision tab if available
+                if hasattr(self, '_last_screenshot'):
+                    self._last_screenshot = vision.capture.last_capture
+                    
+            else:
+                error = result.get('error', 'Unknown error')
+                self._add_ai_response(f"I tried to capture the screen but encountered an issue: {error}")
+                self.statusBar().showMessage(f"Screenshot failed: {error}", 5000)
+                    
+        except Exception as e:
+            logger.error(f"Screenshot analysis failed: {e}")
+            self._add_ai_response(f"Sorry, I couldn't capture the screen: {e}")
+            self.statusBar().showMessage(f"Screenshot failed: {e}", 5000)
     
     def _on_voice_clicked(self):
         """Handle voice input quick action."""

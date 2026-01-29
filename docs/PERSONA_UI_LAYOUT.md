@@ -81,12 +81,12 @@ The persona indicator:
 ## Color Scheme
 
 Following the existing ForgeAI dark theme:
-- **Primary (green)**: #a6e3a1 - Active buttons, current persona
-- **Secondary (gray)**: #45475a - Standard buttons
+- **Primary (green)**: #a6e3a1 - Active/confirm buttons
+- **Secondary (blue)**: #89b4fa - Standard/action buttons
 - **Danger (red)**: #f38ba8 - Delete button
+- **Disabled (gray + red dashed)**: #313244 with #f38ba8 border - Inactive buttons
 - **Background**: #1e1e2e - Dark background
 - **Text**: #cdd6f4 - Main text
-- **Accent (blue)**: #89b4fa - Model label
 
 ## Interaction Flow
 

@@ -106,7 +106,7 @@ class ExamplesTab(QWidget):
         # Compact header row
         header_row = QHBoxLayout()
         header = QLabel("Example Scripts")
-        header.setStyleSheet("font-size: 14px; font-weight: bold;")
+        header.setStyleSheet("font-size: 12px; font-weight: bold;")
         header_row.addWidget(header)
         header_row.addStretch()
         layout.addLayout(header_row)
@@ -121,7 +121,7 @@ class ExamplesTab(QWidget):
         left_layout.setSpacing(4)
         
         list_label = QLabel("Select an example:")
-        list_label.setStyleSheet("color: #888; font-size: 11px;")
+        list_label.setStyleSheet("color: #bac2de; font-size: 11px;")
         left_layout.addWidget(list_label)
         
         self.example_list = QListWidget()
@@ -140,12 +140,12 @@ class ExamplesTab(QWidget):
         
         # Compact info section (not in a group box)
         self.title_label = QLabel("Select an example")
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         right_layout.addWidget(self.title_label)
         
         self.desc_label = QLabel("")
         self.desc_label.setWordWrap(True)
-        self.desc_label.setStyleSheet("color: #aaa; font-size: 13px;")
+        self.desc_label.setStyleSheet("color: #aaa; font-size: 11px;")
         self.desc_label.setMaximumHeight(40)
         right_layout.addWidget(self.desc_label)
         
@@ -155,7 +155,7 @@ class ExamplesTab(QWidget):
         
         # Code preview (main area)
         code_label = QLabel("Code Preview:")
-        code_label.setStyleSheet("font-size: 13px; color: #888;")
+        code_label.setStyleSheet("font-size: 12px; color: #bac2de;")
         right_layout.addWidget(code_label)
         
         self.code_view = QTextEdit()
@@ -190,8 +190,9 @@ class ExamplesTab(QWidget):
                 background-color: #94e2d5;
             }
             QPushButton:disabled {
-                background-color: #45475a;
-                color: #6c7086;
+                background-color: #313244;
+                color: #f38ba8;
+                border: 2px dashed #f38ba8;
             }
         """)
         btn_layout.addWidget(self.run_btn)
@@ -221,7 +222,7 @@ class ExamplesTab(QWidget):
         
         # Compact output area
         output_label = QLabel("Output:")
-        output_label.setStyleSheet("font-size: 11px; color: #888;")
+        output_label.setStyleSheet("font-size: 11px; color: #bac2de;")
         right_layout.addWidget(output_label)
         
         self.output_view = QTextEdit()

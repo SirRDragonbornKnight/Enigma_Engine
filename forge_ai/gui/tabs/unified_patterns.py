@@ -318,28 +318,31 @@ def get_button_style(style_type: str = "primary") -> str:
                 background-color: #5d87e0;
             }}
             QPushButton:disabled {{
-                background-color: {Colors.BG_TERTIARY};
-                color: {Colors.TEXT_MUTED};
+                background-color: {Colors.BG_SECONDARY};
+                color: {Colors.ERROR};
+                border: 2px dashed {Colors.ERROR};
             }}
         """,
         "secondary": f"""
             QPushButton {{
-                background-color: {Colors.BG_TERTIARY};
-                color: {Colors.TEXT_PRIMARY};
+                background-color: {Colors.ACCENT_BLUE};
+                color: {Colors.BG_PRIMARY};
                 border: none;
                 border-radius: 6px;
                 padding: {padding};
+                font-weight: bold;
                 font-size: {font_size}px;
             }}
             QPushButton:hover {{
-                background-color: #585b70;
+                background-color: #b4befe;
             }}
             QPushButton:pressed {{
-                background-color: {Colors.BG_SECONDARY};
+                background-color: #74c7ec;
             }}
             QPushButton:disabled {{
                 background-color: {Colors.BG_SECONDARY};
-                color: {Colors.TEXT_MUTED};
+                color: {Colors.ERROR};
+                border: 2px dashed {Colors.ERROR};
             }}
         """,
         "success": f"""
@@ -359,8 +362,9 @@ def get_button_style(style_type: str = "primary") -> str:
                 background-color: #74c7a0;
             }}
             QPushButton:disabled {{
-                background-color: {Colors.BG_TERTIARY};
-                color: {Colors.TEXT_MUTED};
+                background-color: {Colors.BG_SECONDARY};
+                color: {Colors.ERROR};
+                border: 2px dashed {Colors.ERROR};
             }}
         """,
         "danger": f"""
@@ -380,8 +384,9 @@ def get_button_style(style_type: str = "primary") -> str:
                 background-color: #d06080;
             }}
             QPushButton:disabled {{
-                background-color: {Colors.BG_TERTIARY};
-                color: {Colors.TEXT_MUTED};
+                background-color: {Colors.BG_SECONDARY};
+                color: {Colors.ERROR};
+                border: 2px dashed {Colors.ERROR};
             }}
         """,
     }

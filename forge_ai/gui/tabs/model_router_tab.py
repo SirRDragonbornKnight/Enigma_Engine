@@ -53,7 +53,7 @@ class ToolAssignmentWidget(QFrame):
         self._setup_ui()
         
     def _setup_ui(self):
-        style = TOOL_STYLES.get(self.tool_name, {"color": "#888", "icon": "[?]"})
+        style = TOOL_STYLES.get(self.tool_name, {"color": "#bac2de", "icon": "[?]"})
         
         self.setFrameStyle(QFrame.Box)
         self.setStyleSheet(f"""
@@ -77,18 +77,18 @@ class ToolAssignmentWidget(QFrame):
         header.setSpacing(4)
         
         icon_label = QLabel(style['icon'])
-        icon_label.setStyleSheet("font-size: 18px;")
+        icon_label.setStyleSheet("font-size: 12px;")
         header.addWidget(icon_label)
         
         name_label = QLabel(self.tool_name.upper())
-        name_label.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {style['color']};")
+        name_label.setStyleSheet(f"font-weight: bold; font-size: 12px; color: {style['color']};")
         header.addWidget(name_label)
         
         header.addStretch()
         
         # Status indicator
         self.status_label = QLabel("No model")
-        self.status_label.setStyleSheet("color: #888; font-size: 13px;")
+        self.status_label.setStyleSheet("color: #bac2de; font-size: 12px;")
         header.addWidget(self.status_label)
         
         layout.addLayout(header)
@@ -291,7 +291,7 @@ class ToolAssignmentWidget(QFrame):
                 color = "#e91e63"
                 icon = "[API]"
             else:
-                color = "#888"
+                color = "#bac2de"
                 icon = "[?]"
                 
             item = QListWidgetItem(f"{icon} {model_id.split(':')[-1]} [{priority}]")
@@ -399,7 +399,7 @@ class ModelRouterTab(QWidget):
         header.setSpacing(12)
         
         title = QLabel("Model Router")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #007bb5;")
+        title.setStyleSheet("font-size: 12px; font-weight: bold; color: #89b4fa;")
         header.addWidget(title)
         
         header.addStretch()
@@ -427,14 +427,14 @@ class ModelRouterTab(QWidget):
         reset_btn.setStyleSheet("""
             QPushButton {
                 background: #2d2d2d;
-                color: #888;
+                color: #bac2de;
                 border: 1px solid #444;
                 border-radius: 4px;
                 padding: 8px 16px;
             }
             QPushButton:hover {
                 background: #3d3d3d;
-                color: #aaa;
+                color: #cdd6f4;
             }
         """)
         reset_btn.clicked.connect(self._reset_defaults)
@@ -447,7 +447,7 @@ class ModelRouterTab(QWidget):
             "Assign AI models to tools below. Higher priority = tried first."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #666; font-size: 11px; margin-bottom: 8px;")
+        desc.setStyleSheet("color: #bac2de; font-size: 11px; margin-bottom: 8px;")
         layout.addWidget(desc)
         
         # Scroll area for tools
@@ -486,7 +486,7 @@ class ModelRouterTab(QWidget):
         
         # Status bar
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #888; font-style: italic;")
+        self.status_label.setStyleSheet("color: #bac2de; font-style: italic;")
         layout.addWidget(self.status_label)
         
     def _load_config(self):

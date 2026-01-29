@@ -571,8 +571,8 @@ class EmbeddingsTab(QWidget):
             
             # Show in results display
             self.results_display.append(
-                f"<p style='color: {color}; font-size: 16px;'><b>Similarity: {sim_percent:.1f}%</b></p>"
-                f"<p style='color: #6c7086;'>Calculated in {duration:.3f}s</p><hr>"
+                f"<p style='color: {color}; font-size: 12px;'><b>Similarity: {sim_percent:.1f}%</b></p>"
+                f"<p style='color: #bac2de;'>Calculated in {duration:.3f}s</p><hr>"
             )
             
             self.status_label.setText(f"Similarity: {sim_percent:.1f}%")

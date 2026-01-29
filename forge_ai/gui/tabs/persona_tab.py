@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QListWidget,
     QTextEdit, QLineEdit, QMessageBox, QFileDialog, QGroupBox, QFormLayout,
     QComboBox, QListWidgetItem, QDialog, QDialogButtonBox, QCheckBox,
-    QSplitter, QFrame
+    QSplitter, QFrame, QSizePolicy
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from pathlib import Path
@@ -38,24 +38,40 @@ STYLE_PRIMARY_BTN = """
         font-weight: bold;
         padding: 8px 12px;
         border-radius: 4px;
+        border: none;
     }
     QPushButton:hover {
         background-color: #94e2d5;
     }
+    QPushButton:pressed {
+        background-color: #74c7ec;
+    }
     QPushButton:disabled {
-        background-color: #45475a;
-        color: #6c7086;
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
 STYLE_SECONDARY_BTN = """
     QPushButton {
-        background-color: #45475a;
+        background-color: #89b4fa;
+        color: #1e1e2e;
+        font-weight: bold;
         padding: 8px 12px;
         border-radius: 4px;
+        border: none;
     }
     QPushButton:hover {
-        background-color: #585b70;
+        background-color: #b4befe;
+    }
+    QPushButton:pressed {
+        background-color: #74c7ec;
+    }
+    QPushButton:disabled {
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
@@ -66,9 +82,18 @@ STYLE_DANGER_BTN = """
         font-weight: bold;
         padding: 8px 12px;
         border-radius: 4px;
+        border: none;
     }
     QPushButton:hover {
         background-color: #eba0ac;
+    }
+    QPushButton:pressed {
+        background-color: #fab387;
+    }
+    QPushButton:disabled {
+        background-color: #313244;
+        color: #f38ba8;
+        border: 2px dashed #f38ba8;
     }
 """
 
@@ -128,24 +153,22 @@ class PersonaTab(QWidget):
     def setup_ui(self):
         """Create the UI layout."""
         layout = QVBoxLayout()
-        layout.setSpacing(12)
+        layout.setSpacing(4)
+        layout.setContentsMargins(8, 8, 8, 8)
         
-        # Header
+        # Header - fixed height, no expansion
         header = QLabel("AI Persona Management")
-        header.setStyleSheet("""
-            QLabel {
-                font-size: 18px;
-                font-weight: bold;
-                color: #cdd6f4;
-                padding: 8px;
-            }
-        """)
+        header.setStyleSheet("font-weight: bold; color: #cdd6f4; font-size: 12px;")
+        header.setFixedHeight(20)
+        header.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         layout.addWidget(header)
         
-        # Info text
-        info = QLabel("Create, customize, and manage your AI personas. Copy your AI to create variants or import personas from others.")
+        # Info text - fixed height, no expansion
+        info = QLabel("Create, customize, and manage your AI personas.")
         info.setWordWrap(True)
-        info.setStyleSheet("color: #a6adc8; padding: 4px 8px;")
+        info.setStyleSheet("color: #a6adc8; font-size: 10px;")
+        info.setFixedHeight(18)
+        info.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         layout.addWidget(info)
         
         # Main content splitter
@@ -182,6 +205,11 @@ class PersonaTab(QWidget):
         # Action buttons
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(8)
+        
+        btn_new = QPushButton("New Persona")
+        btn_new.setStyleSheet(STYLE_PRIMARY_BTN)
+        btn_new.clicked.connect(self.create_new_persona)
+        btn_layout.addWidget(btn_new)
         
         self.btn_activate = QPushButton("Set as Current")
         self.btn_activate.setStyleSheet(STYLE_PRIMARY_BTN)
@@ -437,8 +465,7 @@ class PersonaTab(QWidget):
         self.manager.set_current_persona(self.current_persona.id)
         self.load_personas()
         self.persona_changed.emit(self.current_persona.id)
-        
-        QMessageBox.information(self, "Activated", f"'{self.current_persona.name}' is now your current persona!")
+        # No popup - the list already shows (Current) next to active persona
     
     def copy_persona(self):
         """Copy the selected persona."""
@@ -575,6 +602,96 @@ class PersonaTab(QWidget):
                 QMessageBox.information(self, "Success", f"Loaded template: '{persona.name}'")
             else:
                 QMessageBox.critical(self, "Error", "Failed to load template.")
+    
+    def create_new_persona(self):
+        """Create a new persona from scratch."""
+        dialog = NewPersonaDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            name = dialog.name_edit.text().strip()
+            if not name:
+                QMessageBox.warning(self, "Invalid Name", "Please enter a name for the persona.")
+                return
+            
+            description = dialog.desc_edit.text().strip()
+            system_prompt = dialog.prompt_edit.toPlainText().strip()
+            
+            # Create persona ID from name (lowercase, no spaces)
+            import re
+            from datetime import datetime
+            persona_id = re.sub(r'[^a-z0-9_]', '_', name.lower()).strip('_')
+            
+            # Check if ID already exists
+            if self.manager.persona_exists(persona_id):
+                persona_id = f"{persona_id}_{int(datetime.now().timestamp())}"
+            
+            # Create new persona object
+            from ...core.persona import AIPersona
+            new_persona = AIPersona(
+                id=persona_id,
+                name=name,
+                created_at=datetime.now().isoformat(),
+                personality_traits={},
+                description=description or f"Custom persona: {name}",
+                system_prompt=system_prompt or "You are a helpful AI assistant."
+            )
+            
+            # Save it
+            try:
+                self.manager.save_persona(new_persona)
+                self.load_personas()
+                # Select the new persona
+                for i in range(self.persona_list.count()):
+                    item = self.persona_list.item(i)
+                    if item.data(Qt.UserRole) == new_persona.id:
+                        self.persona_list.setCurrentItem(item)
+                        self.on_persona_selected(item)
+                        break
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create persona: {e}")
+
+
+class NewPersonaDialog(QDialog):
+    """Dialog for creating a new persona."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("New Persona")
+        self.setModal(True)
+        self.setMinimumWidth(350)
+        
+        layout = QVBoxLayout()
+        
+        # Name input
+        form_layout = QFormLayout()
+        
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("My Custom AI")
+        form_layout.addRow("Name:", self.name_edit)
+        
+        self.desc_edit = QLineEdit()
+        self.desc_edit.setPlaceholderText("A helpful assistant...")
+        form_layout.addRow("Description:", self.desc_edit)
+        
+        layout.addLayout(form_layout)
+        
+        # System prompt
+        prompt_label = QLabel("System Prompt:")
+        layout.addWidget(prompt_label)
+        
+        self.prompt_edit = QTextEdit()
+        self.prompt_edit.setPlaceholderText("You are a helpful AI assistant...")
+        self.prompt_edit.setMaximumHeight(100)
+        layout.addWidget(self.prompt_edit)
+        
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        self.setLayout(layout)
 
 
 class CopyPersonaDialog(QDialog):

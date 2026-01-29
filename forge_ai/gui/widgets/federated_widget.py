@@ -75,7 +75,7 @@ if HAS_PYQT:
                 "Only weight updates are shared, never raw conversations."
             )
             desc.setWordWrap(True)
-            desc.setStyleSheet("color: #888; font-style: italic;")
+            desc.setStyleSheet("color: #bac2de; font-style: italic;")
             layout.addWidget(desc)
             
             # Participation section
@@ -122,7 +122,7 @@ if HAS_PYQT:
             
             # Status label
             self.status_label = QLabel("Status: Disabled")
-            self.status_label.setStyleSheet("font-style: italic; color: #888;")
+            self.status_label.setStyleSheet("font-style: italic; color: #bac2de;")
             layout.addWidget(self.status_label)
             
             # Mode selection
@@ -168,7 +168,7 @@ if HAS_PYQT:
             # Privacy explanation
             self.privacy_explain = QLabel()
             self.privacy_explain.setWordWrap(True)
-            self.privacy_explain.setStyleSheet("color: #666; font-size: 10pt;")
+            self.privacy_explain.setStyleSheet("color: #bac2de; font-size: 10pt;")
             layout.addWidget(self.privacy_explain)
             self._update_privacy_explanation()
             
@@ -281,7 +281,7 @@ if HAS_PYQT:
                 self.status_label.setStyleSheet("font-style: italic; color: #22c55e;")
             else:
                 self.status_label.setText("Status: Disabled")
-                self.status_label.setStyleSheet("font-style: italic; color: #888;")
+                self.status_label.setStyleSheet("font-style: italic; color: #bac2de;")
             
             self._on_settings_changed()
         

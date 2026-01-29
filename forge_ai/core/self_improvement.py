@@ -255,6 +255,9 @@ class LearningEngine:
         Args:
             model_name: Name of the AI model
         """
+        # Ensure model_name is valid
+        if not model_name:
+            model_name = 'forge_ai'
         self.model_name = model_name
         
         # Setup paths
