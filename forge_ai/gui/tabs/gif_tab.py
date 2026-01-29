@@ -36,6 +36,7 @@ class GIFGenerationWorker(QThread):
     """Background worker for GIF generation."""
     finished = pyqtSignal(dict)
     progress = pyqtSignal(int, str)
+    status = pyqtSignal(str)
     
     def __init__(self, prompts: List[str], frames_per_prompt: int,
                  width: int, height: int, fps: int, loop: bool, parent=None):
@@ -46,13 +47,25 @@ class GIFGenerationWorker(QThread):
         self.height = height
         self.fps = fps
         self.loop = loop
+        self._stop_requested = False
+        self._start_time = None
+    
+    def request_stop(self):
+        """Request the worker to stop."""
+        self._stop_requested = True
     
     def run(self):
         try:
             from PIL import Image
             import io
             
+            self._start_time = time.time()
             self.progress.emit(5, "Starting GIF generation...")
+            self.status.emit("Estimated time: calculating...")
+            
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
             
             frames = []
             total_frames = len(self.prompts) * self.frames_per_prompt
@@ -62,11 +75,16 @@ class GIFGenerationWorker(QThread):
                 from .image_tab import get_provider
                 provider = get_provider('local')
                 
+                if self._stop_requested:
+                    self.finished.emit({"success": False, "error": "Cancelled by user"})
+                    return
+                
                 if provider is None:
                     raise ImportError("No provider available")
                 
                 if not provider.is_loaded:
                     self.progress.emit(10, "Loading image model...")
+                    self.status.emit("Loading model (may take 30-60s)...")
                     if not provider.load():
                         self.finished.emit({
                             "success": False,
@@ -74,11 +92,27 @@ class GIFGenerationWorker(QThread):
                         })
                         return
                 
+                if self._stop_requested:
+                    self.finished.emit({"success": False, "error": "Cancelled by user"})
+                    return
+                
                 frame_idx = 0
+                frame_times = []
                 for prompt_idx, prompt in enumerate(self.prompts):
                     for i in range(self.frames_per_prompt):
+                        if self._stop_requested:
+                            self.finished.emit({"success": False, "error": "Cancelled by user"})
+                            return
+                        
+                        frame_start = time.time()
                         progress_pct = int(20 + (frame_idx / total_frames) * 70)
                         self.progress.emit(progress_pct, f"Generating frame {frame_idx + 1}/{total_frames}...")
+                        
+                        # Estimate remaining time
+                        if frame_times:
+                            avg_time = sum(frame_times) / len(frame_times)
+                            remaining = (total_frames - frame_idx) * avg_time
+                            self.status.emit(f"~{remaining:.0f}s remaining ({avg_time:.1f}s/frame)")
                         
                         # Generate image
                         result = provider.generate(
@@ -93,17 +127,26 @@ class GIFGenerationWorker(QThread):
                             img = Image.open(result["path"])
                             frames.append(img.copy())
                         
+                        frame_times.append(time.time() - frame_start)
                         frame_idx += 1
                         
             except ImportError:
                 # Fallback: create placeholder frames
                 self.progress.emit(30, "Image model not available, creating placeholder GIF...")
+                self.status.emit("Creating placeholders (~2s)...")
                 
                 for i in range(len(self.prompts) * self.frames_per_prompt):
+                    if self._stop_requested:
+                        self.finished.emit({"success": False, "error": "Cancelled by user"})
+                        return
                     # Create a simple colored frame
                     img = Image.new('RGB', (self.width, self.height), 
                                     color=(50 + i * 10, 100, 150))
                     frames.append(img)
+            
+            if self._stop_requested:
+                self.finished.emit({"success": False, "error": "Cancelled by user"})
+                return
             
             if not frames:
                 self.finished.emit({
@@ -113,6 +156,7 @@ class GIFGenerationWorker(QThread):
                 return
             
             self.progress.emit(90, "Saving GIF...")
+            self.status.emit("Saving...")
             
             # Save as GIF
             timestamp = int(time.time())
@@ -129,11 +173,14 @@ class GIFGenerationWorker(QThread):
             )
             
             self.progress.emit(100, "Done!")
+            duration = time.time() - self._start_time
+            self.status.emit(f"Completed in {duration:.1f}s")
             
             self.finished.emit({
                 "success": True,
                 "path": str(filepath),
-                "frame_count": len(frames)
+                "frame_count": len(frames),
+                "duration": duration
             })
             
         except Exception as e:
@@ -148,6 +195,7 @@ class GIFTab(QWidget):
         self.main_window = parent
         self.worker = None
         self.last_gif_path = None
+        self._current_movie = None  # Keep reference to prevent garbage collection
         self.setup_ui()
     
     def setup_ui(self):
@@ -238,6 +286,12 @@ class GIFTab(QWidget):
         self.generate_btn.clicked.connect(self._generate_gif)
         btn_layout.addWidget(self.generate_btn)
         
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setStyleSheet("background-color: #c0392b; font-weight: bold; padding: 8px;")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self._stop_generation)
+        btn_layout.addWidget(self.stop_btn)
+        
         self.gif_from_images_btn = QPushButton("GIF from Images")
         self.gif_from_images_btn.clicked.connect(self._gif_from_imported)
         btn_layout.addWidget(self.gif_from_images_btn)
@@ -282,6 +336,7 @@ class GIFTab(QWidget):
             return
         
         self.generate_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
         self.status_label.setText("Starting generation...")
@@ -295,8 +350,29 @@ class GIFTab(QWidget):
             loop=True
         )
         self.worker.progress.connect(self._on_progress)
+        self.worker.status.connect(lambda s: self.status_label.setText(s))
         self.worker.finished.connect(self._on_generation_complete)
         self.worker.start()
+    
+    def _stop_generation(self):
+        """Stop the current generation."""
+        if self.worker and self.worker.isRunning():
+            self.worker.request_stop()
+            self.stop_btn.setEnabled(False)
+            self.status_label.setText("Stopping...")
+            # Force terminate after 2 seconds if not stopped
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(2000, self._force_stop_if_needed)
+    
+    def _force_stop_if_needed(self):
+        """Force terminate worker if still running."""
+        if self.worker and self.worker.isRunning():
+            self.worker.terminate()
+            self.worker.wait(1000)
+            self.generate_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+            self.progress.setVisible(False)
+            self.status_label.setText("Generation cancelled")
     
     def _gif_from_imported(self):
         """Create GIF from imported images."""
@@ -346,17 +422,19 @@ class GIFTab(QWidget):
     def _on_generation_complete(self, result: dict):
         """Handle generation completion."""
         self.generate_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         self.progress.setVisible(False)
         
         if result.get("success"):
             path = result.get("path", "")
             frame_count = result.get("frame_count", 0)
+            duration = result.get("duration", 0)
             
             if path and Path(path).exists():
                 self.last_gif_path = path
                 self._display_gif(Path(path))
                 self.save_btn.setEnabled(True)
-                self.status_label.setText(f"Generated {frame_count} frames - Saved to: {path}")
+                self.status_label.setText(f"Generated {frame_count} frames in {duration:.1f}s - Saved to: {path}")
             else:
                 self.status_label.setText("Generation complete (no output path)")
         else:
@@ -369,9 +447,10 @@ class GIFTab(QWidget):
         try:
             from PyQt5.QtGui import QMovie
             
-            movie = QMovie(str(filepath))
-            self.result_label.setMovie(movie)
-            movie.start()
+            # Store movie as instance variable to prevent garbage collection
+            self._current_movie = QMovie(str(filepath))
+            self.result_label.setMovie(self._current_movie)
+            self._current_movie.start()
         except Exception:
             # Fallback to static image
             pixmap = QPixmap(str(filepath))

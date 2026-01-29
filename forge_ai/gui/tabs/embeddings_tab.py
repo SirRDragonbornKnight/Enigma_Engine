@@ -357,8 +357,8 @@ class EmbeddingsTab(QWidget):
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         # === OUTPUT AT TOP ===
         # Results display - takes most space

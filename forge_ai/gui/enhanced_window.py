@@ -671,10 +671,10 @@ QListWidget#sidebar {
     padding: 8px 0;
 }
 QListWidget#sidebar::item {
-    padding: 10px 20px;
+    padding: 6px 12px;
     border-left: 3px solid transparent;
-    margin: 1px 8px;
-    border-radius: 6px;
+    margin: 1px 4px;
+    border-radius: 4px;
     color: #a6adc8;
 }
 QListWidget#sidebar::item:selected {
@@ -833,10 +833,10 @@ QListWidget#sidebar {
     padding: 8px 0;
 }
 QListWidget#sidebar::item {
-    padding: 10px 20px;
+    padding: 6px 12px;
     border-left: 3px solid transparent;
-    margin: 1px 8px;
-    border-radius: 6px;
+    margin: 1px 4px;
+    border-radius: 4px;
     color: #5c5f77;
 }
 QListWidget#sidebar::item:selected {
@@ -2249,8 +2249,8 @@ class EnhancedMainWindow(QMainWindow):
         """)
         
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
         
         label = QLabel("What would you like to do?")
         label.setAlignment(Qt.AlignCenter)
@@ -3190,7 +3190,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # === SIDEBAR NAVIGATION ===
         sidebar_container = QWidget()
-        sidebar_container.setFixedWidth(180)
+        sidebar_container.setFixedWidth(140)
         sidebar_container.setStyleSheet("background-color: #11111b;")
         sidebar_layout = QVBoxLayout(sidebar_container)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
@@ -3198,13 +3198,13 @@ class EnhancedMainWindow(QMainWindow):
         
         # App title/logo area with close button
         title_widget = QWidget()
-        title_widget.setFixedHeight(50)
+        title_widget.setFixedHeight(36)
         title_widget.setStyleSheet("""
             background-color: #11111b;
             border-bottom: 1px solid #1e1e2e;
         """)
         title_layout = QHBoxLayout(title_widget)
-        title_layout.setContentsMargins(16, 0, 8, 0)
+        title_layout.setContentsMargins(10, 0, 6, 0)
         app_title = QLabel("FORGE AI")
         app_title.setStyleSheet("""
             color: #89b4fa;
@@ -3254,8 +3254,8 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Avatar", "avatar", "AI avatar display and control"),
             ("", "Game", "game", "Connect AI to games"),
             ("", "Robot", "robot", "Control robots and hardware"),
-            ("", "Vision", "vision", "AI image/screenshot analysis"),
-            ("", "Camera", "camera", "Live webcam AI analysis"),
+            ("", "Screen", "vision", "Capture screenshots for AI analysis"),
+            ("", "Camera", "camera", "Live webcam preview and recording"),
             # Tools
             ("section", "SYSTEM"),
             ("", "Learning", "learning", "Self-improvement metrics and training"),

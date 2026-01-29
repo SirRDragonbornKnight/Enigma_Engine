@@ -381,8 +381,8 @@ class DashboardTab(QWidget):
     def _setup_ui(self):
         """Set up the dashboard UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
         
         # === Header ===
         header_layout = QHBoxLayout()
@@ -449,11 +449,11 @@ class DashboardTab(QWidget):
         
         # === Main Content ===
         content_layout = QHBoxLayout()
-        content_layout.setSpacing(15)
+        content_layout.setSpacing(10)
         
         # LEFT COLUMN
         left_col = QVBoxLayout()
-        left_col.setSpacing(12)
+        left_col.setSpacing(8)
         
         # Gauges Row
         gauges_group = self._create_group("System Resources")
@@ -532,7 +532,7 @@ class DashboardTab(QWidget):
         
         # RIGHT COLUMN
         right_col = QVBoxLayout()
-        right_col.setSpacing(12)
+        right_col.setSpacing(8)
         
         # Module Status (expanded)
         status_group = self._create_group("Module Status")

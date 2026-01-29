@@ -106,8 +106,8 @@ class ModelManagerDialog(QDialog):
     
     def _build_ui(self):
         layout = QHBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
         
         # Left panel - Model list
         left_panel = QVBoxLayout()

@@ -497,16 +497,31 @@ class VideoTab(QWidget):
             self.status_label.setText(f"Loading {provider_name}...")
             self.load_btn.setEnabled(False)
             
-            from PyQt5.QtCore import QTimer
+            # Load in background thread to prevent UI freeze
+            import threading
             def do_load():
                 success = provider.load()
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                 if success:
-                    self.status_label.setText(f"{provider_name} loaded!")
+                    QMetaObject.invokeMethod(
+                        self.status_label, "setText",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, f"{provider_name} loaded!")
+                    )
                 else:
-                    self.status_label.setText(f"Failed to load {provider_name}")
-                self.load_btn.setEnabled(True)
+                    QMetaObject.invokeMethod(
+                        self.status_label, "setText",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, f"Failed to load {provider_name}")
+                    )
+                QMetaObject.invokeMethod(
+                    self.load_btn, "setEnabled",
+                    Qt.QueuedConnection,
+                    Q_ARG(bool, True)
+                )
             
-            QTimer.singleShot(100, do_load)
+            thread = threading.Thread(target=do_load, daemon=True)
+            thread.start()
     
     def _generate_video(self):
         prompt = self.prompt_input.text().strip()

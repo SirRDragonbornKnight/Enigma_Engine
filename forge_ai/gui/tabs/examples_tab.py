@@ -100,8 +100,8 @@ class ExamplesTab(QWidget):
     def init_ui(self):
         """Initialize the UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         # Compact header row
         header_row = QHBoxLayout()

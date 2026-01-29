@@ -1576,48 +1576,82 @@ def create_settings_tab(parent):
     """Create the settings/resources tab."""
     tab = QWidget()
     layout = QVBoxLayout(tab)
-    layout.setSpacing(15)
+    layout.setSpacing(8)
     
-    # === AI CONTROL LOCK ===
-    lock_group = QGroupBox("AI Control Lock")
-    lock_layout = QVBoxLayout(lock_group)
+    # === QUICK SETTINGS (Most commonly used) ===
+    quick_group = QGroupBox("Quick Settings")
+    quick_layout = QVBoxLayout(quick_group)
+    quick_layout.setSpacing(8)
     
-    lock_desc = QLabel(
-        "When locked, only the AI can change settings. "
-        "This prevents accidental changes while the AI is working."
+    quick_desc = QLabel("Common settings you can toggle quickly.")
+    quick_desc.setWordWrap(True)
+    quick_desc.setStyleSheet("color: #a6adc8; margin-bottom: 6px;")
+    quick_layout.addWidget(quick_desc)
+    
+    # Row of quick toggles
+    quick_row1 = QHBoxLayout()
+    
+    # Autonomous Mode (important - add here for easy access)
+    parent.quick_autonomous_check = QCheckBox("Autonomous Mode")
+    parent.quick_autonomous_check.setToolTip(
+        "AI acts on its own when you're not chatting:\n"
+        "- Explores curiosities\n"
+        "- Learns from the web\n"
+        "- Evolves personality"
     )
-    lock_desc.setWordWrap(True)
-    lock_layout.addWidget(lock_desc)
-    
-    lock_row = QHBoxLayout()
-    parent.ai_lock_checkbox = QCheckBox("Lock settings for AI control")
-    parent.ai_lock_checkbox.stateChanged.connect(
-        lambda state: _toggle_ai_lock(parent, state)
+    parent.quick_autonomous_check.stateChanged.connect(
+        lambda state: _sync_autonomous_toggles(parent, state)
     )
-    lock_row.addWidget(parent.ai_lock_checkbox)
+    quick_row1.addWidget(parent.quick_autonomous_check)
     
-    parent.ai_lock_status = QLabel("")
-    parent.ai_lock_status.setStyleSheet("color: #bac2de; font-style: italic;")
-    lock_row.addWidget(parent.ai_lock_status)
-    lock_row.addStretch()
-    lock_layout.addLayout(lock_row)
+    # Game Mode
+    parent.quick_game_mode_check = QCheckBox("Game Mode")
+    parent.quick_game_mode_check.setToolTip(
+        "Reduce AI resource usage for gaming:\n"
+        "- Lower CPU/GPU usage\n"
+        "- AI stays responsive but minimal"
+    )
+    parent.quick_game_mode_check.stateChanged.connect(
+        lambda state: _sync_game_mode_toggles(parent, state)
+    )
+    quick_row1.addWidget(parent.quick_game_mode_check)
     
-    # Password protection for unlock
-    pwd_row = QHBoxLayout()
-    pwd_row.addWidget(QLabel("Unlock PIN (optional):"))
-    parent.ai_lock_pin = QLineEdit()
-    parent.ai_lock_pin.setPlaceholderText("Set a 4-digit PIN")
-    parent.ai_lock_pin.setMaxLength(4)
-    parent.ai_lock_pin.setMaximumWidth(100)
-    parent.ai_lock_pin.setEchoMode(QLineEdit.Password)
-    pwd_row.addWidget(parent.ai_lock_pin)
-    pwd_row.addStretch()
-    lock_layout.addLayout(pwd_row)
+    # Always on top
+    parent.quick_always_on_top = QCheckBox("Window on Top")
+    parent.quick_always_on_top.setToolTip("Keep main window above others")
+    parent.quick_always_on_top.stateChanged.connect(
+        lambda state: _toggle_always_on_top(parent, state)
+    )
+    quick_row1.addWidget(parent.quick_always_on_top)
     
-    layout.addWidget(lock_group)
+    quick_row1.addStretch()
+    quick_layout.addLayout(quick_row1)
+    
+    # Quick links row
+    quick_row2 = QHBoxLayout()
+    
+    go_persona_btn = QPushButton("Personality")
+    go_persona_btn.setToolTip("Configure AI personality")
+    go_persona_btn.clicked.connect(lambda: _go_to_tab(parent, "Persona"))
+    quick_row2.addWidget(go_persona_btn)
+    
+    go_avatar_btn = QPushButton("Avatar")
+    go_avatar_btn.setToolTip("Avatar display settings")
+    go_avatar_btn.clicked.connect(lambda: _go_to_tab(parent, "Avatar"))
+    quick_row2.addWidget(go_avatar_btn)
+    
+    go_modules_btn = QPushButton("Modules")
+    go_modules_btn.setToolTip("Enable/disable AI capabilities")
+    go_modules_btn.clicked.connect(lambda: _go_to_tab(parent, "Modules"))
+    quick_row2.addWidget(go_modules_btn)
+    
+    quick_row2.addStretch()
+    quick_layout.addLayout(quick_row2)
+    
+    layout.addWidget(quick_group)
     
     # === DEVICE INFO ===
-    device_group = QGroupBox(" Hardware Detection")
+    device_group = QGroupBox("Hardware")
     device_layout = QVBoxLayout(device_group)
     
     # Check for GPU
@@ -1832,7 +1866,7 @@ def create_settings_tab(parent):
     parent.game_mode_checkbox = QCheckBox("Enable Game Mode")
     parent.game_mode_checkbox.setToolTip("Auto-detect games and reduce AI resource usage")
     parent.game_mode_checkbox.stateChanged.connect(
-        lambda state: _toggle_game_mode(parent, state)
+        lambda state: _sync_game_mode_toggles(parent, state)
     )
     enable_row.addWidget(parent.game_mode_checkbox)
     
@@ -2198,23 +2232,17 @@ def create_settings_tab(parent):
     # NOTE: Robot Control moved to Robot tab for better E-STOP access
     # NOTE: Game AI Routing moved to Game tab for better organization
 
-    # === AUTONOMOUS MODE ===
-    autonomous_group = QGroupBox("Autonomous Mode")
+    # === AUTONOMOUS MODE (Advanced Settings) ===
+    autonomous_group = QGroupBox("Autonomous Mode Settings")
     autonomous_layout = QVBoxLayout(autonomous_group)
     
-    autonomous_desc = QLabel(
-        "Allow AI to act on its own - explore curiosities, learn from the web, "
-        "and evolve personality when you're not chatting. "
-        "Can be turned off at any time."
+    autonomous_note = QLabel(
+        "Toggle Autonomous Mode in Quick Settings above. "
+        "Configure advanced settings here."
     )
-    autonomous_desc.setWordWrap(True)
-    autonomous_layout.addWidget(autonomous_desc)
-    
-    parent.autonomous_enabled_check = QCheckBox("Enable Autonomous Mode")
-    parent.autonomous_enabled_check.stateChanged.connect(
-        lambda state: _toggle_autonomous(parent, state)
-    )
-    autonomous_layout.addWidget(parent.autonomous_enabled_check)
+    autonomous_note.setWordWrap(True)
+    autonomous_note.setStyleSheet("color: #a6adc8; font-style: italic;")
+    autonomous_layout.addWidget(autonomous_note)
     
     # Autonomous settings
     autonomous_settings = QHBoxLayout()
@@ -2225,33 +2253,18 @@ def create_settings_tab(parent):
     parent.autonomous_activity_spin.setValue(12)
     parent.autonomous_activity_spin.setSuffix(" actions/hour")
     parent.autonomous_activity_spin.setToolTip("How many autonomous actions per hour")
-    parent.autonomous_activity_spin.setEnabled(False)  # Disabled until autonomous mode enabled
     autonomous_settings.addWidget(parent.autonomous_activity_spin)
     autonomous_settings.addStretch()
     autonomous_layout.addLayout(autonomous_settings)
     
-    layout.addWidget(autonomous_group)
-    
-    # === AI PERSONALITY (Link to full tab) ===
-    personality_group = QGroupBox("AI Personality")
-    personality_layout = QVBoxLayout(personality_group)
-    personality_layout.setSpacing(6)
-    
-    personality_desc = QLabel(
-        "Configure AI personality traits, presets, and evolution settings."
+    # Add reference checkbox (synced with quick settings)
+    parent.autonomous_enabled_check = QCheckBox("Enable Autonomous Mode")
+    parent.autonomous_enabled_check.stateChanged.connect(
+        lambda state: _sync_autonomous_toggles(parent, state)
     )
-    personality_desc.setWordWrap(True)
-    personality_layout.addWidget(personality_desc)
+    autonomous_layout.addWidget(parent.autonomous_enabled_check)
     
-    personality_btn_row = QHBoxLayout()
-    go_to_personality_btn = QPushButton("Open Personality Tab")
-    go_to_personality_btn.setToolTip("Configure detailed personality settings in the Personality tab")
-    go_to_personality_btn.clicked.connect(lambda: _go_to_tab(parent, "Personality"))
-    personality_btn_row.addWidget(go_to_personality_btn)
-    personality_btn_row.addStretch()
-    personality_layout.addLayout(personality_btn_row)
-    
-    layout.addWidget(personality_group)
+    layout.addWidget(autonomous_group)
 
     # === API KEYS ===
     api_group = QGroupBox("API Keys")
@@ -2471,7 +2484,7 @@ def create_settings_tab(parent):
     # Connection indicators
     parent.connection_indicators = QWidget()
     conn_grid = QHBoxLayout(parent.connection_indicators)
-    conn_grid.setSpacing(20)
+    conn_grid.setSpacing(12)
     
     # Create indicator labels
     parent.model_status = _create_status_indicator("Model", "disconnected")
@@ -3661,6 +3674,44 @@ def _toggle_autonomous(parent, state):
         QMessageBox.warning(parent, "Error", "Autonomous mode not available")
     except Exception as e:
         QMessageBox.warning(parent, "Error", f"Failed to toggle autonomous mode: {e}")
+
+
+def _sync_autonomous_toggles(parent, state):
+    """Sync all autonomous mode toggles and then apply the change."""
+    is_checked = state == Checked
+    
+    # Block signals to prevent recursion
+    if hasattr(parent, 'quick_autonomous_check'):
+        parent.quick_autonomous_check.blockSignals(True)
+        parent.quick_autonomous_check.setChecked(is_checked)
+        parent.quick_autonomous_check.blockSignals(False)
+    
+    if hasattr(parent, 'autonomous_enabled_check'):
+        parent.autonomous_enabled_check.blockSignals(True)
+        parent.autonomous_enabled_check.setChecked(is_checked)
+        parent.autonomous_enabled_check.blockSignals(False)
+    
+    # Now toggle the actual autonomous mode
+    _toggle_autonomous(parent, state)
+
+
+def _sync_game_mode_toggles(parent, state):
+    """Sync all game mode toggles and then apply the change."""
+    is_checked = state == Checked
+    
+    # Block signals to prevent recursion
+    if hasattr(parent, 'quick_game_mode_check'):
+        parent.quick_game_mode_check.blockSignals(True)
+        parent.quick_game_mode_check.setChecked(is_checked)
+        parent.quick_game_mode_check.blockSignals(False)
+    
+    if hasattr(parent, 'game_mode_checkbox'):
+        parent.game_mode_checkbox.blockSignals(True)
+        parent.game_mode_checkbox.setChecked(is_checked)
+        parent.game_mode_checkbox.blockSignals(False)
+    
+    # Now toggle the actual game mode
+    _toggle_game_mode(parent, state)
 
 
 def _refresh_power_status(parent):

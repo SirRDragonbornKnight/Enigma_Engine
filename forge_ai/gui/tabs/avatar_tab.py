@@ -29,6 +29,8 @@ def create_avatar_tab(parent):
     """
     w = QWidget()
     layout = QVBoxLayout()
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
     
     # Sub-tabs container
     sub_tabs = QTabWidget()

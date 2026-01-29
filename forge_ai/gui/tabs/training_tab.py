@@ -21,8 +21,8 @@ def create_training_tab(parent):
     """Create the train tab with model training controls."""
     w = QWidget()
     layout = QVBoxLayout()
-    layout.setSpacing(12)
-    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(8)
+    layout.setContentsMargins(6, 6, 6, 6)
     
     # Header with model info
     header_layout = QHBoxLayout()
@@ -188,7 +188,7 @@ def create_training_tab(parent):
     # Training parameters group
     params_group = QGroupBox("Training Parameters")
     params_layout = QHBoxLayout(params_group)
-    params_layout.setSpacing(15)
+    params_layout.setSpacing(10)
     
     # Epochs
     epochs_layout = QVBoxLayout()
@@ -501,29 +501,65 @@ def _import_from_url(parent):
             url_input.setText(url)
         
         preview_text.setPlainText("Fetching...")
-        try:
-            # Fetch the webpage
-            headers = {"User-Agent": "Mozilla/5.0 (compatible; ForgeBot/1.0)"}
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as response:
-                html = response.read().decode('utf-8', errors='ignore')
-            
-            # Extract text content
-            content = _extract_training_content(
-                html, 
-                as_qa=format_qa.isChecked(),
-                include_headers=keep_headers.isChecked(),
-                clean=clean_text.isChecked()
-            )
-            
-            preview_text.setPlainText(content)
-            
-        except urllib.error.HTTPError as e:
-            preview_text.setPlainText(f"HTTP Error {e.code}: {e.reason}")
-        except urllib.error.URLError as e:
-            preview_text.setPlainText(f"Network Error: {e}")
-        except Exception as e:
-            preview_text.setPlainText(f"Error: {e}")
+        fetch_btn.setEnabled(False)
+        
+        # Run fetch in background thread to prevent UI freeze
+        import threading
+        def do_fetch():
+            try:
+                # Fetch the webpage
+                headers = {"User-Agent": "Mozilla/5.0 (compatible; ForgeBot/1.0)"}
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    html = response.read().decode('utf-8', errors='ignore')
+                
+                # Extract text content
+                content = _extract_training_content(
+                    html, 
+                    as_qa=format_qa.isChecked(),
+                    include_headers=keep_headers.isChecked(),
+                    clean=clean_text.isChecked()
+                )
+                
+                # Update UI on main thread
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    preview_text, "setPlainText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, content)
+                )
+                
+            except urllib.error.HTTPError as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    preview_text, "setPlainText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"HTTP Error {e.code}: {e.reason}")
+                )
+            except urllib.error.URLError as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    preview_text, "setPlainText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"Network Error: {e}")
+                )
+            except Exception as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    preview_text, "setPlainText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"Error: {e}")
+                )
+            finally:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    fetch_btn, "setEnabled",
+                    Qt.QueuedConnection,
+                    Q_ARG(bool, True)
+                )
+        
+        thread = threading.Thread(target=do_fetch, daemon=True)
+        thread.start()
     
     fetch_btn.clicked.connect(on_fetch)
     btn_layout.addWidget(fetch_btn)

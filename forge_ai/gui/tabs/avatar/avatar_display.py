@@ -1269,6 +1269,12 @@ class AvatarOverlayWindow(QWidget):
         self._rotation_angle = 0.0  # Current rotation in degrees
         self._rotate_start_x = None  # Starting X for rotation drag
         
+        # Eye tracking state
+        self._eye_tracking_enabled = False
+        self._eye_offset_x = 0.0  # Eye offset from center (-1 to 1)
+        self._eye_offset_y = 0.0
+        self._eye_timer = None  # Timer for smooth tracking
+        
         # Enable mouse tracking for resize cursor feedback
         self.setMouseTracking(True)
         self.setCursor(QCursor(Qt_ArrowCursor))
@@ -1296,6 +1302,47 @@ class AvatarOverlayWindow(QWidget):
                 user32.SetWindowLongW(hwnd, GWL_EXSTYLE, current_style | WS_EX_LAYERED)
             except Exception:
                 pass
+    
+    def set_eye_tracking(self, enabled: bool):
+        """Enable or disable eye tracking (follow cursor)."""
+        self._eye_tracking_enabled = enabled
+        
+        if enabled:
+            # Start eye tracking timer
+            if self._eye_timer is None:
+                self._eye_timer = QTimer(self)
+                self._eye_timer.timeout.connect(self._update_eye_tracking)
+            self._eye_timer.start(50)  # Update 20 times per second
+        else:
+            # Stop and reset
+            if self._eye_timer:
+                self._eye_timer.stop()
+            self._eye_offset_x = 0.0
+            self._eye_offset_y = 0.0
+            self.update()
+    
+    def _update_eye_tracking(self):
+        """Update eye position based on cursor location."""
+        if not self._eye_tracking_enabled:
+            return
+        
+        # Get global cursor position
+        cursor_pos = QCursor.pos()
+        
+        # Get avatar center position (global)
+        avatar_center = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2))
+        
+        # Calculate direction to cursor
+        dx = cursor_pos.x() - avatar_center.x()
+        dy = cursor_pos.y() - avatar_center.y()
+        
+        # Normalize to -1 to 1 range (with max distance of 500 pixels)
+        max_dist = 500.0
+        self._eye_offset_x = max(-1.0, min(1.0, dx / max_dist))
+        self._eye_offset_y = max(-1.0, min(1.0, dy / max_dist))
+        
+        # Trigger repaint to show the shift
+        self.update()
     
     def set_avatar_path(self, path: str):
         """Set the current avatar path and load per-avatar settings."""
@@ -1402,13 +1449,21 @@ class AvatarOverlayWindow(QWidget):
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             
+            # Apply eye tracking offset (subtle shift in gaze direction)
+            eye_shift_x = 0
+            eye_shift_y = 0
+            if getattr(self, '_eye_tracking_enabled', False):
+                # Max shift is 10 pixels in each direction for subtle effect
+                eye_shift_x = int(getattr(self, '_eye_offset_x', 0) * 10)
+                eye_shift_y = int(getattr(self, '_eye_offset_y', 0) * 5)  # Less vertical
+            
             # Draw a subtle circular background/glow FIRST (behind everything)
             painter.setPen(Qt_NoPen)
             painter.setBrush(QColor(30, 30, 46, 80))  # Semi-transparent dark
             painter.drawEllipse(x - 3, y - 3, self.pixmap.width() + 6, self.pixmap.height() + 6)
             
-            # Draw the avatar
-            painter.drawPixmap(x, y, self.pixmap)
+            # Draw the avatar with eye tracking offset applied
+            painter.drawPixmap(x + eye_shift_x, y + eye_shift_y, self.pixmap)
             
             # Draw border ALWAYS tight around avatar - color indicates resize mode
             pen = painter.pen()
@@ -3448,6 +3503,10 @@ class Avatar3DOverlayWindow(QWidget):
         self._model_path = None
         self._use_circular_mask = False  # Disabled - can cause visual artifacts
         
+        # Eye tracking state
+        self._eye_tracking_enabled = False
+        self._eye_timer = None
+        
         # Drag bar - ALWAYS functional for dragging, can be made visible for resize/reposition
         self._show_control_bar = True  # DEFAULT: Show the drag bar so users can see it
         self._control_bar_height = 25  # Height of control bar
@@ -3535,6 +3594,58 @@ class Avatar3DOverlayWindow(QWidget):
         
         # Initialize pixel-based hit testing (only avatar pixels are clickable)
         self._make_click_through()
+    
+    def set_eye_tracking(self, enabled: bool):
+        """Enable or disable eye tracking (follow cursor) for 3D avatar."""
+        self._eye_tracking_enabled = enabled
+        
+        if enabled:
+            # Start eye tracking timer for 3D camera rotation
+            if self._eye_timer is None:
+                self._eye_timer = QTimer(self)
+                self._eye_timer.timeout.connect(self._update_eye_tracking_3d)
+            self._eye_timer.start(50)  # 20 FPS updates
+        else:
+            # Stop and reset camera to default view
+            if self._eye_timer:
+                self._eye_timer.stop()
+            if self._gl_widget:
+                # Reset camera rotation to default
+                self._gl_widget.rotation_x = 0
+                self._gl_widget.rotation_y = 0
+                self._gl_widget.update()
+    
+    def _update_eye_tracking_3d(self):
+        """Update 3D camera rotation to follow cursor."""
+        if not self._eye_tracking_enabled or not self._gl_widget:
+            return
+        
+        # Get global cursor position
+        cursor_pos = QCursor.pos()
+        
+        # Get avatar center position (global)
+        avatar_center = self.mapToGlobal(QPoint(self.width() // 2, self.height() // 2))
+        
+        # Calculate direction to cursor
+        dx = cursor_pos.x() - avatar_center.x()
+        dy = cursor_pos.y() - avatar_center.y()
+        
+        # Convert to rotation angles (limited range for subtle effect)
+        # Max rotation of 15 degrees in each direction
+        max_angle = 15.0
+        max_dist = 400.0
+        
+        target_rot_y = max(-max_angle, min(max_angle, (dx / max_dist) * max_angle))
+        target_rot_x = max(-max_angle, min(max_angle, (dy / max_dist) * max_angle))
+        
+        # Smooth interpolation to target
+        lerp_speed = 0.15
+        current_x = getattr(self._gl_widget, 'rotation_x', 0)
+        current_y = getattr(self._gl_widget, 'rotation_y', 0)
+        
+        self._gl_widget.rotation_x = current_x + (target_rot_x - current_x) * lerp_speed
+        self._gl_widget.rotation_y = current_y + (target_rot_y - current_y) * lerp_speed
+        self._gl_widget.update()
     
     def _update_drag_bar_position(self):
         """Update position tracking (for compatibility)."""
@@ -4879,14 +4990,15 @@ def create_avatar_subtab(parent):
     actions_group = QGroupBox("Quick Actions")
     actions_layout = QVBoxLayout()
     
-    # Auto-design from personality
-    parent.auto_design_btn = QPushButton("AI Auto-Design")
-    parent.auto_design_btn.setToolTip("Let AI design avatar based on its personality")
+# Auto-design from personality (only for built-in sprites)
+    parent.auto_design_btn = QPushButton("AI Auto-Design (Sprites)")
+    parent.auto_design_btn.setToolTip("Randomly generate a 2D sprite style. For 3D models, use the 3D tab instead.")
     parent.auto_design_btn.clicked.connect(lambda: _auto_design_avatar(parent))
     actions_layout.addWidget(parent.auto_design_btn)
-    
-    # Export sprite button
+
+    # Export sprite button (only for built-in sprites)
     parent.export_btn = QPushButton("Export Current Sprite")
+    parent.export_btn.setToolTip("Export the built-in 2D sprite to SVG/PNG file. Only works with sprites, not 3D models.")
     parent.export_btn.clicked.connect(lambda: _export_sprite(parent))
     actions_layout.addWidget(parent.export_btn)
     
@@ -4907,6 +5019,16 @@ def create_avatar_subtab(parent):
     )
     parent.auto_avatar_enabled = True
     behavior_layout.addWidget(parent.auto_avatar_check)
+    
+    # Eye tracking - follow mouse cursor
+    parent.eye_tracking_check = QCheckBox("Eye Tracking (look at cursor)")
+    parent.eye_tracking_check.setChecked(False)
+    parent.eye_tracking_check.setToolTip("Avatar eyes/head follows your mouse cursor")
+    parent.eye_tracking_check.stateChanged.connect(
+        lambda state: _toggle_eye_tracking(parent, state == 2)
+    )
+    parent.eye_tracking_enabled = False
+    behavior_layout.addWidget(parent.eye_tracking_check)
     
     # Autonomous mode (react to screen)
     parent.avatar_autonomous_check = QCheckBox("Autonomous Mode (react to screen)")
@@ -4982,6 +5104,25 @@ def create_avatar_subtab(parent):
         display_row.addWidget(parent.show_grid_checkbox)
         display_row.addStretch()
         viewer_layout.addLayout(display_row)
+        
+        # === Facing Direction Indicator ===
+        facing_group = QHBoxLayout()
+        facing_label = QLabel("Facing:")
+        facing_label.setStyleSheet("font-weight: bold;")
+        facing_group.addWidget(facing_label)
+        
+        parent.facing_direction_label = QLabel("Front (0 deg)")
+        parent.facing_direction_label.setStyleSheet("""
+            background: #313244;
+            padding: 4px 12px;
+            border-radius: 4px;
+            color: #89b4fa;
+            font-weight: bold;
+        """)
+        parent.facing_direction_label.setToolTip("Current facing direction (Yaw rotation)")
+        facing_group.addWidget(parent.facing_direction_label)
+        facing_group.addStretch()
+        viewer_layout.addLayout(facing_group)
         
         # === Orientation Controls ===
         orient_label = QLabel("Model Orientation (fix sideways models):")
@@ -6037,6 +6178,24 @@ def _toggle_avatar(parent, enabled):
         parent.avatar_status.setStyleSheet("color: #6c7086;")
 
 
+def _toggle_eye_tracking(parent, enabled: bool):
+    """Toggle avatar eye tracking - look at mouse cursor."""
+    parent.eye_tracking_enabled = enabled
+    
+    # Enable/disable on overlays
+    if hasattr(parent, '_overlay') and parent._overlay:
+        parent._overlay.set_eye_tracking(enabled)
+    if hasattr(parent, '_overlay_3d') and parent._overlay_3d:
+        parent._overlay_3d.set_eye_tracking(enabled)
+    
+    if enabled:
+        parent.avatar_status.setText("Eye tracking enabled - avatar will follow your cursor")
+        parent.avatar_status.setStyleSheet("color: #89b4fa;")
+    else:
+        parent.avatar_status.setText("Eye tracking disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
 def _toggle_avatar_autonomous(parent, state):
     """Toggle avatar autonomous mode (react to screen content)."""
     enabled = state == 2  # Qt.Checked
@@ -6316,12 +6475,45 @@ def _set_model_orientation(parent, axis: str, value: float):
             parent.avatar_preview_3d.model_yaw = radians
             if hasattr(parent, 'yaw_label'):
                 parent.yaw_label.setText(str(int(value)))
+            # Update facing direction indicator
+            _update_facing_direction_label(parent, int(value))
         elif axis == 'roll':
             parent.avatar_preview_3d.model_roll = radians
             if hasattr(parent, 'roll_label'):
                 parent.roll_label.setText(str(int(value)))
         
         parent.avatar_preview_3d.update()
+
+
+def _update_facing_direction_label(parent, yaw_degrees: int):
+    """Update the facing direction label based on yaw rotation."""
+    if not hasattr(parent, 'facing_direction_label'):
+        return
+    
+    # Normalize to 0-360 range
+    yaw = yaw_degrees % 360
+    if yaw < 0:
+        yaw += 360
+    
+    # Determine direction name based on yaw angle
+    if yaw >= 337.5 or yaw < 22.5:
+        direction = "Front"
+    elif 22.5 <= yaw < 67.5:
+        direction = "Front-Right"
+    elif 67.5 <= yaw < 112.5:
+        direction = "Right"
+    elif 112.5 <= yaw < 157.5:
+        direction = "Back-Right"
+    elif 157.5 <= yaw < 202.5:
+        direction = "Back"
+    elif 202.5 <= yaw < 247.5:
+        direction = "Back-Left"
+    elif 247.5 <= yaw < 292.5:
+        direction = "Left"
+    else:  # 292.5 <= yaw < 337.5
+        direction = "Front-Left"
+    
+    parent.facing_direction_label.setText(f"{direction} ({yaw_degrees} deg)")
 
 
 def _quick_rotate(parent, axis: str, degrees: int):
@@ -6354,6 +6546,70 @@ def _reset_orientation(parent):
         parent.yaw_slider.setValue(0)
     if hasattr(parent, 'roll_slider'):
         parent.roll_slider.setValue(0)
+    # Update facing direction indicator
+    _update_facing_direction_label(parent, 0)
+
+
+def _auto_design_avatar(parent):
+    """Let AI design avatar based on personality (runs in background thread)."""
+    import threading
+    
+    parent.avatar_status.setText("AI is designing avatar...")
+    parent.avatar_status.setStyleSheet("color: #89b4fa;")
+    parent.auto_design_btn.setEnabled(False)
+    
+    def do_design():
+        try:
+            # Try to get the avatar controller
+            avatar = get_avatar()
+            if avatar and hasattr(avatar, 'auto_design'):
+                appearance = avatar.auto_design()
+                
+                # Update UI on main thread
+                from PyQt5.QtCore import QTimer
+                def update_ui():
+                    if appearance:
+                        parent.avatar_status.setText(f"AI designed avatar: {appearance.style if hasattr(appearance, 'style') else 'Custom'}")
+                        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                        _refresh_avatar(parent)
+                    else:
+                        parent.avatar_status.setText("AI design complete - refresh to see changes")
+                        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                    parent.auto_design_btn.setEnabled(True)
+                
+                QTimer.singleShot(0, update_ui)
+            else:
+                # Fallback: Generate a random style
+                import random
+                styles = list(SPRITE_TEMPLATES.keys()) if SPRITE_TEMPLATES else ['default']
+                chosen_style = random.choice(styles)
+                
+                # Generate sprite with random style
+                sprite_path = generate_sprite(chosen_style)
+                
+                from PyQt5.QtCore import QTimer
+                def update_ui():
+                    if sprite_path:
+                        parent.avatar_status.setText(f"Generated AI style: {chosen_style}")
+                        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+                        _refresh_avatar(parent)
+                    else:
+                        parent.avatar_status.setText("Could not generate avatar")
+                        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+                    parent.auto_design_btn.setEnabled(True)
+                
+                QTimer.singleShot(0, update_ui)
+                
+        except Exception as e:
+            from PyQt5.QtCore import QTimer
+            def show_error():
+                parent.avatar_status.setText(f"Auto-design error: {str(e)[:50]}")
+                parent.avatar_status.setStyleSheet("color: #f38ba8;")
+                parent.auto_design_btn.setEnabled(True)
+            QTimer.singleShot(0, show_error)
+    
+    thread = threading.Thread(target=do_design, daemon=True)
+    thread.start()
 
 
 def _set_camera_view(parent, rotation_x: float, rotation_y: float):
@@ -6387,6 +6643,9 @@ def _auto_orient_model(parent):
     if hasattr(parent, 'roll_slider'):
         parent.roll_slider.setValue(int(roll))
     
+    # Update facing direction indicator
+    _update_facing_direction_label(parent, int(yaw))
+    
     parent.avatar_status.setText(f"Auto-oriented: X={pitch}deg, Y={yaw}deg, Z={roll}deg")
     parent.avatar_status.setStyleSheet("color: #89b4fa;")
 
@@ -6415,7 +6674,7 @@ def _save_model_orientation(parent):
         return
     
     # Load or create settings file
-    settings_path = Path("data/avatar/model_orientations.json")
+    settings_path = Path(CONFIG.get("data_dir", "data")) / "avatar" / "model_orientations.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     
     orientations = {}
@@ -6448,7 +6707,7 @@ def _load_model_orientation(parent, model_path: str):
     from pathlib import Path
     import math
     
-    settings_path = Path("data/avatar/model_orientations.json")
+    settings_path = Path(CONFIG.get("data_dir", "data")) / "avatar" / "model_orientations.json"
     if not settings_path.exists():
         return None
     
@@ -6842,7 +7101,10 @@ def _apply_avatar(parent):
                 if hasattr(parent, 'pitch_slider'):
                     parent.pitch_slider.setValue(int(math.degrees(saved_orientation['pitch'])))
                 if hasattr(parent, 'yaw_slider'):
-                    parent.yaw_slider.setValue(int(math.degrees(saved_orientation['yaw'])))
+                    yaw_deg = int(math.degrees(saved_orientation['yaw']))
+                    parent.yaw_slider.setValue(yaw_deg)
+                    # Update facing direction indicator
+                    _update_facing_direction_label(parent, yaw_deg)
                 if hasattr(parent, 'roll_slider'):
                     parent.roll_slider.setValue(int(math.degrees(saved_orientation['roll'])))
                 

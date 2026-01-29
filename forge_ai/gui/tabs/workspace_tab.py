@@ -98,8 +98,8 @@ def _create_training_section(parent):
     """Create the training data section."""
     w = QWidget()
     layout = QVBoxLayout()
-    layout.setSpacing(12)
-    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(8)
+    layout.setContentsMargins(6, 6, 6, 6)
     
     # File management group
     file_group = QGroupBox("Training Data")
@@ -158,7 +158,7 @@ def _create_training_section(parent):
     # Training parameters group
     params_group = QGroupBox("Training Parameters")
     params_layout = QHBoxLayout(params_group)
-    params_layout.setSpacing(15)
+    params_layout.setSpacing(10)
     
     # Epochs
     epochs_layout = QVBoxLayout()
@@ -246,8 +246,8 @@ def _create_prompts_section(parent):
     """Create the prompts management section."""
     w = QWidget()
     layout = QVBoxLayout()
-    layout.setSpacing(12)
-    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(8)
+    layout.setContentsMargins(6, 6, 6, 6)
     
     # Description
     desc = QLabel(
@@ -354,8 +354,8 @@ def _create_notes_section(parent):
     """Create the notes section."""
     w = QWidget()
     layout = QVBoxLayout()
-    layout.setSpacing(12)
-    layout.setContentsMargins(10, 10, 10, 10)
+    layout.setSpacing(8)
+    layout.setContentsMargins(6, 6, 6, 6)
     
     # Notes list and editor in splitter
     splitter = QSplitter(Qt.Horizontal)

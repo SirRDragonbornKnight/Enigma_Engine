@@ -22,8 +22,8 @@ def create_personality_tab(parent):
     """Create the personality configuration tab."""
     tab = QWidget()
     layout = QVBoxLayout(tab)
-    layout.setSpacing(10)
-    layout.setContentsMargins(12, 12, 12, 12)
+    layout.setSpacing(8)
+    layout.setContentsMargins(6, 6, 6, 6)
 
     # === HEADER ===
     header = QLabel("Personality")

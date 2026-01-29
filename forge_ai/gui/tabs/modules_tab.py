@@ -46,13 +46,14 @@ class ModuleListItem(QFrame):
         self.module_id = module_id
         self.module_info = module_info
         self.is_loaded = False
-        self.is_processing = False  # Flag to prevent double-clicks
+        self.is_processing = False
         self._setup_ui()
         
     def _setup_ui(self):
         self.setMinimumHeight(50)
         self.setMaximumHeight(60)
         self.setFrameStyle(QFrame.NoFrame)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)  # Show hand cursor to indicate clickable
         
         category = self.module_info.get('category', 'extension').lower()
         color = CATEGORIES.get(category, CATEGORIES['extension'])['color']
@@ -69,31 +70,41 @@ class ModuleListItem(QFrame):
         """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(12)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(8)
         
-        # Toggle checkbox - larger for easier clicking
-        self.toggle = QCheckBox()
-        self.toggle.setFixedSize(24, 24)
-        self.toggle.setStyleSheet("""
-            QCheckBox::indicator {
-                width: 20px;
-                height: 20px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #2ecc71;
-                border: 2px solid #27ae60;
-                border-radius: 4px;
-            }
-            QCheckBox::indicator:unchecked {
+        # Toggle button - styled as ON/OFF switch
+        self.toggle_btn = QPushButton("OFF")
+        self.toggle_btn.setFixedSize(50, 28)
+        self.toggle_btn.setCheckable(True)
+        self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_btn.setStyleSheet("""
+            QPushButton {
                 background-color: #333;
+                color: #bac2de;
                 border: 2px solid #555;
                 border-radius: 4px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton:checked {
+                background-color: #2ecc71;
+                color: #1e1e2e;
+                border: 2px solid #27ae60;
+            }
+            QPushButton:hover {
+                border-color: #888;
+            }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #888;
             }
         """)
-        self.toggle.setToolTip("Enable or disable this module")
-        layout.addWidget(self.toggle)
+        self.toggle_btn.setToolTip("Click to enable or disable this module")
+        layout.addWidget(self.toggle_btn)
         
+        # Keep toggle as alias for compatibility
+        self.toggle = self.toggle_btn
         # Name and description
         info_layout = QVBoxLayout()
         info_layout.setSpacing(2)
@@ -102,6 +113,7 @@ class ModuleListItem(QFrame):
         name = self.module_info.get('name', self.module_id)
         self.name_label = QLabel(name)
         self.name_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        self.name_label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         info_layout.addWidget(self.name_label)
         
         desc = self.module_info.get('description', '')
@@ -110,22 +122,10 @@ class ModuleListItem(QFrame):
             desc = desc[:60] + "..."
         self.desc_label = QLabel(desc)
         self.desc_label.setStyleSheet("color: #bac2de; font-size: 11px;")
+        self.desc_label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         info_layout.addWidget(self.desc_label)
         
         layout.addLayout(info_layout, stretch=1)
-        
-        # Status indicator
-        self.status_label = QLabel("OFF")
-        self.status_label.setFixedWidth(40)
-        self.status_label.setAlignment(AlignCenter)
-        self.status_label.setStyleSheet("""
-            QLabel {
-                color: #bac2de;
-                font-size: 12px;
-                font-weight: bold;
-            }
-        """)
-        layout.addWidget(self.status_label)
         
         # Requirements indicator (compact)
         needs = []
@@ -137,45 +137,25 @@ class ModuleListItem(QFrame):
         if needs:
             req_label = QLabel("|".join(needs))
             req_label.setStyleSheet("color: #f39c12; font-size: 12px;")
+            req_label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
             req_label.setFixedWidth(45)
             layout.addWidget(req_label)
     
     def set_loaded(self, loaded: bool):
         self.is_loaded = loaded
-        self.toggle.setChecked(loaded)
-        if loaded:
-            self.status_label.setText("ON")
-            self.status_label.setStyleSheet("""
-                QLabel {
-                    color: #2ecc71;
-                    font-size: 12px;
-                    font-weight: bold;
-                }
-            """)
-        else:
-            self.status_label.setText("OFF")
-            self.status_label.setStyleSheet("""
-                QLabel {
-                    color: #bac2de;
-                    font-size: 12px;
-                    font-weight: bold;
-                }
-            """)
+        self.toggle_btn.blockSignals(True)
+        self.toggle_btn.setChecked(loaded)
+        self.toggle_btn.setText("ON" if loaded else "OFF")
+        self.toggle_btn.blockSignals(False)
         self.is_processing = False
+        self.toggle_btn.setEnabled(True)
     
     def set_processing(self, processing: bool):
         """Set processing state - disables toggle during load/unload."""
         self.is_processing = processing
-        self.toggle.setEnabled(not processing)
+        self.toggle_btn.setEnabled(not processing)
         if processing:
-            self.status_label.setText("...")
-            self.status_label.setStyleSheet("""
-                QLabel {
-                    color: #f39c12;
-                    font-size: 12px;
-                    font-weight: bold;
-                }
-            """)
+            self.toggle_btn.setText("...")
 
 
 class ModulesTab(QWidget):
@@ -194,8 +174,8 @@ class ModulesTab(QWidget):
         
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
+        layout.setContentsMargins(8, 8, 8, 8)
         
         # Header
         header_layout = QHBoxLayout()
@@ -244,7 +224,7 @@ class ModulesTab(QWidget):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(12)
+        left_layout.setSpacing(6)
         
         # Category filter
         filter_layout = QHBoxLayout()
@@ -326,16 +306,17 @@ class ModulesTab(QWidget):
         scroll.setWidget(self.modules_container)
         left_layout.addWidget(scroll)
         
-        content_layout.addWidget(left_panel, stretch=3)
+        # Use splitter for resizable panels
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(left_panel)
         
-        # Right side - Status panel (collapsible on small screens)
+        # Right side - Status panel (resizable)
         right_panel = QWidget()
-        right_panel.setMinimumWidth(200)
-        right_panel.setMaximumWidth(320)
-        right_panel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        right_panel.setMinimumWidth(250)
+        right_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(10, 0, 0, 0)
-        right_layout.setSpacing(12)
+        right_layout.setContentsMargins(8, 0, 0, 0)
+        right_layout.setSpacing(8)
         
         # Stats box
         stats_box = QGroupBox("Status")
@@ -417,11 +398,23 @@ class ModulesTab(QWidget):
         clear_btn.clicked.connect(lambda: self.log_text.clear())
         log_layout.addWidget(clear_btn)
         
-        right_layout.addWidget(log_box)
+        right_layout.addWidget(log_box, stretch=1)  # Let log box expand
         
-        right_layout.addStretch()
+        splitter.addWidget(right_panel)
         
-        content_layout.addWidget(right_panel, stretch=1)
+        # Set initial splitter sizes (50/50 split)
+        splitter.setSizes([500, 500])
+        splitter.setStyleSheet("""
+            QSplitter::handle {
+                background: #444;
+                width: 4px;
+            }
+            QSplitter::handle:hover {
+                background: #666;
+            }
+        """)
+        
+        content_layout.addWidget(splitter)
         
         layout.addLayout(content_layout)
         
@@ -463,8 +456,10 @@ class ModulesTab(QWidget):
             
             # Add module item
             item = ModuleListItem(mod_id, info)
-            item.toggle.stateChanged.connect(
-                lambda state, mid=mod_id: self._on_toggle(mid, state)
+            
+            # Simple direct connection - clicked signal only fires on user clicks
+            item.toggle_btn.clicked.connect(
+                lambda checked, m=mod_id: self._on_toggle_bool(m, checked)
             )
             self.modules_layout.addWidget(item)
             self.module_items[mod_id] = item
@@ -545,6 +540,62 @@ class ModulesTab(QWidget):
             'logs': {'name': 'Logs', 'category': 'interface', 'description': 'System log viewer'},
             'workspace': {'name': 'Workspace', 'category': 'interface', 'description': 'Project management'},
         }
+    
+    def _on_toggle_bool(self, module_id: str, enabled: bool):
+        """Handle module toggle (bool version)."""
+        # Check if item exists
+        if module_id not in self.module_items:
+            return
+            
+        item = self.module_items[module_id]
+        
+        # Prevent rapid repeated clicks
+        if item.is_processing:
+            return
+        
+        # Set processing state
+        item.set_processing(True)
+        
+        action = "Loading" if enabled else "Unloading"
+        self._log(f"{action} {module_id}...")
+        
+        success = False
+        if self.module_manager:
+            try:
+                if enabled:
+                    can_load, reason = self.module_manager.can_load(module_id)
+                    if not can_load:
+                        self._log(f"Cannot load {module_id}: {reason}")
+                    success = self.module_manager.load(module_id)
+                else:
+                    success = self.module_manager.unload(module_id)
+                
+                if success:
+                    self._sync_options_menu(module_id, enabled)
+                    self._sync_tab_visibility(module_id, enabled)
+                    try:
+                        self.module_manager.save_config()
+                    except Exception:
+                        pass
+                    self._log(f"OK: {module_id} {'enabled' if enabled else 'disabled'}")
+                else:
+                    self._log(f"FAILED: Could not {'load' if enabled else 'unload'} {module_id}")
+                
+            except Exception as e:
+                self._log(f"ERROR: {str(e)}")
+        
+        # Update UI state based on result
+        item.toggle_btn.blockSignals(True)
+        if success:
+            item.set_loaded(enabled)
+        else:
+            # Revert button to previous state
+            item.toggle_btn.setChecked(not enabled)
+            item.toggle_btn.setText("ON" if not enabled else "OFF")
+            item.set_processing(False)
+        item.toggle_btn.blockSignals(False)
+        
+        self._update_stats()
     
     def _on_toggle(self, module_id: str, state: int):
         """Handle module toggle."""
@@ -660,9 +711,9 @@ class ModulesTab(QWidget):
             for mod_id in loaded:
                 if mod_id in self.module_items:
                     item = self.module_items[mod_id]
-                    item.toggle.blockSignals(True)
+                    item.toggle_btn.blockSignals(True)
                     item.set_loaded(True)
-                    item.toggle.blockSignals(False)
+                    item.toggle_btn.blockSignals(False)
             self._log(f"Synced {len(loaded)} loaded modules")
         except Exception as e:
             self._log(f"Sync error: {e}")

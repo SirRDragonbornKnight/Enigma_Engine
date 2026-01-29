@@ -507,9 +507,9 @@ class AudioTab(QWidget):
         ref_layout = QHBoxLayout()
         ref_layout.addWidget(QLabel("Ref Audio:"))
         self.ref_audio_path = QLineEdit()
-        self.ref_audio_path.setPlaceholderText("Optional reference for voice cloning")
+        self.ref_audio_path.setPlaceholderText("Optional: .mp3, .wav, .ogg, .flac for voice cloning")
         self.ref_audio_path.setReadOnly(True)
-        self.ref_audio_path.setToolTip("Optional: Select a reference audio file to clone a voice style")
+        self.ref_audio_path.setToolTip("Optional: Select a reference audio file (.mp3, .wav, .ogg, .flac) to clone a voice style")
         ref_layout.addWidget(self.ref_audio_path)
         
         browse_ref_btn = QPushButton("Browse")

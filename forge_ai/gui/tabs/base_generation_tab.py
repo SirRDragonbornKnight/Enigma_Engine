@@ -312,8 +312,8 @@ class BaseGenerationTab(QWidget):
     def _setup_base_ui(self):
         """Set up the base UI structure. Called automatically."""
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setSpacing(10)
-        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(6)
+        self.main_layout.setContentsMargins(6, 6, 6, 6)
         
         # 1. Header
         self._create_header()

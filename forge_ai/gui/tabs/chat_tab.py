@@ -388,12 +388,13 @@ def _create_input_section(parent, layout):
     parent.rec_btn.clicked.connect(lambda: _toggle_voice_input(parent))
     input_layout.addWidget(parent.rec_btn)
     
-    # TTS button
-    parent.btn_speak = QPushButton("TTS")
-    parent.btn_speak.setToolTip("Speak last AI response")
+    # TTS button - toggles voice mode
+    parent.btn_speak = QPushButton("Voice")
+    parent.btn_speak.setToolTip("Toggle voice mode - AI will speak responses aloud")
     parent.btn_speak.setFixedSize(*TTS_BTN_SIZE)
+    parent.btn_speak.setCheckable(True)
     parent.btn_speak.setStyleSheet(STYLE_TTS_BTN)
-    parent.btn_speak.clicked.connect(lambda: _on_speak_last_safe(parent))
+    parent.btn_speak.clicked.connect(lambda: _toggle_voice_mode(parent))
     input_layout.addWidget(parent.btn_speak)
     
     # TTS Stop button (hidden by default)
@@ -466,8 +467,8 @@ def create_chat_tab(parent):
     """
     chat_widget = QWidget()
     main_layout = QVBoxLayout()
-    main_layout.setSpacing(10)
-    main_layout.setContentsMargins(10, 10, 10, 10)
+    main_layout.setSpacing(6)
+    main_layout.setContentsMargins(6, 6, 6, 6)
     
     # Build each section using helper functions
     _create_header_section(parent, main_layout)
@@ -523,10 +524,11 @@ def _on_feedback(parent, is_positive):
     logger.info(f"User feedback received: {feedback_type} for last AI response")
 
 
-def _toggle_voice_output(parent):
-    """Toggle voice output on/off."""
+def _toggle_voice_mode(parent):
+    """Toggle voice mode from the TTS button."""
     parent.auto_speak = not getattr(parent, 'auto_speak', False)
     _update_voice_button_state(parent)
+    _update_tts_button_state(parent)
     
     # Also sync with the auto_speak_action menu item if it exists
     if hasattr(parent, 'auto_speak_action'):
@@ -537,25 +539,61 @@ def _toggle_voice_output(parent):
     
     # Show status
     if parent.auto_speak:
-        parent.chat_status.setText("Voice output ON - AI will speak responses aloud")
+        parent.chat_status.setText("Voice mode ON - AI will speak responses")
     else:
-        parent.chat_status.setText("Voice output OFF")
+        parent.chat_status.setText("Voice mode OFF")
+
+
+def _toggle_voice_output(parent):
+    """Toggle voice output on/off (from status bar button)."""
+    _toggle_voice_mode(parent)
+
+
+def _update_tts_button_state(parent):
+    """Update the TTS/Voice button appearance based on voice mode state."""
+    if not hasattr(parent, 'btn_speak'):
+        return
+    
+    is_on = getattr(parent, 'auto_speak', False)
+    parent.btn_speak.setChecked(is_on)
+    
+    if is_on:
+        parent.btn_speak.setText("Voice")
+        parent.btn_speak.setToolTip("Voice mode ON - AI speaks responses\nClick to turn off")
+        parent.btn_speak.setStyleSheet("""
+            QPushButton {
+                background-color: #a6e3a1;
+                color: #1e1e2e;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #94d990;
+            }
+        """)
+    else:
+        parent.btn_speak.setText("Voice")
+        parent.btn_speak.setToolTip("Voice mode OFF\nClick to turn on")
+        parent.btn_speak.setStyleSheet(STYLE_TTS_BTN)
 
 
 def _update_voice_button_state(parent):
     """Update the voice toggle button appearance based on state."""
-    if not hasattr(parent, 'voice_toggle_btn'):
-        return
-    
     is_on = getattr(parent, 'auto_speak', False)
-    parent.voice_toggle_btn.setChecked(is_on)
     
-    if is_on:
-        parent.voice_toggle_btn.setText("ON")
-        parent.voice_toggle_btn.setToolTip("AI Voice: ON\nAI will speak responses")
-    else:
-        parent.voice_toggle_btn.setText("OFF")
-        parent.voice_toggle_btn.setToolTip("AI Voice: OFF")
+    # Update status bar voice toggle button
+    if hasattr(parent, 'voice_toggle_btn'):
+        parent.voice_toggle_btn.setChecked(is_on)
+        
+        if is_on:
+            parent.voice_toggle_btn.setText("ON")
+            parent.voice_toggle_btn.setToolTip("AI Voice: ON\nAI will speak responses")
+        else:
+            parent.voice_toggle_btn.setText("OFF")
+            parent.voice_toggle_btn.setToolTip("AI Voice: OFF")
+    
+    # Also update the TTS button state
+    _update_tts_button_state(parent)
 
 
 def _toggle_voice_input(parent):

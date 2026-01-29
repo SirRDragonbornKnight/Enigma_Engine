@@ -54,10 +54,11 @@ try:
         QWidget, QVBoxLayout, QHBoxLayout, QLabel,
         QPushButton, QTextEdit, QProgressBar,
         QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-        QDoubleSpinBox, QLineEdit, QCheckBox
+        QDoubleSpinBox, QLineEdit, QCheckBox, QFrame,
+        QRubberBand, QSizeGrip, QApplication
     )
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal
-    from PyQt5.QtGui import QFont, QPixmap, QImage, QPainter, QColor
+    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRect, QPoint, QSize
+    from PyQt5.QtGui import QFont, QPixmap, QImage, QPainter, QColor, QPen, QBrush, QCursor
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -68,6 +69,304 @@ from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 # Output directory
 OUTPUT_DIR = Path(CONFIG.get("outputs_dir", "outputs")) / "images"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# =============================================================================
+# Resizable Image Preview Widget
+# =============================================================================
+
+class ResizableImagePreview(QFrame):
+    """
+    A preview widget that shows the generation dimensions as a resizable box.
+    - Displays the current width x height in the center
+    - Allows dragging the box to reposition
+    - Allows resizing from corners/edges
+    - Syncs with the width/height spinboxes
+    """
+    
+    size_changed = pyqtSignal(int, int)  # Emitted when user resizes the box
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self.setMinimumHeight(250)
+        self.setStyleSheet("background-color: #1a1a2e; border-radius: 4px;")
+        
+        # The preview box dimensions (actual generation size)
+        self._box_width = 512
+        self._box_height = 512
+        
+        # Box position (center of the widget by default)
+        self._box_x = 0
+        self._box_y = 0
+        self._box_centered = True  # Auto-center when True
+        
+        # Scaling factor to fit box in widget
+        self._scale = 0.5
+        self._min_scale = 0.1
+        self._max_scale = 1.0
+        
+        # Interaction state
+        self._dragging = False
+        self._resizing = False
+        self._resize_edge = None  # 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'
+        self._drag_start = QPoint()
+        self._box_start_pos = QPoint()
+        self._box_start_size = QSize()
+        
+        # Edge detection threshold (pixels)
+        self._edge_threshold = 10
+        
+        # Image to display (if any)
+        self._pixmap = None
+        
+    def set_dimensions(self, width: int, height: int):
+        """Set the box dimensions (generation size)."""
+        self._box_width = max(64, min(4096, width))
+        self._box_height = max(64, min(4096, height))
+        self._update_scale()
+        self.update()
+        
+    def set_pixmap(self, pixmap: QPixmap):
+        """Set an image to display in the preview."""
+        self._pixmap = pixmap
+        self.update()
+        
+    def clear_pixmap(self):
+        """Clear the displayed image."""
+        self._pixmap = None
+        self.update()
+        
+    def _update_scale(self):
+        """Calculate scale to fit box nicely in widget."""
+        widget_w = self.width() - 40  # Margin
+        widget_h = self.height() - 40
+        
+        if widget_w <= 0 or widget_h <= 0:
+            return
+            
+        scale_w = widget_w / self._box_width
+        scale_h = widget_h / self._box_height
+        self._scale = min(scale_w, scale_h, self._max_scale)
+        self._scale = max(self._scale, self._min_scale)
+        
+    def _get_box_rect(self) -> QRect:
+        """Get the current box rectangle in widget coordinates."""
+        scaled_w = int(self._box_width * self._scale)
+        scaled_h = int(self._box_height * self._scale)
+        
+        if self._box_centered:
+            x = (self.width() - scaled_w) // 2
+            y = (self.height() - scaled_h) // 2
+        else:
+            x = self._box_x
+            y = self._box_y
+            
+        return QRect(x, y, scaled_w, scaled_h)
+        
+    def _get_resize_edge(self, pos: QPoint) -> str:
+        """Determine which edge/corner the mouse is over."""
+        rect = self._get_box_rect()
+        t = self._edge_threshold
+        
+        on_left = abs(pos.x() - rect.left()) < t
+        on_right = abs(pos.x() - rect.right()) < t
+        on_top = abs(pos.y() - rect.top()) < t
+        on_bottom = abs(pos.y() - rect.bottom()) < t
+        
+        # Inside vertical bounds?
+        in_v = rect.top() - t < pos.y() < rect.bottom() + t
+        # Inside horizontal bounds?
+        in_h = rect.left() - t < pos.x() < rect.right() + t
+        
+        # Check corners first
+        if on_top and on_left:
+            return 'nw'
+        if on_top and on_right:
+            return 'ne'
+        if on_bottom and on_left:
+            return 'sw'
+        if on_bottom and on_right:
+            return 'se'
+        # Then edges
+        if on_top and in_h:
+            return 'n'
+        if on_bottom and in_h:
+            return 's'
+        if on_left and in_v:
+            return 'w'
+        if on_right and in_v:
+            return 'e'
+        return ''
+        
+    def _update_cursor(self, edge: str):
+        """Update cursor based on edge."""
+        cursors = {
+            'n': Qt.SizeVerCursor,
+            's': Qt.SizeVerCursor,
+            'e': Qt.SizeHorCursor,
+            'w': Qt.SizeHorCursor,
+            'nw': Qt.SizeFDiagCursor,
+            'se': Qt.SizeFDiagCursor,
+            'ne': Qt.SizeBDiagCursor,
+            'sw': Qt.SizeBDiagCursor,
+        }
+        if edge in cursors:
+            self.setCursor(cursors[edge])
+        else:
+            self.setCursor(Qt.ArrowCursor)
+            
+    def mousePressEvent(self, event):
+        """Handle mouse press for drag/resize."""
+        if event.button() != Qt.LeftButton:
+            return super().mousePressEvent(event)
+            
+        pos = event.pos()
+        rect = self._get_box_rect()
+        edge = self._get_resize_edge(pos)
+        
+        if edge:
+            # Start resizing
+            self._resizing = True
+            self._resize_edge = edge
+            self._drag_start = pos
+            self._box_start_size = QSize(self._box_width, self._box_height)
+        elif rect.contains(pos):
+            # Start dragging
+            self._dragging = True
+            self._box_centered = False
+            self._drag_start = pos
+            self._box_start_pos = QPoint(rect.x(), rect.y())
+            self.setCursor(Qt.SizeAllCursor)
+            
+    def mouseMoveEvent(self, event):
+        """Handle mouse move for drag/resize."""
+        pos = event.pos()
+        
+        if self._resizing:
+            # Calculate delta
+            dx = pos.x() - self._drag_start.x()
+            dy = pos.y() - self._drag_start.y()
+            
+            # Convert to unscaled dimensions
+            dx_unscaled = int(dx / self._scale)
+            dy_unscaled = int(dy / self._scale)
+            
+            new_w = self._box_start_size.width()
+            new_h = self._box_start_size.height()
+            
+            edge = self._resize_edge
+            if 'e' in edge:
+                new_w += dx_unscaled
+            if 'w' in edge:
+                new_w -= dx_unscaled
+            if 's' in edge:
+                new_h += dy_unscaled
+            if 'n' in edge:
+                new_h -= dy_unscaled
+                
+            # Snap to 64-pixel increments
+            new_w = max(256, min(2048, (new_w // 64) * 64))
+            new_h = max(256, min(2048, (new_h // 64) * 64))
+            
+            if new_w != self._box_width or new_h != self._box_height:
+                self._box_width = new_w
+                self._box_height = new_h
+                self._update_scale()
+                self.size_changed.emit(new_w, new_h)
+                self.update()
+                
+        elif self._dragging:
+            # Move the box
+            dx = pos.x() - self._drag_start.x()
+            dy = pos.y() - self._drag_start.y()
+            self._box_x = self._box_start_pos.x() + dx
+            self._box_y = self._box_start_pos.y() + dy
+            self.update()
+        else:
+            # Update cursor based on position
+            edge = self._get_resize_edge(pos)
+            self._update_cursor(edge)
+            
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release."""
+        self._dragging = False
+        self._resizing = False
+        self._resize_edge = None
+        edge = self._get_resize_edge(event.pos())
+        self._update_cursor(edge)
+        
+    def mouseDoubleClickEvent(self, event):
+        """Double-click to re-center the box."""
+        self._box_centered = True
+        self.update()
+        
+    def resizeEvent(self, event):
+        """Handle widget resize."""
+        super().resizeEvent(event)
+        self._update_scale()
+        
+    def paintEvent(self, event):
+        """Draw the preview box with dimensions."""
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        rect = self._get_box_rect()
+        
+        # Draw the box outline (dashed)
+        pen = QPen(QColor("#e74c3c"), 2, Qt.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(QBrush(QColor(40, 40, 60, 180)))
+        painter.drawRect(rect)
+        
+        # Draw corner handles
+        handle_size = 8
+        handle_color = QColor("#3498db")
+        painter.setPen(QPen(handle_color, 1))
+        painter.setBrush(QBrush(handle_color))
+        
+        corners = [
+            QRect(rect.left() - handle_size//2, rect.top() - handle_size//2, handle_size, handle_size),
+            QRect(rect.right() - handle_size//2, rect.top() - handle_size//2, handle_size, handle_size),
+            QRect(rect.left() - handle_size//2, rect.bottom() - handle_size//2, handle_size, handle_size),
+            QRect(rect.right() - handle_size//2, rect.bottom() - handle_size//2, handle_size, handle_size),
+        ]
+        for corner in corners:
+            painter.drawRect(corner)
+            
+        # Draw edge midpoint handles
+        mid_handles = [
+            QRect(rect.center().x() - handle_size//2, rect.top() - handle_size//2, handle_size, handle_size),
+            QRect(rect.center().x() - handle_size//2, rect.bottom() - handle_size//2, handle_size, handle_size),
+            QRect(rect.left() - handle_size//2, rect.center().y() - handle_size//2, handle_size, handle_size),
+            QRect(rect.right() - handle_size//2, rect.center().y() - handle_size//2, handle_size, handle_size),
+        ]
+        painter.setBrush(QBrush(QColor("#9b59b6")))
+        for handle in mid_handles:
+            painter.drawRect(handle)
+        
+        # Draw the image if we have one
+        if self._pixmap:
+            scaled_pixmap = self._pixmap.scaled(
+                rect.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            img_x = rect.x() + (rect.width() - scaled_pixmap.width()) // 2
+            img_y = rect.y() + (rect.height() - scaled_pixmap.height()) // 2
+            painter.drawPixmap(img_x, img_y, scaled_pixmap)
+        
+        # Draw instructions at bottom
+        hint_text = "Drag edges to resize | Drag center to move | Double-click to re-center"
+        painter.setPen(QPen(QColor("#888888")))
+        font = painter.font()
+        font.setPointSize(9)
+        font.setBold(False)
+        painter.setFont(font)
+        painter.drawText(QRect(0, self.height() - 25, self.width(), 20), Qt.AlignCenter, hint_text)
+        
+        painter.end()
 
 
 # =============================================================================
@@ -737,12 +1036,15 @@ class ImageTab(QWidget):
         
         layout.addLayout(header_layout)
         
-        # Result area at TOP
-        self.result_label = QLabel("Generated image will appear here")
-        self.result_label.setAlignment(Qt.AlignCenter)
-        self.result_label.setMinimumHeight(200)
-        self.result_label.setStyleSheet("background-color: #2d2d2d; border-radius: 4px;")
-        layout.addWidget(self.result_label, stretch=1)
+        # Resizable preview area at TOP - shows dimensions and allows drag-to-resize
+        self.preview_area = ResizableImagePreview()
+        self.preview_area.set_dimensions(512, 512)
+        self.preview_area.size_changed.connect(self._on_preview_size_changed)
+        layout.addWidget(self.preview_area, stretch=1)
+        
+        # Keep result_label for compatibility but hide it (image shows in preview_area)
+        self.result_label = QLabel()
+        self.result_label.setVisible(False)
         
         # Progress and Status
         self.progress = QProgressBar()
@@ -814,6 +1116,7 @@ class ImageTab(QWidget):
         self.width_spin.setValue(512)
         self.width_spin.setSingleStep(64)
         self.width_spin.setToolTip("Image width in pixels (512 is standard, higher = more detail but slower)")
+        self.width_spin.valueChanged.connect(self._on_spinbox_changed)
         options_layout.addWidget(self.width_spin)
         
         options_layout.addWidget(QLabel("Height:"))
@@ -822,6 +1125,7 @@ class ImageTab(QWidget):
         self.height_spin.setValue(512)
         self.height_spin.setSingleStep(64)
         self.height_spin.setToolTip("Image height in pixels (512 is standard, higher = more detail but slower)")
+        self.height_spin.valueChanged.connect(self._on_spinbox_changed)
         options_layout.addWidget(self.height_spin)
         
         options_layout.addWidget(QLabel("Steps:"))
@@ -943,6 +1247,23 @@ class ImageTab(QWidget):
         
         thread = threading.Thread(target=do_load, daemon=True)
         thread.start()
+    
+    def _on_preview_size_changed(self, width: int, height: int):
+        """Called when user resizes the preview box - update spinboxes."""
+        # Block signals to prevent recursion
+        self.width_spin.blockSignals(True)
+        self.height_spin.blockSignals(True)
+        self.width_spin.setValue(width)
+        self.height_spin.setValue(height)
+        self.width_spin.blockSignals(False)
+        self.height_spin.blockSignals(False)
+        self.status_label.setText(f"Size changed to {width} x {height}")
+    
+    def _on_spinbox_changed(self):
+        """Called when spinbox values change - update preview area."""
+        width = self.width_spin.value()
+        height = self.height_spin.value()
+        self.preview_area.set_dimensions(width, height)
     
     def _browse_reference_image(self):
         """Browse for a reference image."""
@@ -1069,12 +1390,9 @@ class ImageTab(QWidget):
             if path and Path(path).exists():
                 self.last_image_path = path
                 pixmap = QPixmap(path)
-                scaled = pixmap.scaled(
-                    self.result_label.size(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
-                self.result_label.setPixmap(scaled)
+                
+                # Display in the resizable preview area
+                self.preview_area.set_pixmap(pixmap)
                 self.save_btn.setEnabled(True)
                 
                 status = f"Generated in {duration:.1f}s - Saved to: {path}"
@@ -1100,7 +1418,7 @@ class ImageTab(QWidget):
         else:
             error = result.get("error", "Unknown error")
             self.status_label.setText(f"Error: {error}")
-            self.result_label.setText(f"Generation failed:\n{error}\n\nTo fix, install: pip install diffusers transformers accelerate")
+            self.preview_area.clear_pixmap()
             self._check_ready_status()
     
     def _show_popup_preview(self, path: str):

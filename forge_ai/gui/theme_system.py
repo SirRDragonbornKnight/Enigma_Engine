@@ -75,31 +75,64 @@ class Theme:
         c = self.colors
         
         return f"""
-        /* Theme: {self.name} */
+        /* Theme: {self.name} - Compact Layout */
         QMainWindow, QWidget {{
             background-color: {c.bg_primary};
             color: {c.text_primary};
-            font-size: 12px;
+            font-size: 11px;
         }}
         
-        QTextEdit, QPlainTextEdit, QLineEdit, QListWidget {{
+        QTextEdit, QPlainTextEdit {{
             background-color: {c.bg_secondary};
             color: {c.text_primary};
             border: 1px solid {c.border_primary};
-            border-radius: 4px;
+            border-radius: 3px;
             padding: 4px;
-            font-size: 12px;
+            font-size: 11px;
             selection-background-color: {c.accent_primary};
             selection-color: {c.bg_primary};
+        }}
+        
+        QTextEdit:focus, QPlainTextEdit:focus {{
+            border: 1px solid {c.accent_primary};
+        }}
+        
+        QLineEdit {{
+            background-color: {c.bg_secondary};
+            color: {c.text_primary};
+            border: 1px solid {c.border_primary};
+            border-radius: 3px;
+            padding: 4px;
+            font-size: 11px;
+            selection-background-color: {c.accent_primary};
+            selection-color: {c.bg_primary};
+        }}
+        
+        QLineEdit:focus {{
+            border: 1px solid {c.accent_primary};
+        }}
+        
+        QListWidget {{
+            background-color: {c.bg_secondary};
+            color: {c.text_primary};
+            border: 1px solid {c.border_primary};
+            border-radius: 3px;
+            padding: 3px;
+            font-size: 11px;
+        }}
+        
+        QListWidget::item:selected {{
+            background-color: {c.accent_primary};
+            color: {c.bg_primary};
         }}
         
         QPushButton {{
             background-color: {c.accent_primary};
             color: {c.bg_primary};
             border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 12px;
+            border-radius: 3px;
+            padding: 5px 10px;
+            font-size: 11px;
             font-weight: bold;
         }}
         
@@ -112,39 +145,39 @@ class Theme:
         }}
         
         QPushButton:disabled {{
-            background-color: {c.bg_secondary};
-            color: #f38ba8;
-            border: 2px dashed #f38ba8;
+            background-color: {c.bg_tertiary};
+            color: {c.text_disabled};
+            border: 1px solid {c.border_primary};
         }}
         
         QGroupBox {{
             border: 1px solid {c.border_primary};
-            border-radius: 4px;
-            margin-top: 12px;
-            padding-top: 8px;
+            border-radius: 3px;
+            margin-top: 8px;
+            padding-top: 4px;
             color: {c.text_primary};
         }}
         
         QGroupBox::title {{
             color: {c.accent_primary};
             subcontrol-origin: margin;
-            left: 10px;
+            left: 8px;
         }}
         
         QTabWidget::pane {{
             border: 1px solid {c.border_primary};
-            border-radius: 4px;
+            border-radius: 3px;
             background-color: {c.bg_primary};
         }}
         
         QTabBar::tab {{
             background-color: {c.bg_secondary};
             color: {c.text_primary};
-            padding: 8px 16px;
-            font-size: 12px;
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-            margin-right: 2px;
+            padding: 5px 12px;
+            font-size: 11px;
+            border-top-left-radius: 3px;
+            border-top-right-radius: 3px;
+            margin-right: 1px;
         }}
         
         QTabBar::tab:selected {{

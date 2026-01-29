@@ -1,434 +1,430 @@
 """
-Model Scaling Tab - Interactive Model Size Explorer
-===================================================
+Model Scaling Tab - Clean Horizontal Layout
+============================================
 
-A beautiful, interactive interface for exploring and selecting model sizes.
-Features:
-  - Interactive pyramid visualization
-  - Real-time hardware requirement calculator
-  - Performance estimates
-  - One-click model creation
+Simple, clean interface for selecting model sizes.
+- Left: Scrollable list of model cards
+- Right: Detailed specs for selected model
 """
 
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from PyQt5.QtGui import QPaintEvent, QMouseEvent
+from typing import Optional
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-    QLabel, QPushButton, QFrame, QGroupBox, QMessageBox, QProgressBar,
-    QSlider, QSpinBox, QStackedWidget, QSizePolicy
+    QLabel, QPushButton, QFrame, QMessageBox, QProgressBar, QSizePolicy
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush, QLinearGradient, QPainterPath
+from PyQt5.QtCore import Qt, pyqtSignal, QEvent
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QFont
 
 from .shared_components import NoScrollComboBox
 
-# Qt enum constants
-NoBrush = Qt.BrushStyle.NoBrush
-FontBold = QFont.Weight.Bold
-FontNormal = QFont.Weight.Normal
-
-import math
-
-
-# Model definitions with full specs
+# Model definitions
 MODEL_SPECS = {
-    'nano':     {'params': 1,     'dim': 128,  'layers': 4,  'heads': 4,  'ctx': 256,   'ram': 256,   'vram': 0,    'tier': 'embedded',   'emoji': '', 'desc': 'Microcontrollers, testing'},
-    'micro':    {'params': 2,     'dim': 192,  'layers': 4,  'heads': 4,  'ctx': 384,   'ram': 512,   'vram': 0,    'tier': 'embedded',   'emoji': '', 'desc': 'IoT devices, ESP32'},
-    'tiny':     {'params': 5,     'dim': 256,  'layers': 6,  'heads': 8,  'ctx': 512,   'ram': 1024,  'vram': 0,    'tier': 'edge',       'emoji': '', 'desc': 'Raspberry Pi 3/4'},
-    'mini':     {'params': 10,    'dim': 384,  'layers': 6,  'heads': 6,  'ctx': 512,   'ram': 2048,  'vram': 0,    'tier': 'edge',       'emoji': '', 'desc': 'Mobile, tablets'},
-    'small':    {'params': 27,    'dim': 512,  'layers': 8,  'heads': 8,  'ctx': 1024,  'ram': 4096,  'vram': 2048, 'tier': 'consumer',   'emoji': '', 'desc': 'Laptops, entry GPU'},
-    'medium':   {'params': 85,    'dim': 768,  'layers': 12, 'heads': 12, 'ctx': 2048,  'ram': 8192,  'vram': 4096, 'tier': 'consumer',   'emoji': '', 'desc': 'Desktop, GTX 1660+'},
-    'base':     {'params': 125,   'dim': 896,  'layers': 14, 'heads': 14, 'ctx': 2048,  'ram': 12288, 'vram': 6144, 'tier': 'consumer',   'emoji': '', 'desc': 'Gaming PC, RTX 3060'},
-    'large':    {'params': 200,   'dim': 1024, 'layers': 16, 'heads': 16, 'ctx': 4096,  'ram': 16384, 'vram': 8192, 'tier': 'prosumer',   'emoji': '', 'desc': 'Workstation, RTX 3070+'},
-    'xl':       {'params': 600,   'dim': 1536, 'layers': 24, 'heads': 24, 'ctx': 4096,  'ram': 32768, 'vram': 12288,'tier': 'prosumer',   'emoji': '', 'desc': 'High-end, RTX 3080+'},
-    'xxl':      {'params': 1500,  'dim': 2048, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 65536, 'vram': 24576,'tier': 'server',     'emoji': '', 'desc': 'Server, RTX 4090'},
-    'huge':     {'params': 3000,  'dim': 2560, 'layers': 40, 'heads': 40, 'ctx': 8192,  'ram': 131072,'vram': 49152,'tier': 'server',     'emoji': '', 'desc': 'Multi-GPU server'},
-    'giant':    {'params': 7000,  'dim': 4096, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 262144,'vram': 81920,'tier': 'datacenter', 'emoji': '', 'desc': 'A100/H100 cluster'},
-    'colossal': {'params': 13000, 'dim': 4096, 'layers': 48, 'heads': 32, 'ctx': 16384, 'ram': 524288,'vram': 163840,'tier': 'datacenter','emoji': '', 'desc': 'Distributed training'},
-    'titan':    {'params': 30000, 'dim': 6144, 'layers': 48, 'heads': 48, 'ctx': 16384, 'ram': 1048576,'vram': 327680,'tier': 'ultimate', 'emoji': '', 'desc': 'Full datacenter'},
-    'omega':    {'params': 70000, 'dim': 8192, 'layers': 64, 'heads': 64, 'ctx': 32768, 'ram': 2097152,'vram': 655360,'tier': 'ultimate', 'emoji': '', 'desc': 'Research frontier'},
+    'nano':     {'params': 1,     'dim': 128,  'layers': 4,  'heads': 4,  'ctx': 256,   'ram': 256,   'vram': 0,    'tier': 'embedded',   'desc': 'Microcontrollers, testing'},
+    'micro':    {'params': 2,     'dim': 192,  'layers': 4,  'heads': 4,  'ctx': 384,   'ram': 512,   'vram': 0,    'tier': 'embedded',   'desc': 'IoT devices, ESP32'},
+    'tiny':     {'params': 5,     'dim': 256,  'layers': 6,  'heads': 8,  'ctx': 512,   'ram': 1024,  'vram': 0,    'tier': 'edge',       'desc': 'Raspberry Pi 3/4'},
+    'mini':     {'params': 10,    'dim': 384,  'layers': 6,  'heads': 6,  'ctx': 512,   'ram': 2048,  'vram': 0,    'tier': 'edge',       'desc': 'Mobile, tablets'},
+    'small':    {'params': 27,    'dim': 512,  'layers': 8,  'heads': 8,  'ctx': 1024,  'ram': 4096,  'vram': 2048, 'tier': 'consumer',   'desc': 'Laptops, entry GPU'},
+    'medium':   {'params': 85,    'dim': 768,  'layers': 12, 'heads': 12, 'ctx': 2048,  'ram': 8192,  'vram': 4096, 'tier': 'consumer',   'desc': 'Desktop, GTX 1660+'},
+    'base':     {'params': 125,   'dim': 896,  'layers': 14, 'heads': 14, 'ctx': 2048,  'ram': 12288, 'vram': 6144, 'tier': 'consumer',   'desc': 'Gaming PC, RTX 3060'},
+    'large':    {'params': 200,   'dim': 1024, 'layers': 16, 'heads': 16, 'ctx': 4096,  'ram': 16384, 'vram': 8192, 'tier': 'prosumer',   'desc': 'Workstation, RTX 3070+'},
+    'xl':       {'params': 600,   'dim': 1536, 'layers': 24, 'heads': 24, 'ctx': 4096,  'ram': 32768, 'vram': 12288,'tier': 'prosumer',   'desc': 'High-end, RTX 3080+'},
+    'xxl':      {'params': 1500,  'dim': 2048, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 65536, 'vram': 24576,'tier': 'server',     'desc': 'Server, RTX 4090'},
+    'huge':     {'params': 3000,  'dim': 2560, 'layers': 40, 'heads': 40, 'ctx': 8192,  'ram': 131072,'vram': 49152,'tier': 'server',     'desc': 'Multi-GPU server'},
+    'giant':    {'params': 7000,  'dim': 4096, 'layers': 32, 'heads': 32, 'ctx': 8192,  'ram': 262144,'vram': 81920,'tier': 'datacenter', 'desc': 'A100/H100 cluster'},
+    'colossal': {'params': 13000, 'dim': 4096, 'layers': 48, 'heads': 32, 'ctx': 16384, 'ram': 524288,'vram': 163840,'tier': 'datacenter','desc': 'Distributed training'},
+    'titan':    {'params': 30000, 'dim': 6144, 'layers': 48, 'heads': 48, 'ctx': 16384, 'ram': 1048576,'vram': 327680,'tier': 'ultimate', 'desc': 'Full datacenter'},
+    'omega':    {'params': 70000, 'dim': 8192, 'layers': 64, 'heads': 64, 'ctx': 32768, 'ram': 2097152,'vram': 655360,'tier': 'ultimate', 'desc': 'Research frontier'},
 }
 
 MODEL_ORDER = ['nano', 'micro', 'tiny', 'mini', 'small', 'medium', 'base', 'large', 'xl', 'xxl', 'huge', 'giant', 'colossal', 'titan', 'omega']
 
 TIER_COLORS = {
-    'embedded':   ('#ff6b6b', '#ff8787'),  # Red
-    'edge':       ('#ffa94d', '#ffc078'),  # Orange
-    'consumer':   ('#ffd43b', '#ffe066'),  # Yellow
-    'prosumer':   ('#69db7c', '#8ce99a'),  # Green
-    'server':     ('#74c0fc', '#a5d8ff'),  # Blue
-    'datacenter': ('#b197fc', '#d0bfff'),  # Purple
-    'ultimate':   ('#63e6be', '#96f2d7'),  # Teal
-}
-
-TIER_NAMES = {
-    'embedded': 'Embedded',
-    'edge': 'Edge',
-    'consumer': 'Consumer',
-    'prosumer': 'Prosumer',
-    'server': 'Server',
-    'datacenter': 'Datacenter',
-    'ultimate': 'Ultimate'
+    'embedded':   '#ff6b6b',
+    'edge':       '#ffa94d',
+    'consumer':   '#ffd43b',
+    'prosumer':   '#69db7c',
+    'server':     '#74c0fc',
+    'datacenter': '#b197fc',
+    'ultimate':   '#63e6be',
 }
 
 
-class PyramidWidget(QFrame):
-    """Interactive pyramid visualization of model sizes."""
+class ModelCard(QFrame):
+    """Clickable card for a single model size."""
     
-    model_clicked = pyqtSignal(str)
+    clicked = pyqtSignal(str)
+    
+    def __init__(self, model_name: str, parent=None):
+        super().__init__(parent)
+        self.model_name = model_name
+        self.spec = MODEL_SPECS[model_name]
+        self.selected = False
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(50)
+        self.setFocusPolicy(Qt.NoFocus)
+        self._setup_ui()
+        self._update_style()
+        
+    def _setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(8)
+        
+        # Color indicator
+        self.color_bar = QFrame()
+        self.color_bar.setFixedSize(4, 30)
+        self.color_bar.setFocusPolicy(Qt.NoFocus)
+        self.color_bar.setAttribute(Qt.WA_TransparentForMouseEvents)
+        color = TIER_COLORS[self.spec['tier']]
+        self.color_bar.setStyleSheet(f"background: {color}; border-radius: 2px;")
+        layout.addWidget(self.color_bar)
+        
+        # Name and params
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(0)
+        
+        self.name_label = QLabel(self.model_name.upper())
+        self.name_label.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
+        self.name_label.setFocusPolicy(Qt.NoFocus)
+        self.name_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        info_layout.addWidget(self.name_label)
+        
+        params = self.spec['params']
+        params_str = f"{params/1000:.1f}B" if params >= 1000 else f"{params}M"
+        self.params_label = QLabel(params_str)
+        self.params_label.setStyleSheet("color: #8b949e; font-size: 10px;")
+        self.params_label.setFocusPolicy(Qt.NoFocus)
+        self.params_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.params_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        info_layout.addWidget(self.params_label)
+        
+        layout.addLayout(info_layout)
+        layout.addStretch()
+        
+        # RAM indicator
+        ram = self.spec['ram']
+        ram_str = f"{ram/1024:.0f}G" if ram >= 1024 else f"{ram}M"
+        self.ram_label = QLabel(ram_str)
+        self.ram_label.setStyleSheet("color: #74c0fc; font-size: 10px;")
+        self.ram_label.setFocusPolicy(Qt.NoFocus)
+        self.ram_label.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.ram_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        layout.addWidget(self.ram_label)
+        
+    def _update_style(self):
+        if self.selected:
+            self.setStyleSheet("""
+                QFrame {
+                    background: #238636;
+                    border: 1px solid #2ea043;
+                    border-radius: 6px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QFrame {
+                    background: #21262d;
+                    border: 1px solid #30363d;
+                    border-radius: 6px;
+                }
+                QFrame:hover {
+                    background: #30363d;
+                    border: 1px solid #484f58;
+                }
+            """)
+            
+    def set_selected(self, selected: bool):
+        self.selected = selected
+        self._update_style()
+        
+    def mousePressEvent(self, event):
+        # Clear any focus from anywhere
+        focused = QApplication.focusWidget()
+        if focused:
+            focused.clearFocus()
+        self.clicked.emit(self.model_name)
+
+
+class ScalingTab(QWidget):
+    """Model scaling tab with horizontal layout."""
+    
+    model_changed = pyqtSignal(str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(300, 200)  # Smaller minimum for flexibility
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Allow resize
-        self.selected = 'small'
-        self.hovered = None
-        self.setMouseTracking(True)
-        self.model_rects = {}
+        self.main_window = parent
+        self.selected_model = 'small'
+        self.model_cards = {}
+        self._setup_ui()
         
-    def paintEvent(self, a0: Optional[QPaintEvent]):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+    def _setup_ui(self):
+        layout = QHBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
         
-        w, h = self.width(), self.height()
-        
-        # Background gradient
-        bg = QLinearGradient(0, 0, 0, h)
-        bg.setColorAt(0, QColor('#0d1117'))
-        bg.setColorAt(1, QColor('#161b22'))
-        painter.fillRect(0, 0, w, h, bg)
-        
-        # Dynamic sizing based on widget size
-        margin = max(20, min(50, w // 20))  # Scale margin with width
-        pyramid_width = w - (margin * 2)
-        title_height = 45  # Space for title at top
-        bottom_margin = 15  # Small margin at bottom
-        pyramid_left = margin
-        
-        # Group models by tier for pyramid rows
-        tiers = ['embedded', 'edge', 'consumer', 'prosumer', 'server', 'datacenter', 'ultimate']
-        tier_models = {t: [] for t in tiers}
-        for name in MODEL_ORDER:
-            tier_models[MODEL_SPECS[name]['tier']].append(name)
-        
-        # Calculate dynamic row heights - pyramid fills available space
-        total_rows = len([t for t in tiers if tier_models[t]])
-        available_height = h - title_height - bottom_margin
-        base_row_height = available_height / total_rows
-        
-        # Draw from bottom (ultimate) to top (embedded)
-        current_y = h - bottom_margin  # Start from bottom
-        
-        self.model_rects = {}
-        
-        for i, tier in enumerate(reversed(tiers)):
-            models = tier_models[tier]
-            if not models:
-                continue
-                
-            row_height = base_row_height  # Use calculated height to fill space
-            current_y -= row_height
-            
-            # Calculate width for this row (narrower at top)
-            width_factor = 0.3 + (0.7 * (i / max(1, len(tiers) - 1)))
-            row_width = pyramid_width * width_factor
-            row_left = pyramid_left + (pyramid_width - row_width) / 2
-            
-            # Draw tier background
-            colors = TIER_COLORS[tier]
-            tier_bg = QLinearGradient(row_left, current_y, row_left + row_width, current_y)
-            tier_bg.setColorAt(0, QColor(colors[0]).darker(150))
-            tier_bg.setColorAt(0.5, QColor(colors[0]))
-            tier_bg.setColorAt(1, QColor(colors[0]).darker(150))
-            
-            path = QPainterPath()
-            path.addRoundedRect(row_left, current_y, row_width, row_height - 2, 6, 6)
-            painter.fillPath(path, tier_bg)
-            
-            # Draw models in this tier
-            model_width = row_width / len(models)
-            for j, model in enumerate(models):
-                mx = row_left + j * model_width
-                rect = (mx + 2, current_y + 2, model_width - 4, row_height - 6)
-                self.model_rects[model] = rect
-                
-                # Highlight selected/hovered
-                if model == self.selected:
-                    painter.setPen(QPen(QColor('#ffffff'), 3))
-                    painter.setBrush(NoBrush)
-                    painter.drawRoundedRect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), 4, 4)
-                elif model == self.hovered:
-                    painter.setPen(QPen(QColor('#ffffff88'), 2))
-                    painter.setBrush(NoBrush)
-                    painter.drawRoundedRect(int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]), 4, 4)
-                
-                # Model name
-                spec = MODEL_SPECS[model]
-                painter.setPen(QPen(QColor('#ffffff')))
-                font_size = max(8, int(row_height / 3))  # Scale with row height
-                font = QFont('Segoe UI', font_size, FontBold if model == self.selected else FontNormal)
-                painter.setFont(font)
-                
-                text = f"{spec['emoji']} {model.upper()}"
-                text_rect = painter.fontMetrics().boundingRect(text)
-                tx = mx + (model_width - text_rect.width()) / 2
-                ty = current_y + row_height / 2 + text_rect.height() / 4
-                painter.drawText(int(tx), int(ty), text)
-        
-        # Title - dynamic font size
-        painter.setPen(QPen(QColor('#ffffff')))
-        title_font_size = max(12, min(16, w // 40))
-        painter.setFont(QFont('Segoe UI', title_font_size, FontBold))
-        painter.drawText(margin, 30, "Model Size Pyramid")
-        
-        # Subtitle
-        painter.setPen(QPen(QColor('#8b949e')))
-        subtitle_font_size = max(8, min(10, w // 60))
-        painter.setFont(QFont('Segoe UI', subtitle_font_size))
-        subtitle_text = "Click to select"
-        subtitle_width = painter.fontMetrics().boundingRect(subtitle_text).width()
-        painter.drawText(w - margin - subtitle_width, 30, subtitle_text)
-        
-        painter.end()
-        
-    def mouseMoveEvent(self, a0: Optional[QMouseEvent]):
-        if a0 is None:
-            return
-        pos = a0.pos()
-        old_hover = self.hovered
-        self.hovered = None
-        
-        for model, rect in self.model_rects.items():
-            if rect[0] <= pos.x() <= rect[0] + rect[2] and rect[1] <= pos.y() <= rect[1] + rect[3]:
-                self.hovered = model
-                break
-        
-        if old_hover != self.hovered:
-            self.update()
-            
-    def mousePressEvent(self, a0: Optional[QMouseEvent]):
-        if self.hovered:
-            self.selected = self.hovered
-            self.model_clicked.emit(self.hovered)
-            self.update()
-            
-    def set_selected(self, model):
-        self.selected = model
-        self.update()
-
-
-class SpecsPanel(QFrame):
-    """Panel showing detailed specs for selected model."""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("""
+        # LEFT: Model list (scrollable)
+        left_frame = QFrame()
+        left_frame.setFocusPolicy(Qt.NoFocus)
+        left_frame.setStyleSheet("""
             QFrame {
                 background: #161b22;
                 border: 1px solid #30363d;
-                border-radius: 12px;
+                border-radius: 8px;
             }
         """)
-        self.setup_ui()
+        left_layout = QVBoxLayout(left_frame)
+        left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.setSpacing(6)
         
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-        layout.setContentsMargins(20, 20, 20, 20)
+        # Title
+        title = QLabel("Select Model Size")
+        title.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 13px;")
+        title.setFocusPolicy(Qt.NoFocus)
+        title.setTextInteractionFlags(Qt.NoTextInteraction)
+        left_layout.addWidget(title)
         
-        # Header with model name and emoji
-        self.header = QLabel("SMALL")
-        self.header.setFont(QFont('Segoe UI', 24, FontBold))
-        self.header.setStyleSheet("color: #ffd43b;")
-        layout.addWidget(self.header)
+        # Scroll area for cards
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setFocusPolicy(Qt.NoFocus)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("""
+            QScrollArea { border: none; background: transparent; }
+            QScrollBar:vertical { width: 8px; background: #21262d; }
+            QScrollBar::handle:vertical { background: #484f58; border-radius: 4px; min-height: 20px; }
+        """)
         
-        # Description
-        self.desc = QLabel("Laptops, entry GPU")
-        self.desc.setStyleSheet("color: #8b949e; font-size: 12px;")
-        layout.addWidget(self.desc)
+        cards_widget = QWidget()
+        cards_widget.setFocusPolicy(Qt.NoFocus)
+        cards_layout = QVBoxLayout(cards_widget)
+        cards_layout.setContentsMargins(0, 0, 0, 0)
+        cards_layout.setSpacing(4)
         
-        # Tier badge
-        self.tier_badge = QLabel("Consumer Tier")
+        for model in MODEL_ORDER:
+            card = ModelCard(model)
+            card.clicked.connect(self._on_card_clicked)
+            cards_layout.addWidget(card)
+            self.model_cards[model] = card
+            
+        cards_layout.addStretch()
+        scroll.setWidget(cards_widget)
+        left_layout.addWidget(scroll)
+        
+        left_frame.setFixedWidth(180)
+        layout.addWidget(left_frame)
+        
+        # RIGHT: Details panel
+        right_frame = QFrame()
+        right_frame.setStyleSheet("""
+            QFrame {
+                background: #161b22;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+            }
+        """)
+        right_layout = QVBoxLayout(right_frame)
+        right_layout.setContentsMargins(10, 10, 10, 10)
+        right_layout.setSpacing(8)
+        
+        # Header
+        header_row = QHBoxLayout()
+        self.model_header = QLabel("SMALL")
+        self.model_header.setFont(QFont('Segoe UI', 24, QFont.Bold))
+        self.model_header.setStyleSheet("color: #ffd43b;")
+        header_row.addWidget(self.model_header)
+        
+        self.tier_badge = QLabel("Consumer")
         self.tier_badge.setStyleSheet("""
             background: #ffd43b33;
             color: #ffd43b;
             padding: 6px 12px;
             border-radius: 6px;
             font-weight: bold;
+            font-size: 12px;
         """)
-        self.tier_badge.setFixedWidth(160)
-        layout.addWidget(self.tier_badge)
+        header_row.addWidget(self.tier_badge)
+        header_row.addStretch()
+        right_layout.addLayout(header_row)
         
-        layout.addSpacing(10)
+        # Description
+        self.desc_label = QLabel("Laptops, entry GPU")
+        self.desc_label.setStyleSheet("color: #8b949e; font-size: 13px;")
+        right_layout.addWidget(self.desc_label)
         
-        # Architecture specs
-        arch_group = QGroupBox("Architecture")
-        arch_group.setStyleSheet("""
-            QGroupBox {
-                color: #ffffff;
-                font-weight: bold;
-                border: 1px solid #30363d;
-                border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-            }
-        """)
-        arch_layout = QGridLayout(arch_group)
+        right_layout.addSpacing(8)
         
-        self.params_label = QLabel("~27M")
-        self.dim_label = QLabel("512")
-        self.layers_label = QLabel("8")
-        self.heads_label = QLabel("8")
-        self.ctx_label = QLabel("1024")
+        # Specs grid
+        specs_frame = QFrame()
+        specs_frame.setStyleSheet("background: #21262d; border-radius: 6px; border: none;")
+        specs_grid = QGridLayout(specs_frame)
+        specs_grid.setContentsMargins(8, 8, 8, 8)
+        specs_grid.setSpacing(6)
         
+        self.spec_labels = {}
         specs = [
-            ("Parameters:", self.params_label),
-            ("Embedding Dim:", self.dim_label),
-            ("Layers:", self.layers_label),
-            ("Attention Heads:", self.heads_label),
-            ("Context Length:", self.ctx_label),
+            ("Parameters", "params"),
+            ("Embedding Dim", "dim"),
+            ("Layers", "layers"),
+            ("Attention Heads", "heads"),
+            ("Context Length", "ctx"),
+            ("System RAM", "ram"),
+            ("GPU VRAM", "vram"),
         ]
         
-        for i, (label, value_widget) in enumerate(specs):
-            lbl = QLabel(label)
-            lbl.setStyleSheet("color: #8b949e;")
-            value_widget.setStyleSheet("color: #ffffff; font-weight: bold;")
-            arch_layout.addWidget(lbl, i, 0)
-            arch_layout.addWidget(value_widget, i, 1)
+        for i, (label, key) in enumerate(specs):
+            row, col = i // 2, (i % 2) * 2
             
-        layout.addWidget(arch_group)
-        
-        # Hardware requirements
-        hw_group = QGroupBox(" Hardware Requirements")
-        hw_group.setStyleSheet(arch_group.styleSheet())
-        hw_layout = QGridLayout(hw_group)
-        
-        self.ram_label = QLabel("4 GB")
-        self.vram_label = QLabel("2 GB")
-        
-        hw_specs = [
-            ("System RAM:", self.ram_label),
-            ("GPU VRAM:", self.vram_label),
-        ]
-        
-        for i, (label, value_widget) in enumerate(hw_specs):
-            lbl = QLabel(label)
-            lbl.setStyleSheet("color: #8b949e;")
-            value_widget.setStyleSheet("color: #ffffff; font-weight: bold;")
-            hw_layout.addWidget(lbl, i, 0)
-            hw_layout.addWidget(value_widget, i, 1)
+            name_lbl = QLabel(label)
+            name_lbl.setStyleSheet("color: #8b949e; font-size: 12px;")
+            specs_grid.addWidget(name_lbl, row, col)
             
-        # RAM bar
-        self.ram_bar = QProgressBar()
-        self.ram_bar.setMaximum(100)
-        self.ram_bar.setValue(25)
-        self.ram_bar.setTextVisible(False)
-        self.ram_bar.setFixedHeight(8)
-        self.ram_bar.setStyleSheet("""
-            QProgressBar {
-                background: #30363d;
-                border-radius: 4px;
-            }
-            QProgressBar::chunk {
-                background: #69db7c;
-                border-radius: 4px;
-            }
-        """)
-        hw_layout.addWidget(QLabel("RAM Usage:"), 2, 0)
-        hw_layout.addWidget(self.ram_bar, 2, 1)
+            value_lbl = QLabel("-")
+            value_lbl.setStyleSheet("color: #ffffff; font-weight: bold; font-size: 12px;")
+            specs_grid.addWidget(value_lbl, row, col + 1)
+            self.spec_labels[key] = value_lbl
+            
+        right_layout.addWidget(specs_frame)
         
-        # VRAM bar
-        self.vram_bar = QProgressBar()
-        self.vram_bar.setMaximum(100)
-        self.vram_bar.setValue(15)
-        self.vram_bar.setTextVisible(False)
-        self.vram_bar.setFixedHeight(8)
-        self.vram_bar.setStyleSheet(self.ram_bar.styleSheet())
-        hw_layout.addWidget(QLabel("VRAM Usage:"), 3, 0)
-        hw_layout.addWidget(self.vram_bar, 3, 1)
+        # Progress bars
+        bars_frame = QFrame()
+        bars_frame.setStyleSheet("background: transparent; border: none;")
+        bars_layout = QHBoxLayout(bars_frame)
+        bars_layout.setContentsMargins(0, 0, 0, 0)
+        bars_layout.setSpacing(10)
         
-        layout.addWidget(hw_group)
+        for name, attr in [("RAM Usage", "ram_bar"), ("VRAM Usage", "vram_bar")]:
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            lbl = QLabel(name)
+            lbl.setStyleSheet("color: #8b949e; font-size: 11px;")
+            col.addWidget(lbl)
+            
+            bar = QProgressBar()
+            bar.setMaximum(100)
+            bar.setValue(25)
+            bar.setTextVisible(False)
+            bar.setFixedHeight(8)
+            bar.setStyleSheet("""
+                QProgressBar { background: #30363d; border-radius: 4px; }
+                QProgressBar::chunk { background: #69db7c; border-radius: 4px; }
+            """)
+            col.addWidget(bar)
+            setattr(self, attr, bar)
+            bars_layout.addLayout(col)
+            
+        right_layout.addWidget(bars_frame)
         
-        # Performance estimate
-        perf_group = QGroupBox(" Performance Estimate")
-        perf_group.setStyleSheet(arch_group.styleSheet())
-        perf_layout = QVBoxLayout(perf_group)
-        
+        # Performance
         self.perf_label = QLabel("~50 tokens/sec on RTX 3060")
         self.perf_label.setStyleSheet("color: #69db7c; font-size: 12px;")
-        perf_layout.addWidget(self.perf_label)
+        right_layout.addWidget(self.perf_label)
         
-        self.quality_label = QLabel("Good for: Conversations, basic tasks, learning")
+        self.quality_label = QLabel("Good for: Conversations, learning, prototyping")
         self.quality_label.setStyleSheet("color: #bac2de; font-size: 11px;")
-        self.quality_label.setWordWrap(True)
-        perf_layout.addWidget(self.quality_label)
+        right_layout.addWidget(self.quality_label)
         
-        layout.addWidget(perf_group)
+        right_layout.addStretch()
         
-        layout.addStretch()
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
         
-    def update_model(self, model: str):
-        spec = MODEL_SPECS.get(model, MODEL_SPECS['small'])
+        self.create_btn = QPushButton("Create Model")
+        self.create_btn.setStyleSheet("""
+            QPushButton {
+                background: #238636;
+                color: #ffffff;
+                border: none;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background: #2ea043; }
+        """)
+        self.create_btn.clicked.connect(self._create_model)
+        btn_layout.addWidget(self.create_btn)
+        
+        self.benchmark_btn = QPushButton("Benchmark")
+        self.benchmark_btn.setStyleSheet("""
+            QPushButton {
+                background: #30363d;
+                color: #ffffff;
+                border: 1px solid #484f58;
+                border-radius: 6px;
+                padding: 10px 20px;
+                font-size: 12px;
+            }
+            QPushButton:hover { background: #484f58; }
+        """)
+        self.benchmark_btn.clicked.connect(self._run_benchmark)
+        btn_layout.addWidget(self.benchmark_btn)
+        
+        btn_layout.addStretch()
+        right_layout.addLayout(btn_layout)
+        
+        layout.addWidget(right_frame, stretch=1)
+        
+        # Initial selection
+        self._select_model('small')
+        
+    def _on_card_clicked(self, model: str):
+        self._select_model(model)
+        
+    def _select_model(self, model: str):
+        # Update card selection
+        for name, card in self.model_cards.items():
+            card.set_selected(name == model)
+            
+        self.selected_model = model
+        spec = MODEL_SPECS[model]
         tier = spec['tier']
-        colors = TIER_COLORS[tier]
+        color = TIER_COLORS[tier]
         
-        self.header.setText(f"{spec['emoji']} {model.upper()}")
-        self.header.setStyleSheet(f"color: {colors[0]};")
+        # Update header
+        self.model_header.setText(model.upper())
+        self.model_header.setStyleSheet(f"color: {color};")
         
-        self.desc.setText(spec['desc'])
-        
-        self.tier_badge.setText(TIER_NAMES[tier])
+        self.tier_badge.setText(tier.capitalize())
         self.tier_badge.setStyleSheet(f"""
-            background: {colors[0]}33;
-            color: {colors[0]};
+            background: {color}33;
+            color: {color};
             padding: 6px 12px;
             border-radius: 6px;
             font-weight: bold;
+            font-size: 12px;
         """)
         
-        # Architecture
+        self.desc_label.setText(spec['desc'])
+        
+        # Update specs
         params = spec['params']
-        if params >= 1000:
-            self.params_label.setText(f"~{params/1000:.1f}B")
+        self.spec_labels['params'].setText(f"~{params/1000:.1f}B" if params >= 1000 else f"~{params}M")
+        self.spec_labels['dim'].setText(str(spec['dim']))
+        self.spec_labels['layers'].setText(str(spec['layers']))
+        self.spec_labels['heads'].setText(str(spec['heads']))
+        self.spec_labels['ctx'].setText(f"{spec['ctx']:,}")
+        
+        ram = spec['ram']
+        self.spec_labels['ram'].setText(f"{ram/1024:.0f} GB" if ram >= 1024 else f"{ram} MB")
+        
+        vram = spec['vram']
+        if vram == 0:
+            self.spec_labels['vram'].setText("CPU only")
         else:
-            self.params_label.setText(f"~{params}M")
-        self.dim_label.setText(str(spec['dim']))
-        self.layers_label.setText(str(spec['layers']))
-        self.heads_label.setText(str(spec['heads']))
-        self.ctx_label.setText(f"{spec['ctx']:,}")
+            self.spec_labels['vram'].setText(f"{vram/1024:.0f} GB" if vram >= 1024 else f"{vram} MB")
         
-        # Hardware
-        ram_mb = spec['ram']
-        vram_mb = spec['vram']
-        
-        if ram_mb >= 1024:
-            self.ram_label.setText(f"{ram_mb/1024:.0f} GB")
-        else:
-            self.ram_label.setText(f"{ram_mb} MB")
-            
-        if vram_mb == 0:
-            self.vram_label.setText("CPU only")
-        elif vram_mb >= 1024:
-            self.vram_label.setText(f"{vram_mb/1024:.0f} GB")
-        else:
-            self.vram_label.setText(f"{vram_mb} MB")
-        
-        # Bars (relative to 32GB RAM, 24GB VRAM as "normal high-end")
-        self.ram_bar.setValue(min(100, int(ram_mb / 327.68)))  # 32GB = 100%
-        self.vram_bar.setValue(min(100, int(vram_mb / 245.76)))  # 24GB = 100%
-        
-        # Color bars based on usage
-        ram_pct = ram_mb / 327.68
-        vram_pct = vram_mb / 245.76
+        # Update bars
+        ram_pct = min(100, int(ram / 327.68))
+        vram_pct = min(100, int(vram / 245.76))
+        self.ram_bar.setValue(ram_pct)
+        self.vram_bar.setValue(vram_pct)
         
         ram_color = '#69db7c' if ram_pct < 50 else '#ffd43b' if ram_pct < 80 else '#ff6b6b'
         vram_color = '#69db7c' if vram_pct < 50 else '#ffd43b' if vram_pct < 80 else '#ff6b6b'
@@ -443,325 +439,95 @@ class SpecsPanel(QFrame):
         """)
         
         # Performance estimates
-        perf_estimates = {
-            'nano': ('~200 tok/s on CPU', 'Testing, embedded demos'),
-            'micro': ('~150 tok/s on CPU', 'IoT responses, simple queries'),
-            'tiny': ('~100 tok/s on Pi 4', 'Edge AI, basic chat'),
-            'mini': ('~80 tok/s on mobile', 'Mobile apps, quick responses'),
-            'small': ('~50 tok/s on RTX 3060', 'Conversations, learning, prototyping'),
-            'medium': ('~35 tok/s on RTX 3060', 'Good conversations, reasoning'),
-            'base': ('~25 tok/s on RTX 3060', 'Quality responses, code help'),
-            'large': ('~15 tok/s on RTX 3080', 'High quality, complex tasks'),
-            'xl': ('~8 tok/s on RTX 4090', 'Excellent quality, research'),
-            'xxl': ('~4 tok/s on RTX 4090', 'Near-commercial quality'),
-            'huge': ('~2 tok/s on 2x 4090', 'Production-grade quality'),
-            'giant': ('~1 tok/s on A100', 'Commercial deployment'),
-            'colossal': ('~0.5 tok/s on 2x A100', 'Enterprise applications'),
-            'titan': ('~0.2 tok/s on cluster', 'State-of-the-art research'),
-            'omega': ('Research scale', 'Frontier capabilities'),
+        perf_map = {
+            'nano': ('~200 tok/s CPU', 'Testing, demos'),
+            'micro': ('~150 tok/s CPU', 'IoT, simple queries'),
+            'tiny': ('~100 tok/s Pi 4', 'Edge AI, basic chat'),
+            'mini': ('~80 tok/s mobile', 'Mobile apps'),
+            'small': ('~50 tok/s RTX 3060', 'Conversations, learning'),
+            'medium': ('~35 tok/s RTX 3060', 'Good conversations'),
+            'base': ('~25 tok/s RTX 3060', 'Quality responses'),
+            'large': ('~15 tok/s RTX 3080', 'Complex tasks'),
+            'xl': ('~8 tok/s RTX 4090', 'Excellent quality'),
+            'xxl': ('~4 tok/s RTX 4090', 'Near-commercial'),
+            'huge': ('~2 tok/s 2x 4090', 'Production-grade'),
+            'giant': ('~1 tok/s A100', 'Commercial'),
+            'colossal': ('~0.5 tok/s 2x A100', 'Enterprise'),
+            'titan': ('~0.2 tok/s cluster', 'SOTA research'),
+            'omega': ('Research scale', 'Frontier'),
         }
         
-        perf, quality = perf_estimates.get(model, ('Unknown', 'Unknown'))
+        perf, quality = perf_map.get(model, ('Unknown', 'Unknown'))
         self.perf_label.setText(perf)
         self.quality_label.setText(f"Good for: {quality}")
-
-
-class CompareWidget(QFrame):
-    """Side-by-side model comparison with more details."""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("""
-            QFrame {
-                background: #161b22;
-                border: 1px solid #30363d;
-                border-radius: 12px;
-            }
-        """)
-        self.setup_ui()
         
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(6)
+        self.model_changed.emit(model)
         
-        title = QLabel("Quick Compare")
-        title.setFont(QFont('Segoe UI', 14, FontBold))
-        title.setStyleSheet("color: #ffffff;")
-        layout.addWidget(title)
-        
-        # Comparison table header
-        header = QHBoxLayout()
-        header.setSpacing(8)
-        for col in ["Model", "Params", "Context", "RAM", "Speed"]:
-            lbl = QLabel(col)
-            lbl.setStyleSheet("color: #bac2de; font-weight: bold; font-size: 12px;")
-            lbl.setMinimumWidth(60)
-            header.addWidget(lbl, 1)
-        layout.addLayout(header)
-        
-        # More comprehensive comparison rows
-        comparisons = [
-            ('nano',   '1M',    '256',   '256MB',  ''),
-            ('micro',  '2M',    '384',   '512MB',  ''),
-            ('tiny',   '5M',    '512',   '1GB',    ''),
-            ('mini',   '10M',   '512',   '2GB',    ''),
-            ('small',  '27M',   '1K',    '4GB',    ''),
-            ('medium', '85M',   '2K',    '8GB',    ''),
-            ('base',   '125M',  '2K',    '12GB',   ''),
-            ('large',  '200M',  '4K',    '16GB',   ''),
-            ('xl',     '600M',  '4K',    '32GB',   ''),
-            ('xxl',    '1.5B',  '8K',    '64GB',   'Slow'),
-        ]
-        
-        self.compare_rows = []
-        for model, params, ctx, ram, speed in comparisons:
-            row = QHBoxLayout()
-            row.setSpacing(8)
-            
-            colors = TIER_COLORS[MODEL_SPECS[model]['tier']]
-            
-            name_lbl = QLabel(model.upper())
-            name_lbl.setStyleSheet(f"color: {colors[0]}; font-weight: bold; font-size: 12px;")
-            name_lbl.setMinimumWidth(60)
-            row.addWidget(name_lbl, 1)
-            
-            params_lbl = QLabel(params)
-            params_lbl.setStyleSheet("color: #ffffff; font-size: 12px;")
-            params_lbl.setMinimumWidth(60)
-            row.addWidget(params_lbl, 1)
-            
-            ctx_lbl = QLabel(ctx)
-            ctx_lbl.setStyleSheet("color: #bac2de; font-size: 12px;")
-            ctx_lbl.setMinimumWidth(60)
-            row.addWidget(ctx_lbl, 1)
-            
-            ram_lbl = QLabel(ram)
-            ram_lbl.setStyleSheet("color: #74c0fc; font-size: 12px;")
-            ram_lbl.setMinimumWidth(60)
-            row.addWidget(ram_lbl, 1)
-            
-            speed_lbl = QLabel(speed)
-            speed_lbl.setStyleSheet("font-size: 12px;")
-            speed_lbl.setMinimumWidth(60)
-            row.addWidget(speed_lbl, 1)
-            
-            layout.addLayout(row)
-            self.compare_rows.append((model, row))
-        
-        layout.addStretch()
-
-
-class ScalingTab(QWidget):
-    """Complete model scaling interface."""
-    
-    model_changed = pyqtSignal(str)
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.main_window = parent  # Reference to EnhancedMainWindow
-        self.selected_model = 'small'
-        self.setup_ui()
-        
-    def setup_ui(self):
-        layout = QHBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(15, 15, 15, 15)
-        
-        # Left side - Pyramid visualization (takes more space)
-        left_panel = QVBoxLayout()
-        left_panel.setSpacing(10)
-        
-        self.pyramid = PyramidWidget()
-        self.pyramid.model_clicked.connect(self.on_model_selected)
-        left_panel.addWidget(self.pyramid, stretch=2)  # Pyramid gets more space
-        
-        # Quick compare below pyramid (scales with window)
-        self.compare = CompareWidget()
-        left_panel.addWidget(self.compare, stretch=1)
-        
-        layout.addLayout(left_panel, stretch=2)
-        
-        # Right side - Specs and actions
-        right_panel = QVBoxLayout()
-        right_panel.setSpacing(10)
-        
-        self.specs = SpecsPanel()
-        right_panel.addWidget(self.specs, stretch=1)
-        
-        # Action buttons
-        btn_layout = QHBoxLayout()
-        
-        self.create_btn = QPushButton("Create This Model")
-        self.create_btn.setToolTip("Create a new model with selected configuration")
-        self.create_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #69db7c, stop:1 #51cf66);
-                color: #1e1e2e;
-                border: none;
-                border-radius: 8px;
-                padding: 15px 25px;
-                font-size: 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #8ce99a, stop:1 #69db7c);
-            }
-        """)
-        self.create_btn.clicked.connect(self.create_model)
-        btn_layout.addWidget(self.create_btn)
-        
-        self.benchmark_btn = QPushButton("Benchmark")
-        self.benchmark_btn.setToolTip("Run performance benchmark on selected model")
-        self.benchmark_btn.setStyleSheet("""
-            QPushButton {
-                background: #30363d;
-                color: #ffffff;
-                border: 1px solid #484f58;
-                border-radius: 8px;
-                padding: 15px 20px;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: #484f58;
-            }
-        """)
-        self.benchmark_btn.clicked.connect(self.run_benchmark)
-        btn_layout.addWidget(self.benchmark_btn)
-        
-        right_panel.addLayout(btn_layout)
-        
-        layout.addLayout(right_panel, stretch=1)
-        
-        # Initial update
-        self.specs.update_model('small')
-        
-    def on_model_selected(self, model: str):
-        self.selected_model = model
-        self.specs.update_model(model)
-        
-    def create_model(self):
+    def _create_model(self):
         model = self.selected_model
         spec = MODEL_SPECS[model]
         
         params_str = f"{spec['params']/1000:.1f}B" if spec['params'] >= 1000 else f"{spec['params']}M"
         ram_str = f"{spec['ram']/1024:.1f}GB" if spec['ram'] >= 1024 else f"{spec['ram']}MB"
-        vram_str = f"{spec['vram']/1024:.1f}GB" if spec['vram'] >= 1024 else "CPU only" if spec['vram'] == 0 else f"{spec['vram']}MB"
         
-        # Get model name from user
         from PyQt5.QtWidgets import QInputDialog
         name, ok = QInputDialog.getText(
             self,
             f"Create {model.upper()} Model",
-            f"Enter a name for your new {model.upper()} model:\n\n"
+            f"Enter name for your {model.upper()} model:\n\n"
             f"Parameters: ~{params_str}\n"
-            f"RAM Required: {ram_str}\n"
-            f"VRAM Required: {vram_str}",
+            f"RAM Required: {ram_str}",
             text=f"my_{model}_model"
         )
         
         if ok and name:
-            # Clean up the name
             name = name.strip().replace(' ', '_')
             
-            # Check if we have access to the registry
             if self.main_window and hasattr(self.main_window, 'registry'):
                 try:
-                    self.main_window.registry.create_model(
-                        name,
-                        size=model,
-                        vocab_size=32000
-                    )
-                    
-                    # Emit signal for any listeners
-                    self.model_changed.emit(model)
-                    
-                    # Update window title and load the model
+                    self.main_window.registry.create_model(name, size=model, vocab_size=32000)
                     self.main_window.current_model_name = name
                     self.main_window.setWindowTitle(f"ForgeAI - {name}")
                     
-                    # Update model status button if exists
                     if hasattr(self.main_window, 'model_status_btn'):
                         self.main_window.model_status_btn.setText(f"Model: {name}  v")
                     
-                    QMessageBox.information(
-                        self,
-                        "Model Created",
+                    QMessageBox.information(self, "Model Created", 
                         f"{model.upper()} model '{name}' created!\n\n"
-                        "Next steps:\n"
-                        "1. Go to the Train tab\n"
-                        "2. Add your training data\n"
-                        "3. Start training"
-                    )
+                        "Next: Go to Train tab to add data and train.")
                 except Exception as e:
-                    QMessageBox.warning(
-                        self,
-                        "Error Creating Model",
-                        f"Failed to create model: {e}"
-                    )
+                    QMessageBox.warning(self, "Error", f"Failed to create model: {e}")
             else:
-                QMessageBox.warning(
-                    self,
-                    "No Registry",
-                    "Model registry not available.\n"
-                    "Please restart the application."
-                )
-            
-    def run_benchmark(self):
-        """Run performance benchmark on selected model size."""
+                QMessageBox.warning(self, "No Registry", "Model registry not available.")
+                
+    def _run_benchmark(self):
         model = self.selected_model
         
-        # Ask for confirmation
         reply = QMessageBox.question(
-            self,
-            "Run Benchmark",
-            f"Run benchmark for {model.upper()} model?\n\n"
-            "This will:\n"
-            "- Test forward pass speed\n"
-            "- Test generation speed\n"
-            "- Check memory usage\n\n"
-            "This may take a few minutes.",
+            self, "Run Benchmark",
+            f"Benchmark {model.upper()} model?\n\nThis tests forward pass, generation speed, and memory.",
             QMessageBox.Yes | QMessageBox.No
         )
         
         if reply != QMessageBox.Yes:
             return
-        
+            
         try:
             import torch
             import time
             from forge_ai.core.model import create_model
-            from forge_ai.core.model_config import get_model_config
             
-            # Setup device
-            if torch.cuda.is_available():
-                device = torch.device("cuda")
-                device_name = torch.cuda.get_device_name(0)
-            else:
-                device = torch.device("cpu")
-                device_name = "CPU"
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
             
-            # Create progress dialog
             from PyQt5.QtWidgets import QProgressDialog
-            from PyQt5.QtCore import Qt
             progress = QProgressDialog("Running benchmark...", "Cancel", 0, 100, self)
             progress.setWindowModality(Qt.WindowModal)
-            progress.setWindowTitle("Benchmark")
             progress.show()
             
-            results = []
-            results.append(f"Device: {device_name}")
-            results.append(f"Model: {model.upper()}")
-            results.append("-" * 40)
+            results = [f"Device: {device_name}", f"Model: {model.upper()}", "-" * 40]
             
             progress.setValue(10)
-            progress.setLabelText("Creating model...")
-            
-            # Create model
-            config = get_model_config(model)
             test_model = create_model(size=model, vocab_size=32000)
             test_model.to(device)
             test_model.eval()
@@ -770,13 +536,9 @@ class ScalingTab(QWidget):
             results.append(f"Parameters: {params:,}")
             
             progress.setValue(30)
-            progress.setLabelText("Testing forward pass...")
-            
-            # Benchmark forward pass
             seq_len = 128
             input_ids = torch.randint(0, 32000, (1, seq_len), device=device)
             
-            # Warmup
             with torch.no_grad():
                 for _ in range(3):
                     _ = test_model(input_ids, use_cache=False)
@@ -784,7 +546,6 @@ class ScalingTab(QWidget):
             if device.type == "cuda":
                 torch.cuda.synchronize()
             
-            # Measure
             times = []
             with torch.no_grad():
                 for _ in range(5):
@@ -794,64 +555,15 @@ class ScalingTab(QWidget):
                         torch.cuda.synchronize()
                     times.append(time.perf_counter() - start)
             
-            avg_forward = sum(times) / len(times)
-            tokens_per_sec = seq_len / avg_forward
-            results.append(f"\nForward Pass ({seq_len} tokens):")
-            results.append(f"  Time: {avg_forward*1000:.1f} ms")
-            results.append(f"  Speed: {tokens_per_sec:.0f} tokens/sec")
+            avg = sum(times) / len(times)
+            results.append(f"\nForward: {avg*1000:.1f}ms, {seq_len/avg:.0f} tok/s")
             
-            progress.setValue(60)
-            progress.setLabelText("Testing generation...")
-            
-            # Benchmark generation
-            gen_len = 20
-            gen_input = torch.randint(0, 32000, (1, 10), device=device)
-            
-            # Warmup
-            with torch.no_grad():
-                for _ in range(2):
-                    _ = test_model.generate(gen_input.clone(), max_new_tokens=gen_len, use_cache=True)
+            progress.setValue(70)
             
             if device.type == "cuda":
-                torch.cuda.synchronize()
+                mem = torch.cuda.memory_allocated() / 1024**2
+                results.append(f"GPU Memory: {mem:.0f} MB")
             
-            # Measure
-            times = []
-            with torch.no_grad():
-                for _ in range(3):
-                    start = time.perf_counter()
-                    _ = test_model.generate(gen_input.clone(), max_new_tokens=gen_len, use_cache=True)
-                    if device.type == "cuda":
-                        torch.cuda.synchronize()
-                    times.append(time.perf_counter() - start)
-            
-            avg_gen = sum(times) / len(times)
-            gen_tokens_per_sec = gen_len / avg_gen
-            results.append(f"\nGeneration ({gen_len} tokens):")
-            results.append(f"  Time: {avg_gen*1000:.1f} ms")
-            results.append(f"  Speed: {gen_tokens_per_sec:.1f} tokens/sec")
-            results.append(f"  Per token: {(avg_gen/gen_len)*1000:.1f} ms")
-            
-            progress.setValue(80)
-            progress.setLabelText("Checking memory...")
-            
-            # Memory usage
-            results.append(f"\nMemory Usage:")
-            if device.type == "cuda":
-                mem_alloc = torch.cuda.memory_allocated() / 1024**2
-                mem_reserved = torch.cuda.memory_reserved() / 1024**2
-                results.append(f"  GPU Allocated: {mem_alloc:.0f} MB")
-                results.append(f"  GPU Reserved: {mem_reserved:.0f} MB")
-            else:
-                try:
-                    import psutil
-                    process = psutil.Process()
-                    ram = process.memory_info().rss / 1024**2
-                    results.append(f"  RAM Used: {ram:.0f} MB")
-                except:
-                    results.append("  RAM: Unable to measure")
-            
-            # Cleanup
             del test_model
             if device.type == "cuda":
                 torch.cuda.empty_cache()
@@ -859,20 +571,10 @@ class ScalingTab(QWidget):
             progress.setValue(100)
             progress.close()
             
-            # Show results
-            QMessageBox.information(
-                self,
-                "Benchmark Results",
-                "\n".join(results)
-            )
+            QMessageBox.information(self, "Benchmark Results", "\n".join(results))
             
         except Exception as e:
-            progress.close() if 'progress' in dir() else None
-            QMessageBox.warning(
-                self,
-                "Benchmark Error",
-                f"Benchmark failed: {e}"
-            )
+            QMessageBox.warning(self, "Benchmark Error", f"Failed: {e}")
 
 
 def create_scaling_tab(window) -> QWidget:

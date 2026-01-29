@@ -246,7 +246,7 @@ class QuickSettingsPanel(QWidget):
         group.setStyleSheet(PANEL_STYLE)
         
         layout = QVBoxLayout(group)
-        layout.setSpacing(12)
+        layout.setSpacing(8)
         
         # Max tokens
         tokens_layout = QHBoxLayout()
@@ -448,7 +448,7 @@ class ResourceMonitor(QWidget):
         """Set up the UI."""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(12)
+        layout.setSpacing(8)
         
         # CPU
         self.cpu_label = QLabel("CPU: --%")

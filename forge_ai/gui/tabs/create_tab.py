@@ -69,8 +69,8 @@ def create_create_tab(parent):
     # Main widget
     widget = QWidget()
     layout = QVBoxLayout(widget)
-    layout.setContentsMargins(16, 16, 16, 16)
-    layout.setSpacing(12)
+    layout.setContentsMargins(8, 8, 8, 8)
+    layout.setSpacing(8)
     
     # Header
     header = QLabel("Create Content")
@@ -181,7 +181,7 @@ class CreateTab(QWidget):
     def _setup_ui(self):
         """Set up the UI."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(8, 8, 8, 8)
         
         # For now, just use the function-based approach
         # This class can be expanded later if needed

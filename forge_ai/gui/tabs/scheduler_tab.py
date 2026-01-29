@@ -464,57 +464,68 @@ class SchedulerTab(QWidget):
             self._refresh_table()
     
     def _run_task(self, task: dict):
-        """Run a task immediately."""
+        """Run a task immediately (in background thread)."""
         self._add_history(task["name"], "Running...")
         
-        task_type = task.get("type", "")
-        action = task.get("action", "")
+        # Run task in background thread to prevent UI freeze
+        import threading
+        def do_task():
+            task_type = task.get("type", "")
+            action = task.get("action", "")
+            
+            try:
+                if task_type == "Run Command":
+                    import subprocess
+                    result = subprocess.run(action, shell=True, capture_output=True, text=True, timeout=30)
+                    output = result.stdout or result.stderr or "Completed"
+                    status = "Success" if result.returncode == 0 else "Failed"
+                
+                elif task_type == "Send Message":
+                    # Would integrate with chat here
+                    output = f"Message sent: {action[:50]}..."
+                    status = "Success"
+                
+                elif task_type == "Backup Models":
+                    output = "Backup not yet implemented"
+                    status = "Skipped"
+                
+                elif task_type == "Clear Cache":
+                    import shutil
+                    cache_dir = Path.home() / ".forge_ai" / "cache"
+                    if cache_dir.exists():
+                        shutil.rmtree(cache_dir)
+                        cache_dir.mkdir()
+                    output = "Cache cleared"
+                    status = "Success"
+                
+                elif task_type == "Export Logs":
+                    output = "Log export not yet implemented"
+                    status = "Skipped"
+                
+                else:
+                    output = f"Unknown task type: {task_type}"
+                    status = "Failed"
+                
+                # Update task on main thread
+                from PyQt5.QtCore import QTimer
+                def update_ui():
+                    for t in self.tasks:
+                        if t.get("id") == task.get("id"):
+                            t["last_run"] = datetime.now().isoformat()
+                            t["run_count"] = t.get("run_count", 0) + 1
+                    
+                    self._save_tasks()
+                    self._refresh_table()
+                    self._update_history(task["name"], status, output)
+                
+                QTimer.singleShot(0, update_ui)
+                
+            except Exception as e:
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self._update_history(task["name"], "Error", str(e)))
         
-        try:
-            if task_type == "Run Command":
-                import subprocess
-                result = subprocess.run(action, shell=True, capture_output=True, text=True, timeout=30)
-                output = result.stdout or result.stderr or "Completed"
-                status = "Success" if result.returncode == 0 else "Failed"
-            
-            elif task_type == "Send Message":
-                # Would integrate with chat here
-                output = f"Message sent: {action[:50]}..."
-                status = "Success"
-            
-            elif task_type == "Backup Models":
-                output = "Backup not yet implemented"
-                status = "Skipped"
-            
-            elif task_type == "Clear Cache":
-                import shutil
-                cache_dir = Path.home() / ".forge_ai" / "cache"
-                if cache_dir.exists():
-                    shutil.rmtree(cache_dir)
-                    cache_dir.mkdir()
-                output = "Cache cleared"
-                status = "Success"
-            
-            elif task_type == "Export Logs":
-                output = "Log export not yet implemented"
-                status = "Skipped"
-            
-            else:
-                output = f"Unknown task type: {task_type}"
-                status = "Failed"
-            
-            # Update task
-            for t in self.tasks:
-                if t.get("id") == task.get("id"):
-                    t["last_run"] = datetime.now().isoformat()
-                    t["run_count"] = t.get("run_count", 0) + 1
-            
-            self._save_tasks()
-            self._refresh_table()
-            self._update_history(task["name"], status, output)
-            
-        except Exception as e:
-            self._update_history(task["name"], "Error", str(e))
+        thread = threading.Thread(target=do_task, daemon=True)
+        thread.start()
     
     def _add_history(self, task_name: str, status: str):
         """Add entry to history table."""

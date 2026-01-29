@@ -104,74 +104,133 @@ class VoiceGenerationWorker(QThread):
         """AI-driven voice generation from personality description."""
         desc_lower = description.lower()
         
-        # AI analyzes personality traits from description
+        # AI analyzes personality traits from description - expanded trait detection
         traits = {
-            "confident": any(w in desc_lower for w in ["confident", "bold", "assertive", "leader", "powerful"]),
-            "playful": any(w in desc_lower for w in ["playful", "fun", "cheerful", "happy", "energetic", "bubbly"]),
-            "calm": any(w in desc_lower for w in ["calm", "peaceful", "serene", "gentle", "soft", "soothing"]),
-            "mysterious": any(w in desc_lower for w in ["mysterious", "dark", "enigmatic", "cryptic", "shadowy"]),
-            "wise": any(w in desc_lower for w in ["wise", "old", "ancient", "mentor", "sage", "knowledgeable"]),
-            "robotic": any(w in desc_lower for w in ["robot", "ai", "machine", "synthetic", "digital", "electronic"]),
-            "sarcastic": any(w in desc_lower for w in ["sarcastic", "witty", "sardonic", "dry", "ironic"]),
-            "nervous": any(w in desc_lower for w in ["nervous", "anxious", "worried", "timid", "shy"]),
-            "deep": any(w in desc_lower for w in ["deep", "bass", "low", "baritone"]),
-            "high": any(w in desc_lower for w in ["high", "squeaky", "shrill", "soprano"]),
-            "fast": any(w in desc_lower for w in ["fast", "quick", "rapid", "speedy"]),
-            "slow": any(w in desc_lower for w in ["slow", "deliberate", "measured", "thoughtful"]),
+            # Confidence/Power traits
+            "confident": any(w in desc_lower for w in ["confident", "bold", "assertive", "leader", "powerful", "commanding", "authoritative", "strong"]),
+            "villain": any(w in desc_lower for w in ["villain", "evil", "sinister", "menacing", "dark lord", "malice", "wicked"]),
+            
+            # Mood traits
+            "playful": any(w in desc_lower for w in ["playful", "fun", "cheerful", "happy", "energetic", "bubbly", "enthusiastic", "upbeat"]),
+            "calm": any(w in desc_lower for w in ["calm", "peaceful", "serene", "gentle", "soft", "soothing", "relaxed", "tranquil"]),
+            "mysterious": any(w in desc_lower for w in ["mysterious", "dark", "enigmatic", "cryptic", "shadowy", "ethereal"]),
+            "nervous": any(w in desc_lower for w in ["nervous", "anxious", "worried", "timid", "shy", "uncertain", "hesitant"]),
+            "sarcastic": any(w in desc_lower for w in ["sarcastic", "witty", "sardonic", "dry", "ironic", "cynical"]),
+            
+            # Character types
+            "wise": any(w in desc_lower for w in ["wise", "old", "ancient", "mentor", "sage", "knowledgeable", "elder", "scholarly"]),
+            "robotic": any(w in desc_lower for w in ["robot", "ai", "machine", "synthetic", "digital", "electronic", "android", "cyborg", "monotone"]),
+            "british": any(w in desc_lower for w in ["british", "butler", "refined", "proper", "distinguished", "posh", "elegant"]),
+            "pirate": any(w in desc_lower for w in ["pirate", "gruff", "rowdy", "sailor", "captain", "seafarer"]),
+            "anime": any(w in desc_lower for w in ["anime", "hero", "protagonist", "determined", "shonen", "enthusiastic hero"]),
+            "narrator": any(w in desc_lower for w in ["narrator", "documentary", "professional", "announcer", "broadcaster"]),
+            "child": any(w in desc_lower for w in ["child", "young", "innocent", "wonder", "curious", "kid", "youthful"]),
+            
+            # Voice characteristics
+            "deep": any(w in desc_lower for w in ["deep", "bass", "low", "baritone", "rumbling", "gravelly"]),
+            "high": any(w in desc_lower for w in ["high", "squeaky", "shrill", "soprano", "pitched", "light"]),
+            "fast": any(w in desc_lower for w in ["fast", "quick", "rapid", "speedy", "hyperactive"]),
+            "slow": any(w in desc_lower for w in ["slow", "deliberate", "measured", "thoughtful", "ponderous"]),
+            "echo": any(w in desc_lower for w in ["echo", "reverb", "ethereal", "ghostly", "spectral"]),
         }
         
-        # Calculate voice parameters based on traits
+        # Calculate voice parameters based on traits - more sophisticated mapping
         pitch = 1.0
         speed = 1.0
         volume = 0.85
         effects = []
         
-        # Pitch adjustments
+        # ===== PITCH ADJUSTMENTS =====
+        # Deep voices
         if traits["deep"]:
             pitch -= 0.25
-        if traits["high"]:
-            pitch += 0.25
+        if traits["villain"]:
+            pitch -= 0.2
+        if traits["narrator"]:
+            pitch -= 0.15
+        if traits["pirate"]:
+            pitch -= 0.15
         if traits["confident"]:
             pitch -= 0.1
-        if traits["nervous"]:
-            pitch += 0.15
         if traits["wise"]:
             pitch -= 0.15
+            
+        # High voices
+        if traits["high"]:
+            pitch += 0.3
+        if traits["child"]:
+            pitch += 0.25
+        if traits["nervous"]:
+            pitch += 0.15
         if traits["playful"]:
             pitch += 0.1
+        if traits["anime"]:
+            pitch += 0.1
         
-        # Speed adjustments
+        # ===== SPEED ADJUSTMENTS =====
+        # Fast speech
         if traits["fast"]:
             speed += 0.3
-        if traits["slow"]:
-            speed -= 0.2
         if traits["nervous"]:
+            speed += 0.2
+        if traits["anime"]:
             speed += 0.15
+        if traits["playful"]:
+            speed += 0.1
+            
+        # Slow speech
+        if traits["slow"]:
+            speed -= 0.25
+        if traits["villain"]:
+            speed -= 0.2
+        if traits["wise"]:
+            speed -= 0.2
         if traits["calm"]:
             speed -= 0.1
-        if traits["wise"]:
-            speed -= 0.15
+        if traits["narrator"]:
+            speed -= 0.1
+        if traits["british"]:
+            speed -= 0.05
+        if traits["mysterious"]:
+            speed -= 0.1
         
-        # Volume adjustments
+        # ===== VOLUME ADJUSTMENTS =====
         if traits["confident"]:
             volume = 0.95
+        if traits["villain"]:
+            volume = 0.9
+        if traits["narrator"]:
+            volume = 0.92
+        if traits["pirate"]:
+            volume = 0.95
+        if traits["anime"]:
+            volume = 0.93
         if traits["calm"]:
             volume = 0.75
         if traits["mysterious"]:
+            volume = 0.72
+        if traits["nervous"]:
             volume = 0.7
+        if traits["child"]:
+            volume = 0.8
         
-        # Effects
+        # ===== EFFECTS =====
         if traits["robotic"]:
             effects.append("robotic")
-        if traits["mysterious"]:
+        if traits["mysterious"] or traits["echo"]:
             effects.append("echo")
+        if traits["villain"]:
+            effects.append("reverb")
         
-        # Clamp values
+        # Clamp values to valid ranges
         pitch = max(0.5, min(1.5, pitch))
-        speed = max(0.6, min(1.5, speed))
+        speed = max(0.5, min(1.6, speed))
         volume = max(0.5, min(1.0, volume))
         
-        # Create profile
+        # Create profile with enhanced description
+        detected_traits = [k for k, v in traits.items() if v]
+        trait_str = ", ".join(detected_traits[:5]) if detected_traits else "neutral"
+        
         profile = VoiceProfile(
             name=name,
             pitch=pitch,
@@ -179,7 +238,7 @@ class VoiceGenerationWorker(QThread):
             volume=volume,
             voice=base_voice,
             effects=effects,
-            description=f"AI-generated voice: {description[:100]}"
+            description=f"AI-generated ({trait_str}): {description[:80]}"
         )
         profile.save()
         
@@ -271,11 +330,11 @@ class VoiceCloneTab(QWidget):
         """Create the voice cloning from audio tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
+        layout.setSpacing(10)
         
         # Instructions
         info = QLabel(
-            "Upload 3-10 audio clips of a voice to clone. Each clip should be:\n"
+            "Upload 3-10 audio clips of a voice to clone (.mp3, .wav, .ogg, .flac, .m4a). Each clip should be:\n"
             "• 3-30 seconds long\n"
             "• Clear speech (no background music/noise)\n"
             "• Single speaker only"
@@ -346,7 +405,7 @@ class VoiceCloneTab(QWidget):
         """Create the AI voice generation tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
+        layout.setSpacing(10)
         
         # Instructions
         info = QLabel(
@@ -407,7 +466,7 @@ class VoiceCloneTab(QWidget):
         gen_btn.clicked.connect(self._on_generate_ai_voice)
         layout.addWidget(gen_btn)
         
-        # Quick presets
+        # Quick presets - expanded with more options
         presets_group = QGroupBox("Quick Personality Presets")
         presets_layout = QGridLayout(presets_group)
         
@@ -418,11 +477,18 @@ class VoiceCloneTab(QWidget):
             ("Energetic", "A hyperactive, fast-talking character full of energy and excitement."),
             ("Mysterious", "A dark, mysterious entity with a deep, echoing voice."),
             ("Nervous", "A timid, nervous character who speaks quickly and with uncertainty."),
+            ("British Butler", "A refined, proper British butler with a calm, distinguished voice. Speaks precisely and politely."),
+            ("Pirate", "A gruff, rowdy pirate with a deep voice. Speaks with bold confidence and adventure."),
+            ("Villain", "A sinister, menacing villain with a deep, slow voice dripping with malice."),
+            ("Anime Hero", "An enthusiastic anime protagonist who speaks with determination and high energy."),
+            ("Narrator", "A professional documentary narrator with a deep, authoritative voice."),
+            ("Child-like", "A young, innocent voice that speaks with wonder and curiosity. High-pitched and playful."),
         ]
         
         for i, (label, desc) in enumerate(presets):
             btn = QPushButton(label)
             btn.setStyleSheet("padding: 8px;")
+            btn.setToolTip(desc[:80] + "..." if len(desc) > 80 else desc)
             btn.clicked.connect(lambda checked, d=desc: self.personality_input.setPlainText(d))
             presets_layout.addWidget(btn, i // 3, i % 3)
         
@@ -435,7 +501,7 @@ class VoiceCloneTab(QWidget):
         """Create the voice profiles management tab."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
+        layout.setSpacing(10)
         
         # Profile list
         list_group = QGroupBox("Saved Voice Profiles")
@@ -742,7 +808,7 @@ class VoiceCloneTab(QWidget):
         self.status_label.setText(f"Profile '{self.current_profile.name}' saved!")
     
     def _on_preview_voice(self):
-        """Preview the selected voice."""
+        """Preview the selected voice (runs in background thread)."""
         if not self.current_profile:
             QMessageBox.warning(self, "No Profile", "Select a profile first")
             return
@@ -751,12 +817,32 @@ class VoiceCloneTab(QWidget):
         if not text:
             text = "Hello! This is a voice preview test."
         
-        try:
-            engine = get_engine()
-            engine.set_profile(self.current_profile)
-            engine.speak(text)
-        except Exception as e:
-            QMessageBox.warning(self, "TTS Error", f"Could not preview voice: {e}")
+        # Run in background thread to prevent UI freeze
+        self.status_label.setText("Generating preview...")
+        
+        import threading
+        def do_preview():
+            try:
+                engine = get_engine()
+                engine.set_profile(self.current_profile)
+                engine.speak(text)
+                # Update status on main thread
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self.status_label, "setText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, "Preview complete!")
+                )
+            except Exception as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self.status_label, "setText",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"Preview error: {e}")
+                )
+        
+        thread = threading.Thread(target=do_preview, daemon=True)
+        thread.start()
     
     def _on_apply_to_avatar(self):
         """Apply voice to current avatar."""

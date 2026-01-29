@@ -110,8 +110,8 @@ class DevicesTab(QWidget):
     
     def _setup_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(16)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(10)
         
         # Left panel - Device list
         left_panel = QVBoxLayout()
@@ -456,7 +456,7 @@ class DevicesTab(QWidget):
         self._refresh_devices()
     
     def _test_selected_device(self):
-        """Test connection to selected device."""
+        """Test connection to selected device (runs in background)."""
         if not self._selected_device:
             return
         
@@ -468,25 +468,44 @@ class DevicesTab(QWidget):
             QMessageBox.warning(self, "Error", "No address for device")
             return
         
-        try:
-            from ..comms.remote_client import RemoteClient
-            
-            client = RemoteClient(address, port)
-            result = client.health_check()
-            
-            if result:
-                QMessageBox.information(
-                    self, "Success",
-                    f"Connection to {address}:{port} successful!"
-                )
-            else:
-                QMessageBox.warning(
-                    self, "Failed",
-                    f"Connection to {address}:{port} failed"
-                )
+        self.test_btn.setEnabled(False)
+        self.test_btn.setText("Testing...")
+        
+        # Run network test in background thread
+        import threading
+        def do_test():
+            try:
+                from ..comms.remote_client import RemoteClient
                 
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Test failed: {e}")
+                client = RemoteClient(address, port)
+                result = client.health_check()
+                
+                from PyQt5.QtCore import QTimer
+                def show_result():
+                    self.test_btn.setEnabled(True)
+                    self.test_btn.setText("Test Connection")
+                    if result:
+                        QMessageBox.information(
+                            self, "Success",
+                            f"Connection to {address}:{port} successful!"
+                        )
+                    else:
+                        QMessageBox.warning(
+                            self, "Failed",
+                            f"Connection to {address}:{port} failed"
+                        )
+                QTimer.singleShot(0, show_result)
+                    
+            except Exception as e:
+                from PyQt5.QtCore import QTimer
+                def show_error():
+                    self.test_btn.setEnabled(True)
+                    self.test_btn.setText("Test Connection")
+                    QMessageBox.warning(self, "Error", f"Test failed: {e}")
+                QTimer.singleShot(0, show_error)
+        
+        thread = threading.Thread(target=do_test, daemon=True)
+        thread.start()
     
     def _remove_selected_device(self):
         """Remove selected device."""

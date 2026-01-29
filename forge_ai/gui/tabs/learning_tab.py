@@ -46,8 +46,8 @@ class LearningTab(QWidget):
     def init_ui(self):
         """Initialize the UI components."""
         layout = QVBoxLayout()
-        layout.setSpacing(12)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         # Header
         header = QLabel("Self-Improvement System")

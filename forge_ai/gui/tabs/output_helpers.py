@@ -53,11 +53,19 @@ def open_folder(folder_path: Union[str, Path]) -> None:
     if not folder.exists():
         folder.mkdir(parents=True, exist_ok=True)
     
-    # Use Qt's cross-platform folder opening (internal, no external tools)
-    if HAS_PYQT:
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
-    elif sys.platform == 'win32':
+    # Use platform-specific methods for reliability
+    if sys.platform == 'win32':
         os.startfile(str(folder))  # type: ignore[attr-defined]
+    elif sys.platform == 'darwin':
+        import subprocess
+        subprocess.run(['open', str(folder)])
+    else:
+        # Linux/other - try Qt first, then xdg-open
+        if HAS_PYQT:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        else:
+            import subprocess
+            subprocess.run(['xdg-open', str(folder)])
 
 
 def create_auto_open_options(parent: Any) -> Tuple[Any, Any, Any]:

@@ -331,7 +331,7 @@ class HelpWindow(QWidget):
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setContentsMargins(10, 10, 10, 10)
         
         # Title
         title = QLabel("ForgeAI Help")
@@ -496,8 +496,8 @@ class QuickCommandOverlay(QWidget):
         """)
         
         frame_layout = QVBoxLayout(self.frame)
-        frame_layout.setContentsMargins(15, 8, 15, 10)
-        frame_layout.setSpacing(6)
+        frame_layout.setContentsMargins(10, 6, 10, 8)
+        frame_layout.setSpacing(4)
         
         # Header widget for dragging (like a window title bar)
         self._header_widget = QFrame()
@@ -1086,8 +1086,8 @@ class QuickCommandOverlay(QWidget):
         """)
         
         layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
         
         # Title
         title = QLabel("Close Options")
@@ -2916,11 +2916,12 @@ class ForgeSystemTray(QObject):
 
 # Global reference to track tray instances for cleanup
 _tray_instances = []
+_tray_created = False  # Track if we already created a tray this session
 
 
 def create_system_tray(app, main_window=None):
     """Create and return the system tray instance with proper cleanup registration."""
-    global _tray_instances
+    global _tray_instances, _tray_created
     
     if not HAS_PYQT:
         return None
@@ -2929,18 +2930,27 @@ def create_system_tray(app, main_window=None):
         logger.warning("System tray not available on this system")
         return None
     
+    # Only create one tray per session
+    if _tray_created and _tray_instances:
+        return _tray_instances[-1]
+    
+    # Clean up any leftover instances first
+    cleanup_all_system_trays()
+    
     tray = ForgeSystemTray(app, main_window)
     _tray_instances.append(tray)
+    _tray_created = True
     
     # Register cleanup on app quit
     def cleanup_all_trays():
-        global _tray_instances
+        global _tray_instances, _tray_created
         for instance in _tray_instances:
             try:
                 instance.cleanup()
             except Exception:
                 pass
         _tray_instances.clear()
+        _tray_created = False
     
     app.aboutToQuit.connect(cleanup_all_trays)
     

@@ -1667,7 +1667,7 @@ class CodeGenLocalModule(GenerationModule):
         requires=["model", "tokenizer", "inference"],  # Needs the full local stack
         provides=["code_generation"],
         config_schema={
-            "model_name": {"type": "string", "default": "sacrifice"},
+            "model_name": {"type": "string", "default": None},
             "temperature": {"type": "float", "min": 0.1, "max": 1.5, "default": 0.3},
         },
     )
@@ -1676,7 +1676,7 @@ class CodeGenLocalModule(GenerationModule):
         """Load the local code generation model."""
         try:
             from forge_ai.gui.tabs.code_tab import ForgeCode
-            self._addon = ForgeCode(model_name=self.config.get('model_name', 'sacrifice'))
+            self._addon = ForgeCode(model_name=self.config.get('model_name') or 'small_forge_ai')
             return self._addon.load()
         except Exception as e:
             logger.warning(f"Could not load local code gen: {e}")

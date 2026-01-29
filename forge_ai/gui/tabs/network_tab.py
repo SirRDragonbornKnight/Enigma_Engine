@@ -624,37 +624,53 @@ class NetworkTab(QWidget):
             QMessageBox.warning(self, "Error", "Please enter a remote URL first")
             return
         
-        try:
-            from forge_ai.comms.remote_client import RemoteClient
-            
-            self._log(f"Connecting to {url}...")
-            client = RemoteClient(url)
-            
-            if not client.is_available():
-                QMessageBox.warning(self, "Connection Error", f"Cannot reach server at {url}")
-                return
-            
-            # Get a prompt from user
-            from PyQt5.QtWidgets import QInputDialog
-            prompt, ok = QInputDialog.getText(
-                self, "Remote Chat",
-                f"Connected to: {url}\n\nEnter your message:",
-                text="Hello, how are you?"
-            )
-            
-            if ok and prompt:
-                self._log(f"Sending: {prompt}")
-                try:
-                    response = client.generate(prompt, max_gen=100)
-                    self._log(f"Response: {response}")
-                    QMessageBox.information(self, "Remote Response", 
-                        f"Prompt: {prompt}\n\nResponse: {response}")
-                except Exception as e:
-                    self._log(f"Generation failed: {e}")
-                    QMessageBox.warning(self, "Chat Error", f"Failed to get response: {e}")
-        except Exception as e:
-            self._log(f"Remote chat failed: {e}")
-            QMessageBox.warning(self, "Connection Error", f"Remote chat failed: {e}")
+        # Get a prompt from user first (before going async)
+        from PyQt5.QtWidgets import QInputDialog
+        prompt, ok = QInputDialog.getText(
+            self, "Remote Chat",
+            f"Enter your message for: {url}",
+            text="Hello, how are you?"
+        )
+        
+        if not ok or not prompt:
+            return
+        
+        self._log(f"Connecting to {url}...")
+        self._log(f"Sending: {prompt}")
+        
+        # Run network operations in background thread
+        import threading
+        def do_remote_chat():
+            try:
+                from forge_ai.comms.remote_client import RemoteClient
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                
+                client = RemoteClient(url)
+                
+                if not client.is_available():
+                    QMetaObject.invokeMethod(
+                        self.network_log, "append",
+                        Qt.QueuedConnection,
+                        Q_ARG(str, f"Cannot reach server at {url}")
+                    )
+                    return
+                
+                response = client.generate(prompt, max_gen=100)
+                QMetaObject.invokeMethod(
+                    self.network_log, "append",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"Response: {response}")
+                )
+            except Exception as e:
+                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                QMetaObject.invokeMethod(
+                    self.network_log, "append",
+                    Qt.QueuedConnection,
+                    Q_ARG(str, f"Remote chat failed: {e}")
+                )
+        
+        thread = threading.Thread(target=do_remote_chat, daemon=True)
+        thread.start()
     
     def _log(self, message: str):
         """Add message to network log."""

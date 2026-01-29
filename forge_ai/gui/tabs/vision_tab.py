@@ -18,17 +18,23 @@ IMAGES_DIR = Path(CONFIG["data_dir"]) / "images"
 
 
 def create_vision_tab(parent):
-    """Create the screen vision tab with camera support."""
+    """Create the screen analysis tab for AI image analysis."""
     w = QWidget()
     layout = QVBoxLayout()
     
-    # Header
-    header = QLabel("Screen Vision & Camera")
+    # Header - renamed to clarify purpose
+    header = QLabel("Screen Analysis")
     header.setObjectName("header")
     layout.addWidget(header)
     
+    # Description
+    desc = QLabel("Capture screen or load images for AI analysis. For live camera, use the Camera tab.")
+    desc.setStyleSheet("color: #a6adc8; font-style: italic; margin-bottom: 8px;")
+    desc.setWordWrap(True)
+    layout.addWidget(desc)
+    
     # Preview area - flexible height
-    parent.vision_preview = QLabel("Vision not started")
+    parent.vision_preview = QLabel("No image loaded")
     parent.vision_preview.setMinimumHeight(150)  # Reduced for smaller screens
     parent.vision_preview.setAlignment(Qt.AlignCenter)
     parent.vision_preview.setStyleSheet("border: 1px solid #45475a; border-radius: 4px; background: #313244;")
@@ -36,21 +42,16 @@ def create_vision_tab(parent):
     layout.addWidget(parent.vision_preview, stretch=1)  # Allow to grow/shrink
     
     # Source selection group
-    source_group = QGroupBox("Capture Source")
+    source_group = QGroupBox("Image Source")
     source_layout = QHBoxLayout()
     
-    parent.btn_capture_screen = QPushButton("Screen")
-    parent.btn_capture_screen.setToolTip("Capture from screen")
+    parent.btn_capture_screen = QPushButton("Capture Screen")
+    parent.btn_capture_screen.setToolTip("Take a screenshot of your screen")
     parent.btn_capture_screen.clicked.connect(parent._capture_screen)
     source_layout.addWidget(parent.btn_capture_screen)
     
-    parent.btn_capture_camera = QPushButton("Camera")
-    parent.btn_capture_camera.setToolTip("Capture from webcam/camera")
-    parent.btn_capture_camera.clicked.connect(parent._capture_camera)
-    source_layout.addWidget(parent.btn_capture_camera)
-    
     parent.btn_load_image = QPushButton("Load Image")
-    parent.btn_load_image.setToolTip("Load image from file")
+    parent.btn_load_image.setToolTip("Load an image file from disk")
     parent.btn_load_image.clicked.connect(parent._load_vision_image)
     source_layout.addWidget(parent.btn_load_image)
     

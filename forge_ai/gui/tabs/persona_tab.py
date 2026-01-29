@@ -348,11 +348,11 @@ class PersonaTab(QWidget):
             self.persona_list.addItem(item)
     
     def _load_voice_profiles(self):
-        """Load voice profiles from data directory."""
+        """Load voice profiles from data directory (async for system voices)."""
         import os
         from pathlib import Path
         
-        # Voice profiles directory
+        # Voice profiles directory (fast - local file check)
         voice_dir = Path("data/voice_profiles")
         if voice_dir.exists():
             for profile_file in voice_dir.glob("*.json"):
@@ -360,17 +360,31 @@ class PersonaTab(QWidget):
                 if profile_name not in [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]:
                     self.voice_combo.addItem(profile_name)
         
-        # Also try to get system voices if pyttsx3 is available
-        try:
-            import pyttsx3
-            engine = pyttsx3.init()
-            voices = engine.getProperty('voices')
-            for voice in voices[:10]:  # Limit to first 10
-                voice_name = voice.name.split()[-1] if voice.name else voice.id
-                if voice_name not in [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]:
-                    self.voice_combo.addItem(voice_name)
-        except Exception:
-            pass
+        # Load system voices in background thread (pyttsx3 init can be slow)
+        import threading
+        def load_system_voices():
+            try:
+                import pyttsx3
+                engine = pyttsx3.init()
+                voices = engine.getProperty('voices')
+                voice_names = []
+                for voice in voices[:10]:  # Limit to first 10
+                    voice_name = voice.name.split()[-1] if voice.name else voice.id
+                    voice_names.append(voice_name)
+                
+                # Update combo on main thread using QTimer
+                from PyQt5.QtCore import QTimer
+                def add_voices():
+                    for voice_name in voice_names:
+                        if voice_name not in [self.voice_combo.itemText(i) for i in range(self.voice_combo.count())]:
+                            self.voice_combo.addItem(voice_name)
+                
+                QTimer.singleShot(0, add_voices)
+            except Exception:
+                pass
+        
+        thread = threading.Thread(target=load_system_voices, daemon=True)
+        thread.start()
     
     def _load_avatar_presets(self):
         """Load avatar presets from data directory."""
