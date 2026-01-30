@@ -412,7 +412,7 @@ class SpecsPanel(QFrame):
         
         # Performance estimates
         perf_estimates = {
-            'nano': ('~200 tok/s on CPU', 'Testing, embedded demos'),
+            'nano': ('~200 tok/s on CPU', 'Testing, lightweight'),
             'micro': ('~150 tok/s on CPU', 'IoT responses, simple queries'),
             'tiny': ('~100 tok/s on Pi 4', 'Edge AI, basic chat'),
             'mini': ('~80 tok/s on mobile', 'Mobile apps, quick responses'),

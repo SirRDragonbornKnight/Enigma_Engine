@@ -35,9 +35,16 @@ Your journey through ForgeAI starts here.
 For first-time users, start with: python run.py --gui
 """
 
+# === EARLY ENVIRONMENT SETUP ===
+# These must be set BEFORE any imports that might load GTK/Qt
+import os
+os.environ["NO_AT_BRIDGE"] = "1"
+os.environ["GTK_A11Y"] = "none"
+os.environ["GTK_MODULES"] = ""  # Disable gail and atk-bridge modules
+os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+
 import argparse
 import sys
-import os
 from pathlib import Path
 
 
@@ -74,6 +81,11 @@ def _suppress_noise():
     
     # ===== QT NOISE SUPPRESSION =====
     os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+    
+    # ===== GTK/ATK ACCESSIBILITY SUPPRESSION =====
+    # Suppress GTK gail module and ATK bridge warnings
+    os.environ["NO_AT_BRIDGE"] = "1"
+    os.environ["GTK_A11Y"] = "none"
     
     # ===== AUDIO DRIVER SETTINGS =====
     # Use dummy audio driver if no real audio needed
@@ -401,10 +413,27 @@ Examples:
                 break
 
     if args.gui:
+        # Suppress GTK/ATK stderr noise during Qt initialization
+        # Redirect stderr at the file descriptor level to catch C-level output
+        import sys
+        stderr_fd = sys.stderr.fileno()
+        try:
+            devnull_fd = os.open(os.devnull, os.O_WRONLY)
+            old_stderr_fd = os.dup(stderr_fd)
+            os.dup2(devnull_fd, stderr_fd)
+            os.close(devnull_fd)
+        except (OSError, AttributeError):
+            old_stderr_fd = None
+        
         _print_startup_banner()
+        
         try:
             from forge_ai.gui.enhanced_window import run_app
         except ImportError as e:
+            # Restore stderr for error messages
+            if old_stderr_fd is not None:
+                os.dup2(old_stderr_fd, stderr_fd)
+                os.close(old_stderr_fd)
             print(f"\n[ERROR] GUI requires PyQt5")
             print(f"   Error: {e}")
             print("\nTo fix this:")
@@ -413,6 +442,12 @@ Examples:
             print("\n   On Raspberry Pi, use the system package:")
             print("      sudo apt install python3-pyqt5")
             sys.exit(1)
+        
+        # Restore stderr before running app (so we can see real errors)
+        if old_stderr_fd is not None:
+            os.dup2(old_stderr_fd, stderr_fd)
+            os.close(old_stderr_fd)
+        
         run_app()
     
     if args.background:

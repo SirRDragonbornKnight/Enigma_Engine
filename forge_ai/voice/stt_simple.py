@@ -95,8 +95,24 @@ def _transcribe_vosk_file(path):
 # SpeechRecognition fallback (online by default)
 def _transcribe_sr_from_mic(timeout):
     try:
+        import sys
+        import os
+        
         r = sr.Recognizer()
-        with sr.Microphone() as source:
+        
+        # Suppress PyAudio stderr spam when opening microphone
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            mic = sr.Microphone()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception:
+            sys.stderr = old_stderr
+            raise
+        
+        with mic as source:
             r.adjust_for_ambient_noise(source)
             audio = r.listen(source, timeout=timeout)
         return r.recognize_google(audio)  # uses Google Web Speech API (online)

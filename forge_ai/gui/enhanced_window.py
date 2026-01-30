@@ -1624,12 +1624,25 @@ class EnhancedMainWindow(QMainWindow):
                 print("Loaded saved module configuration")
             else:
                 # Enable default modules on first run
-                default_modules = ['avatar', 'memory', 'web_tools', 'file_tools']
+                # Image, Avatar, Vision are on by default for a complete experience
+                default_modules = ['avatar', 'vision', 'memory', 'web_tools', 'file_tools']
                 for mod_id in default_modules:
                     try:
                         self.module_manager.load(mod_id)
                     except Exception:
                         pass
+                
+                # Try to load image generation (local first, fall back to API)
+                try:
+                    can_load, _ = self.module_manager.can_load('image_gen_local')
+                    if can_load:
+                        self.module_manager.load('image_gen_local')
+                    else:
+                        # No GPU - image_gen_api doesn't require GPU
+                        self.module_manager.load('image_gen_api')
+                except Exception:
+                    pass
+                
                 print("Enabled default modules")
         except Exception as e:
             print(f"Could not initialize ModuleManager: {e}")
@@ -3292,15 +3305,20 @@ class EnhancedMainWindow(QMainWindow):
             'embedding_api': ['search'],
             'avatar': ['avatar'],
             'vision': ['vision', 'camera'],
-            'voice_input': [],
-            'voice_output': [],
+            'voice_input': ['voice'],
+            'voice_output': ['voice'],
+            'gif_gen': ['gif'],
+            'game_ai': ['game'],
+            'robot_control': ['robot'],
         }
         
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
             'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
-            'game', 'robot', 'learning', 'terminal', 'files', 'logs', 'network', 'federation',
-            'analytics', 'examples', 'settings', 'gif', 'voice'
+            'learning', 'terminal', 'files', 'logs', 'network', 'federation',
+            'analytics', 'examples', 'settings',
+            # Default-enabled generation/perception tabs (image, avatar, vision on by default)
+            'image', 'avatar', 'vision'
         ]
         
         for item in nav_items:

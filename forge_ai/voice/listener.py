@@ -90,6 +90,7 @@ def _check_audio_device():
         bool: True if an input device is found, False otherwise
     """
     import os
+    import sys
     
     # Allow the ritual to be bypassed for tests/headless environments
     if os.getenv('FORGE_NO_AUDIO'):
@@ -99,8 +100,19 @@ def _check_audio_device():
         return False
     
     try:
-        # This may emit ALSA warnings once, but results are cached
-        p = sr.Microphone.get_pyaudio().PyAudio()
+        # Suppress PyAudio/PortAudio stderr spam during initialization
+        # On Linux, ctypes callbacks print errors that we can't catch otherwise
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            p = sr.Microphone.get_pyaudio().PyAudio()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception:
+            sys.stderr = old_stderr
+            raise
+        
         device_count = p.get_device_count()
         has_device = False
         for i in range(device_count):

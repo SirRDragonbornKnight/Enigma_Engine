@@ -4726,15 +4726,8 @@ class AvatarPreviewWidget(QFrame):
     
     def set_svg_sprite(self, svg_data: str):
         """Set avatar from SVG data."""
-        if not HAS_SVG or QSvgRenderer is None:
-            print("SVG support not available - using fallback")
-            return
-        
         self._svg_mode = True
         self._current_svg = svg_data
-        
-        # Convert SVG to pixmap for display
-        renderer = QSvgRenderer(QByteArray(svg_data.encode('utf-8')))
         
         # Use minimum size of 200 if widget not yet sized
         size = min(self.width(), self.height()) - 20
@@ -4743,9 +4736,71 @@ class AvatarPreviewWidget(QFrame):
         
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt_transparent if isinstance(Qt_transparent, QColor) else QColor(0, 0, 0, 0))
-        painter = QPainter(pixmap)
-        renderer.render(painter)
-        painter.end()
+        
+        if HAS_SVG and QSvgRenderer is not None:
+            # Convert SVG to pixmap using Qt SVG renderer
+            renderer = QSvgRenderer(QByteArray(svg_data.encode('utf-8')))
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+        else:
+            # Fallback: Create a simple drawn avatar without SVG support
+            # Parse basic colors from SVG if possible
+            primary = "#89b4fa"  # Default blue
+            accent = "#cdd6f4"   # Default light
+            secondary = "#f5c2e7"  # Default pink
+            
+            # Try to extract colors from SVG
+            import re
+            for pattern, var in [
+                (r'fill="\{primary_color\}"', 'primary'),
+                (r'fill="\{accent_color\}"', 'accent'),
+                (r'fill="\{secondary_color\}"', 'secondary'),
+            ]:
+                pass  # Colors are placeholders in template
+            
+            # If SVG has actual color values
+            primary_match = re.search(r'fill="(#[0-9a-fA-F]{6})"', svg_data)
+            if primary_match:
+                primary = primary_match.group(1)
+            
+            # Draw fallback avatar
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            
+            # Background circle
+            painter.setPen(Qt_NoPen)
+            painter.setBrush(QColor(primary))
+            painter.setOpacity(0.2)
+            painter.drawEllipse(size//2 - size*4//10, size//2 - size*4//10, size*8//10, size*8//10)
+            
+            # Main head circle
+            painter.setOpacity(1.0)
+            painter.setBrush(QColor(primary))
+            painter.drawEllipse(size//2 - size*3//10, size//2 - size*3//10, size*6//10, size*6//10)
+            
+            # Eyes
+            painter.setBrush(QColor(accent))
+            eye_y = size//2 - size//20
+            eye_size = size//12
+            painter.drawEllipse(size//2 - size//6 - eye_size//2, eye_y - eye_size//2, eye_size, int(eye_size * 1.3))
+            painter.drawEllipse(size//2 + size//6 - eye_size//2, eye_y - eye_size//2, eye_size, int(eye_size * 1.3))
+            
+            # Pupils
+            pupil_size = eye_size // 2
+            painter.setBrush(QColor("#1e1e2e"))
+            painter.drawEllipse(size//2 - size//6 - pupil_size//2, eye_y, pupil_size, pupil_size)
+            painter.drawEllipse(size//2 + size//6 - pupil_size//2, eye_y, pupil_size, pupil_size)
+            
+            # Mouth (neutral)
+            painter.setPen(QPen(QColor(accent), 2))
+            painter.setBrush(Qt_NoBrush)
+            from PyQt5.QtCore import QRect
+            mouth_rect = QRect(size//2 - size//8, size//2 + size//12, size//4, size//10)
+            painter.drawArc(mouth_rect, 0, -180 * 16)  # Bottom half of arc
+            
+            painter.end()
+            print("SVG support not available - using QPainter fallback avatar")
         
         self.original_pixmap = pixmap
         self.pixmap = pixmap

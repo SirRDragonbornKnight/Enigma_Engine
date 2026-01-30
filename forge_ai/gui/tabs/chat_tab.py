@@ -625,9 +625,24 @@ def _do_voice_input(parent):
     """Background voice recognition - automatically sends message after capture."""
     try:
         import speech_recognition as sr
+        import sys
+        import os
+        
         recognizer = sr.Recognizer()
         
-        with sr.Microphone() as source:
+        # Suppress PyAudio stderr spam when opening microphone
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            mic = sr.Microphone()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception:
+            sys.stderr = old_stderr
+            raise
+        
+        with mic as source:
             recognizer.adjust_for_ambient_noise(source, duration=0.3)
             audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
         

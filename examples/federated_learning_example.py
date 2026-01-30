@@ -1,327 +1,283 @@
 """
-Federated Learning Example for ForgeAI
+Demo script for Federated Learning System
 
-This example demonstrates how to use the federated learning system
-to share model improvements without sharing private data.
-
-What is Federated Learning?
-----------------------------
-Federated learning allows multiple devices to collaboratively train a model
-while keeping all training data on the device. Only model improvements
-(weight updates) are shared, never the raw data.
-
-Privacy Protection:
-- Differential privacy adds noise to weight updates
-- PII is automatically detected and sanitized
-- Device IDs are anonymized
-- Secure aggregation prevents inspection of individual updates
-- Trust management detects and blocks malicious updates
-
-Usage Example
--------------
+Demonstrates the core federated learning capabilities:
+- Creating weight updates
+- Adding differential privacy
+- Aggregating updates
+- Trust management
 """
 
-import sys
-from pathlib import Path
+import numpy as np
+from datetime import datetime
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-
-def example_basic_usage():
-    """Basic federated learning setup."""
-    from forge_ai.learning import (
-        FederatedLearning,
-        FederatedMode,
-        PrivacyLevel,
-    )
-    
-    print("=== Basic Federated Learning Setup ===\n")
-    
-    # Create federated learning instance
-    fl = FederatedLearning(
-        model_name="my_model",
-        mode=FederatedMode.OPT_IN,  # Must explicitly enable
-        privacy_level=PrivacyLevel.HIGH,  # Strong privacy protection
-    )
-    
-    print(f"Device ID: {fl.device_id}")
-    print(f"Mode: {fl.mode.value}")
-    print(f"Privacy Level: {fl.privacy_level.value}\n")
-    
-    # Set initial model weights (before training)
-    initial_weights = {
-        "layer1": [1.0, 2.0, 3.0],
-        "layer2": [4.0, 5.0, 6.0],
-    }
-    fl.set_initial_weights(initial_weights)
-    
-    # After local training, create a weight update
-    final_weights = {
-        "layer1": [1.1, 2.2, 3.3],  # Trained weights
-        "layer2": [4.1, 5.1, 6.1],
-    }
-    
-    update = fl.train_local_round(
-        final_weights=final_weights,
-        training_samples=50,
-        metadata={"loss": 0.45, "accuracy": 0.85}
-    )
-    
-    print(f"Created update: {update.update_id[:8]}...")
-    print(f"Training samples: {update.training_samples}")
-    print(f"Layers updated: {list(update.weight_deltas.keys())}\n")
-    
-    # Share the update (applies privacy protection)
-    success = fl.share_update(update)
-    print(f"Update shared: {success}\n")
-    
-    # Get statistics
-    stats = fl.get_stats()
-    print("Statistics:")
-    for key, value in stats.items():
-        print(f"  {key}: {value}")
+# Import federated learning components
+from forge_ai.learning import (
+    FederatedLearning,
+    WeightUpdate,
+    FederatedMode,
+    PrivacyLevel,
+    DifferentialPrivacy,
+    SecureAggregator,
+    AggregationMethod,
+    DataFilter,
+    TrustManager,
+    TrainingCoordinator,
+)
 
 
-def example_data_filtering():
-    """Data filtering and sanitization."""
-    from forge_ai.learning import (
-        FederatedDataFilter,
-        TrainingExample,
-    )
+def demo_basic_workflow():
+    """Demonstrate basic federated learning workflow."""
+    print("=" * 70)
+    print("FEDERATED LEARNING - BASIC WORKFLOW DEMO")
+    print("=" * 70)
     
-    print("\n\n=== Data Filtering & Privacy ===\n")
-    
-    # Create data filter
-    filter = FederatedDataFilter()
-    
-    # Add custom excluded keywords
-    filter.add_excluded_keyword("company_secret")
-    
-    # Example 1: Normal conversation (included)
-    example1 = TrainingExample(
-        text="Let's discuss how to implement recursion in Python.",
-        category="coding",
-    )
-    print(f"Example 1: '{example1.text[:50]}...'")
-    print(f"  Should include? {filter.should_include(example1)}\n")
-    
-    # Example 2: Contains password (excluded)
-    example2 = TrainingExample(
-        text="My password is secret123, please don't share it.",
-    )
-    print(f"Example 2: '{example2.text[:50]}...'")
-    print(f"  Should include? {filter.should_include(example2)}\n")
-    
-    # Example 3: Contains PII (sanitize it)
-    example3 = TrainingExample(
-        text="Contact me at john.doe@example.com or 555-123-4567.",
-    )
-    print(f"Example 3 (original): '{example3.text}'")
-    sanitized = filter.sanitize(example3)
-    print(f"Example 3 (sanitized): '{sanitized.text}'\n")
-    
-    # Example 4: Private conversation (excluded)
-    example4 = TrainingExample(
-        text="This is a private conversation.",
-        is_private=True,
-    )
-    print(f"Example 4: '{example4.text}'")
-    print(f"  Should include? {filter.should_include(example4)}\n")
-
-
-def example_coordinator():
-    """Federated learning coordination."""
-    from forge_ai.learning import (
-        FederatedCoordinator,
-        CoordinatorMode,
-    )
-    
-    print("\n\n=== Federated Learning Coordinator ===\n")
-    
-    # Create coordinator
-    coordinator = FederatedCoordinator(
-        mode=CoordinatorMode.CENTRALIZED,
-        min_participants=2,
-        round_timeout=300,  # 5 minutes
-    )
-    
-    # Register devices
-    coordinator.register_device("device1")
-    coordinator.register_device("device2")
-    coordinator.register_device("device3")
-    
-    print(f"Registered {len(coordinator.authorized_devices)} devices")
-    
-    # Start a training round
-    round_id = coordinator.start_round()
-    print(f"\nStarted round: {round_id}")
-    
-    # Get round status
-    status = coordinator.get_round_status()
-    print(f"Round state: {status['state']}")
-    print(f"Pending updates: {status['pending_updates']}/{status['min_participants']}")
-    print(f"Authorized devices: {status['authorized_devices']}\n")
-
-
-def example_differential_privacy():
-    """Differential privacy demonstration."""
-    print("\n\n=== Differential Privacy ===\n")
-    
-    try:
-        import numpy as np
-        from forge_ai.learning import DifferentialPrivacy
-        
-        # Create differential privacy mechanism
-        dp = DifferentialPrivacy(
-            epsilon=1.0,  # Privacy budget (lower = more private)
-            delta=1e-5,   # Privacy delta
+    # Step 1: Initialize federated learning on 3 devices
+    print("\n1. Initializing 3 devices...")
+    devices = []
+    for i in range(3):
+        fl = FederatedLearning(
+            mode=FederatedMode.OPT_IN,
+            privacy_level=PrivacyLevel.MEDIUM
         )
+        devices.append(fl)
+        print(f"   Device {i+1}: {fl.device_id[:16]}...")
+    
+    # Step 2: Each device trains locally
+    print("\n2. Local training on each device...")
+    
+    # Simulated base weights
+    base_weights = {
+        "layer1": np.array([1.0, 2.0, 3.0]),
+        "layer2": np.array([0.5, 0.5]),
+    }
+    
+    updates = []
+    for i, device in enumerate(devices):
+        # Start training round
+        device.start_local_round(base_weights)
         
-        print(f"Privacy Level: {dp.get_privacy_level_description()}\n")
-        
-        # Original weights
-        weights = {
-            "layer1": np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
-            "layer2": np.array([0.5, 0.5, 0.5, 0.5]),
+        # Simulate training (small random changes)
+        updated_weights = {
+            "layer1": base_weights["layer1"] + np.random.normal(0, 0.1, 3),
+            "layer2": base_weights["layer2"] + np.random.normal(0, 0.1, 2),
         }
         
-        print("Original weights:")
-        for name, w in weights.items():
-            print(f"  {name}: {w}")
+        # Create update
+        update = device.train_local_round(
+            model_weights=updated_weights,
+            training_samples=100 + i * 50,  # Different amounts of data
+            loss=0.5 - i * 0.1,
+            accuracy=0.8 + i * 0.05
+        )
         
-        # Add differential privacy noise
-        noisy_weights = dp.add_noise(weights)
-        
-        print("\nNoisy weights (with privacy protection):")
-        for name, w in noisy_weights.items():
-            print(f"  {name}: {w}")
-        
-        print("\nDifference (noise added):")
-        for name in weights:
-            diff = noisy_weights[name] - weights[name]
-            print(f"  {name}: {diff}")
-        
-        print(f"\nTotal privacy budget after 10 rounds: ε = {dp.compose_privacy_budget(10)}")
-        
-    except ImportError:
-        print("NumPy not available - differential privacy requires NumPy")
-
-
-def example_trust_management():
-    """Trust management and poisoning detection."""
-    print("\n\n=== Trust Management ===\n")
+        updates.append(update)
+        print(f"   Device {i+1}: trained on {update.training_samples} samples, "
+              f"loss={update.metadata['loss']:.3f}")
     
-    try:
-        import numpy as np
-        from forge_ai.learning import TrustManager, WeightUpdate
-        from datetime import datetime
-        
-        trust_mgr = TrustManager(
-            max_update_magnitude=10.0,
-            min_reputation=0.5,
-        )
-        
-        # Create a valid update
-        valid_update = WeightUpdate(
-            update_id="valid123",
-            device_id="good_device",
-            timestamp=datetime.now(),
-            weight_deltas={"layer1": np.array([0.1, 0.2, 0.3])},
-            training_samples=100,
-        )
-        valid_update.sign()
-        
-        print("Verifying valid update...")
-        is_valid = trust_mgr.verify_update(valid_update)
-        print(f"  Valid: {is_valid}")
-        print(f"  Device reputation: {trust_mgr.calculate_reputation('good_device'):.2f}\n")
-        
-        # Create a suspicious update (very large magnitude)
-        suspicious_update = WeightUpdate(
-            update_id="suspicious456",
-            device_id="suspicious_device",
-            timestamp=datetime.now(),
-            weight_deltas={"layer1": np.array([100.0, 200.0, 300.0])},
-            training_samples=100,
-        )
-        suspicious_update.sign()
-        
-        print("Verifying suspicious update (large magnitude)...")
-        is_valid = trust_mgr.verify_update(suspicious_update)
-        print(f"  Valid: {is_valid}")
-        print(f"  Device reputation: {trust_mgr.calculate_reputation('suspicious_device'):.2f}\n")
-        
-        # Get trust statistics
-        stats = trust_mgr.get_stats()
-        print("Trust Manager Statistics:")
-        print(f"  Total devices tracked: {stats['total_devices']}")
-        print(f"  Blocked devices: {stats['blocked_devices']}")
-        print(f"  Total updates processed: {stats['total_updates']}")
-        
-    except ImportError:
-        print("NumPy not available - trust management requires NumPy for update verification")
-
-
-def example_configuration():
-    """Configuration example."""
-    print("\n\n=== Configuration ===\n")
+    # Step 3: Aggregate updates
+    print("\n3. Aggregating updates (weighted by samples)...")
+    aggregator = SecureAggregator(method=AggregationMethod.WEIGHTED)
+    global_update = aggregator.aggregate_updates(updates)
     
-    print("To enable federated learning, add to forge_config.json:\n")
-    print("""{
-  "federated_learning": {
-    "enabled": true,
-    "mode": "peer_to_peer",
-    "privacy_level": "high",
-    "differential_privacy": {
-      "enabled": true,
-      "epsilon": 1.0,
-      "delta": 1e-5
-    },
-    "data_filtering": {
-      "exclude_private_chats": true,
-      "sanitize_pii": true,
-      "excluded_keywords": ["password", "credit card", "ssn"]
-    },
-    "participation": {
-      "auto_join_rounds": true,
-      "max_rounds_per_day": 3,
-      "min_training_samples": 10
-    },
-    "trust": {
-      "verify_signatures": true,
-      "detect_poisoning": true
+    print(f"   Aggregated {len(updates)} updates")
+    print(f"   Total training samples: {global_update.training_samples}")
+    
+    # Step 4: Devices receive global update
+    print("\n4. Distributing global update to devices...")
+    for i, device in enumerate(devices):
+        new_weights = device.receive_global_update(global_update)
+        print(f"   Device {i+1} applied global update")
+    
+    print("\n✓ Basic workflow completed successfully!")
+
+
+def demo_privacy():
+    """Demonstrate differential privacy."""
+    print("\n" + "=" * 70)
+    print("DIFFERENTIAL PRIVACY DEMO")
+    print("=" * 70)
+    
+    print("\n1. Original weights:")
+    weights = {
+        "layer1": np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
     }
-  }
-}""")
+    print(f"   layer1: {weights['layer1']}")
     
-    print("\n\nOr configure via GUI:")
-    print("  Settings Tab -> Federated Learning section")
-    print("  - Enable/disable participation")
-    print("  - Set privacy level")
-    print("  - Configure data filtering")
-    print("  - View contribution statistics")
+    # Add noise with different privacy levels
+    print("\n2. Adding noise with different privacy budgets:")
+    
+    for epsilon in [10.0, 1.0, 0.1]:
+        dp = DifferentialPrivacy(epsilon=epsilon, delta=1e-5)
+        noisy = dp.add_noise(weights.copy())
+        
+        diff = np.abs(noisy["layer1"] - weights["layer1"])
+        avg_diff = np.mean(diff)
+        
+        print(f"   ε={epsilon:4.1f}: avg noise={avg_diff:.4f}, "
+              f"noisy values={noisy['layer1'][:3]}")
+    
+    print("\n✓ Lower epsilon = more privacy (more noise)")
+
+
+def demo_trust():
+    """Demonstrate trust management."""
+    print("\n" + "=" * 70)
+    print("TRUST MANAGEMENT DEMO")
+    print("=" * 70)
+    
+    tm = TrustManager(min_trust_score=0.5)
+    
+    print("\n1. Creating normal and malicious updates...")
+    
+    # Normal update
+    normal = WeightUpdate(
+        update_id="normal-1",
+        device_id="good-device",
+        timestamp=datetime.now(),
+        weight_deltas={"layer1": np.array([0.1, 0.2, 0.1])},
+        training_samples=100,
+    )
+    
+    # Malicious update (huge weights)
+    malicious = WeightUpdate(
+        update_id="malicious-1",
+        device_id="bad-device",
+        timestamp=datetime.now(),
+        weight_deltas={"layer1": np.array([1e12, 1e12, 1e12])},
+        training_samples=100,
+    )
+    
+    print("\n2. Evaluating updates...")
+    
+    normal_ok = tm.evaluate_update(normal)
+    print(f"   Normal update: {'✓ Accepted' if normal_ok else '✗ Rejected'}")
+    
+    malicious_ok = tm.evaluate_update(malicious)
+    print(f"   Malicious update: {'✓ Accepted' if malicious_ok else '✗ Rejected'}")
+    
+    print("\n3. Trust scores:")
+    for device_id in ["good-device", "bad-device"]:
+        trust = tm.get_device_trust(device_id)
+        if trust:
+            print(f"   {device_id}: trust={trust.trust_score:.2f}")
+    
+    print("\n✓ Byzantine attack detected and blocked!")
+
+
+def demo_data_filter():
+    """Demonstrate data filtering."""
+    print("\n" + "=" * 70)
+    print("DATA FILTERING DEMO")
+    print("=" * 70)
+    
+    print("\n1. Original training data with PII:")
+    data = [
+        {
+            "input": "My email is john.doe@example.com",
+            "output": "Thanks! I'll contact you soon."
+        },
+        {
+            "input": "Call me at 555-123-4567",
+            "output": "I'll call you tomorrow."
+        },
+        {
+            "input": "Tell me about quantum computing",
+            "output": "Quantum computing uses qubits..."
+        }
+    ]
+    
+    for i, ex in enumerate(data):
+        print(f"   {i+1}. Input: {ex['input']}")
+    
+    print("\n2. Filtering data...")
+    filter = DataFilter(remove_pii=True)
+    filtered = filter.filter_training_data(data)
+    
+    print("\n3. Filtered data (PII removed):")
+    for i, ex in enumerate(filtered):
+        print(f"   {i+1}. Input: {ex['input']}")
+    
+    print("\n✓ Personal information protected!")
+
+
+def demo_coordinator():
+    """Demonstrate training coordination."""
+    print("\n" + "=" * 70)
+    print("TRAINING COORDINATOR DEMO")
+    print("=" * 70)
+    
+    print("\n1. Initializing coordinator...")
+    coordinator = TrainingCoordinator(
+        min_devices=2,
+        round_duration=10,  # 10 seconds for demo
+    )
+    
+    # Register callbacks
+    coordinator.on_round_start(
+        lambda round_id: print(f"   → Round {round_id} started")
+    )
+    coordinator.on_round_complete(
+        lambda round_info: print(
+            f"   → Round {round_info.round_id} completed: "
+            f"{len(round_info.updates)} updates, "
+            f"status={round_info.status.value}"
+        )
+    )
+    
+    print("\n2. Simulating update submissions...")
+    
+    # Manually start a round
+    coordinator._start_new_round()
+    
+    # Submit some updates
+    for i in range(3):
+        update = WeightUpdate(
+            update_id=f"update-{i}",
+            device_id=f"device-{i}",
+            timestamp=datetime.now(),
+            weight_deltas={"layer1": np.array([0.1, 0.2])},
+            training_samples=100,
+        )
+        coordinator.submit_update(update)
+        print(f"   Submitted update from device-{i}")
+    
+    print("\n3. Coordinator statistics:")
+    stats = coordinator.get_statistics()
+    for key, value in stats.items():
+        print(f"   {key}: {value}")
+    
+    print("\n✓ Coordination system working!")
 
 
 def main():
-    """Run all examples."""
-    print("=" * 70)
-    print(" ForgeAI Federated Learning - Usage Examples")
-    print("=" * 70)
+    """Run all demos."""
+    print("\n")
+    print("╔" + "═" * 68 + "╗")
+    print("║" + " " * 15 + "FORGE AI - FEDERATED LEARNING DEMO" + " " * 19 + "║")
+    print("╚" + "═" * 68 + "╝")
     
     try:
-        example_basic_usage()
-        example_data_filtering()
-        example_coordinator()
-        example_differential_privacy()
-        example_trust_management()
-        example_configuration()
+        demo_basic_workflow()
+        demo_privacy()
+        demo_trust()
+        demo_data_filter()
+        demo_coordinator()
         
         print("\n" + "=" * 70)
-        print(" Examples completed successfully!")
+        print("ALL DEMOS COMPLETED SUCCESSFULLY!")
         print("=" * 70)
+        print("\nFederated Learning Features:")
+        print("  ✓ Privacy-preserving weight updates")
+        print("  ✓ Differential privacy with noise")
+        print("  ✓ Trust management and Byzantine detection")
+        print("  ✓ Data filtering (PII removal)")
+        print("  ✓ Training round coordination")
+        print("  ✓ Secure aggregation")
+        print("\n")
         
     except Exception as e:
-        print(f"\nError running examples: {e}")
+        print(f"\n✗ Demo failed: {e}")
         import traceback
         traceback.print_exc()
 

@@ -440,7 +440,7 @@ class ScalingTab(QWidget):
         
         # Performance estimates
         perf_map = {
-            'nano': ('~200 tok/s CPU', 'Testing, demos'),
+            'nano': ('~200 tok/s CPU', 'Testing, lightweight'),
             'micro': ('~150 tok/s CPU', 'IoT, simple queries'),
             'tiny': ('~100 tok/s Pi 4', 'Edge AI, basic chat'),
             'mini': ('~80 tok/s mobile', 'Mobile apps'),

@@ -2214,8 +2214,9 @@ def create_settings_tab(parent):
     mic_test_row.addStretch()
     audio_layout.addLayout(mic_test_row)
     
-    # Populate audio devices
-    _refresh_audio_devices(parent)
+    # Don't populate audio devices at startup - wait for user to click refresh
+    # This avoids PyAudio ctypes callback errors during GUI initialization
+    # _refresh_audio_devices(parent)  # Delayed - click Refresh to enumerate
     
     # Link to Audio tab
     audio_link_row = QHBoxLayout()
@@ -3887,27 +3888,45 @@ def _get_audio_devices():
     
     try:
         import pyaudio
-        p = pyaudio.PyAudio()
+        import sys
+        import os
+        
+        # Suppress PyAudio/PortAudio stderr spam during initialization
+        # This is especially needed on Linux where ctypes callbacks print errors
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            p = pyaudio.PyAudio()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception:
+            sys.stderr = old_stderr
+            raise
         
         for i in range(p.get_device_count()):
-            info = p.get_device_info_by_index(i)
-            name = info.get('name', f'Device {i}')
-            
-            # Truncate long names
-            if len(name) > 40:
-                name = name[:37] + "..."
-            
-            if info.get('maxInputChannels', 0) > 0:
-                input_devices.append((name, i))
-            if info.get('maxOutputChannels', 0) > 0:
-                output_devices.append((name, i))
+            try:
+                info = p.get_device_info_by_index(i)
+                name = info.get('name', f'Device {i}')
+                
+                # Truncate long names
+                if len(name) > 40:
+                    name = name[:37] + "..."
+                
+                if info.get('maxInputChannels', 0) > 0:
+                    input_devices.append((name, i))
+                if info.get('maxOutputChannels', 0) > 0:
+                    output_devices.append((name, i))
+            except (OSError, IOError):
+                # Some devices fail enumeration - skip them
+                continue
         
         p.terminate()
     except (ImportError, OSError, TypeError) as e:
         # pyaudio not installed, or audio system issue (e.g., portaudio ctypes callback)
-        print(f"[Audio] Could not enumerate devices: {type(e).__name__}")
-    except Exception as e:
-        print(f"Error getting audio devices: {e}")
+        pass  # Silently fail - audio is optional
+    except Exception:
+        pass  # Silently fail - audio is optional
     
     return input_devices, output_devices
 
