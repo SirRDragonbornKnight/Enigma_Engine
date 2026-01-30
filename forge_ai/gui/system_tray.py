@@ -464,19 +464,30 @@ class QuickCommandOverlay(QWidget):
         # Load settings for always-on-top
         always_on_top = self._load_mini_chat_settings().get("mini_chat_always_on_top", True)
         
-        # Use Window flag for proper window controls including Alt+F4
+        # Frameless window with native OS drag/resize via startSystemMove()
         flags = Qt.Window | Qt.FramelessWindowHint
         if always_on_top:
             flags |= Qt.WindowStaysOnTopHint
         self.setWindowFlags(flags)
-        
         self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # Enable mouse tracking for resize cursor
+        self.setMouseTracking(True)
         
         # Enable custom context menu
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
         
         self.setup_ui()
+        
+        # Install event filter on frame to capture mouse events
+        self.frame.installEventFilter(self)
+        self._header_widget.installEventFilter(self)
+        
+        # Enable mouse tracking on child widgets for cursor updates
+        self.frame.setMouseTracking(True)
+        self._header_widget.setMouseTracking(True)
+        
         self.history = []
         self.history_index = -1
         
@@ -502,14 +513,7 @@ class QuickCommandOverlay(QWidget):
         # Header widget for dragging (like a window title bar)
         self._header_widget = QFrame()
         self._header_widget.setFixedHeight(30)
-        # No special cursor - keep default arrow like normal windows
         self._header_widget.setStyleSheet("background: rgba(50, 50, 50, 0.5); border-radius: 4px;")
-        self._header_widget.setMouseTracking(True)
-        
-        # Install event filter for proper drag handling
-        self._header_widget.mousePressEvent = lambda e: self._header_mouse_press(e)
-        self._header_widget.mouseMoveEvent = lambda e: self._header_mouse_move(e)
-        self._header_widget.mouseReleaseEvent = lambda e: self._header_mouse_release(e)
         
         header_layout = QHBoxLayout(self._header_widget)
         header_layout.setContentsMargins(8, 0, 0, 0)
@@ -1680,110 +1684,151 @@ class QuickCommandOverlay(QWidget):
         self._close_overlay()
         event.ignore()  # Don't actually close the window
     
-    # === Header drag handlers ===
-    def _header_mouse_press(self, event):
-        """Handle mouse press on header for dragging."""
-        if event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
-        event.accept()
+    # === Window-level mouse handlers for drag and resize ===
+    def _get_resize_edge(self, pos):
+        """Check if position is near a resize edge (all edges)."""
+        margin = 12  # Margin for edge detection
+        w, h = self.width(), self.height()
+        
+        on_left = pos.x() <= margin
+        on_right = pos.x() >= w - margin
+        on_top = pos.y() <= margin
+        on_bottom = pos.y() >= h - margin
+        
+        # Corners first (higher priority)
+        if on_top and on_left:
+            return 'topleft'
+        elif on_top and on_right:
+            return 'topright'
+        elif on_bottom and on_left:
+            return 'bottomleft'
+        elif on_bottom and on_right:
+            return 'bottomright'
+        # Then edges
+        elif on_left:
+            return 'left'
+        elif on_right:
+            return 'right'
+        elif on_top:
+            return 'top'
+        elif on_bottom:
+            return 'bottom'
+        return None
     
-    def _header_mouse_move(self, event):
-        """Handle mouse move on header for dragging."""
-        if event.buttons() & Qt.LeftButton and self._drag_pos:
-            self.move(event.globalPos() - self._drag_pos)
-        event.accept()
+    def _get_cursor_for_edge(self, edge):
+        """Get appropriate cursor for resize edge."""
+        if edge in ('left', 'right'):
+            return Qt.SizeHorCursor
+        elif edge in ('top', 'bottom'):
+            return Qt.SizeVerCursor
+        elif edge in ('topleft', 'bottomright'):
+            return Qt.SizeFDiagCursor
+        elif edge in ('topright', 'bottomleft'):
+            return Qt.SizeBDiagCursor
+        return Qt.ArrowCursor
     
-    def _header_mouse_release(self, event):
-        """Handle mouse release on header."""
-        self._drag_pos = None
-        event.accept()
+    def _is_on_header(self, pos):
+        """Check if position is on the header widget."""
+        header_rect = self._header_widget.geometry()
+        # Adjust for frame position
+        frame_pos = self.frame.pos()
+        adjusted_rect = header_rect.translated(frame_pos)
+        return adjusted_rect.contains(pos)
     
-    # === Resizing support ===
-    def mousePressEvent(self, event):
-        """Handle mouse press for dragging/resizing."""
-        if event.button() == Qt.LeftButton:
-            # Check if near edges for resizing
-            edge = self._get_resize_edge(event.pos())
+    def eventFilter(self, obj, event):
+        """Filter events from child widgets to handle drag and resize using native OS APIs."""
+        from PyQt5.QtCore import QEvent
+        
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            # Convert to window coordinates
+            global_pos = event.globalPos()
+            local_pos = self.mapFromGlobal(global_pos)
+            
+            # Check resize edge first - use native OS resize
+            edge = self._get_resize_edge(local_pos)
             if edge:
-                self._resize_edge = edge
-            else:
-                # Drag window
-                self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+                self._start_native_resize(edge)
+                return True  # Consume event
+            
+            # Check if on header for dragging - use native OS move
+            if obj == self._header_widget or self._is_on_header(local_pos):
+                self._start_native_move()
+                return True  # Consume event
+                
+        elif event.type() == QEvent.MouseMove:
+            if not (event.buttons() & Qt.LeftButton):
+                # Just hovering - update cursor
+                local_pos = self.mapFromGlobal(event.globalPos())
+                edge = self._get_resize_edge(local_pos)
+                self.setCursor(self._get_cursor_for_edge(edge))
+        
+        return super().eventFilter(obj, event)
+    
+    def _start_native_move(self):
+        """Start native OS window move operation."""
+        window = self.windowHandle()
+        if window:
+            window.startSystemMove()
+    
+    def _start_native_resize(self, edge):
+        """Start native OS window resize operation."""
+        from PyQt5.QtCore import Qt as QtCore
+        
+        # Map edge string to Qt edge flags
+        edge_map = {
+            'left': QtCore.LeftEdge,
+            'right': QtCore.RightEdge,
+            'top': QtCore.TopEdge,
+            'bottom': QtCore.BottomEdge,
+            'topleft': QtCore.TopEdge | QtCore.LeftEdge,
+            'topright': QtCore.TopEdge | QtCore.RightEdge,
+            'bottomleft': QtCore.BottomEdge | QtCore.LeftEdge,
+            'bottomright': QtCore.BottomEdge | QtCore.RightEdge,
+        }
+        
+        qt_edge = edge_map.get(edge)
+        if qt_edge:
+            window = self.windowHandle()
+            if window:
+                window.startSystemResize(qt_edge)
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press for window drag and resize using native OS APIs."""
+        if event.button() == Qt.LeftButton:
+            pos = event.pos()
+            
+            # Check resize edge first - use native OS resize
+            edge = self._get_resize_edge(pos)
+            if edge:
+                self._start_native_resize(edge)
+            # Check if on header for dragging - use native OS move
+            elif self._is_on_header(pos):
+                self._start_native_move()
         event.accept()
     
     def mouseMoveEvent(self, event):
-        """Handle mouse move for dragging/resizing."""
-        if event.buttons() & Qt.LeftButton:
-            if self._resize_edge:
-                self._do_resize(event.globalPos())
-            elif self._drag_pos:
-                self.move(event.globalPos() - self._drag_pos)
-        else:
-            # Update cursor based on position
+        """Handle mouse move for cursor updates."""
+        if not (event.buttons() & Qt.LeftButton):
+            # Just hovering - update cursor
             edge = self._get_resize_edge(event.pos())
-            if edge in ('left', 'right'):
-                self.setCursor(Qt.SizeHorCursor)
-            elif edge in ('top', 'bottom'):
-                self.setCursor(Qt.SizeVerCursor)
-            elif edge in ('topleft', 'bottomright'):
-                self.setCursor(Qt.SizeFDiagCursor)
-            elif edge in ('topright', 'bottomleft'):
-                self.setCursor(Qt.SizeBDiagCursor)
-            else:
-                self.setCursor(Qt.ArrowCursor)
+            self.setCursor(self._get_cursor_for_edge(edge))
         event.accept()
     
     def mouseReleaseEvent(self, event):
         """Handle mouse release."""
-        self._drag_pos = None
-        self._resize_edge = None
-        self.setCursor(Qt.ArrowCursor)
+        # Update cursor based on current position
+        edge = self._get_resize_edge(event.pos())
+        self.setCursor(self._get_cursor_for_edge(edge))
         event.accept()
     
-    def _get_resize_edge(self, pos):
-        """Determine which edge the cursor is near."""
-        margin = 8
-        rect = self.rect()
-        
-        left = pos.x() < margin
-        right = pos.x() > rect.width() - margin
-        top = pos.y() < margin
-        bottom = pos.y() > rect.height() - margin
-        
-        if top and left:
-            return 'topleft'
-        elif top and right:
-            return 'topright'
-        elif bottom and left:
-            return 'bottomleft'
-        elif bottom and right:
-            return 'bottomright'
-        elif left:
-            return 'left'
-        elif right:
-            return 'right'
-        elif top:
-            return 'top'
-        elif bottom:
-            return 'bottom'
-        return None
-    
     def _do_resize(self, global_pos):
-        """Perform resize based on edge being dragged."""
+        """Perform resize based on edge being dragged (bottom/right only)."""
         geo = self.geometry()
         
-        if 'left' in self._resize_edge:
-            new_width = geo.right() - global_pos.x()
-            if new_width >= self._min_width:
-                geo.setLeft(global_pos.x())
         if 'right' in self._resize_edge:
             new_width = global_pos.x() - geo.left()
             if new_width >= self._min_width:
                 geo.setRight(global_pos.x())
-        if 'top' in self._resize_edge:
-            new_height = geo.bottom() - global_pos.y()
-            if new_height >= self._min_height:
-                geo.setTop(global_pos.y())
         if 'bottom' in self._resize_edge:
             new_height = global_pos.y() - geo.top()
             if new_height >= self._min_height:
