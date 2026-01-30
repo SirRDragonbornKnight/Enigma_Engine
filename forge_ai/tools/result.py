@@ -208,12 +208,12 @@ class ToolResult(Generic[T]):
 
 
 # Type aliases for common result types
-FileResult = ToolResult[Dict[str, Any]]
-CommandResult = ToolResult[Dict[str, Any]]
-SearchResult = ToolResult[List[Dict[str, Any]]]
+FileResult = ToolResult[dict[str, Any]]
+CommandResult = ToolResult[dict[str, Any]]
+SearchResult = ToolResult[list[dict[str, Any]]]
 
 
-def from_legacy_dict(result: Dict[str, Any]) -> ToolResult:
+def from_legacy_dict(result: dict[str, Any]) -> ToolResult:
     """
     Convert a legacy {"success": bool, ...} dict to ToolResult.
     
