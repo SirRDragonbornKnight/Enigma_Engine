@@ -9,11 +9,13 @@ When idle, the AI can autonomously:
 - Organize knowledge
 """
 
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-from datetime import datetime, timedelta
+from __future__ import annotations
+
 import json
 import random
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
 
 
 class DiscoveryMode:

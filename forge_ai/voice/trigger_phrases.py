@@ -32,11 +32,13 @@ Usage:
     detector.stop_listening()
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
-from typing import Callable, List, Optional
 from dataclasses import dataclass
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,7 @@ class TriggerConfig:
     """Configuration for trigger phrase detection."""
     
     # Wake phrases to listen for
-    phrases: List[str] = None
+    phrases: list[str] = None
     
     # Confidence threshold (0.0 to 1.0)
     confidence_threshold: float = 0.6

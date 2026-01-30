@@ -2,13 +2,16 @@
 Memory Backup Scheduling for ForgeAI
 Provides automatic backup and restoration of memories.
 """
+
+from __future__ import annotations
+
 import logging
-import time
-import threading
-from typing import List, Dict, Any, Optional
-from pathlib import Path
-from datetime import datetime
 import shutil
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from .categorization import MemoryCategorization
 from .export_import import MemoryExporter, MemoryImporter

@@ -8,13 +8,15 @@ Implements various strategies for distributing inference tasks:
 - Latency-aware
 """
 
+from __future__ import annotations
+
 import logging
 import random
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
-import threading
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

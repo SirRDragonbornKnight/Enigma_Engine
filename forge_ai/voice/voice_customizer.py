@@ -25,10 +25,12 @@ Usage:
     customizer.compare_voices([profile1, profile2], "Test text")
 """
 
+from __future__ import annotations
+
 import json
-from pathlib import Path
-from typing import List, Optional, Dict, Any
 from dataclasses import asdict
+from pathlib import Path
+from typing import Any
 
 from .voice_profile import VoiceProfile, PRESET_PROFILES, VoiceEngine
 from .voice_effects import VoiceEffects

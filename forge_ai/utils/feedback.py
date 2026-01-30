@@ -4,10 +4,12 @@ Feedback System - Collect user ratings and feedback on AI responses
 Allows users to rate responses and provide feedback for continuous improvement.
 """
 
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-from datetime import datetime
+from __future__ import annotations
+
 import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 class FeedbackCollector:

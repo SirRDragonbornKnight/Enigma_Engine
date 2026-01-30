@@ -2,13 +2,16 @@
 Memory Categorization and TTL Management
 Implements short-term and long-term memory with automatic pruning.
 """
+
+from __future__ import annotations
+
+import json
 import logging
 import time
-from enum import Enum
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-import json
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

@@ -15,12 +15,14 @@ Each profile controls:
 - Generation capabilities
 """
 
-from typing import Dict, Any, Optional, List
-from pathlib import Path
-from dataclasses import dataclass, asdict
-from enum import Enum
+from __future__ import annotations
+
 import json
 import platform
+from dataclasses import asdict, dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
 
 class DeviceType(Enum):

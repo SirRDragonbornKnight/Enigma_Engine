@@ -28,12 +28,14 @@ Usage:
     identity.learn_from_feedback("The voice feels too fast", voice_profile)
 """
 
+from __future__ import annotations
+
 import json
 import random
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from .voice_profile import VoiceProfile, PROFILES_DIR
 from ..config import CONFIG

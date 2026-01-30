@@ -24,9 +24,11 @@ Usage:
     similarity = analyzer.compare_voices("voice1.wav", "voice2.wav")
 """
 
-from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple
+from __future__ import annotations
+
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from .voice_profile import VoiceProfile
 

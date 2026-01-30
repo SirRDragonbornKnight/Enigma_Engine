@@ -2,9 +2,13 @@
 Embedding Generation for ForgeAI Memory System
 Supports local sentence-transformers and API-based embeddings.
 """
-import logging
+
+from __future__ import annotations
+
 import hashlib
-from typing import List, Optional, Dict, Tuple, Any
+import logging
+from typing import Any
+
 import numpy as np
 
 from .vector_db import VectorDBInterface

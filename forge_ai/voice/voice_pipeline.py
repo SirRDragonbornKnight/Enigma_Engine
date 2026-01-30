@@ -23,14 +23,16 @@ USAGE:
     pipeline.speak("Hello! How can I help?")
 """
 
+from __future__ import annotations
+
 import logging
-import threading
 import queue
+import threading
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Callable, List, Dict, Any
 from enum import Enum, auto
 from pathlib import Path
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

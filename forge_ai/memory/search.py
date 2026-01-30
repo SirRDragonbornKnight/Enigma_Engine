@@ -2,13 +2,16 @@
 Advanced Memory Search for ForgeAI
 Provides full-text, semantic, and hybrid search capabilities.
 """
-import logging
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import Any
+
+from .categorization import Memory, MemoryCategorization, MemoryType
 from .memory_db import MemoryDatabase
 from .vector_db import VectorDBInterface
-from .categorization import Memory, MemoryType, MemoryCategorization
 
 logger = logging.getLogger(__name__)
 

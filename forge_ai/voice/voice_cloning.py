@@ -33,17 +33,19 @@ USAGE:
     audio = voice.speak("Hello, this is my cloned voice!")
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import shutil
+import struct
 import tempfile
 import wave
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
-import struct
+from typing import Any, Union
 
 from ..config import CONFIG
 

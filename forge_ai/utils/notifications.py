@@ -25,19 +25,19 @@ Usage:
     )
 """
 
+from __future__ import annotations
+
 import logging
+import platform
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Union
 
 logger = logging.getLogger(__name__)
-
-# Platform detection
-import platform
 PLATFORM = platform.system().lower()
 
 

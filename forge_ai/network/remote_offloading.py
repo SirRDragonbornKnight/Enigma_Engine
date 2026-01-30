@@ -5,11 +5,13 @@ Automatically routes heavy inference tasks to capable remote servers
 when local hardware is insufficient or busy.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

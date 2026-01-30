@@ -5,6 +5,8 @@ Manages a queue of tasks that need to be sent to remote servers,
 with priority handling, retry logic, and result caching.
 """
 
+from __future__ import annotations
+
 import logging
 import queue
 import threading
@@ -12,7 +14,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

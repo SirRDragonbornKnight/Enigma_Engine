@@ -24,14 +24,16 @@ Usage:
     engine.speak("Hello, test subject.")
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import platform
 import shlex
 import shutil
-from pathlib import Path
-from typing import Optional, Dict, List
 from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Any
 
 from ..utils.system_messages import warning_msg, error_msg
 

@@ -7,15 +7,17 @@ Automatically routes inference requests to the best available target:
 - Remote server (if offloading enabled)
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Union
 
-from .remote_offloading import RemoteOffloader, OffloadCriteria, OffloadDecision, get_remote_offloader
-from .load_balancer import LoadBalancer, ServerInfo, BalancingStrategy
 from .failover import FailoverManager, ServerHealth
+from .load_balancer import BalancingStrategy, LoadBalancer, ServerInfo
+from .remote_offloading import OffloadCriteria, OffloadDecision, RemoteOffloader, get_remote_offloader
 
 logger = logging.getLogger(__name__)
 

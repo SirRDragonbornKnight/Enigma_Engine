@@ -2,13 +2,16 @@
 RAG (Retrieval-Augmented Generation) System for ForgeAI
 Integrates memory retrieval with LLM generation for context-aware responses.
 """
+
+from __future__ import annotations
+
 import logging
 import time
-from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from .categorization import Memory, MemoryType, MemoryCategorization
+from .categorization import Memory, MemoryCategorization, MemoryType
 from .vector_db import VectorDBInterface
 
 logger = logging.getLogger(__name__)

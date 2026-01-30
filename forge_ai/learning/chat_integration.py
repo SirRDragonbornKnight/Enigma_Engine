@@ -29,15 +29,14 @@ USAGE:
 ================================================================================
 """
 
-import time
+from __future__ import annotations
+
 import logging
 import threading
-from typing import Optional, Callable, Dict, Any, List
+import time
 from datetime import datetime
+from typing import Any, Callable
 
-from .conversation_detector import ConversationDetector, DetectedLearning
-
-# Import from existing systems
 from ..core.self_improvement import (
     LearningEngine,
     LearningExample,
@@ -45,6 +44,7 @@ from ..core.self_improvement import (
     Priority,
     get_learning_engine,
 )
+from .conversation_detector import ConversationDetector, DetectedLearning
 
 logger = logging.getLogger(__name__)
 

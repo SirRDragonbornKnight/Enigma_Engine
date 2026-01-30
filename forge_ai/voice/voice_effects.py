@@ -27,8 +27,10 @@ Usage:
     effect = effects.effect_for_emotion("happy")  # Returns "energetic"
 """
 
-from typing import List, Dict, Optional, Any
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -39,7 +41,7 @@ class EffectConfig:
     description: str
     text_transform: bool = True  # Does it modify text?
     audio_transform: bool = False  # Does it need audio processing?
-    parameters: Dict[str, Any] = None
+    parameters: dict[str, Any] = None
     
     def __post_init__(self):
         if self.parameters is None:
