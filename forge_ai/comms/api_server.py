@@ -41,12 +41,16 @@ automation, and integrations with external systems.
     • forge_ai/comms/remote_client.py - Connect to remote servers
     • forge_ai/comms/mobile_api.py    - Mobile app API
 """
+import logging
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from functools import wraps
 import secrets
 from ..core.inference import ForgeEngine
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 def generate_api_key() -> str:
@@ -184,6 +188,6 @@ def create_api_server(host: str = "0.0.0.0", port: int = 5000, debug: bool = Fal
         The Flask app (after starting)
     """
     app = create_app()
-    print(f"Starting Forge API server on {host}:{port}")
+    logger.info(f"Starting Forge API server on {host}:{port}")
     app.run(host=host, port=port, debug=debug)
     return app

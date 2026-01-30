@@ -137,7 +137,8 @@ def create_ai_tab(parent):
         try:
             training_widget = create_training_tab(parent)
             tab_widget.addTab(training_widget, "Training")
-        except:
+        except Exception as e:
+            logger.debug(f"Training tab not available: {e}")
             pass  # Training tab might not be available in all configurations
         
     except Exception as e:

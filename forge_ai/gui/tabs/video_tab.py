@@ -6,10 +6,13 @@ Providers:
   - REPLICATE: Cloud video generation (requires replicate, API key)
 """
 
+import logging
 import os
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtWidgets import (
@@ -72,10 +75,10 @@ class LocalVideo:
             self.is_loaded = True
             self._using_builtin = False
             return True
-        except ImportError:
-            pass
+        except ImportError as e:
+            logger.debug(f"AnimateDiff import failed: {e}")
         except Exception as e:
-            print(f"AnimateDiff not available: {e}")
+            logger.warning(f"AnimateDiff not available: {e}")
         
         # Fall back to built-in video generator
         try:
@@ -84,10 +87,10 @@ class LocalVideo:
             if self._builtin_video.load():
                 self.is_loaded = True
                 self._using_builtin = True
-                print("Using built-in video generator (animated GIF)")
+                logger.info("Using built-in video generator (animated GIF)")
                 return True
         except Exception as e:
-            print(f"Built-in video gen failed: {e}")
+            logger.debug(f"Built-in video gen failed: {e}")
         
         return False
     
@@ -99,8 +102,8 @@ class LocalVideo:
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            except ImportError:
-                pass
+            except ImportError as e:
+                logger.debug(f"torch not available for cache clearing: {e}")
         if self._builtin_video:
             self._builtin_video.unload()
             self._builtin_video = None
@@ -183,8 +186,8 @@ class ReplicateVideo:
             self.client = replicate
             self.is_loaded = bool(self.api_key)
             return self.is_loaded
-        except ImportError:
-            print("Install: pip install replicate")
+        except ImportError as e:
+            logger.warning(f"Install: pip install replicate - {e}")
             return False
     
     def unload(self):
@@ -295,7 +298,7 @@ class VideoGenerationWorker(QThread):
                     self.finished.emit(result)
                     return
             except Exception as router_error:
-                print(f"Router fallback: {router_error}")
+                logger.debug(f"Router fallback: {router_error}")
             
             if self._stop_requested:
                 self.finished.emit({"success": False, "error": "Cancelled by user"})

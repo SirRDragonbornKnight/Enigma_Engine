@@ -7,10 +7,13 @@ import re
 import json
 import sqlite3
 import csv
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
 from .tool_registry import Tool
+
+logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = Path.home() / ".forge_ai" / "outputs" / "data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -65,7 +68,8 @@ class CSVQueryTool(Tool):
                     col, op, val = match.groups()
                     val = val.strip().strip('"\'')
                     try: val = float(val)
-                    except: pass
+                    except Exception as e:
+                        logger.debug(f"Could not convert value '{val}' to float: {e}")
                     ops = {'>': lambda x,v: x>v, '<': lambda x,v: x<v, '>=': lambda x,v: x>=v, 
                            '<=': lambda x,v: x<=v, '==': lambda x,v: x==v, '=': lambda x,v: x==v, '!=': lambda x,v: x!=v}
                     if op in ops: df = df[ops[op](df[col], val)]

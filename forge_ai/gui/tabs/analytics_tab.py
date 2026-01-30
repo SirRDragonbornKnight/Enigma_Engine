@@ -351,8 +351,8 @@ class AnalyticsTab(QWidget):
                         entry_date = datetime.fromisoformat(entry.get("timestamp", "2000-01-01"))
                         if entry_date >= start_date:
                             usage[entry.get("tool", "unknown")] += 1
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not load tool usage file: {e}")
         
         # Add some sample data if empty
         if not usage:
@@ -380,8 +380,8 @@ class AnalyticsTab(QWidget):
             try:
                 with open(SESSION_STATS_FILE, 'r') as f:
                     stats = json.load(f)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not load session stats: {e}")
         
         # Default sample data
         if stats["total_messages"] == 0:
@@ -454,8 +454,8 @@ class AnalyticsTab(QWidget):
                 with open(TOOL_USAGE_FILE, 'r') as f:
                     data = json.load(f)
                     entries = data.get("entries", [])
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not load tool usage for recording: {e}")
         
         entries.append({
             "tool": tool_name,

@@ -759,7 +759,8 @@ class ScalingTab(QWidget):
                     process = psutil.Process()
                     ram = process.memory_info().rss / 1024**2
                     results.append(f"  RAM Used: {ram:.0f} MB")
-                except:
+                except Exception as e:
+                    logger.debug(f"RAM measurement failed: {e}")
                     results.append("  RAM: Unable to measure")
             
             # Cleanup

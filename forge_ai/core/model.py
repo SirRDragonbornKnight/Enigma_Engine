@@ -3120,7 +3120,7 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
         logger.error(f"Failed to initialize model: {e}")
         raise RuntimeError(f"Model creation failed: {e}") from e
 
-    print(f"Created Forge ({size}): {model.num_parameters:,} params, "
+    logger.info(f"Created Forge ({size}): {model.num_parameters:,} params, "
           f"{config.dim}d, {config.n_layers}L")
     return model
 

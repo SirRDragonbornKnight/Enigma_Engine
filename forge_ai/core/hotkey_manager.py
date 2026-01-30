@@ -262,8 +262,8 @@ class HotkeyManager:
         try:
             self.stop()
             self.unregister_all()
-        except:
-            pass
+        except Exception:
+            pass  # Ignore cleanup errors during shutdown
 
 
 # Singleton instance

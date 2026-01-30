@@ -61,7 +61,8 @@ def _transcribe_vosk_from_mic(timeout):
         import json
         r = json.loads(res)
         return r.get("text", "")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"VOSK microphone transcription failed: {e}")
         return ""
 
 def _transcribe_vosk_file(path):

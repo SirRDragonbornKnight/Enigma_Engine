@@ -222,6 +222,7 @@ class FetchWebpageTool(Tool):
 
 if __name__ == "__main__":
     # Test
+    logging.basicConfig(level=logging.DEBUG)
     search = WebSearchTool()
     result = search.execute("python programming")
-    print(json.dumps(result, indent=2))
+    logger.info("Search result: %s", json.dumps(result, indent=2))

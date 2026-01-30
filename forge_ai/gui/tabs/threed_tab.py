@@ -8,8 +8,11 @@ Providers:
 
 import os
 import time
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtWidgets import (
@@ -59,13 +62,13 @@ class Local3DGen:
                 gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 free_mem = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / (1024**3)
                 if free_mem < 3.5:  # Need at least 3.5GB free
-                    print(f"Warning: Only {free_mem:.1f}GB GPU memory free. Shap-E needs ~4GB. Using CPU instead.")
+                    logger.warning(f"Only {free_mem:.1f}GB GPU memory free. Shap-E needs ~4GB. Using CPU instead.")
                     self.use_cpu = True
             
             # Use float32 on CPU, float16 on GPU
             dtype = torch.float32 if self.use_cpu else torch.float16
             
-            print(f"Loading Shap-E 3D generator ({'CPU' if self.use_cpu else 'GPU'})...")
+            logger.info(f"Loading Shap-E 3D generator ({'CPU' if self.use_cpu else 'GPU'})...")
             self.pipe = ShapEPipeline.from_pretrained(
                 "openai/shap-e",
                 torch_dtype=dtype,
@@ -78,19 +81,19 @@ class Local3DGen:
                 # Enable memory efficient attention if available
                 try:
                     self.pipe.enable_attention_slicing(1)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Attention slicing not available: {e}")
             else:
                 self._device = "cpu"
             
             self.is_loaded = True
             self._using_builtin = False
-            print(f"Shap-E loaded successfully on {self._device}")
+            logger.info(f"Shap-E loaded successfully on {self._device}")
             return True
         except ImportError:
-            print("Shap-E not available - diffusers not installed")
+            logger.info("Shap-E not available - diffusers not installed")
         except Exception as e:
-            print(f"Shap-E not available: {e}")
+            logger.warning(f"Shap-E not available: {e}")
         
         # Fall back to built-in 3D generator
         try:
@@ -99,10 +102,10 @@ class Local3DGen:
             if self._builtin_3d.load():
                 self.is_loaded = True
                 self._using_builtin = True
-                print("Using built-in 3D generator (geometric primitives)")
+                logger.info("Using built-in 3D generator (geometric primitives)")
                 return True
         except Exception as e:
-            print(f"Built-in 3D gen failed: {e}")
+            logger.warning(f"Built-in 3D gen failed: {e}")
         
         return False
     
@@ -210,7 +213,7 @@ class Cloud3DGen:
             self.is_loaded = bool(self.api_key)
             return self.is_loaded
         except ImportError:
-            print("Install: pip install replicate")
+            logger.warning("Replicate not available. Install: pip install replicate")
             return False
     
     def unload(self):
@@ -335,7 +338,7 @@ class ThreeDGenerationWorker(QThread):
                     self.finished.emit(result)
                     return
             except Exception as router_error:
-                print(f"Router fallback: {router_error}")
+                logger.debug(f"Router fallback: {router_error}")
             
             if self._stop_requested:
                 self.finished.emit({"success": False, "error": "Cancelled by user"})

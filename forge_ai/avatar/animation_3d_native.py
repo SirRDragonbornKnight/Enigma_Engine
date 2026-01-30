@@ -71,7 +71,8 @@ except ImportError:
     try:
         # PyQt5 has basic GL bindings
         HAS_OPENGL = False
-    except:
+    except Exception as e:
+        logger.debug(f"OpenGL fallback failed: {e}")
         HAS_OPENGL = False
 
 

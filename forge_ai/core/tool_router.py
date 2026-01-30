@@ -1365,8 +1365,8 @@ class ToolRouter:
                 if device == "cuda":
                     try:
                         pipe.enable_attention_slicing()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not enable attention slicing: {e}")
                 
                 self._cache_model(model_id, {"pipe": pipe, "type": "hf_image", "device": device})
             
@@ -1755,8 +1755,8 @@ class ToolRouter:
                     models = registry.list_models()
                     if model_name == "default" or model_name in models:
                         return True
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not check model registry for {model_type}: {e}")
         
         return False
     

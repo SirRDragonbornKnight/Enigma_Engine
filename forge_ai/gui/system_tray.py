@@ -61,7 +61,8 @@ def get_current_model_name() -> str:
         # Fallback to config
         model_name = CONFIG.get("default_model", "small_forge_ai")
         return model_name
-    except:
+    except Exception as e:
+        logger.debug(f"Could not get current model: {e}")
         return "Unknown Model"
 
 
@@ -100,8 +101,8 @@ def kill_other_forge_ai_instances() -> dict:
                             if pid != current_pid:
                                 subprocess.run(['taskkill', '/PID', str(pid), '/F'], capture_output=True)
                                 killed += 1
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not kill process: {e}")
         else:
             # Linux/Mac: use ps and kill
             result = subprocess.run(
@@ -2607,7 +2608,8 @@ class ForgeSystemTray(QObject):
                             QSystemTrayIcon.Information,
                             3000
                         )
-                except:
+                except Exception as e:
+                    logger.debug(f"Clipboard copy failed: {e}")
                     self.tray_icon.showMessage(
                         f"Screen Captured ({self.current_model})",
                         f"Saved to: {path}",
@@ -2796,7 +2798,8 @@ class ForgeSystemTray(QObject):
                 self.recording_process.stdin.write(b'q')
                 self.recording_process.stdin.flush()
                 self.recording_process.wait(timeout=5)
-            except:
+            except Exception as e:
+                logger.debug(f"Could not stop ffmpeg gracefully: {e}")
                 self.recording_process.terminate()
             
             self.recording_process = None
@@ -2846,8 +2849,8 @@ class ForgeSystemTray(QObject):
                         "help": settings.get("hotkey_help", defaults["help"]),
                         "voice": settings.get("hotkey_voice", defaults["voice"])
                     }
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not load hotkey settings: {e}")
         return defaults
     
     def _show_help(self):

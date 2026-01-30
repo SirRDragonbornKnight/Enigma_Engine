@@ -53,11 +53,14 @@ USAGE:
     listener.start(callback=on_speech)
 """
 
+import logging
 import threading
 import queue
 import time
 from typing import Optional, Callable, List
-from dataclasses import dataclass
+from dataclass import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -109,8 +112,9 @@ def _check_audio_device():
             p = sr.Microphone.get_pyaudio().PyAudio()
             sys.stderr = old_stderr
             devnull.close()
-        except Exception:
+        except Exception as e:
             sys.stderr = old_stderr
+            logger.debug("PyAudio initialization failed: %s", e)
             raise
         
         device_count = p.get_device_count()
@@ -126,7 +130,8 @@ def _check_audio_device():
                 continue
         p.terminate()
         return has_device
-    except Exception:
+    except Exception as e:
+        logger.debug("Audio device check failed: %s", e)
         return False
 
 

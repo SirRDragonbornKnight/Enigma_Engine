@@ -256,8 +256,8 @@ class BrowserMediaVolumeTool(Tool):
                         ps_script = f'(New-Object -ComObject WScript.Shell).SendKeys([char]173)'
                         # This is simplified - real implementation would use audio API
                         return {"success": True, "volume": level, "method": "windows"}
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not set Windows volume: {e}")
                 
                 return {"success": False, "error": "Could not set volume"}
             else:

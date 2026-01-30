@@ -593,8 +593,8 @@ class AvatarController:
                 try:
                     profile = VoiceProfile.load(self.config.voice_profile)
                     engine.set_profile(profile)
-                except FileNotFoundError:
-                    pass  # Use default
+                except FileNotFoundError as e:
+                    logger.debug(f"Voice profile not found, using default: {e}")
             
             # Also check if voice_profile is set as an attribute (from VoiceCloneTab)
             if hasattr(self, 'voice_profile') and self.voice_profile:
@@ -1187,8 +1187,8 @@ class ScreenInteractor:
                             "width": int(parts[4]),
                             "height": int(parts[5]),
                         }
-        except (subprocess.SubprocessError, ValueError, IndexError, OSError):
-            pass
+        except (subprocess.SubprocessError, ValueError, IndexError, OSError) as e:
+            logger.debug(f"wmctrl window search failed: {e}")
         
         try:
             # Try xdotool
@@ -1215,8 +1215,8 @@ class ScreenInteractor:
                         "width": int(size_match.group(1)),
                         "height": int(size_match.group(2)),
                     }
-        except (subprocess.SubprocessError, ValueError, IndexError, OSError):
-            pass
+        except (subprocess.SubprocessError, ValueError, IndexError, OSError) as e:
+            logger.debug(f"xdotool window search failed: {e}")
         
         return None
     
@@ -1257,8 +1257,8 @@ class ScreenInteractor:
                     "width": rect.right - rect.left,
                     "height": rect.bottom - rect.top,
                 }
-        except (ImportError, OSError, ctypes.ArgumentError):
-            pass
+        except (ImportError, OSError, ctypes.ArgumentError) as e:
+            logger.debug(f"Windows window search failed: {e}")
         
         return None
     
@@ -1294,8 +1294,8 @@ class ScreenInteractor:
                         "width": int(parts[2]),
                         "height": int(parts[3]),
                     }
-        except (subprocess.SubprocessError, ValueError, IndexError, OSError):
-            pass
+        except (subprocess.SubprocessError, ValueError, IndexError, OSError) as e:
+            logger.debug(f"macOS window search failed: {e}")
         
         return None
 

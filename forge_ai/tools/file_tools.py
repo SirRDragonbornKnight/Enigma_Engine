@@ -50,8 +50,9 @@ def _check_path_allowed(path: str, resolve_first: bool = True) -> Dict[str, Any]
         try:
             # Resolve path to prevent traversal attacks (e.g., "../../etc/passwd")
             resolved_path = str(Path(path).expanduser().resolve())
-        except Exception:
+        except Exception as e:
             # If path can't be resolved, use original
+            logger.debug(f"Could not resolve path '{path}': {e}")
             resolved_path = path
     else:
         resolved_path = path
@@ -364,7 +365,8 @@ class DeleteFileTool(Tool):
 if __name__ == "__main__":
     # Test
     import json
+    logging.basicConfig(level=logging.DEBUG)
     
     list_tool = ListDirectoryTool()
     result = list_tool.execute(".")
-    print(json.dumps(result, indent=2))
+    logger.info(json.dumps(result, indent=2))

@@ -200,8 +200,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                     Qt.QueuedConnection
                 )
                 self._main_window.chat_messages = []
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not clear main chat: {e}")
         
         if self._quick_chat and hasattr(self._quick_chat, 'response_area'):
             try:
@@ -209,8 +209,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                     self._quick_chat.response_area, "clear",
                     Qt.QueuedConnection
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not clear quick chat: {e}")
     
     def generate_response(self, user_text: str, source: str = "main"):
         """Generate an AI response in background, update both chats."""
@@ -368,8 +368,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                 # Also update chat_messages list
                 if hasattr(self._main_window, 'chat_messages'):
                     self._main_window.chat_messages.append(msg.to_dict())
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update main window user message: {e}")
         
         # Update quick chat (always, even if message came from main)
         if self._quick_chat and hasattr(self._quick_chat, 'response_area'):
@@ -382,8 +382,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                     self._quick_chat.response_area, "append",
                     Qt.QueuedConnection, Q_ARG(str, quick_html)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update quick chat user message: {e}")
     
     def _update_ai_message_ui(self, msg: ChatMessage, source: str):
         """Update both chat UIs with an AI message."""
@@ -419,8 +419,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                 # Also update chat_messages list
                 if hasattr(self._main_window, 'chat_messages'):
                     self._main_window.chat_messages.append(msg.to_dict())
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update main window AI message: {e}")
         
         # Update quick chat
         if self._quick_chat and hasattr(self._quick_chat, 'response_area'):
@@ -433,8 +433,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                     self._quick_chat.response_area, "append",
                     Qt.QueuedConnection, Q_ARG(str, quick_html)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update quick chat AI message: {e}")
     
     def _sync_to_main(self):
         """Sync all messages to main window."""
@@ -450,8 +450,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                     self._update_user_message_ui(msg, "sync")
                 else:
                     self._update_ai_message_ui(msg, "sync")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not sync to main window: {e}")
     
     def _sync_to_quick(self):
         """Sync all messages to quick chat."""
@@ -466,8 +466,8 @@ class ChatSync(QObject if HAS_PYQT else object):
                     self._update_user_message_ui(msg, "sync")
                 else:
                     self._update_ai_message_ui(msg, "sync")
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not sync to quick chat: {e}")
     
     def get_history_for_context(self, max_messages: int = 6) -> List[Dict]:
         """Get recent messages for AI context."""

@@ -1,8 +1,11 @@
 """Vision tab for ForgeAI GUI - screen capture and camera support."""
 
+import logging
 import os
 import subprocess
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -215,5 +218,5 @@ def _save_current_image(parent):
                 pixmap.save(str(dest_path))
         
         _refresh_saved_images(parent)
-    except Exception:
-        pass  # Silent fail
+    except Exception as e:
+        logger.debug(f"Failed to save current image: {e}")

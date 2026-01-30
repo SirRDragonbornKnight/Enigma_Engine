@@ -271,7 +271,8 @@ class DistributedNode:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except:
+        except Exception as e:
+            logger.debug(f"Could not get local IP: {e}")
             return "127.0.0.1"
     
     @property

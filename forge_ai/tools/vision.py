@@ -138,7 +138,7 @@ class ScreenCapture:
                 img = self._capture_cli(region)
             
         except Exception as e:
-            # Silently fail, return None
+            logger.debug(f"Screen capture failed with backend '{self._backend}': {e}")
             return None
         
         if img:
@@ -179,7 +179,8 @@ class ScreenCapture:
             return img
             
         except Exception as e:
-            return None  # Silently fail
+            logger.debug(f"CLI capture with '{self._backend}' failed: {e}")
+            return None
         finally:
             Path(temp_path).unlink(missing_ok=True)
     

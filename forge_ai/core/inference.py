@@ -343,7 +343,7 @@ class ForgeEngine:
                     torch.set_num_threads(cpu_threads)
                 return torch.device("cpu")
         except ImportError:
-            pass  # Power mode not available
+            logger.debug("Power mode module not available, skipping power management")
 
         if torch.cuda.is_available():
             # Apply GPU memory limit from config
@@ -538,7 +538,7 @@ class ForgeEngine:
                         use_mmap = True
                         logger.info("[Memory] Using memory-mapped loading for low-memory device")
                 except ImportError:
-                    pass
+                    logger.debug("Hardware detection not available for memory-mapped loading check")
             
             # Load state dict to infer model architecture
             try:

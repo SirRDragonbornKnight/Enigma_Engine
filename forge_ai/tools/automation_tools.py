@@ -690,8 +690,8 @@ class FolderWatcher:
                 if file.is_file():
                     try:
                         states[str(file)] = file.stat().st_mtime
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not stat file {file}: {e}")
         return states
     
     def remove_watch(self, path: str):

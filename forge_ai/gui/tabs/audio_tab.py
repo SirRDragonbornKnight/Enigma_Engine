@@ -9,8 +9,11 @@ Providers:
 
 import os
 import time
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtWidgets import (
@@ -58,9 +61,9 @@ class LocalTTS:
             self._using_builtin = False
             return True
         except ImportError:
-            pass
+            logger.debug("pyttsx3 not installed, trying fallback")
         except Exception as e:
-            print(f"pyttsx3 failed: {e}")
+            logger.warning(f"pyttsx3 failed: {e}")
         
         # Fall back to built-in TTS
         try:
@@ -70,20 +73,20 @@ class LocalTTS:
                 self.voices = self._builtin_tts.get_voices()
                 self.is_loaded = True
                 self._using_builtin = True
-                print("Using built-in TTS (system speech)")
+                logger.info("Using built-in TTS (system speech)")
                 return True
         except Exception as e:
-            print(f"Built-in TTS failed: {e}")
+            logger.warning(f"Built-in TTS failed: {e}")
         
-        print("No TTS available. Install pyttsx3 or use system speech.")
+        logger.warning("No TTS available. Install pyttsx3 or use system speech.")
         return False
     
     def unload(self):
         if self.engine:
             try:
                 self.engine.stop()
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                logger.debug(f"Engine stop raised RuntimeError (safe to ignore): {e}")
             self.engine = None
         if self._builtin_tts:
             self._builtin_tts.unload()
@@ -184,7 +187,7 @@ class ElevenLabsTTS:
     
     def load(self) -> bool:
         if not self.api_key:
-            print("ElevenLabs requires ELEVENLABS_API_KEY")
+            logger.warning("ElevenLabs requires ELEVENLABS_API_KEY")
             return False
         
         try:
@@ -201,10 +204,10 @@ class ElevenLabsTTS:
             self.is_loaded = True
             return True
         except ImportError:
-            print("Install: pip install elevenlabs")
+            logger.info("Install: pip install elevenlabs")
             return False
         except Exception as e:
-            print(f"Failed to load ElevenLabs: {e}")
+            logger.warning(f"Failed to load ElevenLabs: {e}")
             return False
     
     def unload(self):
@@ -266,7 +269,7 @@ class ReplicateAudio:
             self.is_loaded = bool(self.api_key)
             return self.is_loaded
         except ImportError:
-            print("Install: pip install replicate")
+            logger.info("Install: pip install replicate")
             return False
     
     def unload(self):
@@ -360,7 +363,7 @@ class AudioGenerationWorker(QThread):
                     self.finished.emit(result)
                     return
             except Exception as router_error:
-                print(f"Router fallback: {router_error}")
+                logger.debug(f"Router fallback: {router_error}")
             
             # Direct provider fallback
             provider = get_provider(self.provider_name)

@@ -172,8 +172,8 @@ class ModelModule(Module):
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"GPU cache cleanup skipped: {e}")
         return True
 
 
@@ -670,8 +670,8 @@ class GGUFLoaderModule(Module):
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"GPU cache cleanup skipped: {e}")
         return True
 
 
@@ -1145,8 +1145,8 @@ class ToolRouterModule(Module):
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"GPU cache cleanup skipped: {e}")
         return True
 
 
@@ -1635,8 +1635,8 @@ class ImageGenAPIModule(GenerationModule):
             if self._addon.load():
                 logger.info("Using built-in image generator as fallback")
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Built-in image generator fallback failed: {e}")
         
         return True  # Module loads, just won't generate
 

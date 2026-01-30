@@ -1,9 +1,12 @@
 """Train tab for ForgeAI GUI."""
 
+import logging
 import re
 import urllib.request
 import urllib.error
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSpinBox, QLineEdit, QProgressBar, QFileDialog,
@@ -693,8 +696,8 @@ def _populate_prompt_templates(parent):
                 user_presets = json.load(f)
             for name in user_presets.keys():
                 parent.training_prompt_combo.addItem(f"[User] {name}", f"user_{name}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to load user presets from %s: %s", user_presets_path, e)
 
 
 def _get_template_content(template_id):
@@ -762,8 +765,8 @@ Assistant: Of course! I'd be happy to help with coding. What would you like to k
                     user_presets = json.load(f)
                 if preset_name in user_presets:
                     return user_presets[preset_name]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to load user preset '%s': %s", preset_name, e)
     
     # Check for custom from gui_settings
     if template_id == "custom":
@@ -773,8 +776,8 @@ Assistant: Of course! I'd be happy to help with coding. What would you like to k
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
                 return settings.get("system_prompt", "")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to load custom template from gui_settings: %s", e)
     
     return ""
 

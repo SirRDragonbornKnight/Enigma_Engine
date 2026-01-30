@@ -450,6 +450,7 @@ def api_get_memories():
             'total': len(_memories) + len(conversations)
         })
     except Exception as e:
+        logger.debug(f"Error loading memories from conversation manager: {e}")
         return jsonify({
             'success': True,
             'memories': _memories,
@@ -827,30 +828,30 @@ def run_web(host: str = '0.0.0.0', port: int = 8080, debug: bool = False):
         debug: Enable debug mode
     """
     if not FLASK_AVAILABLE:
-        print("Error: Flask not installed. Install with: pip install flask flask-cors")
+        logger.error("Flask not installed. Install with: pip install flask flask-cors")
         return
     
-    print(f"\n{'='*60}")
-    print("FORGE AI WEB DASHBOARD")
-    print(f"{'='*60}")
-    print(f"\nServer starting on http://{host}:{port}")
-    print(f"\nAccess from:")
-    print(f"   - Local:   http://localhost:{port}")
-    print(f"   - Network: http://{host}:{port}")
-    print(f"\nAvailable pages:")
-    print(f"   - Dashboard:   http://localhost:{port}/")
-    print(f"   - Chat:        http://localhost:{port}/chat")
-    print(f"   - Personality: http://localhost:{port}/personality")
-    print(f"   - Voice:       http://localhost:{port}/voice")
-    print(f"   - Memory:      http://localhost:{port}/memory")
-    print(f"   - Train:       http://localhost:{port}/train")
-    print(f"   - Settings:    http://localhost:{port}/settings")
-    print(f"\n{'='*60}\n")
+    logger.info(f"{'='*60}")
+    logger.info("FORGE AI WEB DASHBOARD")
+    logger.info(f"{'='*60}")
+    logger.info(f"Server starting on http://{host}:{port}")
+    logger.info(f"Access from:")
+    logger.info(f"   - Local:   http://localhost:{port}")
+    logger.info(f"   - Network: http://{host}:{port}")
+    logger.info(f"Available pages:")
+    logger.info(f"   - Dashboard:   http://localhost:{port}/")
+    logger.info(f"   - Chat:        http://localhost:{port}/chat")
+    logger.info(f"   - Personality: http://localhost:{port}/personality")
+    logger.info(f"   - Voice:       http://localhost:{port}/voice")
+    logger.info(f"   - Memory:      http://localhost:{port}/memory")
+    logger.info(f"   - Train:       http://localhost:{port}/train")
+    logger.info(f"   - Settings:    http://localhost:{port}/settings")
+    logger.info(f"{'='*60}")
     
     if SOCKETIO_AVAILABLE and socketio:
-        print("[OK] WebSocket support enabled")
+        logger.info("WebSocket support enabled")
         socketio.run(app, host=host, port=port, debug=debug)
     else:
-        print("[!] WebSocket support not available (install flask-socketio)")
-        print("  Real-time chat features will be limited")
+        logger.warning("WebSocket support not available (install flask-socketio)")
+        logger.warning("Real-time chat features will be limited")
         app.run(host=host, port=port, debug=debug)

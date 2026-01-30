@@ -530,8 +530,8 @@ class ConversationDetector:
             if groups and groups[-1]:
                 info = groups[-1].strip()
                 return f"I'll remember that {info}."
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not extract teaching info: {e}")
         return f"Thank you for telling me. I'll remember this."
 
 

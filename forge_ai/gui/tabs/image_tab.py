@@ -46,8 +46,11 @@ import time
 import base64
 import subprocess
 import sys
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtWidgets import (
@@ -444,7 +447,8 @@ class PlaceholderImage:
                 # Add prompt text
                 try:
                     font = ImageFont.truetype("arial.ttf", 20)
-                except:
+                except Exception as e:
+                    logger.debug(f"Could not load truetype font: {e}, using default")
                     font = ImageFont.load_default()
                 
                 # Wrap text
