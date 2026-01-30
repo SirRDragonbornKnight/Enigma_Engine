@@ -267,11 +267,13 @@ class DistributedNode:
         """Get local IP address."""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
+            try:
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+            finally:
+                s.close()
             return ip
-        except:
+        except OSError:
             return "127.0.0.1"
     
     @property

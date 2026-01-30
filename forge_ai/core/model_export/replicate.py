@@ -125,7 +125,7 @@ class Predictor(BasePredictor):
             from safetensors.torch import load_file
             state_dict = load_file(str(weights_path))
         else:
-            state_dict = torch.load("pytorch_model.bin", map_location="cuda")
+            state_dict = torch.load("pytorch_model.bin", map_location="cuda", weights_only=True)
         
         self.model.load_state_dict(state_dict)
         self.model.to("cuda")

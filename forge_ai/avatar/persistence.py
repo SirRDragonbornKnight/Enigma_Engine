@@ -293,7 +293,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
             screen_w, screen_h = geo.width(), geo.height()
         else:
             screen_w, screen_h = 1920, 1080  # Fallback
-    except:
+    except (ImportError, RuntimeError):
         screen_w, screen_h = 1920, 1080
     
     # Determine region (3x3 grid)
@@ -331,7 +331,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
                         facing = "backward"
                     else:
                         facing = "left"
-    except:
+    except (AttributeError, KeyError, ValueError):
         pass
     
     # Load model/mesh info from capabilities file
@@ -342,7 +342,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
             with open(caps_path, 'r') as f:
                 caps = json.load(f)
             model_info = caps.get('model_info', {})
-    except:
+    except (json.JSONDecodeError, IOError):
         pass
     
     # Load bone info
@@ -352,7 +352,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
         if bone_path.exists():
             with open(bone_path, 'r') as f:
                 bone_info = json.load(f)
-    except:
+    except (json.JSONDecodeError, IOError):
         pass
     
     return {

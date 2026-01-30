@@ -413,7 +413,7 @@ class ToolManagerTab(QWidget):
                     "Install command copied to clipboard!\n\n"
                     "Paste and run in your terminal."
                 )
-            except:
+            except (ImportError, RuntimeError):
                 QMessageBox.information(
                     self, "Command",
                     f"Run this command in your terminal:\n\n{cmd}"

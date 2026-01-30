@@ -659,8 +659,8 @@ def _load_user_presets():
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load user presets: {e}")
     return {}
 
 
@@ -842,8 +842,8 @@ def _save_to_gui_settings(parent):
         try:
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load settings: {e}")
     
     settings["system_prompt"] = parent.workspace_prompt_editor.toPlainText()
     settings["system_prompt_preset"] = "custom"
@@ -866,8 +866,8 @@ def _apply_prompt_to_chat(parent):
         try:
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load settings: {e}")
     
     settings["system_prompt"] = content
     
@@ -907,8 +907,8 @@ def _refresh_notes_list(parent):
             item = QListWidgetItem(note.get("title", note_file.stem))
             item.setData(Qt.UserRole, str(note_file))
             parent.workspace_notes_list.addItem(item)
-        except:
-            pass
+        except (json.JSONDecodeError, IOError) as e:
+            logger.debug(f"Failed to load note {note_file}: {e}")
 
 
 def _load_note(parent, item):

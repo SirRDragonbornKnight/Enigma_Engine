@@ -137,8 +137,10 @@ def create_ai_tab(parent):
         try:
             training_widget = create_training_tab(parent)
             tab_widget.addTab(training_widget, "Training")
-        except:
-            pass  # Training tab might not be available in all configurations
+        except ImportError:
+            logger.debug("Training tab not available - dependencies missing")
+        except Exception as e:
+            logger.warning(f"Failed to load training tab: {e}")
         
     except Exception as e:
         # If any tab fails to load, show error message

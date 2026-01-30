@@ -50,14 +50,19 @@ class NaturalTTS:
         """Speak text through speakers."""
         import tempfile
         import os
+        import subprocess
         
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             self.save(f.name, text)
-            # Play audio
+            # Play audio using subprocess (safer than os.system)
             if os.name == 'nt':
-                os.system(f'start {f.name}')
+                subprocess.Popen(['cmd', '/c', 'start', '', f.name], shell=False)
             elif os.name == 'posix':
-                os.system(f'aplay {f.name} 2>/dev/null || afplay {f.name}')
+                # Try aplay first, then afplay (macOS)
+                try:
+                    subprocess.run(['aplay', f.name], stderr=subprocess.DEVNULL, check=False)
+                except FileNotFoundError:
+                    subprocess.run(['afplay', f.name], stderr=subprocess.DEVNULL, check=False)
     
     def save(self, path: str, text: str):
         """Save speech to file."""

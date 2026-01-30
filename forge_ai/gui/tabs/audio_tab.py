@@ -291,7 +291,7 @@ class ReplicateAudio:
             if not audio_url:
                 return {"success": False, "error": "No audio URL returned"}
             
-            resp = requests.get(audio_url)
+            resp = requests.get(audio_url, timeout=60)
             
             timestamp = int(time.time())
             filename = f"replicate_audio_{timestamp}.wav"

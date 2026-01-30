@@ -73,7 +73,7 @@ class AvatarGalleryItem(QFrame):
         avatar_type = self.avatar_info.get("type", "").lower()
         type_label = QLabel(avatar_type[:10])
         type_label.setAlignment(Qt.AlignCenter)
-                type_label.setStyleSheet("font-size: 10px; color: #bac2de;")
+        type_label.setStyleSheet("font-size: 10px; color: #bac2de;")
         layout.addWidget(type_label)
     
     def _load_thumbnail(self):

@@ -54,31 +54,118 @@ class RunCommandTool(Tool):
         re.compile(r'wget.*\|.*sh', re.IGNORECASE), # Wget pipe to shell
     ]
     
-    def execute(self, command: str, timeout: int = 30, cwd: str = None, **kwargs) -> Dict[str, Any]:
+    # Shell metacharacters that indicate potential injection
+    SHELL_METACHARACTERS = {'|', '&', ';', '`', '$', '>', '<', '\n', '\r', '(', ')', '{', '}'}
+    
+    # Whitelisted safe commands (expand carefully)
+    ALLOWED_COMMANDS = {
+        # File listing and info
+        'ls', 'dir', 'cat', 'type', 'head', 'tail', 'wc', 'file',
+        # Directory info
+        'pwd', 'cd',
+        # User/system info (read-only)
+        'whoami', 'hostname', 'uname', 'date', 'uptime',
+        # Python/pip (for development)
+        'python', 'python3', 'pip', 'pip3',
+        # Git (read operations)
+        'git',
+        # Echo for simple output
+        'echo',
+    }
+    
+    def _is_safe_command(self, command: str) -> tuple:
+        """
+        Check if command is safe to execute.
+        
+        Returns:
+            (is_safe: bool, reason: str or None)
+        """
+        if not command or not command.strip():
+            return False, "Empty command"
+        
+        # Check for null bytes (injection attempt)
+        if '\x00' in command or '%00' in command:
+            return False, "Null byte detected"
+        
+        # Check for shell metacharacters
+        if any(char in command for char in self.SHELL_METACHARACTERS):
+            return False, "Shell metacharacters not allowed for security"
+        
+        # Parse command safely
+        try:
+            args = shlex.split(command)
+        except ValueError as e:
+            return False, f"Invalid command syntax: {e}"
+        
+        if not args:
+            return False, "Empty command after parsing"
+        
+        # Get base command (handle paths like /usr/bin/python)
+        base_cmd = Path(args[0]).name.lower()
+        
+        # Check against allowlist
+        if base_cmd not in self.ALLOWED_COMMANDS:
+            return False, f"Command '{base_cmd}' not in allowlist. Allowed: {', '.join(sorted(self.ALLOWED_COMMANDS))}"
+        
+        return True, None
+    
+    def execute(self, command: str, timeout: int = 30, cwd: str = None, safe_mode: bool = True, **kwargs) -> Dict[str, Any]:
+        """
+        Execute a shell command.
+        
+        Args:
+            command: The command to execute
+            timeout: Maximum seconds to wait (1-300)
+            cwd: Working directory
+            safe_mode: If True (default), use whitelist and shell=False.
+                       If False, use blocklist approach with shell=True (DANGEROUS).
+        """
         try:
             # Validate timeout bounds
             timeout = max(1, min(300, int(timeout)))  # 1-300 seconds
             
-            # Safety check - blocked commands
+            # Safety check - blocked commands (always check)
             for blocked in self.BLOCKED_COMMANDS:
                 if blocked in command:
                     logger.warning(f"Blocked dangerous command attempt: {blocked}")
                     return {"success": False, "error": f"Blocked dangerous command: {blocked}"}
             
-            # Safety check - dangerous patterns (pre-compiled)
+            # Safety check - dangerous patterns (always check)
             for pattern in self.DANGEROUS_PATTERNS:
                 if pattern.search(command):
                     logger.warning(f"Blocked command matching dangerous pattern: {pattern.pattern}")
                     return {"success": False, "error": "Command contains potentially dangerous pattern"}
             
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=cwd
-            )
+            if safe_mode:
+                # SECURE PATH: Whitelist + shell=False
+                is_safe, reason = self._is_safe_command(command)
+                if not is_safe:
+                    logger.warning(f"Blocked unsafe command: {reason}")
+                    return {"success": False, "error": f"Command blocked: {reason}"}
+                
+                # Parse command into arguments (safe with shell=False)
+                args = shlex.split(command)
+                
+                result = subprocess.run(
+                    args,
+                    shell=False,  # SECURE: No shell interpretation
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=cwd
+                )
+            else:
+                # LEGACY PATH: Blocklist only (for backwards compatibility)
+                # WARNING: This is less secure, use only when necessary
+                logger.warning("Running command with safe_mode=False - reduced security")
+                result = subprocess.run(
+                    command,
+                    shell=True,  # WARNING: Shell interpretation enabled
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=cwd
+                )
             
             return {
                 "success": result.returncode == 0,

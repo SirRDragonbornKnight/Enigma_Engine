@@ -5829,7 +5829,7 @@ def _apply_ai_customization(parent, setting: str, value: str):
             if n > 1.0:  # Assume 0-100 scale
                 n = n / 100.0
             return max(min_val, min(max_val, n))
-        except:
+        except (ValueError, TypeError):
             return 0.5
     
     # Parse hex color
@@ -5840,7 +5840,7 @@ def _apply_ai_customization(parent, setting: str, value: str):
                 g = int(v[3:5], 16) / 255.0
                 b = int(v[5:7], 16) / 255.0
                 return [r, g, b]
-            except:
+            except (ValueError, IndexError):
                 pass
         return None
     
@@ -6894,7 +6894,7 @@ def _load_json(path: Path) -> dict:
     try:
         with open(path, 'r') as f:
             return json.load(f)
-    except:
+    except (json.JSONDecodeError, IOError):
         return {}
 
 

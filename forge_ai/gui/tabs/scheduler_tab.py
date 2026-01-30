@@ -183,13 +183,13 @@ class TaskDialog(QDialog):
             try:
                 time_parts = task["time"].split(":")
                 self.time_edit.setTime(QTime(int(time_parts[0]), int(time_parts[1])))
-            except:
+            except (ValueError, IndexError):
                 pass
         
         if "date" in task:
             try:
                 self.date_edit.setDate(QDate.fromString(task["date"], "yyyy-MM-dd"))
-            except:
+            except ValueError:
                 pass
         
         for day, cb in self.day_checks.items():
@@ -294,7 +294,8 @@ class SchedulerTab(QWidget):
                 with open(SCHEDULER_FILE, 'r') as f:
                     data = json.load(f)
                     self.tasks = data.get("tasks", [])
-            except:
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load scheduled tasks: {e}")
                 self.tasks = []
         
         self._refresh_table()
@@ -337,7 +338,7 @@ class SchedulerTab(QWidget):
                 try:
                     dt = datetime.fromisoformat(last_run)
                     last_run = dt.strftime("%m/%d %H:%M")
-                except:
+                except ValueError:
                     pass
             self.tasks_table.setItem(row, 5, QTableWidgetItem(last_run))
             
@@ -426,7 +427,7 @@ class SchedulerTab(QWidget):
             
             return time_str
             
-        except:
+        except (ValueError, IndexError):
             return "Unknown"
     
     def _add_task(self):
@@ -643,8 +644,8 @@ class SchedulerTab(QWidget):
                 if should_run:
                     self._run_task(task)
             
-            except:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to check/run scheduled task: {e}")
 
 
 def create_scheduler_tab(parent=None):

@@ -66,6 +66,7 @@ def __getattr__(name: str):
         'create_chat_tab': ('.chat_tab', 'create_chat_tab'),
         'create_training_tab': ('.training_tab', 'create_training_tab'),
         'create_workspace_tab': ('.workspace_tab', 'create_workspace_tab'),
+        'create_dashboard_tab': ('.dashboard_tab', 'create_dashboard_tab'),
         'create_avatar_tab': ('.avatar_tab', 'create_avatar_tab'),
         'create_avatar_subtab': ('.avatar.avatar_display', 'create_avatar_subtab'),
         'create_game_subtab': ('.game.game_connection', 'create_game_subtab'),
@@ -87,6 +88,8 @@ def __getattr__(name: str):
         'create_examples_tab': ('.examples_tab', 'create_examples_tab'),
         'ToolManagerTab': ('.tool_manager_tab', 'ToolManagerTab'),
         'ModelRouterTab': ('.model_router_tab', 'ModelRouterTab'),
+        'LearningTab': ('.learning_tab', 'LearningTab'),
+        'create_learning_tab': ('.learning_tab', 'create_learning_tab'),
         
         # Generation tabs
         'ImageTab': ('.image_tab', 'ImageTab'),
@@ -118,6 +121,8 @@ def __getattr__(name: str):
         'create_analytics_tab': ('.analytics_tab', 'create_analytics_tab'),
         'SchedulerTab': ('.scheduler_tab', 'SchedulerTab'),
         'create_scheduler_tab': ('.scheduler_tab', 'create_scheduler_tab'),
+        'DevicesTab': ('.devices_tab', 'DevicesTab'),
+        'create_devices_tab': ('.devices_tab', 'create_devices_tab'),
         
         # Shared components
         'STYLE_PRESETS': ('.shared_components', 'STYLE_PRESETS'),

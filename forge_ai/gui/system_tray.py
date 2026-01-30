@@ -61,7 +61,8 @@ def get_current_model_name() -> str:
         # Fallback to config
         model_name = CONFIG.get("default_model", "small_forge_ai")
         return model_name
-    except:
+    except (json.JSONDecodeError, IOError, KeyError) as e:
+        logger.debug(f"Failed to get model name: {e}")
         return "Unknown Model"
 
 
@@ -100,8 +101,8 @@ def kill_other_forge_ai_instances() -> dict:
                             if pid != current_pid:
                                 subprocess.run(['taskkill', '/PID', str(pid), '/F'], capture_output=True)
                                 killed += 1
-                    except:
-                        pass
+                    except (ValueError, IndexError, subprocess.SubprocessError):
+                        pass  # Skip invalid lines
         else:
             # Linux/Mac: use ps and kill
             result = subprocess.run(
@@ -2547,7 +2548,8 @@ class ForgeSystemTray(QObject):
                             QSystemTrayIcon.Information,
                             3000
                         )
-                except:
+                except (ImportError, RuntimeError) as e:
+                    logger.debug(f"OCR not available: {e}")
                     self.tray_icon.showMessage(
                         f"Screen Captured ({self.current_model})",
                         f"Saved to: {path}",
@@ -2736,7 +2738,7 @@ class ForgeSystemTray(QObject):
                 self.recording_process.stdin.write(b'q')
                 self.recording_process.stdin.flush()
                 self.recording_process.wait(timeout=5)
-            except:
+            except (OSError, subprocess.TimeoutExpired, AttributeError):
                 self.recording_process.terminate()
             
             self.recording_process = None
@@ -2786,8 +2788,8 @@ class ForgeSystemTray(QObject):
                         "help": settings.get("hotkey_help", defaults["help"]),
                         "voice": settings.get("hotkey_voice", defaults["voice"])
                     }
-        except:
-            pass
+        except (json.JSONDecodeError, IOError, KeyError) as e:
+            logger.debug(f"Failed to load hotkey settings: {e}")
         return defaults
     
     def _show_help(self):

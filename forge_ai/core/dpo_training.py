@@ -541,7 +541,8 @@ class DPOTrainer:
     
     def load(self, path: Union[str, Path]):
         """Load a saved model."""
-        checkpoint = torch.load(path, map_location=self.device)
+        # Note: weights_only=False needed for optimizer state, only load trusted checkpoints
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.global_step = checkpoint.get("global_step", 0)

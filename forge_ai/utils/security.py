@@ -122,10 +122,44 @@ def is_path_blocked(path: str) -> Tuple[bool, Optional[str]]:
     if not path:
         return False, None
     
+    # ==========================================================================
+    # INJECTION ATTACK PREVENTION
+    # ==========================================================================
+    
+    # Check for null byte injection (common bypass technique)
+    if '\x00' in path or '%00' in path:
+        logger.warning(f"Security: Null byte injection detected in path")
+        return True, "Null byte injection detected"
+    
+    # Check for URL encoding bypass attempts
+    import urllib.parse
+    try:
+        decoded_path = urllib.parse.unquote(path)
+        # If decoding changed the path, check the decoded version too
+        if decoded_path != path:
+            # Recursively check decoded path
+            is_blocked, reason = is_path_blocked(decoded_path)
+            if is_blocked:
+                return True, f"URL-encoded path blocked: {reason}"
+    except Exception:
+        pass  # If decoding fails, continue with original
+    
+    # Check for Unicode normalization attacks
+    import unicodedata
+    try:
+        normalized_path = unicodedata.normalize('NFKC', path)
+        if normalized_path != path:
+            # Check normalized version too
+            is_blocked, reason = is_path_blocked(normalized_path)
+            if is_blocked:
+                return True, f"Unicode-normalized path blocked: {reason}"
+    except Exception:
+        pass
+    
     try:
         # Check BOTH resolved and unresolved paths to prevent symlink bypass
         raw_path = Path(path).expanduser()
-        resolved_path = raw_path.resolve()
+        resolved_path = raw_path.resolve(strict=False)  # strict=False to handle non-existent paths
         
         # Check both the raw path and resolved path
         paths_to_check = [

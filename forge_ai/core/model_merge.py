@@ -401,8 +401,8 @@ class ModelMerger:
         if weights is None:
             weights = [1.0 / len(paths)] * len(paths)
         
-        # Load first checkpoint
-        merged_state = torch.load(paths[0], map_location='cpu')
+        # Load first checkpoint (weights_only=True for security)
+        merged_state = torch.load(paths[0], map_location='cpu', weights_only=True)
         
         # Scale by first weight
         for key in merged_state:
@@ -411,13 +411,13 @@ class ModelMerger:
         
         # Add remaining checkpoints
         for path, weight in zip(paths[1:], weights[1:]):
-            state = torch.load(path, map_location='cpu')
+            state = torch.load(path, map_location='cpu', weights_only=True)
             for key in merged_state:
                 if isinstance(merged_state[key], torch.Tensor):
                     merged_state[key] += state[key].float() * weight
         
         # Convert back to original dtype
-        ref_state = torch.load(paths[0], map_location='cpu')
+        ref_state = torch.load(paths[0], map_location='cpu', weights_only=True)
         for key in merged_state:
             if isinstance(merged_state[key], torch.Tensor):
                 merged_state[key] = merged_state[key].to(ref_state[key].dtype)

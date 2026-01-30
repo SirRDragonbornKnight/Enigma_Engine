@@ -71,7 +71,7 @@ except ImportError:
     try:
         # PyQt5 has basic GL bindings
         HAS_OPENGL = False
-    except:
+    except ImportError:
         HAS_OPENGL = False
 
 

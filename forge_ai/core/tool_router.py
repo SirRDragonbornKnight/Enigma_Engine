@@ -521,8 +521,9 @@ class ToolRouter:
             import torch
             from .model import Forge
             
-            # Load model checkpoint
-            checkpoint = torch.load(model_path, map_location='cpu')
+            # Load model checkpoint (weights_only=False needed for full checkpoint with config)
+            # This is safe because we only load from our own trained models directory
+            checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
             
             # Get tokenizer
             tokenizer = self._get_shared_tokenizer()

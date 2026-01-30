@@ -538,7 +538,7 @@ class VoicePipeline:
                 "model_id": "eleven_monolingual_v1",
             }
             
-            response = requests.post(url, json=data, headers=headers)
+            response = requests.post(url, json=data, headers=headers, timeout=30)
             if response.status_code == 200:
                 # Play audio
                 self._play_audio(response.content)

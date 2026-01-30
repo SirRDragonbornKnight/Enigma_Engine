@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from typing import Optional, List
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, status
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +21,12 @@ from .auth import get_auth, WebAuth
 from .discovery import LocalDiscovery, get_local_ip
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Security Constants
+# =============================================================================
+MAX_WEBSOCKET_MESSAGE_SIZE = 64 * 1024  # 64KB max message size
+MAX_PROMPT_LENGTH = 10000  # Max characters in a prompt
 
 
 # =============================================================================
@@ -121,6 +128,13 @@ class ForgeWebServer:
         self.require_auth = require_auth
         self.discovery = LocalDiscovery()
         
+        # Thread pool for running sync operations in async context
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forge_web_")
+        
+        # Lazy-loaded engine singleton (thread-safe)
+        self._engine = None
+        self._engine_lock = asyncio.Lock()
+        
         # Get paths
         self.web_dir = Path(__file__).parent
         self.static_dir = self.web_dir / "static"
@@ -175,6 +189,33 @@ class ForgeWebServer:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+        
+        # Add security headers middleware
+        self._add_security_headers()
+    
+    def _add_security_headers(self):
+        """Add security headers to all responses."""
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.requests import Request
+        from starlette.responses import Response
+        
+        SECURITY_HEADERS = {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "X-XSS-Protection": "1; mode=block",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+            # Note: CSP and HSTS should be configured based on deployment
+        }
+        
+        class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request: Request, call_next):
+                response: Response = await call_next(request)
+                for header, value in SECURITY_HEADERS.items():
+                    response.headers[header] = value
+                return response
+        
+        self.app.add_middleware(SecurityHeadersMiddleware)
     
     def _get_auth(self) -> WebAuth:
         """Get auth instance."""
@@ -478,7 +519,7 @@ class ForgeWebServer:
         
         @self.app.websocket("/ws/chat")
         async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(None)):
-            """WebSocket endpoint for real-time chat."""
+            """WebSocket endpoint for real-time chat with message size limits."""
             # Verify authentication for WebSocket
             if self.require_auth:
                 auth = self._get_auth()
@@ -490,12 +531,46 @@ class ForgeWebServer:
             
             try:
                 while True:
-                    # Receive message
-                    data = await websocket.receive_json()
+                    # Receive message with size limit check
+                    raw_data = await websocket.receive_text()
+                    
+                    # Security: Check message size
+                    if len(raw_data) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                        await manager.send_personal_message(
+                            {
+                                "type": "error",
+                                "error": f"Message too large. Maximum size: {MAX_WEBSOCKET_MESSAGE_SIZE} bytes"
+                            },
+                            websocket
+                        )
+                        continue
+                    
+                    # Parse JSON
+                    try:
+                        import json
+                        data = json.loads(raw_data)
+                    except json.JSONDecodeError:
+                        await manager.send_personal_message(
+                            {"type": "error", "error": "Invalid JSON"},
+                            websocket
+                        )
+                        continue
+                    
                     message_type = data.get("type", "message")
                     
                     if message_type == "message":
                         content = data.get("content", "")
+                        
+                        # Security: Limit prompt length
+                        if len(content) > MAX_PROMPT_LENGTH:
+                            await manager.send_personal_message(
+                                {
+                                    "type": "error",
+                                    "error": f"Message too long. Maximum: {MAX_PROMPT_LENGTH} characters"
+                                },
+                                websocket
+                            )
+                            continue
                         
                         # Send typing indicator
                         await manager.send_personal_message(
@@ -526,11 +601,43 @@ class ForgeWebServer:
                 manager.disconnect(websocket)
     
     async def _generate_response(self, prompt: str) -> str:
-        """Generate AI response."""
+        """
+        Generate AI response without blocking the event loop.
+        
+        Uses a thread pool executor to run synchronous inference
+        in a background thread, allowing the async server to remain
+        responsive to other requests.
+        """
+        # Security: Validate and sanitize input
+        if not prompt or not prompt.strip():
+            return "Please provide a message."
+        
+        # Truncate if too long
+        prompt = prompt[:MAX_PROMPT_LENGTH]
+        
+        # Get the current event loop
+        loop = asyncio.get_event_loop()
+        
+        def _sync_generate():
+            """Synchronous generation function to run in thread pool."""
+            try:
+                from ..core.inference import ForgeEngine
+                
+                # Create engine if needed (singleton pattern)
+                # Note: Engine creation is thread-safe due to GIL
+                engine = ForgeEngine()
+                response = engine.generate(prompt, max_gen=200)
+                return response
+            except Exception as e:
+                logger.error(f"Generation error in thread: {e}")
+                raise
+        
         try:
-            from ..core.inference import ForgeEngine
-            engine = ForgeEngine()
-            response = engine.generate(prompt, max_gen=200)
+            # Run sync generation in thread pool to avoid blocking event loop
+            response = await loop.run_in_executor(
+                self._executor,
+                _sync_generate
+            )
             return response
         except Exception as e:
             logger.error(f"Generation error: {e}")

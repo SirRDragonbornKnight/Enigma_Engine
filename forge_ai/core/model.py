@@ -2068,16 +2068,18 @@ class Forge(nn.Module):
         weights_file = path / 'weights.pth' if path.is_dir() else path
         if weights_file.exists():
             # Use mmap_mode for memory-efficient loading
+            # weights_only=True for security against pickle attacks
             try:
                 state_dict = torch.load(
                     weights_file, 
                     map_location='cpu',
-                    mmap=True  # Memory-mapped loading (PyTorch 2.0+)
+                    mmap=True,  # Memory-mapped loading (PyTorch 2.0+)
+                    weights_only=True
                 )
             except TypeError:
                 # Fallback for older PyTorch versions
                 logger.warning("mmap loading not available, using standard load")
-                state_dict = torch.load(weights_file, map_location='cpu')
+                state_dict = torch.load(weights_file, map_location='cpu', weights_only=True)
             
             model.load_state_dict(state_dict, strict=False)
         

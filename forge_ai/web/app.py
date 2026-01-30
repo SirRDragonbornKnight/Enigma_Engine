@@ -199,60 +199,60 @@ if FLASK_AVAILABLE and app is not None:
     def api_list_models():
         """List available models."""
         try:
-        models_dir = Path(CONFIG["models_dir"])
-        models = []
-        
-        for model_path in models_dir.glob("*"):
-            if model_path.is_dir():
-                # Check if it has model files
-                has_model = any(
-                    model_path.glob("*.pth")
-                ) or any(
-                    model_path.glob("*.pt")
-                )
-                
-                if has_model:
-                    models.append({
-                        'name': model_path.name,
-                        'path': str(model_path),
-                        'size': sum(f.stat().st_size for f in model_path.rglob('*') if f.is_file())
-                    })
-        
-        return jsonify({'models': models})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+            models_dir = Path(CONFIG["models_dir"])
+            models = []
+            
+            for model_path in models_dir.glob("*"):
+                if model_path.is_dir():
+                    # Check if it has model files
+                    has_model = any(
+                        model_path.glob("*.pth")
+                    ) or any(
+                        model_path.glob("*.pt")
+                    )
+                    
+                    if has_model:
+                        models.append({
+                            'name': model_path.name,
+                            'path': str(model_path),
+                            'size': sum(f.stat().st_size for f in model_path.rglob('*') if f.is_file())
+                        })
+            
+            return jsonify({'models': models})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/generate', methods=['POST'])
-def api_generate():
-    """Generate text from prompt."""
-    request_data = request.json
-    prompt = request_data.get('prompt', '')
-    max_tokens = request_data.get('max_tokens', DEFAULT_MAX_TOKENS)
-    temperature = request_data.get('temperature', DEFAULT_TEMPERATURE)
-    
-    if not prompt:
-        return jsonify({'error': 'No prompt provided'}), HTTP_BAD_REQUEST
-    
-    engine = get_engine()
-    if engine is None:
-        return jsonify({'error': 'Model not loaded'}), HTTP_SERVER_ERROR
-    
-    try:
-        response = engine.generate(
-            prompt,
-            max_gen=max_tokens,
-            temperature=temperature
-        )
+    @app.route('/api/generate', methods=['POST'])
+    def api_generate():
+        """Generate text from prompt."""
+        request_data = request.json
+        prompt = request_data.get('prompt', '')
+        max_tokens = request_data.get('max_tokens', DEFAULT_MAX_TOKENS)
+        temperature = request_data.get('temperature', DEFAULT_TEMPERATURE)
         
-        return jsonify({
-            'success': True,
-            'response': response,
-            'model': _model_name,
-            'tokens': len(response.split())
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        if not prompt:
+            return jsonify({'error': 'No prompt provided'}), HTTP_BAD_REQUEST
+        
+        engine = get_engine()
+        if engine is None:
+            return jsonify({'error': 'Model not loaded'}), HTTP_SERVER_ERROR
+        
+        try:
+            response = engine.generate(
+                prompt,
+                max_gen=max_tokens,
+                temperature=temperature
+            )
+            
+            return jsonify({
+                'success': True,
+                'response': response,
+                'model': _model_name,
+                'tokens': len(response.split())
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 
 # =============================================================================

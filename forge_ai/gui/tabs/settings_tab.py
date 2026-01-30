@@ -3240,8 +3240,8 @@ def _apply_custom_resources(parent):
         try:
             import torch
             torch.set_num_threads(cpu_threads)
-        except:
-            pass
+        except ImportError:
+            pass  # PyTorch not installed
         
         # Save settings
         try:

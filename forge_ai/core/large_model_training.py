@@ -546,7 +546,9 @@ class LargeModelTrainer:
     def load_checkpoint(self, path: Union[str, Path]):
         """Load training checkpoint."""
         path = Path(path)
-        checkpoint = torch.load(path, map_location=self.device)
+        # weights_only=False needed for full checkpoint with optimizer state
+        # This is safe because we only load from our own training checkpoints
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
         
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

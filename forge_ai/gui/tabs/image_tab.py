@@ -444,7 +444,7 @@ class PlaceholderImage:
                 # Add prompt text
                 try:
                     font = ImageFont.truetype("arial.ttf", 20)
-                except:
+                except (IOError, OSError):
                     font = ImageFont.load_default()
                 
                 # Wrap text
@@ -763,7 +763,7 @@ class ReplicateImage:
             
             # Download image
             image_url = output[0] if isinstance(output, list) else output
-            resp = requests.get(image_url)
+            resp = requests.get(image_url, timeout=60)
             
             # Save to file
             timestamp = int(time.time())

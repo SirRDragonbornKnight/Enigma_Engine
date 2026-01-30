@@ -690,8 +690,8 @@ class FolderWatcher:
                 if file.is_file():
                     try:
                         states[str(file)] = file.stat().st_mtime
-                    except:
-                        pass
+                    except (OSError, PermissionError):
+                        pass  # Skip files we can't access
         return states
     
     def remove_watch(self, path: str):

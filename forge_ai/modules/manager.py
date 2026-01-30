@@ -465,6 +465,12 @@ class ModuleManager:
             local_only: If True, only allow local modules (no cloud APIs)
         """
         # ─────────────────────────────────────────────────────────────────────
+        # THREAD SAFETY: Lock for module operations
+        # ─────────────────────────────────────────────────────────────────────
+        self._lock = threading.RLock()  # Reentrant lock for nested calls
+        self._module_locks: Dict[str, threading.Lock] = {}  # Per-module locks
+        
+        # ─────────────────────────────────────────────────────────────────────
         # MODULE STORAGE
         # ─────────────────────────────────────────────────────────────────────
         self.modules: Dict[str, Module] = {}          # Loaded module instances
@@ -806,9 +812,16 @@ class ModuleManager:
     # 📦 LOADING: Initialize and start a module
     # =========================================================================
 
+    def _get_module_lock(self, module_id: str) -> threading.Lock:
+        """Get or create a per-module lock for fine-grained concurrency control."""
+        with self._lock:
+            if module_id not in self._module_locks:
+                self._module_locks[module_id] = threading.Lock()
+            return self._module_locks[module_id]
+
     def load(self, module_id: str, config: Dict[str, Any] = None) -> bool:
         """
-        Load a module.
+        Load a module (thread-safe).
         
         📖 WHAT THIS DOES:
         1. Validates the module can be loaded (can_load checks)
@@ -836,59 +849,74 @@ class ModuleManager:
         Returns:
             True if loaded successfully, False otherwise
         """
-        # First, validate with all our safety checks
-        can_load, reason = self.can_load(module_id)
-        if not can_load:
-            logger.error(f"Cannot load module '{module_id}': {reason}")
-            return False
-
-        module_class = self.module_classes[module_id]
-        module_info = module_class.get_info()
-
-        # Privacy warning for cloud services
-        if module_info.is_cloud_service:
-            logger.warning(
-                f"Warning: Module '{module_id}' connects to external cloud services and requires API keys + internet.")
-
-        try:
-            # ─────────────────────────────────────────────────────────────────
-            # STEP 1: Create the module instance
-            # ─────────────────────────────────────────────────────────────────
-            module = module_class(self, config)
-            module.state = ModuleState.LOADING
-
-            # ─────────────────────────────────────────────────────────────────
-            # STEP 2: Call module's load() to initialize resources
-            # This is where the module loads models, connects to APIs, etc.
-            # ─────────────────────────────────────────────────────────────────
-            if module.load():
-                # Success! Mark as loaded and store
-                module.state = ModuleState.LOADED
-                module.get_info().load_time = datetime.now()
-                self.modules[module_id] = module
-
-                # ─────────────────────────────────────────────────────────────
-                # STEP 3: Register with capability registry (orchestrator)
-                # ─────────────────────────────────────────────────────────────
-                self._register_module_capabilities(module_id, module_info)
-
-                # ─────────────────────────────────────────────────────────────
-                # STEP 4: Notify any listeners (GUI, etc.)
-                # ─────────────────────────────────────────────────────────────
-                for callback in self._on_load:
-                    callback(module_id)
-
-                logger.info(f"Loaded module: {module_id}")
+        # Get per-module lock to prevent concurrent loading of same module
+        module_lock = self._get_module_lock(module_id)
+        
+        with module_lock:
+            # Double-check if already loaded (another thread may have loaded it)
+            if module_id in self.modules and self.modules[module_id].state == ModuleState.LOADED:
+                logger.debug(f"Module '{module_id}' already loaded")
                 return True
-            else:
-                # Module's load() returned False - something went wrong
-                module.state = ModuleState.ERROR
-                module.get_info().error_message = "load() returned False"
+            
+            # First, validate with all our safety checks
+            can_load, reason = self.can_load(module_id)
+            if not can_load:
+                logger.error(f"Cannot load module '{module_id}': {reason}")
                 return False
 
-        except Exception as e:
-            logger.error(f"Error loading module '{module_id}': {e}")
-            return False
+            module_class = self.module_classes[module_id]
+            module_info = module_class.get_info()
+
+            # Privacy warning for cloud services
+            if module_info.is_cloud_service:
+                logger.warning(
+                    f"Warning: Module '{module_id}' connects to external cloud services and requires API keys + internet.")
+
+            try:
+                # ─────────────────────────────────────────────────────────────────
+                # STEP 1: Create the module instance
+                # ─────────────────────────────────────────────────────────────────
+                module = module_class(self, config)
+                module.state = ModuleState.LOADING
+
+                # ─────────────────────────────────────────────────────────────────
+                # STEP 2: Call module's load() to initialize resources
+                # This is where the module loads models, connects to APIs, etc.
+                # ─────────────────────────────────────────────────────────────────
+                if module.load():
+                    # Success! Mark as loaded and store
+                    module.state = ModuleState.LOADED
+                    module.get_info().load_time = datetime.now()
+                    
+                    # Use main lock for modifying shared modules dict
+                    with self._lock:
+                        self.modules[module_id] = module
+
+                    # ─────────────────────────────────────────────────────────────
+                    # STEP 3: Register with capability registry (orchestrator)
+                    # ─────────────────────────────────────────────────────────────
+                    self._register_module_capabilities(module_id, module_info)
+
+                    # ─────────────────────────────────────────────────────────────
+                    # STEP 4: Notify any listeners (GUI, etc.)
+                    # ─────────────────────────────────────────────────────────────
+                    for callback in self._on_load:
+                        try:
+                            callback(module_id)
+                        except Exception as e:
+                            logger.warning(f"Error in load callback: {e}")
+
+                    logger.info(f"Loaded module: {module_id}")
+                    return True
+                else:
+                    # Module's load() returned False - something went wrong
+                    module.state = ModuleState.ERROR
+                    module.get_info().error_message = "load() returned False"
+                    return False
+
+            except Exception as e:
+                logger.error(f"Error loading module '{module_id}': {e}")
+                return False
 
     def load_sandboxed(
         self, 
@@ -979,7 +1007,7 @@ class ModuleManager:
 
     def unload(self, module_id: str) -> bool:
         """
-        Unload a module.
+        Unload a module (thread-safe).
         
         📖 WHAT THIS DOES:
         1. Checks no other modules depend on this one
@@ -1004,44 +1032,55 @@ class ModuleManager:
         Returns:
             True if unloaded successfully
         """
-        if module_id not in self.modules:
-            return False
+        # Get per-module lock
+        module_lock = self._get_module_lock(module_id)
+        
+        with module_lock:
+            if module_id not in self.modules:
+                return False
 
-        module = self.modules[module_id]
+            module = self.modules[module_id]
 
-        # ─────────────────────────────────────────────────────────────────────
-        # DEPENDENCY CHECK: Are other modules depending on this one?
-        # ─────────────────────────────────────────────────────────────────────
-        for other_id, other_module in self.modules.items():
-            if other_id != module_id:
-                info = other_module.get_info()
-                if module_id in info.requires and other_module.state == ModuleState.LOADED:
-                    # Can't unload! Something else needs this module
-                    logger.error(f"Cannot unload '{module_id}': required by '{other_id}'")
-                    return False
+            # ─────────────────────────────────────────────────────────────────────
+            # DEPENDENCY CHECK: Are other modules depending on this one?
+            # ─────────────────────────────────────────────────────────────────────
+            with self._lock:  # Lock for reading modules dict
+                for other_id, other_module in self.modules.items():
+                    if other_id != module_id:
+                        info = other_module.get_info()
+                        if module_id in info.requires and other_module.state == ModuleState.LOADED:
+                            # Can't unload! Something else needs this module
+                            logger.error(f"Cannot unload '{module_id}': required by '{other_id}'")
+                            return False
 
-        try:
-            # ─────────────────────────────────────────────────────────────────
-            # STEP 1: Call module's unload() to release resources
-            # This is where models are freed from memory, connections closed, etc.
-            # ─────────────────────────────────────────────────────────────────
-            if module.unload():
-                module.state = ModuleState.UNLOADED
-                del self.modules[module_id]
+            try:
+                # ─────────────────────────────────────────────────────────────────
+                # STEP 1: Call module's unload() to release resources
+                # This is where models are freed from memory, connections closed, etc.
+                # ─────────────────────────────────────────────────────────────────
+                if module.unload():
+                    module.state = ModuleState.UNLOADED
+                    
+                    # Use main lock for modifying shared modules dict
+                    with self._lock:
+                        del self.modules[module_id]
 
-                # ─────────────────────────────────────────────────────────────
-                # STEP 2: Notify listeners (GUI, etc.)
-                # ─────────────────────────────────────────────────────────────
-                for callback in self._on_unload:
-                    callback(module_id)
+                    # ─────────────────────────────────────────────────────────────
+                    # STEP 2: Notify listeners (GUI, etc.)
+                    # ─────────────────────────────────────────────────────────────
+                    for callback in self._on_unload:
+                        try:
+                            callback(module_id)
+                        except Exception as e:
+                            logger.warning(f"Error in unload callback: {e}")
 
-                logger.info(f"Unloaded module: {module_id}")
-                return True
-            return False
+                    logger.info(f"Unloaded module: {module_id}")
+                    return True
+                return False
 
-        except Exception as e:
-            logger.error(f"Error unloading module '{module_id}': {e}")
-            return False
+            except Exception as e:
+                logger.error(f"Error unloading module '{module_id}': {e}")
+                return False
 
     # =========================================================================
     # ⚡ ACTIVATION: Start/stop module processing
@@ -1341,7 +1380,9 @@ class ModuleManager:
         return assessment
 
     def save_config(self, path: Optional[Path] = None):
-        """Save current module configuration."""
+        """Save current module configuration using atomic write to prevent corruption."""
+        from ..utils.io_utils import atomic_save_json
+        
         path = path or self.config_path
 
         config = {
@@ -1355,8 +1396,7 @@ class ModuleManager:
                 'active': module.state == ModuleState.ACTIVE,
             }
 
-        with open(path, 'w') as f:
-            json.dump(config, f, indent=2)
+        atomic_save_json(path, config, indent=2)
 
     def load_config(self, path: Optional[Path] = None) -> bool:
         """Load and apply module configuration."""

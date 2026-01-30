@@ -64,21 +64,25 @@ def _transcribe_vosk_from_mic(timeout):
     except Exception:
         return ""
 
+VOSK_FRAME_SIZE = 4000  # Number of audio frames to read per iteration
+VOSK_MODEL_PATH = "model"  # Default path for VOSK model
+
+
 def _transcribe_vosk_file(path):
     try:
         # simple file transcription using wav file path and vosk
         import wave, json
-        wf = wave.open(path, "rb")
-        model = vosk.Model("model")
-        rec = vosk.KaldiRecognizer(model, wf.getframerate())
-        results = []
-        while True:
-            data = wf.readframes(4000)
-            if len(data) == 0:
-                break
-            if rec.AcceptWaveform(data):
-                results.append(rec.Result())
-        results.append(rec.FinalResult())
+        with wave.open(path, "rb") as wf:
+            model = vosk.Model(VOSK_MODEL_PATH)
+            rec = vosk.KaldiRecognizer(model, wf.getframerate())
+            results = []
+            while True:
+                data = wf.readframes(VOSK_FRAME_SIZE)
+                if len(data) == 0:
+                    break
+                if rec.AcceptWaveform(data):
+                    results.append(rec.Result())
+            results.append(rec.FinalResult())
         texts = []
         for r in results:
             try:

@@ -202,9 +202,14 @@ class ConversationManager:
         data = {"name": name, "saved_at": time.time(), "messages": messages}
         
         # ─────────────────────────────────────────────────────────────────────
-        # WRITE FILE: Save to disk as JSON
+        # WRITE FILE: Save to disk using atomic write to prevent corruption
         # ─────────────────────────────────────────────────────────────────────
         try:
+            from ..utils.io_utils import atomic_save_json
+            if not atomic_save_json(fname, data, indent=2):
+                raise IOError(f"Atomic save failed for {fname}")
+        except ImportError:
+            # Fallback to direct write if io_utils not available
             fname.write_text(json.dumps(data, indent=2), encoding="utf-8")
         except (IOError, OSError) as e:
             raise IOError(f"Failed to save conversation to {fname}: {e}") from e

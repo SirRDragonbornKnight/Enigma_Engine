@@ -219,7 +219,7 @@ class WindowsHotkeyBackend:
                 UnregisterHotKey(None, test_id)
                 return True
             return False
-        except:
+        except (ValueError, TypeError, OSError):
             return False
     
     def start(self):

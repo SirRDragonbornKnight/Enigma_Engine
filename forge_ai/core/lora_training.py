@@ -420,8 +420,8 @@ class LoRAModel(nn.Module):
         """Load LoRA adapter weights."""
         path = Path(path)
         
-        # Load weights
-        lora_state = torch.load(path / "adapter_model.bin", map_location='cpu')
+        # Load weights (weights_only=True for security against pickle attacks)
+        lora_state = torch.load(path / "adapter_model.bin", map_location='cpu', weights_only=True)
         
         for name, layer in self._lora_layers.items():
             layer_state = {}

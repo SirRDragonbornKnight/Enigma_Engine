@@ -236,7 +236,7 @@ class Cloud3DGen:
             
             # Download the result
             result_url = output if isinstance(output, str) else output[0]
-            resp = requests.get(result_url)
+            resp = requests.get(result_url, timeout=120)
             
             timestamp = int(time.time())
             # Determine extension from URL or default to .glb

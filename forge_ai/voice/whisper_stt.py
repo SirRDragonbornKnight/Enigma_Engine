@@ -39,6 +39,7 @@ class WhisperSTT:
     def listen(self, duration: int = 5) -> str:
         """Listen from microphone and transcribe."""
         import tempfile
+        import os
         import sounddevice as sd
         import scipy.io.wavfile as wav
         
@@ -47,7 +48,15 @@ class WhisperSTT:
         audio = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1)
         sd.wait()
         
-        # Save to temp file
+        # Save to temp file and transcribe
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            wav.write(f.name, sample_rate, audio)
-            return self.transcribe(f.name)
+            temp_path = f.name
+        try:
+            wav.write(temp_path, sample_rate, audio)
+            return self.transcribe(temp_path)
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass

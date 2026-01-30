@@ -261,9 +261,9 @@ def load_model_with_offloading(
     # Create model
     model = model_class(**model_kwargs)
     
-    # Load weights
+    # Load weights (weights_only=True for security against pickle attacks)
     if model_path and Path(model_path).exists():
-        state_dict = torch.load(model_path, map_location="cpu")
+        state_dict = torch.load(model_path, map_location="cpu", weights_only=True)
         model.load_state_dict(state_dict, strict=False)
     
     # Estimate memory needs

@@ -353,7 +353,8 @@ def cmd_show(args):
     print(f"{'='*50}\n")
     
     # Load and inspect
-    checkpoint = torch.load(model_path, map_location="cpu")
+    # Note: weights_only=False needed for full checkpoint inspection, only inspect trusted models
+    checkpoint = torch.load(model_path, map_location="cpu", weights_only=False)
     
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         state_dict = checkpoint["model_state_dict"]

@@ -2345,8 +2345,10 @@ class EnhancedMainWindow(QMainWindow):
                 if pipeline:
                     pipeline.stop()
                     print("  - Voice pipeline stopped")
-            except:
-                pass
+            except ImportError:
+                pass  # Module not available
+            except Exception as e:
+                logger.debug(f"Voice pipeline cleanup: {e}")
             
             # Stop voice listener
             try:
@@ -2355,8 +2357,10 @@ class EnhancedMainWindow(QMainWindow):
                 if listener:
                     listener.stop()
                     print("  - Voice listener stopped")
-            except:
-                pass
+            except ImportError:
+                pass  # Module not available
+            except Exception as e:
+                logger.debug(f"Voice listener cleanup: {e}")
             
             # Stop performance monitor
             try:
@@ -2365,24 +2369,28 @@ class EnhancedMainWindow(QMainWindow):
                 if monitor:
                     monitor.stop()
                     print("  - Performance monitor stopped")
-            except:
-                pass
+            except ImportError:
+                pass  # Module not available
+            except Exception as e:
+                logger.debug(f"Performance monitor cleanup: {e}")
             
             # Stop any web server
             try:
                 from ..web.app import shutdown_server
                 shutdown_server()
                 print("  - Web server stopped")
-            except:
-                pass
+            except ImportError:
+                pass  # Module not available
+            except Exception as e:
+                logger.debug(f"Web server cleanup: {e}")
             
             # Clear model from memory
             try:
                 if self.engine:
                     self.engine = None
                     print("  - Model unloaded")
-            except:
-                pass
+            except AttributeError:
+                pass  # Engine not initialized
             
             print("[ForgeAI] Cleanup complete. Exiting...")
             
@@ -2648,8 +2656,8 @@ class EnhancedMainWindow(QMainWindow):
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except:
-            pass
+        except ImportError:
+            pass  # PyTorch not installed
         
         if stopped_any:
             self.statusBar().showMessage("All generations stopped (Escape pressed)", 3000)
@@ -2996,8 +3004,8 @@ class EnhancedMainWindow(QMainWindow):
                 tray = get_system_tray()
                 if tray and hasattr(tray, 'update_model_name'):
                     tray.update_model_name(self.current_model_name)
-            except:
-                pass
+            except (ImportError, RuntimeError):
+                pass  # System tray not available
             
             # Sync engine to ChatSync for shared generation with quick chat
             if hasattr(self, '_chat_sync'):
@@ -3181,6 +3189,9 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.workspace_tab import create_workspace_tab
         from .tabs.persona_tab import create_persona_tab
         from .tabs.learning_tab import LearningTab
+        from .tabs.dashboard_tab import create_dashboard_tab
+        from .tabs.scheduler_tab import SchedulerTab
+        from .tabs.devices_tab import DevicesTab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -3230,6 +3241,7 @@ class EnhancedMainWindow(QMainWindow):
             # Core
             ("section", "CORE"),
             ("", "Chat", "chat", "Talk to your AI - start here!"),
+            ("", "Dashboard", "dashboard", "System overview and quick actions"),
             ("", "Workspace", "workspace", "Quick access to common tasks"),
             ("", "History", "history", "View past conversations"),
             # Model
@@ -3239,6 +3251,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Modules", "modules", "Enable/disable AI features"),
             ("", "Tools", "tools", "Manage AI tools and capabilities"),
             ("", "Router", "router", "Assign specialized models to tasks"),
+            ("", "Training", "training", "Train your AI on custom data"),
             # Generate
             ("section", "GENERATE"),
             ("", "Image", "image", "Generate images from text descriptions"),
@@ -3256,9 +3269,12 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Robot", "robot", "Control robots and hardware"),
             ("", "Screen", "vision", "Capture screenshots for AI analysis"),
             ("", "Camera", "camera", "Live webcam preview and recording"),
+            ("", "Devices", "devices", "Manage network devices and offloading"),
             # Tools
             ("section", "SYSTEM"),
             ("", "Learning", "learning", "Self-improvement metrics and training"),
+            ("", "Scheduler", "scheduler", "Manage scheduled tasks"),
+            ("", "Notes", "notes", "Quick notes and bookmarks"),
             ("", "Terminal", "terminal", "View AI internal processing"),
             ("", "Files", "files", "Edit training data and settings"),
             ("", "Logs", "logs", "View system logs"),
@@ -3296,11 +3312,13 @@ class EnhancedMainWindow(QMainWindow):
             'voice_output': [],
         }
         
-        # Tabs that should always be visible (core tabs)
+        # Tabs that should always be visible (all tabs visible by default)
+        # Module toggling affects feature availability, not tab visibility
         self._always_visible_tabs = [
-            'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
-            'game', 'robot', 'learning', 'terminal', 'files', 'logs', 'network', 'federation',
-            'analytics', 'examples', 'settings', 'gif', 'voice'
+            'chat', 'dashboard', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
+            'training', 'image', 'code', 'video', 'audio', 'voice', '3d', 'gif', 'search', 'avatar',
+            'game', 'robot', 'vision', 'camera', 'devices', 'learning', 'scheduler', 'notes', 'terminal', 
+            'files', 'logs', 'network', 'federation', 'analytics', 'examples', 'settings'
         ]
         
         for item in nav_items:
@@ -3347,9 +3365,13 @@ class EnhancedMainWindow(QMainWindow):
             return scroll
         
         # Add all tabs to the stack (in order matching nav_items)
+        # CORE section
         self.content_stack.addWidget(wrap_in_scroll(create_chat_tab(self)))  # Chat
+        self.content_stack.addWidget(wrap_in_scroll(create_dashboard_tab(self)))  # Dashboard
         self.content_stack.addWidget(wrap_in_scroll(create_workspace_tab(self)))  # Workspace
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
+        
+        # MODEL section
         self.persona_tab = create_persona_tab(self)  # Store reference for signals
         self.content_stack.addWidget(wrap_in_scroll(self.persona_tab))  # Persona
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
@@ -3357,6 +3379,9 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(ToolManagerTab(self)))  # Tools
         self.router_tab = ModelRouterTab(self)  # Store reference for syncing
         self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
+        self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Training
+        
+        # GENERATE section
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
         self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
@@ -3364,13 +3389,20 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(VoiceCloneTab(self)))  # Voice
         self.content_stack.addWidget(wrap_in_scroll(create_threed_tab(self)))  # 3D
         self.content_stack.addWidget(wrap_in_scroll(create_gif_tab(self)))  # GIF
+        
+        # CONNECT section
         self.content_stack.addWidget(wrap_in_scroll(create_embeddings_tab(self)))  # Search
         self.content_stack.addWidget(wrap_in_scroll(create_avatar_subtab(self)))  # Avatar
         self.content_stack.addWidget(wrap_in_scroll(create_game_subtab(self)))  # Game
         self.content_stack.addWidget(wrap_in_scroll(create_robot_subtab(self)))  # Robot
-        self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision
+        self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision/Screen
         self.content_stack.addWidget(wrap_in_scroll(create_camera_tab(self)))  # Camera
+        self.content_stack.addWidget(wrap_in_scroll(DevicesTab(self)))  # Devices
+        
+        # SYSTEM section
         self.content_stack.addWidget(wrap_in_scroll(LearningTab(self)))  # Learning
+        self.content_stack.addWidget(wrap_in_scroll(SchedulerTab(self)))  # Scheduler
+        self.content_stack.addWidget(wrap_in_scroll(create_notes_tab(self)))  # Notes
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs

@@ -211,7 +211,7 @@ class ReplicateVideo:
             
             # Download video
             video_url = output if isinstance(output, str) else output[0]
-            resp = requests.get(video_url)
+            resp = requests.get(video_url, timeout=120)
             
             # Save to file
             timestamp = int(time.time())
