@@ -6,12 +6,15 @@ Tools:
   - fetch_webpage: Get content from a URL
 """
 
-import logging
-import urllib.request
-import urllib.parse
+from __future__ import annotations
+
 import json
+import logging
 import re
-from typing import Dict, Any
+import urllib.parse
+import urllib.request
+from typing import Any
+
 from .tool_registry import Tool
 from .url_safety import URLSafety, ContentFilter
 

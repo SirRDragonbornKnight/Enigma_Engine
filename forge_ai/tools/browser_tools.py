@@ -12,11 +12,14 @@ Tools:
 Supports: Chrome, Firefox, Opera GX, Brave, Edge
 """
 
+from __future__ import annotations
+
+import json
 import os
 import subprocess
-import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from .tool_registry import Tool
 
 # Storage for browser control settings

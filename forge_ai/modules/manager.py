@@ -61,6 +61,8 @@ EVERYTHING is a module that can be loaded/unloaded dynamically.
     • data/module_config.json          - Saved module settings
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
@@ -69,7 +71,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Tuple
+from typing import Any, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .registry import Module
 
 logger = logging.getLogger(__name__)
 

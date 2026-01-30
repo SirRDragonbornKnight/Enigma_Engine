@@ -10,12 +10,14 @@ Allows the AI to "see" what's on screen:
 Works on: Desktop (Windows/Mac/Linux), Mobile (limited)
 """
 
+from __future__ import annotations
+
 import base64
 import io
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

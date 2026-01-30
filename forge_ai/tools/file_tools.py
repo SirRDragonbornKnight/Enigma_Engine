@@ -13,11 +13,14 @@ Security:
   - AI cannot access files in blocked locations
 """
 
+from __future__ import annotations
+
 import logging
 import platform
 import shutil
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)

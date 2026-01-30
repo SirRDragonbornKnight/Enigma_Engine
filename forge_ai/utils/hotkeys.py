@@ -18,17 +18,19 @@ Usage:
     manager.start()
 """
 
+from __future__ import annotations
+
 import logging
+import platform
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 # Platform detection
-import platform
 PLATFORM = platform.system().lower()
 
 

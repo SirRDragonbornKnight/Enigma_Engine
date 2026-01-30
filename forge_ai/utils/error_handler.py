@@ -4,10 +4,12 @@ Error Handler - Graceful error handling with fallback responses
 Provides friendly error messages and recovery suggestions for common errors.
 """
 
+from __future__ import annotations
+
 import logging
 import traceback
-from typing import Dict, Any, Optional, Callable
 from pathlib import Path
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

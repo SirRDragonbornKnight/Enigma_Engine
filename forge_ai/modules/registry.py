@@ -51,12 +51,17 @@ that tells ModuleManager what modules exist and how to load them.
     • docs/MODULE_GUIDE.md              - Module documentation
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
 import logging
 import os
-from typing import Dict, List, Optional, Type, Any
+from typing import Any, TYPE_CHECKING
 
 from .manager import Module, ModuleInfo, ModuleCategory, ModuleManager
+
+if TYPE_CHECKING:
+    pass  # Type-only imports if needed
 
 logger = logging.getLogger(__name__)
 

@@ -39,14 +39,16 @@ USAGE:
     manager.load_profile("my_router_setup")
 """
 
+from __future__ import annotations
+
 import os
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
-from datetime import datetime
 
 # Config path
 CONFIG_DIR = Path.home() / ".forge_ai"

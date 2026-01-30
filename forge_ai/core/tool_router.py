@@ -64,13 +64,15 @@ and sends their request to the RIGHT specialized model or tool!
     • data/tool_routing.json            - Saved routing config
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import re
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

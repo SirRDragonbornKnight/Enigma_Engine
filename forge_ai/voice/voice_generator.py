@@ -51,12 +51,14 @@ Generate unique voices that match your AI's character.
     • data/voice_profiles/          - Saved voice configurations
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import shutil
-from pathlib import Path
-from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from .voice_profile import VoiceProfile, PROFILES_DIR
 from ..config import CONFIG

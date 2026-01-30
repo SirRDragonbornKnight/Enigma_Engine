@@ -11,15 +11,18 @@ Tools:
   - watch_folder: Monitor folder for changes
 """
 
-import os
+from __future__ import annotations
+
 import json
-import time
 import logging
-import threading
+import os
 import subprocess
-from pathlib import Path
+import threading
+import time
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Callable
+from pathlib import Path
+from typing import Any, Callable
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)

@@ -53,11 +53,13 @@ USAGE:
     listener.start(callback=on_speech)
 """
 
-import threading
+from __future__ import annotations
+
 import queue
+import threading
 import time
-from typing import Optional, Callable, List
 from dataclasses import dataclass
+from typing import Callable
 
 
 # =============================================================================
@@ -157,7 +159,7 @@ class VoiceConfig:
         energy_threshold: Microphone sensitivity (lower = more sensitive)
         dynamic_energy: If True, auto-adjusts for ambient noise
     """
-    wake_words: List[str] = None
+    wake_words: list[str] = None
     language: str = "en-US"
     timeout: float = 5.0
     phrase_time_limit: float = 10.0

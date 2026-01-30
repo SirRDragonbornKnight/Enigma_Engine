@@ -66,12 +66,15 @@ and generates intelligent responses.
     • forge_ai/core/tool_router.py - Route requests to specialized tools
     • forge_ai/memory/manager.py   - Save conversations
 """
-import torch
-import torch.nn.functional as F
-from typing import Optional, List, Union, Generator, Dict, Any
-from pathlib import Path
+from __future__ import annotations
+
 import logging
 import threading
+from pathlib import Path
+from typing import Any, Generator, Union
+
+import torch
+import torch.nn.functional as F
 
 from .model import Forge, create_model, MODEL_PRESETS
 from .tokenizer import get_tokenizer

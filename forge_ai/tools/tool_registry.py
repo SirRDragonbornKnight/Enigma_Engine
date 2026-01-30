@@ -26,8 +26,10 @@ USAGE:
     result = tools.execute("read_file", path="/home/user/document.txt")
 """
 
-from typing import Dict, Any, Optional, List
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class Tool(ABC):
@@ -35,10 +37,10 @@ class Tool(ABC):
     
     name: str = "base_tool"
     description: str = "Base tool - override this"
-    parameters: Dict[str, str] = {}  # param_name: description
+    parameters: dict[str, str] = {}  # param_name: description
     
     @abstractmethod
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         """
         Execute the tool.
         

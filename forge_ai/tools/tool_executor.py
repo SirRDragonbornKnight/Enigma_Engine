@@ -59,14 +59,16 @@ executes tools with timeouts, and returns structured results.
     • forge_ai/core/tool_router.py       - Routes requests here
 """
 
+from __future__ import annotations
+
 import json
 import re
 import logging
 import signal
 import platform
 import time
-from typing import Dict, Any, Optional, List, Tuple
 from contextlib import contextmanager
+from typing import Any
 
 from .tool_definitions import get_tool_definition
 

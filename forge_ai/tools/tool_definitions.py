@@ -12,9 +12,11 @@ This allows the AI to:
 - Execute tools through the module system
 """
 
-from typing import Dict, List, Any, Optional
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class ToolParameter:
     description: str
     required: bool = True
     default: Any = None
-    enum: Optional[List[Any]] = None  # For choice parameters
+    enum: list[Any] | None = None  # For choice parameters
 
 
 @dataclass
@@ -35,16 +37,16 @@ class ToolDefinition:
     """Definition of a tool that the AI can use."""
     name: str
     description: str
-    parameters: List[ToolParameter]
-    module: Optional[str] = None  # Module that provides this capability
+    parameters: list[ToolParameter]
+    module: str | None = None  # Module that provides this capability
     category: str = "general"  # "generation", "perception", "control", "system", "general"
-    examples: List[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
     version: str = "1.0.0"  # Tool version (semantic versioning)
     deprecated: bool = False  # Whether tool is deprecated
-    deprecated_message: Optional[str] = None  # Deprecation message
-    added_in: Optional[str] = None  # Version when tool was added
+    deprecated_message: str | None = None  # Deprecation message
+    added_in: str | None = None  # Version when tool was added
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for AI consumption."""
         result = {
             "name": self.name,

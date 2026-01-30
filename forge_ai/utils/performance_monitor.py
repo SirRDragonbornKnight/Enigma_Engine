@@ -24,13 +24,15 @@ USAGE:
     monitor.set_alert("cpu", threshold=90.0, callback=lambda m: print("CPU high!"))
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Optional, Callable, List, Dict, Any
 from collections import deque
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 

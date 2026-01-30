@@ -40,12 +40,15 @@ and finds similar items using mathematical distance.
     • forge_ai/memory/embeddings.py - Converts text to vectors
     • forge_ai/memory/search.py     - High-level search interface
 """
+from __future__ import annotations
+
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Tuple
-import numpy as np
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

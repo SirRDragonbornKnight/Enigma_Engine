@@ -56,11 +56,13 @@ and pushed to a vector database for intelligent semantic search.
     • forge_ai/memory/embeddings.py - Convert text to vectors
     • forge_ai/memory/rag.py        - Retrieval-augmented generation
 """
+from __future__ import annotations
+
 import json
 import logging
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from .vector_db import SimpleVectorDB
 from ..config import CONFIG
