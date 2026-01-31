@@ -8,8 +8,11 @@ Providers:
 
 import os
 import time
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtWidgets import (
@@ -73,7 +76,7 @@ class ForgeCode:
             self._using_builtin = False
             return True
         except Exception as e:
-            print(f"Forge model not available: {e}")
+            logger.debug(f"Forge model not available: {e}")
         
         # Fall back to built-in template-based code generation
         try:
@@ -82,10 +85,10 @@ class ForgeCode:
             if self._builtin_code.load():
                 self.is_loaded = True
                 self._using_builtin = True
-                print("Using built-in code generator (template-based)")
+                logger.info("Using built-in code generator (template-based)")
                 return True
         except Exception as e:
-            print(f"Built-in code gen failed: {e}")
+            logger.debug(f"Built-in code gen failed: {e}")
         
         return False
     
@@ -141,7 +144,7 @@ class OpenAICode:
             self.is_loaded = bool(self.api_key)
             return self.is_loaded
         except ImportError:
-            print("Install: pip install openai")
+            logger.debug("OpenAI not available - install: pip install openai")
             return False
     
     def unload(self):
@@ -255,7 +258,7 @@ class CodeGenerationWorker(QThread):
                     self.finished.emit(result)
                     return
             except Exception as router_error:
-                print(f"Router fallback: {router_error}")
+                logger.debug(f"Router fallback: {router_error}")
             
             # Direct provider fallback
             provider = get_provider(self.provider_name)

@@ -180,6 +180,7 @@ class GGUFModel:
             if stream:
                 # Streaming generation
                 output = ""
+                import sys
                 for chunk in self.model(
                     prompt,
                     max_tokens=max_tokens,
@@ -193,8 +194,10 @@ class GGUFModel:
                 ):
                     text = chunk['choices'][0]['text']
                     output += text
-                    print(text, end='', flush=True)
-                print()  # Newline after streaming
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+                sys.stdout.write('\n')  # Newline after streaming
+                logger.debug(f"Streaming generation complete, {len(output)} chars")
                 return output
             else:
                 # Standard generation
@@ -248,6 +251,7 @@ class GGUFModel:
             )
             
             if stream:
+                import sys
                 output = ""
                 for chunk in response:
                     if 'choices' in chunk and len(chunk['choices']) > 0:
@@ -255,8 +259,10 @@ class GGUFModel:
                         if 'content' in delta:
                             text = delta['content']
                             output += text
-                            print(text, end='', flush=True)
-                print()
+                            sys.stdout.write(text)
+                            sys.stdout.flush()
+                sys.stdout.write('\n')
+                logger.debug(f"Streaming chat complete, {len(output)} chars")
                 return output
             else:
                 return response['choices'][0]['message']['content']
@@ -959,41 +965,41 @@ def load_gguf_model(
 
 def test_gguf_loading(model_path: str = None):
     """Test function to verify GGUF loading works."""
-    print("Testing GGUF loading...")
+    logger.info("Testing GGUF loading...")
     
     if not HAVE_LLAMA_CPP:
-        print("[ERROR] llama-cpp-python not available")
-        print("Install with: pip install llama-cpp-python")
+        logger.error("llama-cpp-python not available")
+        logger.error("Install with: pip install llama-cpp-python")
         return False
     
     if model_path is None:
         # Try to find a GGUF model
         models = list_gguf_models()
         if not models:
-            print("[ERROR] No GGUF models found in models/ directory")
+            logger.error("No GGUF models found in models/ directory")
             return False
         model_path = str(models[0])
-        print(f"Using model: {model_path}")
+        logger.info(f"Using model: {model_path}")
     
     try:
         model = GGUFModel(model_path, n_ctx=512, verbose=False)
         
         if model.load():
-            print("[OK] Model loaded successfully")
+            logger.info("Model loaded successfully")
             
             # Test generation
             response = model.generate("Hello!", max_tokens=20)
-            print(f"[OK] Generated: {response[:50]}...")
+            logger.info(f"Generated: {response[:50]}...")
             
             model.unload()
-            print("[OK] Model unloaded")
+            logger.info("Model unloaded")
             return True
         else:
-            print("[ERROR] Failed to load model")
+            logger.error("Failed to load model")
             return False
     
     except Exception as e:
-        print(f"[ERROR] Error: {e}")
+        logger.error(f"Error: {e}")
         return False
 
 

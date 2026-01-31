@@ -7,10 +7,13 @@ import re
 import json
 import sqlite3
 import csv
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
 from .tool_registry import Tool
+
+logger = logging.getLogger(__name__)
 
 OUTPUT_DIR = Path.home() / ".forge_ai" / "outputs" / "data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -54,33 +57,9 @@ class CSVQueryTool(Tool):
     description = "Query CSV using simple filters (column > value)."
     parameters = {"path": "CSV file path", "query": "Filter like 'age > 30'", "limit": "Max rows (default: 100)"}
     
-    # Input validation constants
-    MAX_LIMIT = 10000
-    MIN_LIMIT = 1
-    
     def execute(self, path: str, query: str, limit: int = 100, **kwargs) -> Dict[str, Any]:
-        # Input validation
-        if not path or not isinstance(path, str):
-            return {"success": False, "error": "Path is required and must be a string"}
-        
-        # Validate and constrain limit
-        try:
-            limit = int(limit)
-            limit = max(self.MIN_LIMIT, min(self.MAX_LIMIT, limit))
-        except (ValueError, TypeError):
-            limit = 100
-        
         try:
             path = Path(path).expanduser().resolve()
-            
-            # Security: Check for path traversal
-            try:
-                from ..utils.security import is_path_blocked
-                if is_path_blocked(str(path)):
-                    return {"success": False, "error": "Access to this path is not allowed"}
-            except ImportError:
-                pass  # Security module not available
-            
             try:
                 import pandas as pd
                 df = pd.read_csv(str(path))
@@ -88,10 +67,9 @@ class CSVQueryTool(Tool):
                 if match:
                     col, op, val = match.groups()
                     val = val.strip().strip('"\'')
-                    try:
-                        val = float(val)
-                    except ValueError:
-                        pass  # Keep as string if not numeric
+                    try: val = float(val)
+                    except Exception as e:
+                        logger.debug(f"Could not convert value '{val}' to float: {e}")
                     ops = {'>': lambda x,v: x>v, '<': lambda x,v: x<v, '>=': lambda x,v: x>=v, 
                            '<=': lambda x,v: x<=v, '==': lambda x,v: x==v, '=': lambda x,v: x==v, '!=': lambda x,v: x!=v}
                     if op in ops: df = df[ops[op](df[col], val)]

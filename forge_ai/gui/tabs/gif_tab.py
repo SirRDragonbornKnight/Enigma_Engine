@@ -7,8 +7,11 @@ Provides easy GIF creation from:
   - Image variations (morph between prompts)
 """
 
+import logging
 import os
 import time
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -451,8 +454,9 @@ class GIFTab(QWidget):
             self._current_movie = QMovie(str(filepath))
             self.result_label.setMovie(self._current_movie)
             self._current_movie.start()
-        except Exception:
+        except Exception as e:
             # Fallback to static image
+            logger.debug(f"Failed to display animated GIF, falling back to static: {e}")
             pixmap = QPixmap(str(filepath))
             scaled = pixmap.scaled(
                 self.result_label.size(),

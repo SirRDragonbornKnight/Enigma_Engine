@@ -35,10 +35,21 @@ Your journey through ForgeAI starts here.
 For first-time users, start with: python run.py --gui
 """
 
-import argparse
-import sys
+# === EARLY ENVIRONMENT SETUP ===
+# These must be set BEFORE any imports that might load GTK/Qt
 import os
+os.environ["NO_AT_BRIDGE"] = "1"
+os.environ["GTK_A11Y"] = "none"
+os.environ["GTK_MODULES"] = ""  # Disable gail and atk-bridge modules
+os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+
+import argparse
+import logging
+import sys
 from pathlib import Path
+
+# Module logger
+logger = logging.getLogger(__name__)
 
 
 def _suppress_noise():
@@ -67,13 +78,18 @@ def _suppress_noise():
         try:
             asound = ctypes.cdll.LoadLibrary('libasound.so.2')
             asound.snd_lib_error_set_handler(c_error_handler)
-        except OSError:
-            pass  # libasound not available, that's fine
-    except Exception:
-        pass  # If this fails, continue anyway
+        except OSError as e:
+            logger.debug(f"libasound not available: {e}")
+    except Exception as e:
+        logger.debug(f"ALSA error suppression setup failed: {e}")
     
     # ===== QT NOISE SUPPRESSION =====
     os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+    
+    # ===== GTK/ATK ACCESSIBILITY SUPPRESSION =====
+    # Suppress GTK gail module and ATK bridge warnings
+    os.environ["NO_AT_BRIDGE"] = "1"
+    os.environ["GTK_A11Y"] = "none"
     
     # ===== AUDIO DRIVER SETTINGS =====
     # Use dummy audio driver if no real audio needed
@@ -214,6 +230,8 @@ Examples:
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output or Path(CONFIG["models_dir"]) / f"{args.model}_forge.pth"
         
+        logger.info(f"Building {args.model} model from {data_path}")
+        logger.info(f"Output: {output_path}")
         print(f"\nBuilding {args.model} model from {data_path}")
         print(f"Output: {output_path}")
         print()
@@ -238,6 +256,7 @@ Examples:
         data_path = args.data or Path(CONFIG["data_dir"]) / "data.txt"
         output_path = args.output
         
+        logger.info(f"Training {args.model} model, data={data_path}, epochs={args.epochs}")
         print(f"\nTraining {args.model} model...")
         print(f"Data: {data_path}")
         print(f"Epochs: {args.epochs}")
@@ -271,6 +290,7 @@ Examples:
             subdomain=args.tunnel_subdomain
         )
         
+        logger.info(f"Starting {args.tunnel_provider} tunnel on port {args.tunnel_port}")
         print(f"\nStarting {args.tunnel_provider} tunnel on port {args.tunnel_port}...")
         print("This will expose your local server to the internet.\n")
         
@@ -283,6 +303,7 @@ Examples:
         tunnel_url = manager.start_tunnel(args.tunnel_port)
         
         if tunnel_url:
+            logger.info(f"Tunnel started successfully: {tunnel_url}")
             print("\n✓ Tunnel started successfully!")
             print(f"\n  Public URL: {tunnel_url}")
             print(f"  Local Port: {args.tunnel_port}")
@@ -299,6 +320,7 @@ Examples:
                 manager.stop_tunnel()
                 print("✓ Tunnel stopped.\n")
         else:
+            logger.error(f"Failed to start {args.tunnel_provider} tunnel on port {args.tunnel_port}")
             print("\n✗ Failed to start tunnel.")
             print(f"\nTroubleshooting:")
             print(f"  1. Make sure {args.tunnel_provider} is installed")
@@ -321,6 +343,7 @@ Examples:
             # OpenAI-compatible API (recommended)
             from forge_ai.comms.openai_api import create_openai_server
             port = port or 8000
+            logger.info(f"Starting OpenAI-compatible API server on port {port}")
             print("\n" + "=" * 60)
             print("  ForgeAI OpenAI-Compatible API Server")
             print("=" * 60)
@@ -337,6 +360,7 @@ Examples:
             from forge_ai.comms.api_server import create_app
             port = port or 5000
             app = create_app()
+            logger.info(f"Starting simple API server on port {port}")
             print(f"\nStarting API server at http://127.0.0.1:{port}")
             print("Press Ctrl+C to stop\n")
             app.run(host="127.0.0.1", port=port, debug=True)
@@ -352,6 +376,7 @@ Examples:
         try:
             engine = ForgeEngine()
         except FileNotFoundError as e:
+            logger.error(f"Model not found: {e}")
             print(f"\n[ERROR] Model not found")
             print(f"   {e}")
             print("\nTo fix this:")
@@ -361,6 +386,7 @@ Examples:
             print("      python run.py --gui")
             return
         except ImportError as e:
+            logger.error(f"Missing dependency: {e}")
             print(f"\n[ERROR] Missing dependency")
             print(f"   {e}")
             print("\nTo fix this:")
@@ -368,6 +394,7 @@ Examples:
             print("      pip install -r requirements.txt")
             return
         except Exception as e:
+            logger.error(f"Error loading model: {e}", exc_info=True)
             print(f"\n[ERROR] Error loading model: {e}")
             print("\nTroubleshooting:")
             print("   - Check if the model file exists in the models/ directory")
@@ -392,6 +419,7 @@ Examples:
                     for token in engine.stream_generate(prompt, max_gen=200):
                         print(token, end="", flush=True)
                 except Exception as e:
+                    logger.warning(f"Generation error: {e}", exc_info=True)
                     print(f"\n\n[WARNING] Generation error: {e}")
                     print("Try a different prompt or check the model.")
                 print("\n")
@@ -401,10 +429,29 @@ Examples:
                 break
 
     if args.gui:
+        # Suppress GTK/ATK stderr noise during Qt initialization
+        # Redirect stderr at the file descriptor level to catch C-level output
+        import sys
+        stderr_fd = sys.stderr.fileno()
+        try:
+            devnull_fd = os.open(os.devnull, os.O_WRONLY)
+            old_stderr_fd = os.dup(stderr_fd)
+            os.dup2(devnull_fd, stderr_fd)
+            os.close(devnull_fd)
+        except (OSError, AttributeError) as e:
+            logger.debug(f"Could not redirect stderr: {e}")
+            old_stderr_fd = None
+        
         _print_startup_banner()
+        
         try:
             from forge_ai.gui.enhanced_window import run_app
         except ImportError as e:
+            # Restore stderr for error messages
+            if old_stderr_fd is not None:
+                os.dup2(old_stderr_fd, stderr_fd)
+                os.close(old_stderr_fd)
+            logger.error(f"GUI requires PyQt5: {e}")
             print(f"\n[ERROR] GUI requires PyQt5")
             print(f"   Error: {e}")
             print("\nTo fix this:")
@@ -413,12 +460,19 @@ Examples:
             print("\n   On Raspberry Pi, use the system package:")
             print("      sudo apt install python3-pyqt5")
             sys.exit(1)
+        
+        # Restore stderr before running app (so we can see real errors)
+        if old_stderr_fd is not None:
+            os.dup2(old_stderr_fd, stderr_fd)
+            os.close(old_stderr_fd)
+        
         run_app()
     
     if args.background:
         try:
             from forge_ai.background import main as run_background
         except ImportError as e:
+            logger.error(f"Background mode requires PyQt5: {e}")
             print(f"\n[ERROR] Background mode requires PyQt5")
             print(f"   Error: {e}")
             print("\nTo fix this:")
@@ -438,6 +492,7 @@ Examples:
         try:
             from forge_ai.web.app import run_web
         except ImportError as e:
+            logger.error(f"Web dashboard requires flask-socketio: {e}")
             print(f"\n[ERROR] Web dashboard requires flask-socketio")
             print(f"   Error: {e}")
             print("\nTo fix this:")
@@ -448,6 +503,7 @@ Examples:
         print("\n" + "=" * 60)
         print("AI TESTER - WEB DASHBOARD")
         print("=" * 60)
+        logger.info("Starting web dashboard on port 8080")
         print(f"\nStarting web server...")
         
         # Setup instance manager if needed

@@ -6,12 +6,15 @@ while gaming or doing other tasks.
 """
 
 import os
+import logging
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
     QPushButton, QSpinBox, QSlider, QCheckBox,
     QTextEdit, QMessageBox, QLineEdit
 )
 from PyQt5.QtCore import Qt
+
+logger = logging.getLogger(__name__)
 
 from .shared_components import NoScrollComboBox
 
@@ -231,8 +234,8 @@ def _toggle_web_server(parent, state):
                 try:
                     # Mark server for cleanup
                     parent._web_server = None
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Web server cleanup: {e}")
             parent.web_status_label.setText("Server stopped")
             parent.web_status_label.setStyleSheet("color: #bac2de;")
             parent.web_qr_btn.setEnabled(False)
@@ -510,8 +513,8 @@ def _on_game_detected(parent, game_id: str):
                         parent.game_combo.setCurrentIndex(i)
                         break
                 parent.game_combo.blockSignals(False)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to restore game state: {e}")
 
 
 
@@ -833,8 +836,8 @@ def _move_to_monitor(parent, monitor_index):
             settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
             with open(settings_path, 'w') as f:
                 json.dump(main_window._gui_settings, f, indent=2)
-        except Exception:
-            pass
+        except (IOError, OSError) as e:
+            logger.debug(f"Failed to save monitor settings: {e}")
     
     _update_display_info(parent)
 
@@ -853,8 +856,8 @@ def _save_startup_position_mode(parent):
             settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
             with open(settings_path, 'w') as f:
                 json.dump(main_window._gui_settings, f, indent=2)
-        except Exception:
-            pass
+        except (IOError, OSError) as e:
+            logger.debug(f"Failed to save startup position mode: {e}")
 
 
 def _load_startup_position_mode(parent):
@@ -951,8 +954,8 @@ def _toggle_cloud_mode(parent, state):
                 manager = main_window.module_manager
                 if manager.is_loaded('chat_api'):
                     manager.unload('chat_api')
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to unload chat_api module: {e}")
 
 
 def _update_cloud_model_options(parent):
@@ -2214,8 +2217,9 @@ def create_settings_tab(parent):
     mic_test_row.addStretch()
     audio_layout.addLayout(mic_test_row)
     
-    # Populate audio devices
-    _refresh_audio_devices(parent)
+    # Don't populate audio devices at startup - wait for user to click refresh
+    # This avoids PyAudio ctypes callback errors during GUI initialization
+    # _refresh_audio_devices(parent)  # Delayed - click Refresh to enumerate
     
     # Link to Audio tab
     audio_link_row = QHBoxLayout()
@@ -2777,8 +2781,8 @@ def _load_mini_chat_on_top_setting(parent):
             settings = json.loads(settings_path.read_text())
             on_top = settings.get("mini_chat_always_on_top", True)  # Default to True
             parent.mini_chat_on_top_check.setChecked(on_top)
-    except Exception:
-        pass  # Keep default (checked)
+    except (IOError, OSError, json.JSONDecodeError, KeyError) as e:
+        logger.debug(f"Could not load mini chat setting, using default: {e}")
 
 
 def _create_status_indicator(name: str, status: str) -> QLabel:
@@ -2970,8 +2974,8 @@ def _get_folder_size(path):
         for item in Path(path).rglob("*"):
             if item.is_file():
                 total += item.stat().st_size
-    except Exception:
-        pass
+    except (OSError, PermissionError) as e:
+        logger.debug(f"Could not calculate folder size for {path}: {e}")
     return total
 
 
@@ -3241,7 +3245,7 @@ def _apply_custom_resources(parent):
             import torch
             torch.set_num_threads(cpu_threads)
         except ImportError:
-            pass  # PyTorch not installed
+            logger.debug("PyTorch not available, cannot set thread count")
         
         # Save settings
         try:
@@ -3842,8 +3846,10 @@ def _apply_personality_preset(parent):
         personality = AIPersonality(model_name)
         personality.set_preset(preset)
         personality.save()
-    except Exception:
-        pass  # Personality system may not be available
+    except ImportError:
+        logger.debug("Personality system not available")
+    except Exception as e:
+        logger.debug(f"Failed to apply personality preset: {e}")
 
 
 def _update_personality_trait(parent, trait_key: str, value: int):
@@ -3859,8 +3865,10 @@ def _update_personality_trait(parent, trait_key: str, value: int):
         if hasattr(personality.traits, trait_key):
             setattr(personality.traits, trait_key, trait_value)
             personality.save()
-    except Exception:
-        pass  # Personality system may not be available
+    except ImportError:
+        logger.debug("Personality system not available")
+    except Exception as e:
+        logger.debug(f"Failed to update personality trait {trait_key}: {e}")
 
 
 def _toggle_personality_evolution(parent, state):
@@ -3872,8 +3880,10 @@ def _toggle_personality_evolution(parent, state):
         personality.load()
         personality.allow_evolution = (state == Checked)
         personality.save()
-    except Exception:
-        pass  # Personality system may not be available
+    except ImportError:
+        logger.debug("Personality system not available")
+    except Exception as e:
+        logger.debug(f"Failed to toggle personality evolution: {e}")
 
 
 # =============================================================================
@@ -3887,27 +3897,45 @@ def _get_audio_devices():
     
     try:
         import pyaudio
-        p = pyaudio.PyAudio()
+        import sys
+        import os
+        
+        # Suppress PyAudio/PortAudio stderr spam during initialization
+        # This is especially needed on Linux where ctypes callbacks print errors
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            p = pyaudio.PyAudio()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception:
+            sys.stderr = old_stderr
+            raise
         
         for i in range(p.get_device_count()):
-            info = p.get_device_info_by_index(i)
-            name = info.get('name', f'Device {i}')
-            
-            # Truncate long names
-            if len(name) > 40:
-                name = name[:37] + "..."
-            
-            if info.get('maxInputChannels', 0) > 0:
-                input_devices.append((name, i))
-            if info.get('maxOutputChannels', 0) > 0:
-                output_devices.append((name, i))
+            try:
+                info = p.get_device_info_by_index(i)
+                name = info.get('name', f'Device {i}')
+                
+                # Truncate long names
+                if len(name) > 40:
+                    name = name[:37] + "..."
+                
+                if info.get('maxInputChannels', 0) > 0:
+                    input_devices.append((name, i))
+                if info.get('maxOutputChannels', 0) > 0:
+                    output_devices.append((name, i))
+            except (OSError, IOError):
+                # Some devices fail enumeration - skip them
+                continue
         
         p.terminate()
     except (ImportError, OSError, TypeError) as e:
         # pyaudio not installed, or audio system issue (e.g., portaudio ctypes callback)
-        print(f"[Audio] Could not enumerate devices: {type(e).__name__}")
+        logger.debug(f"Audio device enumeration failed (expected if pyaudio not installed): {e}")
     except Exception as e:
-        print(f"Error getting audio devices: {e}")
+        logger.debug(f"Unexpected error enumerating audio devices: {e}")
     
     return input_devices, output_devices
 

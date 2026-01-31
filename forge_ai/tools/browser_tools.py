@@ -12,14 +12,11 @@ Tools:
 Supports: Chrome, Firefox, Opera GX, Brave, Edge
 """
 
-from __future__ import annotations
-
-import json
 import os
 import subprocess
+import json
 from pathlib import Path
-from typing import Any
-
+from typing import Dict, Any, List, Optional
 from .tool_registry import Tool
 
 # Storage for browser control settings
@@ -259,8 +256,8 @@ class BrowserMediaVolumeTool(Tool):
                         ps_script = f'(New-Object -ComObject WScript.Shell).SendKeys([char]173)'
                         # This is simplified - real implementation would use audio API
                         return {"success": True, "volume": level, "method": "windows"}
-                    except (OSError, RuntimeError) as e:
-                        logger.debug(f"Windows volume control failed: {e}")
+                    except Exception as e:
+                        logger.debug(f"Could not set Windows volume: {e}")
                 
                 return {"success": False, "error": "Could not set volume"}
             else:

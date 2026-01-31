@@ -271,13 +271,12 @@ class NetworkTab(QWidget):
         """Get local IP address."""
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                s.connect(("8.8.8.8", 80))
-                ip = s.getsockname()[0]
-            finally:
-                s.close()
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
             return ip
-        except OSError:
+        except Exception as e:
+            logger.debug(f"Could not get local IP: {e}")
             return "127.0.0.1"
     
     def _load_config(self):
@@ -291,8 +290,8 @@ class NetworkTab(QWidget):
                     # Load saved devices
                     for device in config.get("devices", []):
                         self._add_device_to_table(device)
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"Failed to load network config: {e}")
+            except Exception as e:
+                logger.debug(f"Could not load network config: {e}")
     
     def _save_config(self):
         """Save network configuration."""

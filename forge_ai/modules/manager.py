@@ -670,7 +670,7 @@ class ModuleManager:
             self.hardware_profile['cpu_cores'] = psutil.cpu_count()
             self.hardware_profile['ram_mb'] = psutil.virtual_memory().total // (1024 * 1024)
         except ImportError:
-            pass  # Silently use defaults
+            logger.debug("psutil not available, using default CPU/RAM values")
         
         # Determine recommended model size based on hardware
         ram_gb = self.hardware_profile['ram_mb'] / 1024
@@ -1467,8 +1467,8 @@ class ModuleManager:
                 if mem_percent > 80:
                     warnings.append(f"High memory usage: {mem_percent:.1f}%")
                 
-            except (ImportError, Exception):
-                pass  # psutil not available or error
+            except (ImportError, Exception) as e:
+                logger.debug(f"psutil not available or error during health check: {e}")
             
         except Exception as e:
             is_healthy = False

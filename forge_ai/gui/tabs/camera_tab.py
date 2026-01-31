@@ -1,8 +1,11 @@
 """Camera tab for ForgeAI GUI - live camera preview and capture."""
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Optional
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -20,6 +23,7 @@ try:
     import cv2
     HAVE_CV2 = True
 except ImportError:
+    logger.debug("OpenCV not available - camera features disabled")
     cv2 = None
     HAVE_CV2 = False
 
@@ -70,6 +74,7 @@ class CameraThread(QThread):
                 self.msleep(33)  # ~30 FPS
                 
         except Exception as e:
+            logger.error(f"Camera thread error: {e}")
             self.error.emit(str(e))
         finally:
             if self.cap:
@@ -319,9 +324,11 @@ class CameraTab(QWidget):
         
         try:
             cv2.imwrite(str(filename), self.current_frame)
+            logger.info(f"Photo captured: {filename}")
             self.status_label.setText(f"Status: Photo saved to {filename.name}")
             self.analysis_text.appendPlainText(f"\nPhoto saved: {filename.name}")
         except Exception as e:
+            logger.error(f"Failed to save photo: {e}")
             QMessageBox.warning(self, "Save Error", f"Failed to save photo: {e}")
             
     def toggle_recording(self):
@@ -419,12 +426,14 @@ class CameraTab(QWidget):
                     
             except (ImportError, AttributeError, Exception) as e:
                 # Fallback - just report basic info
+                logger.debug(f"Vision tools not available: {e}")
                 h, w = self.current_frame.shape[:2]
                 self.analysis_text.appendPlainText(
                     f"Frame info: {w}x{h} pixels\n"
                     f"(Vision tools not available - install transformers for AI analysis)"
                 )
         except Exception as e:
+            logger.error(f"Frame analysis error: {e}")
             self.analysis_text.appendPlainText(f"Analysis error: {e}")
             
     def _toggle_auto_analyze(self, enabled: bool):

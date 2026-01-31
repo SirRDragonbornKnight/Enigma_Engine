@@ -269,8 +269,8 @@ class AIVoiceGenerator:
             from .audio_analyzer import AudioAnalyzer
             analyzer = AudioAnalyzer()
             coqui_features = analyzer.extract_coqui_features(stored_samples)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Coqui feature extraction not available: {e}")
         
         metadata = {
             "name": name,

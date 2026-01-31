@@ -270,8 +270,8 @@ class ConversationManager:
                 backup_path = fname.with_suffix(".json.corrupt")
                 fname.rename(backup_path)
                 logger.info(f"Moved corrupt file to {backup_path}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to backup corrupt file {fname}: {e}")
             raise json.JSONDecodeError(
                 f"Invalid JSON in conversation file {fname}",
                 e.doc,

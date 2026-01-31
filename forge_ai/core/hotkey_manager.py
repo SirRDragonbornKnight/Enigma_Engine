@@ -263,7 +263,7 @@ class HotkeyManager:
             self.stop()
             self.unregister_all()
         except Exception:
-            pass  # Suppress errors during destruction
+            pass  # Ignore cleanup errors during shutdown
 
 
 # Singleton instance

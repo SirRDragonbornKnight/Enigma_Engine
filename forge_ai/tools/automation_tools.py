@@ -11,18 +11,15 @@ Tools:
   - watch_folder: Monitor folder for changes
 """
 
-from __future__ import annotations
-
-import json
-import logging
 import os
-import subprocess
-import threading
+import json
 import time
-from datetime import datetime, timedelta
+import logging
+import threading
+import subprocess
 from pathlib import Path
-from typing import Any, Callable
-
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional, Callable
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -693,8 +690,8 @@ class FolderWatcher:
                 if file.is_file():
                     try:
                         states[str(file)] = file.stat().st_mtime
-                    except (OSError, PermissionError):
-                        pass  # Skip files we can't access
+                    except Exception as e:
+                        logger.debug(f"Could not stat file {file}: {e}")
         return states
     
     def remove_watch(self, path: str):

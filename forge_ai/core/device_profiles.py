@@ -326,7 +326,7 @@ class DeviceProfiler:
                         caps.is_raspberry_pi = True
                         caps.has_neon = True
             except (IOError, OSError):
-                pass  # /proc/cpuinfo not available
+                pass  # /proc/cpuinfo not available on this system
             
             # Android detection
             if "ANDROID_ROOT" in os.environ or "TERMUX_VERSION" in os.environ:
@@ -363,7 +363,7 @@ class DeviceProfiler:
                             caps.has_avx512 = "avx512" in flags
                             break
         except (IOError, OSError):
-            pass  # /proc/cpuinfo not available
+            pass  # CPU flags not available on this system
         
         # ARM detection
         if "arm" in caps.cpu_arch or "aarch" in caps.cpu_arch:
@@ -403,8 +403,7 @@ class DeviceProfiler:
                 kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
                 caps.ram_total_mb = stat.ullTotalPhys // (1024 * 1024)
                 caps.ram_available_mb = stat.ullAvailPhys // (1024 * 1024)
-        except (IOError, OSError, AttributeError) as e:
-            logger.debug(f"Memory detection failed: {e}")
+        except Exception:
             caps.ram_total_mb = 4096  # Assume 4GB minimum
             caps.ram_available_mb = 2048
         
@@ -429,7 +428,7 @@ class DeviceProfiler:
             import shutil
             total, used, free = shutil.disk_usage(Path.home())
             caps.disk_free_gb = free / (1024**3)
-        except (OSError, ValueError):
+        except (OSError, IOError):
             caps.disk_free_gb = 10.0  # Assume 10GB
         
         self._capabilities = caps

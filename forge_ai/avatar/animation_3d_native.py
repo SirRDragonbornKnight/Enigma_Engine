@@ -58,7 +58,7 @@ try:
     HAS_PYQT_GL = True
 except ImportError:
     HAS_PYQT_GL = False
-    print("[3D Native] PyQt5 OpenGL not available")
+    # Don't print - this is optional and the fallback works fine
 
 # OpenGL functions from PyQt5
 try:
@@ -71,7 +71,8 @@ except ImportError:
     try:
         # PyQt5 has basic GL bindings
         HAS_OPENGL = False
-    except ImportError:
+    except Exception as e:
+        logger.debug(f"OpenGL fallback failed: {e}")
         HAS_OPENGL = False
 
 

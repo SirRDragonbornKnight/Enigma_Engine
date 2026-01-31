@@ -332,8 +332,8 @@ class GameAIRouter:
             for cb in self._on_game_changed:
                 try:
                     cb(old_game, game_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Game change callback failed: {e}")
     
     def detect_game(self) -> Optional[str]:
         """Detect currently running game."""
@@ -374,8 +374,8 @@ class GameAIRouter:
                             for window_title in config.window_titles:
                                 if window_title.lower() in title.value.lower():
                                     return game_id
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Windows title detection failed: {e}")
             else:
                 # Linux/macOS - use Xlib for active window (internal)
                 try:
@@ -416,9 +416,9 @@ class GameAIRouter:
                     d.close()
                 except ImportError:
                     # Xlib not available, rely on process detection only
-                    pass
-                except Exception:
-                    pass
+                    logger.debug("Xlib not available - relying on process detection only")
+                except Exception as e:
+                    logger.debug(f"Xlib window detection failed: {e}")
             
         except ImportError:
             logger.warning("psutil not installed - game detection disabled")
@@ -437,8 +437,8 @@ class GameAIRouter:
             for cb in self._on_game_detected:
                 try:
                     cb(game)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Game detection callback failed: {e}")
         
         return game
     

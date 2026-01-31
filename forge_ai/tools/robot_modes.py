@@ -25,11 +25,14 @@ Usage:
     controller.emergency_stop()             # E-STOP
 """
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Any, Callable, Tuple, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .robot_tools import RobotController
@@ -205,13 +208,13 @@ class RobotModeController:
         with self._mode_lock:
             # Check E-STOP
             if self._estop_active and not force:
-                print(f"[Robot] Cannot change mode - E-STOP active: {self._estop_reason}")
+                logger.warning(f"Cannot change mode - E-STOP active: {self._estop_reason}")
                 return False
             
             # Safety checks
             if not force:
                 if mode == RobotMode.AUTO and self._safety_level == SafetyLevel.MAXIMUM:
-                    print("[Robot] Cannot enter AUTO mode - safety level too high")
+                    logger.warning("Cannot enter AUTO mode - safety level too high")
                     return False
             
             old_mode = self._mode
@@ -226,14 +229,14 @@ class RobotModeController:
                     # Apply speed limits via safe mode flag
                     pass
             
-            print(f"[Robot] Mode changed: {old_mode.name} -> {mode.name}")
+            logger.info(f"Mode changed: {old_mode.name} -> {mode.name}")
             
             # Notify callbacks
             for cb in self._on_mode_change:
                 try:
                     cb(old_mode, mode)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Mode change callback failed: {e}")
             
             return True
     
@@ -266,14 +269,14 @@ class RobotModeController:
         if self._robot:
             self._robot.stop()
         
-        print(f"[Robot] *** E-STOP ACTIVATED *** Reason: {reason}")
+        logger.critical(f"*** E-STOP ACTIVATED *** Reason: {reason}")
         
         # Notify callbacks
         for cb in self._on_estop:
             try:
                 cb(reason)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"E-STOP callback failed: {e}")
     
     def reset_estop(self, confirm: bool = False) -> bool:
         """
@@ -286,13 +289,13 @@ class RobotModeController:
             True if reset successful
         """
         if not confirm:
-            print("[Robot] E-STOP reset requires confirm=True")
+            logger.warning("E-STOP reset requires confirm=True")
             return False
         
         self._estop_active = False
         self._estop_reason = ""
         self._mode = RobotMode.DISABLED  # Always start disabled after E-STOP
-        print("[Robot] E-STOP reset - robot now DISABLED")
+        logger.info("E-STOP reset - robot now DISABLED")
         return True
     
     # ===== Camera =====
@@ -308,12 +311,12 @@ class RobotModeController:
                 self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, self._camera_config.resolution[0])
                 self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self._camera_config.resolution[1])
                 self._camera.set(cv2.CAP_PROP_FPS, self._camera_config.fps)
-                print(f"[Robot] Camera {self._camera_config.device_id} initialized")
+                logger.info(f"Camera {self._camera_config.device_id} initialized")
             except ImportError:
-                print("[Robot] OpenCV not installed - camera disabled")
+                logger.warning("OpenCV not installed - camera disabled")
                 self._camera_config.enabled = False
             except Exception as e:
-                print(f"[Robot] Camera init failed: {e}")
+                logger.error(f"Camera init failed: {e}")
                 self._camera_config.enabled = False
     
     def start_camera(self):
@@ -340,14 +343,14 @@ class RobotModeController:
                     for cb in self._on_camera_frame:
                         try:
                             cb(frame)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Camera frame callback failed: {e}")
                 
                 time.sleep(1.0 / self._camera_config.fps)
         
         self._camera_thread = threading.Thread(target=capture_loop, daemon=True)
         self._camera_thread.start()
-        print("[Robot] Camera capture started")
+        logger.info("Camera capture started")
     
     def stop_camera(self):
         """Stop camera capture."""
@@ -355,7 +358,7 @@ class RobotModeController:
         if self._camera:
             self._camera.release()
             self._camera = None
-        print("[Robot] Camera stopped")
+        logger.info("Camera stopped")
     
     def get_camera_frame(self):
         """Get latest camera frame."""
@@ -368,7 +371,7 @@ class RobotModeController:
         """Add a sensor for monitoring."""
         self._sensors[name] = config
         self._sensor_values[name] = 0.0
-        print(f"[Robot] Sensor added: {name} ({config.type})")
+        logger.info(f"Sensor added: {name} ({config.type})")
     
     def start_sensor_monitoring(self):
         """Start sensor monitoring thread."""
@@ -392,14 +395,14 @@ class RobotModeController:
                         for cb in self._on_sensor_warning:
                             try:
                                 cb(name, value)
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Sensor warning callback failed: {e}")
                 
                 time.sleep(0.1)  # 10Hz sensor check
         
         self._sensor_thread = threading.Thread(target=monitor_loop, daemon=True)
         self._sensor_thread.start()
-        print("[Robot] Sensor monitoring started")
+        logger.info("Sensor monitoring started")
     
     def _read_sensor(self, name: str, config: SensorConfig) -> float:
         """Read sensor value (override for specific implementations)."""
@@ -454,7 +457,7 @@ class RobotModeController:
         allowed, reason = self.validate_movement(joint, position, speed)
         
         if not allowed:
-            print(f"[Robot] Movement denied: {reason}")
+            logger.warning(f"Movement denied: {reason}")
             return False
         
         # Apply constraints
@@ -463,7 +466,7 @@ class RobotModeController:
         # Check if confirmation required
         if self._constraints.require_confirmation:
             # In a GUI, you would show a confirmation dialog here
-            print(f"[Robot] Movement requires confirmation: {joint} to {position}")
+            logger.info(f"Movement requires confirmation: {joint} to {position}")
             # For now, just proceed
         
         # Execute
@@ -489,7 +492,7 @@ class RobotModeController:
             True if action executed
         """
         if not self.can_ai_control:
-            print(f"[Robot] AI control not allowed in mode {self._mode.name}")
+            logger.warning(f"AI control not allowed in mode {self._mode.name}")
             return False
         
         params = params or {}
@@ -550,7 +553,8 @@ def get_mode_controller(robot: Optional['RobotController'] = None) -> RobotModeC
             try:
                 from .robot_tools import RobotController
                 robot = RobotController()
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Could not create RobotController: {e}")
                 robot = None
         _mode_controller = RobotModeController(robot)
     

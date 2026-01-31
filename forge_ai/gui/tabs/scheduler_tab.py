@@ -183,14 +183,14 @@ class TaskDialog(QDialog):
             try:
                 time_parts = task["time"].split(":")
                 self.time_edit.setTime(QTime(int(time_parts[0]), int(time_parts[1])))
-            except (ValueError, IndexError):
-                pass
+            except Exception as e:
+                logger.debug(f"Could not parse task time: {e}")
         
         if "date" in task:
             try:
                 self.date_edit.setDate(QDate.fromString(task["date"], "yyyy-MM-dd"))
-            except ValueError:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not parse task date: {e}")
         
         for day, cb in self.day_checks.items():
             cb.setChecked(day in task.get("days", []))
@@ -294,8 +294,8 @@ class SchedulerTab(QWidget):
                 with open(SCHEDULER_FILE, 'r') as f:
                     data = json.load(f)
                     self.tasks = data.get("tasks", [])
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"Failed to load scheduled tasks: {e}")
+            except Exception as e:
+                logger.debug(f"Could not load scheduler tasks: {e}")
                 self.tasks = []
         
         self._refresh_table()
@@ -338,8 +338,8 @@ class SchedulerTab(QWidget):
                 try:
                     dt = datetime.fromisoformat(last_run)
                     last_run = dt.strftime("%m/%d %H:%M")
-                except ValueError:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not parse last_run date: {e}")
             self.tasks_table.setItem(row, 5, QTableWidgetItem(last_run))
             
             # Actions
@@ -427,7 +427,8 @@ class SchedulerTab(QWidget):
             
             return time_str
             
-        except (ValueError, IndexError):
+        except Exception as e:
+            logger.debug(f"Could not calculate next run: {e}")
             return "Unknown"
     
     def _add_task(self):
@@ -645,7 +646,7 @@ class SchedulerTab(QWidget):
                     self._run_task(task)
             
             except Exception as e:
-                logger.error(f"Failed to check/run scheduled task: {e}")
+                logger.debug(f"Error checking task {task.get('name', 'unknown')}: {e}")
 
 
 def create_scheduler_tab(parent=None):

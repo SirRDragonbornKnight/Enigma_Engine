@@ -777,7 +777,7 @@ class Trainer:
     📐 EXAMPLE USAGE:
         trainer = Trainer(model, tokenizer)
         results = trainer.train(texts, epochs=3)
-        print(f"Final loss: {results['final_loss']}")
+        logger.info(f"Final loss: {results['final_loss']}")
     
     🔗 CONNECTS TO:
       → Uses datasets (TextDataset, QADataset) defined above
@@ -1375,8 +1375,8 @@ def train_model(
     # CHECK EXISTING MODEL: Skip if already trained (unless force=True)
     # ─────────────────────────────────────────────────────────────────
     if output_path.exists() and not force:
-        print(warning_msg(f"Model already exists at {output_path}"))
-        print(info_msg("Use force=True to retrain"))
+        logger.warning(f"Model already exists at {output_path}")
+        logger.info("Use force=True to retrain")
         return {"status": "skipped", "path": str(output_path)}
 
     # Ensure output directory exists
@@ -1400,7 +1400,7 @@ def train_model(
     # Training a tokenizer on YOUR data gives better results than
     # using a generic one, especially for specialized domains
     if train_tokenizer_first:
-        print(system_msg("Training tokenizer..."))
+        logger.info("Training tokenizer...")
         try:
             tokenizer = train_tokenizer(
                 data_paths=[str(data_path)],
@@ -1422,7 +1422,7 @@ def train_model(
     # ─────────────────────────────────────────────────────────────────
     # CREATE MODEL: Initialize with random weights
     # ─────────────────────────────────────────────────────────────────
-    print(system_msg(f"Creating {model_size} model..."))
+    logger.info(f"Creating {model_size} model...")
     try:
         model = create_model(model_size, vocab_size=tokenizer.vocab_size)
     except (ValueError, RuntimeError) as e:

@@ -1588,7 +1588,7 @@ class EnhancedMainWindow(QMainWindow):
             # Listen for settings changes
             self.ui_settings.add_listener(self._on_ui_settings_changed)
         except Exception as e:
-            print(f"Could not load UI settings: {e}")
+            logger.warning(f"Could not load UI settings: {e}")
             self.ui_settings = None
             # Apply fallback styles for text selection
             try:
@@ -1621,18 +1621,31 @@ class EnhancedMainWindow(QMainWindow):
             
             # Load saved module configuration or enable defaults
             if self.module_manager.load_config():
-                print("Loaded saved module configuration")
+                logger.debug("Loaded saved module configuration")
             else:
                 # Enable default modules on first run
-                default_modules = ['avatar', 'memory', 'web_tools', 'file_tools']
+                # Image, Avatar, Vision are on by default for a complete experience
+                default_modules = ['avatar', 'vision', 'memory', 'web_tools', 'file_tools']
                 for mod_id in default_modules:
                     try:
                         self.module_manager.load(mod_id)
                     except Exception:
                         pass
-                print("Enabled default modules")
+                
+                # Try to load image generation (local first, fall back to API)
+                try:
+                    can_load, _ = self.module_manager.can_load('image_gen_local')
+                    if can_load:
+                        self.module_manager.load('image_gen_local')
+                    else:
+                        # No GPU - image_gen_api doesn't require GPU
+                        self.module_manager.load('image_gen_api')
+                except Exception:
+                    pass
+                
+                logger.debug("Enabled default modules")
         except Exception as e:
-            print(f"Could not initialize ModuleManager: {e}")
+            logger.warning(f"Could not initialize ModuleManager: {e}")
             self.module_manager = None
         
         # ─────────────────────────────────────────────────────────────────
@@ -1649,9 +1662,9 @@ class EnhancedMainWindow(QMainWindow):
             }
             initial_mode = mode_map.get(saved_mode, GUIMode.STANDARD)
             self.gui_mode_manager = GUIModeManager(initial_mode)
-            print(f"GUI Mode: {self.gui_mode_manager.get_mode_name()}")
+            logger.debug(f"GUI Mode: {self.gui_mode_manager.get_mode_name()}")
         except Exception as e:
-            print(f"Could not initialize GUIModeManager: {e}")
+            logger.warning(f"Could not initialize GUIModeManager: {e}")
             self.gui_mode_manager = GUIModeManager(GUIMode.STANDARD)
         
         # ─────────────────────────────────────────────────────────────────
@@ -1702,9 +1715,9 @@ class EnhancedMainWindow(QMainWindow):
                     self._avatar_bridge.emotion_detected.connect(self._on_avatar_emotion)
                 if hasattr(self._avatar_bridge, 'gesture_triggered'):
                     self._avatar_bridge.gesture_triggered.connect(self._on_avatar_gesture)
-                print("Avatar-AI Bridge initialized")
+                logger.debug("Avatar-AI Bridge initialized")
         except Exception as e:
-            print(f"Could not initialize Avatar-AI Bridge: {e}")
+            logger.warning(f"Could not initialize Avatar-AI Bridge: {e}")
             self._avatar_bridge = None
         
         # ─────────────────────────────────────────────────────────────────
@@ -1721,9 +1734,9 @@ class EnhancedMainWindow(QMainWindow):
                     model_name=model_name,
                     mode=FederationMode.OPT_IN,
                 )
-                print("Federated Learning integration initialized")
+                logger.debug("Federated Learning integration initialized")
         except Exception as e:
-            print(f"Could not initialize Federated Learning: {e}")
+            logger.warning(f"Could not initialize Federated Learning: {e}")
             self._federated_learning = None
         
         # ─────────────────────────────────────────────────────────────────
@@ -1735,9 +1748,9 @@ class EnhancedMainWindow(QMainWindow):
             from ..learning import LearningChatIntegration
             # Will be properly initialized once a model is loaded
             self._learning_integration_enabled = self._gui_settings.get("learning_integration", True)
-            print(f"Learning integration: {'enabled' if self._learning_integration_enabled else 'disabled'}")
+            logger.debug(f"Learning integration: {'enabled' if self._learning_integration_enabled else 'disabled'}")
         except Exception as e:
-            print(f"Could not initialize Learning integration: {e}")
+            logger.warning(f"Could not initialize Learning integration: {e}")
             self._learning_integration_enabled = False
         
         # ─────────────────────────────────────────────────────────────────
@@ -1758,9 +1771,9 @@ class EnhancedMainWindow(QMainWindow):
                     self._overlay.show()
                 else:
                     self._overlay.hide()
-                print("AI Overlay initialized")
+                logger.debug("AI Overlay initialized")
         except Exception as e:
-            print(f"Could not initialize AI Overlay: {e}")
+            logger.warning(f"Could not initialize AI Overlay: {e}")
             self._overlay = None
         
         # Training state
@@ -1789,7 +1802,7 @@ class EnhancedMainWindow(QMainWindow):
             gui_state = get_gui_state()
             gui_state.set_window(self)
         except Exception as e:
-            print(f"Could not register with GUIStateManager: {e}")
+            logger.warning(f"Could not register with GUIStateManager: {e}")
         
         # ─────────────────────────────────────────────────────────────────
         # Apply saved settings to UI widgets AFTER building UI
@@ -1890,7 +1903,7 @@ class EnhancedMainWindow(QMainWindow):
                     self.setWindowIcon(QIcon(str(icon_path)))
                     return
         except Exception as e:
-            print(f"Could not set window icon: {e}")
+            logger.debug(f"Could not set window icon: {e}")
     
     def _on_ui_settings_changed(self):
         """Handle UI settings changes (font scale, theme)."""
@@ -1929,7 +1942,7 @@ class EnhancedMainWindow(QMainWindow):
     def _emergency_quit(self):
         """Emergency quit - force terminate immediately."""
         import os
-        print("[EMERGENCY] Force quitting ForgeAI...")
+        logger.warning("[EMERGENCY] Force quitting ForgeAI...")
         os._exit(0)
     
     def _is_huggingface_model(self) -> bool:
@@ -2051,7 +2064,7 @@ class EnhancedMainWindow(QMainWindow):
             
             # Check if hotkeys are enabled
             if not CONFIG.get("enable_hotkeys", True):
-                print("Global hotkeys disabled in config")
+                logger.debug("Global hotkeys disabled in config")
                 return
             
             from ..core.hotkey_manager import get_hotkey_manager, DEFAULT_HOTKEYS
@@ -2081,12 +2094,12 @@ class EnhancedMainWindow(QMainWindow):
             # Start listening
             if registered_count > 0:
                 self.hotkey_manager.start()
-                print(f"Registered {registered_count} global hotkeys")
+                logger.debug(f"Registered {registered_count} global hotkeys")
             else:
-                print("No hotkeys registered")
+                logger.debug("No hotkeys registered")
                 
         except Exception as e:
-            print(f"Could not initialize global hotkeys: {e}")
+            logger.warning(f"Could not initialize global hotkeys: {e}")
             self.hotkey_manager = None
             self.hotkey_actions = None
     
@@ -2148,7 +2161,7 @@ class EnhancedMainWindow(QMainWindow):
                 with open(settings_path, "r") as f:
                     return json.load(f)
         except Exception as e:
-            print(f"Could not load GUI settings: {e}")
+            logger.warning(f"Could not load GUI settings: {e}")
         return {}
     
     def _save_gui_settings(self):
@@ -2222,7 +2235,7 @@ class EnhancedMainWindow(QMainWindow):
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
         except Exception as e:
-            print(f"Could not save GUI settings: {e}")
+            logger.warning(f"Could not save GUI settings: {e}")
     
     def _show_close_dialog(self):
         """Show close options dialog - same as Quick Chat close."""
@@ -2335,7 +2348,7 @@ class EnhancedMainWindow(QMainWindow):
         import sys
         import os
         
-        print("[ForgeAI] Shutting down all components...")
+        logger.info("[ForgeAI] Shutting down all components...")
         
         try:
             # Stop voice systems
@@ -2344,11 +2357,9 @@ class EnhancedMainWindow(QMainWindow):
                 pipeline = get_voice_pipeline()
                 if pipeline:
                     pipeline.stop()
-                    print("  - Voice pipeline stopped")
-            except ImportError:
-                pass  # Module not available
+                    logger.debug("  - Voice pipeline stopped")
             except Exception as e:
-                logger.debug(f"Voice pipeline cleanup: {e}")
+                logger.debug(f"Voice pipeline cleanup skipped: {e}")
             
             # Stop voice listener
             try:
@@ -2356,11 +2367,9 @@ class EnhancedMainWindow(QMainWindow):
                 listener = get_listener()
                 if listener:
                     listener.stop()
-                    print("  - Voice listener stopped")
-            except ImportError:
-                pass  # Module not available
+                    logger.debug("  - Voice listener stopped")
             except Exception as e:
-                logger.debug(f"Voice listener cleanup: {e}")
+                logger.debug(f"Voice listener cleanup skipped: {e}")
             
             # Stop performance monitor
             try:
@@ -2368,34 +2377,30 @@ class EnhancedMainWindow(QMainWindow):
                 monitor = get_monitor()
                 if monitor:
                     monitor.stop()
-                    print("  - Performance monitor stopped")
-            except ImportError:
-                pass  # Module not available
+                    logger.debug("  - Performance monitor stopped")
             except Exception as e:
-                logger.debug(f"Performance monitor cleanup: {e}")
+                logger.debug(f"Performance monitor cleanup skipped: {e}")
             
             # Stop any web server
             try:
                 from ..web.app import shutdown_server
                 shutdown_server()
-                print("  - Web server stopped")
-            except ImportError:
-                pass  # Module not available
+                logger.debug("  - Web server stopped")
             except Exception as e:
-                logger.debug(f"Web server cleanup: {e}")
+                logger.debug(f"Web server cleanup skipped: {e}")
             
             # Clear model from memory
             try:
                 if self.engine:
                     self.engine = None
-                    print("  - Model unloaded")
-            except AttributeError:
-                pass  # Engine not initialized
+                    logger.debug("  - Model unloaded")
+            except Exception as e:
+                logger.debug(f"Engine cleanup skipped: {e}")
             
-            print("[ForgeAI] Cleanup complete. Exiting...")
+            logger.info("[ForgeAI] Cleanup complete. Exiting...")
             
         except Exception as e:
-            print(f"[ForgeAI] Error during cleanup: {e}")
+            logger.error(f"[ForgeAI] Error during cleanup: {e}")
         
         # Force quit the application
         from PyQt5.QtWidgets import QApplication
@@ -2657,7 +2662,9 @@ class EnhancedMainWindow(QMainWindow):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
         except ImportError:
-            pass  # PyTorch not installed
+            pass  # torch not installed
+        except Exception as e:
+            logger.debug(f"CUDA cache clear skipped: {e}")
         
         if stopped_any:
             self.statusBar().showMessage("All generations stopped (Escape pressed)", 3000)
@@ -3004,8 +3011,8 @@ class EnhancedMainWindow(QMainWindow):
                 tray = get_system_tray()
                 if tray and hasattr(tray, 'update_model_name'):
                     tray.update_model_name(self.current_model_name)
-            except (ImportError, RuntimeError):
-                pass  # System tray not available
+            except Exception as e:
+                logger.debug(f"System tray update skipped: {e}")
             
             # Sync engine to ChatSync for shared generation with quick chat
             if hasattr(self, '_chat_sync'):
@@ -3015,7 +3022,7 @@ class EnhancedMainWindow(QMainWindow):
             # Sync engine to overlay for AI responses
             if hasattr(self, '_overlay') and self._overlay:
                 self._overlay.set_engine(self.engine)
-                print("Overlay synced with engine")
+                logger.debug("Overlay synced with engine")
             
             # Initialize learning integration (real-time learning from conversation)
             if getattr(self, '_learning_integration_enabled', False) and not is_huggingface:
@@ -3027,10 +3034,10 @@ class EnhancedMainWindow(QMainWindow):
                         auto_learn=True,
                         on_learning_detected=self._on_learning_detected,
                     )
-                    print("Learning integration connected to model")
+                    logger.debug("Learning integration connected to model")
                     self.log_terminal("Real-time learning integration enabled", "info")
                 except Exception as e:
-                    print(f"Could not connect learning integration: {e}")
+                    logger.warning(f"Could not connect learning integration: {e}")
                     self._learning_integration = None
             
             # Refresh notes files for new model
@@ -3158,7 +3165,7 @@ class EnhancedMainWindow(QMainWindow):
             game_mode.on_game_ended(self._on_game_ended)
             game_mode.on_limits_changed(self._on_game_limits_changed)
         except Exception as e:
-            print(f"Could not register game mode callbacks: {e}")
+            logger.warning(f"Could not register game mode callbacks: {e}")
         
         # Schedule initial status update
         QTimer.singleShot(1000, self._update_ai_status)
@@ -3189,9 +3196,6 @@ class EnhancedMainWindow(QMainWindow):
         from .tabs.workspace_tab import create_workspace_tab
         from .tabs.persona_tab import create_persona_tab
         from .tabs.learning_tab import LearningTab
-        from .tabs.dashboard_tab import create_dashboard_tab
-        from .tabs.scheduler_tab import SchedulerTab
-        from .tabs.devices_tab import DevicesTab
         
         # Create main container with sidebar navigation
         main_widget = QWidget()
@@ -3241,7 +3245,6 @@ class EnhancedMainWindow(QMainWindow):
             # Core
             ("section", "CORE"),
             ("", "Chat", "chat", "Talk to your AI - start here!"),
-            ("", "Dashboard", "dashboard", "System overview and quick actions"),
             ("", "Workspace", "workspace", "Quick access to common tasks"),
             ("", "History", "history", "View past conversations"),
             # Model
@@ -3251,7 +3254,6 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Modules", "modules", "Enable/disable AI features"),
             ("", "Tools", "tools", "Manage AI tools and capabilities"),
             ("", "Router", "router", "Assign specialized models to tasks"),
-            ("", "Training", "training", "Train your AI on custom data"),
             # Generate
             ("section", "GENERATE"),
             ("", "Image", "image", "Generate images from text descriptions"),
@@ -3269,12 +3271,9 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Robot", "robot", "Control robots and hardware"),
             ("", "Screen", "vision", "Capture screenshots for AI analysis"),
             ("", "Camera", "camera", "Live webcam preview and recording"),
-            ("", "Devices", "devices", "Manage network devices and offloading"),
             # Tools
             ("section", "SYSTEM"),
             ("", "Learning", "learning", "Self-improvement metrics and training"),
-            ("", "Scheduler", "scheduler", "Manage scheduled tasks"),
-            ("", "Notes", "notes", "Quick notes and bookmarks"),
             ("", "Terminal", "terminal", "View AI internal processing"),
             ("", "Files", "files", "Edit training data and settings"),
             ("", "Logs", "logs", "View system logs"),
@@ -3308,17 +3307,20 @@ class EnhancedMainWindow(QMainWindow):
             'embedding_api': ['search'],
             'avatar': ['avatar'],
             'vision': ['vision', 'camera'],
-            'voice_input': [],
-            'voice_output': [],
+            'voice_input': ['voice'],
+            'voice_output': ['voice'],
+            'gif_gen': ['gif'],
+            'game_ai': ['game'],
+            'robot_control': ['robot'],
         }
         
-        # Tabs that should always be visible (all tabs visible by default)
-        # Module toggling affects feature availability, not tab visibility
+        # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
-            'chat', 'dashboard', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
-            'training', 'image', 'code', 'video', 'audio', 'voice', '3d', 'gif', 'search', 'avatar',
-            'game', 'robot', 'vision', 'camera', 'devices', 'learning', 'scheduler', 'notes', 'terminal', 
-            'files', 'logs', 'network', 'federation', 'analytics', 'examples', 'settings'
+            'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
+            'learning', 'terminal', 'files', 'logs', 'network', 'federation',
+            'analytics', 'examples', 'settings',
+            # Default-enabled generation/perception tabs (image, avatar, vision on by default)
+            'image', 'avatar', 'vision'
         ]
         
         for item in nav_items:
@@ -3365,13 +3367,9 @@ class EnhancedMainWindow(QMainWindow):
             return scroll
         
         # Add all tabs to the stack (in order matching nav_items)
-        # CORE section
         self.content_stack.addWidget(wrap_in_scroll(create_chat_tab(self)))  # Chat
-        self.content_stack.addWidget(wrap_in_scroll(create_dashboard_tab(self)))  # Dashboard
         self.content_stack.addWidget(wrap_in_scroll(create_workspace_tab(self)))  # Workspace
         self.content_stack.addWidget(wrap_in_scroll(create_sessions_tab(self)))  # History
-        
-        # MODEL section
         self.persona_tab = create_persona_tab(self)  # Store reference for signals
         self.content_stack.addWidget(wrap_in_scroll(self.persona_tab))  # Persona
         self.content_stack.addWidget(wrap_in_scroll(ScalingTab(self)))  # Scale
@@ -3379,9 +3377,6 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(ToolManagerTab(self)))  # Tools
         self.router_tab = ModelRouterTab(self)  # Store reference for syncing
         self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
-        self.content_stack.addWidget(wrap_in_scroll(create_training_tab(self)))  # Training
-        
-        # GENERATE section
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
         self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
@@ -3389,20 +3384,13 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(VoiceCloneTab(self)))  # Voice
         self.content_stack.addWidget(wrap_in_scroll(create_threed_tab(self)))  # 3D
         self.content_stack.addWidget(wrap_in_scroll(create_gif_tab(self)))  # GIF
-        
-        # CONNECT section
         self.content_stack.addWidget(wrap_in_scroll(create_embeddings_tab(self)))  # Search
         self.content_stack.addWidget(wrap_in_scroll(create_avatar_subtab(self)))  # Avatar
         self.content_stack.addWidget(wrap_in_scroll(create_game_subtab(self)))  # Game
         self.content_stack.addWidget(wrap_in_scroll(create_robot_subtab(self)))  # Robot
-        self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision/Screen
+        self.content_stack.addWidget(wrap_in_scroll(create_vision_tab(self)))  # Vision
         self.content_stack.addWidget(wrap_in_scroll(create_camera_tab(self)))  # Camera
-        self.content_stack.addWidget(wrap_in_scroll(DevicesTab(self)))  # Devices
-        
-        # SYSTEM section
         self.content_stack.addWidget(wrap_in_scroll(LearningTab(self)))  # Learning
-        self.content_stack.addWidget(wrap_in_scroll(SchedulerTab(self)))  # Scheduler
-        self.content_stack.addWidget(wrap_in_scroll(create_notes_tab(self)))  # Notes
         self.content_stack.addWidget(wrap_in_scroll(create_terminal_tab(self)))  # Terminal
         self.content_stack.addWidget(wrap_in_scroll(create_instructions_tab(self)))  # Files
         self.content_stack.addWidget(wrap_in_scroll(create_logs_tab(self)))  # Logs
@@ -3608,7 +3596,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.always_on_top_check.setChecked(True)
                 self.always_on_top_check.blockSignals(False)
         except Exception as e:
-            print(f"Could not restore always-on-top: {e}")
+            logger.debug(f"Could not restore always-on-top: {e}")
     
     def _on_sidebar_changed(self, current, previous):
         """Handle sidebar navigation change."""
@@ -3814,7 +3802,7 @@ class EnhancedMainWindow(QMainWindow):
             else:
                 QMessageBox.information(self, "Quick Chat", "Quick Chat is not available.\nStart Forge from run.py to enable system tray features.")
         except Exception as e:
-            print(f"Error opening Quick Chat: {e}")
+            logger.error(f"Error opening Quick Chat: {e}")
     
     def _toggle_overlay(self):
         """Toggle the AI overlay visibility."""
@@ -3824,7 +3812,7 @@ class EnhancedMainWindow(QMainWindow):
                 self._overlay = AIOverlay()
                 if self.engine:
                     self._overlay.set_engine(self.engine)
-                print("AI Overlay created")
+                logger.debug("AI Overlay created")
             except Exception as e:
                 QMessageBox.warning(
                     self,
@@ -3934,7 +3922,7 @@ class EnhancedMainWindow(QMainWindow):
                     self.chat_status.setText("Ready")
                     
         except Exception as e:
-            print(f"Error toggling companion mode: {e}")
+            logger.error(f"Error toggling companion mode: {e}")
             self.companion_action.setChecked(False)
             QMessageBox.warning(self, "Companion Mode", f"Could not start Companion Mode:\n{e}")
 
@@ -4037,7 +4025,7 @@ class EnhancedMainWindow(QMainWindow):
             self.statusBar().showMessage(f"Zoom: {value}%", 2000)
                     
         except Exception as e:
-            print(f"Zoom error: {e}")
+            logger.debug(f"Zoom error: {e}")
     
     def _show_zoom_dialog(self):
         """Show a dialog with live preview zoom slider."""
@@ -4136,7 +4124,7 @@ class EnhancedMainWindow(QMainWindow):
             # Don't crash if avatar fails
             self.avatar_action.setChecked(False)
             self.avatar_action.setText("Avatar (OFF)")
-            print(f"Avatar toggle error: {e}")
+            logger.debug(f"Avatar toggle error: {e}")
     
     def show_all_tabs(self):
         """Make all sidebar tabs visible (ignore module requirements)."""
@@ -4217,7 +4205,7 @@ class EnhancedMainWindow(QMainWindow):
                 self.show_overlay_btn.setEnabled(is_enabled)
             
         except Exception as e:
-            print(f"Error refreshing avatar tab: {e}")
+            logger.debug(f"Error refreshing avatar tab: {e}")
     
     def on_module_toggled(self, module_id: str, enabled: bool):
         """
@@ -5794,7 +5782,7 @@ class EnhancedMainWindow(QMainWindow):
             )
             popup.show()
         except Exception as e:
-            print(f"Could not show preview popup: {e}")
+            logger.debug(f"Could not show preview popup: {e}")
     
     def _get_user_system_prompt(self) -> str:
         """Get the system prompt based on user settings."""
@@ -6422,13 +6410,13 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             
             self._update_game_mode_status()
         except Exception as e:
-            print(f"Could not toggle game mode: {e}")
+            logger.debug(f"Could not toggle game mode: {e}")
     
     def _on_game_detected(self, game_name: str):
         """Called when a game is detected."""
         try:
             self._update_game_mode_status()
-            print(f"Game detected: {game_name}")
+            logger.debug(f"Game detected: {game_name}")
         except Exception:
             pass
     
@@ -6436,7 +6424,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         """Called when game ends."""
         try:
             self._update_game_mode_status()
-            print("Game ended")
+            logger.debug("Game ended")
         except Exception:
             pass
     
@@ -7021,9 +7009,9 @@ def run_app(minimize_to_tray: bool = True):
         try:
             if window and hasattr(window, '_save_gui_settings'):
                 window._save_gui_settings()
-                print("Settings saved before quit")
+                logger.debug("Settings saved before quit")
         except Exception as e:
-            print(f"Error saving settings on quit: {e}")
+            logger.warning(f"Error saving settings on quit: {e}")
     
     app.aboutToQuit.connect(save_before_quit)
     
@@ -7067,7 +7055,7 @@ def run_app(minimize_to_tray: bool = True):
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(500, _system_tray.show_quick_command)
     except Exception as e:
-        print(f"System tray not available: {e}")
+        logger.warning(f"System tray not available: {e}")
         # If no tray, show main window
         window.show()
         sys.exit(app.exec_())

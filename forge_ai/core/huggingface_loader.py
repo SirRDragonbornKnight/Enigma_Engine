@@ -1046,34 +1046,37 @@ def convert_huggingface_to_forge(
 
 
 if __name__ == "__main__":
-    # Demo
-    print("HuggingFace Model Loader Demo")
-    print("=" * 50)
+    # Demo - configure logging for standalone execution
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     
-    print("\nSuggested models:")
+    logger.info("HuggingFace Model Loader Demo")
+    logger.info("=" * 50)
+    
+    logger.info("Suggested models:")
     for name, model_id in HuggingFaceModel.SUGGESTED_MODELS.items():
-        print(f"  {name}: {model_id}")
+        logger.info(f"  {name}: {model_id}")
     
-    print("\nLoading GPT-2...")
+    logger.info("Loading GPT-2...")
     model = HuggingFaceModel("gpt2")
     model.load()
     
-    print("\nModel info:")
+    logger.info("Model info:")
     info = model.get_model_info()
     for k, v in info.items():
-        print(f"  {k}: {v}")
+        logger.info(f"  {k}: {v}")
     
-    print("\nGenerating text...")
+    logger.info("Generating text...")
     prompt = "The future of artificial intelligence is"
-    print(f"Prompt: {prompt}")
+    logger.info(f"Prompt: {prompt}")
     response = model.generate(prompt, max_new_tokens=50)
-    print(f"Response: {response}")
+    logger.info(f"Response: {response}")
     
-    print("\nStreaming generation...")
-    print("Prompt: Once upon a time")
-    print("Response: ", end="")
+    logger.info("Streaming generation...")
+    logger.info("Prompt: Once upon a time")
+    logger.info("Response: (streaming tokens)")
+    streamed_output = ""
     for token in model.stream_generate("Once upon a time", max_new_tokens=30):
-        print(token, end="", flush=True)
-    print("\n")
+        streamed_output += token
+    logger.info(f"Streamed: {streamed_output}")
     
-    print("Done!")
+    logger.info("Done!")

@@ -248,8 +248,8 @@ class AutonomousAvatar:
                 for cb in self._on_mood_change:
                     try:
                         cb(old_mood, mood)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Mood change callback failed: {e}")
     
     def on_mood_change(self, callback: Callable):
         """Register callback for mood changes."""
@@ -419,8 +419,8 @@ class AutonomousAvatar:
                 y = random.randint(0, geo.height())
                 self.avatar.point_at(x, y)
                 self._record_action(f"look_at:{x},{y}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Look around failed: {e}")
     
     def _react_to_screen(self):
         """React to something on screen."""
@@ -598,8 +598,8 @@ class AutonomousAvatar:
                                         self._seen_windows.append(title)
                                         region.interest_score = 0.9
                                         region.content_type = "new_window"
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Failed to get X11 window info: {e}")
                     
                     d.close()
                     
@@ -628,7 +628,7 @@ class AutonomousAvatar:
                 
         except Exception as e:
             # Screen scanning failed, continue without
-            pass
+            logger.debug(f"Screen scanning failed: {e}")
     
     def _classify_window(self, title: str) -> str:
         """Classify window by title."""
@@ -671,8 +671,8 @@ class AutonomousAvatar:
         for cb in self._on_action:
             try:
                 cb(action)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Action callback failed: {e}")
 
 
 # Global instance

@@ -58,9 +58,9 @@ EXAMPLES = {
         "description": "Create and manage multiple named AI models with different purposes.",
         "category": "Advanced"
     },
-    "module_system_demo.py": {
+    "module_system_example.py": {
         "title": "Module System",
-        "description": "Comprehensive demo of the module system - loading, conflicts, hardware detection.",
+        "description": "Complete guide to the module system - loading, conflicts, hardware detection.",
         "category": "Advanced"
     },
     "local_cloud_example.py": {

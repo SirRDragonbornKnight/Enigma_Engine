@@ -53,13 +53,14 @@ USAGE:
     listener.start(callback=on_speech)
 """
 
-from __future__ import annotations
-
-import queue
+import logging
 import threading
+import queue
 import time
-from dataclasses import dataclass
-from typing import Callable
+from typing import Optional, Callable, List
+from dataclass import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -92,6 +93,7 @@ def _check_audio_device():
         bool: True if an input device is found, False otherwise
     """
     import os
+    import sys
     
     # Allow the ritual to be bypassed for tests/headless environments
     if os.getenv('FORGE_NO_AUDIO'):
@@ -101,8 +103,20 @@ def _check_audio_device():
         return False
     
     try:
-        # This may emit ALSA warnings once, but results are cached
-        p = sr.Microphone.get_pyaudio().PyAudio()
+        # Suppress PyAudio/PortAudio stderr spam during initialization
+        # On Linux, ctypes callbacks print errors that we can't catch otherwise
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            p = sr.Microphone.get_pyaudio().PyAudio()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception as e:
+            sys.stderr = old_stderr
+            logger.debug("PyAudio initialization failed: %s", e)
+            raise
+        
         device_count = p.get_device_count()
         has_device = False
         for i in range(device_count):
@@ -116,7 +130,8 @@ def _check_audio_device():
                 continue
         p.terminate()
         return has_device
-    except Exception:
+    except Exception as e:
+        logger.debug("Audio device check failed: %s", e)
         return False
 
 
@@ -159,7 +174,7 @@ class VoiceConfig:
         energy_threshold: Microphone sensitivity (lower = more sensitive)
         dynamic_energy: If True, auto-adjusts for ambient noise
     """
-    wake_words: list[str] = None
+    wake_words: List[str] = None
     language: str = "en-US"
     timeout: float = 5.0
     phrase_time_limit: float = 10.0

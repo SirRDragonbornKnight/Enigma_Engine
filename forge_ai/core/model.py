@@ -308,6 +308,9 @@ class ForgeConfig:
     max_len: Optional[int] = None    # Old name for max_seq_len
     embed_dim: Optional[int] = None  # Old name for dim
 
+    # Track if config is frozen (immutable after creation)
+    _frozen: bool = False
+    
     def __post_init__(self):
         """
         Post-initialization: validate and set computed defaults.
@@ -412,6 +415,60 @@ class ForgeConfig:
                     f"num_experts_per_token must be in (0, {self.num_experts}], "
                     f"got {self.num_experts_per_token}"
                 )
+
+    def validate(self) -> bool:
+        """
+        Re-run validation on the config.
+        
+        Useful after manually modifying config attributes to ensure
+        the configuration is still valid.
+        
+        Returns:
+            True if valid
+            
+        Raises:
+            ValueError: If any validation fails
+        """
+        # Re-run __post_init__ validation logic
+        if self.vocab_size <= 0:
+            raise ValueError(f"vocab_size must be positive, got {self.vocab_size}")
+        if self.dim <= 0:
+            raise ValueError(f"dim must be positive, got {self.dim}")
+        if self.n_layers <= 0:
+            raise ValueError(f"n_layers must be positive, got {self.n_layers}")
+        if self.n_heads <= 0:
+            raise ValueError(f"n_heads must be positive, got {self.n_heads}")
+        if not (0 <= self.dropout <= 1):
+            raise ValueError(f"dropout must be between 0 and 1, got {self.dropout}")
+        if self.max_seq_len <= 0:
+            raise ValueError(f"max_seq_len must be positive, got {self.max_seq_len}")
+        if self.dim % self.n_heads != 0:
+            raise ValueError(f"n_heads ({self.n_heads}) must divide evenly into dim ({self.dim})")
+        if self.n_kv_heads and self.n_heads % self.n_kv_heads != 0:
+            raise ValueError(f"n_kv_heads ({self.n_kv_heads}) must divide evenly into n_heads ({self.n_heads})")
+        return True
+    
+    def freeze(self) -> 'ForgeConfig':
+        """
+        Freeze the config to prevent further modifications.
+        
+        Once frozen, any attempt to modify attributes will raise an error.
+        This is useful for ensuring config immutability after model creation.
+        
+        Returns:
+            self (for chaining)
+        """
+        object.__setattr__(self, '_frozen', True)
+        return self
+    
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Override setattr to enforce frozen state."""
+        if getattr(self, '_frozen', False) and name != '_frozen':
+            raise AttributeError(
+                f"Cannot modify frozen ForgeConfig. "
+                f"Create a new config with the desired changes instead."
+            )
+        object.__setattr__(self, name, value)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -742,13 +799,20 @@ def apply_repetition_penalty(
         penalty: Penalty factor (>1.0 reduces repetition, 1.0 = no penalty)
     
     Returns:
-        Modified logits with repetition penalty applied
+        Modified logits with repetition penalty applied (new tensor, not in-place)
     
     Example:
         logits = apply_repetition_penalty(logits, generated_ids, penalty=1.2)
+    
+    Note:
+        Returns a cloned tensor to avoid in-place mutation issues with
+        beam search, speculative decoding, or autograd.
     """
     if penalty == 1.0:
         return logits
+    
+    # Clone to avoid in-place mutation (important for beam search, speculative decoding)
+    logits = logits.clone()
     
     vocab_size = logits.shape[-1]
     seq_len = generated_tokens.numel()
@@ -1053,13 +1117,29 @@ class Attention(nn.Module):
         # ─────────────────────────────────────────────────────────────────────
         # STEP 5: Compute attention (Flash or Standard)
         # ─────────────────────────────────────────────────────────────────────
-        # Try Flash Attention if: available, CUDA, half precision, no cache
-        # Flash Attention is O(n) memory vs O(n²) and 2-4x faster!
+        # Flash Attention conditions (all must be true):
+        #   1. flash_attn package is installed (pip install flash-attn)
+        #   2. Running on CUDA GPU
+        #   3. Using half precision (fp16 or bf16) - Flash doesn't support fp32
+        #   4. NOT using KV-cache (Flash doesn't support incremental decoding)
+        #   5. Processing full sequence (not continuing from cached K/V)
+        #
+        # ⚠️ IMPORTANT LIMITATION:
+        # Flash Attention is DISABLED during generation (use_cache=True) because:
+        #   - Flash computes the full attention matrix efficiently but atomically
+        #   - Incremental KV-cache decoding needs to attend to cached K/V
+        #   - This is a fundamental limitation, not a bug
+        #
+        # Flash is used during: Training, prompt encoding, non-cached inference
+        # Flash is NOT used during: Token-by-token generation with KV-cache
+        #
+        # Performance impact: Training gets 2-4x speedup. Generation uses standard
+        # attention which is still efficient due to KV-cache (O(1) per token).
         use_flash = (
             HAS_FLASH_ATTN
             and x.is_cuda
             and x.dtype in (torch.float16, torch.bfloat16)
-            and not use_cache  # Flash doesn't support incremental decode well
+            and not use_cache  # Flash doesn't support incremental decode
             and (mask is None or T == k.shape[1])  # Full sequence, not cached
         )
         
@@ -1229,7 +1309,10 @@ class MoEFeedForward(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through MoE layer.
+        Forward pass through MoE layer with vectorized routing.
+        
+        This implementation groups tokens by expert and processes them in batches,
+        avoiding the O(tokens × experts) nested loop that would kill performance.
         
         Args:
             x: Input tensor [batch, seq_len, dim]
@@ -1238,52 +1321,82 @@ class MoEFeedForward(nn.Module):
             Output tensor [batch, seq_len, dim]
         """
         B, T, D = x.shape
+        num_tokens = B * T
         
         # Flatten batch and sequence dimensions for routing
-        x_flat = x.view(-1, D)  # [B*T, D]
+        x_flat = x.view(-1, D)  # [num_tokens, D]
         
         # Compute router scores
-        router_logits = self.gate(x_flat)  # [B*T, num_experts]
+        router_logits = self.gate(x_flat)  # [num_tokens, num_experts]
         router_probs = F.softmax(router_logits, dim=-1)
         
         # Select top-k experts for each token
         top_k_probs, top_k_indices = torch.topk(
             router_probs, self.num_experts_per_token, dim=-1
-        )
+        )  # Both: [num_tokens, k]
         
         # Normalize selected expert weights
         top_k_probs = top_k_probs / top_k_probs.sum(dim=-1, keepdim=True)
         
-        # Compute load balancing loss for training
+        # Compute load balancing loss for training (vectorized)
         if self.training:
-            # Count how many tokens go to each expert
-            expert_counts = torch.zeros(self.num_experts, device=x.device)
-            for i in range(self.num_experts_per_token):
-                expert_counts.scatter_add_(
-                    0, 
-                    top_k_indices[:, i], 
-                    torch.ones_like(top_k_indices[:, i], dtype=torch.float)
-                )
+            # Use one_hot + sum for vectorized counting (no loop)
+            # Flatten top_k_indices and create one-hot encoding
+            flat_indices = top_k_indices.view(-1)  # [num_tokens * k]
+            expert_counts = torch.bincount(
+                flat_indices, minlength=self.num_experts
+            ).float()
             
             # Ideal distribution is uniform
-            ideal_count = (B * T * self.num_experts_per_token) / self.num_experts
+            ideal_count = (num_tokens * self.num_experts_per_token) / self.num_experts
             # Loss is variance from ideal (encourages balance)
             self.load_balancing_loss = ((expert_counts - ideal_count) ** 2).mean()
         
-        # Compute weighted output from selected experts
-        output = torch.zeros_like(x_flat)
+        # ─────────────────────────────────────────────────────────────────────
+        # VECTORIZED EXPERT ROUTING: Process each expert once with batched tokens
+        # ─────────────────────────────────────────────────────────────────────
+        # Instead of nested loops O(k × num_experts × num_tokens), we:
+        # 1. Create a flat list of (token_idx, expert_idx, weight) assignments
+        # 2. Sort/group by expert
+        # 3. Process each expert's batch once
+        # 4. Scatter results back
         
-        for i in range(self.num_experts_per_token):
-            expert_idx = top_k_indices[:, i]  # [B*T]
-            expert_weight = top_k_probs[:, i:i+1]  # [B*T, 1]
+        # Expand token indices for all k selections
+        token_indices = torch.arange(num_tokens, device=x.device)
+        token_indices = token_indices.unsqueeze(1).expand(-1, self.num_experts_per_token)
+        # token_indices: [num_tokens, k] - which token each assignment belongs to
+        
+        # Flatten everything for batched processing
+        flat_token_idx = token_indices.reshape(-1)  # [num_tokens * k]
+        flat_expert_idx = top_k_indices.reshape(-1)  # [num_tokens * k]
+        flat_weights = top_k_probs.reshape(-1)  # [num_tokens * k]
+        
+        # Initialize output accumulator
+        output = torch.zeros_like(x_flat)  # [num_tokens, D]
+        
+        # Process each expert's tokens in a single batch
+        for expert_id in range(self.num_experts):
+            # Find all assignments to this expert
+            expert_mask = (flat_expert_idx == expert_id)
             
-            # Process tokens for each expert
-            for e in range(self.num_experts):
-                mask = (expert_idx == e)
-                if mask.any():
-                    expert_input = x_flat[mask]
-                    expert_output = self.experts[e](expert_input)
-                    output[mask] += expert_weight[mask] * expert_output
+            if not expert_mask.any():
+                continue
+            
+            # Get token indices and weights for this expert
+            selected_token_idx = flat_token_idx[expert_mask]
+            selected_weights = flat_weights[expert_mask]
+            
+            # Gather input tokens for this expert (single gather operation)
+            expert_input = x_flat[selected_token_idx]  # [num_selected, D]
+            
+            # Process all tokens through this expert at once
+            expert_output = self.experts[expert_id](expert_input)  # [num_selected, D]
+            
+            # Weight the outputs
+            weighted_output = expert_output * selected_weights.unsqueeze(-1)
+            
+            # Scatter-add back to output (handles duplicate token indices)
+            output.index_add_(0, selected_token_idx, weighted_output)
         
         # Reshape back to [B, T, D]
         return output.view(B, T, D)
@@ -3009,7 +3122,7 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
         logger.error(f"Failed to initialize model: {e}")
         raise RuntimeError(f"Model creation failed: {e}") from e
 
-    print(f"Created Forge ({size}): {model.num_parameters:,} params, "
+    logger.info(f"Created Forge ({size}): {model.num_parameters:,} params, "
           f"{config.dim}d, {config.n_layers}L")
     return model
 

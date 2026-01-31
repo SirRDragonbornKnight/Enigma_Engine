@@ -275,14 +275,14 @@ class BlenderBridge:
         if self._connected:
             try:
                 self._send_command(BlenderCommand.DISCONNECT, {})
-            except (OSError, ConnectionError):
-                pass
+            except Exception as e:
+                logger.debug(f"Could not send disconnect command: {e}")
         
         if self._socket:
             try:
                 self._socket.close()
-            except OSError:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close socket: {e}")
             self._socket = None
         
         self._connected = False
@@ -291,7 +291,7 @@ class BlenderBridge:
             try:
                 cb()
             except Exception as e:
-                print(f"[BlenderBridge] Disconnect callback error: {e}")
+                logger.debug(f"Disconnect callback error: {e}")
         
         print("[BlenderBridge] Disconnected")
     
@@ -346,7 +346,7 @@ class BlenderBridge:
                 try:
                     cb()
                 except Exception as e:
-                    print(f"[BlenderBridge] Disconnect callback error: {e}")
+                    logger.debug(f"Disconnected callback error: {e}")
             
             if self.config.auto_reconnect:
                 self._start_reconnect()
@@ -424,7 +424,7 @@ class BlenderBridge:
                 try:
                     cb(self._model_info)
                 except Exception as e:
-                    print(f"[BlenderBridge] Model loaded callback error: {e}")
+                    logger.debug(f"Model loaded callback error: {e}")
     
     # === Model Control ===
     
@@ -882,8 +882,8 @@ def server_thread():
                                 
                 except socket.timeout:
                     continue
-                except (OSError, ConnectionError):
-                    break
+                except (socket.error, ConnectionError, OSError):
+                    break  # Client disconnected or error
                     
             if _client_socket:
                 _client_socket.close()
@@ -892,8 +892,8 @@ def server_thread():
             
         except socket.timeout:
             continue
-        except (OSError, ConnectionError):
-            break
+        except (socket.error, ConnectionError, OSError):
+            break  # Server error, exit loop
     
     if _server_socket:
         _server_socket.close()
@@ -933,8 +933,8 @@ class FORGEAI_OT_stop_server(bpy.types.Operator):
         if _client_socket:
             try:
                 _client_socket.close()
-            except OSError:
-                pass
+            except (socket.error, OSError):
+                pass  # Socket already closed
         
         self.report({'INFO'}, "Server stopped")
         return {'FINISHED'}

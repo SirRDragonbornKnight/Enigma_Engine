@@ -294,7 +294,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
         else:
             screen_w, screen_h = 1920, 1080  # Fallback
     except (ImportError, RuntimeError):
-        screen_w, screen_h = 1920, 1080
+        screen_w, screen_h = 1920, 1080  # PyQt5 not available
     
     # Determine region (3x3 grid)
     third_w, third_h = screen_w // 3, screen_h // 3
@@ -331,8 +331,8 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
                         facing = "backward"
                     else:
                         facing = "left"
-    except (AttributeError, KeyError, ValueError):
-        pass
+    except (IOError, json.JSONDecodeError, KeyError):
+        pass  # Orientation data not available
     
     # Load model/mesh info from capabilities file
     model_info = {}
@@ -342,8 +342,8 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
             with open(caps_path, 'r') as f:
                 caps = json.load(f)
             model_info = caps.get('model_info', {})
-    except (json.JSONDecodeError, IOError):
-        pass
+    except (IOError, json.JSONDecodeError):
+        pass  # Capabilities not available
     
     # Load bone info
     bone_info = {}
@@ -352,8 +352,8 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
         if bone_path.exists():
             with open(bone_path, 'r') as f:
                 bone_info = json.load(f)
-    except (json.JSONDecodeError, IOError):
-        pass
+    except (IOError, json.JSONDecodeError):
+        pass  # Bone info not available
     
     return {
         "position": {"x": x, "y": y},

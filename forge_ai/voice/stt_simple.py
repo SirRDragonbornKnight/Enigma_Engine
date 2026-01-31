@@ -61,7 +61,8 @@ def _transcribe_vosk_from_mic(timeout):
         import json
         r = json.loads(res)
         return r.get("text", "")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"VOSK microphone transcription failed: {e}")
         return ""
 
 VOSK_FRAME_SIZE = 4000  # Number of audio frames to read per iteration
@@ -99,8 +100,24 @@ def _transcribe_vosk_file(path):
 # SpeechRecognition fallback (online by default)
 def _transcribe_sr_from_mic(timeout):
     try:
+        import sys
+        import os
+        
         r = sr.Recognizer()
-        with sr.Microphone() as source:
+        
+        # Suppress PyAudio stderr spam when opening microphone
+        old_stderr = sys.stderr
+        try:
+            devnull = open(os.devnull, 'w')
+            sys.stderr = devnull
+            mic = sr.Microphone()
+            sys.stderr = old_stderr
+            devnull.close()
+        except Exception:
+            sys.stderr = old_stderr
+            raise
+        
+        with mic as source:
             r.adjust_for_ambient_noise(source)
             audio = r.listen(source, timeout=timeout)
         return r.recognize_google(audio)  # uses Google Web Speech API (online)

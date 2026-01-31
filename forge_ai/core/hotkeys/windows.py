@@ -219,8 +219,8 @@ class WindowsHotkeyBackend:
                 UnregisterHotKey(None, test_id)
                 return True
             return False
-        except (ValueError, TypeError, OSError):
-            return False
+        except (OSError, ctypes.WinError, Exception):
+            return False  # Hotkey registration failed
     
     def start(self):
         """Start listening for hotkeys."""

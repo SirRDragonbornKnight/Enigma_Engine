@@ -29,10 +29,10 @@ USAGE:
     detector.on_ai_response(ai_response)
 ================================================================================
 """
-from __future__ import annotations
 
 import re
 import logging
+from typing import Optional, List, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -62,13 +62,13 @@ class DetectedLearning:
     input_text: str  # What should trigger this learning
     target_output: str  # What the AI should learn to produce
     confidence: float  # 0.0-1.0 how confident we are in the detection
-    context: str | None = None  # Additional context
+    context: Optional[str] = None  # Additional context
     timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
     
     # Extracted information (if applicable)
-    corrected_from: str | None = None  # What was wrong
-    corrected_to: str | None = None  # What is right
-    user_preference: str | None = None  # User preference/fact
+    corrected_from: Optional[str] = None  # What was wrong
+    corrected_to: Optional[str] = None  # What is right
+    user_preference: Optional[str] = None  # User preference/fact
     
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -218,9 +218,9 @@ class ConversationDetector:
     def __init__(self):
         """Initialize the conversation detector."""
         # Track conversation state
-        self.last_ai_response: str | None = None
-        self.last_user_message: str | None = None
-        self.conversation_context: list[tuple[str, str]] = []  # [(role, text), ...]
+        self.last_ai_response: Optional[str] = None
+        self.last_user_message: Optional[str] = None
+        self.conversation_context: List[Tuple[str, str]] = []  # [(role, text), ...]
         
         # Statistics
         self.detections_count = {
@@ -240,7 +240,7 @@ class ConversationDetector:
         
         logger.debug("ConversationDetector initialized")
     
-    def on_user_message(self, message: str) -> DetectedLearning | None:
+    def on_user_message(self, message: str) -> Optional[DetectedLearning]:
         """
         Process user message and detect learning opportunity.
         
@@ -530,8 +530,8 @@ class ConversationDetector:
             if groups and groups[-1]:
                 info = groups[-1].strip()
                 return f"I'll remember that {info}."
-        except (IndexError, AttributeError):
-            pass
+        except Exception as e:
+            logger.debug(f"Could not extract teaching info: {e}")
         return f"Thank you for telling me. I'll remember this."
 
 

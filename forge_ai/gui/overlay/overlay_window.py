@@ -139,6 +139,7 @@ class AIOverlay(QWidget):
         # Header with drag handle
         header = QFrame()
         header.setFixedHeight(30)
+        header.setCursor(Qt.SizeAllCursor)  # Show move cursor on header
         header.mousePressEvent = self._header_press
         header.mouseMoveEvent = self._header_move
         header.mouseReleaseEvent = self._header_release
@@ -149,6 +150,7 @@ class AIOverlay(QWidget):
         if config.show_avatar:
             avatar_label = QLabel("🤖")
             avatar_label.setFixedSize(24, 24)
+            avatar_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Pass clicks to header
             header_layout.addWidget(avatar_label)
             
         header_layout.addStretch()

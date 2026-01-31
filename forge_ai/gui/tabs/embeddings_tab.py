@@ -9,8 +9,11 @@ Providers:
 import os
 import time
 import json
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+
+logger = logging.getLogger(__name__)
 
 try:
     from PyQt5.QtWidgets import (
@@ -57,9 +60,9 @@ class LocalEmbedding:
             self._using_builtin = False
             return True
         except ImportError:
-            pass
+            logger.debug("sentence-transformers not installed, will try builtin fallback")
         except Exception as e:
-            print(f"sentence-transformers failed: {e}")
+            logger.debug(f"sentence-transformers failed: {e}")
         
         # Fall back to built-in embeddings
         try:
