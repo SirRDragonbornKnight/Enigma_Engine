@@ -604,24 +604,64 @@ class StoryContinueTool(Tool):
             return {"success": False, "error": str(e)}
     
     def _generate_continuation(self, story: Dict, choice: str) -> Dict:
-        """Generate story continuation based on choice."""
-        # This would ideally use an LLM, but here's a template-based approach
+        """Generate story continuation based on choice using AI."""
+        protagonist = story.get('protagonist', 'the hero')
+        setting = story.get('setting', 'a mysterious land')
         
-        continuations = [
-            f"Having chosen wisely, {story['protagonist']} pressed forward. The path ahead was uncertain, but determination burned bright.",
-            f"The decision was made. {story['protagonist']} knew there was no turning back now.",
-            f"With a deep breath, {story['protagonist']} committed to this course of action. Whatever came next, they would face it head-on.",
-        ]
+        # Try AI-generated continuation
+        try:
+            from ..core.inference import ForgeEngine
+            engine = ForgeEngine.get_instance()
+            
+            if engine and engine.model:
+                # Get last chapter for context
+                last_text = ""
+                if story.get("chapters"):
+                    last_text = story["chapters"][-1].get("text", "")[:200]
+                
+                prompt = f\"\"\"Continue this interactive story:
+Setting: {setting}
+Protagonist: {protagonist}
+Last scene: {last_text}
+Player chose: "{choice}"
+
+Write a SHORT continuation (2-3 sentences) and provide 3 new choices.
+
+Format:
+STORY: [continuation]
+CHOICE A: [option]
+CHOICE B: [option]  
+CHOICE C: [option]\"\"\"
+                
+                response = engine.generate(prompt, max_length=200, temperature=0.9)
+                
+                # Parse response
+                if response and "STORY:" in response:
+                    lines = response.split("\\n")
+                    story_text = ""
+                    choices = []
+                    
+                    for line in lines:
+                        if line.startswith("STORY:"):
+                            story_text = line.replace("STORY:", "").strip()
+                        elif line.startswith("CHOICE"):
+                            choice_text = line.split(":", 1)[-1].strip()
+                            choice_id = line[7] if len(line) > 7 else chr(65 + len(choices))
+                            choices.append({"id": choice_id, "text": choice_text})
+                    
+                    if story_text and len(choices) >= 2:
+                        return {"text": story_text, "choices": choices[:3]}
+        except Exception:
+            pass
         
-        new_choices = [
-            {"id": "A", "text": "Press on despite the danger"},
-            {"id": "B", "text": "Take a moment to rest and think"},
-            {"id": "C", "text": "Search for an alternative path"},
-        ]
-        
+        # Fallback: Simple template
         return {
-            "text": random.choice(continuations),
-            "choices": new_choices,
+            "text": f"{protagonist} considered the choice carefully. The decision would shape everything that followed.",
+            "choices": [
+                {"id": "A", "text": "Continue forward cautiously"},
+                {"id": "B", "text": "Look for another way"},
+                {"id": "C", "text": "Rest and reconsider"},
+            ],
         }
 
 

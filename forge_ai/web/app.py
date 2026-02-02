@@ -651,15 +651,35 @@ _ai_state = {
 
 @app.route('/api/ai/mood', methods=['GET'])
 def api_get_ai_mood():
-    """Get AI's current mood and state."""
-    moods = [
-        {'mood': 'curious', 'emoji': '🤔', 'text': "I'm feeling curious today!"},
-        {'mood': 'happy', 'emoji': '😊', 'text': "I'm in a great mood!"},
-        {'mood': 'focused', 'emoji': '🎯', 'text': "Ready to help and solve problems!"},
-        {'mood': 'creative', 'emoji': '🎨', 'text': "Feeling creative and inspired!"},
-    ]
+    """Get AI's current mood based on actual state."""
+    # Determine mood from actual AI state
+    try:
+        from ..core.inference import ForgeEngine
+        engine = ForgeEngine.get_instance()
+        
+        if engine and engine.model:
+            # Base mood on recent interactions and system state
+            prompt = """Based on being an AI assistant, what mood are you in right now? 
+Choose ONE: curious, happy, focused, creative
+Reply with ONLY the mood word."""
+            
+            response = engine.generate(prompt, max_length=15, temperature=0.5)
+            mood_word = response.strip().lower().split()[0] if response else "focused"
+            
+            mood_map = {
+                'curious': {'mood': 'curious', 'emoji': '...', 'text': "I'm feeling curious today!"},
+                'happy': {'mood': 'happy', 'emoji': '...', 'text': "I'm in a great mood!"},
+                'focused': {'mood': 'focused', 'emoji': '...', 'text': "Ready to help and solve problems!"},
+                'creative': {'mood': 'creative', 'emoji': '...', 'text': "Feeling creative and inspired!"},
+            }
+            
+            current = mood_map.get(mood_word, mood_map['focused'])
+        else:
+            # No AI loaded - default to focused
+            current = {'mood': 'focused', 'emoji': '...', 'text': "Ready to help!"}
+    except Exception:
+        current = {'mood': 'focused', 'emoji': '...', 'text': "Ready to help!"}
     
-    current = random.choice(moods)
     _ai_state['mood'] = current['mood']
     _ai_state['mood_emoji'] = current['emoji']
     

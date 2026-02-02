@@ -130,21 +130,49 @@ class DiscoveryMode:
         return idle_time >= self.idle_threshold
     
     def get_discovery_topic(self) -> str:
-        """Get a random topic to explore."""
-        # Check if we have interests logged
-        if self.discoveries:
-            # Sometimes explore related topics
-            if random.random() < 0.3:  # 30% chance
-                last = self.discoveries[-1]
-                if 'related_topics' in last:
-                    return random.choice(last['related_topics'])
+        """Get a topic to explore, using AI to pick something relevant."""
+        # Try AI-driven topic selection
+        try:
+            from ..core.inference import ForgeEngine
+            engine = ForgeEngine.get_instance()
+            
+            if engine and engine.model:
+                # Build context from past discoveries
+                context = ""
+                if self.discoveries:
+                    recent = [d['topic'] for d in self.discoveries[-5:]]
+                    context = f"Recently explored: {', '.join(recent)}. "
+                
+                prompt = f"""{context}Pick ONE topic from this list that would be most interesting to learn about next: {', '.join(self.DISCOVERY_TOPICS[:20])}
+
+Consider what builds on recent topics or fills knowledge gaps. Reply with ONLY the topic name."""
+                
+                response = engine.generate(prompt, max_length=30, temperature=0.7)
+                topic = response.strip()
+                
+                # Validate
+                for t in self.DISCOVERY_TOPICS:
+                    if t.lower() in topic.lower() or topic.lower() in t.lower():
+                        return t
+        except Exception:
+            pass
         
-        # Otherwise pick a random topic
-        return random.choice(self.DISCOVERY_TOPICS)
+        # Fallback: Check if we have related topics from last discovery
+        if self.discoveries and 'related_topics' in self.discoveries[-1]:
+            related = self.discoveries[-1]['related_topics']
+            if related:
+                return related[0]  # Pick first related rather than random
+        
+        # Last resort: Return first unexplored topic
+        explored = {d['topic'] for d in self.discoveries}
+        for topic in self.DISCOVERY_TOPICS:
+            if topic not in explored:
+                return topic
+        return self.DISCOVERY_TOPICS[0]
     
     def suggest_research_query(self, topic: str) -> str:
         """
-        Generate a research query for a topic.
+        Generate a research query for a topic using AI when available.
         
         Args:
             topic: The topic to research
@@ -152,15 +180,22 @@ class DiscoveryMode:
         Returns:
             A formatted research query
         """
-        query_templates = [
-            f"What are the latest developments in {topic}?",
-            f"Tell me something interesting about {topic}",
-            f"What should I know about {topic}?",
-            f"Explain {topic} in an interesting way",
-            f"What are some fascinating facts about {topic}?",
-        ]
+        # Try AI-generated query
+        try:
+            from ..core.inference import ForgeEngine
+            engine = ForgeEngine.get_instance()
+            
+            if engine and engine.model:
+                prompt = f"""Generate ONE interesting research question about '{topic}' that would lead to learning something new and practical. Be specific and curious. Reply with ONLY the question."""
+                
+                response = engine.generate(prompt, max_length=60, temperature=0.8)
+                if response and '?' in response:
+                    return response.strip()
+        except Exception:
+            pass
         
-        return random.choice(query_templates)
+        # Fallback: Simple template
+        return f"What are the most interesting aspects of {topic}?"
     
     def log_discovery(self, topic: str, findings: str, 
                      related_topics: Optional[List[str]] = None):
