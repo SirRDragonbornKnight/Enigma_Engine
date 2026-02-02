@@ -634,3 +634,123 @@ class SetAvatarTool(Tool):
             "type": "3d" if ext in [".obj", ".fbx", ".gltf", ".glb", ".ply"] else "2d"
         }
 
+
+class ControlAvatarTool(Tool):
+    """
+    Direct control over avatar movement, position, size, and gaze.
+    """
+    
+    name = "control_avatar"
+    description = "Control my avatar - move, resize, look at things, go to corners, express emotions"
+    parameters = {
+        "action": "What to do: move_to, resize, look_at, go_corner, emotion, gesture, say, walk_to",
+        "x": "X coordinate (for move_to, look_at) or size in pixels (for resize)",
+        "y": "Y coordinate (for move_to, look_at) - optional",
+        "value": "Corner name (for go_corner), emotion name, gesture type, or text to say",
+    }
+    
+    def execute(self, action: str, x: int = None, y: int = None, value: str = None, **kwargs) -> Dict[str, Any]:
+        action = action.lower().strip()
+        
+        try:
+            # Try to get the desktop pet
+            from forge_ai.avatar.desktop_pet import DesktopPet
+            
+            # Get the running pet instance
+            pet = self._get_pet_instance()
+            if not pet:
+                return {"success": False, "error": "Desktop pet not running. Start it from the Avatar tab."}
+            
+            if action == "move_to" or action == "teleport":
+                if x is None:
+                    return {"success": False, "error": "Need x coordinate"}
+                y = y or 500  # Default to middle height
+                pet.teleport(x, y)
+                return {"success": True, "action": "teleported", "position": (x, y)}
+            
+            elif action == "walk_to":
+                if x is None:
+                    return {"success": False, "error": "Need x coordinate"}
+                pet.walk_to(x, y)
+                return {"success": True, "action": "walking", "target": (x, y)}
+            
+            elif action == "resize":
+                if x is None:
+                    return {"success": False, "error": "Need size (x parameter)"}
+                size = max(32, min(512, x))
+                pet.resize(size)
+                return {"success": True, "action": "resized", "new_size": size}
+            
+            elif action == "look_at":
+                if x is None:
+                    return {"success": False, "error": "Need x coordinate to look at"}
+                y = y or 500
+                pet.look_at_screen_position(x, y)
+                return {"success": True, "action": "looking_at", "position": (x, y)}
+            
+            elif action == "go_corner":
+                corner = value or "bottom_right"
+                valid_corners = ["bottom_right", "bottom_left", "top_right", "top_left", "center"]
+                if corner not in valid_corners:
+                    return {"success": False, "error": f"Invalid corner. Use: {valid_corners}"}
+                pet.go_to_corner(corner)
+                return {"success": True, "action": "going_to", "corner": corner}
+            
+            elif action == "emotion" or action == "mood":
+                emotion = value or "neutral"
+                pet.set_mood(emotion)
+                return {"success": True, "action": "emotion_set", "emotion": emotion}
+            
+            elif action == "gesture":
+                gesture = value or "wave"
+                if gesture == "wave":
+                    pet._set_state(pet._state.__class__.WAVING)
+                elif gesture == "dance":
+                    pet._set_state(pet._state.__class__.DANCING)
+                elif gesture == "sleep":
+                    pet._set_state(pet._state.__class__.SLEEPING)
+                return {"success": True, "action": "gesture", "gesture": gesture}
+            
+            elif action == "say":
+                text = value or "Hello!"
+                pet.say(text)
+                return {"success": True, "action": "said", "text": text}
+            
+            elif action == "think":
+                text = value or "Hmm..."
+                pet.think(text)
+                return {"success": True, "action": "thinking", "text": text}
+            
+            elif action == "follow_cursor":
+                pet.follow_cursor()
+                return {"success": True, "action": "following_cursor"}
+            
+            elif action == "jump":
+                pet.jump()
+                return {"success": True, "action": "jumping"}
+            
+            else:
+                return {"success": False, "error": f"Unknown action: {action}. Use: move_to, walk_to, resize, look_at, go_corner, emotion, gesture, say, think, follow_cursor, jump"}
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _get_pet_instance(self):
+        """Try to get the running desktop pet instance."""
+        try:
+            # Check if there's a global pet instance
+            from forge_ai.avatar import desktop_pet
+            if hasattr(desktop_pet, '_global_pet') and desktop_pet._global_pet:
+                return desktop_pet._global_pet
+            
+            # Try to get from the main window
+            from PyQt5.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                for widget in app.topLevelWidgets():
+                    if hasattr(widget, '_desktop_pet') and widget._desktop_pet:
+                        return widget._desktop_pet
+            
+            return None
+        except Exception:
+            return None

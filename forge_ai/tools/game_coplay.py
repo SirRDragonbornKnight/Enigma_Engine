@@ -583,14 +583,106 @@ class GameCoPlayer:
     
     def observe(self) -> Dict[str, Any]:
         """
-        Observe the current game state.
+        Observe the current game state by capturing the screen.
         
-        This should be called with vision/screenshot data to understand
+        Uses mss for fast screenshot capture to understand
         what's happening in the game.
+        
+        Returns:
+            Dict with screen capture and analysis
         """
-        # This would integrate with vision tools
+        try:
+            # Fast screen capture with mss
+            try:
+                import mss
+                with mss.mss() as sct:
+                    monitor = sct.monitors[1]  # Primary monitor
+                    screenshot = sct.grab(monitor)
+                    # Convert to bytes for analysis
+                    self._game_state["screen_width"] = screenshot.width
+                    self._game_state["screen_height"] = screenshot.height
+                    self._game_state["last_capture_time"] = time.time()
+                    self._game_state["has_screen"] = True
+                    
+                    # Store raw pixels for vision processing
+                    from PIL import Image
+                    img = Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
+                    self._last_screen_capture = img
+                    
+            except ImportError:
+                # Fallback to PIL
+                from PIL import ImageGrab
+                img = ImageGrab.grab()
+                self._game_state["screen_width"] = img.width
+                self._game_state["screen_height"] = img.height
+                self._game_state["last_capture_time"] = time.time()
+                self._game_state["has_screen"] = True
+                self._last_screen_capture = img
+                
+        except Exception as e:
+            logger.warning(f"Screen capture failed: {e}")
+            self._game_state["has_screen"] = False
+        
         return self._game_state
     
+    def get_screen_image(self) -> Optional[Any]:
+        """Get the last captured screen image for AI analysis."""
+        return getattr(self, '_last_screen_capture', None)
+    
+    def analyze_screen(self) -> str:
+        """
+        Capture screen and get AI analysis of what's happening.
+        
+        Returns:
+            Text description of game state
+        """
+        self.observe()
+        
+        img = self.get_screen_image()
+        if not img:
+            return "Could not capture screen"
+        
+        # Try to get AI vision analysis
+        try:
+            from forge_ai.tools.vision_tools import describe_image
+            return describe_image(img)
+        except ImportError:
+            return f"Screen captured: {img.width}x{img.height} - vision tools not available"
+    
+    def start_continuous_observation(self, interval: float = 1.0):
+        """
+        Start continuously observing the game screen.
+        
+        Args:
+            interval: Seconds between observations
+        """
+        if hasattr(self, '_observe_thread') and self._observe_thread:
+            return  # Already running
+        
+        self._observing = True
+        
+        def observe_loop():
+            while self._observing and self._active:
+                self.observe()
+                
+                # Let AI analyze if we have a good capture
+                if self._game_state.get("has_screen"):
+                    # AI could react based on what it sees
+                    pass
+                
+                time.sleep(interval)
+        
+        self._observe_thread = threading.Thread(target=observe_loop, daemon=True)
+        self._observe_thread.start()
+        logger.info(f"Started continuous game observation (every {interval}s)")
+    
+    def stop_continuous_observation(self):
+        """Stop continuous screen observation."""
+        self._observing = False
+        if hasattr(self, '_observe_thread'):
+            self._observe_thread = None
+        logger.info("Stopped continuous game observation")
+
     def decide_action(self, context: str) -> Optional[GameAction]:
         """
         Let the AI decide what action to take based on context.

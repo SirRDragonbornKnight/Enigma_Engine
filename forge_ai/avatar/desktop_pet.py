@@ -74,6 +74,15 @@ except ImportError:
 
 from ..config import CONFIG
 
+# Global pet instance for tool access
+_global_pet: Optional['DesktopPet'] = None
+
+
+def get_desktop_pet() -> Optional['DesktopPet']:
+    """Get the global desktop pet instance."""
+    return _global_pet
+
+
 # Qt flags - get safely to work on both platforms
 def _get_qt_flag(name: str, default: int) -> int:
     """Get Qt flag safely."""
@@ -544,6 +553,10 @@ class DesktopPet(QObject):
             print("[DesktopPet] PyQt5 not available - cannot start desktop pet")
             return
         
+        # Register globally for tool access
+        global _global_pet
+        _global_pet = self
+        
         # Create window
         self._window = DesktopPetWindow(self.config.size)
         self._window.dropped.connect(self._on_dropped)
@@ -587,6 +600,8 @@ class DesktopPet(QObject):
     
     def stop(self):
         """Stop and hide the desktop pet."""
+        global _global_pet
+        _global_pet = None
         self._running = False
         
         if self._physics_timer:
@@ -707,6 +722,93 @@ class DesktopPet(QObject):
     def link_personality(self, personality):
         """Link to AI personality."""
         self._personality = personality
+    
+    def resize(self, new_size: int):
+        """
+        Resize the avatar.
+        
+        Args:
+            new_size: New size in pixels (width and height)
+        """
+        if new_size < 32:
+            new_size = 32
+        elif new_size > 512:
+            new_size = 512
+        
+        self.config.size = new_size
+        
+        # Reload sprites at new size
+        self._load_default_sprites()
+        
+        # Update window size if running
+        if self._window:
+            padding = 20
+            self._window._size = new_size
+            self._window.setFixedSize(new_size + padding * 2, new_size + padding * 2 + 60)
+            
+            # Re-apply current sprite at new size
+            if self._current_sprite_key in self._sprites:
+                self._window.set_sprite(self._sprites[self._current_sprite_key])
+        
+        print(f"[DesktopPet] Resized to {new_size}px")
+    
+    def look_at_screen_position(self, x: int, y: int):
+        """
+        Make the pet look at a specific screen position.
+        
+        Args:
+            x, y: Screen coordinates to look at
+        """
+        # Calculate direction to look
+        dx = x - self._x
+        dy = y - self._y
+        
+        # Face the direction
+        if dx > 0:
+            self._direction = PetDirection.RIGHT
+        else:
+            self._direction = PetDirection.LEFT
+        
+        if self._window:
+            self._window.set_direction(self._direction)
+        
+        self._set_state(PetState.LOOKING)
+        self.think(f"Looking at ({x}, {y})...", duration=2.0)
+    
+    def follow_cursor(self):
+        """Make the pet look at and follow the cursor."""
+        if not HAS_PYQT:
+            return
+        
+        cursor_pos = QCursor.pos()
+        self.look_at_screen_position(cursor_pos.x(), cursor_pos.y())
+        
+        # Walk toward cursor if far away
+        distance = abs(cursor_pos.x() - self._x)
+        if distance > 200:
+            # Walk toward but keep some distance
+            target_x = cursor_pos.x() - 100 if cursor_pos.x() > self._x else cursor_pos.x() + 100
+            self.walk_to(target_x)
+    
+    def go_to_corner(self, corner: str = "bottom_right"):
+        """
+        Move to a screen corner.
+        
+        Args:
+            corner: "bottom_right", "bottom_left", "top_right", "top_left"
+        """
+        screen = self._screen_rect
+        
+        positions = {
+            "bottom_right": (screen.width() - self.config.size - 50, screen.height() - self.config.size - 80),
+            "bottom_left": (50, screen.height() - self.config.size - 80),
+            "top_right": (screen.width() - self.config.size - 50, 50),
+            "top_left": (50, 50),
+            "center": (screen.width() // 2, screen.height() // 2),
+        }
+        
+        x, y = positions.get(corner, positions["bottom_right"])
+        self.walk_to(x, y)
     
     # === Internal ===
     
