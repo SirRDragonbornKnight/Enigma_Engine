@@ -6062,28 +6062,38 @@ def _show_default_preview(parent):
 
 
 def _test_random_expression(parent):
-    """Test a random expression in the preview."""
-    import random
-    expressions = list(SPRITE_TEMPLATES.keys())
-    if expressions:
-        expr = random.choice(expressions)
-        parent.current_expression = expr
-        if hasattr(parent, 'expression_label'):
-            parent.expression_label.setText(f"Current: {expr}")
-        
-        svg_data = generate_sprite(
-            expr,
-            parent._current_colors["primary"],
-            parent._current_colors["secondary"],
-            parent._current_colors["accent"]
-        )
-        parent.avatar_preview_2d.set_svg_sprite(svg_data)
-        
-        # Also update overlay if visible (pass original, overlay handles scaling)
-        if parent._overlay and parent._overlay.isVisible():
-            pixmap = parent.avatar_preview_2d.original_pixmap
-            if pixmap:
-                parent._overlay.set_avatar(pixmap)
+    """Cycle through expressions for preview testing."""
+    # Instead of random, cycle through expressions in order for testing
+    expressions = list(SPRITE_TEMPLATES.keys()) if SPRITE_TEMPLATES else []
+    if not expressions:
+        return
+    
+    # Get current expression index and move to next
+    current = getattr(parent, 'current_expression', 'neutral')
+    try:
+        current_idx = expressions.index(current)
+        next_idx = (current_idx + 1) % len(expressions)
+    except ValueError:
+        next_idx = 0
+    
+    expr = expressions[next_idx]
+    parent.current_expression = expr
+    if hasattr(parent, 'expression_label'):
+        parent.expression_label.setText(f"Current: {expr}")
+    
+    svg_data = generate_sprite(
+        expr,
+        parent._current_colors["primary"],
+        parent._current_colors["secondary"],
+        parent._current_colors["accent"]
+    )
+    parent.avatar_preview_2d.set_svg_sprite(svg_data)
+    
+    # Also update overlay if visible (pass original, overlay handles scaling)
+    if parent._overlay and parent._overlay.isVisible():
+        pixmap = parent.avatar_preview_2d.original_pixmap
+        if pixmap:
+            parent._overlay.set_avatar(pixmap)
 
 
 def _set_expression(parent, expression: str, from_callback: bool = False):
@@ -6637,10 +6647,24 @@ def _auto_design_avatar(parent):
                 
                 QTimer.singleShot(0, update_ui)
             else:
-                # Fallback: Generate a random style
-                import random
-                styles = list(SPRITE_TEMPLATES.keys()) if SPRITE_TEMPLATES else ['default']
-                chosen_style = random.choice(styles)
+                # Fallback: Use AI to pick a style based on personality
+                try:
+                    from ....core.inference import ForgeEngine
+                    engine = ForgeEngine.get_instance()
+                    styles = list(SPRITE_TEMPLATES.keys()) if SPRITE_TEMPLATES else ['default']
+                    
+                    if engine and engine.model:
+                        prompt = f"Pick ONE avatar style from this list that best fits an AI assistant: {', '.join(styles)}. Reply with ONLY the style name, nothing else."
+                        response = engine.generate(prompt, max_length=20, temperature=0.7)
+                        chosen_style = response.strip().lower()
+                        # Validate it's a real style
+                        if chosen_style not in styles:
+                            chosen_style = styles[0]  # Default to first if invalid
+                    else:
+                        chosen_style = styles[0]  # No AI, use first style
+                except Exception:
+                    styles = list(SPRITE_TEMPLATES.keys()) if SPRITE_TEMPLATES else ['default']
+                    chosen_style = styles[0]  # Fallback to first style
                 
                 # Generate sprite with random style
                 sprite_path = generate_sprite(chosen_style)

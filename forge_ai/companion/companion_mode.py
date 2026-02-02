@@ -357,62 +357,84 @@ class CompanionMode:
             self._avatar_callback("gesture", "look_at")
     
     def _generate_comment(self) -> Optional[str]:
-        """Generate a contextual comment about what's on screen."""
-        context = self._current_screen_context.lower()
+        """Generate a contextual comment about what's on screen using AI."""
+        context = self._current_screen_context
         
-        # Context-based comments
-        if "code" in context or "python" in context or "visual studio" in context:
-            comments = [
-                "Nice coding session!",
-                "That's some interesting code.",
-                "Making good progress!",
-                "Need a second pair of eyes on that?",
-            ]
-        elif "youtube" in context or "video" in context:
-            comments = [
-                "Enjoying a video?",
-                "Good pick!",
-                "Taking a break? Nice.",
-            ]
-        elif "game" in context or "steam" in context:
-            comments = [
-                "Game time! Have fun!",
-                "Nice game choice.",
-                "Don't forget to save!",
-            ]
-        elif "discord" in context or "chat" in context:
-            comments = [
-                "Chatting with friends?",
-                "Popular today!",
-            ]
-        elif "browser" in context or "chrome" in context or "firefox" in context:
-            comments = [
-                "Browsing something interesting?",
-                "Finding what you need?",
-            ]
-        else:
-            # Generic comments
-            comments = [
-                "Working hard!",
-                "Need anything?",
-                "I'm here if you need me.",
-            ]
+        if not context:
+            return None
         
-        return random.choice(comments) if comments else None
+        # Try to use AI for natural comments
+        try:
+            from ..core.inference import ForgeEngine
+            engine = ForgeEngine.get_instance()
+            
+            if engine and engine.model:
+                prompt = f"""You're a friendly AI companion watching the user's screen. 
+The active window is: "{context}"
+
+Generate a SHORT, natural comment (1 sentence max) that feels like a friend noticing what you're doing.
+Be casual and helpful, not robotic. Only comment if you have something genuinely useful or friendly to say.
+If there's nothing interesting to comment on, respond with just "..." to stay quiet.
+
+Your comment:"""
+                
+                response = engine.generate(prompt, max_length=50, temperature=0.8)
+                if response and response.strip() and response.strip() != "...":
+                    return response.strip()
+                return None  # AI chose to stay quiet
+        except Exception:
+            pass
+        
+        # Fallback: Only comment on specific situations, don't force generic comments
+        context_lower = context.lower()
+        
+        # Only speak up for genuinely notable situations
+        if "error" in context_lower:
+            return "I noticed an error - need help with that?"
+        elif "stackoverflow" in context_lower or "github.com" in context_lower:
+            return "Researching something? I can help look things up."
+        
+        # For everything else, stay quiet rather than say something generic
+        return None
     
     def _detect_emotion(self, text: str) -> str:
-        """Detect emotion from text for avatar."""
+        """Detect emotion from text for avatar using AI when available."""
+        if not text:
+            return "neutral"
+        
+        # Try AI-based emotion detection first
+        try:
+            from ..core.inference import ForgeEngine
+            engine = ForgeEngine.get_instance()
+            
+            if engine and engine.model:
+                prompt = f"""What emotion does this text express? Choose ONE: happy, sad, thinking, excited, curious, neutral
+
+Text: "{text[:200]}"
+
+Emotion:"""
+                response = engine.generate(prompt, max_length=15, temperature=0.3)
+                emotion = response.strip().lower().split()[0] if response else "neutral"
+                
+                # Validate
+                valid_emotions = {"happy", "sad", "thinking", "excited", "curious", "neutral"}
+                if emotion in valid_emotions:
+                    return emotion
+        except Exception:
+            pass
+        
+        # Fallback: Simple keyword detection
         text_lower = text.lower()
         
-        if any(w in text_lower for w in ["happy", "great", "awesome", "excellent", "wonderful"]):
+        if any(w in text_lower for w in ["happy", "great", "awesome", "excellent", "wonderful", "love"]):
             return "happy"
-        elif any(w in text_lower for w in ["sorry", "unfortunately", "can't", "error"]):
+        elif any(w in text_lower for w in ["sorry", "unfortunately", "can't", "error", "failed"]):
             return "sad"
-        elif any(w in text_lower for w in ["think", "perhaps", "maybe", "consider"]):
+        elif any(w in text_lower for w in ["think", "perhaps", "maybe", "consider", "hmm"]):
             return "thinking"
-        elif any(w in text_lower for w in ["!", "wow", "amazing"]):
+        elif any(w in text_lower for w in ["!", "wow", "amazing", "incredible"]):
             return "excited"
-        elif any(w in text_lower for w in ["?", "curious", "wonder"]):
+        elif any(w in text_lower for w in ["?", "curious", "wonder", "what", "how", "why"]):
             return "curious"
         else:
             return "neutral"
