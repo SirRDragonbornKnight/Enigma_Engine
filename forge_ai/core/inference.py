@@ -1486,6 +1486,117 @@ class ForgeEngine:
     # =========================================================================
     # Chat Interface
     # =========================================================================
+    
+    def clear_kv_cache(self):
+        """
+        Clear the KV-cache to prevent hallucinations from stale context.
+        
+        Call this when:
+        - Starting a new conversation
+        - After many messages (context gets confused)
+        - When AI starts hallucinating
+        """
+        if hasattr(self.model, 'clear_kv_cache'):
+            self.model.clear_kv_cache()
+            logger.debug("Cleared model KV-cache")
+        elif hasattr(self.model, 'reset_cache'):
+            self.model.reset_cache()
+            logger.debug("Reset model cache")
+        elif hasattr(self.model, 'kv_cache'):
+            self.model.kv_cache = None
+            logger.debug("Set kv_cache to None")
+        # Also clear any internal cache
+        if hasattr(self, '_cache'):
+            self._cache = None
+    
+    def count_tokens(self, text: str) -> int:
+        """
+        Count the number of tokens in a text string.
+        
+        Args:
+            text: Text to count tokens in
+            
+        Returns:
+            Number of tokens
+        """
+        if hasattr(self.tokenizer, 'encode'):
+            return len(self.tokenizer.encode(text, add_special_tokens=False))
+        elif hasattr(self.tokenizer, '__call__'):
+            result = self.tokenizer(text, return_tensors=None)
+            return len(result.get('input_ids', []))
+        else:
+            # Rough estimate: ~4 chars per token
+            return len(text) // 4
+    
+    def get_max_context_length(self) -> int:
+        """Get the model's maximum context length."""
+        if hasattr(self.model, 'config'):
+            return getattr(self.model.config, 'max_seq_len', 1024)
+        return 1024  # Safe default
+    
+    def _truncate_history(
+        self,
+        history: List[Dict[str, str]],
+        current_message: str,
+        system_prompt: Optional[str] = None,
+        max_history_tokens: Optional[int] = None,
+        reserve_for_response: int = 200
+    ) -> List[Dict[str, str]]:
+        """
+        Truncate conversation history to fit within context window.
+        
+        This prevents hallucinations caused by context overflow!
+        
+        Args:
+            history: Full conversation history
+            current_message: Current user message
+            system_prompt: Optional system prompt
+            max_history_tokens: Max tokens for history (auto-calculated if None)
+            reserve_for_response: Tokens to reserve for AI response
+            
+        Returns:
+            Truncated history that fits in context window
+        """
+        if not history:
+            return []
+        
+        # Calculate available space
+        max_context = self.get_max_context_length()
+        
+        # Reserve space for: system prompt + current message + response
+        reserved = reserve_for_response
+        if system_prompt:
+            reserved += self.count_tokens(f"System: {system_prompt}\n")
+        reserved += self.count_tokens(f"User: {current_message}\nAssistant:")
+        
+        max_history_tokens = max_history_tokens or (max_context - reserved)
+        
+        # If very limited context, keep only last exchange
+        if max_history_tokens < 100:
+            logger.warning(f"Very limited context ({max_context} tokens), keeping only last exchange")
+            return history[-2:] if len(history) >= 2 else history[-1:]
+        
+        # Build history from most recent, counting tokens
+        truncated = []
+        total_tokens = 0
+        
+        for msg in reversed(history):
+            role = msg.get("role", "user").capitalize()
+            content = msg.get("content", "")
+            msg_text = f"{role}: {content}\n"
+            msg_tokens = self.count_tokens(msg_text)
+            
+            if total_tokens + msg_tokens > max_history_tokens:
+                # Don't add this message, we're at limit
+                break
+            
+            truncated.insert(0, msg)
+            total_tokens += msg_tokens
+        
+        if len(truncated) < len(history):
+            logger.info(f"Truncated history: {len(history)} -> {len(truncated)} messages ({total_tokens} tokens)")
+        
+        return truncated
 
     def chat(
         self,
@@ -1493,6 +1604,7 @@ class ForgeEngine:
         history: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
         max_gen: int = 200,
+        auto_truncate: bool = True,
         **kwargs
     ) -> str:
         """
@@ -1503,11 +1615,25 @@ class ForgeEngine:
             history: List of {"role": "user/assistant", "content": "..."} dicts
             system_prompt: Optional system prompt
             max_gen: Maximum tokens to generate
+            auto_truncate: Automatically truncate history to fit context (prevents hallucinations!)
             **kwargs: Additional generation parameters
 
         Returns:
             Assistant's response
         """
+        # ─────────────────────────────────────────────────────────────────────
+        # TRUNCATE HISTORY TO PREVENT HALLUCINATIONS
+        # This is critical! Without this, long conversations overflow the
+        # context window and cause the model to hallucinate.
+        # ─────────────────────────────────────────────────────────────────────
+        if auto_truncate and history:
+            history = self._truncate_history(
+                history,
+                current_message=message,
+                system_prompt=system_prompt,
+                reserve_for_response=max_gen
+            )
+        
         # Use centralized prompt builder for consistent formatting
         try:
             from .prompt_builder import get_prompt_builder

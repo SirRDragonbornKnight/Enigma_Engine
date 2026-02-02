@@ -206,6 +206,90 @@ ROUTING_RULES = {
         keywords=["avatar", "face", "expression", "show me", "look"],
         parameters={"expression": "Avatar expression to show"}
     ),
+    "robot": RoutingRule(
+        name="robot",
+        description="Control physical robots and servos",
+        keywords=["robot", "servo", "motor", "arm", "gripper", "move robot", "animatronic"],
+        parameters={"robot": "Robot name", "action": "move/grip/speak", "value": "Action value"}
+    ),
+    "game": RoutingRule(
+        name="game",
+        description="Game AI assistance and control",
+        keywords=["game", "play", "gaming", "minecraft", "strategy", "quest", "level"],
+        parameters={"game": "Game name", "action": "help/command/strategy"}
+    ),
+    "iot": RoutingRule(
+        name="iot",
+        description="Control smart home and IoT devices",
+        keywords=["light", "lights", "turn on", "turn off", "smart home", "home assistant", "thermostat", "sensor", "switch"],
+        parameters={"device": "Device name", "action": "on/off/set", "value": "Value to set"}
+    ),
+    "file": RoutingRule(
+        name="file",
+        description="Read, write, and manage files",
+        keywords=["file", "read file", "write file", "save", "open file", "create file", "delete file"],
+        parameters={"action": "read/write/list/delete", "path": "File path"}
+    ),
+    "document": RoutingRule(
+        name="document",
+        description="Process PDFs, Word docs, and documents",
+        keywords=["pdf", "document", "word", "docx", "extract text", "read document"],
+        parameters={"path": "Document path", "action": "read/extract/summarize"}
+    ),
+    "system": RoutingRule(
+        name="system",
+        description="System commands and terminal operations",
+        keywords=["terminal", "command", "run", "execute", "shell", "system info"],
+        parameters={"command": "Command to run"}
+    ),
+    "task": RoutingRule(
+        name="task",
+        description="Task management and reminders",
+        keywords=["task", "todo", "reminder", "checklist", "schedule", "remind me"],
+        parameters={"action": "add/list/complete", "content": "Task description"}
+    ),
+    "voice_clone": RoutingRule(
+        name="voice_clone",
+        description="Clone voices and create voice profiles",
+        keywords=["clone voice", "voice clone", "copy voice", "voice profile", "mimic voice"],
+        parameters={"action": "clone/list/use", "audio_path": "Audio sample path"}
+    ),
+    "automation": RoutingRule(
+        name="automation",
+        description="Automation, scheduling, macros, and clipboard",
+        keywords=["schedule", "automate", "macro", "clipboard", "copy", "paste", "record macro", "run at"],
+        parameters={"action": "schedule/macro/clipboard", "content": "What to automate"}
+    ),
+    "knowledge": RoutingRule(
+        name="knowledge",
+        description="Search Wikipedia, ArXiv, and knowledge bases",
+        keywords=["wikipedia", "arxiv", "research", "paper", "article", "encyclopedia", "scientific"],
+        parameters={"query": "Topic to search", "source": "wikipedia/arxiv"}
+    ),
+    "data": RoutingRule(
+        name="data",
+        description="Analyze CSV, JSON, SQL, and create charts",
+        keywords=["csv", "json", "sql", "data", "chart", "graph", "plot", "analyze data", "query"],
+        parameters={"action": "analyze/query/plot", "path": "Data file path"}
+    ),
+    "browser": RoutingRule(
+        name="browser",
+        description="Control browser tabs and media playback",
+        keywords=["browser", "tab", "pause video", "mute", "youtube", "media", "play", "volume"],
+        parameters={"action": "pause/mute/skip/focus", "target": "Tab or media target"}
+    ),
+    "productivity": RoutingRule(
+        name="productivity",
+        description="Git, Docker, SSH, and process management",
+        keywords=["git", "commit", "push", "pull", "docker", "container", "ssh", "process", "kill process"],
+        parameters={"action": "git/docker/ssh/process", "command": "Specific command"}
+    ),
+    "self": RoutingRule(
+        name="self",
+        description="AI self-modification: personality, preferences, memory",
+        keywords=["personality", "be more", "act like", "preference", "configure yourself", "your settings"],
+        parameters={"setting": "What to change", "value": "New value"}
+    ),
 }
 
 
@@ -333,6 +417,62 @@ class ToolRouter:
         # Load specialized models config if enabled
         if use_specialized:
             self._load_specialized_config()
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # AUTO-ASSIGN: Models with declared capabilities auto-register
+        # This means if you train ONE model for chat+code+vision,
+        # it's automatically assigned to all three tools (loaded only ONCE)
+        # ─────────────────────────────────────────────────────────────────────
+        self._auto_assign_from_capabilities()
+    
+    def _auto_assign_from_capabilities(self):
+        """
+        Auto-assign models to tools based on their declared capabilities.
+        
+        📖 WHY THIS EXISTS:
+        If you train ONE model on multiple things (chat, code, vision),
+        you shouldn't have to manually assign it 3 times. This function
+        reads each model's capabilities and auto-assigns it to matching tools.
+        
+        📐 HOW IT WORKS:
+        1. Scan all models in registry for "capabilities" field
+        2. For each model with capabilities, assign it to those tools
+        3. The model is CACHED - so loading for "chat" means it's already
+           loaded when "code" or "vision" is called!
+        
+        📐 EXAMPLE:
+        Model "my_ai" has capabilities: ["chat", "code", "vision"]
+        → Auto-assigns "forge:my_ai" to chat tool
+        → Auto-assigns "forge:my_ai" to code tool  
+        → Auto-assigns "forge:my_ai" to vision tool
+        → When ANY of these tools runs, the SAME cached model is used!
+        """
+        try:
+            from .model_registry import ModelRegistry
+            registry = ModelRegistry()
+            
+            for model_name, info in registry.registry.get("models", {}).items():
+                capabilities = info.get("capabilities", [])
+                has_weights = info.get("has_weights", False)
+                
+                # Only auto-assign models that are trained
+                if not has_weights:
+                    continue
+                
+                # Auto-assign to each declared capability
+                for cap in capabilities:
+                    if cap in self.routing_rules:
+                        # Check if already assigned (don't override user assignments)
+                        existing = self.get_assignments(cap)
+                        model_id = f"forge:{model_name}"
+                        
+                        if not any(a.model_id == model_id for a in existing):
+                            # Add with lower priority than manual assignments
+                            self.assign_model(cap, model_id, priority=5)
+                            logger.debug(f"Auto-assigned {model_id} to {cap}")
+            
+        except Exception as e:
+            logger.debug(f"Could not auto-assign from capabilities: {e}")
     
     def _cache_model(self, key: str, model: Any, is_specialized: bool = False):
         """

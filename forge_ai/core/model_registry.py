@@ -316,6 +316,9 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 "instructions": str(instructions_file),
             },
             "base_model": base_model,  # Track lineage
+            # Capabilities this model is trained for
+            # When a model has capabilities, router auto-assigns it to those tools
+            "capabilities": ["chat"],  # Default: chat only, add more as you train
         }
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
@@ -329,6 +332,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
             "has_weights": False,
             "data_dir": str(model_dir / "data"),
             "base_model": base_model,
+            "capabilities": ["chat"],  # What this model can do
         }
         
         # If base model specified, copy its weights
@@ -706,6 +710,93 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
 def get_registry(models_dir: Optional[str] = None) -> ModelRegistry:
     """Get the model registry instance."""
     return ModelRegistry(models_dir)
+
+
+# =============================================================================
+# CAPABILITY MANAGEMENT - For Multi-Capable Models
+# =============================================================================
+
+def set_model_capabilities(model_name: str, capabilities: list, models_dir: Optional[str] = None):
+    """
+    Set the capabilities a model is trained for.
+    
+    When a model has capabilities, the router can auto-assign it to those tools.
+    This means one model trained on chat+code+vision only loads ONCE and handles all three.
+    
+    Args:
+        model_name: Name of the model in registry
+        capabilities: List of capability names (e.g., ["chat", "code", "vision"])
+        models_dir: Optional models directory
+        
+    Example:
+        # Train a model on multiple things, then declare its capabilities:
+        set_model_capabilities("my_multimodel", ["chat", "code", "vision", "web"])
+        
+        # Now the router knows this ONE model can handle all four!
+    """
+    registry = ModelRegistry(models_dir)
+    name = model_name.lower().strip()
+    
+    if name not in registry.registry["models"]:
+        raise ValueError(f"Model '{name}' not found")
+    
+    # Update registry
+    registry.registry["models"][name]["capabilities"] = capabilities
+    registry._save_registry()
+    
+    # Update metadata file too
+    model_dir = Path(registry.registry["models"][name]["path"])
+    metadata_path = model_dir / "metadata.json"
+    if metadata_path.exists():
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+        metadata["capabilities"] = capabilities
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+    
+    print(f"[SYSTEM] [OK] Set capabilities for '{name}': {capabilities}")
+
+
+def get_model_capabilities(model_name: str, models_dir: Optional[str] = None) -> list:
+    """
+    Get the capabilities a model is trained for.
+    
+    Args:
+        model_name: Name of the model in registry
+        models_dir: Optional models directory
+        
+    Returns:
+        List of capability names
+    """
+    registry = ModelRegistry(models_dir)
+    name = model_name.lower().strip()
+    
+    if name not in registry.registry["models"]:
+        raise ValueError(f"Model '{name}' not found")
+    
+    return registry.registry["models"][name].get("capabilities", ["chat"])
+
+
+def find_models_with_capability(capability: str, models_dir: Optional[str] = None) -> list:
+    """
+    Find all models that have a specific capability.
+    
+    Args:
+        capability: Capability to search for (e.g., "vision", "code")
+        models_dir: Optional models directory
+        
+    Returns:
+        List of model names that have this capability
+    """
+    registry = ModelRegistry(models_dir)
+    models = []
+    
+    for name, info in registry.registry["models"].items():
+        caps = info.get("capabilities", ["chat"])
+        if capability in caps:
+            models.append(name)
+    
+    return models
 
 
 if __name__ == "__main__":

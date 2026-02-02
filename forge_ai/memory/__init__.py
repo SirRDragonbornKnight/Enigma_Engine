@@ -53,6 +53,15 @@ from .encryption import (
 from .backup import (
     MemoryBackupScheduler
 )
+from .augmented_engine import (
+    MemoryAugmentedEngine,
+    MemoryConfig,
+    get_memory_engine,
+    generate_with_memory,
+    chat_with_memory,
+    store_memory,
+    search_memories
+)
 
 __all__ = [
     # Legacy API
@@ -113,4 +122,13 @@ __all__ = [
     
     # Backup
     "MemoryBackupScheduler",
+    
+    # Memory-Augmented Engine (NEW - AI with real memory!)
+    "MemoryAugmentedEngine",
+    "MemoryConfig",
+    "get_memory_engine",
+    "generate_with_memory",
+    "chat_with_memory",
+    "store_memory",
+    "search_memories",
 ]

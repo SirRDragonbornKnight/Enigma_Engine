@@ -54,6 +54,9 @@ from PyQt5.QtCore import Qt
 # UI text truncation length
 MAX_DISPLAY_LENGTH = 200
 
+# Maximum messages to keep in history (prevents hallucination from context overflow)
+MAX_HISTORY_MESSAGES = 20  # 10 exchanges (user + AI each)
+
 STYLE_MODEL_LABEL = """
     QLabel {
         color: #89b4fa;
@@ -843,8 +846,21 @@ def _new_chat(parent):
     except Exception:
         pass
     
-    # Reset any HuggingFace conversation history
+    # ─────────────────────────────────────────────────────────────────────────
+    # CLEAR KV-CACHE: Prevents hallucinations from stale context!
+    # This is critical - without this, the model may reference old conversations
+    # ─────────────────────────────────────────────────────────────────────────
     if hasattr(parent, 'engine') and parent.engine:
+        # Clear KV-cache for fresh context
+        if hasattr(parent.engine, 'clear_kv_cache'):
+            try:
+                parent.engine.clear_kv_cache()
+                if hasattr(parent, 'log_terminal'):
+                    parent.log_terminal("Cleared KV-cache for new conversation", "debug")
+            except Exception:
+                pass
+        
+        # Reset HuggingFace conversation history
         if hasattr(parent.engine, 'model') and hasattr(parent.engine.model, 'reset_conversation'):
             try:
                 parent.engine.model.reset_conversation()

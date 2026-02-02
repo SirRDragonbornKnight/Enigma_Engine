@@ -184,6 +184,25 @@ class MemoryCategorization:
         self.last_prune_time = time.time()
         self.prune_interval = self.config.get('prune_interval', 3600)  # 1 hour
     
+    def add(
+        self,
+        content: str,
+        memory_type: MemoryType = MemoryType.SHORT_TERM,
+        **kwargs
+    ) -> Memory:
+        """
+        Convenience method - alias for add_memory().
+        
+        Args:
+            content: Memory content
+            memory_type: Type of memory
+            **kwargs: Additional arguments passed to add_memory
+            
+        Returns:
+            Created Memory object
+        """
+        return self.add_memory(content, memory_type=memory_type, **kwargs)
+    
     def add_memory(
         self,
         content: str,
