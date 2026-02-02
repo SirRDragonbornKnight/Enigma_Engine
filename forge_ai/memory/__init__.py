@@ -62,6 +62,14 @@ from .augmented_engine import (
     store_memory,
     search_memories
 )
+from .conversation_summary import (
+    ConversationSummarizer,
+    ConversationSummary,
+    get_summarizer,
+    summarize_conversation,
+    get_continuation_context,
+    export_for_handoff
+)
 
 __all__ = [
     # Legacy API
@@ -131,4 +139,12 @@ __all__ = [
     "chat_with_memory",
     "store_memory",
     "search_memories",
+    
+    # Conversation Summarization (context compression & handoff)
+    "ConversationSummarizer",
+    "ConversationSummary",
+    "get_summarizer",
+    "summarize_conversation",
+    "get_continuation_context",
+    "export_for_handoff",
 ]

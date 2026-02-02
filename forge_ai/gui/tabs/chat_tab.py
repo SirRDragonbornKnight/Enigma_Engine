@@ -54,8 +54,9 @@ from PyQt5.QtCore import Qt
 # UI text truncation length
 MAX_DISPLAY_LENGTH = 200
 
-# Maximum messages to keep in history (prevents hallucination from context overflow)
-MAX_HISTORY_MESSAGES = 20  # 10 exchanges (user + AI each)
+# Note: History limiting is now handled by token-based truncation in
+# forge_ai/core/inference.py (_truncate_history method) which dynamically
+# calculates how many messages fit based on actual token counts.
 
 STYLE_MODEL_LABEL = """
     QLabel {
@@ -300,6 +301,14 @@ def _create_header_section(parent, layout):
     parent.btn_save_chat.clicked.connect(lambda: _save_chat(parent))
     parent.btn_save_chat.setStyleSheet(STYLE_SECONDARY_BTN)
     header_layout.addWidget(parent.btn_save_chat)
+    
+    # Summarize button - compress conversation for context/handoff
+    parent.btn_summarize = QPushButton("Summary")
+    parent.btn_summarize.setToolTip("Summarize conversation for context or handoff to another AI")
+    parent.btn_summarize.setMaximumWidth(BUTTON_WIDTH_SMALL)
+    parent.btn_summarize.clicked.connect(lambda: _summarize_chat(parent))
+    parent.btn_summarize.setStyleSheet(STYLE_SECONDARY_BTN)
+    header_layout.addWidget(parent.btn_summarize)
     
     layout.addLayout(header_layout)
 
@@ -904,6 +913,83 @@ def _save_chat(parent):
         parent.chat_status.setText("Chat saved!")
     else:
         parent.chat_status.setText("Save not available")
+
+
+def _summarize_chat(parent):
+    """
+    Summarize the current conversation.
+    
+    This creates a compact summary that can be:
+    - Used to continue the conversation later
+    - Handed off to another AI for context
+    - Copied for sharing or documentation
+    """
+    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout, QLabel, QApplication
+    
+    if not hasattr(parent, 'chat_messages') or not parent.chat_messages:
+        parent.chat_status.setText("No conversation to summarize")
+        return
+    
+    if len(parent.chat_messages) < 2:
+        parent.chat_status.setText("Need more messages to summarize")
+        return
+    
+    parent.chat_status.setText("Generating summary...")
+    
+    try:
+        from ...memory.conversation_summary import summarize_conversation, export_for_handoff
+        
+        # Generate summary
+        summary = summarize_conversation(parent.chat_messages, use_ai=False)
+        
+        # Create dialog to show summary
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("Conversation Summary")
+        dialog.setMinimumSize(500, 400)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Summary info
+        info_label = QLabel(f"Messages: {summary.message_count} | Topics: {', '.join(summary.topics[:3]) or 'General chat'}")
+        info_label.setStyleSheet("color: #89b4fa; font-weight: bold;")
+        layout.addWidget(info_label)
+        
+        # Summary text
+        summary_text = QTextEdit()
+        summary_text.setReadOnly(True)
+        summary_text.setPlainText(summary.to_context_string() or summary.summary_text)
+        layout.addWidget(summary_text)
+        
+        # Handoff context (for other AIs)
+        layout.addWidget(QLabel("Context for handoff to another AI:"))
+        handoff_text = QTextEdit()
+        handoff_text.setReadOnly(True)
+        handoff_text.setPlainText(export_for_handoff(parent.chat_messages))
+        handoff_text.setMaximumHeight(150)
+        layout.addWidget(handoff_text)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        
+        copy_btn = QPushButton("Copy Summary")
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(summary_text.toPlainText()))
+        btn_layout.addWidget(copy_btn)
+        
+        copy_handoff_btn = QPushButton("Copy Handoff")
+        copy_handoff_btn.clicked.connect(lambda: QApplication.clipboard().setText(handoff_text.toPlainText()))
+        btn_layout.addWidget(copy_handoff_btn)
+        
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        btn_layout.addWidget(close_btn)
+        
+        layout.addLayout(btn_layout)
+        
+        dialog.exec_()
+        parent.chat_status.setText("Summary generated")
+        
+    except Exception as e:
+        parent.chat_status.setText(f"Summary failed: {str(e)[:30]}")
 
 
 def _stop_generation(parent):

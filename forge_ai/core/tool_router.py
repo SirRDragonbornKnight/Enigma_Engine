@@ -2199,6 +2199,50 @@ class ToolRouter:
             
         # Standard local execution
         return self.execute_tool(tool_name, params)
+    
+    def auto_route_with_context(
+        self,
+        user_input: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        include_summary: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Route with conversation context for better tool selection.
+        
+        This is useful when:
+        - Routing to specialized AIs that need context
+        - Continuing conversations across different tools
+        - Providing background for complex requests
+        
+        Args:
+            user_input: Current user message
+            conversation_history: List of previous messages
+            include_summary: Whether to generate and include summary
+            
+        Returns:
+            Tool execution result with context
+        """
+        context = {}
+        
+        if conversation_history and include_summary:
+            try:
+                from ..memory.conversation_summary import get_continuation_context
+                context["conversation_context"] = get_continuation_context(
+                    conversation_history,
+                    max_tokens=300  # Keep context compact for routing
+                )
+            except Exception as e:
+                logger.debug(f"Could not generate conversation context: {e}")
+        
+        # Include recent messages even without full summary
+        if conversation_history and not context.get("conversation_context"):
+            recent = conversation_history[-4:]
+            context["recent_messages"] = [
+                {"role": m.get("role", "user"), "text": m.get("text", "")[:200]}
+                for m in recent
+            ]
+        
+        return self.auto_route(user_input, context)
 
 
 # Singleton instance
