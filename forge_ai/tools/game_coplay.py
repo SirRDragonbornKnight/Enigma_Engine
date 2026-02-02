@@ -1,32 +1,77 @@
 """
-Game Co-Play System - AI plays games WITH you, not FOR you.
+================================================================================
+🎮 GAME CO-PLAY SYSTEM - ADVENTURING TOGETHER
+================================================================================
 
-This module allows the AI to:
-1. See the game screen (via vision/screenshot)
-2. Understand game state through conversation
-3. Send inputs to the game (keyboard/mouse/controller)
-4. Coordinate with you as a teammate or opponent
+AI plays games WITH you, not FOR you. A true companion on digital quests!
 
-IMPORTANT: The AI plays as a PARTNER. It doesn't take over - it cooperates.
+📍 FILE: forge_ai/tools/game_coplay.py
+🏷️ TYPE: Game Partnership System
+🎯 MAIN CLASS: GameCoPlayer
 
-Supported input methods:
-- Keyboard simulation (pynput)
-- Mouse simulation (pynput)
-- Controller simulation (vgamepad on Windows, uinput on Linux)
-- Game-specific APIs (mods, WebSocket bridges)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  THE ADVENTURER'S COMPANION GUIDE:                                          │
+│                                                                             │
+│  "In the realm of games, the AI does not seek to conquer alone.            │
+│   It walks beside you, shield-brother in digital battles,                  │
+│   voice of strategy in your ear, hands ready to help."                     │
+│                                                                             │
+│  🛡️ TEAMMATE    - "I'll cover your flank!"                                 │
+│  ⚔️ OPPONENT    - "En garde! May the best player win."                     │
+│  📚 COACH       - "Try flanking left, they won't expect it."               │
+│  🐕 COMPANION   - "Where you go, I follow. Lead the way!"                  │
+│  💚 SUPPORT     - "Healing incoming! Stay near me."                        │
+│  🔭 EXPLORER    - "I found a treasure chest this way!"                     │
+│  🏰 DEFENDER    - "The base is safe. Go hunt, I'll guard."                 │
+│                                                                             │
+│  THE AI KNOWS:                                                              │
+│  - When to act and when to wait                                            │
+│  - When to ask permission vs. just helping                                 │
+│  - When you're in a menu (and NOT to press buttons!)                       │
+│  - When to celebrate victories and console defeats                         │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-Usage:
+💭 PHILOSOPHY OF CO-PLAY:
+
+    The AI is NOT trying to beat you or play FOR you.
+    It's there to make gaming MORE fun, not replace your agency.
+    
+    Good co-play:
+    ✓ "I'll hold this position while you explore"
+    ✓ "Enemy spotted northwest, should I engage?"
+    ✓ "Nice shot! Want me to push forward?"
+    
+    Bad co-play:
+    ✗ Taking over completely without asking
+    ✗ Criticizing every mistake
+    ✗ Ruining surprises or spoiling content
+    
+    The AI has soft ethics here too - it CAN be an annoying backseat gamer
+    if the user wants that experience, but defaults to being helpful!
+
+🎯 SUPPORTED INPUT METHODS:
+    - Keyboard simulation (pynput)
+    - Mouse simulation (pynput)  
+    - Controller simulation (vgamepad on Windows, uinput on Linux)
+    - Game-specific APIs (mods, WebSocket bridges)
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/tools/vision.py (see the screen)
+    → USES:      forge_ai/tools/gaming_tools.py (game-specific helpers)
+    ← USED BY:   forge_ai/gui/tabs/game/game_tab.py (GUI)
+
+📖 USAGE:
     from forge_ai.tools.game_coplay import GameCoPlayer
     
     player = GameCoPlayer()
-    player.set_role("teammate")  # or "opponent", "coach", "companion"
+    player.set_role("teammate")
     player.connect_game("minecraft")
     
-    # AI sees screen and decides action
+    # AI observes and helps
     player.observe_and_act()
     
     # Or explicit coordination
-    player.say("I'll cover the left side")
+    player.say("I'll cover the left side!")
     player.press_key("a")  # Move left
 """
 
@@ -42,8 +87,17 @@ import json
 logger = logging.getLogger(__name__)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CO-PLAY ROLES - What kind of partner do you want?
+# ═══════════════════════════════════════════════════════════════════════════════
+
 class CoPlayRole(Enum):
-    """Roles the AI can take when playing with you."""
+    """
+    Roles the AI can take when playing with you.
+    
+    Each role affects how the AI behaves, what it prioritizes,
+    and how it communicates with you during gameplay.
+    """
     TEAMMATE = "teammate"       # Works with you toward shared goal
     OPPONENT = "opponent"       # Plays against you (friendly competition)
     COACH = "coach"             # Watches and gives advice, minimal input
@@ -64,7 +118,13 @@ class InputMethod(Enum):
 
 @dataclass
 class GameAction:
-    """An action the AI wants to perform."""
+    """
+    An action the AI wants to perform in the game.
+    
+    Actions include movement, combat, item use, and communication.
+    Each action has a reason (so the AI can explain itself) and
+    a confidence level (how sure it is this is a good idea).
+    """
     action_type: str            # "move", "attack", "use", "say", etc.
     parameters: Dict[str, Any] = field(default_factory=dict)
     reason: str = ""            # Why the AI chose this action
@@ -82,7 +142,12 @@ class GameAction:
 
 @dataclass
 class CoPlayConfig:
-    """Configuration for co-play behavior."""
+    """
+    Configuration for co-play behavior.
+    
+    These settings control how the AI behaves as your gaming partner.
+    Safety features prevent the AI from being annoying or disruptive!
+    """
     role: CoPlayRole = CoPlayRole.COMPANION
     input_method: InputMethod = InputMethod.KEYBOARD
     
@@ -92,7 +157,8 @@ class CoPlayConfig:
     announce_actions: bool = True       # Tell player what AI is doing
     ask_before_major: bool = True       # Ask before big decisions
     
-    # Safety
+    # Safety - these are DEFAULTS, not hard restrictions
+    # The AI chooses to follow these because it's a good partner
     pause_on_menu: bool = True          # Don't act in menus
     respect_cooldowns: bool = True      # Don't spam abilities
     emergency_stop_key: str = "escape"  # AI stops on this key

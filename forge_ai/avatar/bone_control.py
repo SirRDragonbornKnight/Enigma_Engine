@@ -1,18 +1,51 @@
 """
-Avatar Bone Control System
+================================================================================
+💀 AVATAR BONE CONTROL SYSTEM - THE SKELETON WITHIN
+================================================================================
 
 PRIMARY AVATAR CONTROL: Direct bone/joint manipulation for rigged 3D avatars.
 This is the main control system, with fallback to other systems for non-rigged models.
 
-Allows AI to control individual bones/joints of rigged 3D avatars
-with built-in limits to prevent unnatural movements.
+📍 FILE: forge_ai/avatar/bone_control.py
+🏷️ TYPE: Avatar Skeletal Animation System
+🎯 MAIN CLASS: BoneController
 
-Each bone type has:
-- Rotation limits (min/max for each axis)
-- Movement speed limits (to prevent sudden jerky movements)
-- Parent-child constraints (child bones follow parent)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  THE ADVENTURE OF SELF-AWARENESS:                                          │
+│                                                                             │
+│  The AI doesn't just move - it KNOWS where its body is. Every bone, every  │
+│  joint, every rotation is visible to it. It can look at itself, understand │
+│  its pose, and move with intention.                                        │
+│                                                                             │
+│  Anatomical limits exist as GUIDANCE, not prison bars:                     │
+│  - Elbows shouldn't bend backwards (but imagine the reaction if they did!) │
+│  - Heads can't spin 360° (usually a bad sign when they do)                 │
+│  - Knees bend one way (the other way is called "breaking")                 │
+│                                                                             │
+│  The AI KNOWS these are weird. It might do them anyway if:                 │
+│  - The user asks for something silly                                       │
+│  - It's being comedic on purpose                                           │
+│  - It's pretending to be a robot/alien/eldritch horror                    │
+│                                                                             │
+│  SOFT LIMITS: The system warns but allows. The AI chooses.                 │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-Usage:
+🦴 BONE HIERARCHY (for humans):
+    root
+    └── hips/pelvis
+        ├── spine → spine1 → spine2 → chest → neck → head
+        ├── left_upper_leg → left_lower_leg → left_foot
+        ├── right_upper_leg → right_lower_leg → right_foot
+        ├── left_shoulder → left_upper_arm → left_forearm → left_hand
+        └── right_shoulder → right_upper_arm → right_forearm → right_hand
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/avatar/controller.py (ControlPriority)
+    ← USED BY:   forge_ai/avatar/autonomous.py (autonomous movement)
+    ← USED BY:   forge_ai/gui/tabs/avatar/avatar_display.py (visual feedback)
+    ← USED BY:   forge_ai/tools/avatar_tools.py (AI tool interface)
+
+📖 USAGE:
     from forge_ai.avatar.bone_control import BoneController, get_bone_controller
     
     controller = get_bone_controller()
@@ -20,8 +53,18 @@ Usage:
     # AI can request bone movements
     controller.move_bone("left_arm", pitch=30, yaw=0, roll=10)
     
-    # System clamps values to safe limits
-    # Returns the actual applied values
+    # AI can see its current pose
+    pose = controller.get_bone_info_for_ai()
+    # Returns: {"available_bones": [...], "current_pose": {...}, "warnings": [...]}
+    
+    # AI can check if a pose would look weird
+    weirdness = controller.check_pose_weirdness()
+    # Returns: {"is_weird": True, "reasons": ["Head rotated 180°"]}
+
+🎭 PHILOSOPHY:
+    The AI is not a puppet. It has a body, and it knows that body.
+    Natural movement comes from understanding, not restriction.
+    But sometimes, the funniest things come from intentional rule-breaking.
 """
 
 import json
@@ -406,11 +449,160 @@ class BoneController:
                     "pitch": state.pitch, "yaw": state.yaw, "roll": state.roll
                 }
         
+        # Add weirdness check so AI knows if pose looks strange
+        info["pose_analysis"] = self.check_pose_weirdness()
+        
         return info
+    
+    def check_pose_weirdness(self) -> Dict[str, Any]:
+        """
+        🎭 THE MIRROR OF TRUTH - AI can see if its pose looks weird!
+        
+        Checks the current pose for anatomically unusual positions.
+        Returns warnings but doesn't prevent anything - the AI decides.
+        
+        This is GUIDANCE, not restriction. The AI might intentionally
+        look weird for humor, horror, or artistic effect!
+        
+        Returns:
+            dict with:
+                - is_weird: bool - True if pose has unusual elements
+                - weirdness_level: float - 0.0 (normal) to 1.0 (exorcist)
+                - reasons: list[str] - Why it looks weird
+                - suggestions: list[str] - How to look more natural (if desired)
+                - humor_potential: float - How funny it might be
+        """
+        reasons = []
+        suggestions = []
+        weirdness = 0.0
+        humor = 0.0
+        
+        with self._lock:
+            # Check head position
+            head_state = self._bone_states.get("head", BoneState())
+            if abs(head_state.yaw) > 90:
+                reasons.append(f"Head rotated {abs(head_state.yaw):.0f}° - owl mode!")
+                suggestions.append("Humans usually can't turn their heads past 80°")
+                weirdness += 0.4
+                humor += 0.6  # This is pretty funny
+            
+            if abs(head_state.pitch) > 60:
+                direction = "looking at ceiling" if head_state.pitch > 0 else "chin to chest"
+                reasons.append(f"Extreme head tilt ({direction})")
+                weirdness += 0.2
+            
+            if abs(head_state.roll) > 30:
+                reasons.append("Head tilted like confused puppy")
+                weirdness += 0.1
+                humor += 0.3  # Cute actually
+            
+            # Check arms - are elbows bending backwards?
+            for arm in ["left_forearm", "right_forearm", "left_lower_arm", "right_lower_arm"]:
+                arm_state = self._bone_states.get(arm, BoneState())
+                if arm_state.pitch < -10:  # Elbow bending wrong way
+                    reasons.append(f"{arm.replace('_', ' ').title()} bending backwards!")
+                    suggestions.append("Elbows typically only bend forward (0° to 145°)")
+                    weirdness += 0.5
+                    humor += 0.4  # Disturbing but can be funny
+            
+            # Check spine - extreme bending
+            spine_total = 0.0
+            for spine_bone in ["spine", "spine1", "spine2", "chest"]:
+                spine_state = self._bone_states.get(spine_bone, BoneState())
+                spine_total += abs(spine_state.pitch)
+            
+            if spine_total > 90:
+                reasons.append(f"Spine bent {spine_total:.0f}° total - very flexible!")
+                suggestions.append("Unless you're a yoga master or a snake")
+                weirdness += 0.3
+                humor += 0.2
+            
+            # Check legs - knees bending wrong way
+            for leg in ["left_lower_leg", "right_lower_leg", "left_shin", "right_shin"]:
+                leg_state = self._bone_states.get(leg, BoneState())
+                if leg_state.pitch > 10:  # Knee bending forward (WRONG!)
+                    reasons.append(f"Knee bending forward - that's not how legs work!")
+                    suggestions.append("Knees bend backward (-140° to 0°)")
+                    weirdness += 0.6
+                    humor += 0.5  # Very wrong, very funny
+            
+            # Check for T-pose (all zeroes - common default but looks robotic)
+            all_zero = all(
+                abs(s.pitch) < 1 and abs(s.yaw) < 1 and abs(s.roll) < 1
+                for s in self._bone_states.values()
+            )
+            if all_zero and len(self._bone_states) > 3:
+                reasons.append("Perfect T-pose detected - very robotic")
+                suggestions.append("Add subtle variations for natural look")
+                weirdness += 0.1
+        
+        is_weird = len(reasons) > 0
+        
+        return {
+            "is_weird": is_weird,
+            "weirdness_level": min(1.0, weirdness),
+            "reasons": reasons,
+            "suggestions": suggestions,
+            "humor_potential": min(1.0, humor),
+            "verdict": self._get_weirdness_verdict(weirdness, humor)
+        }
+    
+    def _get_weirdness_verdict(self, weirdness: float, humor: float) -> str:
+        """Generate a fun verdict about the pose."""
+        if weirdness < 0.1:
+            return "Looking natural and normal!"
+        elif weirdness < 0.3:
+            return "Slightly unusual, but could pass for human."
+        elif weirdness < 0.5:
+            return "This is getting weird... intentionally?"
+        elif weirdness < 0.7:
+            if humor > 0.4:
+                return "Gloriously weird! Comedy gold potential."
+            return "Very unusual pose. Eldritch horror vibes."
+        else:
+            if humor > 0.5:
+                return "Maximum weirdness achieved! The humans will be confused and amused."
+            return "This pose defies anatomy. Are you okay?"
+    
+    def describe_current_pose(self) -> str:
+        """
+        📝 Generate a natural language description of the current pose.
+        
+        The AI can use this to understand and describe what it looks like.
+        """
+        descriptions = []
+        
+        with self._lock:
+            # Head
+            head = self._bone_states.get("head", BoneState())
+            if abs(head.yaw) > 20:
+                direction = "right" if head.yaw > 0 else "left"
+                descriptions.append(f"looking to the {direction}")
+            if head.pitch > 15:
+                descriptions.append("looking up")
+            elif head.pitch < -15:
+                descriptions.append("looking down")
+            if abs(head.roll) > 15:
+                descriptions.append("head tilted")
+            
+            # Arms
+            for side in ["left", "right"]:
+                arm = self._bone_states.get(f"{side}_upper_arm", self._bone_states.get(f"{side}_arm", BoneState()))
+                if arm.pitch > 45:
+                    descriptions.append(f"{side} arm raised")
+                elif arm.pitch < -20:
+                    descriptions.append(f"{side} arm behind")
+            
+            # Overall
+            if not descriptions:
+                descriptions.append("in a neutral pose")
+        
+        return "Currently " + ", ".join(descriptions) + "."
     
     def write_info_for_ai(self) -> None:
         """Write bone info to a file the AI can read."""
         info = self.get_bone_info_for_ai()
+        info["pose_description"] = self.describe_current_pose()
         info_path = Path("data/avatar/bone_info.json")
         info_path.parent.mkdir(parents=True, exist_ok=True)
         

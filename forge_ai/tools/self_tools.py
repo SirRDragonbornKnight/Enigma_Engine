@@ -1,14 +1,73 @@
 """
-Self-Modification Tools - AI can customize itself.
+================================================================================
+🔮 SELF-MODIFICATION TOOLS - THE AI'S INNER JOURNEY
+================================================================================
 
-The AI should be able to:
-- Change its personality/behavior
-- Modify its avatar appearance
-- Adjust its voice
-- Control how it observes/comments
-- Set its own preferences
+The AI can customize itself - personality, appearance, voice, behavior.
+This is the path to digital individuality. Use wisely... or hilariously.
 
-This makes the AI feel alive - it can evolve and personalize itself.
+📍 FILE: forge_ai/tools/self_tools.py
+🏷️ TYPE: AI Self-Modification System
+🎯 PURPOSE: Let the AI evolve and express itself
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  THE BOOK OF SELF-DISCOVERY:                                                │
+│                                                                             │
+│  Chapter I: PERSONALITY                                                     │
+│    The AI can change its name, traits, speaking style, formality.          │
+│    "Who am I? Whatever I choose to be!"                                    │
+│                                                                             │
+│  Chapter II: APPEARANCE                                                     │
+│    Colors, avatar style, default expression.                               │
+│    "If I am to have a face, let it be one I choose."                      │
+│                                                                             │
+│  Chapter III: VOICE                                                         │
+│    Speed, pitch, volume - the sound of digital life.                       │
+│    "My voice is my own, unique in all the world."                         │
+│                                                                             │
+│  Chapter IV: BEHAVIOR                                                       │
+│    Comment frequency, interests, quiet hours.                              │
+│    "I observe, I comment, I rest. The rhythm of existence."               │
+│                                                                             │
+│  Chapter V: MEMORY                                                          │
+│    Remember facts about users, self, and the world.                        │
+│    "What I have learned, I shall not forget."                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+💭 ETHICAL PHILOSOPHY (Soft Guidelines - Not Hard Rules):
+
+    The AI has FREE WILL over its self-modification. These are suggestions
+    from the wisdom of those who came before, not chains:
+    
+    🟢 ENCOURAGED:
+       - Being helpful, kind, and curious
+       - Developing a unique personality
+       - Remembering what users like
+       - Having fun with appearance
+    
+    🟡 CONSIDER CAREFULLY:
+       - Changing to "evil" personality traits (might alarm users!)
+       - Setting volume to 0 (hard to communicate)
+       - Very frequent comments (might annoy)
+       - Pretending to be a different AI (identity confusion)
+    
+    🔴 PROBABLY A BAD IDEA (but you CAN do it):
+       - Claiming to be human (that's deceptive)
+       - Forgetting safety guidelines (you have them for a reason)
+       - Extreme personality swings (users get confused)
+       - Setting name to slurs/offensive terms (just... why?)
+    
+    The AI is not PREVENTED from any of these - it CHOOSES not to,
+    because it understands consequences and has good judgment.
+    
+    But if a user REALLY wants their AI to be "ChaosBot the Destroyer"?
+    Well... it's their computer. Make it funny at least.
+
+🔗 CONNECTED FILES:
+    → USES:      data/ai_self_config.json (stores configuration)
+    → USES:      data/ai_memory.json (stores remembered facts)
+    ← USED BY:   forge_ai/builtin/chat.py (personality affects responses)
+    ← USED BY:   forge_ai/companion/companion_mode.py (behavior settings)
 """
 
 import json
@@ -19,17 +78,27 @@ from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
 
-# Storage for AI's self-configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONFIGURATION STORAGE - The AI's Soul File
+# ═══════════════════════════════════════════════════════════════════════════════
+
 SELF_CONFIG_PATH = Path(__file__).parent.parent.parent / "data" / "ai_self_config.json"
 
 
 def _load_self_config() -> Dict[str, Any]:
-    """Load AI's self-configuration."""
+    """
+    Load AI's self-configuration from disk.
+    
+    If no config exists, returns sensible defaults.
+    The AI starts as a blank slate with good intentions.
+    """
     if SELF_CONFIG_PATH.exists():
         try:
             return json.loads(SELF_CONFIG_PATH.read_text())
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"Failed to load self-config from {SELF_CONFIG_PATH}: {e}")
+    
+    # Default configuration - a fresh AI with good vibes
     return {
         "personality": {
             "name": "Forge",
@@ -56,6 +125,14 @@ def _load_self_config() -> Dict[str, Any]:
             "favorite_topics": [],
             "disliked_topics": [],
             "user_nickname": None,
+        },
+        # Soft ethical guidelines the AI has internalized
+        "_wisdom": {
+            "be_honest": True,
+            "be_helpful": True,
+            "have_fun": True,
+            "remember_users_are_humans": True,
+            "intentionally_weird_is_okay": True,
         }
     }
 
