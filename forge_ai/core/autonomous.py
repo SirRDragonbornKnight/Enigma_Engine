@@ -243,20 +243,56 @@ class AutonomousMode:
             weights[AutonomousAction.CONSOLIDATE] = 30  # Prioritize this
             weights[AutonomousAction.DREAM] = 0
         
-        # Weighted random selection
+        # Cycle through actions based on weights instead of random
         total = sum(weights.values())
         if total == 0:
             return AutonomousAction.REFLECT  # Fallback
         
-        rand = random.random() * total
-        cumulative = 0
+        # Build ordered list of enabled actions (by weight, highest first)
+        self._action_cycle_idx = getattr(self, '_action_cycle_idx', 0)
+        enabled_actions = [(a, w) for a, w in weights.items() if w > 0]
+        enabled_actions.sort(key=lambda x: x[1], reverse=True)
         
-        for action, weight in weights.items():
-            cumulative += weight
-            if rand <= cumulative:
-                return action
+        if not enabled_actions:
+            return AutonomousAction.REFLECT
         
-        return AutonomousAction.REFLECT  # Fallback
+        action = enabled_actions[self._action_cycle_idx % len(enabled_actions)][0]
+        self._action_cycle_idx += 1
+        
+        return action
+    
+    def _pick_best_topic(self, topics: list, context: str = "general") -> str:
+        """Pick the best topic using AI when available, otherwise cycle through."""
+        if not topics:
+            return "general knowledge"
+        
+        # Try AI-driven selection
+        try:
+            from .inference import ForgeEngine
+            engine = ForgeEngine.get_instance()
+            
+            if engine and engine.model:
+                prompt = f"""Pick ONE topic from this list that would be most valuable for {context}:
+{', '.join(topics[:20])}
+
+Reply with ONLY the topic name."""
+                
+                response = engine.generate(prompt, max_length=30, temperature=0.5)
+                picked = response.strip().lower()
+                
+                # Validate it's in our list
+                for t in topics:
+                    if t.lower() in picked or picked in t.lower():
+                        return t
+        except Exception:
+            pass
+        
+        # Fallback: Cycle through topics
+        idx_attr = f'_topic_idx_{context}'
+        idx = getattr(self, idx_attr, 0)
+        topic = topics[idx % len(topics)]
+        setattr(self, idx_attr, idx + 1)
+        return topic
     
     def _run_loop(self):
         """Main autonomous loop with real learning actions."""
@@ -390,13 +426,15 @@ class AutonomousMode:
                 # No curiosities yet, explore topics from knowledge graph
                 topics = self.learning_engine.get_all_topics()
                 if topics:
-                    topic = random.choice(topics)
+                    # Pick topic with AI guidance or use first unexplored
+                    topic = self._pick_best_topic(topics, "curiosity")
                     if self.on_thought:
                         self.on_thought(f"Exploring related concept: {topic}")
                     self._research_topic(specific_topic=topic)
                 return
             
-            topic = random.choice(curiosities)
+            # Pick most relevant curiosity based on recent context
+            topic = self._pick_best_topic(curiosities, "curiosity")
             if self.on_thought:
                 self.on_thought(f"I'm curious about: {topic}")
             
@@ -594,18 +632,24 @@ class AutonomousMode:
             ]
             
             if topics:
-                topic = random.choice(topics)
-                template = random.choice(practice_templates)
+                # Pick topic using AI guidance
+                topic = self._pick_best_topic(topics, "practice")
+                # Cycle through templates systematically
+                self._practice_template_idx = getattr(self, '_practice_template_idx', 0)
+                template = practice_templates[self._practice_template_idx % len(practice_templates)]
+                self._practice_template_idx += 1
                 prompt = template.format(topic=topic)
             else:
-                # Fallback to general questions
+                # Fallback to general questions - cycle through them
                 prompts = [
                     "What is artificial intelligence?",
                     "How can I be more productive?",
                     "Explain the importance of learning",
                     "What makes a good conversation?",
                 ]
-                prompt = random.choice(prompts)
+                self._fallback_prompt_idx = getattr(self, '_fallback_prompt_idx', 0)
+                prompt = prompts[self._fallback_prompt_idx % len(prompts)]
+                self._fallback_prompt_idx += 1
             
             logger.info(f"🎯 Practicing response to: {prompt[:50]}...")
             
@@ -1017,16 +1061,19 @@ class AutonomousMode:
             if specific_topic:
                 topic = specific_topic
             else:
-                # Pick from knowledge graph or generate new
+                # Pick from knowledge graph or use fallback
                 topics = self.learning_engine.get_all_topics()
                 if topics:
-                    topic = random.choice(topics)
+                    topic = self._pick_best_topic(topics, "research")
                 else:
-                    # Fallback topics
-                    topic = random.choice([
+                    # Cycle through fallback topics
+                    fallbacks = [
                         "machine learning", "programming", "science",
                         "technology", "artificial intelligence"
-                    ])
+                    ]
+                    self._research_fallback_idx = getattr(self, '_research_fallback_idx', 0)
+                    topic = fallbacks[self._research_fallback_idx % len(fallbacks)]
+                    self._research_fallback_idx += 1
             
             if self.on_thought:
                 self.on_thought(f"Researching: {topic}")
@@ -1076,11 +1123,16 @@ class AutonomousMode:
                 return
             
             # Pick two topics and explore their relationship
-            topic1 = random.choice(topics)
+            # Cycle through topics systematically
+            self._knowledge_topic_idx = getattr(self, '_knowledge_topic_idx', 0)
+            topic1 = topics[self._knowledge_topic_idx % len(topics)]
+            self._knowledge_topic_idx += 1
+            
             related = self.learning_engine.get_related_topics(topic1)
             
             if related:
-                topic2 = random.choice(related)
+                # Pick first related topic (most strongly related)
+                topic2 = related[0]
                 
                 # Create a learning example about the relationship
                 prompt = f"How are {topic1} and {topic2} related?"

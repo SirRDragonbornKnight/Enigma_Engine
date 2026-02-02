@@ -377,22 +377,32 @@ class VoiceCustomizer:
         Returns:
             List of VoiceProfile variations
         """
-        import random
-        
         variations = []
         
-        for i in range(num_variations):
-            variation = VoiceProfile(
-                name=f"{base_profile.name}_var{i+1}",
-                pitch=max(0.5, min(1.5, base_profile.pitch + random.uniform(-0.15, 0.15))),
-                speed=max(0.5, min(1.5, base_profile.speed + random.uniform(-0.15, 0.15))),
-                volume=max(0.3, min(1.0, base_profile.volume + random.uniform(-0.1, 0.1))),
-                voice=base_profile.voice,
-                effects=base_profile.effects.copy(),
-                language=base_profile.language,
-                description=f"Variation {i+1} of {base_profile.name}"
-            )
-            variations.append(variation)
+        # Systematic exploration instead of random - explore parameter space evenly
+        # Create variations along pitch and speed axes
+        pitch_offsets = [-0.15, -0.075, 0, 0.075, 0.15]
+        speed_offsets = [-0.15, -0.075, 0, 0.075, 0.15]
+        
+        i = 0
+        for p_off in pitch_offsets:
+            for s_off in speed_offsets:
+                if i >= num_variations:
+                    break
+                variation = VoiceProfile(
+                    name=f"{base_profile.name}_var{i+1}",
+                    pitch=max(0.5, min(1.5, base_profile.pitch + p_off)),
+                    speed=max(0.5, min(1.5, base_profile.speed + s_off)),
+                    volume=base_profile.volume,  # Keep volume consistent
+                    voice=base_profile.voice,
+                    effects=base_profile.effects.copy(),
+                    language=base_profile.language,
+                    description=f"Variation {i+1}: pitch {p_off:+.2f}, speed {s_off:+.2f}"
+                )
+                variations.append(variation)
+                i += 1
+            if i >= num_variations:
+                break
         
         return variations
 

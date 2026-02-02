@@ -293,7 +293,7 @@ class CompanionMode:
             for interest in self.config.interests
         )
         
-        if is_interesting or random.random() < 0.1:  # Small chance for any topic
+        if is_interesting:  # Only comment when genuinely relevant to interests
             comment = self._generate_comment()
             if comment:
                 self._set_state(CompanionState.COMMENTING)

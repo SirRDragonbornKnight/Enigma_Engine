@@ -299,11 +299,8 @@ class AutonomousAvatar:
             try:
                 current_time = time.time()
                 
-                # Calculate next action timing
-                interval = random.uniform(
-                    self.config.action_interval_min,
-                    self.config.action_interval_max
-                )
+                # Use consistent interval (average of min/max) instead of random
+                interval = (self.config.action_interval_min + self.config.action_interval_max) / 2
                 
                 if current_time - self._last_action_time >= interval:
                     self._do_autonomous_action()
@@ -319,10 +316,14 @@ class AutonomousAvatar:
                     if self._mood != AvatarMood.BORED and self._mood != AvatarMood.SLEEPY:
                         self.set_mood(AvatarMood.BORED)
                 
-                # Time-based mood check
+                # Time-based mood check - apply consistently when conditions met
                 time_mood = self._get_time_based_mood_modifier()
-                if time_mood and random.random() > 0.95:  # Rarely override
-                    self.set_mood(time_mood)
+                if time_mood and self._mood != time_mood:
+                    # Only change mood once per 5 minutes to avoid constant switching
+                    last_mood_change = getattr(self, '_last_mood_change', 0)
+                    if current_time - last_mood_change > 300:  # 5 minutes
+                        self.set_mood(time_mood)
+                        self._last_mood_change = current_time
                 
                 time.sleep(0.5)
                 

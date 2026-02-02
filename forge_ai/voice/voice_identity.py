@@ -116,15 +116,19 @@ class AIVoiceIdentity:
         traits = personality.traits
         
         for i in range(num_experiments - 1):
-            # Create variation by adjusting parameters
+            # Create variation by systematically adjusting parameters
+            # Explore parameter space in a grid pattern
+            pitch_offset = ((i % 3) - 1) * 0.1  # -0.1, 0, 0.1
+            speed_offset = ((i // 3 % 3) - 1) * 0.15  # -0.15, 0, 0.15
+            
             variation = VoiceProfile(
                 name=f"experiment_{i}",
-                pitch=base_profile.pitch + random.uniform(-0.1, 0.1),
-                speed=base_profile.speed + random.uniform(-0.15, 0.15),
-                volume=base_profile.volume + random.uniform(-0.1, 0.1),
+                pitch=base_profile.pitch + pitch_offset,
+                speed=base_profile.speed + speed_offset,
+                volume=base_profile.volume,  # Keep volume stable
                 voice=base_profile.voice,
                 effects=base_profile.effects.copy(),
-                description=f"Experimental variation {i}"
+                description=f"Experimental variation {i}: pitch {pitch_offset:+.1f}, speed {speed_offset:+.2f}"
             )
             candidates.append(variation)
         
