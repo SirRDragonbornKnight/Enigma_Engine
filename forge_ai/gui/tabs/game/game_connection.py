@@ -152,8 +152,10 @@ def create_game_subtab(parent):
     """
     Create the game connection sub-tab.
     
-    The AI you are training will learn to control these games.
-    Connection settings are loaded from config files.
+    The AI plays games WITH you using:
+    - Input simulation (keyboard/mouse/controller)
+    - Game-specific API connections
+    - Vision to understand game state
     """
     widget = QWidget()
     layout = QVBoxLayout()
@@ -209,6 +211,84 @@ def create_game_subtab(parent):
     routing_layout.addWidget(parent.game_routing_status)
     
     layout.addWidget(routing_group)
+    
+    # === CO-PLAY SECTION ===
+    coplay_group = QGroupBox("Co-Play (AI plays WITH you)")
+    coplay_layout = QVBoxLayout(coplay_group)
+    
+    coplay_desc = QLabel(
+        "AI acts as your teammate/companion using keyboard, mouse, or controller input."
+    )
+    coplay_desc.setWordWrap(True)
+    coplay_layout.addWidget(coplay_desc)
+    
+    # Role selection
+    role_row = QHBoxLayout()
+    role_row.addWidget(QLabel("AI Role:"))
+    parent.coplay_role_combo = NoScrollComboBox()
+    parent.coplay_role_combo.addItems([
+        "Companion (follows your lead)",
+        "Teammate (equal partner)",
+        "Support (heals/buffs)",
+        "Defender (protects position)",
+        "Explorer (scouts ahead)",
+        "Coach (advice only)",
+        "Opponent (friendly competition)",
+    ])
+    parent.coplay_role_combo.setToolTip("How the AI behaves when playing with you")
+    role_row.addWidget(parent.coplay_role_combo)
+    role_row.addStretch()
+    coplay_layout.addLayout(role_row)
+    
+    # Input method
+    input_row = QHBoxLayout()
+    input_row.addWidget(QLabel("Input:"))
+    parent.coplay_input_combo = NoScrollComboBox()
+    parent.coplay_input_combo.addItems(["Keyboard/Mouse", "Controller", "Game API"])
+    parent.coplay_input_combo.setToolTip("How the AI sends inputs to the game")
+    input_row.addWidget(parent.coplay_input_combo)
+    input_row.addStretch()
+    coplay_layout.addLayout(input_row)
+    
+    # Co-play options
+    options_row = QHBoxLayout()
+    parent.coplay_announce = QCheckBox("Announce actions")
+    parent.coplay_announce.setChecked(True)
+    parent.coplay_announce.setToolTip("AI tells you what it's doing")
+    options_row.addWidget(parent.coplay_announce)
+    
+    parent.coplay_ask_major = QCheckBox("Ask before big decisions")
+    parent.coplay_ask_major.setChecked(True)
+    parent.coplay_ask_major.setToolTip("AI asks before major actions like using items")
+    options_row.addWidget(parent.coplay_ask_major)
+    options_row.addStretch()
+    coplay_layout.addLayout(options_row)
+    
+    # Co-play control buttons
+    coplay_btn_row = QHBoxLayout()
+    parent.btn_coplay_start = QPushButton("Start Co-Play")
+    parent.btn_coplay_start.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+    parent.btn_coplay_start.clicked.connect(lambda: _start_coplay(parent))
+    coplay_btn_row.addWidget(parent.btn_coplay_start)
+    
+    parent.btn_coplay_pause = QPushButton("Pause")
+    parent.btn_coplay_pause.setEnabled(False)
+    parent.btn_coplay_pause.clicked.connect(lambda: _pause_coplay(parent))
+    coplay_btn_row.addWidget(parent.btn_coplay_pause)
+    
+    parent.btn_coplay_stop = QPushButton("Stop")
+    parent.btn_coplay_stop.setEnabled(False)
+    parent.btn_coplay_stop.clicked.connect(lambda: _stop_coplay(parent))
+    coplay_btn_row.addWidget(parent.btn_coplay_stop)
+    coplay_btn_row.addStretch()
+    coplay_layout.addLayout(coplay_btn_row)
+    
+    # Co-play status
+    parent.coplay_status = QLabel("Co-Play: Inactive")
+    parent.coplay_status.setStyleSheet("color: #bac2de; font-style: italic;")
+    coplay_layout.addWidget(parent.coplay_status)
+    
+    layout.addWidget(coplay_group)
     
     # === OUTPUT AT TOP ===
     # Log (main output area)
@@ -728,3 +808,100 @@ def _load_custom_games(parent):
                     
     except Exception:
         pass  # File may be corrupted
+
+
+# === CO-PLAY CONTROL FUNCTIONS ===
+
+def _start_coplay(parent):
+    """Start co-play mode."""
+    try:
+        from forge_ai.tools.game_coplay import get_coplayer, CoPlayRole, InputMethod
+        
+        coplayer = get_coplayer()
+        
+        # Set role from combo
+        role_text = parent.coplay_role_combo.currentText().lower()
+        if "companion" in role_text:
+            coplayer.set_role("companion")
+        elif "teammate" in role_text:
+            coplayer.set_role("teammate")
+        elif "support" in role_text:
+            coplayer.set_role("support")
+        elif "defender" in role_text:
+            coplayer.set_role("defender")
+        elif "explorer" in role_text:
+            coplayer.set_role("explorer")
+        elif "coach" in role_text:
+            coplayer.set_role("coach")
+        elif "opponent" in role_text:
+            coplayer.set_role("opponent")
+        
+        # Set options
+        coplayer.config.announce_actions = parent.coplay_announce.isChecked()
+        coplayer.config.ask_before_major = parent.coplay_ask_major.isChecked()
+        
+        # Connect to selected game
+        game_id = parent.game_routing_combo.currentData()
+        if game_id and game_id != "none":
+            coplayer.connect_game(game_id)
+        
+        # Register callbacks
+        def on_action(action):
+            parent.game_log.append(f"[AI] {action.reason}")
+        
+        def on_speak(message):
+            parent.game_log.append(f"[AI says] {message}")
+        
+        coplayer.on_action(on_action)
+        coplayer.on_speak(on_speak)
+        
+        # Start
+        coplayer.start()
+        
+        # Update UI
+        parent.btn_coplay_start.setEnabled(False)
+        parent.btn_coplay_pause.setEnabled(True)
+        parent.btn_coplay_stop.setEnabled(True)
+        parent.coplay_status.setText("Co-Play: Active")
+        parent.coplay_status.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+        parent.game_log.append("[OK] Co-Play started - AI is now your " + coplayer.config.role.value)
+        
+        # Store reference
+        parent._coplayer = coplayer
+        
+    except ImportError as e:
+        parent.game_log.append(f"[!] Co-play requires pynput: pip install pynput")
+    except Exception as e:
+        parent.game_log.append(f"[X] Failed to start co-play: {e}")
+
+
+def _pause_coplay(parent):
+    """Pause co-play mode."""
+    if hasattr(parent, '_coplayer') and parent._coplayer:
+        if parent._coplayer._paused:
+            parent._coplayer.resume()
+            parent.btn_coplay_pause.setText("Pause")
+            parent.coplay_status.setText("Co-Play: Active")
+            parent.coplay_status.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+            parent.game_log.append("[>] Co-Play resumed")
+        else:
+            parent._coplayer.pause()
+            parent.btn_coplay_pause.setText("Resume")
+            parent.coplay_status.setText("Co-Play: Paused")
+            parent.coplay_status.setStyleSheet("color: #f59e0b; font-weight: bold;")
+            parent.game_log.append("[||] Co-Play paused")
+
+
+def _stop_coplay(parent):
+    """Stop co-play mode."""
+    if hasattr(parent, '_coplayer') and parent._coplayer:
+        parent._coplayer.stop()
+        parent._coplayer = None
+    
+    parent.btn_coplay_start.setEnabled(True)
+    parent.btn_coplay_pause.setEnabled(False)
+    parent.btn_coplay_pause.setText("Pause")
+    parent.btn_coplay_stop.setEnabled(False)
+    parent.coplay_status.setText("Co-Play: Inactive")
+    parent.coplay_status.setStyleSheet("color: #bac2de; font-style: italic;")
+    parent.game_log.append("[x] Co-Play stopped")
