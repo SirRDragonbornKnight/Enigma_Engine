@@ -462,6 +462,9 @@ def api_get_memories():
 @app.route('/api/memory', methods=['POST'])
 def api_add_memory():
     """User adds a memory for the AI."""
+    global _memories
+    MAX_MEMORIES = 1000  # Prevent unbounded growth
+    
     data = request.json
     text = data.get('text', '')
     importance = data.get('importance', 0.5)
@@ -477,6 +480,10 @@ def api_add_memory():
         'source': 'user'
     }
     _memories.append(memory)
+    
+    # Trim oldest memories if over limit
+    if len(_memories) > MAX_MEMORIES:
+        _memories = _memories[-MAX_MEMORIES:]
     
     return jsonify({
         'success': True,

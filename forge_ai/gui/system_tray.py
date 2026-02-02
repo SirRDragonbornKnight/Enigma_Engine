@@ -1210,8 +1210,10 @@ class QuickCommandOverlay(QWidget):
         if self._is_responding:
             return
         
-        # Add to local history
+        # Add to local history (bounded to 100 entries to prevent memory leak)
         self.history.append(command)
+        if len(self.history) > 100:
+            self.history = self.history[-100:]
         self.history_index = len(self.history)
         self.command_input.clear()
         
