@@ -248,10 +248,17 @@ class AILearnedGenerator:
             "crystal_growth", "neural_network", "quantum_field"
         ]
         
-        # Combine concepts for uniqueness
+        # Cycle through concepts deterministically
+        if not hasattr(self, '_creative_form_index'):
+            self._creative_form_index = 0
+        
+        concept = abstract_concepts[self._creative_form_index % len(abstract_concepts)]
+        self._creative_form_index = (self._creative_form_index + 1) % len(abstract_concepts)
+        
+        # Combine concepts for uniqueness when traits are high
         if creativity > 0.85 and playfulness > 0.7:
-            return f"{random.choice(abstract_concepts)}_hybrid"
-        return random.choice(abstract_concepts)
+            return f"{concept}_hybrid"
+        return concept
     
     def _generate_structured_form(self, formality: float) -> str:
         """Generate a structured, geometric form."""
@@ -259,7 +266,14 @@ class AILearnedGenerator:
             "recursive_hexagon", "golden_ratio_spiral", "platonic_solid",
             "tessellation", "symmetric_grid", "modular_structure"
         ]
-        return random.choice(geometric_concepts)
+        
+        # Cycle through geometric concepts
+        if not hasattr(self, '_structured_form_index'):
+            self._structured_form_index = 0
+        
+        concept = geometric_concepts[self._structured_form_index % len(geometric_concepts)]
+        self._structured_form_index = (self._structured_form_index + 1) % len(geometric_concepts)
+        return concept
     
     def _generate_balanced_form(self, traits: Dict[str, float]) -> str:
         """Generate form balancing multiple traits."""

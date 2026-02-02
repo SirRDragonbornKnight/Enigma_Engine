@@ -373,9 +373,13 @@ class AICuriosity:
         if current_hour in self.config.quiet_hours:
             return False
         
-        # Random chance based on curiosity level
-        if random.random() > self.config.curiosity_level:
-            return False
+        # Time-based check: curiosity level affects cooldown
+        # Higher curiosity = shorter cooldown between questions
+        min_cooldown = 60 * (1.0 - self.config.curiosity_level + 0.1)  # 6-60 seconds
+        if hasattr(self, '_last_curiosity_check'):
+            if time.time() - self._last_curiosity_check < min_cooldown:
+                return False
+        self._last_curiosity_check = time.time()
         
         return True
     
@@ -443,18 +447,18 @@ class AICuriosity:
         total = sum(weights.values())
         weights = {k: v / total for k, v in weights.items()}
         
-        # Weighted random selection
-        r = random.random()
-        cumulative = 0
-        for cat_name, weight in weights.items():
-            cumulative += weight
-            if r <= cumulative:
-                try:
-                    return QuestionCategory(cat_name)
-                except ValueError:
-                    pass
+        # Cycle through categories sorted by weight (highest first)
+        if not hasattr(self, '_category_cycle_index'):
+            self._category_cycle_index = 0
         
-        return QuestionCategory.RANDOM
+        sorted_cats = sorted(weights.items(), key=lambda x: x[1], reverse=True)
+        cat_name, _ = sorted_cats[self._category_cycle_index % len(sorted_cats)]
+        self._category_cycle_index = (self._category_cycle_index + 1) % len(sorted_cats)
+        
+        try:
+            return QuestionCategory(cat_name)
+        except ValueError:
+            return QuestionCategory.RANDOM
     
     def _get_question_from_bank(self, category: QuestionCategory) -> Optional[Question]:
         """Get a question from the appropriate bank."""
@@ -474,7 +478,18 @@ class AICuriosity:
             available = bank
         
         if available:
-            text = random.choice(available)
+            # Cycle through available questions systematically
+            if not hasattr(self, '_question_cycle_indices'):
+                self._question_cycle_indices = {}
+            
+            cat_key = category.value
+            if cat_key not in self._question_cycle_indices:
+                self._question_cycle_indices[cat_key] = 0
+            
+            idx = self._question_cycle_indices[cat_key] % len(available)
+            text = available[idx]
+            self._question_cycle_indices[cat_key] = (idx + 1) % len(available)
+            
             return Question(
                 text=text,
                 category=category,
@@ -488,8 +503,13 @@ class AICuriosity:
         if not context or not self._topics_mentioned:
             return None
         
-        # Pick a recent topic to follow up on
-        topic = random.choice(self._topics_mentioned[-10:])
+        # Cycle through recent topics instead of random pick
+        if not hasattr(self, '_topic_follow_up_index'):
+            self._topic_follow_up_index = 0
+        
+        recent_topics = self._topics_mentioned[-10:]
+        topic = recent_topics[self._topic_follow_up_index % len(recent_topics)]
+        self._topic_follow_up_index = (self._topic_follow_up_index + 1) % len(recent_topics)
         
         follow_up_templates = [
             f"You mentioned {topic} earlier - can you tell me more about that?",
@@ -499,8 +519,15 @@ class AICuriosity:
             f"What made you interested in {topic}?",
         ]
         
+        # Cycle through templates instead of random choice
+        if not hasattr(self, '_follow_up_template_index'):
+            self._follow_up_template_index = 0
+        
+        selected_template = follow_up_templates[self._follow_up_template_index % len(follow_up_templates)]
+        self._follow_up_template_index = (self._follow_up_template_index + 1) % len(follow_up_templates)
+        
         return Question(
-            text=random.choice(follow_up_templates),
+            text=selected_template,
             category=QuestionCategory.FOLLOW_UP,
             follow_up_to=topic,
             importance=0.7,  # Follow-ups are higher priority
@@ -634,12 +661,21 @@ class AICuriosity:
             ],
         }
         
-        intro = random.choice(intros.get(style, intros["friendly"]))
+        # Cycle through intros for variety without randomness
+        if not hasattr(self, '_intro_cycle_indices'):
+            self._intro_cycle_indices = {}
         
-        # Don't add intro if question already starts with a question word
+        if style not in self._intro_cycle_indices:
+            self._intro_cycle_indices[style] = 0
+        
+        style_intros = intros.get(style, intros["friendly"])
+        idx = self._intro_cycle_indices[style] % len(style_intros)
+        intro = style_intros[idx]
+        self._intro_cycle_indices[style] = (idx + 1) % len(style_intros)
+        
+        # Skip intro for questions that naturally start with question words
         if question.text.lower().startswith(('how', 'what', 'do you', 'are you', 'have you')):
-            if random.random() < 0.5:
-                intro = ""
+            intro = ""
         
         return intro + question.text
 

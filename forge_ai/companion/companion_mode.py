@@ -214,10 +214,9 @@ class CompanionMode:
                     self._observe_screen()
                     self._last_observe = now
                 
-                # Maybe comment on something
+                # Comment when interval reached (AI decides relevance in _maybe_comment)
                 if now - self._last_comment >= self.config.comment_interval:
-                    if random.random() < self.config.comment_chance:
-                        self._maybe_comment()
+                    self._maybe_comment()
                     self._last_comment = now
                 
                 # Offer help if user seems stuck

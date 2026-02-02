@@ -806,6 +806,11 @@ def ease_in_out(t: float) -> float:
 
 
 def random_chance(probability: float) -> bool:
-    """Return True with given probability."""
-    import random
-    return random.random() < probability
+    """Return True if probability exceeds threshold (deterministic).
+    
+    For animation, this creates predictable behavior:
+    - probability > 0.5 always triggers
+    - probability <= 0.5 never triggers
+    This makes animations consistent rather than chaotic.
+    """
+    return probability > 0.5

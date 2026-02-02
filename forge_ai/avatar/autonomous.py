@@ -344,16 +344,18 @@ class AutonomousAvatar:
             (weights['gesture'], self._random_gesture),
         ]
         
-        # Normalize weights
-        total_weight = sum(w for w, _ in actions)
-        rand = random.random() * total_weight
+        # Sort actions by weight (highest priority first) and cycle through
+        actions.sort(key=lambda x: x[0], reverse=True)
         
-        cumulative = 0
-        for weight, action in actions:
-            cumulative += weight
-            if rand <= cumulative:
-                action()
-                break
+        # Track action index for cycling
+        if not hasattr(self, '_action_cycle_index'):
+            self._action_cycle_index = 0
+        
+        # Execute current action in cycle
+        if actions:
+            _, action = actions[self._action_cycle_index % len(actions)]
+            action()
+            self._action_cycle_index = (self._action_cycle_index + 1) % len(actions)
     
     def _get_adjusted_weights(self) -> Dict[str, float]:
         """Get behavior weights adjusted for current mood."""

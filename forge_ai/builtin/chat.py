@@ -168,10 +168,22 @@ class BuiltinChat:
         """Find a matching response for the input."""
         text_lower = text.lower().strip()
         
-        for pattern, responses in self.patterns:
+        # Track response indices for cycling
+        if not hasattr(self, '_response_cycle_indices'):
+            self._response_cycle_indices = {}
+        
+        for i, (pattern, responses) in enumerate(self.patterns):
             match = re.search(pattern, text_lower, re.IGNORECASE)
             if match:
-                response = random.choice(responses)
+                # Cycle through responses for this pattern
+                pattern_key = f"pattern_{i}"
+                if pattern_key not in self._response_cycle_indices:
+                    self._response_cycle_indices[pattern_key] = 0
+                
+                idx = self._response_cycle_indices[pattern_key] % len(responses)
+                response = responses[idx]
+                self._response_cycle_indices[pattern_key] = (idx + 1) % len(responses)
+                
                 if callable(response):
                     try:
                         return response(match) if match.groups() else response()
@@ -179,7 +191,14 @@ class BuiltinChat:
                         continue
                 return response
         
-        return random.choice(self.default_responses)
+        # Cycle through default responses
+        if 'default' not in self._response_cycle_indices:
+            self._response_cycle_indices['default'] = 0
+        
+        idx = self._response_cycle_indices['default'] % len(self.default_responses)
+        response = self.default_responses[idx]
+        self._response_cycle_indices['default'] = (idx + 1) % len(self.default_responses)
+        return response
     
     def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
         """Generate a response to the prompt."""
