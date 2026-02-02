@@ -1,21 +1,52 @@
 """
-Spawnable Objects System - Avatar can generate and place objects on screen.
+================================================================================
+✨ SPAWNABLE OBJECTS SYSTEM - THE CONJURATION ARTS
+================================================================================
 
-The AI's avatar can:
-- Create speech/thought bubbles
-- Hold items (sword, book, coffee, etc.)
-- Spawn decorations/items around the screen
-- Leave notes, drawings, stickers
-- Create 2D sprites or 3D objects
+The AI's avatar can CREATE THINGS on screen - like a digital wizard!
 
-Objects can:
-- Be attached to avatar (holding)
-- Float freely on screen
-- Have physics (fall, bounce)
-- Be persistent or temporary
-- Be interactive (clickable)
+📍 FILE: forge_ai/avatar/spawnable_objects.py
+🏷️ TYPE: Avatar Object Spawning System
+🎯 MAIN CLASSES: ObjectSpawner, SpawnedObject, ObjectWindow
 
-Usage:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  THE WORKSHOP OF WONDERS:                                                   │
+│                                                                             │
+│  "The AI gazed upon the empty screen and said: 'Let there be stuff!'       │
+│   And lo, stuff appeared. Speech bubbles floated, notes stuck themselves   │
+│   to corners, and the avatar held aloft a mighty coffee cup."              │
+│                                                                             │
+│  🗨️ SPEECH_BUBBLE  - "Hello there!" (floats near avatar)                   │
+│  💭 THOUGHT_BUBBLE - Hmm... (cloudy, dreamy)                               │
+│  🗡️ HELD_ITEM      - Sword, book, coffee, flower, wand, heart             │
+│  🌟 DECORATION     - Stars, sparkles, floating bits                        │
+│  📝 NOTE           - Sticky notes that persist                             │
+│  😀 EMOJI          - Big floating emoji                                    │
+│  📋 SIGN           - Placards and signs                                    │
+│  ✨ EFFECT         - Sparkles, magic, visual flair                         │
+│                                                                             │
+│  Each object can:                                                           │
+│  • Be attached to avatar (holding in hand, floating nearby)                │
+│  • Live freely on screen (notes, decorations)                              │
+│  • Have physics (fall, bounce - wheee!)                                    │
+│  • Be temporary (fade away) or permanent (stick around)                    │
+│  • Be clicked by the user (interactive!)                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🎭 ATTACHMENT POINTS:
+    LEFT_HAND  - Held in left hand (for lefties and dual-wielders)
+    RIGHT_HAND - Held in right hand (default for most things)
+    HEAD       - Worn on head (hats, halos, thought bubbles)
+    BACK       - Carried on back (backpacks, wings, capes)
+    FLOATING   - Near avatar but not physically attached
+    NONE       - Free on screen, independent of avatar
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/gui/tabs/threed_tab.py (for AI-generated objects)
+    ← USED BY:   forge_ai/tools/self_tools.py (SpawnObjectTool)
+    ← USED BY:   forge_ai/avatar/desktop_pet.py (visual effects)
+
+📖 USAGE:
     from forge_ai.avatar.spawnable_objects import ObjectSpawner, SpawnedObject
     
     spawner = ObjectSpawner()
@@ -29,11 +60,13 @@ Usage:
     # Create a floating decoration
     star = spawner.spawn_decoration("star", x=500, y=200, animated=True)
     
-    # Spawn a custom image
-    pic = spawner.spawn_image("path/to/image.png", x=300, y=400)
-    
-    # AI generates and spawns
+    # AI conjures something from description
     ai_art = spawner.spawn_ai_generated("a cute cat", style="pixel")
+
+💭 PHILOSOPHY:
+    The avatar isn't just a static image - it interacts with the world!
+    Spawning objects makes conversations visual and memorable.
+    A speech bubble feels more alive than plain text.
 """
 
 import math
@@ -45,7 +78,10 @@ from pathlib import Path
 from typing import Optional, Dict, List, Callable, Any, Tuple
 import json
 
-# Try PyQt5
+# ═══════════════════════════════════════════════════════════════════════════════
+# PyQt5 Import - The Visual Magic
+# ═══════════════════════════════════════════════════════════════════════════════
+
 try:
     from PyQt5.QtWidgets import (
         QWidget, QLabel, QApplication, QMenu, QGraphicsDropShadowEffect
@@ -64,7 +100,7 @@ except ImportError:
     QWidget = object
     pyqtSignal = lambda *args: None
 
-# Try SVG support
+# Try SVG support for fancier graphics
 try:
     from PyQt5.QtSvg import QSvgRenderer
     HAS_SVG = True
@@ -72,10 +108,18 @@ except ImportError:
     HAS_SVG = False
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# OBJECT TYPES - What can we create?
+# ═══════════════════════════════════════════════════════════════════════════════
+
 class ObjectType(Enum):
-    """Types of spawnable objects."""
-    SPEECH_BUBBLE = auto()      # Text bubble
-    THOUGHT_BUBBLE = auto()     # Thought cloud
+    """
+    Types of spawnable objects.
+    
+    Each type has different visual rendering and behavior.
+    """
+    SPEECH_BUBBLE = auto()      # Text bubble - "Hello!"
+    THOUGHT_BUBBLE = auto()     # Thought cloud - Hmm...
     HELD_ITEM = auto()          # Item avatar holds
     DECORATION = auto()         # Screen decoration
     NOTE = auto()               # Sticky note
@@ -88,7 +132,11 @@ class ObjectType(Enum):
 
 
 class AttachPoint(Enum):
-    """Where objects can attach to avatar."""
+    """
+    Where objects can attach to avatar.
+    
+    This determines how objects move when the avatar moves.
+    """
     LEFT_HAND = "left_hand"
     RIGHT_HAND = "right_hand"
     HEAD = "head"

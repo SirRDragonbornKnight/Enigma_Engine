@@ -1,3 +1,42 @@
+"""
+================================================================================
+🧠 FORGEAI MEMORY MODULE - THE VAULT OF MEMORIES
+================================================================================
+
+Memory systems for conversation storage, vector search, RAG, and more.
+
+📍 PACKAGE: forge_ai/memory/
+🏷️ TYPE: AI Memory & Context System
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  THE ARCHIVES OF DIGITAL MEMORY:                                            │
+│                                                                             │
+│  "Without memory, the AI lives only in the present moment.                 │
+│   With memory, it becomes your companion across time."                     │
+│                                                                             │
+│  🗃️ STORAGE        - Conversations, facts, preferences                     │
+│  🔍 SEARCH         - Find relevant memories instantly                      │
+│  📊 EMBEDDINGS     - Turn text into searchable vectors                     │
+│  🎯 RAG            - Retrieve context for better responses                 │
+│  📝 SUMMARIZATION  - Compress long conversations                           │
+│  🔐 ENCRYPTION     - Keep memories private                                 │
+│  💾 BACKUP         - Never lose what was learned                           │
+│                                                                             │
+│  NEW FEATURES (Feb 2026):                                                  │
+│  • MemoryAugmentedEngine - AI with REAL memory recall!                     │
+│  • ConversationSummarizer - Compress context, never forget                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+📖 QUICK START:
+    # AI with automatic memory
+    from forge_ai.memory import generate_with_memory
+    response = generate_with_memory("What did I tell you about cats?")
+    
+    # Summarize long conversations
+    from forge_ai.memory import summarize_conversation
+    summary = summarize_conversation(messages)
+"""
+
 # memory package - Conversation Storage, Vector Search, Categorization, Export/Import, RAG, and more
 
 from .manager import ConversationManager
