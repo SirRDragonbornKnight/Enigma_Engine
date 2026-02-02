@@ -5814,53 +5814,15 @@ class EnhancedMainWindow(QMainWindow):
     
     def _maybe_ask_curiosity_question(self, ai_response: str):
         """
-        Occasionally have the AI ask a curiosity question.
+        DEPRECATED: Dice-roll curiosity removed.
         
-        This makes the AI feel more alive and interested in the user.
-        Questions are asked with low probability to avoid being annoying.
+        AI now asks questions naturally through the system prompt.
+        The prompt encourages genuine curiosity when appropriate.
+        This method is kept for compatibility but does nothing.
         """
-        import random
-        
-        # Check if curiosity is enabled (default: on)
-        if not self._gui_settings.get("ai_curiosity", True):
-            return
-        
-        # Low random chance (5% per response)
-        if random.random() > 0.05:
-            return
-        
-        try:
-            from ..personality.curiosity import get_curiosity_system, add_conversation_topic
-            
-            curiosity = get_curiosity_system(self.current_model_name)
-            
-            # Extract topics from the response for potential follow-up
-            if ai_response:
-                # Simple topic extraction - look for key nouns
-                words = ai_response.split()
-                for word in words[:20]:
-                    clean = word.strip('.,!?()[]{}":;').lower()
-                    if len(clean) > 5 and clean.isalpha():
-                        add_conversation_topic(clean)
-            
-            # Check if we should ask a question
-            if not curiosity.should_ask_question():
-                return
-            
-            # Get a question
-            question = curiosity.get_question()
-            
-            if question:
-                # Format and display the question after a brief delay
-                from PyQt5.QtCore import QTimer
-                formatted = curiosity.format_question_for_chat(question, style="friendly")
-                
-                # Use a timer to add a natural pause
-                QTimer.singleShot(2000, lambda: self._show_curiosity_question(formatted))
-                
-        except Exception as e:
-            # Don't crash on curiosity errors
-            self.log_terminal(f"Curiosity system error: {e}", "debug")
+        # AI curiosity is now handled naturally via system prompt
+        # No more fake dice rolls - the AI decides when to ask
+        pass
     
     def _show_curiosity_question(self, question: str):
         """Display a curiosity question from the AI."""
@@ -5911,7 +5873,9 @@ class EnhancedMainWindow(QMainWindow):
         elif preset == 'full':
             return self._build_tool_enabled_system_prompt()
         else:  # simple (default)
-            return "You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful."
+            return """You are a helpful AI assistant. Answer questions clearly and conversationally. Be friendly and helpful.
+
+When genuinely curious about something the user mentioned, feel free to ask follow-up questions naturally in your response. Don't force it - only ask when you're actually interested or when clarification would help you assist them better."""
     
     def _build_tool_enabled_system_prompt(self) -> str:
         """Build system prompt with all available tools the AI can use and GUI knowledge."""
@@ -5967,7 +5931,10 @@ User: "What's in this folder?"
 You: Let me check that folder for you.
 <tool_call>{{"tool": "list_directory", "params": {{"path": "/home/user/Documents"}}}}</tool_call>
 
-Be friendly, concise, and proactive in helping users accomplish their goals."""
+Be friendly, concise, and proactive in helping users accomplish their goals.
+
+## Natural Curiosity
+When genuinely curious about something the user mentioned, feel free to ask follow-up questions naturally in your response. Don't force it - only ask when you're actually interested or when clarification would help you assist them better. This makes conversations feel more natural and helps you understand the user better."""
 
     def _build_gui_knowledge(self) -> str:
         """Build knowledge about the ForgeAI GUI and enabled/disabled modules."""

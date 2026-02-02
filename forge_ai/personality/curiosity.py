@@ -1,34 +1,36 @@
 """
 ================================================================================
-🤔 AI CURIOSITY SYSTEM - THE AI ASKS YOU QUESTIONS
+AI CURIOSITY SYSTEM - QUESTION BANKS & USER LEARNING
 ================================================================================
 
-This module allows the AI to proactively ask questions to:
-- Learn about the user (preferences, life, interests)
-- Express emotional curiosity ("How are you feeling today?")
-- Explore random topics ("Have you ever wondered about...")
-- Get clarification ("Can you tell me more about...")
-- Build rapport ("What did you do this weekend?")
+This module provides question banks and user preference tracking.
+
+NOTE: As of Feb 2026, the AI's curiosity is handled naturally through system
+prompts - the AI asks questions when genuinely curious as part of its response.
+This module is now used for:
+- Storing question banks for manual UI features
+- Tracking user answers/preferences over time  
+- Companion mode scripted interactions
+- Recording conversation topics
 
 📍 FILE: forge_ai/personality/curiosity.py
-🏷️ TYPE: Proactive AI Behavior
+🏷️ TYPE: Personality Support Utility
 🎯 MAIN CLASS: AICuriosity
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  QUESTION CATEGORIES:                                                       │
+│  QUESTION CATEGORIES (for reference/manual use):                            │
 │                                                                             │
-│  💭 EMOTIONAL    - "How are you feeling?" "What made you happy today?"     │
-│  🎲 RANDOM       - "Have you ever..." "What's your opinion on..."          │
-│  📚 LEARNING     - "What's your favorite..." "Tell me about..."            │
-│  💡 FOLLOW-UP    - "You mentioned X earlier, can you tell me more?"        │
-│  🌟 PHILOSOPHICAL - "Do you think..." "What would you do if..."            │
-│  🎯 GOAL-ORIENTED - "What are you working on?" "How can I help today?"     │
+│  EMOTIONAL    - "How are you feeling?" "What made you happy today?"        │
+│  RANDOM       - "Have you ever..." "What's your opinion on..."             │
+│  LEARNING     - "What's your favorite..." "Tell me about..."               │
+│  FOLLOW-UP    - "You mentioned X earlier, can you tell me more?"           │
+│  PHILOSOPHICAL - "Do you think..." "What would you do if..."               │
+│  GOAL-ORIENTED - "What are you working on?" "How can I help today?"        │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 🔗 CONNECTED FILES:
     → USES:      forge_ai/memory/manager.py (remember user answers)
     → USES:      forge_ai/personality/ (personality traits affect questions)
-    ← USED BY:   forge_ai/gui/tabs/chat_tab.py (inject questions)
     ← USED BY:   forge_ai/companion/companion_mode.py (proactive chat)
 
 📖 USAGE:
@@ -36,7 +38,7 @@ This module allows the AI to proactively ask questions to:
     
     curiosity = get_curiosity_system()
     
-    # Get a random question
+    # Get a random question (for manual features, not automatic injection)
     question = curiosity.get_question()
     
     # Get a question of specific type
@@ -45,7 +47,7 @@ This module allows the AI to proactively ask questions to:
     # Record user's answer for memory
     curiosity.record_answer(question, user_answer)
     
-    # Check if it's a good time to ask
+    # Check if it's a good time to ask (for companion mode)
     if curiosity.should_ask_question():
         q = curiosity.get_question()
 """
