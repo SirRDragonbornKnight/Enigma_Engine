@@ -680,8 +680,16 @@ def _voice_input_and_send(parent, text: str):
         parent._on_send()  # This will read from chat_input and process
 
 
+# =============================================================================
+# DEPRECATED FUNCTIONS (kept for reference, no longer used)
+# =============================================================================
+
 def _voice_input_done(parent):
-    """Called when voice input completes successfully (legacy - not used with auto-send)."""
+    """
+    DEPRECATED: No longer used with auto-send voice input.
+    Was called when voice input completed successfully.
+    Voice input now uses _do_voice_input() which auto-sends.
+    """
     parent.rec_btn.setChecked(False)
     parent.rec_btn.setToolTip("Record - Click to speak")
     parent.chat_status.setText("Voice captured")
@@ -690,7 +698,11 @@ def _voice_input_done(parent):
 
 
 def _on_speak_last_safe(parent):
-    """Speak last AI response with double-click protection."""
+    """
+    DEPRECATED: No longer used. TTS is now controlled via auto-speak mode.
+    See _toggle_voice_mode() for current implementation.
+    Was: Speak last AI response with double-click protection.
+    """
     global _tts_is_speaking, _tts_stop_requested
     
     # Prevent double-clicks while TTS is running

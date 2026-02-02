@@ -71,7 +71,7 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from typing import Any, Generator, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 
 import torch
 import torch.nn.functional as F

@@ -203,7 +203,8 @@ class AIGenerationWorker(QThread):
                 chat_history = []
                 if self.parent_window and hasattr(self.parent_window, 'chat_messages'):
                     # Get last 6 messages (3 exchanges) to fit in context
-                    recent = self.parent_window.chat_messages[-6:-1] if len(self.parent_window.chat_messages) > 1 else []
+                    # Use -7:-1 to exclude the current message being processed but get 6 prior
+                    recent = self.parent_window.chat_messages[-7:-1] if len(self.parent_window.chat_messages) > 1 else []
                     for msg in recent:
                         role = "user" if msg.get("role") == "user" else "assistant"
                         chat_history.append({"role": role, "content": msg.get("text", "")})
@@ -5079,6 +5080,12 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
+        # Prevent unbounded growth - keep only recent history
+        # This prevents memory issues and context overflow hallucinations
+        MAX_HISTORY = 50  # 25 exchanges
+        if len(self.chat_messages) > MAX_HISTORY:
+            self.chat_messages = self.chat_messages[-MAX_HISTORY:]
+        
         # ─────────────────────────────────────────────────────────────────
         # LEARNING DETECTION: Check if user is correcting/teaching the AI
         # ─────────────────────────────────────────────────────────────────
@@ -5692,7 +5699,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # AUTO-SPEAK: Read response aloud if enabled (handled at end after processing)
         
-        # Store response for feedback
+        # Store response for feedback (with size limit to prevent memory leak)
         if not hasattr(self, '_response_history'):
             self._response_history = {}
         self._response_history[response_id] = {
@@ -5700,6 +5707,13 @@ class EnhancedMainWindow(QMainWindow):
             'ai_response': response,
             'timestamp': time.time()
         }
+        # Limit response history to prevent memory leak
+        MAX_RESPONSE_HISTORY = 100
+        if len(self._response_history) > MAX_RESPONSE_HISTORY:
+            # Remove oldest entries
+            sorted_keys = sorted(self._response_history.keys())
+            for old_key in sorted_keys[:len(self._response_history) - MAX_RESPONSE_HISTORY]:
+                del self._response_history[old_key]
         
         # Learn from interaction (wants system)
         if hasattr(self, 'wants_system') and self.wants_system and user_msgs:
