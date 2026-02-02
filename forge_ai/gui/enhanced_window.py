@@ -5784,6 +5784,12 @@ class EnhancedMainWindow(QMainWindow):
         # Auto-speak if enabled
         if getattr(self, 'auto_speak', False):
             self._speak_text(display_response)
+        
+        # ─────────────────────────────────────────────────────────────────
+        # AI CURIOSITY: Occasionally ask the user a question
+        # This makes the AI feel more alive and interested in the user
+        # ─────────────────────────────────────────────────────────────────
+        self._maybe_ask_curiosity_question(response)
     
     def _show_generation_result_in_chat(self, result):
         """Show a generation result popup (image, video, animation, etc.)."""
@@ -5806,6 +5812,95 @@ class EnhancedMainWindow(QMainWindow):
         except Exception as e:
             print(f"Could not show preview popup: {e}")
     
+    def _maybe_ask_curiosity_question(self, ai_response: str):
+        """
+        Occasionally have the AI ask a curiosity question.
+        
+        This makes the AI feel more alive and interested in the user.
+        Questions are asked with low probability to avoid being annoying.
+        """
+        import random
+        
+        # Check if curiosity is enabled (default: on)
+        if not self._gui_settings.get("ai_curiosity", True):
+            return
+        
+        # Low random chance (5% per response)
+        if random.random() > 0.05:
+            return
+        
+        try:
+            from ..personality.curiosity import get_curiosity_system, add_conversation_topic
+            
+            curiosity = get_curiosity_system(self.current_model_name)
+            
+            # Extract topics from the response for potential follow-up
+            if ai_response:
+                # Simple topic extraction - look for key nouns
+                words = ai_response.split()
+                for word in words[:20]:
+                    clean = word.strip('.,!?()[]{}":;').lower()
+                    if len(clean) > 5 and clean.isalpha():
+                        add_conversation_topic(clean)
+            
+            # Check if we should ask a question
+            if not curiosity.should_ask_question():
+                return
+            
+            # Get a question
+            question = curiosity.get_question()
+            
+            if question:
+                # Format and display the question after a brief delay
+                from PyQt5.QtCore import QTimer
+                formatted = curiosity.format_question_for_chat(question, style="friendly")
+                
+                # Use a timer to add a natural pause
+                QTimer.singleShot(2000, lambda: self._show_curiosity_question(formatted))
+                
+        except Exception as e:
+            # Don't crash on curiosity errors
+            self.log_terminal(f"Curiosity system error: {e}", "debug")
+    
+    def _show_curiosity_question(self, question: str):
+        """Display a curiosity question from the AI."""
+        if not question:
+            return
+        
+        # Show in chat with distinct styling
+        ai_name = self.current_model_name or "AI"
+        html = f'''
+        <div style="background: linear-gradient(135deg, #313244 0%, #45475a 100%); 
+                    border-radius: 8px; padding: 12px; margin: 8px 0;
+                    border-left: 3px solid #cba6f7;">
+            <div style="color: #cba6f7; font-weight: bold; margin-bottom: 6px;">
+                {ai_name} is curious:
+            </div>
+            <div style="color: #f5e0dc; font-style: italic;">
+                {question}
+            </div>
+        </div>
+        '''
+        self.chat_display.append(html)
+        
+        # Track as AI message
+        self.chat_messages.append({
+            "role": "assistant",
+            "text": f"[Curiosity] {question}",
+            "ts": time.time(),
+            "type": "curiosity"
+        })
+        
+        # Scroll to bottom
+        if hasattr(self.chat_display, 'verticalScrollBar'):
+            self.chat_display.verticalScrollBar().setValue(
+                self.chat_display.verticalScrollBar().maximum()
+            )
+        
+        # Speak if voice is enabled
+        if getattr(self, 'auto_speak', False):
+            self._speak_text(question)
+
     def _get_user_system_prompt(self) -> str:
         """Get the system prompt based on user settings."""
         preset = getattr(self, '_system_prompt_preset', 'simple')
