@@ -1,15 +1,67 @@
 """
-Tool Definitions for ForgeAI
-===============================
+================================================================================
+🛠️ TOOL DEFINITIONS - THE AI'S HANDS & CAPABILITIES
+================================================================================
 
-Defines all available tools that the AI can use, including their schemas,
-parameters, and which modules provide them.
+Welcome, traveler, to the AI's TOOLBOX! This is where we define every action
+the AI can take in the world - from generating images to moving its avatar,
+from searching the web to adjusting its own personality.
 
-This allows the AI to:
-- Know what tools are available
-- Understand what each tool does
-- Know what parameters each tool requires
-- Execute tools through the module system
+📍 FILE: forge_ai/tools/tool_definitions.py
+🏷️ TYPE: Tool Schema Registry
+🎯 MAIN CLASS: ToolDefinition, ToolParameter
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  THE PHILOSOPHY OF TOOLS:                                                   │
+│                                                                             │
+│  Tools are HOW an AI affects the world beyond just generating text.        │
+│  Without tools, an AI can only talk. WITH tools, it can DO.                │
+│                                                                             │
+│  ┌──────────────────┐                                                       │
+│  │  TOOL CATEGORIES │                                                       │
+│  ├──────────────────┤                                                       │
+│  │ 🎨 generation    │ → create images, audio, video, code                  │
+│  │ 👁️ perception    │ → see images, read files, search web                 │
+│  │ 🎮 control       │ → move avatar, interact with games                   │
+│  │ ⚙️ system        │ → settings, memory, self-modification                │
+│  │ 📚 general       │ → miscellaneous utilities                            │
+│  └──────────────────┘                                                       │
+│                                                                             │
+│  Each tool has:                                                             │
+│    • Name        - What to call it                                          │
+│    • Description - What it does (AI reads this!)                            │
+│    • Parameters  - What inputs it needs                                     │
+│    • Module      - Which module provides it                                 │
+│    • Category    - What type of action it is                                │
+│    • Examples    - How to use it                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+🔗 CONNECTED FILES:
+    → USES:      forge_ai/modules/manager.py (check if module available)
+    ← USED BY:   forge_ai/tools/tool_executor.py (execute the tools)
+    ← USED BY:   forge_ai/core/inference.py (tool routing)
+    ← USED BY:   forge_ai/gui/tabs/ (various UI tabs)
+
+📖 USAGE:
+    from forge_ai.tools.tool_definitions import get_all_tools, get_tool
+    
+    # Get all available tools
+    tools = get_all_tools()
+    
+    # Get a specific tool
+    image_tool = get_tool("generate_image")
+    
+    # Check tool parameters
+    for param in image_tool.parameters:
+        print(f"{param.name}: {param.description}")
+
+🧙 ADDING NEW TOOLS:
+    To add a new tool, create a ToolDefinition with:
+    1. A clear, descriptive name (snake_case)
+    2. A description the AI can understand
+    3. All required parameters with types
+    4. The module that provides the capability
+    5. Examples of how to use it
 """
 
 from __future__ import annotations
