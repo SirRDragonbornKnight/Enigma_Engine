@@ -619,7 +619,7 @@ class StoryContinueTool(Tool):
                 if story.get("chapters"):
                     last_text = story["chapters"][-1].get("text", "")[:200]
                 
-                prompt = f\"\"\"Continue this interactive story:
+                prompt = f"""Continue this interactive story:
 Setting: {setting}
 Protagonist: {protagonist}
 Last scene: {last_text}
@@ -631,13 +631,13 @@ Format:
 STORY: [continuation]
 CHOICE A: [option]
 CHOICE B: [option]  
-CHOICE C: [option]\"\"\"
+CHOICE C: [option]"""
                 
                 response = engine.generate(prompt, max_length=200, temperature=0.9)
                 
                 # Parse response
                 if response and "STORY:" in response:
-                    lines = response.split("\\n")
+                    lines = response.split("\n")
                     story_text = ""
                     choices = []
                     

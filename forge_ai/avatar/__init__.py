@@ -207,6 +207,16 @@ from .desktop_pet import (
     get_desktop_pet,
 )
 
+# Spawnable objects system (avatar can spawn items on screen)
+from .spawnable_objects import (
+    ObjectSpawner,
+    SpawnedObject,
+    ObjectType,
+    AttachPoint,
+    ObjectWindow,
+    get_spawner,
+)
+
 # Blender integration
 from .blender_bridge import (
     BlenderBridge,

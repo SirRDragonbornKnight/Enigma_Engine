@@ -398,7 +398,61 @@ class AutonomousAvatar:
         return base
     
     def _do_idle_animation(self):
-        \"\"\"Small idle movement/animation - cycle through rather than random.\"\"\"\n        animations = [\n            \"breathe\",\n            \"blink\",\n            \"subtle_move\",\n            \"look_around\",\n        ]\n        \n        # Cycle through animations in order\n        self._idle_anim_index = getattr(self, '_idle_anim_index', 0)\n        anim = animations[self._idle_anim_index % len(animations)]\n        self._idle_anim_index += 1\n        \n        if hasattr(self.avatar, '_animator') and self.avatar._animator:\n            self.avatar._animator.play(anim, duration=1.0)\n        \n        self._record_action(f\"idle:{anim}\")\n    \n    def _look_around(self):\n        \"\"\"Look at interesting parts of the screen, not random positions.\"\"\"\n        try:\n            from PyQt5.QtWidgets import QApplication\n            screen = QApplication.primaryScreen()\n            if not screen:\n                return\n            \n            geo = screen.geometry()\n            \n            # If we have screen regions detected, look at the most interesting one\n            if self._screen_regions:\n                sorted_regions = sorted(\n                    self._screen_regions,\n                    key=lambda r: r.interest_score,\n                    reverse=True\n                )\n                region = sorted_regions[0]\n                x = region.x + region.width // 2\n                y = region.y + region.height // 2\n            else:\n                # No regions - look at center or common UI areas\n                # Cycle through meaningful positions\n                positions = [\n                    (geo.width() // 2, geo.height() // 3),      # Top center (title bars)\n                    (geo.width() // 4, geo.height() // 2),      # Left side\n                    (3 * geo.width() // 4, geo.height() // 2),  # Right side\n                    (geo.width() // 2, 2 * geo.height() // 3),  # Bottom center\n                ]\n                self._look_pos_index = getattr(self, '_look_pos_index', 0)\n                x, y = positions[self._look_pos_index % len(positions)]\n                self._look_pos_index += 1\n            \n            self.avatar.point_at(x, y)\n            self._record_action(f\"look_at:{x},{y}\")\n        except Exception as e:\n            logger.debug(f\"Look around failed: {e}\")
+        """Small idle movement/animation - cycle through rather than random."""
+        animations = [
+            "breathe",
+            "blink",
+            "subtle_move",
+            "look_around",
+        ]
+        
+        # Cycle through animations in order
+        self._idle_anim_index = getattr(self, '_idle_anim_index', 0)
+        anim = animations[self._idle_anim_index % len(animations)]
+        self._idle_anim_index += 1
+        
+        if hasattr(self.avatar, '_animator') and self.avatar._animator:
+            self.avatar._animator.play(anim, duration=1.0)
+        
+        self._record_action(f"idle:{anim}")
+    
+    def _look_around(self):
+        """Look at interesting parts of the screen, not random positions."""
+        try:
+            from PyQt5.QtWidgets import QApplication
+            screen = QApplication.primaryScreen()
+            if not screen:
+                return
+            
+            geo = screen.geometry()
+            
+            # If we have screen regions detected, look at the most interesting one
+            if self._screen_regions:
+                sorted_regions = sorted(
+                    self._screen_regions,
+                    key=lambda r: r.interest_score,
+                    reverse=True
+                )
+                region = sorted_regions[0]
+                x = region.x + region.width // 2
+                y = region.y + region.height // 2
+            else:
+                # No regions - look at center or common UI areas
+                # Cycle through meaningful positions
+                positions = [
+                    (geo.width() // 2, geo.height() // 3),      # Top center (title bars)
+                    (geo.width() // 4, geo.height() // 2),      # Left side
+                    (3 * geo.width() // 4, geo.height() // 2),  # Right side
+                    (geo.width() // 2, 2 * geo.height() // 3),  # Bottom center
+                ]
+                self._look_pos_index = getattr(self, '_look_pos_index', 0)
+                x, y = positions[self._look_pos_index % len(positions)]
+                self._look_pos_index += 1
+            
+            self.avatar.point_at(x, y)
+            self._record_action(f"look_at:{x},{y}")
+        except Exception as e:
+            logger.debug(f"Look around failed: {e}")
     
     def _react_to_screen(self):
         """React to something on screen."""

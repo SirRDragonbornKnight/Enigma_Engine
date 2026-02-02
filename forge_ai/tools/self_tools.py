@@ -641,12 +641,12 @@ class ControlAvatarTool(Tool):
     """
     
     name = "control_avatar"
-    description = "Control my avatar - move, resize, look at things, go to corners, express emotions"
+    description = "Control my avatar - move, resize, look at things, go to corners, express emotions, hold items"
     parameters = {
-        "action": "What to do: move_to, resize, look_at, go_corner, emotion, gesture, say, walk_to",
+        "action": "What to do: move_to, resize, look_at, go_corner, emotion, gesture, say, walk_to, hold, drop, leave_note, sparkle",
         "x": "X coordinate (for move_to, look_at) or size in pixels (for resize)",
         "y": "Y coordinate (for move_to, look_at) - optional",
-        "value": "Corner name (for go_corner), emotion name, gesture type, or text to say",
+        "value": "Corner name (for go_corner), emotion name, gesture type, text to say, item to hold, or note content",
     }
     
     def execute(self, action: str, x: int = None, y: int = None, value: str = None, **kwargs) -> Dict[str, Any]:
@@ -729,8 +729,31 @@ class ControlAvatarTool(Tool):
                 pet.jump()
                 return {"success": True, "action": "jumping"}
             
+            elif action == "hold":
+                item = value or "heart"
+                obj = pet.hold(item)
+                return {"success": True, "action": "holding", "item": item, "object_id": obj.id if obj else None}
+            
+            elif action == "drop" or action == "release":
+                from forge_ai.avatar.spawnable_objects import get_spawner
+                spawner = get_spawner()
+                # Remove held items
+                held = [o for o in spawner.get_objects() if o.attached_to_avatar]
+                for obj in held:
+                    spawner.remove(obj.id)
+                return {"success": True, "action": "dropped", "count": len(held)}
+            
+            elif action == "leave_note":
+                text = value or "Note from AI"
+                obj = pet.leave_note(text, x=x, y=y)
+                return {"success": True, "action": "left_note", "text": text, "object_id": obj.id if obj else None}
+            
+            elif action == "sparkle":
+                obj = pet.sparkle(x=x, y=y)
+                return {"success": True, "action": "sparkled", "object_id": obj.id if obj else None}
+            
             else:
-                return {"success": False, "error": f"Unknown action: {action}. Use: move_to, walk_to, resize, look_at, go_corner, emotion, gesture, say, think, follow_cursor, jump"}
+                return {"success": False, "error": f"Unknown action: {action}. Use: move_to, walk_to, resize, look_at, go_corner, emotion, gesture, say, think, follow_cursor, jump, hold, drop, leave_note, sparkle"}
             
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -754,3 +777,166 @@ class ControlAvatarTool(Tool):
             return None
         except Exception:
             return None
+
+
+class SpawnObjectTool(Tool):
+    """
+    AI can spawn objects on the screen.
+    
+    Create speech bubbles, sticky notes, emojis, stickers, visual effects,
+    hold items, leave decorations around the screen.
+    """
+    
+    name = "spawn_object"
+    description = "Spawn objects on screen - bubbles, notes, emojis, effects, items to hold, decorations"
+    parameters = {
+        "object_type": "Type: speech_bubble, thought_bubble, note, emoji, sticker, sign, effect, held_item",
+        "text": "Text content for the object (for bubbles, notes, signs, emojis)",
+        "x": "X position on screen (optional - uses avatar position if not set)",
+        "y": "Y position on screen (optional - uses avatar position if not set)",
+        "item": "For held_item: sword, book, coffee, flower, wand, heart",
+        "hand": "For held_item: left or right (default: right)",
+        "color": "Color for stickers (hex like #e91e63)",
+        "duration": "How long to show (seconds, 0 = permanent)",
+        "physics": "true/false - should object fall with gravity?",
+    }
+    
+    def execute(
+        self,
+        object_type: str,
+        text: str = "",
+        x: int = None,
+        y: int = None,
+        item: str = None,
+        hand: str = "right",
+        color: str = "#e91e63",
+        duration: float = 5.0,
+        physics: bool = False,
+        **kwargs
+    ) -> Dict[str, Any]:
+        try:
+            from forge_ai.avatar.spawnable_objects import get_spawner
+            spawner = get_spawner()
+            
+            # Default position near avatar or center of screen
+            if x is None or y is None:
+                pet = self._get_avatar_position()
+                if pet:
+                    x = x or pet[0] + 50
+                    y = y or pet[1] - 100
+                else:
+                    x = x or 500
+                    y = y or 300
+            
+            obj_type = object_type.lower().strip()
+            
+            if obj_type == "speech_bubble":
+                obj = spawner.create_speech_bubble(text or "Hello!", x, y, lifetime=duration)
+                return {"success": True, "object_id": obj.id, "type": "speech_bubble"}
+            
+            elif obj_type == "thought_bubble":
+                obj = spawner.create_thought_bubble(text or "Hmm...", x, y, lifetime=duration)
+                return {"success": True, "object_id": obj.id, "type": "thought_bubble"}
+            
+            elif obj_type == "note":
+                permanent = duration == 0
+                obj = spawner.spawn_note(text or "Note!", x, y, animated=True, permanent=permanent)
+                return {"success": True, "object_id": obj.id, "type": "note"}
+            
+            elif obj_type == "emoji":
+                obj = spawner.spawn_emoji(text or "★", x, y, physics=physics, lifetime=duration)
+                return {"success": True, "object_id": obj.id, "type": "emoji"}
+            
+            elif obj_type == "sticker":
+                obj = spawner.spawn_sticker(text or "!", x, y, color=color)
+                return {"success": True, "object_id": obj.id, "type": "sticker"}
+            
+            elif obj_type == "sign":
+                obj = spawner.spawn_sign(text or "Sign", x, y)
+                return {"success": True, "object_id": obj.id, "type": "sign"}
+            
+            elif obj_type == "effect":
+                obj = spawner.spawn_effect(x, y, effect_type=text or "sparkle", duration=duration)
+                return {"success": True, "object_id": obj.id, "type": "effect"}
+            
+            elif obj_type == "held_item":
+                item_type = item or text or "heart"
+                obj = spawner.create_held_object(item_type, hand=hand)
+                return {"success": True, "object_id": obj.id, "type": "held_item", "item": item_type}
+            
+            else:
+                valid = ["speech_bubble", "thought_bubble", "note", "emoji", "sticker", "sign", "effect", "held_item"]
+                return {"success": False, "error": f"Unknown object type: {obj_type}. Valid types: {valid}"}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _get_avatar_position(self):
+        """Get avatar position for spawning nearby."""
+        try:
+            from forge_ai.avatar import desktop_pet
+            if hasattr(desktop_pet, '_global_pet') and desktop_pet._global_pet:
+                pet = desktop_pet._global_pet
+                return (pet.x(), pet.y())
+            return None
+        except Exception:
+            return None
+
+
+class RemoveObjectTool(Tool):
+    """
+    Remove spawned objects from the screen.
+    """
+    
+    name = "remove_object"
+    description = "Remove a spawned object from the screen by ID, or remove all objects"
+    parameters = {
+        "object_id": "ID of the object to remove (from spawn_object result), or 'all' to remove everything",
+    }
+    
+    def execute(self, object_id: str, **kwargs) -> Dict[str, Any]:
+        try:
+            from forge_ai.avatar.spawnable_objects import get_spawner
+            spawner = get_spawner()
+            
+            if object_id.lower() == "all":
+                spawner.remove_all()
+                return {"success": True, "action": "removed_all"}
+            else:
+                spawner.remove(object_id)
+                return {"success": True, "action": "removed", "object_id": object_id}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+class ListSpawnedObjectsTool(Tool):
+    """
+    List all currently spawned objects.
+    """
+    
+    name = "list_spawned_objects"
+    description = "List all objects I've spawned on the screen"
+    parameters = {}
+    
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        try:
+            from forge_ai.avatar.spawnable_objects import get_spawner
+            spawner = get_spawner()
+            
+            objects = spawner.get_objects()
+            obj_list = [
+                {
+                    "id": obj.id,
+                    "type": obj.object_type.name,
+                    "text": obj.text[:50] if obj.text else "",
+                    "position": (obj.x, obj.y),
+                    "permanent": not obj.temporary,
+                }
+                for obj in objects
+            ]
+            
+            return {"success": True, "count": len(obj_list), "objects": obj_list}
+        
+        except Exception as e:
+            return {"success": False, "error": str(e)}

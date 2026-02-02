@@ -161,6 +161,7 @@ TOOL_CATEGORIES = {
         "set_companion_behavior", "set_preference", "get_self_config",
         "remember_fact", "recall_facts",
         "generate_avatar", "open_avatar_in_blender", "list_avatars", "set_avatar",
+        "spawn_object", "remove_object", "list_spawned_objects",
     ],
 }
 

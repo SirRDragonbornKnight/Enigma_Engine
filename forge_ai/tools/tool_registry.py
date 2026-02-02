@@ -123,7 +123,8 @@ class ToolRegistry:
                                  SetPreferenceTool, GetSelfConfigTool,
                                  RememberFactTool, RecallFactsTool,
                                  GenerateAvatarTool, OpenAvatarInBlenderTool,
-                                 ListAvatarsTool, SetAvatarTool)
+                                 ListAvatarsTool, SetAvatarTool,
+                                 SpawnObjectTool, RemoveObjectTool, ListSpawnedObjectsTool)
         # Gaming tools removed - AI can roleplay, tell stories, and play games natively
         # Keep only DnD dice roller since it needs true randomness
         from .gaming_tools import DnDRollTool
@@ -249,6 +250,10 @@ class ToolRegistry:
             OpenAvatarInBlenderTool(),
             ListAvatarsTool(),
             SetAvatarTool(),
+            # Object Spawning - AI can spawn objects on screen
+            SpawnObjectTool(),
+            RemoveObjectTool(),
+            ListSpawnedObjectsTool(),
         ]
         
         for tool in builtin:

@@ -810,6 +810,86 @@ class DesktopPet(QObject):
         x, y = positions.get(corner, positions["bottom_right"])
         self.walk_to(x, y)
     
+    def spawn(self, object_type: str, text: str = "", **kwargs):
+        """
+        Spawn an object near the avatar.
+        
+        Uses the spawnable_objects system to create visual objects.
+        
+        Args:
+            object_type: "note", "emoji", "sticker", "effect", "held_item"
+            text: Text content or emoji
+            **kwargs: Additional parameters (color, duration, physics, etc.)
+        
+        Examples:
+            pet.spawn("note", "Remember to save!")
+            pet.spawn("emoji", "heart")
+            pet.spawn("effect", "sparkle")
+            pet.spawn("held_item", "sword")
+        """
+        try:
+            from .spawnable_objects import get_spawner
+            spawner = get_spawner()
+            
+            # Position near avatar
+            x = kwargs.pop('x', self._x + 50)
+            y = kwargs.pop('y', self._y - 80)
+            
+            if object_type == "note":
+                return spawner.spawn_note(text, int(x), int(y), **kwargs)
+            elif object_type == "emoji":
+                return spawner.spawn_emoji(text, int(x), int(y), **kwargs)
+            elif object_type == "sticker":
+                color = kwargs.get('color', '#e91e63')
+                return spawner.spawn_sticker(text, int(x), int(y), color=color)
+            elif object_type == "effect":
+                effect_type = text or "sparkle"
+                duration = kwargs.get('duration', 3.0)
+                return spawner.spawn_effect(int(x), int(y), effect_type, duration)
+            elif object_type == "held_item":
+                item = text or "heart"
+                hand = kwargs.get('hand', 'right')
+                return spawner.create_held_object(item, hand)
+            elif object_type == "speech":
+                duration = kwargs.get('duration', 5.0)
+                return spawner.create_speech_bubble(text, int(x), int(y), duration)
+            elif object_type == "thought":
+                duration = kwargs.get('duration', 4.0)
+                return spawner.create_thought_bubble(text, int(x), int(y), duration)
+            elif object_type == "sign":
+                return spawner.spawn_sign(text, int(x), int(y))
+            else:
+                print(f"[DesktopPet] Unknown spawn type: {object_type}")
+                return None
+        except Exception as e:
+            print(f"[DesktopPet] Spawn failed: {e}")
+            return None
+    
+    def hold(self, item: str, hand: str = "right"):
+        """
+        Have the avatar hold an item.
+        
+        Args:
+            item: "sword", "book", "coffee", "flower", "wand", "heart"
+            hand: "left" or "right"
+        """
+        return self.spawn("held_item", item, hand=hand)
+    
+    def leave_note(self, text: str, x: int = None, y: int = None, permanent: bool = True):
+        """
+        Leave a sticky note on the screen.
+        
+        Args:
+            text: Note content
+            x, y: Position (defaults to near avatar)
+            permanent: If False, note disappears after 30 seconds
+        """
+        return self.spawn("note", text, x=x, y=y, permanent=permanent)
+    
+    def sparkle(self, x: int = None, y: int = None, duration: float = 3.0):
+        """Create a sparkle effect at position."""
+        return self.spawn("effect", "sparkle", x=x, y=y, duration=duration)
+    
     # === Internal ===
     
     def _set_sprite(self, key: str):
@@ -899,7 +979,32 @@ class DesktopPet(QObject):
                 self._choose_next_behavior()
     
     def _choose_next_behavior(self):
-        \"\"\"Choose next autonomous behavior based on context.\"\"\"\n        self._behavior_timer = 0\n        \n        # Cycle through behaviors in weighted order rather than random\n        # This creates more predictable, natural patterns\n        behaviors = [\n            (self.config.chance_walk, self._behavior_walk, \"walk\"),\n            (self.config.chance_sit, self._behavior_sit, \"sit\"),\n            (self.config.chance_sleep, self._behavior_sleep, \"sleep\"),\n            (self.config.chance_wave, self._behavior_wave, \"wave\"),\n            (self.config.chance_dance, self._behavior_dance, \"dance\"),\n        ]\n        \n        # Filter to only enabled behaviors (chance > 0)\n        enabled = [(b, name) for chance, b, name in behaviors if chance > 0]\n        \n        if not enabled:\n            self._behavior_idle()\n            return\n        \n        # Cycle through enabled behaviors\n        self._behavior_index = getattr(self, '_behavior_index', 0)\n        behavior, name = enabled[self._behavior_index % len(enabled)]\n        self._behavior_index += 1\n        \n        behavior()
+        """Choose next autonomous behavior based on context."""
+        self._behavior_timer = 0
+        
+        # Cycle through behaviors in weighted order rather than random
+        # This creates more predictable, natural patterns
+        behaviors = [
+            (self.config.chance_walk, self._behavior_walk, "walk"),
+            (self.config.chance_sit, self._behavior_sit, "sit"),
+            (self.config.chance_sleep, self._behavior_sleep, "sleep"),
+            (self.config.chance_wave, self._behavior_wave, "wave"),
+            (self.config.chance_dance, self._behavior_dance, "dance"),
+        ]
+        
+        # Filter to only enabled behaviors (chance > 0)
+        enabled = [(b, name) for chance, b, name in behaviors if chance > 0]
+        
+        if not enabled:
+            self._behavior_idle()
+            return
+        
+        # Cycle through enabled behaviors
+        self._behavior_index = getattr(self, '_behavior_index', 0)
+        behavior, name = enabled[self._behavior_index % len(enabled)]
+        self._behavior_index += 1
+        
+        behavior()
     
     def _behavior_idle(self):
         """Idle behavior."""
