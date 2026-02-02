@@ -62,16 +62,21 @@ class CameraThread(QThread):
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             
             self.running = True
+            self._frame_count = 0
             while self.running:
                 ret, frame = self.cap.read()
                 if ret:
+                    # Always capture but only emit every frame for smooth preview
+                    # The UI thread handles its own throttling via Qt event loop
                     self.frame_ready.emit(frame)
+                    self._frame_count += 1
                 else:
                     self.error.emit("Failed to read frame")
                     break
                     
-                # Small delay to prevent overwhelming the system
-                self.msleep(33)  # ~30 FPS
+                # Run at full camera FPS - Qt event loop handles UI updates safely
+                # This prevents frame buffer buildup and keeps preview responsive
+                self.msleep(16)  # ~60 FPS max (camera hardware usually limits this)
                 
         except Exception as e:
             logger.error(f"Camera thread error: {e}")
@@ -277,23 +282,27 @@ class CameraTab(QWidget):
         self.status_label.setText("Status: Camera stopped")
         
     def _on_frame(self, frame):
-        """Handle incoming frame from camera thread."""
+        """Handle incoming frame from camera thread - optimized for full FPS."""
         self.current_frame = frame
+        
+        # Track FPS for status display
+        self._fps_count = getattr(self, '_fps_count', 0) + 1
         
         # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        # Create QImage
+        # Create QImage - use copy to prevent memory issues with fast frames
         h, w, ch = rgb_frame.shape
         bytes_per_line = ch * w
-        q_img = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        q_img = QImage(rgb_frame.copy().data, w, h, bytes_per_line, QImage.Format_RGB888)
         
         # Scale to fit preview while maintaining aspect ratio
+        # Use FastTransformation for speed at high FPS
         pixmap = QPixmap.fromImage(q_img)
         scaled = pixmap.scaled(
             self.preview_label.size(),
             Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
+            Qt.FastTransformation  # Faster than SmoothTransformation for live video
         )
         self.preview_label.setPixmap(scaled)
         

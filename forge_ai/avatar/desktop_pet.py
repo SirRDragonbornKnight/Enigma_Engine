@@ -797,57 +797,46 @@ class DesktopPet(QObject):
                 self._choose_next_behavior()
     
     def _choose_next_behavior(self):
-        """Choose next autonomous behavior."""
-        self._behavior_timer = 0
-        
-        # Random behavior selection
-        roll = random.random()
-        
-        cumulative = 0
-        behaviors = [
-            (self.config.chance_walk, self._behavior_walk),
-            (self.config.chance_sit, self._behavior_sit),
-            (self.config.chance_sleep, self._behavior_sleep),
-            (self.config.chance_wave, self._behavior_wave),
-            (self.config.chance_dance, self._behavior_dance),
-        ]
-        
-        for chance, behavior in behaviors:
-            cumulative += chance
-            if roll < cumulative:
-                behavior()
-                return
-        
-        # Default: idle
-        self._behavior_idle()
+        \"\"\"Choose next autonomous behavior based on context.\"\"\"\n        self._behavior_timer = 0\n        \n        # Cycle through behaviors in weighted order rather than random\n        # This creates more predictable, natural patterns\n        behaviors = [\n            (self.config.chance_walk, self._behavior_walk, \"walk\"),\n            (self.config.chance_sit, self._behavior_sit, \"sit\"),\n            (self.config.chance_sleep, self._behavior_sleep, \"sleep\"),\n            (self.config.chance_wave, self._behavior_wave, \"wave\"),\n            (self.config.chance_dance, self._behavior_dance, \"dance\"),\n        ]\n        \n        # Filter to only enabled behaviors (chance > 0)\n        enabled = [(b, name) for chance, b, name in behaviors if chance > 0]\n        \n        if not enabled:\n            self._behavior_idle()\n            return\n        \n        # Cycle through enabled behaviors\n        self._behavior_index = getattr(self, '_behavior_index', 0)\n        behavior, name = enabled[self._behavior_index % len(enabled)]\n        self._behavior_index += 1\n        \n        behavior()
     
     def _behavior_idle(self):
         """Idle behavior."""
         self._set_state(PetState.IDLE)
-        self._current_behavior_duration = random.uniform(
-            self.config.idle_min_duration,
-            self.config.idle_max_duration
-        )
+        self._current_behavior_duration = 3.0  # Fixed short idle before next action
     
     def _behavior_walk(self):
-        """Walk behavior."""
-        # Pick random destination on screen
-        target_x = random.uniform(50, self._screen_rect.width() - self.config.size - 50)
+        """Walk behavior - move to meaningful screen positions."""
+        # Define meaningful positions to walk to (not random)
+        screen_w = self._screen_rect.width()
+        margin = self.config.size + 50
+        
+        positions = [
+            margin,                    # Left side
+            screen_w // 4,             # Quarter left
+            screen_w // 2,             # Center
+            3 * screen_w // 4,         # Quarter right  
+            screen_w - margin,         # Right side
+        ]
+        
+        # Cycle through positions
+        self._walk_pos_index = getattr(self, '_walk_pos_index', 0)
+        target_x = positions[self._walk_pos_index % len(positions)]
+        self._walk_pos_index += 1
+        
         self.walk_to(target_x)
-        self._current_behavior_duration = random.uniform(
-            self.config.walk_min_duration,
-            self.config.walk_max_duration
-        )
+        # Duration based on distance traveled
+        distance = abs(target_x - self.x)
+        self._current_behavior_duration = max(2.0, distance / 50)
     
     def _behavior_sit(self):
         """Sit behavior."""
         self._set_state(PetState.SITTING)
-        self._current_behavior_duration = random.uniform(3.0, 8.0)
+        self._current_behavior_duration = 5.0  # Fixed comfortable duration
     
     def _behavior_sleep(self):
         """Sleep behavior."""
         self._set_state(PetState.SLEEPING)
-        self._current_behavior_duration = random.uniform(5.0, 15.0)
+        self._current_behavior_duration = 10.0  # Fixed restful duration
     
     def _behavior_wave(self):
         """Wave behavior."""
@@ -857,7 +846,7 @@ class DesktopPet(QObject):
     def _behavior_dance(self):
         """Dance behavior."""
         self._set_state(PetState.DANCING)
-        self._current_behavior_duration = random.uniform(3.0, 6.0)
+        self._current_behavior_duration = 4.0  # Fixed dance duration
     
     def _on_dragging(self, pos: QPoint):
         """Handle being dragged."""

@@ -278,13 +278,13 @@ class PNGBounceWidget(QWidget):
         self._target_squash += (1.0 - self._target_squash) * 2.0 * dt
         self._target_stretch += (1.0 - self._target_stretch) * 2.0 * dt
         
-        # Idle fidget
+        # Idle fidget - smooth oscillation instead of random jumps
         if self.config.idle_fidget and not self._is_talking:
             self._fidget_timer += dt
-            if self._fidget_timer > 2.0 + random.random() * 3.0:
-                self._fidget_timer = 0
-                self._fidget_offset_x = (random.random() - 0.5) * 6
-                self._fidget_offset_y = (random.random() - 0.5) * 4
+            # Smooth sine-based fidget (gentle swaying)
+            fidget_speed = 0.3  # Slow, natural movement
+            self._fidget_offset_x = math.sin(self._fidget_timer * fidget_speed) * 3
+            self._fidget_offset_y = math.sin(self._fidget_timer * fidget_speed * 1.3) * 2
         
         # Smooth fidget return
         self._fidget_offset_x *= 0.95

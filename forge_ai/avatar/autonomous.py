@@ -270,8 +270,8 @@ class AutonomousAvatar:
         """Call when a chat message is received/sent."""
         self.notify_activity()
         if is_from_user:
-            # User engaged, avatar gets curious/happy
-            if random.random() > 0.5:
+            # User engaged - alternate between curious and happy based on interaction count
+            if self._interaction_count % 2 == 0:
                 self.set_mood(AvatarMood.CURIOUS)
             else:
                 self.set_mood(AvatarMood.HAPPY)
@@ -286,7 +286,9 @@ class AutonomousAvatar:
         if hour in self.config.sleepy_hours:
             return AvatarMood.SLEEPY
         elif hour in self.config.energetic_hours:
-            if random.random() > 0.7:
+            # Be playful during energetic hours based on minute (varies naturally)
+            minute = datetime.now().minute
+            if minute % 4 == 0:  # Every 4th minute during energetic hours
                 return AvatarMood.PLAYFUL
         
         return None
@@ -439,7 +441,10 @@ class AutonomousAvatar:
         }
         
         expressions = mood_expressions.get(self._mood, ["neutral"])
-        expression = random.choice(expressions)
+        # Cycle through expressions for this mood
+        self._expr_index = getattr(self, '_expr_index', 0)
+        expression = expressions[self._expr_index % len(expressions)]
+        self._expr_index += 1
         
         # Use AUTONOMOUS priority (fallback to bone control)
         try:
@@ -456,7 +461,7 @@ class AutonomousAvatar:
         self._record_action(f"express:{expression}")
     
     def _random_gesture(self):
-        """Do a random gesture."""
+        """Do a contextual gesture (cycles through options)."""
         gestures = [
             "wave",
             "nod",
@@ -466,7 +471,10 @@ class AutonomousAvatar:
             "point",
             "stretch",
         ]
-        gesture = random.choice(gestures)
+        # Cycle through gestures in order
+        self._gesture_index = getattr(self, '_gesture_index', 0)
+        gesture = gestures[self._gesture_index % len(gestures)]
+        self._gesture_index += 1
         
         if hasattr(self.avatar, '_animator') and self.avatar._animator:
             self.avatar._animator.play(gesture, duration=1.5)
