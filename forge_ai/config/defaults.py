@@ -182,11 +182,11 @@ CONFIG = {
     "precision": "float32", # "float32", "float16", "bfloat16"
     
     # Backend selection for neural network operations
-    # "auto" - Uses pure Python for nano/micro, PyTorch for larger models
-    # "pure" - Always use pure Python (slow but zero dependencies)
-    # "torch" - Always use PyTorch (fast, requires torch installed)
+    # "auto" - Uses Pure Python + Numba as primary, PyTorch as fallback for large models
+    # "pure" - Always use pure Python + Numba (fast with Numba, zero PyTorch dependency)
+    # "torch" - Always use PyTorch (fastest on GPU, requires torch installed)
     "nn_backend": "auto",
-    "nn_backend_threshold": 5000000,  # Switch to PyTorch above this param count
+    "nn_backend_threshold": 100_000_000,  # Use PyTorch for models >100M params (GPU recommended)
 
     # =========================================================================
     # THE FEATURES MANIFEST - Capability Toggles

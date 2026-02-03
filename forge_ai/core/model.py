@@ -3166,17 +3166,29 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
     estimated_params = SIZE_PARAMS.get(size, 25_000_000)
     
     # Determine which backend to use
-    use_pure = False
-    if backend == "pure":
+    # NEW PRIORITY: Pure Python + Numba is PRIMARY, PyTorch is fallback for large models
+    use_pure = True  # Default to pure Python + Numba
+    
+    if backend == "torch":
+        # User explicitly requested PyTorch
+        use_pure = False
+    elif backend == "pure":
+        # User explicitly requested pure Python
         use_pure = True
-    elif backend == "auto" and estimated_params < threshold:
-        # Check if PyTorch is available
-        try:
-            import torch
-            use_pure = False
-        except ImportError:
+    elif backend == "auto":
+        # Auto mode: Use pure for small/medium, PyTorch for large (GPU-scale)
+        if estimated_params > threshold:
+            # Large model - try PyTorch if available
+            try:
+                import torch
+                use_pure = False
+                logger.info(f"Large model ({estimated_params/1e6:.0f}M params) - using PyTorch")
+            except ImportError:
+                use_pure = True
+                logger.info(f"PyTorch not available, using Pure Python + Numba for {size}")
+        else:
+            # Small/medium model - Pure Python + Numba is efficient enough
             use_pure = True
-            logger.info(f"PyTorch not available, using pure Python backend for {size}")
     
     if use_pure:
         # Use pure Python backend
