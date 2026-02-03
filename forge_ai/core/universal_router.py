@@ -70,14 +70,20 @@ class UniversalToolRouter:
         # GIF generation  
         ("gif", ["create gif", "make gif", "generate gif", "animated gif"], 10),
         
-        # Code generation
+        # Code generation - expanded patterns
         ("code", ["write code", "create code", "generate code", "program",
                   "write a function", "write a script", "code for", 
-                  "implement", "write python", "write javascript"], 8),
+                  "implement", "write python", "write javascript",
+                  "code to", "write some code", "coding", "function to",
+                  "algorithm", "sort a list", "parse", "create a class"], 8),
         
         # Web search
         ("web_search", ["search for", "search the web", "google", "look up",
                         "find information", "search online", "web search"], 8),
+        
+        # Time/Date utilities
+        ("get_time", ["what time", "current time", "time is it", "what's the time",
+                      "tell me the time", "date today", "what date", "current date"], 9),
         
         # File operations
         ("read_file", ["read file", "open file", "show file", "cat file",
@@ -92,6 +98,10 @@ class UniversalToolRouter:
                         "screen capture", "what's on my screen"], 9),
         ("vision", ["look at", "analyze image", "describe image", 
                     "what do you see", "identify"], 8),
+        
+        # System info
+        ("system_info", ["system info", "cpu usage", "memory usage", "disk space",
+                         "hardware info", "system status"], 7),
         
         # Default chat (lowest priority)
         ("chat", ["explain", "tell me", "what is", "how do", "why", 
