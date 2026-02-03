@@ -141,3 +141,38 @@ outputs/*
 *.gguf
 *.ggml
 
+# Downloaded/cached HuggingFace models
+models/hf_cache/
+models/dialogpt_fresh/
+models/**/model.safetensors
+models/**/pytorch_model.bin
+
+# Training checkpoints (keep only essential)
+models/*/checkpoints/epoch_*.pth
+models/*/checkpoints/latest.pth
+
+# Large avatar models (keep structure)
+data/avatar/models/*.glb
+data/avatar/models/*.gltf
+data/avatar/models/*.fbx
+!data/avatar/models/.gitkeep
+
+# Voice samples and generated audio
+*.wav
+*.mp3
+*.ogg
+outputs/audio/
+outputs/voice/
+
+# Generated images
+outputs/images/
+outputs/*.png
+outputs/*.jpg
+outputs/*.gif
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Large data files
+*.sqlite
+*.db-journal
