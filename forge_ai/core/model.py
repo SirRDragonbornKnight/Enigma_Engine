@@ -3172,9 +3172,11 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
     if backend == "torch":
         # User explicitly requested PyTorch
         use_pure = False
+        print(f"[Backend] PyTorch requested explicitly for {size}")
     elif backend == "pure":
         # User explicitly requested pure Python
         use_pure = True
+        print(f"[Backend] Pure Python requested explicitly for {size}")
     elif backend == "auto":
         # Auto mode: Use pure for small/medium, PyTorch for large (GPU-scale)
         if estimated_params > threshold:
@@ -3182,10 +3184,14 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
             try:
                 import torch
                 use_pure = False
-                logger.info(f"Large model ({estimated_params/1e6:.0f}M params) - using PyTorch")
+                print(f"[Backend] FALLBACK to PyTorch - model too large ({estimated_params/1e6:.0f}M > {threshold/1e6:.0f}M threshold)")
+                if torch.cuda.is_available():
+                    print(f"[Backend] GPU detected: {torch.cuda.get_device_name(0)}")
+                else:
+                    print(f"[Backend] No GPU - PyTorch will use CPU")
             except ImportError:
                 use_pure = True
-                logger.info(f"PyTorch not available, using Pure Python + Numba for {size}")
+                print(f"[Backend] PyTorch not installed - using Pure Python + Numba for large model")
         else:
             # Small/medium model - Pure Python + Numba is efficient enough
             use_pure = True
@@ -3195,10 +3201,11 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
         try:
             from ..builtin.neural_network import get_model_for_size, set_backend
             set_backend("pure", threshold)
-            logger.info(f"Using pure Python backend for {size} model")
             return get_model_for_size(size)
         except Exception as e:
+            print(f"[Backend] FALLBACK to PyTorch - Pure Python failed: {e}")
             logger.warning(f"Pure Python backend failed: {e}, falling back to PyTorch")
     
-    # Use PyTorch backend (default)
+    # Use PyTorch backend (fallback)
+    print(f"[Backend] Using PyTorch for {size}")
     return create_model(size, vocab_size, **kwargs)
