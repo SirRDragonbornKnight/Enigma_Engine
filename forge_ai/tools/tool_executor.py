@@ -200,6 +200,21 @@ class ToolExecutor:
                 logger.warning(f"Could not load tool registry: {e}")
         return self._tool_registry
     
+    def get_available_tools(self) -> List[str]:
+        """
+        Get list of all available tool names.
+        
+        Returns:
+            List of tool names that can be executed
+        """
+        from .tool_definitions import get_all_tools
+        try:
+            tools = get_all_tools()
+            return [t.name for t in tools]
+        except Exception as e:
+            logger.warning(f"Could not get tool list: {e}")
+            return []
+    
     def parse_tool_calls(self, text: str) -> List[Tuple[str, Dict[str, Any], int, int]]:
         """
         Parse tool calls from AI output.

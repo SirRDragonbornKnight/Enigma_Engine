@@ -2369,8 +2369,8 @@ class EnhancedMainWindow(QMainWindow):
                 if pipeline:
                     pipeline.stop()
                     print("  - Voice pipeline stopped")
-            except:
-                pass
+            except Exception:
+                pass  # Continue cleanup even if voice pipeline fails
             
             # Stop voice listener
             try:
@@ -2379,8 +2379,8 @@ class EnhancedMainWindow(QMainWindow):
                 if listener:
                     listener.stop()
                     print("  - Voice listener stopped")
-            except:
-                pass
+            except Exception:
+                pass  # Continue cleanup even if voice listener fails
             
             # Stop performance monitor
             try:
@@ -2389,24 +2389,24 @@ class EnhancedMainWindow(QMainWindow):
                 if monitor:
                     monitor.stop()
                     print("  - Performance monitor stopped")
-            except:
-                pass
+            except Exception:
+                pass  # Continue cleanup even if monitor fails
             
             # Stop any web server
             try:
                 from ..web.app import shutdown_server
                 shutdown_server()
                 print("  - Web server stopped")
-            except:
-                pass
+            except Exception:
+                pass  # Continue cleanup even if web server fails
             
             # Clear model from memory
             try:
                 if self.engine:
                     self.engine = None
                     print("  - Model unloaded")
-            except:
-                pass
+            except Exception:
+                pass  # Continue cleanup even if model unload fails
             
             print("[ForgeAI] Cleanup complete. Exiting...")
             
@@ -2672,8 +2672,8 @@ class EnhancedMainWindow(QMainWindow):
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except:
-            pass
+        except Exception:
+            pass  # CUDA cleanup is optional
         
         if stopped_any:
             self.statusBar().showMessage("All generations stopped (Escape pressed)", 3000)
@@ -3020,8 +3020,8 @@ class EnhancedMainWindow(QMainWindow):
                 tray = get_system_tray()
                 if tray and hasattr(tray, 'update_model_name'):
                     tray.update_model_name(self.current_model_name)
-            except:
-                pass
+            except Exception:
+                pass  # System tray update is optional
             
             # Sync engine to ChatSync for shared generation with quick chat
             if hasattr(self, '_chat_sync'):
