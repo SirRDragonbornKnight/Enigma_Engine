@@ -41,6 +41,21 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Multi-GPU Support** - Distribute model across multiple GPUs
 - [ ] **Mobile App** - React Native companion app
 - [ ] **Conversation Branching** - Fork conversations to explore different paths
+- [ ] **RAG Integration** - Retrieval-Augmented Generation with local documents
+- [ ] **Function Calling** - OpenAI-style function/tool calling in API
+- [ ] **Quantization Wizard** - GUI for INT4/INT8 model quantization
+- [ ] **Training Data Generator** - Auto-generate Q&A pairs from documents
+- [ ] **Model Merging** - Merge multiple fine-tuned models together
+- [ ] **Prompt Templates Library** - Shareable prompt templates with variables
+- [ ] **Conversation Search** - Full-text search across all chat history
+- [ ] **Keyboard Shortcuts** - Hotkeys for common actions (send, new chat, etc.)
+- [ ] **Auto-save Drafts** - Save incomplete messages on close
+- [ ] **System Monitor Widget** - Floating widget showing GPU/CPU/RAM
+- [ ] **Model Benchmarking** - Compare inference speed/quality across models
+- [ ] **Ollama Import** - Import models directly from Ollama library
+- [ ] **Context Window Display** - Show how much context is used/remaining
+- [ ] **Token Counter** - Live token count while typing
+- [ ] **Response Regenerate** - Button to regenerate last response with different params
 
 ---
 
