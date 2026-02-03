@@ -477,8 +477,40 @@ class SchedulerTab(QWidget):
             
             try:
                 if task_type == "Run Command":
+                    # SECURITY: Validate and sanitize command before execution
+                    # Only allow whitelisted safe commands
                     import subprocess
-                    result = subprocess.run(action, shell=True, capture_output=True, text=True, timeout=30)
+                    import shlex
+                    
+                    # Whitelist of allowed command prefixes
+                    ALLOWED_COMMANDS = [
+                        'echo', 'date', 'whoami', 'ls', 'dir', 'pwd',
+                        'python', 'python3', 'pip', 'git',
+                        'forge', 'make', 'npm', 'node'
+                    ]
+                    
+                    # Parse command safely
+                    try:
+                        parts = shlex.split(action)
+                    except ValueError:
+                        output = "Invalid command syntax"
+                        status = "Failed"
+                        return self._finish_task(task, output, status)
+                    
+                    if not parts:
+                        output = "Empty command"
+                        status = "Failed"
+                        return self._finish_task(task, output, status)
+                    
+                    # Check if command is allowed
+                    base_cmd = parts[0].split('/')[-1]  # Get basename
+                    if base_cmd not in ALLOWED_COMMANDS:
+                        output = f"Command '{base_cmd}' not in whitelist. Allowed: {', '.join(ALLOWED_COMMANDS)}"
+                        status = "Blocked"
+                        return self._finish_task(task, output, status)
+                    
+                    # Run with shell=False for security
+                    result = subprocess.run(parts, shell=False, capture_output=True, text=True, timeout=30)
                     output = result.stdout or result.stderr or "Completed"
                     status = "Success" if result.returncode == 0 else "Failed"
                 
@@ -508,19 +540,7 @@ class SchedulerTab(QWidget):
                     output = f"Unknown task type: {task_type}"
                     status = "Failed"
                 
-                # Update task on main thread
-                from PyQt5.QtCore import QTimer
-                def update_ui():
-                    for t in self.tasks:
-                        if t.get("id") == task.get("id"):
-                            t["last_run"] = datetime.now().isoformat()
-                            t["run_count"] = t.get("run_count", 0) + 1
-                    
-                    self._save_tasks()
-                    self._refresh_table()
-                    self._update_history(task["name"], status, output)
-                
-                QTimer.singleShot(0, update_ui)
+                self._finish_task(task, output, status)
                 
             except Exception as e:
                 from PyQt5.QtCore import QTimer
@@ -528,6 +548,21 @@ class SchedulerTab(QWidget):
         
         thread = threading.Thread(target=do_task, daemon=True)
         thread.start()
+    
+    def _finish_task(self, task: dict, output: str, status: str):
+        """Update task state after completion (thread-safe)."""
+        from PyQt5.QtCore import QTimer
+        def update_ui():
+            for t in self.tasks:
+                if t.get("id") == task.get("id"):
+                    t["last_run"] = datetime.now().isoformat()
+                    t["run_count"] = t.get("run_count", 0) + 1
+            
+            self._save_tasks()
+            self._refresh_table()
+            self._update_history(task["name"], status, output)
+        
+        QTimer.singleShot(0, update_ui)
     
     def _add_history(self, task_name: str, status: str):
         """Add entry to history table."""

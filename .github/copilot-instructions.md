@@ -52,8 +52,8 @@ ForgeAI is a **fully modular AI framework** where EVERYTHING is a toggleable mod
 ## Key Files & Classes Reference
 
 ### Module Management
-- **forge_ai/modules/manager.py**: `ModuleManager`, `Module`, `ModuleInfo`, `ModuleState` classes - Central module system
-- **forge_ai/modules/registry.py**: Module classes (`ModelModule`, `TokenizerModule`, `ToolRouterModule`, etc.)
+- **forge_ai/modules/manager.py**: `ModuleManager`, `Module`, `ModuleInfo`, `ModuleState`, `ModuleCategory` classes - Central module system (auto-registers 50+ modules on init)
+- **forge_ai/modules/registry.py**: Module classes (`ModelModule`, `TokenizerModule`, `ToolRouterModule`, etc.) + `MODULE_REGISTRY` dict, `register_all()`
 - **forge_ai/modules/sandbox.py**: Sandboxed module execution
 
 ### Core AI Components

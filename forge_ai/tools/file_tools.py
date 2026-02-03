@@ -19,7 +19,7 @@ import logging
 import platform
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 from .tool_registry import Tool
 
@@ -206,6 +206,11 @@ class ListDirectoryTool(Tool):
     
     def execute(self, path: str, recursive: bool = False, pattern: str = "*", **kwargs) -> Dict[str, Any]:
         try:
+            # Security check - prevent access to blocked paths
+            blocked = _check_path_allowed(path)
+            if blocked:
+                return blocked
+            
             path = Path(path).expanduser().resolve()
             
             if not path.exists():

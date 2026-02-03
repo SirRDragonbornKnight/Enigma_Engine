@@ -508,6 +508,20 @@ class ModuleManager:
         # ─────────────────────────────────────────────────────────────────────
         self._detect_hardware()
         
+        # ─────────────────────────────────────────────────────────────────────
+        # AUTO-REGISTER ALL BUILT-IN MODULES
+        # ─────────────────────────────────────────────────────────────────────
+        self._auto_register_modules()
+        
+    def _auto_register_modules(self):
+        """Auto-register all built-in modules from the registry."""
+        try:
+            from .registry import register_all
+            register_all(self)
+            logger.info(f"Auto-registered {len(self.module_classes)} modules")
+        except Exception as e:
+            logger.warning(f"Could not auto-register modules: {e}")
+        
     @property
     def device_profile(self):
         """Get device profile for hardware-aware decisions."""
