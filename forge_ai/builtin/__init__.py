@@ -48,6 +48,8 @@ from .neural_network import (
     cross_entropy_loss,
     # RoPE
     RoPEFrequencies, apply_rope,
+    # Regularization
+    dropout,
 )
 
 __all__ = [
@@ -99,6 +101,8 @@ __all__ = [
     # RoPE
     'RoPEFrequencies',
     'apply_rope',
+    # Regularization
+    'dropout',
 ]
 
 

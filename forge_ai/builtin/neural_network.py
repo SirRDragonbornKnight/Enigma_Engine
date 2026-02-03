@@ -529,6 +529,34 @@ def softmax(x: Matrix, axis: int = -1) -> Matrix:
     return result
 
 
+def dropout(x: Matrix, p: float = 0.1, training: bool = True) -> Matrix:
+    """
+    Dropout regularization.
+    
+    During training, randomly zeroes elements with probability p.
+    Remaining elements are scaled by 1/(1-p) to maintain expected values.
+    
+    Args:
+        x: Input matrix
+        p: Dropout probability (0 to 1)
+        training: If False, returns input unchanged
+    
+    Returns:
+        Matrix with dropout applied
+    """
+    if not training or p == 0.0:
+        return x
+    
+    scale = 1.0 / (1.0 - p)
+    result = []
+    for v in x.data:
+        if random.random() < p:
+            result.append(0.0)
+        else:
+            result.append(v * scale)
+    return Matrix(x.rows, x.cols, result)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ROTARY POSITION EMBEDDINGS (RoPE)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1490,6 +1518,7 @@ class PureTransformer:
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 0.9,
+        repetition_penalty: float = 1.0,
         use_cache: bool = True
     ) -> List[int]:
         """
@@ -1501,6 +1530,7 @@ class PureTransformer:
             temperature: Sampling temperature
             top_k: Top-k sampling (0 to disable)
             top_p: Nucleus sampling threshold
+            repetition_penalty: Penalty for repeating tokens (>1.0 reduces repetition)
             use_cache: Whether to use KV cache (faster!)
             
         Returns:
@@ -1533,6 +1563,12 @@ class PureTransformer:
             
             # Get last token's logits
             last_logits = logits.get_row(logits.rows - 1)
+            
+            # Apply repetition penalty
+            if repetition_penalty != 1.0:
+                for token_id in set(generated):
+                    if 0 <= token_id < len(last_logits):
+                        last_logits[token_id] /= repetition_penalty
             
             # Apply temperature
             if temperature != 1.0:
@@ -1608,13 +1644,17 @@ class PureTransformer:
         max_new_tokens: int = 50,
         temperature: float = 1.0,
         top_k: int = 50,
-        top_p: float = 0.9
+        top_p: float = 0.9,
+        repetition_penalty: float = 1.0
     ):
         """
         Generate tokens with streaming (yields tokens one at a time).
         
         This is like generate() but yields each token as it's generated,
         so you can display output in real-time.
+        
+        Args:
+            repetition_penalty: Penalty for repeating tokens (>1.0 reduces repetition)
         
         Yields:
             Token IDs one at a time
@@ -1636,6 +1676,12 @@ class PureTransformer:
         for i in range(max_new_tokens):
             logits = self.forward(context, use_cache=True, start_pos=start_pos)
             last_logits = logits.get_row(logits.rows - 1)
+            
+            # Repetition penalty
+            if repetition_penalty != 1.0:
+                for token_id in set(generated):
+                    if 0 <= token_id < len(last_logits):
+                        last_logits[token_id] /= repetition_penalty
             
             # Temperature
             if temperature != 1.0:
@@ -2408,6 +2454,7 @@ class PureChat:
         message: str, 
         max_tokens: int = 100,
         temperature: float = 0.7,
+        repetition_penalty: float = 1.1,
         system_prompt: str = "You are a helpful AI assistant."
     ) -> str:
         """
@@ -2417,6 +2464,7 @@ class PureChat:
             message: User message
             max_tokens: Maximum response tokens
             temperature: Sampling temperature
+            repetition_penalty: Penalty for repeating tokens (>1.0 reduces repetition)
             system_prompt: System prompt for context
             
         Returns:
@@ -2439,7 +2487,8 @@ class PureChat:
             max_new_tokens=max_tokens,
             temperature=temperature,
             top_k=50,
-            top_p=0.9
+            top_p=0.9,
+            repetition_penalty=repetition_penalty
         )
         
         # Get only the new tokens
