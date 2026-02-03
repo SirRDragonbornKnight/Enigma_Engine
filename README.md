@@ -27,22 +27,28 @@ ForgeAI is a complete framework for building, training, and running your own AI 
 git clone https://github.com/SirRDragonbornKnight/Forge_AI.git
 cd Forge_AI
 
-# Create virtual environment (recommended)
+# Option A: Use the installer (recommended)
+python install.py --standard
+
+# Option B: Quick setup script (creates venv + installs)
+./setup.sh
+
+# Option C: Manual installation
 python -m venv venv
-
-# Activate virtual environment
-# Windows (Command Prompt):
-venv\Scripts\activate
-# Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-# Mac/Linux:
-source venv/bin/activate
-
-# Install dependencies
+source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
 ```
 
-> **Note**: If you encounter permission errors on Windows PowerShell, run:
+**Installer Options:**
+```bash
+python install.py --check     # See what's installed
+python install.py --minimal   # Core only (smallest)
+python install.py --standard  # Core + GUI + Voice
+python install.py --full      # Everything
+python install.py             # Interactive mode
+```
+
+> **Note**: On Windows PowerShell, you may need to run:
 > `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
 ### 2. Launch the GUI

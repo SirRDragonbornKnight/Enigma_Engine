@@ -173,7 +173,7 @@ def demo_module_swapping():
     print("\nUser changes mind, wants images instead...")
     print("  Unloading code_gen_local...")
     print("  Loading image_gen_api (with API key)...")
-    print("  [OK] Swapped successfully"))
+    print("  [OK] Swapped successfully")
 
 
 def demo_configuration():
