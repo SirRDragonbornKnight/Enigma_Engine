@@ -180,6 +180,13 @@ CONFIG = {
     
     "device": "auto",       # "auto", "cpu", "cuda", "mps"
     "precision": "float32", # "float32", "float16", "bfloat16"
+    
+    # Backend selection for neural network operations
+    # "auto" - Uses pure Python for nano/micro, PyTorch for larger models
+    # "pure" - Always use pure Python (slow but zero dependencies)
+    # "torch" - Always use PyTorch (fast, requires torch installed)
+    "nn_backend": "auto",
+    "nn_backend_threshold": 5000000,  # Switch to PyTorch above this param count
 
     # =========================================================================
     # THE FEATURES MANIFEST - Capability Toggles

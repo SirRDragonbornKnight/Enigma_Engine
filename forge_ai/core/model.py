@@ -3131,3 +3131,62 @@ def create_model(size: str = 'small', vocab_size: Optional[int] = None, **kwargs
 TinyForge = Forge
 ForgeModel = Forge
 Enigma = Forge  # Legacy name used in tests and documentation
+
+
+def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **kwargs):
+    """
+    Create a model with automatic backend selection.
+    
+    For nano/micro models, may use pure Python backend if PyTorch is unavailable
+    or if configured to do so. For larger models, always uses PyTorch.
+    
+    Args:
+        size: Model size preset (nano, micro, tiny, small, medium, large, xl, etc.)
+        vocab_size: Size of vocabulary. If None, auto-detects from default tokenizer.
+        **kwargs: Additional config overrides
+        
+    Returns:
+        Model instance (Forge for PyTorch, PureTransformer for pure Python)
+    """
+    from ..config import CONFIG
+    
+    # Get backend preference from config
+    backend = CONFIG.get("nn_backend", "auto")
+    threshold = CONFIG.get("nn_backend_threshold", 5_000_000)
+    
+    # Estimate param count for this size
+    SIZE_PARAMS = {
+        "nano": 200_000,
+        "micro": 1_000_000,
+        "tiny": 5_000_000,
+        "small": 25_000_000,
+        "medium": 85_000_000,
+        "large": 300_000_000,
+    }
+    estimated_params = SIZE_PARAMS.get(size, 25_000_000)
+    
+    # Determine which backend to use
+    use_pure = False
+    if backend == "pure":
+        use_pure = True
+    elif backend == "auto" and estimated_params < threshold:
+        # Check if PyTorch is available
+        try:
+            import torch
+            use_pure = False
+        except ImportError:
+            use_pure = True
+            logger.info(f"PyTorch not available, using pure Python backend for {size}")
+    
+    if use_pure:
+        # Use pure Python backend
+        try:
+            from ..builtin.neural_network import get_model_for_size, set_backend
+            set_backend("pure", threshold)
+            logger.info(f"Using pure Python backend for {size} model")
+            return get_model_for_size(size)
+        except Exception as e:
+            logger.warning(f"Pure Python backend failed: {e}, falling back to PyTorch")
+    
+    # Use PyTorch backend (default)
+    return create_model(size, vocab_size, **kwargs)

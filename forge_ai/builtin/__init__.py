@@ -26,6 +26,21 @@ from .chat import BuiltinChat
 from .video_gen import BuiltinVideoGen
 from .threed_gen import Builtin3DGen
 from .stt import BuiltinSTT
+from .neural_network import (
+    PureTransformer, PureConfig, Matrix,
+    set_backend, get_backend, should_use_pure_backend,
+    get_model_for_size, benchmark_matmul,
+    # PyPy detection
+    is_pypy, get_python_info, PYPY_MODE,
+    # Weight conversion
+    convert_pytorch_to_pure, convert_pure_to_pytorch,
+    save_pure_model, load_pure_model,
+    # Layers
+    PureLinear, PureLayerNorm, PureRMSNorm, PureEmbedding,
+    PureAttention, PureFeedForward, PureTransformerBlock,
+    # Optimizers
+    PureSGD, PureAdam,
+)
 
 __all__ = [
     'BuiltinTTS',
@@ -36,6 +51,35 @@ __all__ = [
     'BuiltinVideoGen',
     'Builtin3DGen',
     'BuiltinSTT',
+    # Neural Network (pure Python)
+    'PureTransformer',
+    'PureConfig',
+    'Matrix',
+    'set_backend',
+    'get_backend',
+    'should_use_pure_backend',
+    'get_model_for_size',
+    'benchmark_matmul',
+    # PyPy detection
+    'is_pypy',
+    'get_python_info',
+    'PYPY_MODE',
+    # Weight conversion
+    'convert_pytorch_to_pure',
+    'convert_pure_to_pytorch',
+    'save_pure_model',
+    'load_pure_model',
+    # Layers
+    'PureLinear',
+    'PureLayerNorm',
+    'PureRMSNorm',
+    'PureEmbedding',
+    'PureAttention',
+    'PureFeedForward',
+    'PureTransformerBlock',
+    # Optimizers
+    'PureSGD',
+    'PureAdam',
 ]
 
 
@@ -50,5 +94,6 @@ def get_builtin_status() -> dict:
         "video_gen": True,  # Always available (pure Python GIF)
         "threed_gen": True,  # Always available (pure Python OBJ)
         "chat": True,  # Always available (rule-based)
+        "neural_network": True,  # Always available (pure Python transformer)
     }
 

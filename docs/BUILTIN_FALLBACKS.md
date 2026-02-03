@@ -1,6 +1,6 @@
 # ForgeAI Built-in Fallbacks
 
-ForgeAI now includes **zero-dependency fallbacks** that work without installing external packages like `pyttsx3`, `sentence-transformers`, `diffusers`, etc.
+ForgeAI now includes **zero-dependency fallbacks** that work without installing external packages like `pyttsx3`, `sentence-transformers`, `diffusers`, `torch`, etc.
 
 ## How It Works
 
@@ -8,6 +8,7 @@ When a full-featured library isn't available, ForgeAI automatically falls back t
 
 | Feature | Full Library | Built-in Fallback |
 |---------|-------------|-------------------|
+| **Neural Network** | PyTorch | Pure Python transformer (nano/micro sizes) |
 | **TTS (Speech)** | pyttsx3 | Windows SAPI / macOS `say` / Linux espeak |
 | **Embeddings** | sentence-transformers | TF-IDF + hash-based vectors |
 | **Code Generation** | ForgeAI Model | Template-based code snippets |
@@ -23,6 +24,21 @@ The fallbacks are **automatic**. When you use any tab in the GUI, it will:
 ## Built-in Modules
 
 Located in `forge_ai/builtin/`:
+
+### PureTransformer (`neural_network.py`) - NEW!
+- **Complete neural network in pure Python** - no numpy, no torch!
+- Full transformer architecture: attention, FFN, embeddings, layer norm
+- Supports nano/micro model sizes (~1-2M parameters)
+- Automatic backend switching based on model size
+- Multiprocessing support for parallel matrix operations
+- **10-50x faster on PyPy** (Python JIT compiler)
+- Weight conversion to/from PyTorch format
+- Training support with Adam optimizer
+
+Configuration in Settings > Hardware > NN Backend:
+- **Auto** (default): Pure Python for nano/micro, PyTorch for larger
+- **Pure Python**: Always use pure Python (slow but works everywhere)
+- **PyTorch**: Always use PyTorch (fast, requires torch installed)
 
 ### BuiltinTTS (`tts.py`)
 - Uses system speech APIs (no installation needed)

@@ -1671,10 +1671,12 @@ def create_settings_tab(parent):
         
         cpu_count = torch.get_num_threads()
         cpu_info = f"CPU Threads: {cpu_count}"
+        torch_available = True
     except Exception:
         device_info = "Warning: PyTorch not available"
         device_style = "color: #ef4444;"
         cpu_info = ""
+        torch_available = False
     
     device_label = QLabel(device_info)
     device_label.setStyleSheet(device_style)
@@ -1683,6 +1685,58 @@ def create_settings_tab(parent):
     if cpu_info:
         cpu_label = QLabel(cpu_info)
         device_layout.addWidget(cpu_label)
+    
+    # Neural Network Backend
+    nn_backend_row = QHBoxLayout()
+    nn_backend_row.addWidget(QLabel("NN Backend:"))
+    
+    parent.nn_backend_combo = NoScrollComboBox()
+    parent.nn_backend_combo.setToolTip(
+        "Neural network backend:\n"
+        "Auto - Uses pure Python for nano/micro, PyTorch for larger\n"
+        "Pure Python - Zero dependencies, works anywhere (slow)\n"
+        "PyTorch - Fast, requires PyTorch installed"
+    )
+    parent.nn_backend_combo.addItem("Auto (recommended)", "auto")
+    parent.nn_backend_combo.addItem("Pure Python (no dependencies)", "pure")
+    parent.nn_backend_combo.addItem("PyTorch (fast)", "torch")
+    
+    # Set default based on config
+    try:
+        from ...config import CONFIG
+        current_backend = CONFIG.get("nn_backend", "auto")
+        idx_map = {"auto": 0, "pure": 1, "torch": 2}
+        parent.nn_backend_combo.setCurrentIndex(idx_map.get(current_backend, 0))
+    except Exception:
+        parent.nn_backend_combo.setCurrentIndex(0)
+    
+    parent.nn_backend_combo.currentIndexChanged.connect(
+        lambda idx: _apply_nn_backend(parent)
+    )
+    nn_backend_row.addWidget(parent.nn_backend_combo)
+    
+    # Show current Python info
+    try:
+        from ...builtin.neural_network import get_python_info
+        info = get_python_info()
+        runtime_label = QLabel(f"{info['implementation']}")
+        if info['is_pypy']:
+            runtime_label.setStyleSheet("color: #22c55e; font-weight: bold;")
+            runtime_label.setToolTip("PyPy detected - Pure Python will be faster!")
+        else:
+            runtime_label.setStyleSheet("color: #bac2de;")
+        nn_backend_row.addWidget(runtime_label)
+    except Exception:
+        pass
+    
+    nn_backend_row.addStretch()
+    device_layout.addLayout(nn_backend_row)
+    
+    # Backend status
+    parent.nn_backend_status = QLabel("")
+    parent.nn_backend_status.setStyleSheet("color: #bac2de; font-style: italic; font-size: 11px;")
+    device_layout.addWidget(parent.nn_backend_status)
+    _update_nn_backend_status(parent)
     
     layout.addWidget(device_group)
     
@@ -3281,6 +3335,86 @@ def _apply_custom_resources(parent):
         parent.resource_status_label.setText(f"Error: {e}")
         parent.resource_status_label.setStyleSheet("color: #ef4444; font-style: italic;")
         QMessageBox.warning(parent, "Error", f"Failed to apply resource limits: {e}")
+
+
+# ===== NEURAL NETWORK BACKEND FUNCTIONS =====
+
+def _apply_nn_backend(parent):
+    """Apply selected neural network backend."""
+    backend = parent.nn_backend_combo.currentData()
+    
+    try:
+        from ...config import CONFIG
+        from ...builtin.neural_network import set_backend
+        
+        # Update config
+        CONFIG["nn_backend"] = backend
+        
+        # Update the neural network module's backend
+        threshold = CONFIG.get("nn_backend_threshold", 5_000_000)
+        set_backend(backend, threshold)
+        
+        # Save to settings
+        _save_nn_backend_setting(backend)
+        
+        # Update status
+        _update_nn_backend_status(parent)
+        
+    except Exception as e:
+        QMessageBox.warning(parent, "Error", f"Failed to set backend: {e}")
+
+
+def _update_nn_backend_status(parent):
+    """Update the neural network backend status label."""
+    try:
+        backend = parent.nn_backend_combo.currentData()
+        from ...builtin.neural_network import is_pypy, get_python_info
+        
+        info = get_python_info()
+        
+        if backend == "auto":
+            status = "Auto: nano/micro use Pure Python, larger use PyTorch"
+        elif backend == "pure":
+            if info['is_pypy']:
+                status = "Pure Python with PyPy JIT (10-50x faster!)"
+            else:
+                status = f"Pure Python on {info['implementation']} (slower, but works anywhere)"
+        else:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    status = f"PyTorch with CUDA ({torch.cuda.get_device_name(0)})"
+                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    status = "PyTorch with Metal (Apple Silicon)"
+                else:
+                    status = "PyTorch (CPU only)"
+            except ImportError:
+                status = "PyTorch not available - will fall back to Pure Python"
+        
+        parent.nn_backend_status.setText(status)
+        
+    except Exception as e:
+        parent.nn_backend_status.setText(f"Error: {e}")
+
+
+def _save_nn_backend_setting(backend: str):
+    """Save the neural network backend setting to GUI settings."""
+    try:
+        from pathlib import Path
+        import json
+        
+        settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
+        
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+        else:
+            settings = {}
+        
+        settings["nn_backend"] = backend
+        settings_path.write_text(json.dumps(settings, indent=2))
+        
+    except Exception:
+        pass  # Non-critical, settings will still work this session
 
 
 # ===== DEVICE PROFILE FUNCTIONS =====
