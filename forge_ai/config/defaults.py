@@ -86,6 +86,7 @@ CONFIG = {
     "info_dir": str(BASE_DIR / "information"),       # Runtime settings, tasks, reminders
     "models_dir": str(BASE_DIR / "models"),
     "memory_dir": str(BASE_DIR / "memory"),
+    "outputs_dir": str(BASE_DIR / "outputs"),        # Generated images, audio, video
     "db_path": str(BASE_DIR / "memory" / "memory.db"),
     "vocab_dir": str(BASE_DIR / "forge_ai" / "vocab_model"),
     "logs_dir": str(BASE_DIR / "logs"),
