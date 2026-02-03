@@ -134,3 +134,10 @@ models/*/personality.json
 # Outputs directory (generated images, GIFs, etc.)
 outputs/*
 !outputs/.gitkeep
+
+# Model weights
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+
