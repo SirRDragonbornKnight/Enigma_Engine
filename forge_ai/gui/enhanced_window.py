@@ -4733,10 +4733,13 @@ class EnhancedMainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            if session_path.exists():
-                session_path.unlink()
-            self._refresh_sessions()
-            self.session_viewer.clear()
+            try:
+                if session_path.exists():
+                    session_path.unlink()
+                self._refresh_sessions()
+                self.session_viewer.clear()
+            except Exception as e:
+                QMessageBox.warning(self, "Delete Failed", f"Could not delete session: {e}")
     
     def _load_session_into_chat(self):
         """Load the selected session into the chat tab."""

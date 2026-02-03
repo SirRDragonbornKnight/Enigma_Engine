@@ -148,7 +148,7 @@ class AIOverlay(QWidget):
         header_layout.setContentsMargins(8, 0, 8, 0)
         
         if config.show_avatar:
-            avatar_label = QLabel("🤖")
+            avatar_label = QLabel("AI")
             avatar_label.setFixedSize(24, 24)
             avatar_label.setAttribute(Qt.WA_TransparentForMouseEvents)  # Pass clicks to header
             header_layout.addWidget(avatar_label)
@@ -192,7 +192,7 @@ class AIOverlay(QWidget):
         header_layout.setContentsMargins(8, 0, 8, 0)
         
         if config.show_avatar:
-            avatar_label = QLabel("🤖")
+            avatar_label = QLabel("AI")
             avatar_label.setFixedSize(24, 24)
             header_layout.addWidget(avatar_label)
             
@@ -242,8 +242,9 @@ class AIOverlay(QWidget):
             self.input_field.returnPressed.connect(self._send_message)
             input_layout.addWidget(self.input_field)
             
-            send_btn = QPushButton("➤")
+            send_btn = QPushButton(">")
             send_btn.setFixedSize(30, 30)
+            send_btn.setToolTip("Send message")
             send_btn.clicked.connect(self._send_message)
             input_layout.addWidget(send_btn)
             
@@ -264,7 +265,7 @@ class AIOverlay(QWidget):
         header_layout.setContentsMargins(10, 0, 10, 0)
         
         if config.show_avatar:
-            avatar_label = QLabel("🤖")
+            avatar_label = QLabel("AI")
             avatar_label.setFixedSize(32, 32)
             header_layout.addWidget(avatar_label)
             
@@ -314,8 +315,9 @@ class AIOverlay(QWidget):
             self.input_field.returnPressed.connect(self._send_message)
             input_layout.addWidget(self.input_field)
             
-            send_btn = QPushButton("➤")
+            send_btn = QPushButton(">")
             send_btn.setFixedSize(35, 35)
+            send_btn.setToolTip("Send message")
             send_btn.clicked.connect(self._send_message)
             input_layout.addWidget(send_btn)
             

@@ -261,7 +261,7 @@ class ModelLoadingDialog(QDialog):
             'done': done_label
         }
     
-    def add_loading_item(self, name: str, item_type: str = 'other', icon: str = '📦'):
+    def add_loading_item(self, name: str, item_type: str = 'other', icon: str = '[*]'):
         """Dynamically add a new loading item."""
         item = {
             'name': name,
