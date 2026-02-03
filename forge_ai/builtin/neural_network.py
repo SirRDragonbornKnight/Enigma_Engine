@@ -74,15 +74,23 @@ else:
 
 @dataclass
 class PureConfig:
-    """Configuration for pure Python backend."""
+    """Configuration for pure Python backend - matches ForgeConfig."""
     # Model architecture
     vocab_size: int = 1000
-    d_model: int = 64          # Embedding dimension
+    d_model: int = 64          # Embedding dimension (called 'dim' in Forge)
     n_heads: int = 4           # Attention heads
+    n_kv_heads: int = 0        # KV heads for GQA (0 = same as n_heads)
     n_layers: int = 2          # Transformer layers
-    d_ff: int = 256            # Feed-forward dimension
+    d_ff: int = 256            # Feed-forward dimension (called 'hidden_dim' in Forge)
     max_seq_len: int = 512     # Maximum sequence length
     dropout: float = 0.0       # Dropout (only for training)
+    
+    # Advanced features
+    use_rope: bool = True      # Rotary Position Embeddings
+    use_swiglu: bool = True    # SwiGLU activation in FFN
+    use_gqa: bool = True       # Grouped Query Attention
+    rope_theta: float = 10000.0  # RoPE base frequency
+    use_bias: bool = False     # Use bias in linear layers
     
     # Performance
     use_multiprocessing: bool = _DEFAULT_USE_MP  # Auto-disable on PyPy
@@ -92,21 +100,46 @@ class PureConfig:
     # Training
     learning_rate: float = 0.001
     
+    def __post_init__(self):
+        """Post-initialization setup."""
+        if self.n_kv_heads == 0:
+            self.n_kv_heads = self.n_heads
+    
     @property
     def head_dim(self) -> int:
         return self.d_model // self.n_heads
     
+    @property
+    def n_rep(self) -> int:
+        """Number of Q heads per KV head (for GQA)."""
+        return self.n_heads // self.n_kv_heads
+    
     def param_count(self) -> int:
         """Estimate total parameters."""
-        # Embeddings
+        # Embeddings (no position embeddings with RoPE)
         emb = self.vocab_size * self.d_model
-        # Per layer: attention (4 projections) + ffn (2 layers) + norms (2)
-        per_layer = (
-            4 * self.d_model * self.d_model +  # Q, K, V, O projections
-            2 * self.d_model * self.d_ff +      # FFN up and down
-            4 * self.d_model                     # LayerNorm params
+        
+        # Per layer: attention (Q, K, V, O) + ffn (with SwiGLU: 3 layers) + norms (2)
+        attn_params = (
+            self.d_model * self.d_model +                    # Q
+            self.d_model * (self.n_kv_heads * self.head_dim) +  # K (GQA)
+            self.d_model * (self.n_kv_heads * self.head_dim) +  # V (GQA)
+            self.d_model * self.d_model                      # O
         )
-        return emb + (self.n_layers * per_layer) + self.vocab_size * self.d_model
+        
+        if self.use_swiglu:
+            ffn_params = 3 * self.d_model * self.d_ff  # w1, w2, w3
+        else:
+            ffn_params = 2 * self.d_model * self.d_ff  # up, down
+        
+        norm_params = 2 * self.d_model  # 2 norms per layer
+        
+        per_layer = attn_params + ffn_params + norm_params
+        
+        # Final norm + output projection
+        final = self.d_model + self.vocab_size * self.d_model
+        
+        return emb + (self.n_layers * per_layer) + final
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -497,6 +530,115 @@ def softmax(x: Matrix, axis: int = -1) -> Matrix:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ROTARY POSITION EMBEDDINGS (RoPE)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class RoPEFrequencies:
+    """
+    Precomputed RoPE (Rotary Position Embedding) frequencies.
+    
+    RoPE encodes position by ROTATING vectors. Each position gets a unique
+    rotation angle that the model learns to interpret.
+    
+    📐 THE MATH:
+    For dimension pair i, frequency = 1 / (theta^(2i/dim))
+    For position p, angle = p * frequency
+    We store cos(angle) and sin(angle) for efficient rotation.
+    """
+    
+    def __init__(self, dim: int, max_seq_len: int, theta: float = 10000.0):
+        """
+        Precompute RoPE frequencies.
+        
+        Args:
+            dim: Dimension per head (must be even)
+            max_seq_len: Maximum sequence length
+            theta: Base frequency (higher = better long context)
+        """
+        self.dim = dim
+        self.max_seq_len = max_seq_len
+        self.theta = theta
+        
+        # Precompute cos and sin for all positions
+        self.cos_cache: List[List[float]] = []
+        self.sin_cache: List[List[float]] = []
+        
+        # freqs[i] = 1 / (theta^(2i/dim))
+        freqs = []
+        for i in range(0, dim, 2):
+            freqs.append(1.0 / (theta ** (i / dim)))
+        
+        # For each position, compute cos and sin of (pos * freq)
+        for pos in range(max_seq_len):
+            cos_row = []
+            sin_row = []
+            for freq in freqs:
+                angle = pos * freq
+                cos_row.append(math.cos(angle))
+                sin_row.append(math.sin(angle))
+            self.cos_cache.append(cos_row)
+            self.sin_cache.append(sin_row)
+    
+    def get_cos_sin(self, seq_len: int, start_pos: int = 0) -> Tuple[List[List[float]], List[List[float]]]:
+        """
+        Get cos and sin values for a sequence.
+        
+        Args:
+            seq_len: Length of sequence
+            start_pos: Starting position (for KV cache continuation)
+            
+        Returns:
+            (cos_values, sin_values) for positions [start_pos, start_pos + seq_len)
+        """
+        end_pos = start_pos + seq_len
+        return (
+            self.cos_cache[start_pos:end_pos],
+            self.sin_cache[start_pos:end_pos]
+        )
+
+
+def apply_rope(x: Matrix, cos_vals: List[List[float]], sin_vals: List[List[float]]) -> Matrix:
+    """
+    Apply rotary position embeddings to a matrix.
+    
+    📐 ROTATION FORMULA:
+    For each pair of dimensions (x0, x1):
+        rotated_x0 = x0 * cos - x1 * sin
+        rotated_x1 = x0 * sin + x1 * cos
+    
+    Args:
+        x: Input matrix (seq_len, dim) or reshaped for heads
+        cos_vals: Cosine values for each position
+        sin_vals: Sine values for each position
+        
+    Returns:
+        Rotated matrix, same shape as input
+    """
+    result = Matrix.zeros(x.rows, x.cols)
+    half_dim = x.cols // 2
+    
+    for i in range(x.rows):
+        row_start = i * x.cols
+        cos_row = cos_vals[i] if i < len(cos_vals) else cos_vals[-1]
+        sin_row = sin_vals[i] if i < len(sin_vals) else sin_vals[-1]
+        
+        for j in range(half_dim):
+            # Get the pair of values
+            x0 = x.data[row_start + j]
+            x1 = x.data[row_start + half_dim + j]
+            
+            # Get rotation angles
+            cos_val = cos_row[j] if j < len(cos_row) else 1.0
+            sin_val = sin_row[j] if j < len(sin_row) else 0.0
+            
+            # Apply rotation
+            result.data[row_start + j] = x0 * cos_val - x1 * sin_val
+            result.data[row_start + half_dim + j] = x0 * sin_val + x1 * cos_val
+    
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # NEURAL NETWORK LAYERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -788,178 +930,335 @@ class PureEmbedding:
 
 class PureAttention:
     """
-    Multi-Head Self-Attention.
+    Multi-Head Self-Attention with Grouped Query Attention (GQA) and KV Cache.
     
-    The core mechanism that allows the model to attend to different
-    parts of the input sequence.
+    📖 WHAT THIS DOES:
+    Attention is how the model "looks at" different parts of the input.
+    "The cat sat on the mat" - when processing "sat", attention lets
+    the model look back at "cat" to know WHO sat.
+    
+    📐 THE MATH (simplified):
+    1. Create Query (Q), Key (K), Value (V) from input
+    2. Attention scores = Q @ K.T / sqrt(dim)  (which words to look at?)
+    3. Softmax → probabilities (normalize scores)
+    4. Output = scores @ V  (weighted combination of values)
+    
+    ⚡ GROUPED QUERY ATTENTION (GQA):
+    Normal: Each head has its own K and V (memory hungry!)
+    GQA: Multiple Q heads share the same K,V (saves 2-4x memory!)
+    
+    💾 KV-CACHE:
+    During generation, we only add ONE new token at a time.
+    Instead of recomputing K,V for all previous tokens, we cache them!
     """
     
-    def __init__(self, d_model: int, n_heads: int):
+    MAX_CACHE_SEQ_LEN = 4096
+    
+    def __init__(
+        self, 
+        d_model: int, 
+        n_heads: int, 
+        n_kv_heads: int = 0,
+        use_rope: bool = True,
+        use_bias: bool = False,
+        max_seq_len: int = 512,
+        rope_theta: float = 10000.0
+    ):
         self.d_model = d_model
         self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads if n_kv_heads > 0 else n_heads
         self.head_dim = d_model // n_heads
+        self.n_rep = self.n_heads // self.n_kv_heads  # Q heads per KV head
         self.scale = 1.0 / math.sqrt(self.head_dim)
+        self.use_rope = use_rope
         
-        # Q, K, V projections
-        self.q_proj = PureLinear(d_model, d_model, bias=False)
-        self.k_proj = PureLinear(d_model, d_model, bias=False)
-        self.v_proj = PureLinear(d_model, d_model, bias=False)
-        self.o_proj = PureLinear(d_model, d_model, bias=False)
+        # Q projection: full size
+        self.wq = PureLinear(d_model, n_heads * self.head_dim, bias=use_bias)
+        # K, V projections: may be smaller for GQA
+        self.wk = PureLinear(d_model, self.n_kv_heads * self.head_dim, bias=use_bias)
+        self.wv = PureLinear(d_model, self.n_kv_heads * self.head_dim, bias=use_bias)
+        # Output projection
+        self.wo = PureLinear(n_heads * self.head_dim, d_model, bias=use_bias)
+        
+        # RoPE frequencies
+        if use_rope:
+            self.rope_freqs = RoPEFrequencies(self.head_dim, max_seq_len, rope_theta)
+        else:
+            self.rope_freqs = None
+        
+        # KV Cache
+        self.cache_k: Optional[List[List[float]]] = None  # List of K vectors
+        self.cache_v: Optional[List[List[float]]] = None  # List of V vectors
+        self.cache_seq_len: int = 0
         
         # Cache for backward
-        self._q_cache: Optional[Matrix] = None
-        self._k_cache: Optional[Matrix] = None
-        self._v_cache: Optional[Matrix] = None
+        self._input_cache: Optional[Matrix] = None
         self._attn_cache: Optional[Matrix] = None
     
-    def forward(self, x: Matrix, mask: Optional[Matrix] = None) -> Matrix:
+    def forward(
+        self, 
+        x: Matrix, 
+        mask: Optional[Matrix] = None,
+        use_cache: bool = False,
+        start_pos: int = 0
+    ) -> Matrix:
         """
-        Forward pass for self-attention.
+        Forward pass through attention with optional KV cache.
         
         Args:
-            x: Input (seq_len, d_model)
+            x: Input tensor (seq_len, d_model)
             mask: Optional attention mask
-            
+            use_cache: Whether to use/update KV cache
+            start_pos: Starting position (for cache continuation)
+        
         Returns:
-            Output (seq_len, d_model)
+            Output tensor (seq_len, d_model)
         """
         seq_len = x.rows
+        self._input_cache = x
         
-        # Project to Q, K, V
-        q = self.q_proj.forward(x)  # (seq_len, d_model)
-        k = self.k_proj.forward(x)
-        v = self.v_proj.forward(x)
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 1: Project to Q, K, V
+        # ─────────────────────────────────────────────────────────────────────
+        q = self.wq.forward(x)  # (seq_len, n_heads * head_dim)
+        k = self.wk.forward(x)  # (seq_len, n_kv_heads * head_dim)
+        v = self.wv.forward(x)  # (seq_len, n_kv_heads * head_dim)
         
-        self._q_cache = q
-        self._k_cache = k
-        self._v_cache = v
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 2: Apply RoPE to Q and K
+        # ─────────────────────────────────────────────────────────────────────
+        if self.use_rope and self.rope_freqs is not None:
+            cos_vals, sin_vals = self.rope_freqs.get_cos_sin(seq_len, start_pos)
+            
+            # Apply RoPE per head for Q
+            q_rotated = Matrix.zeros(q.rows, q.cols)
+            for h in range(self.n_heads):
+                h_start = h * self.head_dim
+                h_end = h_start + self.head_dim
+                # Extract head slice
+                head_q = Matrix(seq_len, self.head_dim)
+                for i in range(seq_len):
+                    for j in range(self.head_dim):
+                        head_q[i, j] = q[i, h_start + j]
+                # Rotate
+                head_q_rot = apply_rope(head_q, cos_vals, sin_vals)
+                # Put back
+                for i in range(seq_len):
+                    for j in range(self.head_dim):
+                        q_rotated[i, h_start + j] = head_q_rot[i, j]
+            q = q_rotated
+            
+            # Apply RoPE per head for K
+            k_rotated = Matrix.zeros(k.rows, k.cols)
+            for h in range(self.n_kv_heads):
+                h_start = h * self.head_dim
+                h_end = h_start + self.head_dim
+                head_k = Matrix(seq_len, self.head_dim)
+                for i in range(seq_len):
+                    for j in range(self.head_dim):
+                        head_k[i, j] = k[i, h_start + j]
+                head_k_rot = apply_rope(head_k, cos_vals, sin_vals)
+                for i in range(seq_len):
+                    for j in range(self.head_dim):
+                        k_rotated[i, h_start + j] = head_k_rot[i, j]
+            k = k_rotated
         
-        # For simplicity, process all heads together
-        # In a real impl, we'd reshape to (n_heads, seq_len, head_dim)
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 3: Handle KV Cache
+        # ─────────────────────────────────────────────────────────────────────
+        if use_cache:
+            if self.cache_k is None:
+                # First token - initialize cache
+                self.cache_k = [k.get_row(i) for i in range(seq_len)]
+                self.cache_v = [v.get_row(i) for i in range(seq_len)]
+            else:
+                # Append new K, V to cache
+                for i in range(seq_len):
+                    self.cache_k.append(k.get_row(i))
+                    self.cache_v.append(v.get_row(i))
+                
+                # Trim if too long (sliding window)
+                if len(self.cache_k) > self.MAX_CACHE_SEQ_LEN:
+                    trim = len(self.cache_k) - self.MAX_CACHE_SEQ_LEN
+                    self.cache_k = self.cache_k[trim:]
+                    self.cache_v = self.cache_v[trim:]
+            
+            # Use cached K, V
+            cache_len = len(self.cache_k)
+            k = Matrix(cache_len, k.cols)
+            v = Matrix(cache_len, v.cols)
+            for i in range(cache_len):
+                k.set_row(i, self.cache_k[i])
+                v.set_row(i, self.cache_v[i])
+            
+            self.cache_seq_len = cache_len
         
-        # Compute attention scores: Q @ K.T * scale
-        scores = matmul(q, k.T)
-        scores = scale(scores, self.scale)
+        kv_seq_len = k.rows
         
-        # Apply causal mask if needed
-        if mask is not None:
-            for i in range(scores.rows):
-                for j in range(scores.cols):
-                    if mask[i, j] == 0:
-                        scores[i, j] = -1e9
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 4: Multi-Head Attention (with GQA)
+        # ─────────────────────────────────────────────────────────────────────
+        # Process each head separately for proper multi-head attention
+        output_heads = []
         
-        # Softmax
-        attn = softmax(scores, axis=-1)
-        self._attn_cache = attn
+        for h in range(self.n_heads):
+            # Get Q for this head
+            q_head = Matrix(seq_len, self.head_dim)
+            q_start = h * self.head_dim
+            for i in range(seq_len):
+                for j in range(self.head_dim):
+                    q_head[i, j] = q[i, q_start + j]
+            
+            # Get K, V for this head (with GQA: multiple Q heads share same KV)
+            kv_head_idx = h // self.n_rep
+            k_head = Matrix(kv_seq_len, self.head_dim)
+            v_head = Matrix(kv_seq_len, self.head_dim)
+            kv_start = kv_head_idx * self.head_dim
+            for i in range(kv_seq_len):
+                for j in range(self.head_dim):
+                    k_head[i, j] = k[i, kv_start + j]
+                    v_head[i, j] = v[i, kv_start + j]
+            
+            # Attention scores: Q @ K.T / sqrt(head_dim)
+            scores = matmul(q_head, k_head.T)
+            scores = scale(scores, self.scale)
+            
+            # Apply causal mask
+            if mask is not None:
+                for i in range(scores.rows):
+                    for j in range(scores.cols):
+                        if j >= mask.cols or mask[i, j] == 0:
+                            scores[i, j] = -1e9
+            else:
+                # Default causal mask for generation
+                for i in range(scores.rows):
+                    query_pos = start_pos + i if use_cache else i
+                    for j in range(scores.cols):
+                        if j > query_pos:
+                            scores[i, j] = -1e9
+            
+            # Softmax
+            attn = softmax(scores, axis=-1)
+            
+            # Apply to values
+            head_output = matmul(attn, v_head)
+            output_heads.append(head_output)
         
-        # Apply attention to values
-        output = matmul(attn, v)
+        # Concatenate heads
+        output = Matrix(seq_len, self.n_heads * self.head_dim)
+        for h, head_out in enumerate(output_heads):
+            h_start = h * self.head_dim
+            for i in range(seq_len):
+                for j in range(self.head_dim):
+                    output[i, h_start + j] = head_out[i, j]
         
-        # Output projection
-        output = self.o_proj.forward(output)
-        
-        return output
+        # ─────────────────────────────────────────────────────────────────────
+        # STEP 5: Output projection
+        # ─────────────────────────────────────────────────────────────────────
+        return self.wo.forward(output)
     
-    def backward(self, grad_output: Matrix) -> Matrix:
-        """Backward pass."""
-        # This is simplified - full impl needs chain rule through softmax
-        grad = self.o_proj.backward(grad_output)
-        
-        # Gradient through attention (simplified)
-        grad_v = matmul(self._attn_cache.T, grad)
-        grad_attn = matmul(grad, self._v_cache.T)
-        
-        # Gradient through softmax (simplified - assumes attn * (1-attn))
-        grad_scores = multiply(grad_attn, self._attn_cache)
-        grad_scores = scale(grad_scores, self.scale)
-        
-        # Gradient through Q, K projections
-        grad_q = matmul(grad_scores, self._k_cache)
-        grad_k = matmul(grad_scores.T, self._q_cache)
-        
-        grad_x_q = self.q_proj.backward(grad_q)
-        grad_x_k = self.k_proj.backward(grad_k)
-        grad_x_v = self.v_proj.backward(grad_v)
-        
-        # Sum gradients from all paths
-        grad_input = add(add(grad_x_q, grad_x_k), grad_x_v)
-        
-        return grad_input
+    def clear_cache(self):
+        """Clear the KV cache (call between different sequences)."""
+        self.cache_k = None
+        self.cache_v = None
+        self.cache_seq_len = 0
     
     def parameters(self) -> List[Matrix]:
         params = []
-        params.extend(self.q_proj.parameters())
-        params.extend(self.k_proj.parameters())
-        params.extend(self.v_proj.parameters())
-        params.extend(self.o_proj.parameters())
+        params.extend(self.wq.parameters())
+        params.extend(self.wk.parameters())
+        params.extend(self.wv.parameters())
+        params.extend(self.wo.parameters())
         return params
     
     def gradients(self) -> List[Optional[Matrix]]:
         grads = []
-        grads.extend(self.q_proj.gradients())
-        grads.extend(self.k_proj.gradients())
-        grads.extend(self.v_proj.gradients())
-        grads.extend(self.o_proj.gradients())
+        grads.extend(self.wq.gradients())
+        grads.extend(self.wk.gradients())
+        grads.extend(self.wv.gradients())
+        grads.extend(self.wo.gradients())
         return grads
 
 
 class PureFeedForward:
     """
-    Feed-Forward Network (FFN).
+    SwiGLU Feed-Forward Network.
     
-    Two linear layers with activation in between.
-    FFN(x) = act(xW1 + b1)W2 + b2
+    📖 WHAT THIS DOES:
+    After attention decides WHAT to look at, the FFN decides
+    WHAT TO DO with that information. It's the "thinking" part!
+    
+    📐 SWIGLU FORMULA:
+    Standard FFN: output = W2(ReLU(W1(x)))
+    SwiGLU:       output = W2(Swish(W1(x)) * W3(x))
+    
+    💡 WHY SWIGLU IS BETTER:
+    - Swish activation is smoother than ReLU (no hard corners)
+    - Gating mechanism (the W3 multiplication) helps information flow
     """
     
-    def __init__(self, d_model: int, d_ff: int, activation: str = "gelu"):
+    def __init__(
+        self, 
+        d_model: int, 
+        d_ff: int, 
+        use_swiglu: bool = True,
+        use_bias: bool = False
+    ):
         self.d_model = d_model
         self.d_ff = d_ff
-        self.activation = activation
+        self.use_swiglu = use_swiglu
         
-        self.up_proj = PureLinear(d_model, d_ff)
-        self.down_proj = PureLinear(d_ff, d_model)
+        if use_swiglu:
+            # SwiGLU: 3 projections
+            self.w1 = PureLinear(d_model, d_ff, bias=use_bias)  # Gate
+            self.w2 = PureLinear(d_ff, d_model, bias=use_bias)  # Down
+            self.w3 = PureLinear(d_model, d_ff, bias=use_bias)  # Up
+        else:
+            # Standard: 2 projections
+            self.up_proj = PureLinear(d_model, d_ff, bias=use_bias)
+            self.down_proj = PureLinear(d_ff, d_model, bias=use_bias)
         
+        self._gate_cache: Optional[Matrix] = None
         self._up_cache: Optional[Matrix] = None
-        self._act_cache: Optional[Matrix] = None
     
     def forward(self, x: Matrix) -> Matrix:
-        """Forward pass."""
-        up = self.up_proj.forward(x)
-        self._up_cache = up
+        """
+        Forward pass.
         
-        # Activation
-        if self.activation == "gelu":
-            act = gelu(up)
-        elif self.activation == "silu":
-            act = silu(up)
-        elif self.activation == "relu":
-            act = relu(up)
+        📐 SwiGLU computation:
+        1. gate = swish(W1 @ x)  ← Smooth activation
+        2. up = W3 @ x           ← Unactivated projection  
+        3. hidden = gate * up    ← Gated combination
+        4. output = W2 @ hidden  ← Project back
+        """
+        if self.use_swiglu:
+            # SwiGLU
+            gate = self.w1.forward(x)
+            gate = silu(gate)  # Swish = SiLU
+            self._gate_cache = gate
+            
+            up = self.w3.forward(x)
+            self._up_cache = up
+            
+            # Gated combination
+            hidden = multiply(gate, up)
+            
+            return self.w2.forward(hidden)
         else:
+            # Standard FFN
+            up = self.up_proj.forward(x)
+            self._up_cache = up
             act = gelu(up)
-        
-        self._act_cache = act
-        down = self.down_proj.forward(act)
-        
-        return down
-    
-    def backward(self, grad_output: Matrix) -> Matrix:
-        """Backward pass."""
-        grad_act = self.down_proj.backward(grad_output)
-        
-        # Gradient through activation (simplified)
-        if self.activation == "relu":
-            grad_up = relu_backward(self._up_cache, grad_act)
-        else:
-            # Approximate GELU gradient
-            grad_up = grad_act  # Simplified
-        
-        grad_input = self.up_proj.backward(grad_up)
-        return grad_input
+            return self.down_proj.forward(act)
     
     def parameters(self) -> List[Matrix]:
+        if self.use_swiglu:
+            return self.w1.parameters() + self.w2.parameters() + self.w3.parameters()
         return self.up_proj.parameters() + self.down_proj.parameters()
     
     def gradients(self) -> List[Optional[Matrix]]:
+        if self.use_swiglu:
+            return self.w1.gradients() + self.w2.gradients() + self.w3.gradients()
         return self.up_proj.gradients() + self.down_proj.gradients()
 
 
@@ -969,17 +1268,32 @@ class PureFeedForward:
 
 class PureTransformerBlock:
     """
-    Single Transformer block.
+    Single Transformer block with all modern features.
     
-    Architecture:
-        x = x + Attention(LayerNorm(x))
-        x = x + FFN(LayerNorm(x))
+    📖 WHAT THIS DOES:
+    This is ONE "layer" of the transformer. The full model stacks many of these.
+    
+    📐 ARCHITECTURE (Pre-Norm style):
+        x = x + Attention(Norm(x))   ← Look at context
+        x = x + FFN(Norm(x))         ← Process information
+    
+    The residual connections (x + ...) help gradients flow during training.
     """
     
-    def __init__(self, d_model: int, n_heads: int, d_ff: int, use_rms_norm: bool = True):
+    def __init__(
+        self, 
+        d_model: int, 
+        n_heads: int, 
+        d_ff: int, 
+        n_kv_heads: int = 0,
+        use_rms_norm: bool = True,
+        use_rope: bool = True,
+        use_swiglu: bool = True,
+        max_seq_len: int = 512
+    ):
         self.d_model = d_model
         
-        # Layer norms
+        # Layer norms (pre-norm architecture)
         if use_rms_norm:
             self.attn_norm = PureRMSNorm(d_model)
             self.ffn_norm = PureRMSNorm(d_model)
@@ -987,21 +1301,43 @@ class PureTransformerBlock:
             self.attn_norm = PureLayerNorm(d_model)
             self.ffn_norm = PureLayerNorm(d_model)
         
-        # Attention and FFN
-        self.attention = PureAttention(d_model, n_heads)
-        self.ffn = PureFeedForward(d_model, d_ff)
+        # Attention with GQA and RoPE
+        self.attention = PureAttention(
+            d_model=d_model, 
+            n_heads=n_heads, 
+            n_kv_heads=n_kv_heads,
+            use_rope=use_rope,
+            max_seq_len=max_seq_len
+        )
+        
+        # FFN with optional SwiGLU
+        self.ffn = PureFeedForward(d_model, d_ff, use_swiglu=use_swiglu)
         
         # Cache for residual connections
         self._x_cache: Optional[Matrix] = None
         self._attn_out_cache: Optional[Matrix] = None
     
-    def forward(self, x: Matrix, mask: Optional[Matrix] = None) -> Matrix:
-        """Forward pass with residual connections."""
+    def forward(
+        self, 
+        x: Matrix, 
+        mask: Optional[Matrix] = None,
+        use_cache: bool = False,
+        start_pos: int = 0
+    ) -> Matrix:
+        """
+        Forward pass with residual connections.
+        
+        Args:
+            x: Input tensor
+            mask: Optional attention mask
+            use_cache: Whether to use KV cache
+            start_pos: Starting position for cache
+        """
         self._x_cache = x
         
         # Attention block with residual
         normed = self.attn_norm.forward(x)
-        attn_out = self.attention.forward(normed, mask)
+        attn_out = self.attention.forward(normed, mask, use_cache=use_cache, start_pos=start_pos)
         x = add(x, attn_out)
         self._attn_out_cache = x
         
@@ -1012,19 +1348,14 @@ class PureTransformerBlock:
         
         return x
     
+    def clear_cache(self):
+        """Clear KV cache in attention."""
+        self.attention.clear_cache()
+    
     def backward(self, grad_output: Matrix) -> Matrix:
         """Backward pass through block."""
-        # FFN backward
-        grad_ffn = self.ffn.backward(grad_output)
-        grad_ffn = self.ffn_norm.backward(grad_ffn)
-        grad = add(grad_output, grad_ffn)  # Residual gradient
-        
-        # Attention backward
-        grad_attn = self.attention.backward(grad)
-        grad_attn = self.attn_norm.backward(grad_attn)
-        grad = add(grad, grad_attn)  # Residual gradient
-        
-        return grad
+        # Simplified backward - for training use full implementation
+        return grad_output
     
     def parameters(self) -> List[Matrix]:
         params = []
@@ -1051,8 +1382,18 @@ class PureTransformer:
     """
     Complete Transformer model in pure Python.
     
-    This is the main class that ties everything together.
+    📖 WHAT THIS IS:
+    The full language model that ties everything together.
     Compatible with ForgeAI's nano/micro model sizes.
+    
+    📐 ARCHITECTURE:
+    Input → Embedding → [Transformer Block × N] → Norm → Output Projection
+    
+    ⚡ FEATURES:
+    - RoPE positional embeddings (no separate position embedding needed)
+    - KV cache for fast generation
+    - Grouped Query Attention
+    - SwiGLU feed-forward networks
     """
     
     def __init__(self, config: Optional[PureConfig] = None, **kwargs):
@@ -1060,16 +1401,26 @@ class PureTransformer:
             config = PureConfig(**kwargs)
         self.config = config
         
-        # Token and position embeddings
+        # Token embeddings (no position embeddings - using RoPE!)
         self.token_embedding = PureEmbedding(config.vocab_size, config.d_model)
-        self.position_embedding = PureEmbedding(config.max_seq_len, config.d_model)
         
-        # Transformer blocks
+        # Position embedding is only used if RoPE is disabled
+        if not config.use_rope:
+            self.position_embedding = PureEmbedding(config.max_seq_len, config.d_model)
+        else:
+            self.position_embedding = None
+        
+        # Transformer blocks with all features
         self.blocks = [
             PureTransformerBlock(
-                config.d_model,
-                config.n_heads,
-                config.d_ff
+                d_model=config.d_model,
+                n_heads=config.n_heads,
+                d_ff=config.d_ff,
+                n_kv_heads=config.n_kv_heads,
+                use_rms_norm=True,
+                use_rope=config.use_rope,
+                use_swiglu=config.use_swiglu,
+                max_seq_len=config.max_seq_len
             )
             for _ in range(config.n_layers)
         ]
@@ -1081,38 +1432,48 @@ class PureTransformer:
         # Use parallel operations for larger models
         self.use_parallel = config.use_multiprocessing and config.param_count() > 500_000
     
-    def forward(self, input_ids: List[int]) -> Matrix:
+    def forward(
+        self, 
+        input_ids: List[int],
+        use_cache: bool = False,
+        start_pos: int = 0
+    ) -> Matrix:
         """
         Forward pass.
         
         Args:
             input_ids: List of token IDs
+            use_cache: Whether to use KV cache for generation
+            start_pos: Starting position (for cache continuation)
             
         Returns:
             Logits matrix (seq_len, vocab_size)
         """
         seq_len = len(input_ids)
         
-        # Get embeddings
-        token_emb = self.token_embedding.forward(input_ids)
-        pos_ids = list(range(seq_len))
-        pos_emb = self.position_embedding.forward(pos_ids)
+        # Get token embeddings
+        x = self.token_embedding.forward(input_ids)
         
-        # Add embeddings
-        x = add(token_emb, pos_emb)
-        
-        # Create causal mask
-        mask = self._create_causal_mask(seq_len)
+        # Add position embeddings (only if not using RoPE)
+        if self.position_embedding is not None:
+            pos_ids = list(range(start_pos, start_pos + seq_len))
+            pos_emb = self.position_embedding.forward(pos_ids)
+            x = add(x, pos_emb)
         
         # Pass through transformer blocks
         for block in self.blocks:
-            x = block.forward(x, mask)
+            x = block.forward(x, mask=None, use_cache=use_cache, start_pos=start_pos)
         
         # Final norm and project to vocabulary
         x = self.final_norm.forward(x)
         logits = self.output_proj.forward(x)
         
         return logits
+    
+    def clear_cache(self):
+        """Clear KV cache in all blocks."""
+        for block in self.blocks:
+            block.clear_cache()
     
     def _create_causal_mask(self, seq_len: int) -> Matrix:
         """Create causal (triangular) attention mask."""
@@ -1127,28 +1488,48 @@ class PureTransformer:
         input_ids: List[int],
         max_new_tokens: int = 50,
         temperature: float = 1.0,
-        top_k: int = 50
+        top_k: int = 50,
+        top_p: float = 0.9,
+        use_cache: bool = True
     ) -> List[int]:
         """
-        Generate tokens autoregressively.
+        Generate tokens autoregressively with KV cache.
         
         Args:
             input_ids: Starting token IDs
             max_new_tokens: Maximum tokens to generate
             temperature: Sampling temperature
-            top_k: Top-k sampling
+            top_k: Top-k sampling (0 to disable)
+            top_p: Nucleus sampling threshold
+            use_cache: Whether to use KV cache (faster!)
             
         Returns:
             List of generated token IDs
         """
         generated = list(input_ids)
         
-        for _ in range(max_new_tokens):
-            # Truncate to max sequence length
-            context = generated[-self.config.max_seq_len:]
-            
-            # Forward pass
-            logits = self.forward(context)
+        # Clear any previous cache
+        self.clear_cache()
+        
+        # Process prompt first (if using cache)
+        if use_cache and len(input_ids) > 1:
+            # Process all but last token to build cache
+            _ = self.forward(input_ids[:-1], use_cache=True, start_pos=0)
+            # Now process just the last token
+            context = [input_ids[-1]]
+            start_pos = len(input_ids) - 1
+        else:
+            context = input_ids
+            start_pos = 0
+        
+        for i in range(max_new_tokens):
+            if use_cache:
+                # With cache: just process the new token
+                logits = self.forward(context, use_cache=True, start_pos=start_pos)
+            else:
+                # Without cache: process full sequence (slower)
+                context = generated[-self.config.max_seq_len:]
+                logits = self.forward(context, use_cache=False, start_pos=0)
             
             # Get last token's logits
             last_logits = logits.get_row(logits.rows - 1)
@@ -1175,6 +1556,28 @@ class PureTransformer:
             sum_exp = sum(exp_logits)
             probs = [e / sum_exp for e in exp_logits]
             
+            # Top-p (nucleus) filtering
+            if top_p < 1.0:
+                sorted_probs = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)
+                cumsum = 0.0
+                cutoff_idx = len(sorted_probs)
+                for idx, (i, p) in enumerate(sorted_probs):
+                    cumsum += p
+                    if cumsum > top_p:
+                        cutoff_idx = idx + 1
+                        break
+                
+                # Keep only tokens within top_p
+                allowed = set(i for i, _ in sorted_probs[:cutoff_idx])
+                for i in range(len(probs)):
+                    if i not in allowed:
+                        probs[i] = 0.0
+                
+                # Renormalize
+                prob_sum = sum(probs)
+                if prob_sum > 0:
+                    probs = [p / prob_sum for p in probs]
+            
             # Sample from distribution
             r = random.random()
             cumsum = 0.0
@@ -1187,17 +1590,119 @@ class PureTransformer:
             
             generated.append(next_token)
             
+            # Update for next iteration (with cache)
+            if use_cache:
+                context = [next_token]
+                start_pos = len(generated) - 1
+            
             # Stop at EOS (assuming token 0 or 2 is EOS)
             if next_token in [0, 2]:
                 break
         
+        self.clear_cache()
         return generated
+    
+    def generate_stream(
+        self,
+        input_ids: List[int],
+        max_new_tokens: int = 50,
+        temperature: float = 1.0,
+        top_k: int = 50,
+        top_p: float = 0.9
+    ):
+        """
+        Generate tokens with streaming (yields tokens one at a time).
+        
+        This is like generate() but yields each token as it's generated,
+        so you can display output in real-time.
+        
+        Yields:
+            Token IDs one at a time
+        """
+        generated = list(input_ids)
+        
+        # Clear any previous cache
+        self.clear_cache()
+        
+        # Process prompt first to build cache
+        if len(input_ids) > 1:
+            _ = self.forward(input_ids[:-1], use_cache=True, start_pos=0)
+            context = [input_ids[-1]]
+            start_pos = len(input_ids) - 1
+        else:
+            context = input_ids
+            start_pos = 0
+        
+        for i in range(max_new_tokens):
+            logits = self.forward(context, use_cache=True, start_pos=start_pos)
+            last_logits = logits.get_row(logits.rows - 1)
+            
+            # Temperature
+            if temperature != 1.0:
+                last_logits = [l / temperature for l in last_logits]
+            
+            # Top-k
+            if top_k > 0:
+                indexed = list(enumerate(last_logits))
+                indexed.sort(key=lambda x: x[1], reverse=True)
+                top_indices = set(i for i, _ in indexed[:top_k])
+                for i in range(len(last_logits)):
+                    if i not in top_indices:
+                        last_logits[i] = -1e9
+            
+            # Softmax
+            max_logit = max(last_logits)
+            exp_logits = [math.exp(l - max_logit) for l in last_logits]
+            sum_exp = sum(exp_logits)
+            probs = [e / sum_exp for e in exp_logits]
+            
+            # Top-p
+            if top_p < 1.0:
+                sorted_probs = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)
+                cumsum = 0.0
+                cutoff_idx = len(sorted_probs)
+                for idx, (tok_i, p) in enumerate(sorted_probs):
+                    cumsum += p
+                    if cumsum > top_p:
+                        cutoff_idx = idx + 1
+                        break
+                allowed = set(i for i, _ in sorted_probs[:cutoff_idx])
+                for i in range(len(probs)):
+                    if i not in allowed:
+                        probs[i] = 0.0
+                prob_sum = sum(probs)
+                if prob_sum > 0:
+                    probs = [p / prob_sum for p in probs]
+            
+            # Sample
+            r = random.random()
+            cumsum = 0.0
+            next_token = 0
+            for i, p in enumerate(probs):
+                cumsum += p
+                if r < cumsum:
+                    next_token = i
+                    break
+            
+            generated.append(next_token)
+            yield next_token  # Stream the token!
+            
+            # Update for next iteration
+            context = [next_token]
+            start_pos = len(generated) - 1
+            
+            # Stop at EOS
+            if next_token in [0, 2]:
+                break
+        
+        self.clear_cache()
     
     def parameters(self) -> List[Matrix]:
         """Get all model parameters."""
         params = []
         params.extend(self.token_embedding.parameters())
-        params.extend(self.position_embedding.parameters())
+        if self.position_embedding is not None:
+            params.extend(self.position_embedding.parameters())
         for block in self.blocks:
             params.extend(block.parameters())
         params.extend(self.final_norm.parameters())
@@ -1208,7 +1713,8 @@ class PureTransformer:
         """Get all gradients."""
         grads = []
         grads.extend(self.token_embedding.gradients())
-        grads.extend(self.position_embedding.gradients())
+        if self.position_embedding is not None:
+            grads.extend(self.position_embedding.gradients())
         for block in self.blocks:
             grads.extend(block.gradients())
         grads.extend(self.final_norm.gradients())
@@ -1242,7 +1748,11 @@ class PureTransformer:
             "n_heads": self.config.n_heads,
             "n_layers": self.config.n_layers,
             "d_ff": self.config.d_ff,
-            "max_seq_len": self.config.max_seq_len
+            "max_seq_len": self.config.max_seq_len,
+            "n_kv_heads": self.config.n_kv_heads,
+            "use_rope": self.config.use_rope,
+            "use_swiglu": self.config.use_swiglu,
+            "use_gqa": self.config.use_gqa
         }
         
         with open(path, 'w') as f:
@@ -1763,6 +2273,396 @@ def forward_batch(model: 'PureTransformer', batch: List[List[int]], n_workers: i
         return [model.forward(seq) for seq in batch]
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# TOKENIZER INTEGRATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class PureTokenizer:
+    """
+    Simple tokenizer wrapper that works with PureTransformer.
+    
+    Can use ForgeAI's tokenizer if available, or falls back to simple splitting.
+    """
+    
+    def __init__(self, vocab_size: int = 1000):
+        self.vocab_size = vocab_size
+        self._forge_tokenizer = None
+        self._simple_vocab: Dict[str, int] = {}
+        self._simple_vocab_rev: Dict[int, str] = {}
+        self._loaded = False
+    
+    def load(self) -> bool:
+        """Load tokenizer - try ForgeAI first, fall back to simple."""
+        # Try to load ForgeAI tokenizer
+        try:
+            from ..core.tokenizer import get_tokenizer
+            self._forge_tokenizer = get_tokenizer()
+            self.vocab_size = self._forge_tokenizer.vocab_size
+            self._loaded = True
+            return True
+        except Exception:
+            pass
+        
+        # Fall back to simple character/word tokenizer
+        self._build_simple_vocab()
+        self._loaded = True
+        return True
+    
+    def _build_simple_vocab(self):
+        """Build a simple vocabulary for fallback."""
+        # Special tokens
+        self._simple_vocab = {
+            "<pad>": 0,
+            "<unk>": 1,
+            "<eos>": 2,
+            "<bos>": 3,
+            " ": 4,
+            "\n": 5,
+        }
+        
+        # Add ASCII characters
+        idx = len(self._simple_vocab)
+        for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?'-:;\"()[]{}":
+            if idx < self.vocab_size:
+                self._simple_vocab[c] = idx
+                idx += 1
+        
+        # Common words
+        common_words = [
+            "the", "a", "an", "is", "are", "was", "were", "be", "been",
+            "have", "has", "had", "do", "does", "did", "will", "would",
+            "could", "should", "may", "might", "must", "can", "to", "of",
+            "in", "for", "on", "with", "at", "by", "from", "as", "into",
+            "and", "or", "but", "if", "then", "else", "when", "where",
+            "what", "which", "who", "how", "why", "this", "that", "these",
+            "it", "you", "he", "she", "we", "they", "I", "my", "your",
+            "hello", "hi", "yes", "no", "please", "thank", "sorry",
+        ]
+        for word in common_words:
+            if idx < self.vocab_size and word not in self._simple_vocab:
+                self._simple_vocab[word] = idx
+                idx += 1
+        
+        # Build reverse mapping
+        self._simple_vocab_rev = {v: k for k, v in self._simple_vocab.items()}
+    
+    def encode(self, text: str) -> List[int]:
+        """Encode text to token IDs."""
+        if not self._loaded:
+            self.load()
+        
+        if self._forge_tokenizer is not None:
+            return self._forge_tokenizer.encode(text)
+        
+        # Simple fallback encoding
+        tokens = []
+        tokens.append(self._simple_vocab.get("<bos>", 3))
+        
+        # Try word-level first, fall back to character
+        words = text.split()
+        for word in words:
+            if word in self._simple_vocab:
+                tokens.append(self._simple_vocab[word])
+            else:
+                # Character-level fallback
+                for c in word:
+                    tokens.append(self._simple_vocab.get(c, 1))  # <unk>
+            tokens.append(self._simple_vocab.get(" ", 4))
+        
+        return tokens
+    
+    def decode(self, ids: List[int]) -> str:
+        """Decode token IDs to text."""
+        if not self._loaded:
+            self.load()
+        
+        if self._forge_tokenizer is not None:
+            return self._forge_tokenizer.decode(ids)
+        
+        # Simple fallback decoding
+        chars = []
+        for id in ids:
+            if id in [0, 2, 3]:  # Skip special tokens
+                continue
+            token = self._simple_vocab_rev.get(id, "")
+            chars.append(token)
+        
+        return "".join(chars)
+
+
+class PureChat:
+    """
+    Chat interface for PureTransformer.
+    
+    Handles conversation formatting, tokenization, and generation.
+    """
+    
+    def __init__(self, model: 'PureTransformer', tokenizer: Optional[PureTokenizer] = None):
+        self.model = model
+        self.tokenizer = tokenizer or PureTokenizer(model.config.vocab_size)
+        self.tokenizer.load()
+        self.history: List[Dict[str, str]] = []
+    
+    def chat(
+        self, 
+        message: str, 
+        max_tokens: int = 100,
+        temperature: float = 0.7,
+        system_prompt: str = "You are a helpful AI assistant."
+    ) -> str:
+        """
+        Generate a response to a message.
+        
+        Args:
+            message: User message
+            max_tokens: Maximum response tokens
+            temperature: Sampling temperature
+            system_prompt: System prompt for context
+            
+        Returns:
+            Model's response text
+        """
+        # Format conversation
+        prompt = f"{system_prompt}\n\nUser: {message}\nAssistant:"
+        
+        # Encode
+        input_ids = self.tokenizer.encode(prompt)
+        
+        # Truncate if too long
+        max_input = self.model.config.max_seq_len - max_tokens
+        if len(input_ids) > max_input:
+            input_ids = input_ids[-max_input:]
+        
+        # Generate
+        output_ids = self.model.generate(
+            input_ids,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+            top_k=50,
+            top_p=0.9
+        )
+        
+        # Get only the new tokens
+        new_ids = output_ids[len(input_ids):]
+        
+        # Decode
+        response = self.tokenizer.decode(new_ids)
+        
+        # Update history
+        self.history.append({"role": "user", "content": message})
+        self.history.append({"role": "assistant", "content": response})
+        
+        return response
+    
+    def clear_history(self):
+        """Clear conversation history."""
+        self.history = []
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FORGE PYTORCH WEIGHT LOADING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def load_forge_weights(model: 'PureTransformer', checkpoint_path: Path) -> bool:
+    """
+    Load weights from a trained ForgeAI PyTorch model.
+    
+    Args:
+        model: PureTransformer to load weights into
+        checkpoint_path: Path to PyTorch .pt or .pth file
+        
+    Returns:
+        True if successful
+    """
+    checkpoint_path = Path(checkpoint_path)
+    
+    if not checkpoint_path.exists():
+        print(f"Checkpoint not found: {checkpoint_path}")
+        return False
+    
+    try:
+        import torch
+        state_dict = torch.load(checkpoint_path, map_location='cpu')
+        
+        # Handle nested state dict
+        if 'model_state_dict' in state_dict:
+            state_dict = state_dict['model_state_dict']
+        elif 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        
+        loaded_count = 0
+        
+        def to_matrix(tensor) -> Matrix:
+            """Convert tensor to Matrix."""
+            arr = tensor.detach().cpu().numpy()
+            if len(arr.shape) == 1:
+                return Matrix(1, len(arr), arr.tolist())
+            return Matrix(arr.shape[0], arr.shape[1], arr.flatten().tolist())
+        
+        # Load embeddings
+        for key, tensor in state_dict.items():
+            try:
+                # Token embeddings
+                if 'tok_emb' in key and 'weight' in key:
+                    mat = to_matrix(tensor)
+                    if mat.rows <= model.token_embedding.num_embeddings:
+                        # Copy rows that fit
+                        for i in range(min(mat.rows, model.token_embedding.num_embeddings)):
+                            model.token_embedding.weight.set_row(i, mat.get_row(i)[:model.config.d_model])
+                        loaded_count += 1
+                        print(f"  Loaded: {key}")
+                
+                # Attention weights
+                elif 'attention' in key or 'attn' in key:
+                    # Parse layer index
+                    import re
+                    layer_match = re.search(r'layers?\.?(\d+)', key)
+                    if layer_match:
+                        layer_idx = int(layer_match.group(1))
+                        if layer_idx < len(model.blocks):
+                            block = model.blocks[layer_idx]
+                            
+                            if 'wq' in key or 'q_proj' in key:
+                                mat = to_matrix(tensor)
+                                block.attention.wq.weight = mat
+                                loaded_count += 1
+                            elif 'wk' in key or 'k_proj' in key:
+                                mat = to_matrix(tensor)
+                                block.attention.wk.weight = mat
+                                loaded_count += 1
+                            elif 'wv' in key or 'v_proj' in key:
+                                mat = to_matrix(tensor)
+                                block.attention.wv.weight = mat
+                                loaded_count += 1
+                            elif 'wo' in key or 'o_proj' in key:
+                                mat = to_matrix(tensor)
+                                block.attention.wo.weight = mat
+                                loaded_count += 1
+                
+                # FFN weights
+                elif 'ffn' in key or 'feed_forward' in key or 'mlp' in key:
+                    layer_match = re.search(r'layers?\.?(\d+)', key)
+                    if layer_match:
+                        layer_idx = int(layer_match.group(1))
+                        if layer_idx < len(model.blocks):
+                            block = model.blocks[layer_idx]
+                            
+                            if 'w1' in key or 'gate' in key:
+                                mat = to_matrix(tensor)
+                                if block.ffn.use_swiglu:
+                                    block.ffn.w1.weight = mat
+                                loaded_count += 1
+                            elif 'w2' in key or 'down' in key:
+                                mat = to_matrix(tensor)
+                                if block.ffn.use_swiglu:
+                                    block.ffn.w2.weight = mat
+                                else:
+                                    block.ffn.down_proj.weight = mat
+                                loaded_count += 1
+                            elif 'w3' in key or 'up' in key:
+                                mat = to_matrix(tensor)
+                                if block.ffn.use_swiglu:
+                                    block.ffn.w3.weight = mat
+                                else:
+                                    block.ffn.up_proj.weight = mat
+                                loaded_count += 1
+                
+                # Layer norms
+                elif 'norm' in key and 'gamma' in key or 'weight' in key:
+                    layer_match = re.search(r'layers?\.?(\d+)', key)
+                    if layer_match:
+                        layer_idx = int(layer_match.group(1))
+                        if layer_idx < len(model.blocks):
+                            block = model.blocks[layer_idx]
+                            mat = to_matrix(tensor)
+                            if 'attn' in key:
+                                block.attn_norm.gamma = mat
+                            elif 'ffn' in key:
+                                block.ffn_norm.gamma = mat
+                            loaded_count += 1
+                
+                # Final norm
+                elif 'final_norm' in key or 'ln_f' in key:
+                    mat = to_matrix(tensor)
+                    model.final_norm.gamma = mat
+                    loaded_count += 1
+                
+                # Output projection
+                elif 'output' in key or 'lm_head' in key:
+                    mat = to_matrix(tensor)
+                    model.output_proj.weight = mat
+                    loaded_count += 1
+                    
+            except Exception as e:
+                print(f"  Warning: Could not load {key}: {e}")
+        
+        print(f"Loaded {loaded_count} weight tensors from {checkpoint_path}")
+        return loaded_count > 0
+        
+    except ImportError:
+        print("PyTorch not available - cannot load .pt/.pth files")
+        return False
+    except Exception as e:
+        print(f"Error loading weights: {e}")
+        return False
+
+
+def create_from_forge_checkpoint(checkpoint_path: Path, size: str = "auto") -> Optional['PureTransformer']:
+    """
+    Create a PureTransformer and load weights from a Forge checkpoint.
+    
+    Args:
+        checkpoint_path: Path to checkpoint file
+        size: Model size or "auto" to detect from checkpoint
+        
+    Returns:
+        PureTransformer with loaded weights, or None if failed
+    """
+    checkpoint_path = Path(checkpoint_path)
+    
+    # Try to detect model size from checkpoint
+    if size == "auto":
+        try:
+            import torch
+            state_dict = torch.load(checkpoint_path, map_location='cpu')
+            if 'config' in state_dict:
+                cfg = state_dict['config']
+                # Map dim to size
+                dim = cfg.get('dim', cfg.get('d_model', 256))
+                if dim <= 64:
+                    size = "nano"
+                elif dim <= 128:
+                    size = "micro"
+                elif dim <= 256:
+                    size = "tiny"
+                elif dim <= 512:
+                    size = "small"
+                else:
+                    size = "medium"
+            else:
+                size = "small"
+        except Exception:
+            size = "small"
+    
+    # Create model
+    SIZE_CONFIGS = {
+        "nano": PureConfig(vocab_size=1000, d_model=64, n_heads=2, n_layers=2, d_ff=128),
+        "micro": PureConfig(vocab_size=2000, d_model=128, n_heads=4, n_layers=4, d_ff=256),
+        "tiny": PureConfig(vocab_size=4000, d_model=256, n_heads=4, n_layers=6, d_ff=512),
+        "small": PureConfig(vocab_size=8000, d_model=512, n_heads=8, n_layers=8, d_ff=1024),
+        "medium": PureConfig(vocab_size=16000, d_model=768, n_heads=12, n_layers=12, d_ff=2048),
+    }
+    
+    config = SIZE_CONFIGS.get(size, SIZE_CONFIGS["small"])
+    model = PureTransformer(config)
+    
+    # Load weights
+    if load_forge_weights(model, checkpoint_path):
+        return model
+    
+    return None
+
+
 if __name__ == "__main__":
     # Show runtime info
     info = get_python_info()
@@ -1780,3 +2680,234 @@ if __name__ == "__main__":
     print(f"Serial: {results['serial_seconds']:.4f}s")
     print(f"Parallel: {results['parallel_seconds']:.4f}s")
     print(f"Speedup: {results['speedup']:.2f}x on {results['cpu_cores']} cores")
+
+
+def train_example():
+    """
+    Example of training a tiny model using pure Python.
+    
+    📖 HOW TRAINING WORKS:
+    
+    1. FORWARD PASS: Input → Model → Predictions
+       "The cat sat" → PureTransformer → probability distribution over vocabulary
+    
+    2. COST FUNCTION (cross_entropy_loss):
+       Measures how wrong the predictions are.
+       If model predicts "dog" when answer is "mat", cost is HIGH.
+       If model predicts "mat" when answer is "mat", cost is LOW.
+       
+       Cost = -log(probability of correct answer)
+       
+    3. BACKWARD PASS (backpropagation):
+       Compute gradients: how much each weight contributed to the error.
+       This uses calculus (chain rule) to trace error back through layers.
+       
+    4. OPTIMIZER (Adam/SGD):
+       Update weights in direction that reduces cost.
+       weight_new = weight_old - learning_rate * gradient
+       
+    5. REPEAT:
+       Do this for many examples until cost is low!
+    
+    Returns:
+        List of loss values during training
+    """
+    import time
+    print("=" * 60)
+    print("PURE PYTHON TRAINING EXAMPLE")
+    print("=" * 60)
+    
+    # Create tiny model
+    config = PureConfig(
+        vocab_size=50,
+        d_model=32,
+        n_heads=2,
+        n_layers=1,
+        d_ff=64,
+        max_seq_len=16
+    )
+    
+    model = PureTransformer(config)
+    print(f"\nModel: {model.count_parameters():,} parameters")
+    
+    # Create optimizer
+    optimizer = PureAdam(model.parameters(), lr=0.01)
+    
+    # Simple training data: predict next token
+    # Pattern: [1, 2, 3, 4] -> [2, 3, 4, 5]
+    training_examples = [
+        ([1, 2, 3, 4], [2, 3, 4, 5]),
+        ([5, 6, 7, 8], [6, 7, 8, 9]),
+        ([10, 11, 12, 13], [11, 12, 13, 14]),
+        ([20, 21, 22, 23], [21, 22, 23, 24]),
+    ]
+    
+    print(f"Training examples: {len(training_examples)}")
+    print("\nTraining pattern: predict next number in sequence")
+    print("  Input:  [1, 2, 3, 4]")
+    print("  Target: [2, 3, 4, 5]")
+    
+    losses = []
+    n_epochs = 20
+    
+    print(f"\nTraining for {n_epochs} epochs...")
+    start_time = time.time()
+    
+    for epoch in range(n_epochs):
+        epoch_loss = 0.0
+        
+        for inputs, targets in training_examples:
+            # FORWARD PASS
+            logits = model.forward(inputs)
+            
+            # COMPUTE LOSS (cost function)
+            loss, grad = cross_entropy_loss(logits, targets)
+            epoch_loss += loss
+            
+            # BACKWARD PASS (compute gradients)
+            # Note: Full backprop through transformer is complex
+            # This is simplified - just updates output layer
+            model.output_proj.backward(grad)
+            
+            # OPTIMIZER STEP (update weights)
+            optimizer.step(model.output_proj.gradients())
+        
+        avg_loss = epoch_loss / len(training_examples)
+        losses.append(avg_loss)
+        
+        if epoch % 5 == 0 or epoch == n_epochs - 1:
+            print(f"  Epoch {epoch+1:3d}: Loss = {avg_loss:.4f}")
+    
+    elapsed = time.time() - start_time
+    print(f"\nTraining completed in {elapsed:.2f}s")
+    print(f"Final loss: {losses[-1]:.4f}")
+    print(f"Loss reduction: {losses[0]:.4f} -> {losses[-1]:.4f} ({100*(losses[0]-losses[-1])/losses[0]:.1f}% improvement)")
+    
+    # Test generation
+    print("\n" + "=" * 60)
+    print("TESTING TRAINED MODEL")
+    print("=" * 60)
+    
+    test_input = [1, 2, 3]
+    generated = model.generate(test_input, max_new_tokens=5, temperature=0.5)
+    print(f"Input: {test_input}")
+    print(f"Generated: {generated}")
+    print(f"Expected pattern: [1, 2, 3, 4, 5, 6, 7, 8]")
+    
+    return losses
+
+
+def demonstrate_cost_function():
+    """
+    Demonstrate how the cost function (cross-entropy loss) works.
+    
+    📖 COST FUNCTION EXPLAINED:
+    
+    The cost function measures prediction quality:
+    
+    GOOD prediction (high probability for correct answer):
+        P(correct) = 0.9  →  Cost = -log(0.9) = 0.105  (LOW)
+    
+    BAD prediction (low probability for correct answer):
+        P(correct) = 0.1  →  Cost = -log(0.1) = 2.303  (HIGH)
+    
+    TERRIBLE prediction:
+        P(correct) = 0.01 →  Cost = -log(0.01) = 4.605 (VERY HIGH)
+    
+    Training minimizes this cost by adjusting weights!
+    """
+    print("=" * 60)
+    print("COST FUNCTION (CROSS-ENTROPY LOSS) DEMONSTRATION")
+    print("=" * 60)
+    
+    # Create fake logits (model outputs before softmax)
+    # vocab_size = 5, seq_len = 1
+    
+    print("\n📖 What is cross-entropy loss?")
+    print("   It measures how 'surprised' we are by the correct answer.")
+    print("   Lower loss = better prediction = model learned!")
+    
+    print("\n" + "-" * 60)
+    print("SCENARIO 1: Model is confident and CORRECT")
+    print("-" * 60)
+    
+    # Logits that strongly favor token 3
+    good_logits = Matrix.from_2d([
+        [0.1, 0.1, 0.1, 5.0, 0.1]  # Strongly predicts token 3
+    ])
+    target = [3]  # Correct answer is token 3
+    
+    loss, grad = cross_entropy_loss(good_logits, target)
+    print(f"Logits: [0.1, 0.1, 0.1, 5.0, 0.1]")
+    print(f"Target: token 3")
+    print(f"Loss: {loss:.4f} (LOW = good!)")
+    
+    print("\n" + "-" * 60)
+    print("SCENARIO 2: Model is confident but WRONG")
+    print("-" * 60)
+    
+    # Logits that strongly favor wrong token
+    bad_logits = Matrix.from_2d([
+        [5.0, 0.1, 0.1, 0.1, 0.1]  # Strongly predicts token 0
+    ])
+    target = [3]  # But correct answer is token 3!
+    
+    loss, grad = cross_entropy_loss(bad_logits, target)
+    print(f"Logits: [5.0, 0.1, 0.1, 0.1, 0.1]")
+    print(f"Target: token 3")
+    print(f"Loss: {loss:.4f} (HIGH = bad prediction!)")
+    
+    print("\n" + "-" * 60)
+    print("SCENARIO 3: Model is uncertain (uniform)")
+    print("-" * 60)
+    
+    # Uniform logits - model has no idea
+    uncertain_logits = Matrix.from_2d([
+        [1.0, 1.0, 1.0, 1.0, 1.0]  # Equal probability for all
+    ])
+    target = [3]
+    
+    loss, grad = cross_entropy_loss(uncertain_logits, target)
+    print(f"Logits: [1.0, 1.0, 1.0, 1.0, 1.0]")
+    print(f"Target: token 3")
+    print(f"Loss: {loss:.4f} (MEDIUM = random guess)")
+    print(f"Note: -log(1/5) = -log(0.2) = {-math.log(0.2):.4f}")
+    
+    print("\n" + "=" * 60)
+    print("KEY INSIGHT:")
+    print("=" * 60)
+    print("Training adjusts weights to MINIMIZE the loss.")
+    print("Lower loss = model assigns higher probability to correct answers!")
+
+
+# Run demonstrations when file is executed directly
+if __name__ == "__main__":
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--train":
+        train_example()
+    elif len(sys.argv) > 1 and sys.argv[1] == "--cost":
+        demonstrate_cost_function()
+    else:
+        # Default: run basic test
+        # Show runtime info
+        info = get_python_info()
+        print(f"Python: {info['implementation']} {info['version']}")
+        print(f"Platform: {info['platform']} {info['machine']}")
+        print(f"CPU Cores: {info['cpu_count']}")
+        print()
+        
+        # Run tests
+        test_pure_transformer()
+        
+        # Benchmark
+        print("\nBenchmarking matmul...")
+        results = benchmark_matmul(128, 3)
+        print(f"Serial: {results['serial_seconds']:.4f}s")
+        print(f"Parallel: {results['parallel_seconds']:.4f}s")
+        print(f"Speedup: {results['speedup']:.2f}x on {results['cpu_cores']} cores")
+        
+        print("\n" + "=" * 60)
+        print("Run with --train for training example")
+        print("Run with --cost for cost function demo")
+        print("=" * 60)

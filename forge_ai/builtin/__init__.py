@@ -40,6 +40,14 @@ from .neural_network import (
     PureAttention, PureFeedForward, PureTransformerBlock,
     # Optimizers
     PureSGD, PureAdam,
+    # Chat & Tokenizer
+    PureTokenizer, PureChat,
+    # Forge integration
+    load_forge_weights, create_from_forge_checkpoint,
+    # Loss
+    cross_entropy_loss,
+    # RoPE
+    RoPEFrequencies, apply_rope,
 )
 
 __all__ = [
@@ -80,6 +88,17 @@ __all__ = [
     # Optimizers
     'PureSGD',
     'PureAdam',
+    # Chat & Tokenizer
+    'PureTokenizer',
+    'PureChat',
+    # Forge integration
+    'load_forge_weights',
+    'create_from_forge_checkpoint',
+    # Loss
+    'cross_entropy_loss',
+    # RoPE
+    'RoPEFrequencies',
+    'apply_rope',
 ]
 
 
