@@ -3,6 +3,9 @@ ForgeAI Web Server - FastAPI Implementation
 
 Modern async web server with WebSocket support for real-time chat.
 Provides full REST API and mobile-responsive interface.
+
+NOTE: Requires FastAPI to be installed:
+    pip install fastapi uvicorn python-multipart
 """
 
 import logging
@@ -11,16 +14,44 @@ from typing import Optional, List
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, status
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+# Check for FastAPI availability
+try:
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, status
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel
+    FASTAPI_AVAILABLE = True
+except ImportError:
+    FASTAPI_AVAILABLE = False
+    # Create stub classes so the module can be imported
+    FastAPI = None
+    WebSocket = None
+    WebSocketDisconnect = Exception
+    Depends = lambda x: x
+    HTTPException = Exception
+    Query = lambda *a, **k: None
+    status = type('status', (), {'HTTP_401_UNAUTHORIZED': 401})()
+    StaticFiles = None
+    FileResponse = None
+    HTMLResponse = None
+    CORSMiddleware = None
+    
+    # Stub Pydantic BaseModel
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
 
 from .auth import get_auth, WebAuth
 from .discovery import LocalDiscovery, get_local_ip
 
 logger = logging.getLogger(__name__)
+
+# Check if FastAPI is available and warn if not
+if not FASTAPI_AVAILABLE:
+    logger.warning("FastAPI not installed. Web server functionality disabled. "
+                   "Install with: pip install fastapi uvicorn python-multipart")
 
 # =============================================================================
 # Security Constants
@@ -122,6 +153,12 @@ class ForgeWebServer:
             port: Port to listen on
             require_auth: Whether to require authentication
         """
+        if not FASTAPI_AVAILABLE:
+            raise ImportError(
+                "FastAPI is required for the web server. "
+                "Install with: pip install fastapi uvicorn python-multipart"
+            )
+        
         self.app = FastAPI(title="ForgeAI Web", version="1.0.0")
         self.host = host
         self.port = port

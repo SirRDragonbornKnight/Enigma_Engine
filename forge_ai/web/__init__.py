@@ -6,7 +6,13 @@ try:
 except Exception:
     run_web = None
 
-from .server import ForgeWebServer, create_web_server
+# FastAPI server (optional - requires fastapi package)
+try:
+    from .server import ForgeWebServer, create_web_server
+except ImportError:
+    ForgeWebServer = None
+    create_web_server = None
+
 from .auth import WebAuth, get_auth
 from .discovery import LocalDiscovery, get_local_ip
 

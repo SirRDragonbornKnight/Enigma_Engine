@@ -58,7 +58,7 @@ import threading
 import queue
 import time
 from typing import Optional, Callable, List
-from dataclass import dataclass
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

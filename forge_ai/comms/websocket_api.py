@@ -41,6 +41,7 @@ try:
     WEBSOCKETS_AVAILABLE = True
 except ImportError:
     WEBSOCKETS_AVAILABLE = False
+    WebSocketServerProtocol = None  # Type stub for annotations
     logger.warning("websockets not installed. Install with: pip install websockets")
 
 
