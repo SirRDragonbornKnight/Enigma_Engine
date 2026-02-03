@@ -30,8 +30,9 @@ from .neural_network import (
     PureTransformer, PureConfig, Matrix,
     set_backend, get_backend, should_use_pure_backend,
     get_model_for_size, benchmark_matmul,
-    # PyPy detection
-    is_pypy, get_python_info, PYPY_MODE,
+    # Acceleration detection
+    is_pypy, is_numba_available, get_python_info, get_acceleration_status,
+    PYPY_MODE, NUMBA_AVAILABLE,
     # Weight conversion
     convert_pytorch_to_pure, convert_pure_to_pytorch,
     save_pure_model, load_pure_model,
@@ -70,10 +71,13 @@ __all__ = [
     'should_use_pure_backend',
     'get_model_for_size',
     'benchmark_matmul',
-    # PyPy detection
+    # Acceleration detection
     'is_pypy',
+    'is_numba_available',
     'get_python_info',
+    'get_acceleration_status',
     'PYPY_MODE',
+    'NUMBA_AVAILABLE',
     # Weight conversion
     'convert_pytorch_to_pure',
     'convert_pure_to_pytorch',
