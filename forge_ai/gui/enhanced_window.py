@@ -1,66 +1,66 @@
 """
 ================================================================================
-🖥️ ENHANCED MAIN WINDOW - THE GUI CASTLE
+               CHAPTER 5: THE CASTLE - YOUR COMMAND CENTER
 ================================================================================
 
-This is the BIG main application window! The graphical kingdom where users
-interact with ForgeAI through beautiful tabs, buttons, and visualizations.
+    "Welcome to the Grand Hall, where all paths converge."
 
-📍 FILE: forge_ai/gui/enhanced_window.py
-🏷️ TYPE: Main GUI Application (PyQt5)
-🎯 MAIN CLASSES: EnhancedMainWindow, AIGenerationWorker
+You have arrived at the heart of the kingdom! This is the MAIN WINDOW -
+the visual throne room where you control everything in ForgeAI.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  WINDOW LAYOUT:                                                             │
-│                                                                             │
-│  ╔═══════════════════════════════════════════════════════════════╗          │
-│  ║  ForgeAI - Your Model Name                      [-][□][X]║          │
-│  ╠═══════════════════════════════════════════════════════════════╣          │
-│  ║ [💬Chat][🎨Image][💻Code][🎬Video][🔊Audio][🎲3D][⚙️]... ║          │
-│  ╠═══════════════════════════════════════════════════════════════╣          │
-│  ║                                                               ║          │
-│  ║                    Tab Content Area                           ║          │
-│  ║                                                               ║          │
-│  ╠═══════════════════════════════════════════════════════════════╣          │
-│  ║  [Status: Model loaded | GPU: Available | Theme: Dark]        ║          │
-│  ╚═══════════════════════════════════════════════════════════════╝          │
-└─────────────────────────────────────────────────────────────────────────────┘
+WHY THIS FILE MATTERS:
+    Every button you click, every tab you switch, every message you type
+    in the GUI - it all happens here. This is the LARGEST file in ForgeAI
+    because it connects EVERYTHING together into one beautiful interface.
 
-⚡ FEATURES:
-    • First-run setup wizard
-    • Model selection and management
-    • All generation tabs (Chat, Image, Code, Video, Audio, 3D)
-    • Dark/Light/Shadow/Midnight themes
-    • Avatar control panel
-    • Training interface
-    • Per-AI conversation history
-    • Background AI worker threads (keeps GUI responsive)
+THE GRAND TOUR:
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║  ForgeAI - [Your AI's Name]                      [_][O][X]   ║
+    ╠═══════════════════════════════════════════════════════════════╣
+    ║  [Chat] [Image] [Code] [Video] [Audio] [3D] [Train] [+]      ║
+    ║  ─────────────────────────────────────────────────────────── ║
+    ║                                                               ║
+    ║    Whatever tab you select appears here.                     ║
+    ║    This is where the magic happens!                          ║
+    ║                                                               ║
+    ║    Each tab is its own mini-adventure:                       ║
+    ║    • Chat Tab    = Talk to your AI                           ║
+    ║    • Image Tab   = Create artwork                            ║
+    ║    • Code Tab    = Write programs                            ║
+    ║    • Video Tab   = Generate movies                           ║
+    ║    • Audio Tab   = Text to speech                            ║
+    ║    • 3D Tab      = Model generation                          ║
+    ║    • Train Tab   = Teach your AI new things                  ║
+    ║                                                               ║
+    ╠═══════════════════════════════════════════════════════════════╣
+    ║  Status: Ready | Model: small | Theme: Dark                  ║
+    ╚═══════════════════════════════════════════════════════════════╝
 
-💬 AIGenerationWorker CLASS:
-    Runs AI generation in background thread to keep GUI responsive.
-    Signals: finished, error, thinking, stopped
+BEHIND THE SCENES (For Developers):
+    This file uses PyQt5 to create the window. Key classes:
+    
+    • EnhancedMainWindow  - The castle itself (QMainWindow)
+    • AIGenerationWorker  - Background thread for AI responses
+                           (Keeps GUI responsive while AI thinks)
 
-🔗 CONNECTED FILES:
-    → LOADS:     forge_ai/gui/tabs/*.py (all tab panels)
-    → USES:      forge_ai/core/inference.py (AI responses)
-    → USES:      forge_ai/memory/manager.py (save conversations)
-    → USES:      forge_ai/avatar/controller.py (avatar control)
-    → USES:      forge_ai/voice/ (TTS/STT)
-    ← USED BY:   run.py --gui (entry point)
+    The window loads all tabs dynamically from forge_ai/gui/tabs/.
+    Each tab handles its own UI and logic.
 
-📖 TABS INCLUDED:
-    • forge_ai/gui/tabs/chat_tab.py      - 💬 Chat
-    • forge_ai/gui/tabs/image_tab.py     - 🎨 Images
-    • forge_ai/gui/tabs/code_tab.py      - 💻 Code
-    • forge_ai/gui/tabs/video_tab.py     - 🎬 Video
-    • forge_ai/gui/tabs/audio_tab.py     - 🔊 Audio
-    • forge_ai/gui/tabs/threed_tab.py    - 🎲 3D Models
-    • forge_ai/gui/tabs/training_tab.py  - 📚 Training
-    • forge_ai/gui/tabs/modules_tab.py   - ⚙️ Modules
-    • forge_ai/gui/tabs/avatar_tab.py    - 🤖 Avatar
-    • forge_ai/gui/tabs/settings_tab.py  - 🔧 Settings
+YOUR QUEST HERE:
+    Want to add a new tab? Create a file in gui/tabs/, then register
+    it in this file's tab loading section. Follow the existing pattern!
 
-📖 SEE ALSO:
+CONNECTED PATHS:
+    All roads lead here:
+        run.py --gui → THIS FILE → loads all tabs
+    
+    This file talks to:
+        → inference.py (AI responses for chat)
+        → memory/manager.py (save conversations)
+        → avatar/controller.py (avatar features)
+        → All tab files in gui/tabs/
+
+SEE ALSO:
     • forge_ai/gui/styles.py       - Theme CSS styles
     • forge_ai/gui/theme_system.py - Theme management
     • data/gui_settings.json       - Saved GUI preferences

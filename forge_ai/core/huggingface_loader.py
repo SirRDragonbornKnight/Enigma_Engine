@@ -774,6 +774,48 @@ class HuggingFaceEngine:
         
         return response
     
+    def chat_with_tools(
+        self,
+        message: str,
+        max_gen: int = 200,
+        temperature: float = 0.7,
+        reset_history: bool = False,
+        **kwargs
+    ) -> str:
+        """
+        Chat with automatic tool routing based on user intent.
+        
+        Uses the UniversalToolRouter which works with ANY model.
+        Tools are triggered by keywords in the user message.
+        
+        Args:
+            message: User message
+            max_gen: Max tokens for response
+            temperature: Sampling temperature
+            reset_history: Clear chat history
+            
+        Returns:
+            Response (either from tool or from model)
+        """
+        if reset_history:
+            self.chat_history = []
+        
+        # Use the universal router that works with any model
+        from .universal_router import chat_with_tools
+        
+        # Create a chat function that includes history
+        def chat_fn(msg, **kw):
+            return self.chat(msg, max_gen=max_gen, temperature=temperature, 
+                           reset_history=False, **kw)
+        
+        response = chat_with_tools(message, chat_fn, **kwargs)
+        
+        # Update history
+        self.chat_history.append({"role": "user", "content": message})
+        self.chat_history.append({"role": "assistant", "content": response})
+        
+        return response
+    
     def reset_history(self):
         """Clear chat history."""
         self.chat_history = []

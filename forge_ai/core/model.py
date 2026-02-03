@@ -1,73 +1,59 @@
 """
 ================================================================================
-🧠 FORGE MODEL - THE UNIVERSAL AI MODEL
+                    CHAPTER 1: THE FORGE - WHERE MINDS ARE BORN
 ================================================================================
 
-This is the HEART of ForgeAI - a production-grade transformer neural network!
-This is where the actual AI "thinking" happens.
+    "In the depths of silicon and mathematics, something awakens..."
 
-📍 FILE: forge_ai/core/model.py
-🏷️ TYPE: Neural Network Architecture
-🎯 MAIN CLASSES: Forge, ForgeConfig
+Welcome, brave explorer. You have reached the most sacred place in all of
+ForgeAI - the FORGE itself. This is where artificial minds are literally 
+CONSTRUCTED, layer by layer, neuron by neuron.
 
-🌟 NEW: UNIVERSAL MODEL FEATURES (Enhanced 2026)
-   • Universal Loading: HuggingFace, Safetensors, GGUF, ONNX support
-   • RoPE Scaling: Linear, Dynamic NTK, YaRN for extended context
-   • Multi-Modal: Vision/Audio encoder integration hooks
-   • LoRA Adapters: Low-rank adaptation for efficient fine-tuning
-   • Speculative Decoding: 2-4x faster generation with draft models
-   • Enhanced KV-Cache: Sliding window, paged attention, quantization
-   • MoE Support: Mixture of Experts configuration
-   
-   See UNIVERSAL_MODEL_GUIDE.md for detailed usage examples!
+WHY THIS FILE MATTERS:
+    Every word your AI speaks, every thought it processes, every creative
+    idea it generates - ALL of it flows through this file. The Forge class
+    is the living brain. Without it, ForgeAI is just empty code.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  ARCHITECTURE DIAGRAM:                                                      │
-│                                                                             │
-│  Input Text → [Tokenizer] → Numbers                                        │
-│       ↓                                                                     │
-│  [Embedding Layer] - Converts numbers to vectors                           │
-│       ↓                                                                     │
-│  [Multi-Modal Projection] (optional) - Vision/Audio → Text space           │
-│       ↓                                                                     │
-│  [Transformer Blocks] × N layers                                           │
-│    ├── RMSNorm (normalization - faster than LayerNorm)                     │
-│    ├── Self-Attention with RoPE (understanding context)                    │
-│    │   └── Optional: Sliding window, paged attention                       │
-│    ├── SwiGLU Activation (better than ReLU!)                               │
-│    │   └── Optional: MoE expert routing                                    │
-│    └── Residual connections                                                │
-│       ↓                                                                     │
-│  [Output Head] → Next word probabilities                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
+THE JOURNEY AHEAD:
+    1. ForgeConfig     - The blueprint (how big? how smart?)
+    2. RMSNorm         - The stabilizer (keeps gradients healthy)
+    3. Attention       - The memory (what to focus on?)
+    4. SwiGLU          - The activation (fire or not fire?)
+    5. TransformerBlock - One layer of thinking
+    6. Forge           - The complete brain!
 
-⚡ CORE FEATURES:
-    • RoPE (Rotary Position Embeddings) - Better position awareness
-    • RMSNorm - Faster and more stable than LayerNorm  
-    • SwiGLU - Superior activation function
-    • GQA (Grouped Query Attention) - Memory efficient
-    • KV-Cache - Fast autoregressive generation
-    • Flash Attention - 2-4x speedup (optional, requires CUDA)
+MAIN QUEST: Create an AI brain that can process language and generate text.
 
-🌐 UNIVERSAL FEATURES:
-    • Load from any format: HF, Safetensors, GGUF, ONNX
-    • RoPE scaling: Extend context 2x-8x (linear/dynamic/yarn)
-    • Multi-modal: Integrate vision/audio with text
-    • LoRA adapters: Efficient fine-tuning and swapping
-    • Speculative decoding: Faster generation with draft models
-    • Enhanced KV-cache: Sliding window, paging, quantization
-    • MoE configuration: Mixture of experts architecture
+DIFFICULTY: EXPERT - This is the most complex file in ForgeAI. Take your time.
 
-📊 MODEL SIZES (17 presets!):
-    ┌────────────┬──────────┬────────────────────────────────┐
-    │ Size       │ Params   │ Best For                       │
-    ├────────────┼──────────┼────────────────────────────────┤
-    │ pi_zero    │ ~500K    │ Raspberry Pi Zero              │
-    │ nano       │ ~1M      │ Embedded/Testing               │
-    │ tiny       │ ~5M      │ Raspberry Pi                   │
-    │ small      │ ~27M     │ Desktop default (RTX 2080)     │
-    │ medium     │ ~85M     │ Good balance (RTX 3080)        │
-    │ large      │ ~200M    │ Quality focus (RTX 4090)       │
+                    ┌──────────────────────────────────────┐
+                    │  Your words go in...                 │
+                    │         ↓                            │
+                    │  [Embedding]  "Words become vectors" │
+                    │         ↓                            │
+                    │  [Transformer x N] "Deep thinking"   │
+                    │         ↓                            │
+                    │  [Output Head]  "Pick next word"     │
+                    │         ↓                            │
+                    │  ...AI response comes out!           │
+                    └──────────────────────────────────────┘
+
+SIDE QUESTS UNLOCKED (2026 Features):
+    + Universal Loading  - Import models from HuggingFace, GGUF, ONNX
+    + RoPE Scaling       - Handle longer conversations (up to 8x context!)  
+    + LoRA Adapters      - Fine-tune without retraining everything
+    + Speculative Decode - Generate 2-4x faster with draft models
+    + Flash Attention    - GPU speedup wizardry (requires CUDA)
+
+CHOOSE YOUR FIGHTER (Model Sizes):
+    | Size    | Power     | Device          | "Class"          |
+    |---------|-----------|-----------------|------------------|
+    | pi_zero | ~500K     | Pi Zero         | "The Apprentice" |
+    | nano    | ~1M       | Embedded        | "The Scout"      |
+    | tiny    | ~5M       | Raspberry Pi    | "The Traveler"   |
+    | small   | ~27M      | Desktop         | "The Knight"     |
+    | medium  | ~85M      | Gaming PC       | "The Wizard"     |
+    | large   | ~200M     | Workstation     | "The Archmage"   |
     │ xl         │ ~600M    │ Multi-GPU                      │
     │ xxl        │ ~1.5B    │ Cloud/Datacenter               │
     │ omega      │ ~70B+    │ Research frontier              │

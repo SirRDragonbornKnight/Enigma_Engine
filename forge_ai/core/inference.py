@@ -1,70 +1,56 @@
 """
 ================================================================================
-⚡ FORGE INFERENCE ENGINE - TALK TO YOUR AI
+                CHAPTER 2: THE ORACLE - SPEAKING WITH YOUR AI
 ================================================================================
 
-This is how you COMMUNICATE with your AI! The ForgeEngine takes your text 
-and generates intelligent responses.
+    "You have built the mind. Now learn to converse with it."
 
-📍 FILE: forge_ai/core/inference.py
-🏷️ TYPE: Text Generation Engine
-🎯 MAIN CLASS: ForgeEngine
+Congratulations, adventurer! If you made it through model.py (Chapter 1),
+you now understand HOW the AI thinks. This chapter teaches you how to
+actually TALK to it.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  GENERATION FLOW:                                                           │
-│                                                                             │
-│  "Hello, how are" → [ForgeEngine] → "you doing today?"                     │
-│         │                 │                                                 │
-│         │     ┌───────────┴───────────┐                                    │
-│         │     │ 1. Tokenize input     │                                    │
-│         │     │ 2. Run through model  │                                    │
-│         │     │ 3. Sample next token  │                                    │
-│         │     │ 4. Repeat until done  │                                    │
-│         │     │ 5. Detokenize output  │                                    │
-│         │     └───────────────────────┘                                    │
-└─────────────────────────────────────────────────────────────────────────────┘
+WHY THIS FILE MATTERS:
+    The Forge (model.py) is just a brain in a jar - powerful but silent.
+    ForgeEngine is the VOICE. It takes your questions, feeds them to the
+    brain, and brings back answers. Every conversation you have with 
+    ForgeAI passes through this file.
 
-⚡ FEATURES:
-    • KV-cache for efficient generation
-    • Multiple sampling: greedy, top-k, top-p, beam search
-    • Streaming output (token by token)
-    • Batch generation
-    • Chat with conversation history
-    • Automatic GPU/CPU selection
+THE MAGIC PROCESS:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  YOU: "What is the meaning of life?"                        │
+    │   │                                                         │
+    │   ↓  (ForgeEngine encodes your words into numbers)          │
+    │  [15496, 318, 262, 3616, ...]                               │
+    │   │                                                         │
+    │   ↓  (Sends numbers through the Forge brain)                │
+    │  [Matrix multiplication magic x millions]                   │
+    │   │                                                         │
+    │   ↓  (Gets probability for each possible next word)         │
+    │  "The" 0.3, "It" 0.2, "42" 0.15, ...                       │
+    │   │                                                         │
+    │   ↓  (Picks one, repeats until done)                        │
+    │  AI: "The meaning of life is to find purpose..."           │
+    └─────────────────────────────────────────────────────────────┘
 
-🎛️ SAMPLING STRATEGIES:
-    • Greedy      - Always pick most likely (deterministic)
-    • Top-K       - Pick from top K most likely tokens
-    • Top-P       - Pick from tokens covering P% probability  
-    • Temperature - Higher = more creative/random
+SPEAKING STYLES (Sampling Strategies):
+    | Style      | Description                | When to Use           |
+    |------------|----------------------------|-----------------------|
+    | Greedy     | Always pick most likely    | Facts, consistency    |
+    | Top-K      | Pick from top K choices    | Creative but coherent |
+    | Top-P      | Pick from top P% probable  | Natural conversation  |
+    | Temperature| Higher = more wild         | Stories, brainstorming|
 
-🔗 CONNECTED FILES:
-    → USES:      forge_ai/core/model.py (Forge - the neural network)
-    → USES:      forge_ai/core/tokenizer.py (text ↔ numbers)
-    → USES:      forge_ai/core/tool_router.py (route to tools)
-    ← USED BY:   forge_ai/gui/tabs/chat_tab.py (chat interface)
-    ← USED BY:   forge_ai/comms/api_server.py (REST API)
-    ← USED BY:   run.py --run (CLI chat)
+YOUR FIRST CONVERSATION:
+    >>> from forge_ai.core.inference import ForgeEngine
+    >>> oracle = ForgeEngine()
+    >>> oracle.chat("Tell me a joke about AI")
+    "Why did the AI go to therapy? Too many neural issues!"
 
-📖 USAGE:
-    from forge_ai.core.inference import ForgeEngine
-    
-    engine = ForgeEngine()  # Auto-loads model
-    
-    # Simple generation
-    response = engine.generate("Hello, my name is")
-    
-    # Streaming (token by token)
-    for token in engine.stream_generate("Tell me a story"):
-        print(token, end="", flush=True)
-    
-    # Chat mode (with history)
-    response = engine.chat("What is AI?")
-
-📖 SEE ALSO:
-    • forge_ai/core/model.py      - The neural network being used
-    • forge_ai/core/tool_router.py - Route requests to specialized tools
-    • forge_ai/memory/manager.py   - Save conversations
+CONNECTED PATHS:
+    You came from → model.py (Chapter 1: The Brain)
+    You can go to → tool_router.py (Chapter 3: The Dispatcher)
+                  → chat_tab.py (The GUI interface)
+                  → api_server.py (REST API for remote access)
 """
 from __future__ import annotations
 
@@ -1681,6 +1667,51 @@ class ForgeEngine:
                 response = response.split("Assistant:")[-1].strip()
 
         return response
+
+    def chat_with_tools(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        system_prompt: Optional[str] = None,
+        max_gen: int = 200,
+        fallback_to_chat: bool = True,
+        **kwargs
+    ) -> str:
+        """
+        Chat with automatic tool routing based on user intent.
+        
+        Uses the UniversalToolRouter which detects tool intent from
+        keywords in the user message. Works regardless of whether the
+        model was trained to use tools.
+        
+        Args:
+            message: User's message
+            history: Conversation history
+            system_prompt: Optional system prompt
+            max_gen: Maximum tokens to generate
+            fallback_to_chat: If tool fails, use chat instead
+            **kwargs: Additional generation parameters
+            
+        Returns:
+            Response (either from tool execution or chat)
+        """
+        from .universal_router import chat_with_tools as universal_chat
+        
+        # Create a chat function that preserves history/system prompt
+        def chat_fn(msg, **kw):
+            return self.chat(
+                msg, 
+                history=history, 
+                system_prompt=system_prompt,
+                max_gen=max_gen, 
+                **kwargs
+            )
+        
+        return universal_chat(
+            message, 
+            chat_fn, 
+            fallback_to_chat=fallback_to_chat
+        )
 
     def stream_chat(
         self,

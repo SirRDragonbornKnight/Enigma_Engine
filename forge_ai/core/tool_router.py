@@ -1,67 +1,65 @@
 """
 ================================================================================
-🛠️ TOOL ROUTER - TRAFFIC CONTROLLER FOR AI REQUESTS
+            CHAPTER 3: THE DISPATCHER - EVERY REQUEST FINDS ITS HOME
 ================================================================================
 
-The Router is like a traffic controller - it figures out WHAT the user wants
-and sends their request to the RIGHT specialized model or tool!
+    "In the grand crossroads, all paths begin and all intentions are revealed."
 
-📍 FILE: forge_ai/core/tool_router.py
-🏷️ TYPE: Request Routing & Tool Dispatch
-🎯 MAIN CLASSES: ToolRouter, RoutingRule, ModelAssignment
+Welcome to the ROUTING HUB! When a user speaks to ForgeAI, this file decides
+WHERE that request should go. Is it a question? Chat handles it. A drawing
+request? Image generation. Code? The coding assistant.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  ROUTING FLOW:                                                              │
-│                                                                             │
-│  "Draw me a cat"                                                           │
-│         │                                                                   │
-│         ▼                                                                   │
-│  ┌─────────────────┐                                                       │
-│  │  TOOL ROUTER    │ ← Analyzes: "draw" = IMAGE tool!                      │
-│  └────────┬────────┘                                                       │
-│           │                                                                 │
-│     ┌─────┴─────┬──────────┬──────────┬──────────┐                         │
-│     ▼           ▼          ▼          ▼          ▼                         │
-│  [CHAT]     [IMAGE]    [CODE]    [VIDEO]    [AUDIO]                        │
-│             ↑ SELECTED                                                     │
-│             ▼                                                               │
-│  [Stable Diffusion] → 🎨 Cat Image!                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+WHY THIS FILE MATTERS:
+    ForgeAI has many specialized capabilities, but users just type naturally.
+    "Draw me a cat" and "Explain quantum physics" need VERY different handling.
+    The Tool Router reads intent and dispatches to the right specialist.
 
-🛠️ BUILT-IN TOOLS:
-    • chat   - General conversation ("explain", "help", "what")
-    • image  - Generate images ("draw", "paint", "picture")
-    • code   - Generate code ("program", "script", "function")
-    • video  - Generate videos ("animate", "clip", "movie")
-    • audio  - Generate audio ("speak", "voice", "music")
-    • 3d     - Generate 3D models ("model", "mesh", "sculpt")
-    • gif    - Create GIFs ("gif", "animated")
+THE CROSSROADS:
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  USER: "Draw me a cat"                                          │
+    │         │                                                       │
+    │         ▼                                                       │
+    │  ┌─────────────────┐                                           │
+    │  │  TOOL ROUTER    │  "Hmm, 'draw'... that's IMAGE territory"  │
+    │  └────────┬────────┘                                           │
+    │           │                                                     │
+    │     ┌─────┴─────┬──────────┬──────────┬──────────┐             │
+    │     ▼           ▼          ▼          ▼          ▼             │
+    │  [CHAT]     [IMAGE]    [CODE]    [VIDEO]    [AUDIO]            │
+    │             SELECTED                                            │
+    │                ▼                                                │
+    │  [Image Provider] → Cat picture appears!                       │
+    └─────────────────────────────────────────────────────────────────┘
 
-🔗 CONNECTED FILES:
-    → DISPATCHES TO: forge_ai/tools/tool_executor.py (executes tools)
-    → DISPATCHES TO: forge_ai/gui/tabs/*_tab.py (generation tabs)
-    ← USED BY:       forge_ai/core/inference.py (enable_tools mode)
-    ← USED BY:       forge_ai/gui/tabs/model_router_tab.py (configure)
+AVAILABLE ROUTES (Tools):
+    | Tool   | Keywords                    | Destination              |
+    |--------|-----------------------------|--------------------------| 
+    | chat   | explain, help, what, why    | General conversation     |
+    | image  | draw, paint, picture, art   | Image generation tab     |
+    | code   | program, script, function   | Code generation tab      |
+    | video  | animate, clip, movie        | Video generation tab     |
+    | audio  | speak, voice, music, say    | Audio/TTS tab            |
+    | 3d     | model, mesh, sculpt         | 3D generation tab        |
 
-📖 USAGE:
-    from forge_ai.core.tool_router import ToolRouter, get_router
-    
-    router = get_router()
-    
-    # Assign models to tools
-    router.assign_model("chat", "forge:small_forge_ai")
-    router.assign_model("image", "local:stable-diffusion")
-    
-    # Auto-route a request (AI decides which tool)
-    result = router.auto_route("Draw me a sunset")
-    
-    # Or execute specific tool
-    result = router.execute_tool("image", {"prompt": "a sunset"})
+YOUR QUEST HERE:
+    Want to add a new tool? Add routing keywords and a handler.
+    Want to change which model handles a tool? Use router.assign_model().
 
-📖 SEE ALSO:
-    • forge_ai/tools/tool_executor.py   - Executes the tool calls
-    • forge_ai/tools/tool_definitions.py - Define new tools
-    • data/tool_routing.json            - Saved routing config
+CONNECTED PATHS:
+    You came from → inference.py (uses routing for smart responses)
+    Routes to    → tool_executor.py (actually runs the tool)
+                 → gui/tabs/*_tab.py (generation UIs)
+    Configured by → gui/tabs/model_router_tab.py (visual config)
+
+QUICK START:
+    >>> from forge_ai.core.tool_router import get_router
+    >>> router = get_router()
+    >>> router.auto_route("Draw me a sunset")  # Returns image!
+
+SEE ALSO:
+    - forge_ai/tools/tool_executor.py   - Executes the tool calls
+    - forge_ai/tools/tool_definitions.py - Define new tools
+    - data/tool_routing.json            - Saved routing config
 """
 
 from __future__ import annotations

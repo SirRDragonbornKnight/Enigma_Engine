@@ -1,151 +1,116 @@
-# ForgeAI - Code Adventure Tour 🗺️
+# ForgeAI - Code Adventure Tour
 
-Your guide through the ForgeAI codebase!
+**Your epic journey through the ForgeAI codebase!**
 
-Think of this like a "Choose Your Own Adventure" book. Follow the paths that interest you.
-
----
-
-## 🚀 Where to Start
-
-Your journey begins at: **`run.py`**
-
-This file is the front door. Run it with one of these commands:
-
-| Command | What it does |
-|---------|--------------|
-| `python run.py --gui` | Opens the graphical interface **(BEST FOR BEGINNERS)** |
-| `python run.py --train` | Train your AI model |
-| `python run.py --run` | Chat in terminal |
-| `python run.py --serve` | Start REST API server |
-| `python run.py --build` | Build new model from scratch |
+Think of this like a "Choose Your Own Adventure" book. Each chapter corresponds
+to a major part of the system. The files themselves contain detailed chapter
+comments - this guide shows you the path between them.
 
 ---
 
-## 🗂️ The Map
+## The Story So Far...
 
-Here's how ForgeAI is organized:
-
-```
-run.py                   <-- You start here!
-    │
-    ▼
-forge_ai/                <-- Main package folder
-    ├── core/            The AI brain (models, inference)
-    ├── gui/             The visual interface
-    ├── memory/          Saves conversations
-    ├── comms/           Networking and APIs
-    ├── tools/           AI actions (web, files, vision)
-    ├── avatar/          Virtual character
-    ├── voice/           Speech (TTS, STT)
-    └── modules/         Load/unload features
-```
+ForgeAI is a kingdom of modular AI components. Everything is optional, everything
+connects, and YOU decide what to enable. From a tiny Raspberry Pi to a massive
+datacenter, ForgeAI adapts.
 
 ---
 
-## 🧠 Chapter 1: The Brain (`forge_ai/core/`)
+## Starting Your Adventure
 
-This folder contains the AI intelligence.
+Your journey begins at: **`run.py`** (The Front Gate)
 
-### `model.py`
-The neural network itself. Called "Forge".
-
-**What it does:**
-- Takes numbers in, predicts next word
-- Uses modern techniques: RoPE, RMSNorm, SwiGLU, GQA
-- Optional Flash Attention (auto-detected, 2-4x faster on modern GPUs)
-
-**Model sizes:**
-| Size | Params | Best For |
-|------|--------|----------|
-| nano | ~1M | tiny devices, testing |
-| micro | ~2M | Raspberry Pi |
-| tiny | ~5M | light devices |
-| small | ~27M | desktop default |
-| medium | ~85M | good balance |
-| large | ~300M | quality focus |
-| xl+ | 1B+ | datacenter |
-
-**How to use:**
-```python
-from forge_ai.core.model import create_model
-model = create_model('small')
-```
+| Command | Destination | What Happens |
+|---------|-------------|--------------|
+| `python run.py --gui` | The Castle (Chapter 5) | Visual interface opens |
+| `python run.py --train` | The Training Grounds | Teach your AI |
+| `python run.py --run` | The Oracle (Chapter 2) | Chat in terminal |
+| `python run.py --serve` | The Network Tower | Start REST API |
 
 ---
 
-### `inference.py`
-Generates text from the model.
+## Chapter Guide
 
-**Main class:** `ForgeEngine`
+### Chapter 1: The Forge (`forge_ai/core/model.py`)
+*"Where minds are born"*
 
-**What it does:**
-- Takes your text prompt
-- Runs it through the model
-- Returns the AI's response
+The neural network itself. This is where the AI "thinking" happens - embeddings,
+attention, and all the matrix math that makes intelligence emerge from numbers.
 
-**How to use:**
-```python
-from forge_ai.core.inference import ForgeEngine
-engine = ForgeEngine()
-response = engine.generate("Hello, my name is")
-print(response)
-```
+**Key concepts:** RoPE, RMSNorm, SwiGLU, GQA, Flash Attention
 
 ---
 
-### `tokenizer.py`
-Converts text to numbers and back.
+### Chapter 2: The Oracle (`forge_ai/core/inference.py`)
+*"Speaking with your AI"*
 
-> Why? The AI only understands numbers, not letters.
+The Forge is a brain in a jar. The Oracle (ForgeEngine) is how you TALK to it.
+Takes your text, runs it through the brain, returns intelligent responses.
 
-```
-"Hello world" --> [15496, 995]  (encode)
-[15496, 995]  --> "Hello world" (decode)
-```
-
-**How to use:**
-```python
-from forge_ai.core.tokenizer import get_tokenizer
-tokenizer = get_tokenizer()
-tokens = tokenizer.encode("Hello")
-text = tokenizer.decode(tokens)
-```
+**Key concepts:** Tokenization, sampling, temperature, streaming
 
 ---
 
-### `training.py`
-Teaches the model to be smarter.
+### Chapter 3: The Dispatcher (`forge_ai/core/tool_router.py`)
+*"Every request finds its destination"*
 
-**How to use:**
-```bash
-python run.py --train
-```
+When you say "draw a cat" vs "write a poem", how does ForgeAI know the
+difference? The tool router analyzes your intent and sends you to the
+right specialist.
 
-Or in code:
-```python
-from forge_ai.core.training import train_model
-train_model("data/training.txt")
-```
+**Routes to:** Image, Code, Video, Audio, 3D, Chat
 
 ---
 
-### `tool_router.py`
-Figures out what the user wants and sends it to the right place.
+### Chapter 4: The Training Grounds (`forge_ai/core/training.py`)
+*"Where AIs grow stronger"*
 
-**Example:**
-- User says "Draw me a cat" → Router sees "draw" → sends to IMAGE generator
-- User says "Write Python code" → Router sees "code" → sends to CODE generator
+Teaching your AI new things. Load training data, run epochs, watch the
+loss decrease as your AI learns.
 
-**Built-in tools:**
-| Tool | Purpose |
-|------|---------|
-| chat | normal conversation |
-| image | generate pictures |
-| code | write programs |
-| video | make videos |
-| audio | text-to-speech, music |
-| 3d | 3D models |
+---
+
+### Chapter 5: The Castle (`forge_ai/gui/enhanced_window.py`)
+*"Your command center"*
+
+The main GUI window. Every button, every tab, every theme change flows
+through here. The largest file because it connects EVERYTHING.
+
+---
+
+### Chapter 6: The Art Studio (`forge_ai/gui/tabs/image_tab.py`)
+*"Painting with AI"*
+
+Generate images from text descriptions. Supports placeholder art, Stable
+Diffusion, DALL-E 3, and Replicate providers.
+
+---
+
+### Chapter 7: The Library (`forge_ai/memory/manager.py`)
+*"Where memories are preserved"*
+
+Conversation storage. Your AI remembers past chats, can search by meaning
+(vector search), and learns from history.
+
+---
+
+### Chapter 8: The Network Tower (`forge_ai/comms/api_server.py`)
+*"Connecting to the world"*
+
+REST API server. Let other programs talk to your AI. Multi-device networking.
+Remote access capabilities.
+
+---
+
+### The Armory (`forge_ai/modules/`)
+*"Toggle any capability"*
+
+The module system. Load and unload features as needed. Prevents conflicts,
+manages dependencies, adapts to your hardware.
+
+---
+
+## The Map
 
 ---
 

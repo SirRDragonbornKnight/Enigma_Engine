@@ -1,43 +1,50 @@
 """
 ================================================================================
-🎨 IMAGE GENERATION TAB - CREATE VISUAL ART
+              CHAPTER 6: THE ART STUDIO - PAINTING WITH AI
 ================================================================================
 
-Generate images using local or cloud AI models! From simple procedural art
-to Stable Diffusion to DALL-E 3.
+    "With words alone, you can paint entire worlds."
 
-📍 FILE: forge_ai/gui/tabs/image_tab.py
-🏷️ TYPE: GUI Tab + Image Generators
-🎯 MAIN CLASSES: ImageTab, PlaceholderImage, StableDiffusionLocal, OpenAIImage
+Welcome to the IMAGE GENERATION realm! This is where your descriptions
+transform into actual images. Ask for "a sunset over mountains" and
+watch pixels arrange themselves into art.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  AVAILABLE PROVIDERS:                                                       │
-│                                                                             │
-│  🟢 PLACEHOLDER  - Built-in procedural art (NO dependencies!)              │
-│  🟡 LOCAL        - Stable Diffusion (requires diffusers, torch)           │
-│  🟠 OPENAI       - DALL-E 3 (requires openai, API key)                    │
-│  🔴 REPLICATE    - SDXL/Flux (requires replicate, API key)               │
-└─────────────────────────────────────────────────────────────────────────────┘
+WHY THIS FILE MATTERS:
+    This tab lets you CREATE IMAGES using AI! It supports multiple
+    "artists" (providers) - from simple built-in generation to
+    powerful AI models like Stable Diffusion and DALL-E 3.
 
-📁 OUTPUT LOCATION: outputs/images/
+THE ARTISTS AT YOUR SERVICE:
+    ┌────────────────────────────────────────────────────────────────┐
+    │  Provider         │ Requirements        │ Quality    │ Cost   │
+    ├───────────────────┼─────────────────────┼────────────┼────────┤
+    │  Placeholder      │ Nothing!            │ Basic      │ Free   │
+    │  Stable Diffusion │ GPU + diffusers     │ Great      │ Free   │
+    │  DALL-E 3         │ OpenAI API key      │ Excellent  │ Paid   │
+    │  Replicate        │ Replicate API key   │ Excellent  │ Paid   │
+    └────────────────────────────────────────────────────────────────┘
 
-🔗 CONNECTED FILES:
-    → USES:      forge_ai/builtin/ (BuiltinImageGen fallback)
-    → USES:      forge_ai/config/ (CONFIG paths)
-    ← USED BY:   forge_ai/gui/enhanced_window.py (loaded as tab)
-    ← USED BY:   forge_ai/modules/registry.py (ImageGenLocalModule)
+HOW IT WORKS:
+    1. You type: "a cyberpunk city at night with neon lights"
+    2. The provider converts your words into an image
+    3. Image appears in the preview panel
+    4. Saved to outputs/images/ automatically
 
-📖 PROVIDER CLASSES:
+PROVIDER CLASSES (For Developers):
     • PlaceholderImage       - No dependencies, procedural art
     • StableDiffusionLocal   - Local SD with diffusers library
     • OpenAIImage            - DALL-E 3 via OpenAI API
-    • ReplicateImage         - SDXL via Replicate API
+    • ReplicateImage         - SDXL/Flux via Replicate API
 
-📖 SEE ALSO:
-    • forge_ai/gui/tabs/code_tab.py   - Code generation tab
-    • forge_ai/gui/tabs/video_tab.py  - Video generation tab
-    • forge_ai/gui/tabs/audio_tab.py  - Audio generation tab
-    • forge_ai/core/tool_router.py    - Routes "image" requests here
+YOUR QUEST HERE:
+    Want to add a new image provider? Create a class with a
+    generate(prompt, width, height) method and add it to the
+    provider dropdown in ImageTab.setup_ui().
+
+CONNECTED PATHS:
+    ← Parent: enhanced_window.py (loads this as a tab)
+    ← Router: tool_router.py (sends "image" requests here)
+    → Output: outputs/images/ (where images are saved)
 """
 
 import os

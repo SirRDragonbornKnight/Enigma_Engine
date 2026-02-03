@@ -201,6 +201,18 @@ except ImportError:
     AdaptiveMode = None
     get_adaptive_engine = None
 
+# Universal Tool Router (works with ANY model)
+try:
+    from .universal_router import (
+        UniversalToolRouter,
+        get_universal_router,
+        chat_with_tools,
+    )
+except ImportError:
+    UniversalToolRouter = None
+    get_universal_router = None
+    chat_with_tools = None
+
 # HuggingFace model loading (optional - lazy load to avoid slow imports)
 HuggingFaceModel = None
 HuggingFaceEngine = None

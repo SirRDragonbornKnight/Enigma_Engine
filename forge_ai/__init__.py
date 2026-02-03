@@ -1,50 +1,56 @@
 """
 ================================================================================
-🔥 FORGEAI - THE MODULAR AI FRAMEWORK
+               THE KINGDOM OF FORGEAI - YOUR ADVENTURE BEGINS HERE
 ================================================================================
 
-A fully modular AI framework where EVERYTHING is a toggleable module.
-Scales from Raspberry Pi to datacenter.
+    "Every great journey has a starting point. This is yours."
 
-📍 FILE: forge_ai/__init__.py
-🏷️ TYPE: Package Root
+Welcome, adventurer! You have discovered ForgeAI - a fully modular AI
+framework where EVERYTHING is a toggleable module. Whether you're running
+on a tiny Raspberry Pi or a massive datacenter, ForgeAI adapts to you.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PACKAGE STRUCTURE:                                                         │
-│                                                                             │
-│  forge_ai/                                                                  │
-│  ├── core/       🧠 Model, training, inference, tokenizers                  │
-│  ├── modules/    ⚙️  Module system (load/unload capabilities)               │
-│  ├── gui/        🖥️  PyQt5 interface with generation tabs                   │
-│  ├── memory/     💾 Conversation storage, vector search                    │
-│  ├── comms/      🌐 API server, networking                                 │
-│  ├── voice/      🔊 TTS/STT                                                │
-│  ├── avatar/     🤖 Avatar control                                         │
-│  ├── tools/      🔧 Vision, web, file tools                                │
-│  ├── utils/      🛠️  Common utilities                                       │
-│  └── config/     ⚙️  Configuration management                               │
-└─────────────────────────────────────────────────────────────────────────────┘
+WHAT IS THIS FILE?
+    This is the FRONT GATE of the kingdom. When you write:
+        from forge_ai import something
+    Python reads THIS FILE first to know what's available.
 
-🚀 QUICK START:
+THE KINGDOM MAP:
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  forge_ai/                                                      │
+    │  ├── core/       THE FORGE    - AI brains (model, inference)   │
+    │  ├── modules/    THE ARMORY   - Load/unload capabilities       │
+    │  ├── gui/        THE CASTLE   - Visual interface (PyQt5)       │
+    │  ├── memory/     THE LIBRARY  - Conversation storage           │
+    │  ├── comms/      THE NETWORK  - API server, remote access      │
+    │  ├── voice/      THE HERALD   - TTS/STT voice features         │
+    │  ├── avatar/     THE CHAMPION - Virtual character control      │
+    │  ├── tools/      THE WORKSHOP - Vision, web, file tools        │
+    │  ├── utils/      THE UTILITY  - Common helpers                 │
+    │  └── config/     THE CODEX    - Configuration settings         │
+    └─────────────────────────────────────────────────────────────────┘
+
+YOUR FIRST QUEST:
     >>> from forge_ai.core import create_model, ForgeEngine
-    >>> model = create_model('small')
-    >>> engine = ForgeEngine()
+    >>> model = create_model('small')      # Create an AI brain
+    >>> engine = ForgeEngine()             # Create a way to talk to it
     >>> response = engine.generate("Hello, how are you?")
+    >>> print(response)                    # Magic!
 
-📚 DOCUMENTATION:
-    • README.md              - Getting started
-    • CODE_ADVENTURE_TOUR.txt - Interactive code guide
-    • QUICK_FILE_LOCATOR.txt  - Find files fast
-    • docs/CODE_TOUR.md       - Detailed documentation
+CHOOSE YOUR PATH (Entry Points):
+    | Command               | Destination            | Description          |
+    |-----------------------|------------------------|----------------------|
+    | python run.py --gui   | gui/enhanced_window.py | Visual interface     |
+    | python run.py --train | core/training.py       | Teach your AI        |
+    | python run.py --run   | core/inference.py      | Chat in terminal     |
+    | python run.py --serve | comms/api_server.py    | REST API server      |
 
-🔗 ENTRY POINTS:
-    • run.py --gui   → forge_ai/gui/enhanced_window.py
-    • run.py --train → forge_ai/core/training.py
-    • run.py --run   → forge_ai/core/inference.py
-    • run.py --serve → forge_ai/comms/api_server.py
+DOCUMENTATION SCROLLS:
+    • README.md              - Getting started guide
+    • CODE_ADVENTURE_TOUR.md - Interactive code exploration
+    • QUICK_FILE_LOCATOR.md  - Find files fast
+    • docs/CODE_TOUR.md      - Detailed technical docs
 
-For more details, see the README.md or visit:
-https://github.com/SirRDragonbornKnight/AI_Tester
+May your training converge and your gradients flow smoothly!
 """
 from pathlib import Path
 

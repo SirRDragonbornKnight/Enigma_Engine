@@ -1,70 +1,71 @@
 """
 ================================================================================
-🏫 FORGE TRAINING SYSTEM - TEACH YOUR AI
+          CHAPTER 4: THE TRAINING GROUNDS - WHERE AIS GROW STRONGER
 ================================================================================
 
-This is where your AI LEARNS! A production-grade training system that takes
-text data and teaches the neural network to understand and generate language.
+    "A mind without training is like a sword without an edge."
 
-📍 FILE: forge_ai/core/training.py
-🏷️ TYPE: Model Training System
-🎯 MAIN CLASSES: Trainer, TrainingConfig
-🎯 MAIN FUNCTION: train_model()
+Welcome to the TRAINING GROUNDS! This is where your AI transforms from a
+random number generator into an intelligent conversationalist. Feed it text,
+watch it learn, and marvel as patterns emerge from chaos.
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  TRAINING FLOW:                                                             │
-│                                                                             │
-│  data/training.txt → [Tokenizer] → [DataLoader] → [Model] → Loss          │
-│        │                                              ↓                     │
-│        │                                         [Optimizer]               │
-│        │                                              ↓                     │
-│        └───────────────────────────────── [Update Weights]               │
-│                                              ↓                              │
-│                                    Repeat for N epochs                      │
-│                                              ↓                              │
-│                                    models/forge.pth (saved!)                │
-└─────────────────────────────────────────────────────────────────────────────┘
+WHY THIS FILE MATTERS:
+    Your AI starts knowing NOTHING. Through training, it learns language,
+    facts, personality, and capabilities. This file orchestrates that
+    entire learning process - from raw text to trained intelligence.
 
-⚡ FEATURES:
-    • Mixed Precision (AMP)     - Faster training on modern GPUs
-    • Gradient Accumulation     - Larger effective batch sizes
-    • Cosine LR Schedule        - With warmup for optimal learning
-    • Gradient Clipping         - Prevents exploding gradients
-    • Checkpointing             - Save best and periodic checkpoints
-    • Progress Tracking         - Loss curves and metrics
+THE TRAINING RITUAL:
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                                                                 │
+    │  1. PREPARE: Load your training text                           │
+    │     data/training.txt → "Hello! I am helpful and friendly..."  │
+    │                    ↓                                            │
+    │  2. TOKENIZE: Convert words to numbers                         │
+    │     "Hello" → [15496, 995, ...]                                │
+    │                    ↓                                            │
+    │  3. FEED: Show batches to the model                            │
+    │     Model sees input, predicts next word, checks if correct    │
+    │                    ↓                                            │
+    │  4. LEARN: Adjust weights based on errors                      │
+    │     Got it wrong? Update neurons. Repeat thousands of times.   │
+    │                    ↓                                            │
+    │  5. SAVE: Store the trained brain                              │
+    │     models/forge.pth (your trained AI!)                        │
+    │                                                                 │
+    └─────────────────────────────────────────────────────────────────┘
 
-📊 TRAINING CONFIG (TrainingConfig):
-    • epochs: 30 (default)
-    • batch_size: 8
-    • learning_rate: 3e-4
-    • weight_decay: 0.1
+TRAINING WISDOM:
+    | Setting           | Too Low              | Too High             |
+    |-------------------|----------------------|----------------------|
+    | Learning Rate     | Learns nothing       | Forgets everything   |
+    | Epochs            | Undertrained         | Overfitted           |
+    | Batch Size        | Noisy learning       | Memory crash         |
 
-🔗 CONNECTED FILES:
-    → USES:      forge_ai/core/model.py (create_model - what gets trained)
-    → USES:      forge_ai/core/tokenizer.py (get_tokenizer - text to numbers)
-    ← USED BY:   run.py --train (entry point)
-    ← USED BY:   forge_ai/gui/tabs/training_tab.py (GUI training)
+QUICK START:
+    # From command line (easiest)
+    python run.py --train
 
-📖 USAGE:
-    from forge_ai.core.training import Trainer, train_model
-    
-    # Quick training (recommended)
-    train_model(data_path="data/training.txt", epochs=30, model_size="small")
-    
-    # Custom training
-    trainer = Trainer(model, tokenizer, device="cuda")
-    trainer.train(texts, epochs=30)
+    # From code (more control)
+    >>> from forge_ai.core.training import train_model
+    >>> train_model("data/training.txt", epochs=30, model_size="small")
 
-📁 DATA LOCATION: data/training.txt
-📁 OUTPUT LOCATION: models/forge.pth
+YOUR QUEST HERE:
+    Training takes time. Start small (5 epochs) to test, then go big.
+    Watch the loss - if it stops going down, training is complete.
 
-📖 SEE ALSO:
+CONNECTED PATHS:
+    Input comes from → data/training.txt (your training data)
+    Brain comes from → model.py (Chapter 1: The Forge)
+    GUI interface   → gui/tabs/training_tab.py
+    Output saved to → models/forge.pth
+
+SEE ALSO:
     • forge_ai/core/trainer.py  - Advanced ForgeTrainer class
     • docs/HOW_TO_TRAIN.md      - Training guide
     • docs/TRAINING_DATA_FORMAT.md - Data format guide
 """
 # =============================================================================
-# 📚 IMPORTS - What libraries we need
+# IMPORTS - What libraries we need
 # =============================================================================
 # PyTorch is the deep learning framework that powers everything
 import torch                          # Main PyTorch library
