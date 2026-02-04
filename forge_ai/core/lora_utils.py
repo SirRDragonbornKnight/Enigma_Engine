@@ -133,11 +133,54 @@ class LoRATrainer:
         logger.info(f"Total parameters: {total_params:,}")
         logger.info(f"Trainable (LoRA): {trainable_params:,} ({percentage:.2f}%)")
     
-    def forward_with_lora(self, *args, **kwargs):
-        """Forward pass with LoRA adapters applied."""
-        # This is a simplified version - actual implementation would need
-        # to properly integrate LoRA outputs with base model outputs
-        return self.model(*args, **kwargs)
+    def forward_with_lora(self, input_ids, attention_mask=None, **kwargs):
+        """
+        Forward pass with LoRA adapters applied.
+        
+        This hooks into the model's forward pass and adds LoRA contributions
+        to the targeted linear layers (q_proj, v_proj, etc.).
+        
+        Args:
+            input_ids: Input token IDs
+            attention_mask: Optional attention mask
+            **kwargs: Additional arguments passed to the model
+            
+        Returns:
+            Model output with LoRA adaptations applied
+        """
+        # Store original forward methods
+        original_forwards = {}
+        
+        # Temporarily replace forward methods of target modules to include LoRA
+        for name, module in self.model.named_modules():
+            if name in self.lora_modules and isinstance(module, nn.Linear):
+                lora = self.lora_modules[name]
+                original_forwards[name] = module.forward
+                
+                # Create a closure that applies LoRA
+                def make_lora_forward(original_forward, lora_layer):
+                    def lora_forward(x):
+                        base_output = original_forward(x)
+                        # Handle Sequential wrapper (dropout case)
+                        if isinstance(lora_layer, nn.Sequential):
+                            lora_output = lora_layer(x)
+                        else:
+                            lora_output = lora_layer(x)
+                        return base_output + lora_output
+                    return lora_forward
+                
+                module.forward = make_lora_forward(module.forward, lora)
+        
+        try:
+            # Run the model forward pass
+            outputs = self.model(input_ids, attention_mask=attention_mask, **kwargs)
+        finally:
+            # Restore original forward methods
+            for name, module in self.model.named_modules():
+                if name in original_forwards:
+                    module.forward = original_forwards[name]
+        
+        return outputs
     
     def train(
         self,

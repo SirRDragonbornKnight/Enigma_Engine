@@ -556,26 +556,181 @@ class VoicePipeline:
         time.sleep(len(text) * 0.05)
     
     def _play_audio(self, audio_data: bytes):
-        """Play raw audio data."""
+        """
+        Play audio data (supports MP3, WAV, OGG).
+        
+        Uses multiple backends for decoding:
+        1. pydub (if available) - supports most formats
+        2. soundfile (if available) - high quality
+        3. wave (built-in) - WAV only fallback
+        """
         try:
             import sounddevice as sd
             import numpy as np
-            
-            # Decode audio (assuming MP3)
             from io import BytesIO
-            import wave
             
-            # This is simplified - real implementation would decode MP3
-            # For now, just simulate playback
-            time.sleep(2.0)
+            audio_array = None
+            sample_rate = 44100
+            
+            # Try pydub first (handles MP3, OGG, etc.)
+            try:
+                from pydub import AudioSegment
+                
+                # Detect format from magic bytes
+                if audio_data[:3] == b'ID3' or audio_data[:2] == b'\xff\xfb':
+                    # MP3 format
+                    audio = AudioSegment.from_mp3(BytesIO(audio_data))
+                elif audio_data[:4] == b'OggS':
+                    # OGG format
+                    audio = AudioSegment.from_ogg(BytesIO(audio_data))
+                elif audio_data[:4] == b'RIFF':
+                    # WAV format
+                    audio = AudioSegment.from_wav(BytesIO(audio_data))
+                else:
+                    # Try auto-detection
+                    audio = AudioSegment.from_file(BytesIO(audio_data))
+                
+                # Convert to numpy array
+                samples = np.array(audio.get_array_of_samples())
+                if audio.channels == 2:
+                    samples = samples.reshape((-1, 2))
+                audio_array = samples.astype(np.float32) / 32768.0
+                sample_rate = audio.frame_rate
+                
+            except ImportError:
+                pass
+            
+            # Try soundfile if pydub not available
+            if audio_array is None:
+                try:
+                    import soundfile as sf
+                    audio_array, sample_rate = sf.read(BytesIO(audio_data))
+                except (ImportError, RuntimeError):
+                    pass
+            
+            # Fallback to built-in wave for WAV files
+            if audio_array is None and audio_data[:4] == b'RIFF':
+                import wave
+                with wave.open(BytesIO(audio_data), 'rb') as wf:
+                    sample_rate = wf.getframerate()
+                    n_channels = wf.getnchannels()
+                    n_frames = wf.getnframes()
+                    raw_data = wf.readframes(n_frames)
+                    
+                    # Convert to numpy
+                    if wf.getsampwidth() == 2:
+                        audio_array = np.frombuffer(raw_data, dtype=np.int16)
+                    else:
+                        audio_array = np.frombuffer(raw_data, dtype=np.int8)
+                    
+                    if n_channels == 2:
+                        audio_array = audio_array.reshape((-1, 2))
+                    audio_array = audio_array.astype(np.float32) / 32768.0
+            
+            # Play if we successfully decoded
+            if audio_array is not None:
+                sd.play(audio_array, sample_rate)
+                sd.wait()  # Wait until playback finishes
+                logger.debug(f"Played audio: {len(audio_array)} samples at {sample_rate}Hz")
+            else:
+                logger.warning("Could not decode audio - no compatible decoder found")
+                logger.info("Install pydub (pip install pydub) for MP3/OGG support")
+                # Fallback: estimate duration and simulate
+                time.sleep(max(1.0, len(audio_data) / 16000))
             
         except Exception as e:
             logger.error(f"Audio playback error: {e}")
+            # Simulate playback on error
+            time.sleep(2.0)
     
     def _detect_wake_word(self) -> bool:
-        """Detect wake word in audio."""
-        # Simplified wake word detection
-        # Real implementation would use Porcupine or similar
+        \"\"\"
+        Detect wake word in recent audio buffer.
+        
+        Supports multiple backends:
+        1. Porcupine (if available) - most accurate
+        2. Vosk (if available) - offline, good accuracy
+        3. Simple keyword matching - basic fallback
+        
+        Returns:
+            True if wake word detected
+        \"\"\"
+        wake_word = self.config.wake_word.lower()
+        
+        # Try Porcupine first (commercial-grade wake word detection)
+        try:
+            import pvporcupine
+            
+            if not hasattr(self, '_porcupine') or self._porcupine is None:
+                # Initialize Porcupine with built-in keyword if matching
+                built_in_keywords = ['porcupine', 'bumblebee', 'alexa', 'hey siri', 'hey google', 'jarvis', 'computer']
+                
+                if any(kw in wake_word for kw in built_in_keywords):
+                    # Use closest built-in keyword
+                    for kw in built_in_keywords:
+                        if kw in wake_word:
+                            self._porcupine = pvporcupine.create(keywords=[kw])
+                            break
+                else:
+                    # Can't use Porcupine without access key for custom words
+                    self._porcupine = None
+            
+            if self._porcupine and hasattr(self, '_audio_buffer') and self._audio_buffer:
+                # Process audio buffer
+                result = self._porcupine.process(self._audio_buffer[-self._porcupine.frame_length:])
+                if result >= 0:
+                    logger.info(f\"Wake word detected via Porcupine\")
+                    return True
+                    
+        except ImportError:
+            pass  # Porcupine not available
+        except Exception as e:
+            logger.debug(f\"Porcupine error: {e}\")
+        
+        # Try Vosk for keyword spotting (free, offline)
+        try:
+            import vosk
+            import json
+            
+            if not hasattr(self, '_vosk_recognizer') or self._vosk_recognizer is None:
+                # Initialize Vosk with small model
+                vosk.SetLogLevel(-1)  # Suppress logs
+                model_path = Path.home() / '.forge_ai' / 'models' / 'vosk-model-small-en-us'
+                if model_path.exists():
+                    model = vosk.Model(str(model_path))
+                    self._vosk_recognizer = vosk.KaldiRecognizer(model, self.config.sample_rate)
+                    self._vosk_recognizer.SetWords(True)
+            
+            if hasattr(self, '_vosk_recognizer') and self._vosk_recognizer and hasattr(self, '_recent_audio'):
+                # Feed recent audio to recognizer
+                if self._vosk_recognizer.AcceptWaveform(self._recent_audio):
+                    result = json.loads(self._vosk_recognizer.Result())
+                    text = result.get('text', '').lower()
+                    if wake_word in text or any(word in text for word in wake_word.split()):
+                        logger.info(f\"Wake word detected via Vosk: {text}\")
+                        return True
+                        
+        except ImportError:
+            pass  # Vosk not available
+        except Exception as e:
+            logger.debug(f\"Vosk error: {e}\")
+        
+        # Fallback: Check if we have recent transcription that matches
+        if hasattr(self, '_last_transcription') and self._last_transcription:
+            text = self._last_transcription.lower()
+            # Check for wake word or common variations
+            wake_variants = [
+                wake_word,
+                wake_word.replace(' ', ''),
+                wake_word.replace('hey ', ''),
+                wake_word.replace('forge', 'for'),  # Common mishearing
+            ]
+            for variant in wake_variants:
+                if variant in text:
+                    logger.info(f\"Wake word detected via transcription match: {text}\")
+                    self._last_transcription = ''  # Clear to avoid re-triggering
+                    return True
+        
         return False
     
     def _check_push_to_talk(self) -> bool:

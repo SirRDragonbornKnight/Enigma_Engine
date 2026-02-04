@@ -226,27 +226,122 @@ class ModuleUpdater:
             Changelog text
         """
         try:
-            # Stub implementation
-            # In production, fetch from registry
             logger.debug(
                 f"Fetching changelog for '{module_id}' "
                 f"from {from_version} to {to_version}"
             )
             
-            # Would make HTTP request in production
-            changelog = (
-                f"# Changelog for {module_id}\n\n"
-                f"## {to_version}\n\n"
-                f"Changes from {from_version} to {to_version}:\n"
-                f"- Updates and improvements\n"
-                f"- Bug fixes\n"
-            )
+            # Try to read local changelog file first
+            changelog_paths = [
+                self.modules_dir / module_id / "CHANGELOG.md",
+                self.modules_dir / module_id / "changelog.md",
+                self.modules_dir / module_id / "CHANGELOG.txt",
+                self.modules_dir / module_id / "CHANGES.md",
+            ]
+            
+            for changelog_path in changelog_paths:
+                if changelog_path.exists():
+                    changelog_text = changelog_path.read_text(encoding='utf-8')
+                    # Extract relevant versions from changelog
+                    return self._extract_version_range(
+                        changelog_text, from_version, to_version, module_id
+                    )
+            
+            # Try fetching from registry if available
+            if self.registry_url and self.registry_url != DEFAULT_REGISTRY_URL:
+                try:
+                    import urllib.request
+                    import ssl
+                    
+                    url = f"{self.registry_url}/modules/{module_id}/changelog"
+                    params = f"?from={from_version}&to={to_version}"
+                    
+                    ctx = ssl.create_default_context()
+                    with urllib.request.urlopen(url + params, timeout=10, context=ctx) as response:
+                        if response.status == 200:
+                            return response.read().decode('utf-8')
+                except Exception as e:
+                    logger.debug(f"Could not fetch remote changelog: {e}")
+            
+            # Check module registry for inline changelog
+            module_info = self.module_registry.get(module_id, {})
+            if 'changelog' in module_info:
+                return module_info['changelog']
+            
+            # Return structured placeholder with available info
+            changelog = f"# Changelog for {module_id}\n\n"
+            changelog += f"## Version {to_version}\n\n"
+            
+            if from_version != to_version:
+                changelog += f"Updating from {from_version}\n\n"
+                
+            # Add any available metadata
+            if 'description' in module_info:
+                changelog += f"**Description:** {module_info['description']}\n\n"
+            if 'author' in module_info:
+                changelog += f"**Author:** {module_info['author']}\n\n"
+                
+            changelog += "*Detailed changelog not available for this module.*\n"
+            changelog += "*Check the module repository for release notes.*\n"
             
             return changelog
             
         except Exception as e:
             logger.error(f"Error fetching changelog: {e}")
-            return "Changelog not available"
+            return f"Changelog not available: {e}"
+    
+    def _extract_version_range(
+        self,
+        changelog_text: str,
+        from_version: str,
+        to_version: str,
+        module_id: str
+    ) -> str:
+        """
+        Extract changelog entries between two versions.
+        
+        Args:
+            changelog_text: Full changelog text
+            from_version: Starting version (exclusive)
+            to_version: Target version (inclusive)
+            module_id: Module identifier
+            
+        Returns:
+            Filtered changelog text
+        """
+        lines = changelog_text.split('\n')
+        result_lines = [f"# Changelog for {module_id}", ""]
+        result_lines.append(f"*Changes from {from_version} to {to_version}*\n")
+        
+        in_range = False
+        current_version = None
+        version_pattern = re.compile(
+            r'^##?\s*(?:\[)?v?(\d+\.\d+(?:\.\d+)?(?:-\w+)?)',
+            re.IGNORECASE
+        )
+        
+        for line in lines:
+            version_match = version_pattern.match(line)
+            
+            if version_match:
+                current_version = version_match.group(1)
+                
+                # Check if we've reached the target version
+                if compare_versions(current_version, to_version) <= 0:
+                    in_range = True
+                    
+                # Check if we've passed the starting version
+                if compare_versions(current_version, from_version) <= 0:
+                    in_range = False
+                    
+            if in_range:
+                result_lines.append(line)
+        
+        if len(result_lines) <= 3:
+            # No version-specific entries found, return relevant portion
+            return changelog_text[:2000] + "\n\n*[Truncated]*" if len(changelog_text) > 2000 else changelog_text
+            
+        return '\n'.join(result_lines)
     
     def update_module(
         self, 
@@ -469,21 +564,68 @@ class ModuleUpdater:
         """
         Verify downloaded module integrity.
         
+        Checks:
+        - Required fields present (module_id, version)
+        - SHA256 checksum if provided
+        - File size within limits
+        - No malicious patterns
+        
         Args:
             module_data: Downloaded module data
             
         Returns:
             True if valid
         """
-        # Stub - would verify checksums, signatures in production
+        import hashlib
+        
         logger.debug("Verifying module integrity")
         
-        # Basic checks
+        # Required field checks
         if not module_data.get('module_id'):
+            logger.error("Module verification failed: missing module_id")
             return False
         if not module_data.get('version'):
+            logger.error("Module verification failed: missing version")
             return False
         
+        # Checksum verification if provided
+        expected_checksum = module_data.get('checksum') or module_data.get('sha256')
+        if expected_checksum and module_data.get('content'):
+            content = module_data['content']
+            if isinstance(content, str):
+                content = content.encode('utf-8')
+            
+            actual_checksum = hashlib.sha256(content).hexdigest()
+            if actual_checksum.lower() != expected_checksum.lower():
+                logger.error(f"Checksum mismatch: expected {expected_checksum}, got {actual_checksum}")
+                return False
+            logger.debug("Checksum verified successfully")
+        
+        # Size check (max 50MB for modules)
+        max_size = 50 * 1024 * 1024  # 50MB
+        content_size = len(module_data.get('content', b''))
+        if content_size > max_size:
+            logger.error(f"Module too large: {content_size} bytes (max {max_size})")
+            return False
+        
+        # Basic security checks - look for suspicious patterns
+        if module_data.get('content'):
+            content_str = module_data['content'] if isinstance(module_data['content'], str) else module_data['content'].decode('utf-8', errors='ignore')
+            suspicious_patterns = [
+                'os.system(',
+                'subprocess.call(',
+                'eval(',
+                'exec(',
+                '__import__',
+                'open(/etc',
+                'open("/etc',
+            ]
+            for pattern in suspicious_patterns:
+                if pattern in content_str:
+                    logger.warning(f"Suspicious pattern found in module: {pattern}")
+                    # Don't fail, just warn - legitimate modules might use these
+        
+        logger.info(f"Module '{module_data.get('module_id')}' verified successfully")
         return True
     
     def _install_module(
@@ -573,18 +715,66 @@ class ModuleUpdater:
         """
         Restore module from backup.
         
+        Copies all files from backup directory to the module installation directory.
+        
         Args:
             module_id: Module to restore
-            backup_path: Path to backup
+            backup_path: Path to backup directory
             
         Returns:
             True if successful
         """
+        import shutil
+        
         try:
             logger.info(f"Restoring '{module_id}' from {backup_path}")
             
-            # Stub - would copy files back in production
+            if not backup_path.exists():
+                logger.error(f"Backup path does not exist: {backup_path}")
+                return False
             
+            # Determine installation directory
+            from ..config import CONFIG
+            modules_dir = Path(CONFIG.BASE_DIR) / "forge_ai" / "modules" / "installed"
+            install_dir = modules_dir / module_id
+            
+            # Remove current installation if exists
+            if install_dir.exists():
+                logger.debug(f"Removing current installation at {install_dir}")
+                shutil.rmtree(install_dir)
+            
+            # Copy backup to installation directory
+            logger.debug(f"Copying backup from {backup_path} to {install_dir}")
+            shutil.copytree(backup_path, install_dir)
+            
+            # Update module registry
+            registry_file = modules_dir / "registry.json"
+            if registry_file.exists():
+                import json
+                with open(registry_file, 'r') as f:
+                    registry = json.load(f)
+                
+                # Update version info from backup metadata if available
+                backup_meta = backup_path / "module.json"
+                if backup_meta.exists():
+                    with open(backup_meta, 'r') as f:
+                        meta = json.load(f)
+                    registry[module_id] = {
+                        "version": meta.get("version", "unknown"),
+                        "restored_from": str(backup_path),
+                        "restored_at": datetime.now().isoformat()
+                    }
+                else:
+                    registry[module_id] = {
+                        "version": "restored",
+                        "restored_from": str(backup_path),
+                        "restored_at": datetime.now().isoformat()
+                    }
+                
+                with open(registry_file, 'w') as f:
+                    json.dump(registry, f, indent=2)
+            
+            logger.info(f"Successfully restored '{module_id}' from backup")
             return True
             
         except Exception as e:

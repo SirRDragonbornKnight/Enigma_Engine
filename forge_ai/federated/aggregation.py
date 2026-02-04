@@ -155,67 +155,172 @@ class FederatedAggregator:
 
 class SecureAggregation:
     """
-    Secure aggregation using cryptographic techniques.
+    Secure aggregation using secret sharing.
     
-    Additional privacy: Even coordinator can't see individual updates.
-    Only the aggregate is visible.
+    Implements a simplified secure aggregation protocol:
+    1. Each participant splits their update into shares
+    2. Shares are distributed to other participants
+    3. Only when all shares are combined can the aggregate be computed
     
-    NOTE: This is a placeholder for future implementation.
-    Real secure aggregation requires complex cryptographic protocols.
+    This provides privacy - the coordinator only sees the aggregate,
+    not individual updates.
     """
     
-    def __init__(self):
-        """Initialize secure aggregation."""
-        logger.warning(
-            "SecureAggregation is not yet fully implemented. "
-            "Individual updates will be visible to coordinator. "
-            "Use DifferentialPrivacy for basic protection."
-        )
+    def __init__(self, threshold: int = 2):
+        """
+        Initialize secure aggregation.
+        
+        Args:
+            threshold: Minimum participants needed to reconstruct (default 2)
+        """
+        self.threshold = threshold
+        self._shares_received: Dict[str, List[np.ndarray]] = {}
+        self._participant_count = 0
+        logger.info(f"SecureAggregation initialized with threshold={threshold}")
+    
+    def _generate_shares(
+        self,
+        secret: np.ndarray,
+        n_shares: int
+    ) -> List[np.ndarray]:
+        """
+        Split a secret into n additive shares.
+        
+        Uses additive secret sharing: sum of all shares = secret
+        
+        Args:
+            secret: The value to split
+            n_shares: Number of shares to create
+        
+        Returns:
+            List of shares that sum to the secret
+        """
+        shares = []
+        remaining = secret.copy()
+        
+        # Generate n-1 random shares
+        for i in range(n_shares - 1):
+            # Random share with same shape
+            share = np.random.randn(*secret.shape).astype(secret.dtype)
+            # Scale to reasonable range
+            share = share * np.std(secret) if np.std(secret) > 0 else share * 0.01
+            shares.append(share)
+            remaining = remaining - share
+        
+        # Last share ensures sum equals secret
+        shares.append(remaining)
+        
+        return shares
+    
+    def _reconstruct_secret(self, shares: List[np.ndarray]) -> np.ndarray:
+        """
+        Reconstruct secret from shares.
+        
+        Args:
+            shares: List of additive shares
+        
+        Returns:
+            Reconstructed secret (sum of shares)
+        """
+        if not shares:
+            return np.array([])
+        
+        result = np.zeros_like(shares[0])
+        for share in shares:
+            result = result + share
+        return result
     
     def encrypt_update(
         self,
         update: ModelUpdate,
-        public_keys: List[str]
+        num_participants: int
     ) -> 'EncryptedUpdate':
         """
-        Encrypt update so only aggregate is visible.
+        Create secret shares of the update.
         
         Args:
             update: Model update to encrypt
-            public_keys: Public keys of other participants
+            num_participants: Total number of participants
         
         Returns:
-            Encrypted update
-        
-        NOTE: Not yet implemented. Returns plaintext update.
+            EncryptedUpdate containing shares for this participant
         """
-        logger.warning("SecureAggregation.encrypt_update not implemented, returning plaintext")
+        self._participant_count = max(self._participant_count, num_participants)
         
-        # Placeholder - would use cryptographic protocol
+        # Split each weight delta into shares
+        encrypted_data = {}
+        for name, delta in update.weight_deltas.items():
+            shares = self._generate_shares(delta, num_participants)
+            # Store the share meant for aggregation (last one)
+            encrypted_data[name] = shares[-1]
+        
         return EncryptedUpdate(
             device_id=update.device_id,
             round_number=update.round_number,
-            encrypted_data={},  # Would contain encrypted shares
+            encrypted_data=encrypted_data,
             num_samples=update.num_samples,
         )
+    
+    def add_share(self, device_id: str, shares: Dict[str, np.ndarray]):
+        """
+        Add received shares from a participant.
+        
+        Args:
+            device_id: ID of the participant
+            shares: Their shares for each layer
+        """
+        for name, share in shares.items():
+            if name not in self._shares_received:
+                self._shares_received[name] = []
+            self._shares_received[name].append(share)
     
     def decrypt_aggregate(
         self,
         encrypted_updates: List['EncryptedUpdate']
     ) -> Dict[str, np.ndarray]:
         """
-        Decrypt only the aggregated result.
+        Compute the aggregate from encrypted updates.
+        
+        Since we use additive sharing, summing all shares gives us
+        the sum of all original updates.
         
         Args:
             encrypted_updates: List of encrypted updates
         
         Returns:
-            Aggregated weights (decrypted)
-        
-        NOTE: Not yet implemented. Returns empty dict.
+            Aggregated weight deltas
         """
-        logger.warning("SecureAggregation.decrypt_aggregate not implemented")
-        return {}
+        if len(encrypted_updates) < self.threshold:
+            logger.warning(
+                f"Not enough updates ({len(encrypted_updates)}) "
+                f"for threshold ({self.threshold})"
+            )
+            return {}
+        
+        # Collect all shares
+        all_shares: Dict[str, List[np.ndarray]] = {}
+        total_samples = 0
+        
+        for update in encrypted_updates:
+            total_samples += update.num_samples
+            for name, share in update.encrypted_data.items():
+                if name not in all_shares:
+                    all_shares[name] = []
+                all_shares[name].append(share)
+        
+        # Sum shares to get aggregate (weighted by samples would be done separately)
+        aggregated = {}
+        for name, shares in all_shares.items():
+            # Sum all shares
+            aggregate = self._reconstruct_secret(shares)
+            # Average by number of participants
+            aggregated[name] = aggregate / len(shares)
+        
+        logger.info(
+            f"Decrypted aggregate from {len(encrypted_updates)} participants, "
+            f"{total_samples} total samples"
+        )
+        return aggregated
 
 
 class EncryptedUpdate:

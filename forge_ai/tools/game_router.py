@@ -532,9 +532,16 @@ class GameAIRouter:
         
         # Generate response
         try:
-            # TODO: Load LoRA adapter if specified
-            # if model_config["adapter"]:
-            #     engine.load_adapter(model_config["adapter"])
+            # Load LoRA adapter if specified for this game
+            if model_config.get("adapter") and hasattr(engine, 'model'):
+                try:
+                    if hasattr(engine.model, 'load_lora'):
+                        adapter_path = Path("models/adapters") / model_config["adapter"]
+                        if adapter_path.exists():
+                            engine.model.load_lora(str(adapter_path))
+                            logger.info(f"Loaded game adapter: {model_config['adapter']}")
+                except Exception as e:
+                    logger.warning(f"Could not load game adapter: {e}")
             
             response = engine.generate(
                 full_prompt,

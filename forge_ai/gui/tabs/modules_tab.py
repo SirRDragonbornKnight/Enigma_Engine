@@ -487,8 +487,8 @@ class ModulesTab(QWidget):
                     'needs_api_key': 'api_key' in str(info.config_schema),
                 }
             return modules
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not load registry modules: {e}")
         
         # Fallback list
         return {
@@ -575,8 +575,8 @@ class ModulesTab(QWidget):
                     self._sync_tab_visibility(module_id, enabled)
                     try:
                         self.module_manager.save_config()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Could not save module config: {e}")
                     self._log(f"OK: {module_id} {'enabled' if enabled else 'disabled'}")
                 else:
                     self._log(f"FAILED: Could not {'load' if enabled else 'unload'} {module_id}")
@@ -665,8 +665,8 @@ class ModulesTab(QWidget):
             
             if main_window and hasattr(main_window, 'on_module_toggled'):
                 main_window.on_module_toggled(module_id, enabled)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not sync tab visibility for {module_id}: {e}")
     
     def _sync_options_menu(self, module_id: str, enabled: bool):
         """Sync with main window Options menu."""
@@ -698,8 +698,8 @@ class ModulesTab(QWidget):
                 main_window.microphone_enabled = enabled
                 main_window.microphone_action.blockSignals(False)
                 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not sync options menu for {module_id}: {e}")
     
     def _sync_loaded_modules(self):
         """Sync UI with actually loaded modules."""
@@ -870,8 +870,8 @@ class ModulesTab(QWidget):
                         item.set_loaded(is_loaded)
                         item.toggle.blockSignals(False)
                 self._update_stats()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error updating module status: {e}")
         
         # Update resource bars
         try:
@@ -890,7 +890,8 @@ class ModulesTab(QWidget):
                 self.vram_bar.setValue(int(allocated / total * 100))
             else:
                 self.vram_bar.setValue(0)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not get VRAM usage: {e}")
             self.vram_bar.setValue(0)
     
     def _log(self, message: str):

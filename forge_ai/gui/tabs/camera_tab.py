@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QSpinBox, QGroupBox, QMessageBox, QSlider,
     QCheckBox, QFileDialog, QPlainTextEdit
 )
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker
 from PyQt5.QtGui import QPixmap, QImage
 
 from .shared_components import NoScrollComboBox
@@ -99,6 +99,7 @@ class CameraTab(QWidget):
         self.main_window = parent
         self.camera_thread: Optional[CameraThread] = None
         self.current_frame = None
+        self._frame_mutex = QMutex()  # Thread-safe access to current_frame
         self.is_recording = False
         self.video_writer = None
         self.setup_ui()
@@ -283,7 +284,8 @@ class CameraTab(QWidget):
         
     def _on_frame(self, frame):
         """Handle incoming frame from camera thread - optimized for full FPS."""
-        self.current_frame = frame
+        with QMutexLocker(self._frame_mutex):
+            self.current_frame = frame
         
         # Track FPS for status display
         self._fps_count = getattr(self, '_fps_count', 0) + 1
@@ -319,9 +321,12 @@ class CameraTab(QWidget):
         
     def capture_photo(self):
         """Capture current frame as photo."""
-        if self.current_frame is None:
-            QMessageBox.warning(self, "No Frame", "No camera frame available")
-            return
+        with QMutexLocker(self._frame_mutex):
+            if self.current_frame is None:
+                QMessageBox.warning(self, "No Frame", "No camera frame available")
+                return
+            # Copy frame while holding mutex
+            frame_copy = self.current_frame.copy()
         
         if not HAVE_CV2:
             QMessageBox.warning(self, "OpenCV Required", "OpenCV is required to save images")
@@ -332,7 +337,7 @@ class CameraTab(QWidget):
         filename = IMAGES_DIR / f"camera_{timestamp}.jpg"
         
         try:
-            cv2.imwrite(str(filename), self.current_frame)
+            cv2.imwrite(str(filename), frame_copy)
             logger.info(f"Photo captured: {filename}")
             self.status_label.setText(f"Status: Photo saved to {filename.name}")
             self.analysis_text.appendPlainText(f"\nPhoto saved: {filename.name}")
@@ -358,14 +363,14 @@ class CameraTab(QWidget):
             self.analysis_text.appendPlainText("\nRecording stopped")
         else:
             # Start recording
-            if self.current_frame is None:
-                QMessageBox.warning(self, "No Frame", "Camera not running")
-                return
+            with QMutexLocker(self._frame_mutex):
+                if self.current_frame is None:
+                    QMessageBox.warning(self, "No Frame", "Camera not running")
+                    return
+                h, w = self.current_frame.shape[:2]
                 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = IMAGES_DIR / f"camera_recording_{timestamp}.avi"
-            
-            h, w = self.current_frame.shape[:2]
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
             self.video_writer = cv2.VideoWriter(str(filename), fourcc, 20.0, (w, h))
             
@@ -381,8 +386,11 @@ class CameraTab(QWidget):
             
     def analyze_frame(self):
         """Have AI analyze the current frame."""
-        if self.current_frame is None:
-            return
+        with QMutexLocker(self._frame_mutex):
+            if self.current_frame is None:
+                return
+            # Copy frame while holding mutex
+            frame_copy = self.current_frame.copy()
         
         if not HAVE_CV2:
             self.analysis_text.appendPlainText("OpenCV not available for analysis")
@@ -392,7 +400,7 @@ class CameraTab(QWidget):
             from PIL import Image
             
             # Convert frame to PIL Image
-            rgb_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2RGB)
+            rgb_frame = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(rgb_frame)
             
             # Store in main window for vision analysis
@@ -413,7 +421,7 @@ class CameraTab(QWidget):
                 
                 # Try to describe the frame using basic analysis
                 # Get image info
-                h, w = self.current_frame.shape[:2]
+                h, w = frame_copy.shape[:2]
                 
                 # Analyze colors/brightness
                 try:

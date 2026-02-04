@@ -326,9 +326,31 @@ class NetworkTab(QWidget):
         try:
             from forge_ai.comms.discovery import DeviceDiscovery
             
-            # Try to start the API server
-            # This would normally use forge_ai.comms.api_server
             self._log(f"Starting API server on port {port}...")
+            
+            # Start the actual Flask API server in a background thread
+            import threading
+            from forge_ai.comms.api_server import create_app
+            
+            self._flask_app = create_app()
+            
+            def run_server():
+                \"\"\"Run Flask server in background thread.\"\"\"
+                try:
+                    # Use threaded=True for handling multiple requests
+                    self._flask_app.run(
+                        host="0.0.0.0",
+                        port=port,
+                        debug=False,
+                        use_reloader=False,  # Don't use reloader in thread
+                        threaded=True
+                    )
+                except Exception as e:
+                    logger.error(f"API server error: {e}")
+            
+            self._server_thread = threading.Thread(target=run_server, daemon=True)
+            self._server_thread.start()
+            self._log(f"API server started on port {port}")
             
             # Start discovery listener
             import socket
@@ -340,13 +362,14 @@ class NetworkTab(QWidget):
             self.discovery_listener.start_listener()
             self._log("Discovery listener started - other devices can find this node")
             
-            # For now, just update status (actual server would be started here)
+            # Update status
             self.server_status.setText(f"[RUNNING] on port {port}")
             self.server_status.setStyleSheet("color: #4caf50; font-weight: bold;")
             self.start_server_btn.setText("Stop Server")
             
             self._log(f"Server started at http://{self._get_local_ip()}:{port}")
-            self.api_process = True  # Placeholder
+            self._log("Endpoints: /v1/chat/completions, /v1/generate, /health")
+            self.api_process = True
             
         except Exception as e:
             self._log(f"Error starting server: {e}")

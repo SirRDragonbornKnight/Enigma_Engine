@@ -42,9 +42,10 @@ USAGE:
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QTextEdit, QTextBrowser, QLineEdit, QLabel, QFrame, QSplitter,
-    QGroupBox, QSizePolicy
+    QGroupBox, QSizePolicy, QShortcut
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QKeySequence
 
 
 # =============================================================================
@@ -314,7 +315,89 @@ def _create_header_section(parent, layout):
 
 
 def _create_chat_display(parent, layout):
-    """Build the main chat display area."""
+    """Build the main chat display area with search."""
+    # Search bar (hidden by default, toggle with Ctrl+F)
+    parent.search_frame = QFrame()
+    parent.search_frame.setStyleSheet("""
+        QFrame {
+            background: #313244;
+            border: 1px solid #45475a;
+            border-radius: 4px;
+            padding: 4px;
+        }
+    """)
+    search_layout = QHBoxLayout(parent.search_frame)
+    search_layout.setContentsMargins(8, 4, 8, 4)
+    search_layout.setSpacing(8)
+    
+    search_label = QLabel("Find:")
+    search_label.setStyleSheet("color: #cdd6f4; font-size: 11px;")
+    search_layout.addWidget(search_label)
+    
+    parent.search_input = QLineEdit()
+    parent.search_input.setPlaceholderText("Search in conversation...")
+    parent.search_input.setStyleSheet("""
+        QLineEdit {
+            background: #1e1e2e;
+            border: 1px solid #45475a;
+            border-radius: 3px;
+            padding: 4px 8px;
+            color: #cdd6f4;
+            font-size: 11px;
+        }
+    """)
+    parent.search_input.returnPressed.connect(lambda: _search_next(parent))
+    parent.search_input.textChanged.connect(lambda: _highlight_search(parent))
+    search_layout.addWidget(parent.search_input, stretch=1)
+    
+    prev_btn = QPushButton("Prev")
+    prev_btn.setFixedWidth(50)
+    prev_btn.setStyleSheet("""
+        QPushButton {
+            background: #45475a;
+            border: none;
+            border-radius: 3px;
+            color: #cdd6f4;
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+        QPushButton:hover { background: #585b70; }
+    """)
+    prev_btn.clicked.connect(lambda: _search_prev(parent))
+    search_layout.addWidget(prev_btn)
+    
+    next_btn = QPushButton("Next")
+    next_btn.setFixedWidth(50)
+    next_btn.setStyleSheet(prev_btn.styleSheet())
+    next_btn.clicked.connect(lambda: _search_next(parent))
+    search_layout.addWidget(next_btn)
+    
+    parent.search_count = QLabel("")
+    parent.search_count.setStyleSheet("color: #6c7086; font-size: 10px;")
+    search_layout.addWidget(parent.search_count)
+    
+    close_search_btn = QPushButton("X")
+    close_search_btn.setFixedSize(20, 20)
+    close_search_btn.setStyleSheet("""
+        QPushButton {
+            background: transparent;
+            border: none;
+            color: #6c7086;
+            font-size: 12px;
+        }
+        QPushButton:hover { color: #f38ba8; }
+    """)
+    close_search_btn.clicked.connect(lambda: _toggle_search(parent, False))
+    search_layout.addWidget(close_search_btn)
+    
+    parent.search_frame.hide()
+    layout.addWidget(parent.search_frame)
+    
+    # Initialize search state
+    parent._search_positions = []
+    parent._search_index = 0
+    
+    # Chat display
     parent.chat_display = QTextBrowser()
     parent.chat_display.setReadOnly(True)
     parent.chat_display.setTextInteractionFlags(
@@ -328,7 +411,8 @@ def _create_chat_display(parent, layout):
         "- Just ask naturally - 'Generate an image of a sunset'\n"
         "- The AI auto-detects what you want to create\n"
         "- Rate responses to help the AI learn\n"
-        "- Click Critique to give detailed feedback"
+        "- Click Critique to give detailed feedback\n"
+        "- Press Ctrl+F to search"
     )
     parent.chat_display.setStyleSheet("""
         QTextEdit {
@@ -372,7 +456,14 @@ def _create_input_section(parent, layout):
     parent.chat_input.returnPressed.connect(parent._on_send)
     parent.chat_input.setToolTip("Type your message and press Enter or click Send")
     parent.chat_input.setStyleSheet(STYLE_CHAT_INPUT)
+    parent.chat_input.textChanged.connect(lambda text: _update_token_count(parent, text))
     input_layout.addWidget(parent.chat_input, stretch=1)
+    
+    # Token counter label
+    parent.token_count_label = QLabel("0 chars")
+    parent.token_count_label.setStyleSheet("color: #6c7086; font-size: 10px; min-width: 65px;")
+    parent.token_count_label.setToolTip("Approximate character/token count")
+    input_layout.addWidget(parent.token_count_label)
     
     # Send button
     parent.send_btn = QPushButton("Send")
@@ -523,6 +614,14 @@ def create_chat_tab(parent):
     # Update voice button state from saved settings
     _update_voice_button_state(parent)
     
+    # Setup keyboard shortcuts
+    search_shortcut = QShortcut(QKeySequence("Ctrl+F"), chat_widget)
+    search_shortcut.activated.connect(lambda: _toggle_search(parent, True))
+    
+    # Escape to close search
+    escape_shortcut = QShortcut(QKeySequence("Escape"), chat_widget)
+    escape_shortcut.activated.connect(lambda: _toggle_search(parent, False) if parent.search_frame.isVisible() else None)
+    
     chat_widget.setLayout(main_layout)
     return chat_widget
 
@@ -606,6 +705,26 @@ def _update_voice_button_state(parent):
     
     # Also update the TTS button state
     _update_tts_button_state(parent)
+
+
+def _update_token_count(parent, text: str):
+    """Update the token counter label as user types."""
+    char_count = len(text)
+    # Rough token estimate: ~4 chars per token for English
+    token_estimate = char_count // 4
+    
+    if char_count == 0:
+        parent.token_count_label.setText("0 chars")
+        parent.token_count_label.setStyleSheet("color: #6c7086; font-size: 10px; min-width: 65px;")
+    elif char_count < 500:
+        parent.token_count_label.setText(f"{char_count} chars")
+        parent.token_count_label.setStyleSheet("color: #6c7086; font-size: 10px; min-width: 65px;")
+    elif char_count < 2000:
+        parent.token_count_label.setText(f"~{token_estimate} tokens")
+        parent.token_count_label.setStyleSheet("color: #f9e2af; font-size: 10px; min-width: 65px;")
+    else:
+        parent.token_count_label.setText(f"~{token_estimate} tokens")
+        parent.token_count_label.setStyleSheet("color: #f38ba8; font-size: 10px; min-width: 65px;")
 
 
 def _toggle_voice_input(parent):
@@ -1029,9 +1148,15 @@ def _stop_generation(parent):
 
 def _handle_feedback_link(parent, url):
     """Handle feedback links clicked in chat."""
-    from PyQt5.QtWidgets import QInputDialog, QMessageBox
+    from PyQt5.QtWidgets import QInputDialog, QMessageBox, QApplication
     
     url_str = url.toString() if hasattr(url, 'toString') else str(url)
+    
+    # Handle copy:code_hash links for code blocks
+    if url_str.startswith('copy:'):
+        code_hash = url_str[5:]
+        _copy_code_block(parent, code_hash)
+        return
     
     if not url_str.startswith('feedback:'):
         return
@@ -1073,6 +1198,176 @@ def _handle_feedback_link(parent, url):
     elif feedback_type == 'critique':
         # Open detailed critique dialog
         _show_critique_dialog(parent, response_id, response_data)
+    
+    elif feedback_type == 'regenerate':
+        # Regenerate the response with the same input
+        _regenerate_response(parent, response_id, response_data)
+
+
+def _regenerate_response(parent, response_id: str, response_data: dict):
+    """Regenerate a response using the original user input."""
+    if not response_data:
+        parent.chat_status.setText("Cannot regenerate - original input not found")
+        return
+    
+    original_input = response_data.get('user_input', '')
+    if not original_input:
+        parent.chat_status.setText("Cannot regenerate - no original input")
+        return
+    
+    # Add a note to chat
+    parent.chat_display.append(
+        '<div style="color: #cba6f7; padding: 4px; font-size: 12px;"><i>Regenerating response...</i></div>'
+    )
+    
+    # Set the input and trigger send
+    parent.chat_input.setText(original_input)
+    if hasattr(parent, '_on_send'):
+        parent._on_send()
+    
+    parent.chat_status.setText("Regenerating response...")
+
+
+def _copy_code_block(parent, code_hash: str):
+    """
+    Copy a code block to clipboard by its hash.
+    
+    Args:
+        parent: Parent window
+        code_hash: MD5 hash of the code content
+    """
+    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtGui import QGuiApplication
+    
+    # Try to find the code in the chat display HTML
+    html = parent.chat_display.toHtml() if hasattr(parent, 'chat_display') else ""
+    
+    # Look for code blocks by their data-code attribute
+    import re
+    pattern = rf'<code[^>]*data-code="{code_hash}"[^>]*>([^<]*)</code>'
+    match = re.search(pattern, html, re.DOTALL)
+    
+    if match:
+        import html as html_module
+        code = html_module.unescape(match.group(1))
+        
+        # Copy to clipboard
+        clipboard = QGuiApplication.clipboard()
+        if clipboard:
+            clipboard.setText(code)
+            parent.chat_status.setText("Code copied to clipboard!")
+        else:
+            parent.chat_status.setText("Could not access clipboard")
+    else:
+        # Fallback: search in stored code blocks if we have them
+        if hasattr(parent, '_code_blocks') and code_hash in parent._code_blocks:
+            code = parent._code_blocks[code_hash]
+            clipboard = QGuiApplication.clipboard()
+            if clipboard:
+                clipboard.setText(code)
+                parent.chat_status.setText("Code copied to clipboard!")
+        else:
+            parent.chat_status.setText("Code block not found")
+
+
+# =============================================================================
+# SEARCH FUNCTIONS
+# =============================================================================
+
+def _toggle_search(parent, show=None):
+    """Toggle the search bar visibility."""
+    if show is None:
+        show = not parent.search_frame.isVisible()
+    
+    parent.search_frame.setVisible(show)
+    if show:
+        parent.search_input.setFocus()
+        parent.search_input.selectAll()
+    else:
+        # Clear highlighting
+        _clear_search_highlight(parent)
+
+
+def _highlight_search(parent):
+    """Highlight all occurrences of search text."""
+    search_text = parent.search_input.text()
+    
+    if not search_text:
+        _clear_search_highlight(parent)
+        parent.search_count.setText("")
+        return
+    
+    # Get plain text from display
+    text = parent.chat_display.toPlainText()
+    
+    # Find all occurrences
+    parent._search_positions = []
+    start = 0
+    search_lower = search_text.lower()
+    text_lower = text.lower()
+    
+    while True:
+        pos = text_lower.find(search_lower, start)
+        if pos == -1:
+            break
+        parent._search_positions.append(pos)
+        start = pos + 1
+    
+    # Update count
+    count = len(parent._search_positions)
+    if count > 0:
+        parent._search_index = 0
+        parent.search_count.setText(f"1 of {count}")
+        _go_to_search_position(parent, 0)
+    else:
+        parent.search_count.setText("No results")
+        parent._search_index = 0
+
+
+def _search_next(parent):
+    """Go to next search result."""
+    if not parent._search_positions:
+        return
+    
+    parent._search_index = (parent._search_index + 1) % len(parent._search_positions)
+    _go_to_search_position(parent, parent._search_index)
+    parent.search_count.setText(f"{parent._search_index + 1} of {len(parent._search_positions)}")
+
+
+def _search_prev(parent):
+    """Go to previous search result."""
+    if not parent._search_positions:
+        return
+    
+    parent._search_index = (parent._search_index - 1) % len(parent._search_positions)
+    _go_to_search_position(parent, parent._search_index)
+    parent.search_count.setText(f"{parent._search_index + 1} of {len(parent._search_positions)}")
+
+
+def _go_to_search_position(parent, index):
+    """Navigate to a specific search result position."""
+    if not parent._search_positions or index >= len(parent._search_positions):
+        return
+    
+    from PyQt5.QtGui import QTextCursor, QColor, QTextCharFormat
+    
+    pos = parent._search_positions[index]
+    search_len = len(parent.search_input.text())
+    
+    # Move cursor to position and select
+    cursor = parent.chat_display.textCursor()
+    cursor.setPosition(pos)
+    cursor.setPosition(pos + search_len, QTextCursor.KeepAnchor)
+    parent.chat_display.setTextCursor(cursor)
+    
+    # Ensure visible
+    parent.chat_display.ensureCursorVisible()
+
+
+def _clear_search_highlight(parent):
+    """Clear search highlighting."""
+    parent._search_positions = []
+    parent._search_index = 0
 
 
 def _record_feedback_helper(parent, response_data, feedback_type, extra_metadata=None):

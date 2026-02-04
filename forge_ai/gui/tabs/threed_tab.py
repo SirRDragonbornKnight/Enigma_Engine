@@ -714,6 +714,14 @@ class ThreeDTab(QWidget):
     def _clear_reference(self):
         """Clear the reference input."""
         self.ref_input_path.clear()
+    
+    def closeEvent(self, event):
+        """Clean up worker thread when tab is closed."""
+        if self.worker and self.worker.isRunning():
+            self.worker.request_stop()
+            self.worker.terminate()
+            self.worker.wait(1000)  # Wait up to 1 second
+        super().closeEvent(event)
 
 
 def create_threed_tab(parent) -> QWidget:

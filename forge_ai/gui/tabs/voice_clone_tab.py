@@ -898,6 +898,13 @@ class VoiceCloneTab(QWidget):
         self.progress_bar.setVisible(False)
         self.status_label.setText(f"Error: {error}")
         QMessageBox.warning(self, "Error", error)
+    
+    def closeEvent(self, event):
+        """Clean up worker thread when tab is closed."""
+        if self.worker and self.worker.isRunning():
+            self.worker.terminate()
+            self.worker.wait(1000)  # Wait up to 1 second
+        super().closeEvent(event)
 
 
 # For standalone testing

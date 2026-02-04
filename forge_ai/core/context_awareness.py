@@ -181,9 +181,47 @@ class ContextTracker:
         if not self.conversation_history:
             return []
         
-        # For now, return most recent turns
-        # TODO: Could add semantic relevance scoring
-        return self.conversation_history[-max_turns:]
+        # Score turns by relevance to current input
+        scored_turns = []
+        input_words = set(current_input.lower().split())
+        
+        for i, turn in enumerate(self.conversation_history):
+            score = 0.0
+            
+            # Recency score (more recent = higher)
+            recency = (i + 1) / len(self.conversation_history)
+            score += recency * 0.3  # 30% weight for recency
+            
+            # Word overlap score
+            turn_text = f"{turn.user_input} {turn.ai_response}".lower()
+            turn_words = set(turn_text.split())
+            overlap = len(input_words & turn_words)
+            if input_words:
+                overlap_ratio = overlap / len(input_words)
+                score += overlap_ratio * 0.4  # 40% weight for word overlap
+            
+            # Entity overlap score
+            turn_entities = set()
+            for word in turn_text.split():
+                if word.istitle() and len(word) > 2:
+                    turn_entities.add(word.lower())
+            for word in current_input.split():
+                if word.istitle() and word.lower() in turn_entities:
+                    score += 0.1  # Bonus for shared entities
+            
+            # Topic continuity score
+            if turn.detected_topic and self.current_topic:
+                if turn.detected_topic == self.current_topic:
+                    score += 0.2  # Bonus for same topic
+            
+            scored_turns.append((score, i, turn))
+        
+        # Sort by score (descending) and get top turns
+        scored_turns.sort(key=lambda x: x[0], reverse=True)
+        relevant_indices = sorted([t[1] for t in scored_turns[:max_turns]])
+        
+        # Return in chronological order
+        return [self.conversation_history[i] for i in relevant_indices]
     
     def get_context_summary(self) -> str:
         """Get a summary of the current context."""

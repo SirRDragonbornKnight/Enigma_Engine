@@ -314,27 +314,96 @@ class FederatedLearning:
     
     def train_local(self, model, dataset, **kwargs) -> ModelUpdate:
         """
-        Train on local data.
+        Train on local data using ForgeAI training infrastructure.
         
         Args:
             model: Model to train
-            dataset: Local dataset
-            **kwargs: Training parameters
+            dataset: Local dataset (list of samples or DataLoader)
+            **kwargs: Training parameters (epochs, lr, etc.)
         
         Returns:
-            ModelUpdate with only weight deltas, not data
+            ModelUpdate with weight deltas (not full weights for privacy)
         """
+        import torch
+        
         # Store initial weights
         initial_weights = {
             name: param.detach().cpu().numpy().copy()
             for name, param in model.named_parameters()
         }
         
-        # Train model (using existing training logic)
-        # This is a placeholder - actual training would use forge_ai.core.training
-        logger.info(f"Training locally on {len(dataset)} samples")
+        # Get training parameters
+        epochs = kwargs.get('epochs', 1)
+        learning_rate = kwargs.get('lr', kwargs.get('learning_rate', 1e-4))
+        batch_size = kwargs.get('batch_size', 4)
         
-        # Calculate weight deltas
+        logger.info(f"Training locally on {len(dataset)} samples for {epochs} epoch(s)")
+        
+        # Try to use ForgeAI training infrastructure
+        try:
+            from forge_ai.core.training import Trainer, TrainingConfig
+            
+            config = TrainingConfig(
+                epochs=epochs,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                save_checkpoints=False,  # Don't save during federated training
+            )
+            
+            trainer = Trainer(model, config)
+            result = trainer.train(dataset)
+            final_loss = result.get('final_loss', 0.0) if result else 0.0
+            
+        except ImportError:
+            # Fallback to basic training loop
+            logger.debug("Using fallback training loop")
+            model.train()
+            optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+            
+            total_loss = 0.0
+            num_batches = 0
+            
+            for epoch in range(epochs):
+                for i in range(0, len(dataset), batch_size):
+                    batch = dataset[i:i + batch_size]
+                    
+                    # Handle different dataset formats
+                    if isinstance(batch, dict):
+                        input_ids = batch.get('input_ids')
+                        labels = batch.get('labels', input_ids)
+                    elif isinstance(batch, (list, tuple)) and len(batch) >= 2:
+                        input_ids, labels = batch[0], batch[1]
+                    else:
+                        continue
+                    
+                    if input_ids is None:
+                        continue
+                    
+                    optimizer.zero_grad()
+                    
+                    try:
+                        outputs = model(input_ids)
+                        if hasattr(outputs, 'loss') and outputs.loss is not None:
+                            loss = outputs.loss
+                        else:
+                            # Compute cross-entropy loss
+                            loss = torch.nn.functional.cross_entropy(
+                                outputs.view(-1, outputs.size(-1)),
+                                labels.view(-1)
+                            )
+                        
+                        loss.backward()
+                        optimizer.step()
+                        
+                        total_loss += loss.item()
+                        num_batches += 1
+                    except Exception as e:
+                        logger.debug(f"Batch training error: {e}")
+                        continue
+            
+            final_loss = total_loss / max(num_batches, 1)
+        
+        # Calculate weight deltas (what changed during training)
         weight_deltas = {}
         for name, param in model.named_parameters():
             current_weight = param.detach().cpu().numpy()
@@ -346,10 +415,10 @@ class FederatedLearning:
             round_number=self.current_round,
             weight_deltas=weight_deltas,
             num_samples=len(dataset),
-            loss=0.0,  # Would be actual loss from training
+            loss=final_loss,
         )
         
-        logger.info(f"Created model update with {len(weight_deltas)} layers")
+        logger.info(f"Training completed: {len(weight_deltas)} layers, loss={final_loss:.4f}")
         return update
     
     def send_update(self, update: ModelUpdate):

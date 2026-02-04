@@ -625,6 +625,13 @@ class EmbeddingsTab(QWidget):
             self.stored_embeddings.clear()
             self._update_table()
             self.status_label.setText("Cleared all embeddings")
+    
+    def closeEvent(self, event):
+        """Clean up worker thread when tab is closed."""
+        if self.worker and self.worker.isRunning():
+            self.worker.terminate()
+            self.worker.wait(1000)  # Wait up to 1 second
+        super().closeEvent(event)
 
 
 def create_embeddings_tab(parent) -> QWidget:

@@ -205,6 +205,7 @@ class MobileAvatar:
             def on_open(ws):
                 self._connected = True
                 self._state = MobileAvatarState.IDLE
+                self._ws = ws  # Store reference for sending
                 logger.info("Connected to avatar server")
                 # Request current state
                 ws.send(json.dumps({"type": "sync_request"}))
@@ -336,8 +337,28 @@ class MobileAvatar:
     
     def _send_event(self, event: Dict[str, Any]):
         """Send event to server."""
-        # TODO: Implement based on connection type
-        pass
+        if not self._connected:
+            return
+        
+        try:
+            # Check if we have an active websocket connection
+            if hasattr(self, '_ws') and self._ws:
+                self._ws.send(json.dumps(event))
+            else:
+                # Fallback to HTTP POST
+                import urllib.request
+                http_url = self.config.server_url.replace("ws://", "http://").replace("/avatar", "")
+                
+                req = urllib.request.Request(
+                    f"{http_url}/avatar/event",
+                    data=json.dumps(event).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    logger.debug(f"Event sent: {event.get('type', 'unknown')}")
+        except Exception as e:
+            logger.warning(f"Failed to send event: {e}")
     
     def send_command(self, command: str, **kwargs):
         """

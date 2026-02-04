@@ -91,6 +91,136 @@ class AudioAnalyzer:
         except ImportError:
             pass
     
+    def _estimate_speaking_rate(self, audio: 'np.ndarray', sr: int, duration: float) -> float:
+        """
+        Estimate speaking rate from audio using energy envelope peaks.
+        
+        This method counts syllable-like peaks in the energy envelope,
+        which correlates with speaking rate.
+        
+        Args:
+            audio: Audio samples as numpy array
+            sr: Sample rate
+            duration: Audio duration in seconds
+            
+        Returns:
+            Speaking rate normalized around 1.0 (1.0 = ~150 wpm average)
+        """
+        import numpy as np
+        
+        try:
+            # Calculate short-time energy (using 20ms windows)
+            frame_length = int(sr * 0.02)  # 20ms
+            hop_length = int(sr * 0.01)    # 10ms hop
+            
+            # Compute energy for each frame
+            num_frames = 1 + (len(audio) - frame_length) // hop_length
+            energy = np.zeros(num_frames)
+            
+            for i in range(num_frames):
+                start = i * hop_length
+                end = start + frame_length
+                if end <= len(audio):
+                    energy[i] = np.sum(audio[start:end] ** 2)
+            
+            if len(energy) < 3:
+                return 1.0
+            
+            # Smooth the energy envelope
+            kernel_size = 5
+            kernel = np.ones(kernel_size) / kernel_size
+            smoothed = np.convolve(energy, kernel, mode='same')
+            
+            # Normalize
+            if np.max(smoothed) > 0:
+                smoothed = smoothed / np.max(smoothed)
+            
+            # Find peaks (syllable candidates)
+            # A peak is where energy is higher than neighbors and above threshold
+            threshold = 0.2
+            peaks = []
+            for i in range(1, len(smoothed) - 1):
+                if (smoothed[i] > smoothed[i-1] and 
+                    smoothed[i] > smoothed[i+1] and 
+                    smoothed[i] > threshold):
+                    peaks.append(i)
+            
+            # Calculate syllables per second
+            syllables = len(peaks)
+            syllables_per_second = syllables / duration if duration > 0 else 0
+            
+            # Normalize to speaking rate (average English is ~5-6 syllables/sec)
+            # 1.0 = 5.5 syllables/second
+            normalized_rate = syllables_per_second / 5.5
+            
+            # Clamp to reasonable range
+            return max(0.3, min(2.5, normalized_rate))
+            
+        except Exception as e:
+            logger.debug(f"Speaking rate estimation failed: {e}")
+            return 1.0
+    
+    def _estimate_basic_speaking_rate(self, samples: tuple, sample_rate: int, duration: float) -> float:
+        """
+        Estimate speaking rate using basic audio samples (no numpy/librosa).
+        
+        Uses a simplified syllable counting approach.
+        
+        Args:
+            samples: Audio samples as tuple
+            sample_rate: Sample rate
+            duration: Audio duration in seconds
+            
+        Returns:
+            Speaking rate normalized around 1.0
+        """
+        if not samples or duration <= 0:
+            return 1.0
+        
+        try:
+            # Calculate frame-based energy using 20ms windows
+            frame_size = int(sample_rate * 0.02)
+            hop_size = int(sample_rate * 0.01)
+            
+            energy = []
+            for i in range(0, len(samples) - frame_size, hop_size):
+                frame = samples[i:i + frame_size]
+                frame_energy = sum(s ** 2 for s in frame) / len(frame)
+                energy.append(frame_energy)
+            
+            if len(energy) < 3:
+                return 1.0
+            
+            # Normalize energy
+            max_energy = max(energy) if energy else 1
+            if max_energy > 0:
+                energy = [e / max_energy for e in energy]
+            
+            # Simple smoothing (3-point average)
+            smoothed = []
+            for i in range(len(energy)):
+                start = max(0, i - 1)
+                end = min(len(energy), i + 2)
+                smoothed.append(sum(energy[start:end]) / (end - start))
+            
+            # Count peaks (syllable approximations)
+            threshold = 0.2
+            peaks = 0
+            for i in range(1, len(smoothed) - 1):
+                if (smoothed[i] > smoothed[i-1] and 
+                    smoothed[i] > smoothed[i+1] and 
+                    smoothed[i] > threshold):
+                    peaks += 1
+            
+            # Calculate normalized rate
+            syllables_per_second = peaks / duration if duration > 0 else 0
+            normalized_rate = syllables_per_second / 5.5  # Average English rate
+            
+            return max(0.3, min(2.5, normalized_rate))
+            
+        except Exception:
+            return 1.0
+    
     def analyze_audio(self, audio_path: str) -> AudioFeatures:
         """
         Analyze audio file to extract voice features.
@@ -147,6 +277,9 @@ class AudioAnalyzer:
             # Speaking rate (rough estimate from zero crossings)
             zcr = np.mean(librosa.feature.zero_crossing_rate(y))
             
+            # Estimate speaking rate from energy envelope
+            speaking_rate = self._estimate_speaking_rate(y, sr, duration)
+            
             # Spectral centroid
             spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)
             spectral_centroid = np.mean(spectral_centroids)
@@ -154,7 +287,7 @@ class AudioAnalyzer:
             return AudioFeatures(
                 average_pitch=normalized_pitch,
                 pitch_variance=pitch_variance / 100.0,  # Normalize
-                speaking_rate=1.0,  # Would need speech recognition for accurate rate
+                speaking_rate=speaking_rate,
                 energy=normalized_energy,
                 duration=duration,
                 sample_rate=sr,
@@ -167,8 +300,88 @@ class AudioAnalyzer:
             return self._analyze_basic(audio_path)
     
     def _analyze_basic(self, audio_path: Path) -> AudioFeatures:
-        """Basic analysis without advanced libraries."""
-        # Get file size as rough estimate of duration
+        \"\"\"
+        Basic analysis without advanced libraries (librosa).
+        
+        Uses Python standard library (wave, audioop) for WAV files,
+        or falls back to file-based estimates for other formats.
+        \"\"\"
+        import struct
+        
+        try:
+            # Try to analyze WAV files with standard library
+            if str(audio_path).lower().endswith('.wav'):
+                import wave
+                import audioop
+                
+                with wave.open(str(audio_path), 'rb') as wf:
+                    n_channels = wf.getnchannels()
+                    sample_width = wf.getsampwidth()
+                    sample_rate = wf.getframerate()
+                    n_frames = wf.getnframes()
+                    
+                    # Read all frames
+                    frames = wf.readframes(n_frames)
+                    
+                    # Calculate duration
+                    duration = n_frames / sample_rate
+                    
+                    # Calculate RMS energy (volume level)
+                    try:
+                        rms = audioop.rms(frames, sample_width)
+                        # Normalize to 0-1 range (assume max RMS around 32767 for 16-bit)
+                        max_rms = (2 ** (sample_width * 8 - 1)) - 1
+                        energy = min(1.0, rms / max_rms)
+                    except Exception:
+                        energy = 0.5
+                    
+                    # Calculate zero crossing rate (indicates frequency content)
+                    try:
+                        # Convert to mono if stereo
+                        if n_channels == 2:
+                            mono_frames = audioop.tomono(frames, sample_width, 0.5, 0.5)
+                        else:
+                            mono_frames = frames
+                        
+                        # Count zero crossings
+                        if sample_width == 2:  # 16-bit
+                            samples = struct.unpack(f'<{len(mono_frames)//2}h', mono_frames)
+                        elif sample_width == 1:  # 8-bit
+                            samples = struct.unpack(f'{len(mono_frames)}b', mono_frames)
+                        else:
+                            samples = []
+                        
+                        if samples:
+                            zero_crossings = sum(1 for i in range(1, len(samples)) 
+                                               if (samples[i] >= 0) != (samples[i-1] >= 0))
+                            zcr = zero_crossings / len(samples) if samples else 0
+                        else:
+                            zcr = 0.1
+                    except Exception:
+                        zcr = 0.1
+                    
+                    # Estimate pitch from zero crossing rate
+                    # Higher ZCR generally means higher pitch
+                    estimated_pitch = 0.5 + (zcr * 5)  # Scale to reasonable range
+                    estimated_pitch = max(0.5, min(2.0, estimated_pitch))
+                    
+                    # Estimate speaking rate from energy variations in basic mode
+                    # Count peaks in the energy as syllable approximations
+                    speaking_rate = self._estimate_basic_speaking_rate(samples, sample_rate, duration)
+                    
+                    return AudioFeatures(
+                        average_pitch=estimated_pitch,
+                        pitch_variance=0.15,
+                        speaking_rate=speaking_rate,
+                        energy=energy,
+                        duration=duration,
+                        sample_rate=sample_rate,
+                        zero_crossing_rate=zcr
+                    )
+        except Exception as e:
+            logger.debug(f"WAV analysis failed, using file estimates: {e}")
+        
+        # Fallback: file-based estimates for non-WAV or failed analysis
         file_size = audio_path.stat().st_size
         
         # Rough estimates using standard audio format constants

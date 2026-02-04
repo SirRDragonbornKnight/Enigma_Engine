@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import platform
 import threading
@@ -35,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 PLATFORM = platform.system().lower()
@@ -409,6 +410,88 @@ class PlyrNotificationBackend(NotificationBackend):
         return True
 
 
+class NotificationSettings:
+    """Per-type notification settings."""
+    
+    def __init__(self):
+        self.enabled = True
+        self.sound = True
+        self.priority_override: Optional[NotificationPriority] = None
+        self.timeout_override: Optional[int] = None
+    
+    def to_dict(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "sound": self.sound,
+            "priority_override": self.priority_override.value if self.priority_override else None,
+            "timeout_override": self.timeout_override,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'NotificationSettings':
+        settings = cls()
+        settings.enabled = data.get("enabled", True)
+        settings.sound = data.get("sound", True)
+        if data.get("priority_override"):
+            settings.priority_override = NotificationPriority(data["priority_override"])
+        settings.timeout_override = data.get("timeout_override")
+        return settings
+
+
+class DNDSchedule:
+    """Do Not Disturb schedule."""
+    
+    def __init__(self):
+        self.enabled = False
+        self.start_hour = 22  # 10 PM
+        self.start_minute = 0
+        self.end_hour = 8     # 8 AM
+        self.end_minute = 0
+        self.days = [0, 1, 2, 3, 4, 5, 6]  # All days (0=Monday)
+    
+    def is_active(self) -> bool:
+        """Check if DND should be active right now."""
+        if not self.enabled:
+            return False
+        
+        now = datetime.now()
+        current_day = now.weekday()
+        
+        if current_day not in self.days:
+            return False
+        
+        current_minutes = now.hour * 60 + now.minute
+        start_minutes = self.start_hour * 60 + self.start_minute
+        end_minutes = self.end_hour * 60 + self.end_minute
+        
+        # Handle overnight schedules (e.g., 22:00 - 08:00)
+        if start_minutes > end_minutes:
+            return current_minutes >= start_minutes or current_minutes < end_minutes
+        else:
+            return start_minutes <= current_minutes < end_minutes
+    
+    def to_dict(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "start_hour": self.start_hour,
+            "start_minute": self.start_minute,
+            "end_hour": self.end_hour,
+            "end_minute": self.end_minute,
+            "days": self.days,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'DNDSchedule':
+        schedule = cls()
+        schedule.enabled = data.get("enabled", False)
+        schedule.start_hour = data.get("start_hour", 22)
+        schedule.start_minute = data.get("start_minute", 0)
+        schedule.end_hour = data.get("end_hour", 8)
+        schedule.end_minute = data.get("end_minute", 0)
+        schedule.days = data.get("days", [0, 1, 2, 3, 4, 5, 6])
+        return schedule
+
+
 class NotificationManager:
     """
     Cross-platform notification manager.
@@ -416,8 +499,9 @@ class NotificationManager:
     Features:
     - Desktop notifications
     - Notification history
-    - Do Not Disturb mode
+    - Do Not Disturb mode with scheduling
     - Sound alerts
+    - Per-type notification settings
     - Callbacks for notification events
     """
     
@@ -425,7 +509,11 @@ class NotificationManager:
         self.history: List[Notification] = []
         self.max_history = 100
         self.do_not_disturb = False
+        self.dnd_schedule = DNDSchedule()
         self.sound_enabled = True
+        self.type_settings: Dict[NotificationType, NotificationSettings] = {
+            t: NotificationSettings() for t in NotificationType
+        }
         self._backend: Optional[NotificationBackend] = None
         self._callbacks: Dict[str, List[Callable]] = {
             "on_send": [],
@@ -434,9 +522,87 @@ class NotificationManager:
         }
         self._lock = threading.Lock()
         self._next_id = 1
+        self._settings_file = Path.home() / ".forge_ai" / "notification_settings.json"
+        
+        # Load saved settings
+        self._load_settings()
         
         # Initialize backend
         self._init_backend()
+    
+    def _load_settings(self):
+        """Load notification settings from file."""
+        try:
+            if self._settings_file.exists():
+                data = json.loads(self._settings_file.read_text())
+                self.do_not_disturb = data.get("do_not_disturb", False)
+                self.sound_enabled = data.get("sound_enabled", True)
+                
+                if "dnd_schedule" in data:
+                    self.dnd_schedule = DNDSchedule.from_dict(data["dnd_schedule"])
+                
+                if "type_settings" in data:
+                    for type_str, settings_data in data["type_settings"].items():
+                        try:
+                            ntype = NotificationType(type_str)
+                            self.type_settings[ntype] = NotificationSettings.from_dict(settings_data)
+                        except ValueError:
+                            pass
+        except Exception as e:
+            logger.debug(f"Could not load notification settings: {e}")
+    
+    def _save_settings(self):
+        """Save notification settings to file."""
+        try:
+            self._settings_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "do_not_disturb": self.do_not_disturb,
+                "sound_enabled": self.sound_enabled,
+                "dnd_schedule": self.dnd_schedule.to_dict(),
+                "type_settings": {
+                    t.value: s.to_dict() for t, s in self.type_settings.items()
+                },
+            }
+            self._settings_file.write_text(json.dumps(data, indent=2))
+        except Exception as e:
+            logger.debug(f"Could not save notification settings: {e}")
+    
+    def set_type_settings(self, ntype: NotificationType, enabled: bool = None,
+                          sound: bool = None, priority: NotificationPriority = None,
+                          timeout: int = None):
+        """Configure settings for a notification type."""
+        settings = self.type_settings[ntype]
+        if enabled is not None:
+            settings.enabled = enabled
+        if sound is not None:
+            settings.sound = sound
+        if priority is not None:
+            settings.priority_override = priority
+        if timeout is not None:
+            settings.timeout_override = timeout
+        self._save_settings()
+    
+    def set_dnd_schedule(self, enabled: bool = None, start_hour: int = None,
+                         start_minute: int = None, end_hour: int = None,
+                         end_minute: int = None, days: list = None):
+        """Configure DND schedule."""
+        if enabled is not None:
+            self.dnd_schedule.enabled = enabled
+        if start_hour is not None:
+            self.dnd_schedule.start_hour = start_hour
+        if start_minute is not None:
+            self.dnd_schedule.start_minute = start_minute
+        if end_hour is not None:
+            self.dnd_schedule.end_hour = end_hour
+        if end_minute is not None:
+            self.dnd_schedule.end_minute = end_minute
+        if days is not None:
+            self.dnd_schedule.days = days
+        self._save_settings()
+    
+    def is_dnd_active(self) -> bool:
+        """Check if DND is currently active (manual or scheduled)."""
+        return self.do_not_disturb or self.dnd_schedule.is_active()
     
     def _init_backend(self):
         """Initialize the appropriate backend."""
@@ -496,8 +662,24 @@ class NotificationManager:
         if isinstance(priority, str):
             priority = NotificationPriority(priority)
         
-        # Check DND
-        if self.do_not_disturb and priority not in (NotificationPriority.HIGH, NotificationPriority.URGENT):
+        # Check per-type settings
+        type_settings = self.type_settings.get(type)
+        if type_settings:
+            # Check if this type is disabled
+            if not type_settings.enabled:
+                logger.debug(f"Notification suppressed (type disabled): {title}")
+                return ""
+            
+            # Apply overrides
+            if type_settings.priority_override:
+                priority = type_settings.priority_override
+            if type_settings.timeout_override:
+                timeout = type_settings.timeout_override
+            if sound is None:
+                sound = type_settings.sound
+        
+        # Check DND (manual or scheduled)
+        if self.is_dnd_active() and priority not in (NotificationPriority.HIGH, NotificationPriority.URGENT):
             logger.debug(f"Notification suppressed (DND): {title}")
             return ""
         

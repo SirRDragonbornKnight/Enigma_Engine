@@ -193,7 +193,7 @@ class FederatedParticipant:
         round_number: int
     ) -> Optional[ModelUpdate]:
         """
-        Train on local data.
+        Train on local data using ForgeAI training infrastructure.
         
         Args:
             model: Model to train
@@ -203,6 +203,8 @@ class FederatedParticipant:
         Returns:
             Model update or None if training failed
         """
+        import torch
+        
         logger.info("Training on local data...")
         
         if not model or not dataset:
@@ -218,15 +220,75 @@ class FederatedParticipant:
             logger.error(f"Error storing initial weights: {e}")
             return None
         
-        # Train model (placeholder - would use actual training logic)
-        # In real implementation, use forge_ai.core.training
-        logger.debug(f"Training for max {self.max_training_time}s")
-        await asyncio.sleep(0.5)  # Simulate training
+        # Train using ForgeAI training infrastructure
+        loss = 0.0
+        try:
+            from forge_ai.core.training import Trainer, TrainingConfig
+            
+            config = TrainingConfig(
+                epochs=1,  # Single epoch per federated round
+                learning_rate=getattr(self, 'learning_rate', 1e-4),
+                batch_size=getattr(self, 'batch_size', 4),
+                save_checkpoints=False,
+            )
+            
+            # Run training in executor to not block async loop
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = loop.run_in_executor(
+                    executor,
+                    self._run_training_sync,
+                    model, dataset, config
+                )
+                try:
+                    loss = await asyncio.wait_for(future, timeout=self.max_training_time)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Training exceeded max time ({self.max_training_time}s)")
+                    
+        except ImportError:
+            # Fallback: basic training loop
+            logger.debug("Using fallback training")
+            model.train()
+            optimizer = torch.optim.AdamW(model.parameters(), lr=getattr(self, 'learning_rate', 1e-4))
+            
+            dataset_size = self._get_dataset_size(dataset)
+            batch_size = getattr(self, 'batch_size', 4)
+            
+            total_loss = 0.0
+            num_batches = 0
+            
+            for i in range(0, min(dataset_size, 100), batch_size):  # Limit iterations
+                try:
+                    batch = dataset[i:i + batch_size] if hasattr(dataset, '__getitem__') else next(iter(dataset))
+                    
+                    if isinstance(batch, dict):
+                        input_ids = batch.get('input_ids')
+                    elif isinstance(batch, (list, tuple)):
+                        input_ids = batch[0]
+                    else:
+                        continue
+                    
+                    if input_ids is None:
+                        continue
+                    
+                    optimizer.zero_grad()
+                    outputs = model(input_ids)
+                    
+                    if hasattr(outputs, 'loss') and outputs.loss is not None:
+                        batch_loss = outputs.loss
+                        batch_loss.backward()
+                        optimizer.step()
+                        total_loss += batch_loss.item()
+                        num_batches += 1
+                except Exception as e:
+                    logger.debug(f"Batch error: {e}")
+                    continue
+            
+            loss = total_loss / max(num_batches, 1)
         
         # Calculate weight deltas
         weight_deltas = {}
-        loss = 0.0
-        
         try:
             for name, param in model.named_parameters():
                 current_weight = param.detach().cpu().numpy()
@@ -247,6 +309,17 @@ class FederatedParticipant:
         
         logger.info(f"Training completed: {len(weight_deltas)} layers, loss={loss:.4f}")
         return update
+    
+    def _run_training_sync(self, model, dataset, config):
+        """Run training synchronously (called from executor)."""
+        try:
+            from forge_ai.core.training import Trainer
+            trainer = Trainer(model, config)
+            result = trainer.train(dataset)
+            return result.get('final_loss', 0.0) if result else 0.0
+        except Exception as e:
+            logger.error(f"Training error: {e}")
+            return 0.0
     
     async def _send_update(self, update):
         """

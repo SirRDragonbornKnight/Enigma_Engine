@@ -182,6 +182,9 @@ class DesktopPetWindow(QWidget):
     double_clicked = pyqtSignal()
     dragging = pyqtSignal(QPoint)
     dropped = pyqtSignal(QPoint)
+    wave_requested = pyqtSignal()
+    dance_requested = pyqtSignal()
+    sleep_requested = pyqtSignal()
     
     def __init__(self, size: int = 128):
         super().__init__(None)
@@ -416,14 +419,15 @@ class DesktopPetWindow(QWidget):
     
     def _action_wave(self):
         """Trigger wave action via signal."""
-        # Parent DesktopPet will handle this
-        pass
+        self.wave_requested.emit()
     
     def _action_dance(self):
-        pass
+        """Trigger dance action via signal."""
+        self.dance_requested.emit()
     
     def _action_sleep(self):
-        pass
+        """Trigger sleep action via signal."""
+        self.sleep_requested.emit()
     
     def _action_go_home(self):
         # Move to bottom right of screen
@@ -562,6 +566,9 @@ class DesktopPet(QObject):
         self._window.dropped.connect(self._on_dropped)
         self._window.dragging.connect(self._on_dragging)
         self._window.double_clicked.connect(self._on_double_click)
+        self._window.wave_requested.connect(self._behavior_wave)
+        self._window.dance_requested.connect(self._behavior_dance)
+        self._window.sleep_requested.connect(self._behavior_sleep)
         
         # Get screen info
         screen = QApplication.primaryScreen()

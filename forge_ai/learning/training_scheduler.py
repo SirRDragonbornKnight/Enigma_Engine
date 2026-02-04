@@ -174,23 +174,22 @@ class TrainingScheduler:
             training_file = self._export_training_data(examples)
             logger.info(f"Training data exported to: {training_file}")
             
-            # TODO: Actual LoRA training implementation
-            # This would integrate with forge_ai/core/training.py
-            logger.info(f"LoRA training with config: {self.lora_config}")
-            logger.info("Note: LoRA training integration pending - data collected and ready")
+            # Perform actual LoRA training
+            success = self._execute_lora_training(dataset)
             
-            # For now, just simulate training
-            logger.info("Training simulation: Would train model with prepared dataset")
-            
-            # Update state
-            self.last_training_time = datetime.now()
-            self._save_state()
-            
-            logger.info("=" * 60)
-            logger.info("TRAINING COMPLETE")
-            logger.info("=" * 60)
-            
-            return True
+            if success:
+                # Update state
+                self.last_training_time = datetime.now()
+                self._save_state()
+                
+                logger.info("=" * 60)
+                logger.info("TRAINING COMPLETE")
+                logger.info("=" * 60)
+                
+                return True
+            else:
+                logger.warning("LoRA training did not complete successfully")
+                return False
             
         except Exception as e:
             logger.error(f"Error during training: {e}", exc_info=True)
@@ -243,6 +242,102 @@ class TrainingScheduler:
                 "source": example.source.value
             })
         return dataset
+    
+    def _execute_lora_training(self, dataset: List[Dict[str, str]]) -> bool:
+        """
+        Execute actual LoRA training using the LoRA training module.
+        
+        Args:
+            dataset: Prepared training dataset
+            
+        Returns:
+            True if training completed successfully
+        """
+        try:
+            from ..core.lora_training import LoRAConfig, LoRAModel, LoRATrainer
+            from ..core.model import create_model
+            from ..core.tokenizer import get_tokenizer
+            from ..config import CONFIG
+            
+            logger.info(f"Initializing LoRA training with config: {self.lora_config}")
+            
+            # Load base model
+            models_dir = Path(CONFIG.get("models_dir", "models"))
+            model_path = models_dir / self.model_name
+            
+            if not model_path.exists():
+                logger.error(f"Model not found: {model_path}")
+                return False
+            
+            # Create LoRA configuration
+            lora_config = LoRAConfig(
+                r=self.lora_config.get("r", 8),
+                alpha=self.lora_config.get("alpha", 16),
+                dropout=self.lora_config.get("dropout", 0.1),
+                target_modules=self.lora_config.get("target_modules", ["q_proj", "v_proj"]),
+            )
+            
+            # Load or create model
+            try:
+                base_model = create_model(model_path)
+                logger.info(f"Loaded base model from {model_path}")
+            except Exception as e:
+                logger.error(f"Failed to load model: {e}")
+                return False
+            
+            # Get tokenizer
+            tokenizer = get_tokenizer()
+            
+            # Create LoRA model wrapper
+            lora_model = LoRAModel(base_model, config=lora_config)
+            logger.info(f"Created LoRA model with {lora_model.num_trainable_params:,} trainable params")
+            
+            # Prepare text data for training
+            training_texts = []
+            for item in dataset:
+                # Format as prompt-response pair
+                text = f"User: {item['input']}\nAssistant: {item['output']}"
+                training_texts.append(text)
+            
+            # Create trainer
+            trainer = LoRATrainer(
+                model=lora_model,
+                tokenizer=tokenizer,
+                lr=1e-4,
+                warmup_steps=min(100, len(training_texts) // 10),
+                gradient_accumulation_steps=4
+            )
+            
+            # Train
+            logger.info(f"Starting LoRA training with {len(training_texts)} examples...")
+            history = trainer.train(
+                dataset=training_texts,
+                epochs=3,
+                batch_size=4,
+                max_length=512,
+                log_interval=10
+            )
+            
+            # Save adapters
+            adapter_path = model_path / "lora_adapters" / datetime.now().strftime("%Y%m%d_%H%M%S")
+            adapter_path.mkdir(parents=True, exist_ok=True)
+            lora_model.save_adapters(adapter_path)
+            logger.info(f"Saved LoRA adapters to {adapter_path}")
+            
+            # Log training summary
+            if history and 'loss' in history:
+                final_loss = history['loss'][-1] if history['loss'] else float('nan')
+                logger.info(f"Training complete. Final loss: {final_loss:.4f}")
+            
+            return True
+            
+        except ImportError as e:
+            logger.error(f"LoRA training dependencies not available: {e}")
+            logger.info("Falling back to data export only (training skipped)")
+            return False
+        except Exception as e:
+            logger.error(f"LoRA training failed: {e}", exc_info=True)
+            return False
     
     def _export_training_data(self, examples: List) -> Path:
         """

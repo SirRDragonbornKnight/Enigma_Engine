@@ -5083,6 +5083,13 @@ class EnhancedMainWindow(QMainWindow):
             "ts": time.time()
         })
         
+        # Record user message in analytics
+        try:
+            from .tabs.analytics_tab import record_session_message
+            record_session_message(is_user=True)
+        except Exception:
+            pass  # Analytics not available
+        
         # Prevent unbounded growth - keep only recent history
         # This prevents memory issues and context overflow hallucinations
         MAX_HISTORY = 50  # 25 exchanges
@@ -5665,11 +5672,22 @@ class EnhancedMainWindow(QMainWindow):
         else:
             formatted_response = display_response
         
-        # Calculate thinking time
+        # Calculate thinking time and record analytics
         thinking_time = ""
+        elapsed_ms = 0
         if hasattr(self, '_generation_start_time'):
             elapsed = time.time() - self._generation_start_time
+            elapsed_ms = elapsed * 1000
             thinking_time = f'<span style="color: #bac2de; font-size: 12px; float: right;">{elapsed:.1f}s</span>'
+            
+            # Record response time analytics
+            try:
+                from .tabs.analytics_tab import record_response_time, record_session_message
+                model_name = getattr(self, 'current_model_name', 'unknown')
+                record_response_time(elapsed_ms, model_name, len(response))
+                record_session_message(is_user=False)  # AI message
+            except Exception:
+                pass  # Analytics not available
         
         # Generate unique ID for this response (for feedback)
         response_id = int(time.time() * 1000)
@@ -5691,10 +5709,12 @@ class EnhancedMainWindow(QMainWindow):
                 f'<div style="background-color: #1e1e2e; padding: 8px; margin: 4px 0; border-radius: 8px; border-left: 3px solid #a6e3a1;">'
                 f'<b style="color: #a6e3a1;">{self.current_model_name}:</b> {thinking_time}{formatted_response}'
                 f'<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #45475a;">'
-                f'<span style="color: #bac2de; font-size: 12px;">Rate this response: </span>'
+                f'<span style="color: #bac2de; font-size: 12px;">Rate: </span>'
                 f'<a href="feedback:good:{response_id}" style="color: #a6e3a1; text-decoration: none; margin: 0 4px;">Good</a>'
                 f'<a href="feedback:bad:{response_id}" style="color: #f38ba8; text-decoration: none; margin: 0 4px;">Bad</a>'
                 f'<a href="feedback:critique:{response_id}" style="color: #89b4fa; text-decoration: none; margin: 0 4px;">Critique</a>'
+                f'<span style="color: #45475a; margin: 0 4px;">|</span>'
+                f'<a href="feedback:regenerate:{response_id}" style="color: #cba6f7; text-decoration: none; margin: 0 4px;">Regenerate</a>'
                 f'</div></div>'
             )
         self.last_response = response
@@ -6578,6 +6598,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
             return
         self._is_training = True
         self._stop_training = False
+        self._training_start_time = time.time()  # Track training start for analytics
         
         # Get training parameters - check workspace first, then old training tab
         epochs = self.workspace_epochs_spin.value() if hasattr(self, 'workspace_epochs_spin') else self.epochs_spin.value()
@@ -6638,6 +6659,21 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
                 progress = int((epoch + 1) / epochs * 100)
                 update_ui(training=True, progress=progress)
                 QApplication.processEvents()
+            
+            # Record training analytics
+            try:
+                from .tabs.analytics_tab import get_analytics_recorder
+                start_time = getattr(self, '_training_start_time', time.time())
+                duration_min = (time.time() - start_time) / 60
+                final_loss = trainer.training_history[-1]['loss'] if trainer.training_history else 0
+                get_analytics_recorder().record_training(
+                    model=self.current_model_name,
+                    epochs=epochs if not stopped_early else epoch + 1,
+                    final_loss=final_loss,
+                    duration_min=duration_min
+                )
+            except Exception:
+                pass  # Analytics not available
             
             # Reload model
             self._load_current_model()

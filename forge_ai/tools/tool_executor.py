@@ -351,10 +351,13 @@ class ToolExecutor:
         Returns:
             Result dictionary with 'success', 'result', and optionally 'error'
         """
+        start_time = time.time()
+        
         # Validate parameters
         is_valid, error_msg, validated_params = self.validate_params(tool_name, params)
         
         if not is_valid:
+            self._record_tool_analytics(tool_name, False, start_time)
             return {
                 "success": False,
                 "error": error_msg,
@@ -364,6 +367,7 @@ class ToolExecutor:
         tool_def = get_tool_definition(tool_name)
         
         if not tool_def:
+            self._record_tool_analytics(tool_name, False, start_time)
             return {
                 "success": False,
                 "error": f"Unknown tool: {tool_name}",
@@ -373,17 +377,39 @@ class ToolExecutor:
         try:
             # Check if tool requires a module
             if tool_def.module:
-                return self._execute_module_tool(tool_name, tool_def.module, validated_params)
+                result = self._execute_module_tool(tool_name, tool_def.module, validated_params)
             else:
-                return self._execute_builtin_tool(tool_name, validated_params)
+                result = self._execute_builtin_tool(tool_name, validated_params)
+            
+            # Record analytics
+            self._record_tool_analytics(
+                tool_name, 
+                result.get("success", False), 
+                start_time,
+                tool_def.category if tool_def else ""
+            )
+            return result
         
         except Exception as e:
             logger.exception(f"Error executing tool {tool_name}: {e}")
+            self._record_tool_analytics(tool_name, False, start_time)
             return {
                 "success": False,
                 "error": str(e),
                 "tool": tool_name,
             }
+    
+    def _record_tool_analytics(self, tool_name: str, success: bool, 
+                                start_time: float, category: str = ""):
+        """Record tool usage analytics."""
+        try:
+            from ..gui.tabs.analytics_tab import record_tool_usage
+            duration_ms = (time.time() - start_time) * 1000
+            record_tool_usage(tool_name, success, duration_ms, category)
+        except ImportError:
+            pass  # Analytics module not available
+        except Exception as e:
+            logger.debug(f"Could not record tool analytics: {e}")
     
     def execute_tool_with_timeout(
         self,

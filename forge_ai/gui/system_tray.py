@@ -1945,11 +1945,126 @@ class ForgeSystemTray(QObject):
         self._original_showMessage(title, message, icon_type, duration)
     
     def _setup_global_hotkeys(self):
-        """Setup global hotkeys for showing GUI."""
-        # Note: True global hotkeys require platform-specific libraries
-        # For now, use a polling approach or rely on platform features
-        # The overlay ESC key is handled in QuickCommandOverlay.keyPressEvent
-        pass
+        """
+        Setup global hotkeys for showing GUI.
+        
+        Uses pynput for cross-platform global hotkey support.
+        Falls back to no-op if pynput is not available.
+        
+        Hotkeys are loaded from gui_settings.json and can be customized:
+        - hotkey_command: Show quick command overlay (default: Ctrl+Shift+E)
+        - hotkey_help: Show help window (default: Ctrl+Shift+H)
+        - hotkey_voice: Toggle voice input (default: Ctrl+Shift+V)
+        """
+        self._hotkey_listener = None
+        self._active_modifiers = set()
+        
+        try:
+            from pynput import keyboard
+            
+            # Load hotkey settings
+            hotkeys = self._load_hotkey_settings()
+            
+            # Parse hotkey strings into pynput format
+            def parse_hotkey(hotkey_str: str):
+                """Convert 'Ctrl+Shift+E' to pynput key combination."""
+                parts = hotkey_str.lower().replace(' ', '').split('+')
+                keys = set()
+                for part in parts:
+                    if part in ('ctrl', 'control'):
+                        keys.add(keyboard.Key.ctrl)
+                    elif part in ('shift',):
+                        keys.add(keyboard.Key.shift)
+                    elif part in ('alt',):
+                        keys.add(keyboard.Key.alt)
+                    elif part in ('cmd', 'command', 'meta', 'super', 'win'):
+                        keys.add(keyboard.Key.cmd)
+                    elif len(part) == 1:
+                        keys.add(keyboard.KeyCode.from_char(part))
+                    else:
+                        # Try as special key
+                        try:
+                            keys.add(getattr(keyboard.Key, part))
+                        except AttributeError:
+                            pass
+                return frozenset(keys)
+            
+            # Define hotkey combinations
+            self._hotkey_combos = {
+                parse_hotkey(hotkeys['command']): self._show_overlay_from_hotkey,
+                parse_hotkey(hotkeys['help']): self._show_help_from_hotkey,
+                parse_hotkey(hotkeys['voice']): self._toggle_voice_from_hotkey,
+            }
+            
+            def on_press(key):
+                """Handle key press."""
+                try:
+                    # Normalize key to comparable format
+                    if hasattr(key, 'char') and key.char:
+                        self._active_modifiers.add(keyboard.KeyCode.from_char(key.char.lower()))
+                    else:
+                        self._active_modifiers.add(key)
+                    
+                    # Check if any hotkey combination is active
+                    current_keys = frozenset(self._active_modifiers)
+                    for combo, action in self._hotkey_combos.items():
+                        if combo.issubset(current_keys):
+                            # Use QTimer to call from main thread
+                            QTimer.singleShot(0, action)
+                            return
+                except Exception as e:
+                    logger.debug(f"Hotkey press error: {e}")
+            
+            def on_release(key):
+                """Handle key release."""
+                try:
+                    if hasattr(key, 'char') and key.char:
+                        self._active_modifiers.discard(keyboard.KeyCode.from_char(key.char.lower()))
+                    else:
+                        self._active_modifiers.discard(key)
+                except Exception:
+                    pass
+            
+            # Start listener in non-blocking mode
+            self._hotkey_listener = keyboard.Listener(
+                on_press=on_press,
+                on_release=on_release,
+                suppress=False  # Don't suppress keys
+            )
+            self._hotkey_listener.daemon = True
+            self._hotkey_listener.start()
+            
+            logger.info(f"Global hotkeys registered: command={hotkeys['command']}, "
+                       f"help={hotkeys['help']}, voice={hotkeys['voice']}")
+            
+        except ImportError:
+            logger.debug("pynput not available - global hotkeys disabled. "
+                        "Install with: pip install pynput")
+        except Exception as e:
+            logger.warning(f"Failed to setup global hotkeys: {e}")
+    
+    def _show_overlay_from_hotkey(self):
+        """Show quick command overlay (called from hotkey)."""
+        if self.overlay and not self.overlay.isVisible():
+            self.overlay.show()
+            self.overlay.raise_()
+            self.overlay.activateWindow()
+    
+    def _show_help_from_hotkey(self):
+        """Show help window (called from hotkey)."""
+        self._show_help()
+    
+    def _toggle_voice_from_hotkey(self):
+        """Toggle voice input (called from hotkey)."""
+        self._toggle_voice()
+    
+    def _cleanup_hotkeys(self):
+        """Stop the hotkey listener."""
+        if hasattr(self, '_hotkey_listener') and self._hotkey_listener:
+            try:
+                self._hotkey_listener.stop()
+            except Exception:
+                pass
     
     def _create_icon(self):
         """Load icon from file or create a simple one."""
@@ -2958,6 +3073,9 @@ class ForgeSystemTray(QObject):
     def cleanup(self):
         """Clean up resources when the tray is being destroyed."""
         try:
+            # Stop global hotkey listener
+            self._cleanup_hotkeys()
+            
             if hasattr(self, 'tray_icon') and self.tray_icon:
                 self.tray_icon.hide()
                 self.tray_icon.setVisible(False)

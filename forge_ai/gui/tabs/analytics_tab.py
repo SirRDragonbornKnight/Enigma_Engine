@@ -11,9 +11,11 @@ Features:
 
 import os
 import json
+import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import Optional, Dict, Any
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QGroupBox, QHeaderView,
@@ -25,12 +27,177 @@ from PyQt5.QtGui import QFont, QPainter, QColor, QPen
 
 from .shared_components import NoScrollComboBox
 
+logger = logging.getLogger(__name__)
+
 # Config paths
 ANALYTICS_DIR = Path.home() / ".forge_ai" / "analytics"
 ANALYTICS_DIR.mkdir(parents=True, exist_ok=True)
 
 TOOL_USAGE_FILE = ANALYTICS_DIR / "tool_usage.json"
 SESSION_STATS_FILE = ANALYTICS_DIR / "session_stats.json"
+RESPONSE_TIMES_FILE = ANALYTICS_DIR / "response_times.json"
+
+
+# Global analytics recorder for use throughout the codebase
+class AnalyticsRecorder:
+    """Global analytics recording utility."""
+    
+    _instance: Optional['AnalyticsRecorder'] = None
+    
+    def __init__(self):
+        self._ensure_files()
+    
+    @classmethod
+    def get_instance(cls) -> 'AnalyticsRecorder':
+        """Get singleton instance."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+    
+    def _ensure_files(self):
+        """Ensure analytics files exist."""
+        ANALYTICS_DIR.mkdir(parents=True, exist_ok=True)
+        for file in [TOOL_USAGE_FILE, SESSION_STATS_FILE, RESPONSE_TIMES_FILE]:
+            if not file.exists():
+                file.write_text('{}')
+    
+    def record_tool_usage(self, tool_name: str, success: bool = True, 
+                          duration_ms: float = 0, category: str = ""):
+        """Record a tool usage event."""
+        try:
+            entries = []
+            if TOOL_USAGE_FILE.exists():
+                try:
+                    data = json.loads(TOOL_USAGE_FILE.read_text())
+                    entries = data.get("entries", [])
+                except:
+                    pass
+            
+            entries.append({
+                "tool": tool_name,
+                "success": success,
+                "duration_ms": duration_ms,
+                "category": category,
+                "timestamp": datetime.now().isoformat(),
+            })
+            
+            # Keep last 10000 entries
+            entries = entries[-10000:]
+            TOOL_USAGE_FILE.write_text(json.dumps({"entries": entries}, indent=2))
+        except Exception as e:
+            logger.debug(f"Could not record tool usage: {e}")
+    
+    def record_response_time(self, response_time_ms: float, model: str = "", 
+                             tokens: int = 0):
+        """Record a response time measurement."""
+        try:
+            entries = []
+            if RESPONSE_TIMES_FILE.exists():
+                try:
+                    data = json.loads(RESPONSE_TIMES_FILE.read_text())
+                    entries = data.get("entries", [])
+                except:
+                    pass
+            
+            entries.append({
+                "response_time_ms": response_time_ms,
+                "model": model,
+                "tokens": tokens,
+                "timestamp": datetime.now().isoformat(),
+            })
+            
+            # Keep last 5000 entries
+            entries = entries[-5000:]
+            RESPONSE_TIMES_FILE.write_text(json.dumps({"entries": entries}, indent=2))
+        except Exception as e:
+            logger.debug(f"Could not record response time: {e}")
+    
+    def record_session_message(self, is_user: bool = True):
+        """Record a message in session stats."""
+        try:
+            stats = {"total_messages": 0, "session_count": 0, 
+                     "hourly_activity": {}, "models_trained": 0}
+            
+            if SESSION_STATS_FILE.exists():
+                try:
+                    stats = json.loads(SESSION_STATS_FILE.read_text())
+                except:
+                    pass
+            
+            stats["total_messages"] = stats.get("total_messages", 0) + 1
+            
+            # Track hourly activity
+            hour = f"{datetime.now().hour}:00"
+            hourly = stats.get("hourly_activity", {})
+            hourly[hour] = hourly.get(hour, 0) + 1
+            stats["hourly_activity"] = hourly
+            
+            SESSION_STATS_FILE.write_text(json.dumps(stats, indent=2))
+        except Exception as e:
+            logger.debug(f"Could not record session message: {e}")
+    
+    def record_training(self, model: str, epochs: int, final_loss: float, 
+                        duration_min: float):
+        """Record a training session."""
+        try:
+            stats = {}
+            if SESSION_STATS_FILE.exists():
+                try:
+                    stats = json.loads(SESSION_STATS_FILE.read_text())
+                except:
+                    pass
+            
+            stats["models_trained"] = stats.get("models_trained", 0) + 1
+            
+            # Track training history
+            history = stats.get("training_history", [])
+            history.append({
+                "model": model,
+                "epochs": epochs,
+                "final_loss": final_loss,
+                "duration_min": duration_min,
+                "timestamp": datetime.now().isoformat(),
+            })
+            stats["training_history"] = history[-100:]  # Keep last 100
+            
+            SESSION_STATS_FILE.write_text(json.dumps(stats, indent=2))
+        except Exception as e:
+            logger.debug(f"Could not record training: {e}")
+    
+    def get_avg_response_time(self) -> float:
+        """Get average response time in ms."""
+        try:
+            if RESPONSE_TIMES_FILE.exists():
+                data = json.loads(RESPONSE_TIMES_FILE.read_text())
+                entries = data.get("entries", [])
+                if entries:
+                    times = [e.get("response_time_ms", 0) for e in entries[-100:]]
+                    return sum(times) / len(times) if times else 0
+        except:
+            pass
+        return 0
+
+
+def get_analytics_recorder() -> AnalyticsRecorder:
+    """Get the global analytics recorder."""
+    return AnalyticsRecorder.get_instance()
+
+
+# Convenience functions for easy importing
+def record_tool_usage(tool_name: str, success: bool = True, 
+                      duration_ms: float = 0, category: str = ""):
+    """Record tool usage - convenience function."""
+    get_analytics_recorder().record_tool_usage(tool_name, success, duration_ms, category)
+
+
+def record_response_time(response_time_ms: float, model: str = "", tokens: int = 0):
+    """Record response time - convenience function."""
+    get_analytics_recorder().record_response_time(response_time_ms, model, tokens)
+
+
+def record_session_message(is_user: bool = True):
+    """Record session message - convenience function."""
+    get_analytics_recorder().record_session_message(is_user)
 
 
 class StatCard(QFrame):
@@ -338,10 +505,16 @@ class AnalyticsTab(QWidget):
         
         # Update tool table
         self._update_tool_table(tool_usage)
+        
+        # Update training table
+        self._update_training_table(session_stats.get("training_history", []))
     
     def _load_tool_usage(self, start_date: datetime) -> dict:
         """Load tool usage statistics."""
         usage = defaultdict(int)
+        success_count = defaultdict(int)
+        total_count = defaultdict(int)
+        last_used = {}
         
         if TOOL_USAGE_FILE.exists():
             try:
@@ -349,20 +522,25 @@ class AnalyticsTab(QWidget):
                     data = json.load(f)
                     for entry in data.get("entries", []):
                         entry_date = datetime.fromisoformat(entry.get("timestamp", "2000-01-01"))
+                        tool = entry.get("tool", "unknown")
                         if entry_date >= start_date:
-                            usage[entry.get("tool", "unknown")] += 1
+                            usage[tool] += 1
+                            total_count[tool] += 1
+                            if entry.get("success", True):
+                                success_count[tool] += 1
+                            last_used[tool] = entry.get("timestamp", "")
             except Exception as e:
                 logger.debug(f"Could not load tool usage file: {e}")
         
-        # Add some sample data if empty
-        if not usage:
-            usage = {
-                "chat": 45,
-                "web_search": 12,
-                "file_read": 8,
-                "image_gen": 5,
-                "code_gen": 3,
-            }
+        # Store extra data for table display
+        self._tool_success_rates = {}
+        self._tool_last_used = {}
+        for tool in usage:
+            if total_count[tool] > 0:
+                self._tool_success_rates[tool] = int(success_count[tool] / total_count[tool] * 100)
+            else:
+                self._tool_success_rates[tool] = 100
+            self._tool_last_used[tool] = last_used.get(tool, "")
         
         return dict(usage)
     
@@ -374,26 +552,32 @@ class AnalyticsTab(QWidget):
             "avg_response_ms": 0,
             "models_trained": 0,
             "hourly_activity": {},
+            "training_history": [],
         }
         
         if SESSION_STATS_FILE.exists():
             try:
                 with open(SESSION_STATS_FILE, 'r') as f:
-                    stats = json.load(f)
+                    loaded = json.load(f)
+                    stats.update(loaded)
             except Exception as e:
                 logger.debug(f"Could not load session stats: {e}")
         
-        # Default sample data
-        if stats["total_messages"] == 0:
+        # Get real average response time
+        stats["avg_response_ms"] = get_analytics_recorder().get_avg_response_time()
+        
+        # Default sample data only if truly empty
+        if stats["total_messages"] == 0 and not stats.get("hourly_activity"):
             stats = {
-                "total_messages": 156,
-                "session_count": 12,
-                "avg_response_ms": 234,
-                "models_trained": 2,
+                "total_messages": 0,
+                "session_count": 0,
+                "avg_response_ms": 0,
+                "models_trained": 0,
                 "hourly_activity": {
-                    "0:00": 5, "3:00": 2, "6:00": 8, "9:00": 25,
-                    "12:00": 32, "15:00": 28, "18:00": 35, "21:00": 21
-                }
+                    "0:00": 0, "3:00": 0, "6:00": 0, "9:00": 0,
+                    "12:00": 0, "15:00": 0, "18:00": 0, "21:00": 0
+                },
+                "training_history": [],
             }
         
         return stats
@@ -405,17 +589,66 @@ class AnalyticsTab(QWidget):
         categories = {
             "chat": "Core", "web_search": "Web", "file_read": "Files",
             "image_gen": "Generation", "code_gen": "Generation",
+            "screen_capture": "Vision", "analyze_image": "Vision",
         }
         
         for tool, count in sorted(tool_usage.items(), key=lambda x: x[1], reverse=True):
             row = self.tool_table.rowCount()
             self.tool_table.insertRow(row)
             
+            # Get success rate
+            success_rate = self._tool_success_rates.get(tool, 100) if hasattr(self, '_tool_success_rates') else 100
+            
+            # Get last used time
+            last_used_str = "Unknown"
+            if hasattr(self, '_tool_last_used') and tool in self._tool_last_used:
+                ts = self._tool_last_used[tool]
+                if ts:
+                    try:
+                        dt = datetime.fromisoformat(ts)
+                        # Show relative time
+                        delta = datetime.now() - dt
+                        if delta.days > 0:
+                            last_used_str = f"{delta.days}d ago"
+                        elif delta.seconds > 3600:
+                            last_used_str = f"{delta.seconds // 3600}h ago"
+                        elif delta.seconds > 60:
+                            last_used_str = f"{delta.seconds // 60}m ago"
+                        else:
+                            last_used_str = "Just now"
+                    except:
+                        last_used_str = ts[:16]
+            
             self.tool_table.setItem(row, 0, QTableWidgetItem(tool))
             self.tool_table.setItem(row, 1, QTableWidgetItem(categories.get(tool, "Other")))
             self.tool_table.setItem(row, 2, QTableWidgetItem(str(count)))
-            self.tool_table.setItem(row, 3, QTableWidgetItem("98%"))  # Placeholder
-            self.tool_table.setItem(row, 4, QTableWidgetItem("Today"))  # Placeholder
+            self.tool_table.setItem(row, 3, QTableWidgetItem(f"{success_rate}%"))
+            self.tool_table.setItem(row, 4, QTableWidgetItem(last_used_str))
+    
+    def _update_training_table(self, training_history: list):
+        """Update the training history table."""
+        self.training_table.setRowCount(0)
+        
+        for entry in reversed(training_history):  # Most recent first
+            row = self.training_table.rowCount()
+            self.training_table.insertRow(row)
+            
+            # Parse timestamp
+            ts = entry.get("timestamp", "")
+            if ts:
+                try:
+                    dt = datetime.fromisoformat(ts)
+                    date_str = dt.strftime("%Y-%m-%d %H:%M")
+                except:
+                    date_str = ts[:16]
+            else:
+                date_str = "Unknown"
+            
+            self.training_table.setItem(row, 0, QTableWidgetItem(date_str))
+            self.training_table.setItem(row, 1, QTableWidgetItem(entry.get("model", "unknown")))
+            self.training_table.setItem(row, 2, QTableWidgetItem(str(entry.get("epochs", 0))))
+            self.training_table.setItem(row, 3, QTableWidgetItem(f"{entry.get('final_loss', 0):.4f}"))
+            self.training_table.setItem(row, 4, QTableWidgetItem(f"{entry.get('duration_min', 0):.1f}m"))
     
     def _export_analytics(self):
         """Export analytics to file."""
@@ -446,28 +679,8 @@ class AnalyticsTab(QWidget):
         self.refresh_timer.start(60000)  # Refresh every minute
     
     def record_tool_usage(self, tool_name: str, success: bool = True):
-        """Record a tool usage event."""
-        entries = []
-        
-        if TOOL_USAGE_FILE.exists():
-            try:
-                with open(TOOL_USAGE_FILE, 'r') as f:
-                    data = json.load(f)
-                    entries = data.get("entries", [])
-            except Exception as e:
-                logger.debug(f"Could not load tool usage for recording: {e}")
-        
-        entries.append({
-            "tool": tool_name,
-            "success": success,
-            "timestamp": datetime.now().isoformat(),
-        })
-        
-        # Keep last 10000 entries
-        entries = entries[-10000:]
-        
-        with open(TOOL_USAGE_FILE, 'w') as f:
-            json.dump({"entries": entries}, f)
+        """Record a tool usage event (instance method for backwards compatibility)."""
+        get_analytics_recorder().record_tool_usage(tool_name, success)
 
 
 def create_analytics_tab(parent=None):
