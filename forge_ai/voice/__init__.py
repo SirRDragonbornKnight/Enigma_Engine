@@ -197,6 +197,75 @@ __all__ = [
     'stop_wake_word_detection',
     'is_wake_word_active',
     
+    # Noise reduction
+    'NoiseReducer',
+    'NoiseReductionConfig',
+    'reduce_noise',
+    
+    # Echo cancellation
+    'EchoCanceller',
+    'EchoCancellationConfig',
+    'cancel_echo',
+    
+    # Audio ducking
+    'AudioDucker',
+    'AudioDuckingConfig',
+    'duck_audio',
+    'get_ducker',
+    
+    # SSML support
+    'SSMLParser',
+    'SSMLProcessor',
+    'SSMLSegment',
+    'SSMLDocument',
+    'ssml_to_text',
+    'strip_ssml',
+    
+    # Emotional TTS
+    'EmotionalTTS',
+    'Emotion',
+    'EmotionProfile',
+    'EmotionDetector',
+    'detect_emotion',
+    'emotional_ssml',
+    
+    # Multilingual TTS
+    'MultilingualTTS',
+    'Language',
+    'LanguageDetector',
+    'VoiceInfo',
+    'detect_language',
+    'get_language_name',
+    
+    # Speed control
+    'SpeedController',
+    'SpeedConfig',
+    'SpeedPreset',
+    'set_speed',
+    'get_speed',
+    
+    # Interruption handling
+    'InterruptionHandler',
+    'InterruptionConfig',
+    'InterruptionMode',
+    'start_barge_in_detection',
+    'stop_barge_in_detection',
+    'was_interrupted',
+    
+    # Streaming TTS
+    'StreamingTTS',
+    'StreamingConfig',
+    'AudioChunk',
+    'stream_speak',
+    'stream_chunks',
+    
+    # Audio file input
+    'AudioFileTranscriber',
+    'TranscriptionConfig',
+    'TranscriptionResult',
+    'transcribe_file',
+    'transcribe_with_timestamps',
+    
     # Optional advanced features
     'WhisperSTT',
     'NaturalTTS',
@@ -223,4 +292,130 @@ except ImportError:
     VoiceDevice = None
     SpeechSegment = None
     get_voice_pipeline = None
+
+# Noise reduction
+try:
+    from .noise_reduction import (
+        NoiseReducer, NoiseReductionConfig, reduce_noise,
+    )
+except ImportError:
+    NoiseReducer = None
+    NoiseReductionConfig = None
+    reduce_noise = None
+
+# Echo cancellation
+try:
+    from .echo_cancellation import (
+        EchoCanceller, EchoCancellationConfig, cancel_echo,
+    )
+except ImportError:
+    EchoCanceller = None
+    EchoCancellationConfig = None
+    cancel_echo = None
+
+# Audio ducking
+try:
+    from .audio_ducking import (
+        AudioDucker, AudioDuckingConfig, duck_audio, get_ducker,
+    )
+except ImportError:
+    AudioDucker = None
+    AudioDuckingConfig = None
+    duck_audio = None
+    get_ducker = None
+
+# SSML support
+try:
+    from .ssml import (
+        SSMLParser, SSMLProcessor, SSMLSegment, SSMLDocument,
+        ssml_to_text, strip_ssml,
+    )
+except ImportError:
+    SSMLParser = None
+    SSMLProcessor = None
+    SSMLSegment = None
+    SSMLDocument = None
+    ssml_to_text = None
+    strip_ssml = None
+
+# Emotional TTS
+try:
+    from .emotional_tts import (
+        EmotionalTTS, Emotion, EmotionProfile, EmotionDetector,
+        detect_emotion, emotional_ssml,
+    )
+except ImportError:
+    EmotionalTTS = None
+    Emotion = None
+    EmotionProfile = None
+    EmotionDetector = None
+    detect_emotion = None
+    emotional_ssml = None
+
+# Multilingual TTS
+try:
+    from .multilingual_tts import (
+        MultilingualTTS, Language, LanguageDetector, VoiceInfo,
+        detect_language, get_language_name,
+    )
+except ImportError:
+    MultilingualTTS = None
+    Language = None
+    LanguageDetector = None
+    VoiceInfo = None
+    detect_language = None
+    get_language_name = None
+
+# Speed control
+try:
+    from .speed_control import (
+        SpeedController, SpeedConfig, SpeedPreset,
+        set_speed, get_speed,
+    )
+except ImportError:
+    SpeedController = None
+    SpeedConfig = None
+    SpeedPreset = None
+    set_speed = None
+    get_speed = None
+
+# Interruption handling
+try:
+    from .interruption import (
+        InterruptionHandler, InterruptionConfig, InterruptionMode,
+        start_barge_in_detection, stop_barge_in_detection, was_interrupted,
+    )
+except ImportError:
+    InterruptionHandler = None
+    InterruptionConfig = None
+    InterruptionMode = None
+    start_barge_in_detection = None
+    stop_barge_in_detection = None
+    was_interrupted = None
+
+# Streaming TTS
+try:
+    from .streaming_tts import (
+        StreamingTTS, StreamingConfig, AudioChunk,
+        stream_speak, stream_chunks,
+    )
+except ImportError:
+    StreamingTTS = None
+    StreamingConfig = None
+    AudioChunk = None
+    stream_speak = None
+    stream_chunks = None
+
+# Audio file input
+try:
+    from .audio_file_input import (
+        AudioFileTranscriber, TranscriptionConfig, TranscriptionResult,
+        transcribe_file, transcribe_with_timestamps,
+    )
+except ImportError:
+    AudioFileTranscriber = None
+    TranscriptionConfig = None
+    TranscriptionResult = None
+    transcribe_file = None
+    transcribe_with_timestamps = None
 

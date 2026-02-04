@@ -96,6 +96,30 @@ class VoiceConfig:
     tts_rate: int = DEFAULT_TTS_RATE
     tts_volume: float = DEFAULT_TTS_VOLUME
     
+    # Speed control settings
+    speed_control_enabled: bool = True
+    speed_multiplier: float = 1.0  # 0.25-3.0 (1.0 = normal)
+    preserve_pitch: bool = True    # Keep pitch when stretching audio
+    
+    # Voice profile (for TTS customization)
+    voice_profile: str = "default"  # Profile name or path
+    
+    # Noise reduction settings
+    noise_reduction_enabled: bool = True
+    noise_reduction_strength: float = 1.0  # 0.0-1.0
+    
+    # Echo cancellation settings
+    echo_cancellation_enabled: bool = True
+    
+    # Audio ducking settings
+    audio_ducking_enabled: bool = True
+    audio_duck_level: float = 0.3  # 0.0-1.0 (lower = more ducking)
+    
+    # Interruption handling settings
+    interruption_enabled: bool = True
+    interruption_sensitivity: str = "medium"  # low, medium, high, very_high
+    interruption_mode: str = "confirmed"  # immediate, confirmed, word_boundary, sentence_end
+    
     # Output settings
     output_device: str = "default"
     
@@ -159,6 +183,24 @@ class VoicePipeline:
         
         # Wake word detector
         self._wake_detector = None
+        
+        # Noise reducer (lazy loaded)
+        self._noise_reducer = None
+        
+        # Echo canceller (lazy loaded)
+        self._echo_canceller = None
+        
+        # Audio ducker (lazy loaded)
+        self._audio_ducker = None
+        
+        # Speed controller (lazy loaded)
+        self._speed_controller = None
+        
+        # Interruption handler (lazy loaded)
+        self._interruption_handler = None
+        
+        # Flag to signal TTS stop
+        self._tts_stop_requested = False
     
     def start(self):
         """Start the voice pipeline."""
@@ -167,6 +209,11 @@ class VoicePipeline:
         # Initialize engines
         self._init_stt()
         self._init_tts()
+        self._init_noise_reducer()
+        self._init_echo_canceller()
+        self._init_audio_ducker()
+        self._init_speed_controller()
+        self._init_interruption_handler()
         
         # Start listener thread
         if self._mode in (VoiceMode.FULL, VoiceMode.LISTEN_ONLY):
@@ -265,22 +312,198 @@ class VoicePipeline:
         """Enable gaming mode (push-to-talk)."""
         self.set_mode(VoiceMode.GAMING)
     
+    # =========================================================================
+    # VOICE PROFILE MANAGEMENT
+    # =========================================================================
+    
+    def set_voice_profile(self, profile_name_or_obj) -> bool:
+        """
+        Set the active voice profile for TTS.
+        
+        Args:
+            profile_name_or_obj: Either a profile name string, VoiceProfile object,
+                                or a dict with profile settings
+        
+        Returns:
+            True if profile was set successfully
+        """
+        try:
+            from .voice_profile import VoiceProfile, PRESET_PROFILES
+            
+            # Store current profile
+            if isinstance(profile_name_or_obj, str):
+                if profile_name_or_obj.lower() in PRESET_PROFILES:
+                    self._current_voice_profile = PRESET_PROFILES[profile_name_or_obj.lower()]
+                else:
+                    # Try loading from file
+                    self._current_voice_profile = VoiceProfile.load(profile_name_or_obj)
+            elif isinstance(profile_name_or_obj, dict):
+                self._current_voice_profile = VoiceProfile(**profile_name_or_obj)
+            elif isinstance(profile_name_or_obj, VoiceProfile):
+                self._current_voice_profile = profile_name_or_obj
+            else:
+                logger.warning(f"Invalid profile type: {type(profile_name_or_obj)}")
+                return False
+            
+            # Apply to TTS engine
+            self._apply_voice_profile()
+            logger.info(f"Voice profile set to: {self._current_voice_profile.name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to set voice profile: {e}")
+            return False
+    
+    def get_voice_profile(self) -> Optional['VoiceProfile']:
+        """Get the current voice profile."""
+        return getattr(self, '_current_voice_profile', None)
+    
+    def list_voice_profiles(self) -> List[str]:
+        """
+        List all available voice profiles (presets + saved).
+        
+        Returns:
+            List of profile names
+        """
+        try:
+            from .voice_profile import VoiceProfile, PRESET_PROFILES
+            
+            profiles = list(PRESET_PROFILES.keys())
+            profiles.extend(VoiceProfile.list_profiles())
+            return sorted(set(profiles))
+        except Exception as e:
+            logger.error(f"Failed to list profiles: {e}")
+            return ["default"]
+    
+    def save_voice_profile(self, name: str = None) -> bool:
+        """
+        Save the current voice profile to disk.
+        
+        Args:
+            name: Optional name for the profile
+            
+        Returns:
+            True if saved successfully
+        """
+        if not hasattr(self, '_current_voice_profile') or not self._current_voice_profile:
+            logger.warning("No voice profile to save")
+            return False
+        
+        try:
+            if name:
+                self._current_voice_profile.name = name
+            self._current_voice_profile.save()
+            logger.info(f"Voice profile saved: {self._current_voice_profile.name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save profile: {e}")
+            return False
+    
+    def _apply_voice_profile(self):
+        """Apply the current voice profile to the TTS engine."""
+        if not hasattr(self, '_current_voice_profile') or not self._current_voice_profile:
+            return
+        
+        profile = self._current_voice_profile
+        
+        if self._tts_engine and self._tts_engine.get("type") == "pyttsx3":
+            try:
+                engine = self._tts_engine["engine"]
+                
+                # Apply rate (base rate * speed multiplier)
+                base_rate = 200
+                engine.setProperty('rate', int(base_rate * profile.speed))
+                
+                # Apply volume
+                engine.setProperty('volume', profile.volume)
+                
+                # Apply voice (male/female/specific)
+                voices = engine.getProperty('voices')
+                if voices and profile.voice != "default":
+                    voice_pref = profile.voice.lower()
+                    for voice in voices:
+                        if voice_pref in voice.name.lower() or voice_pref in voice.id.lower():
+                            engine.setProperty('voice', voice.id)
+                            break
+                
+                logger.debug(f"Applied voice profile: rate={int(base_rate * profile.speed)}, volume={profile.volume}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to apply voice profile to pyttsx3: {e}")
+        
+        elif self._tts_engine and self._tts_engine.get("type") == "elevenlabs":
+            # ElevenLabs handles profiles differently via voice IDs
+            logger.debug("ElevenLabs profile application not yet implemented")
+    
     def disable_gaming_mode(self):
         """Disable gaming mode."""
         self.set_mode(self.config.default_mode)
     
     def _init_stt(self):
-        """Initialize speech-to-text engine."""
-        try:
-            if self.config.stt_model == "whisper":
-                self._stt_engine = self._init_whisper()
-            elif self.config.stt_model == "vosk":
-                self._stt_engine = self._init_vosk()
-            else:
-                self._stt_engine = self._init_builtin_stt()
-        except Exception as e:
-            logger.warning(f"Failed to init STT ({self.config.stt_model}): {e}")
-            self._stt_engine = self._init_builtin_stt()
+        """
+        Initialize speech-to-text engine with automatic fallback.
+        
+        Fallback chain:
+        1. User-configured STT (whisper/vosk/google)
+        2. Local Whisper (if available)
+        3. Vosk (if available)
+        4. SpeechRecognition library
+        5. Builtin (very limited)
+        """
+        stt_engine = None
+        attempted = []
+        
+        # Try user's preferred STT first
+        if self.config.stt_model == "whisper":
+            try:
+                stt_engine = self._init_whisper()
+                logger.info("Initialized Whisper STT")
+            except Exception as e:
+                attempted.append(f"whisper: {e}")
+        elif self.config.stt_model == "vosk":
+            try:
+                stt_engine = self._init_vosk()
+                logger.info("Initialized Vosk STT")
+            except Exception as e:
+                attempted.append(f"vosk: {e}")
+        elif self.config.stt_model == "google":
+            try:
+                stt_engine = self._init_speech_recognition()
+                logger.info("Initialized Google Speech STT")
+            except Exception as e:
+                attempted.append(f"google: {e}")
+        
+        # Fallback chain if preferred not available
+        if stt_engine is None:
+            # Try local Whisper
+            try:
+                stt_engine = self._init_whisper()
+                logger.info("Fallback: Using local Whisper STT")
+            except Exception as e:
+                attempted.append(f"whisper fallback: {e}")
+        
+        if stt_engine is None:
+            # Try Vosk (good offline option)
+            try:
+                stt_engine = self._init_vosk()
+                logger.info("Fallback: Using Vosk STT")
+            except Exception as e:
+                attempted.append(f"vosk fallback: {e}")
+        
+        if stt_engine is None:
+            # Try SpeechRecognition library
+            try:
+                stt_engine = self._init_speech_recognition()
+                logger.info("Fallback: Using SpeechRecognition STT")
+            except Exception as e:
+                attempted.append(f"speech_recognition fallback: {e}")
+        
+        if stt_engine is None:
+            # Last resort: builtin (very limited)
+            stt_engine = self._init_builtin_stt()
+            logger.warning(f"Using limited builtin STT. Attempted: {attempted}")
+        
+        self._stt_engine = stt_engine
     
     def _init_tts(self):
         """Initialize text-to-speech engine."""
@@ -321,6 +544,22 @@ class VoicePipeline:
         logger.info("Using builtin STT (limited)")
         return {"type": "builtin"}
     
+    def _init_speech_recognition(self):
+        """
+        Initialize SpeechRecognition library.
+        
+        This provides access to multiple backends including:
+        - Google Speech API (online, free tier)
+        - Sphinx (offline, less accurate)
+        - Wit.ai, Bing, etc.
+        """
+        try:
+            import speech_recognition as sr
+            recognizer = sr.Recognizer()
+            return {"type": "speech_recognition", "recognizer": recognizer}
+        except ImportError:
+            raise RuntimeError("speech_recognition not available - pip install SpeechRecognition")
+    
     def _init_pyttsx3(self):
         """Initialize pyttsx3 TTS."""
         try:
@@ -346,6 +585,328 @@ class VoicePipeline:
         """Initialize builtin TTS (limited)."""
         logger.info("Using builtin TTS (limited)")
         return {"type": "builtin"}
+    
+    def _init_noise_reducer(self):
+        """Initialize noise reducer if enabled."""
+        if not self.config.noise_reduction_enabled:
+            logger.debug("Noise reduction disabled")
+            return
+        
+        try:
+            from .noise_reduction import NoiseReducer, NoiseReductionConfig
+            
+            nr_config = NoiseReductionConfig(
+                prop_decrease=self.config.noise_reduction_strength
+            )
+            self._noise_reducer = NoiseReducer(nr_config)
+            logger.info(f"Noise reducer initialized ({self._noise_reducer.backend_name})")
+        except Exception as e:
+            logger.warning(f"Failed to init noise reducer: {e}")
+            self._noise_reducer = None
+    
+    def _apply_noise_reduction(self, audio, sample_rate: int = 16000):
+        """
+        Apply noise reduction to audio if enabled.
+        
+        Args:
+            audio: Audio data (numpy array or bytes)
+            sample_rate: Sample rate in Hz
+        
+        Returns:
+            Cleaned audio in the same format as input
+        """
+        if self._noise_reducer is None:
+            return audio
+        
+        try:
+            import numpy as np
+            
+            # Convert to numpy if needed
+            input_was_bytes = isinstance(audio, bytes)
+            if input_was_bytes:
+                audio_np = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
+            else:
+                audio_np = audio
+            
+            # Apply noise reduction
+            cleaned = self._noise_reducer.reduce_noise(audio_np, sample_rate)
+            
+            # Convert back if needed
+            if input_was_bytes:
+                return (cleaned * 32768).astype(np.int16).tobytes()
+            return cleaned
+            
+        except Exception as e:
+            logger.debug(f"Noise reduction failed (non-fatal): {e}")
+            return audio
+    
+    def _init_echo_canceller(self):
+        """Initialize echo canceller if enabled."""
+        if not self.config.echo_cancellation_enabled:
+            logger.debug("Echo cancellation disabled")
+            return
+        
+        try:
+            from .echo_cancellation import EchoCanceller, EchoCancellationConfig
+            
+            ec_config = EchoCancellationConfig(
+                sample_rate=self.config.sample_rate
+            )
+            self._echo_canceller = EchoCanceller(ec_config)
+            logger.info(f"Echo canceller initialized ({self._echo_canceller.backend_name})")
+        except Exception as e:
+            logger.warning(f"Failed to init echo canceller: {e}")
+            self._echo_canceller = None
+    
+    def _feed_speaker_reference(self, audio, sample_rate: int = None):
+        """
+        Feed speaker audio to echo canceller for reference.
+        
+        Call this when audio is played through speakers.
+        
+        Args:
+            audio: Speaker audio being played
+            sample_rate: Sample rate in Hz
+        """
+        if self._echo_canceller is None:
+            return
+        
+        sample_rate = sample_rate or self.config.sample_rate
+        
+        try:
+            import numpy as np
+            
+            # Convert to numpy if needed
+            if isinstance(audio, bytes):
+                audio_np = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
+            else:
+                audio_np = audio
+            
+            self._echo_canceller.feed_reference(audio_np, sample_rate)
+            
+        except Exception as e:
+            logger.debug(f"Failed to feed speaker reference: {e}")
+    
+    def _apply_echo_cancellation(self, audio, sample_rate: int = None):
+        """
+        Apply echo cancellation to microphone audio.
+        
+        Args:
+            audio: Microphone audio (numpy array or bytes)
+            sample_rate: Sample rate in Hz
+        
+        Returns:
+            Echo-cancelled audio in the same format as input
+        """
+        if self._echo_canceller is None:
+            return audio
+        
+        sample_rate = sample_rate or self.config.sample_rate
+        
+        try:
+            import numpy as np
+            
+            # Convert to numpy if needed
+            input_was_bytes = isinstance(audio, bytes)
+            if input_was_bytes:
+                audio_np = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
+            else:
+                audio_np = audio
+            
+            # Apply echo cancellation
+            cleaned = self._echo_canceller.process(audio_np, sample_rate)
+            
+            # Convert back if needed
+            if input_was_bytes:
+                return (cleaned * 32768).astype(np.int16).tobytes()
+            return cleaned
+            
+        except Exception as e:
+            logger.debug(f"Echo cancellation failed (non-fatal): {e}")
+            return audio
+    
+    def _init_audio_ducker(self):
+        """Initialize audio ducker if enabled."""
+        if not self.config.audio_ducking_enabled:
+            logger.debug("Audio ducking disabled")
+            return
+        
+        try:
+            from .audio_ducking import AudioDucker, AudioDuckingConfig
+            
+            duck_config = AudioDuckingConfig(
+                duck_level=self.config.audio_duck_level
+            )
+            self._audio_ducker = AudioDucker(duck_config)
+            logger.info(f"Audio ducker initialized ({self._audio_ducker.backend_name})")
+        except Exception as e:
+            logger.warning(f"Failed to init audio ducker: {e}")
+            self._audio_ducker = None
+    
+    def _init_speed_controller(self):
+        """Initialize speed controller if enabled."""
+        if not self.config.speed_control_enabled:
+            logger.debug("Speed control disabled")
+            return
+        
+        try:
+            from .speed_control import SpeedController, SpeedConfig
+            
+            speed_config = SpeedConfig(
+                default_speed=self.config.speed_multiplier,
+                preserve_pitch=self.config.preserve_pitch,
+                pyttsx3_base_rate=self.config.tts_rate
+            )
+            self._speed_controller = SpeedController(speed_config)
+            
+            # Apply to TTS engine if already initialized
+            if self._tts_engine and "engine" in self._tts_engine:
+                self._speed_controller.apply_to_engine(self._tts_engine["engine"])
+            
+            logger.info(f"Speed controller initialized (speed={self.config.speed_multiplier}x)")
+        except Exception as e:
+            logger.warning(f"Failed to init speed controller: {e}")
+            self._speed_controller = None
+    
+    # =========================================================================
+    # Speed Control Methods
+    # =========================================================================
+    
+    def set_speed(self, multiplier: float) -> float:
+        """
+        Set speech speed.
+        
+        Args:
+            multiplier: Speed multiplier (0.25-3.0, 1.0 = normal)
+        
+        Returns:
+            Actual speed set
+        """
+        if self._speed_controller:
+            return self._speed_controller.set_speed(multiplier)
+        
+        # Fallback: adjust TTS rate directly
+        self.config.speed_multiplier = max(0.25, min(3.0, multiplier))
+        if self._tts_engine and "engine" in self._tts_engine:
+            engine = self._tts_engine["engine"]
+            if hasattr(engine, 'setProperty'):
+                new_rate = int(self.config.tts_rate * self.config.speed_multiplier)
+                engine.setProperty('rate', new_rate)
+        return self.config.speed_multiplier
+    
+    def get_speed(self) -> float:
+        """Get current speech speed multiplier."""
+        if self._speed_controller:
+            return self._speed_controller.speed
+        return self.config.speed_multiplier
+    
+    def speed_faster(self, amount: float = 0.25) -> float:
+        """Increase speech speed."""
+        if self._speed_controller:
+            return self._speed_controller.faster(amount)
+        return self.set_speed(self.config.speed_multiplier + amount)
+    
+    def speed_slower(self, amount: float = 0.25) -> float:
+        """Decrease speech speed."""
+        if self._speed_controller:
+            return self._speed_controller.slower(amount)
+        return self.set_speed(self.config.speed_multiplier - amount)
+    
+    def speed_reset(self) -> float:
+        """Reset speech speed to normal."""
+        if self._speed_controller:
+            return self._speed_controller.reset()
+        return self.set_speed(1.0)
+    
+    def _init_interruption_handler(self):
+        """Initialize interruption handler if enabled."""
+        if not self.config.interruption_enabled:
+            logger.debug("Interruption handling disabled")
+            return
+        
+        try:
+            from .interruption import (
+                InterruptionHandler, InterruptionConfig,
+                InterruptionMode, InterruptionSensitivity
+            )
+            
+            # Map config strings to enums
+            mode_map = {
+                "immediate": InterruptionMode.IMMEDIATE,
+                "confirmed": InterruptionMode.CONFIRMED,
+                "word_boundary": InterruptionMode.WORD_BOUNDARY,
+                "sentence_end": InterruptionMode.SENTENCE_END,
+            }
+            sensitivity_map = {
+                "low": InterruptionSensitivity.LOW,
+                "medium": InterruptionSensitivity.MEDIUM,
+                "high": InterruptionSensitivity.HIGH,
+                "very_high": InterruptionSensitivity.VERY_HIGH,
+            }
+            
+            int_config = InterruptionConfig(
+                mode=mode_map.get(self.config.interruption_mode, InterruptionMode.CONFIRMED),
+                sensitivity=sensitivity_map.get(self.config.interruption_sensitivity, InterruptionSensitivity.MEDIUM),
+                sample_rate=self.config.sample_rate
+            )
+            self._interruption_handler = InterruptionHandler(int_config)
+            
+            # Set TTS stop function
+            self._interruption_handler.set_tts_stop_function(self._stop_tts)
+            
+            # Register callback
+            self._interruption_handler.on_interrupt(self._on_user_interrupt)
+            
+            logger.info(f"Interruption handler initialized (mode={self.config.interruption_mode}, sensitivity={self.config.interruption_sensitivity})")
+        except Exception as e:
+            logger.warning(f"Failed to init interruption handler: {e}")
+            self._interruption_handler = None
+    
+    def _stop_tts(self):
+        """Stop current TTS playback."""
+        self._tts_stop_requested = True
+        
+        # Try to stop the TTS engine
+        if self._tts_engine:
+            engine_type = self._tts_engine.get("type")
+            engine = self._tts_engine.get("engine")
+            
+            if engine_type == "pyttsx3" and engine:
+                try:
+                    engine.stop()
+                except Exception as e:
+                    logger.debug(f"pyttsx3 stop error: {e}")
+    
+    def _on_user_interrupt(self):
+        """Handle user interruption callback."""
+        logger.info("User interrupted - stopping TTS")
+        
+        # Restore audio if ducked
+        if self._audio_ducker:
+            try:
+                self._audio_ducker.duck_end()
+            except Exception:
+                pass
+    
+    def enable_interruption(self, enabled: bool = True):
+        """Enable or disable interruption handling at runtime."""
+        self.config.interruption_enabled = enabled
+        if enabled and not self._interruption_handler:
+            self._init_interruption_handler()
+        elif not enabled and self._interruption_handler:
+            self._interruption_handler.stop_monitoring()
+    
+    def set_interruption_sensitivity(self, sensitivity: str):
+        """
+        Set interruption sensitivity.
+        
+        Args:
+            sensitivity: low, medium, high, or very_high
+        """
+        self.config.interruption_sensitivity = sensitivity
+        # Re-init to apply new sensitivity
+        if self._interruption_handler:
+            self._init_interruption_handler()
     
     def _cleanup_engines(self):
         """Cleanup audio engines."""
@@ -420,7 +981,27 @@ class VoicePipeline:
                     continue
                 
                 self._speaking = True
-                self._synthesize_speech(text)
+                self._tts_stop_requested = False
+                
+                # Start interruption monitoring
+                if self._interruption_handler:
+                    self._interruption_handler.start_monitoring()
+                
+                # Duck other audio during speech
+                if self._audio_ducker:
+                    self._audio_ducker.duck_start()
+                
+                try:
+                    self._synthesize_speech(text)
+                finally:
+                    # Stop interruption monitoring
+                    if self._interruption_handler:
+                        self._interruption_handler.stop_monitoring()
+                    
+                    # Restore audio after speech
+                    if self._audio_ducker:
+                        self._audio_ducker.duck_end()
+                
                 self._speaking = False
                 
             except queue.Empty:
@@ -428,6 +1009,17 @@ class VoicePipeline:
             except Exception as e:
                 logger.error(f"Speak error: {e}")
                 self._speaking = False
+                # Ensure cleanup on error
+                if self._interruption_handler:
+                    try:
+                        self._interruption_handler.stop_monitoring()
+                    except Exception:
+                        pass
+                if self._audio_ducker:
+                    try:
+                        self._audio_ducker.duck_end()
+                    except Exception:
+                        pass
     
     def _recognize_speech(self) -> str:
         """Recognize speech from microphone."""
@@ -440,6 +1032,8 @@ class VoicePipeline:
             return self._recognize_whisper()
         elif stt_type == "vosk":
             return self._recognize_vosk()
+        elif stt_type == "speech_recognition":
+            return self._recognize_speech_recognition()
         else:
             return self._recognize_builtin()
     
@@ -459,9 +1053,17 @@ class VoicePipeline:
             )
             sd.wait()
             
+            audio_clean = audio.flatten()
+            
+            # Apply echo cancellation first (removes speaker feedback)
+            audio_clean = self._apply_echo_cancellation(audio_clean, self.config.sample_rate)
+            
+            # Apply noise reduction
+            audio_clean = self._apply_noise_reduction(audio_clean, self.config.sample_rate)
+            
             # Transcribe
             model = self._stt_engine["model"]
-            result = model.transcribe(audio.flatten())
+            result = model.transcribe(audio_clean)
             return result.get("text", "").strip()
             
         except Exception as e:
@@ -501,6 +1103,60 @@ class VoicePipeline:
         logger.debug("Builtin STT - waiting for input")
         time.sleep(2.0)  # Simulate listening
         return ""
+    
+    def _recognize_speech_recognition(self) -> str:
+        """
+        Recognize using SpeechRecognition library.
+        
+        Supports multiple backends with automatic fallback:
+        1. Google Speech API (online, best accuracy)
+        2. Sphinx (offline, works without internet)
+        """
+        try:
+            import speech_recognition as sr
+            
+            recognizer = self._stt_engine.get("recognizer")
+            if not recognizer:
+                recognizer = sr.Recognizer()
+            
+            # Use microphone
+            with sr.Microphone(sample_rate=self.config.sample_rate) as source:
+                # Adjust for ambient noise
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                
+                logger.debug("Listening...")
+                try:
+                    audio = recognizer.listen(
+                        source, 
+                        timeout=self.config.max_recording_time,
+                        phrase_time_limit=10
+                    )
+                except sr.WaitTimeoutError:
+                    return ""
+            
+            # Try Google Speech first (online)
+            try:
+                text = recognizer.recognize_google(audio, language=self.config.stt_language)
+                return text.strip()
+            except sr.RequestError:
+                logger.debug("Google Speech unavailable, trying offline...")
+            except sr.UnknownValueError:
+                return ""  # No speech detected
+            
+            # Fallback to Sphinx (offline)
+            try:
+                text = recognizer.recognize_sphinx(audio)
+                return text.strip()
+            except sr.RequestError:
+                logger.debug("Sphinx not available")
+            except sr.UnknownValueError:
+                return ""
+            
+            return ""
+            
+        except Exception as e:
+            logger.error(f"SpeechRecognition error: {e}")
+            return ""
     
     def _synthesize_speech(self, text: str):
         """Synthesize speech from text."""
@@ -629,6 +1285,9 @@ class VoicePipeline:
             
             # Play if we successfully decoded
             if audio_array is not None:
+                # Feed to echo canceller before playing
+                self._feed_speaker_reference(audio_array, sample_rate)
+                
                 sd.play(audio_array, sample_rate)
                 sd.wait()  # Wait until playback finishes
                 logger.debug(f"Played audio: {len(audio_array)} samples at {sample_rate}Hz")
@@ -644,7 +1303,7 @@ class VoicePipeline:
             time.sleep(2.0)
     
     def _detect_wake_word(self) -> bool:
-        \"\"\"
+        """
         Detect wake word in recent audio buffer.
         
         Supports multiple backends:
@@ -654,7 +1313,7 @@ class VoicePipeline:
         
         Returns:
             True if wake word detected
-        \"\"\"
+        """
         wake_word = self.config.wake_word.lower()
         
         # Try Porcupine first (commercial-grade wake word detection)
@@ -679,13 +1338,13 @@ class VoicePipeline:
                 # Process audio buffer
                 result = self._porcupine.process(self._audio_buffer[-self._porcupine.frame_length:])
                 if result >= 0:
-                    logger.info(f\"Wake word detected via Porcupine\")
+                    logger.info(f"Wake word detected via Porcupine")
                     return True
                     
         except ImportError:
             pass  # Porcupine not available
         except Exception as e:
-            logger.debug(f\"Porcupine error: {e}\")
+            logger.debug(f"Porcupine error: {e}")
         
         # Try Vosk for keyword spotting (free, offline)
         try:
@@ -707,13 +1366,13 @@ class VoicePipeline:
                     result = json.loads(self._vosk_recognizer.Result())
                     text = result.get('text', '').lower()
                     if wake_word in text or any(word in text for word in wake_word.split()):
-                        logger.info(f\"Wake word detected via Vosk: {text}\")
+                        logger.info(f"Wake word detected via Vosk: {text}")
                         return True
                         
         except ImportError:
             pass  # Vosk not available
         except Exception as e:
-            logger.debug(f\"Vosk error: {e}\")
+            logger.debug(f"Vosk error: {e}")
         
         # Fallback: Check if we have recent transcription that matches
         if hasattr(self, '_last_transcription') and self._last_transcription:
@@ -727,10 +1386,55 @@ class VoicePipeline:
             ]
             for variant in wake_variants:
                 if variant in text:
-                    logger.info(f\"Wake word detected via transcription match: {text}\")
+                    logger.info(f"Wake word detected via transcription match: {text}")
                     self._last_transcription = ''  # Clear to avoid re-triggering
                     return True
         
+        # Try custom trained wake word model
+        if hasattr(self, '_custom_wake_model') and self._custom_wake_model:
+            if hasattr(self, '_recent_audio_buffer') and self._recent_audio_buffer:
+                try:
+                    import numpy as np
+                    audio = np.array(self._recent_audio_buffer, dtype=np.float32)
+                    detected, confidence = self._custom_wake_model.detect(
+                        audio, self.config.sample_rate
+                    )
+                    if detected:
+                        logger.info(f"Wake word detected via custom model (confidence: {confidence:.2f})")
+                        return True
+                except Exception as e:
+                    logger.debug(f"Custom wake word detection error: {e}")
+        
+        return False
+    
+    def set_custom_wake_word(self, model: 'WakeWordModel'):
+        """
+        Set a custom trained wake word model.
+        
+        Args:
+            model: Trained WakeWordModel from wake_word_trainer
+        """
+        self._custom_wake_model = model
+        logger.info(f"Custom wake word model set for '{model.wake_phrase}'")
+    
+    def load_custom_wake_word(self, wake_phrase: str) -> bool:
+        """
+        Load a custom trained wake word model by phrase.
+        
+        Args:
+            wake_phrase: The wake phrase to load
+            
+        Returns:
+            True if model loaded successfully
+        """
+        try:
+            from .wake_word_trainer import load_wake_word_model
+            model = load_wake_word_model(wake_phrase)
+            if model:
+                self.set_custom_wake_word(model)
+                return True
+        except Exception as e:
+            logger.error(f"Failed to load custom wake word: {e}")
         return False
     
     def _check_push_to_talk(self) -> bool:

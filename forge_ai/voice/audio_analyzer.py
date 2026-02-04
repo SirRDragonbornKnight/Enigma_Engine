@@ -331,6 +331,9 @@ class AudioAnalyzer:
             spectral_centroids = librosa.feature.spectral_centroid(y=y, sr=sr)
             spectral_centroid = np.mean(spectral_centroids)
             
+            # Extract timbre features for accurate voice cloning
+            timbre = self._extract_timbre_features(y, sr, avg_pitch, pitch_values)
+            
             return AudioFeatures(
                 average_pitch=normalized_pitch,
                 pitch_variance=pitch_variance / 100.0,  # Normalize
@@ -338,21 +341,330 @@ class AudioAnalyzer:
                 energy=normalized_energy,
                 duration=duration,
                 sample_rate=sr,
+                formants=timbre.formants if timbre else None,
                 spectral_centroid=spectral_centroid,
-                zero_crossing_rate=float(zcr)
+                zero_crossing_rate=float(zcr),
+                timbre=timbre
             )
             
         except Exception as e:
             print(f"Warning: Advanced analysis failed: {e}")
             return self._analyze_basic(audio_path)
     
+    def _extract_timbre_features(
+        self, 
+        y: 'np.ndarray', 
+        sr: int,
+        f0: float,
+        pitch_values: List[float]
+    ) -> Optional[TimbreFeatures]:
+        """
+        Extract comprehensive timbre features for voice cloning.
+        
+        Analyzes formants, spectral characteristics, and voice quality
+        parameters needed for accurate voice reproduction.
+        
+        Args:
+            y: Audio samples
+            sr: Sample rate
+            f0: Fundamental frequency
+            pitch_values: List of pitch measurements
+            
+        Returns:
+            TimbreFeatures or None if extraction fails
+        """
+        try:
+            import librosa
+            import numpy as np
+            
+            timbre = TimbreFeatures()
+            
+            # === FORMANT ANALYSIS ===
+            # Use LPC (Linear Predictive Coding) to estimate formants
+            formants, bandwidths = self._extract_formants_lpc(y, sr)
+            if formants:
+                timbre.formants = formants[:3] if len(formants) >= 3 else formants
+                timbre.formant_bandwidths = bandwidths[:3] if len(bandwidths) >= 3 else bandwidths
+            
+            # === SPECTRAL FEATURES ===
+            # Spectral centroid (brightness)
+            spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)
+            timbre.spectral_centroid = float(np.mean(spectral_centroid))
+            
+            # Spectral bandwidth (spread)
+            spectral_bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)
+            timbre.spectral_bandwidth = float(np.mean(spectral_bandwidth))
+            
+            # Spectral rolloff (frequency below which 85% of energy lies)
+            spectral_rolloff = librosa.feature.spectral_rolloff(y=y, sr=sr, roll_percent=0.85)
+            timbre.spectral_rolloff = float(np.mean(spectral_rolloff))
+            
+            # Spectral flatness (tonality vs noise)
+            spectral_flatness = librosa.feature.spectral_flatness(y=y)
+            timbre.spectral_flatness = float(np.mean(spectral_flatness))
+            
+            # === VOICE QUALITY ===
+            # Jitter (pitch perturbation)
+            if len(pitch_values) > 1:
+                pitch_arr = np.array(pitch_values)
+                pitch_diffs = np.abs(np.diff(pitch_arr))
+                timbre.jitter = float(np.mean(pitch_diffs) / np.mean(pitch_arr)) if np.mean(pitch_arr) > 0 else 0.01
+            
+            # Shimmer (amplitude perturbation)
+            rms = librosa.feature.rms(y=y)[0]
+            if len(rms) > 1:
+                rms_diffs = np.abs(np.diff(rms))
+                timbre.shimmer = float(np.mean(rms_diffs) / np.mean(rms)) if np.mean(rms) > 0 else 0.03
+            
+            # Harmonics-to-noise ratio (HNR)
+            timbre.harmonics_to_noise = self._estimate_hnr(y, sr, f0)
+            
+            # === VOCAL TRACT CHARACTERISTICS ===
+            # Estimate vocal tract length from formant spacing
+            if len(timbre.formants) >= 2:
+                # Formant spacing relates inversely to vocal tract length
+                # Average adult male: 17cm, female: 14cm
+                formant_spacing = timbre.formants[1] - timbre.formants[0]
+                # Typical F1-F2 spacing is ~1000Hz for 17cm tract
+                timbre.vocal_tract_length = 17.0 * (1000.0 / formant_spacing) if formant_spacing > 0 else 17.0
+                timbre.vocal_tract_length = max(12.0, min(22.0, timbre.vocal_tract_length))
+            
+            # Breathiness (from spectral flatness and HNR)
+            timbre.breathiness = min(1.0, max(0.0, timbre.spectral_flatness * 2 + (1 - timbre.harmonics_to_noise / 30)))
+            
+            # Nasality (estimated from formant patterns)
+            # Nasal sounds show anti-resonances and altered F1
+            timbre.nasality = self._estimate_nasality(timbre.formants, timbre.spectral_flatness)
+            
+            return timbre
+            
+        except Exception as e:
+            logger.debug(f"Timbre extraction failed: {e}")
+            return None
+    
+    def _extract_formants_lpc(
+        self, 
+        y: 'np.ndarray', 
+        sr: int,
+        order: int = 12
+    ) -> Tuple[List[float], List[float]]:
+        """
+        Extract formant frequencies using LPC analysis.
+        
+        Linear Predictive Coding models the vocal tract as a filter,
+        and the poles of this filter correspond to formant frequencies.
+        
+        Args:
+            y: Audio samples
+            sr: Sample rate
+            order: LPC order (higher = more formants but less stable)
+            
+        Returns:
+            Tuple of (formant_frequencies, formant_bandwidths)
+        """
+        import numpy as np
+        
+        try:
+            # Pre-emphasis filter (boost high frequencies)
+            pre_emphasis = 0.97
+            y_emph = np.append(y[0], y[1:] - pre_emphasis * y[:-1])
+            
+            # Window the signal
+            frame_length = min(len(y_emph), int(0.025 * sr))  # 25ms frame
+            frame = y_emph[:frame_length] * np.hamming(frame_length)
+            
+            # Compute LPC coefficients using autocorrelation method
+            # Autocorrelation
+            r = np.correlate(frame, frame, mode='full')
+            r = r[len(r)//2:len(r)//2 + order + 1]
+            
+            # Levinson-Durbin recursion
+            a = self._levinson_durbin(r, order)
+            
+            if a is None:
+                return [500, 1500, 2500], [90, 110, 170]  # Defaults
+            
+            # Find roots of the LPC polynomial
+            roots = np.roots(a)
+            
+            # Keep only roots inside unit circle with positive imaginary part
+            formants = []
+            bandwidths = []
+            
+            for root in roots:
+                if np.imag(root) >= 0:
+                    # Convert to frequency
+                    angle = np.angle(root)
+                    freq = angle * sr / (2 * np.pi)
+                    
+                    # Bandwidth from distance to unit circle
+                    bw = -np.log(np.abs(root)) * sr / np.pi
+                    
+                    # Filter to reasonable formant range
+                    if 200 < freq < 5000 and bw < 500:
+                        formants.append(freq)
+                        bandwidths.append(bw)
+            
+            # Sort by frequency
+            if formants:
+                sorted_indices = np.argsort(formants)
+                formants = [formants[i] for i in sorted_indices]
+                bandwidths = [bandwidths[i] for i in sorted_indices]
+                return formants, bandwidths
+            
+            return [500, 1500, 2500], [90, 110, 170]
+            
+        except Exception as e:
+            logger.debug(f"LPC formant extraction failed: {e}")
+            return [500, 1500, 2500], [90, 110, 170]
+    
+    def _levinson_durbin(self, r: 'np.ndarray', order: int) -> Optional['np.ndarray']:
+        """
+        Levinson-Durbin algorithm for solving Toeplitz system.
+        
+        Used to compute LPC coefficients from autocorrelation.
+        """
+        import numpy as np
+        
+        try:
+            a = np.zeros(order + 1)
+            a[0] = 1.0
+            
+            e = r[0]
+            
+            for i in range(1, order + 1):
+                # Compute reflection coefficient
+                lambda_val = 0.0
+                for j in range(1, i):
+                    lambda_val += a[j] * r[i - j]
+                lambda_val = (r[i] - lambda_val) / e if e != 0 else 0
+                
+                # Update coefficients
+                a_new = a.copy()
+                a_new[i] = lambda_val
+                for j in range(1, i):
+                    a_new[j] = a[j] - lambda_val * a[i - j]
+                a = a_new
+                
+                # Update error
+                e = e * (1 - lambda_val ** 2)
+                
+                if e <= 0:
+                    break
+            
+            return a
+            
+        except Exception:
+            return None
+    
+    def _estimate_hnr(self, y: 'np.ndarray', sr: int, f0: float) -> float:
+        """
+        Estimate Harmonics-to-Noise Ratio (HNR).
+        
+        HNR measures voice clarity - higher values indicate clearer voice,
+        lower values indicate breathier/hoarser voice.
+        
+        Args:
+            y: Audio samples
+            sr: Sample rate
+            f0: Fundamental frequency
+            
+        Returns:
+            HNR in dB (typically 5-25 dB for normal speech)
+        """
+        import numpy as np
+        
+        try:
+            if f0 <= 0:
+                f0 = 150  # Default
+            
+            # Use autocorrelation-based HNR estimation
+            period = int(sr / f0)
+            
+            if period < 2 or period > len(y) // 2:
+                return 15.0  # Default
+            
+            # Compute autocorrelation
+            n_periods = min(10, len(y) // period - 1)
+            if n_periods < 1:
+                return 15.0
+            
+            acf_values = []
+            for lag in range(1, n_periods + 1):
+                shift = lag * period
+                if shift < len(y):
+                    segment1 = y[:len(y) - shift]
+                    segment2 = y[shift:]
+                    min_len = min(len(segment1), len(segment2))
+                    acf = np.sum(segment1[:min_len] * segment2[:min_len])
+                    acf /= np.sqrt(np.sum(segment1[:min_len]**2) * np.sum(segment2[:min_len]**2) + 1e-10)
+                    acf_values.append(acf)
+            
+            if not acf_values:
+                return 15.0
+            
+            # HNR from peak autocorrelation
+            max_acf = max(acf_values)
+            if max_acf > 0 and max_acf < 1:
+                hnr = 10 * np.log10(max_acf / (1 - max_acf + 1e-10))
+                return float(max(0, min(30, hnr)))
+            
+            return 15.0
+            
+        except Exception:
+            return 15.0
+    
+    def _estimate_nasality(self, formants: List[float], spectral_flatness: float) -> float:
+        """
+        Estimate nasality from formant patterns.
+        
+        Nasal sounds show characteristic formant patterns with
+        anti-resonances (zeros) and altered F1.
+        
+        Args:
+            formants: Formant frequencies
+            spectral_flatness: Spectral flatness value
+            
+        Returns:
+            Nasality estimate (0-1)
+        """
+        if len(formants) < 2:
+            return 0.2
+        
+        try:
+            # Nasal sounds typically have:
+            # 1. Lower F1 (around 250-300 Hz vs 500+ for oral)
+            # 2. Anti-resonance around 1000 Hz
+            # 3. Higher spectral flatness
+            
+            nasality = 0.0
+            
+            # Low F1 suggests nasality
+            if formants[0] < 400:
+                nasality += 0.3
+            
+            # Check for characteristic nasal formant spacing
+            if len(formants) >= 2:
+                f1_f2_ratio = formants[1] / formants[0] if formants[0] > 0 else 3
+                # Nasal sounds often have larger F1-F2 ratio
+                if f1_f2_ratio > 4:
+                    nasality += 0.2
+            
+            # High spectral flatness can indicate nasality
+            nasality += spectral_flatness * 0.3
+            
+            return min(1.0, max(0.0, nasality))
+            
+        except Exception:
+            return 0.2
+
     def _analyze_basic(self, audio_path: Path) -> AudioFeatures:
-        \"\"\"
+        """
         Basic analysis without advanced libraries (librosa).
         
         Uses Python standard library (wave, audioop) for WAV files,
         or falls back to file-based estimates for other formats.
-        \"\"\"
+        """
         import struct
         
         try:

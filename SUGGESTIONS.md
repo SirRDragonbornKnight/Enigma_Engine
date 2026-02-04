@@ -12,8 +12,8 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 
 ## Quick Stats
 <!-- Last updated: 2026-02-04 -->
-- **Completed:** 134 items
-- **Remaining:** ~3,701 items
+- **Completed:** 173 items
+- **Remaining:** ~3,662 items
 
 ---
 
@@ -48,24 +48,24 @@ These are marked as implemented but are actually stubs or return hardcoded value
 ## Incomplete Voice System
 
 - [x] **Voice Sample Analysis Fallback** - Implemented WAV analysis using standard library (wave/audioop) for pitch, energy, ZCR (2026-02-04)
-- [ ] **Neural Voice Analysis** - `voice/voice_cloning.py` `_neural_analysis()` falls back to spectral analysis
+- [x] **Neural Voice Analysis** - Implemented multi-backend support: local PyTorch, ElevenLabs API, and Coqui TTS in `voice/voice_cloning.py` (2026-02-04)
 - [x] **Wake Word Detection** - Implemented multi-backend support: Porcupine, Vosk, and transcription matching (2026-02-04)
 - [x] **MP3 Audio Playback** - `voice/voice_pipeline.py` `_play_audio()` now properly decodes MP3/OGG/WAV using pydub, soundfile, or wave (2026-02-04)
-- [ ] **Voice Timbre/Formant Analysis** - Missing from audio analyzer for accurate cloning
+- [x] **Voice Timbre/Formant Analysis** - Added `TimbreFeatures` class and LPC-based formant extraction in `voice/audio_analyzer.py` (2026-02-04)
 - [x] **Speech Rate Detection** - `voice/audio_analyzer.py` now estimates speaking rate from energy envelope peaks (2026-02-04)
-- [ ] **Custom Wake Words** - User-defined wake word training
-- [ ] **Multiple Voice Profiles** - Switch between different TTS voices
-- [ ] **Voice Activity Detection** - Better VAD for noisy environments
-- [ ] **Noise Cancellation** - Filter background noise from input
-- [ ] **Echo Cancellation** - Prevent feedback loops with speakers
-- [ ] **Audio Ducking** - Lower other audio when AI speaks
-- [ ] **SSML Support** - Speech Synthesis Markup Language for TTS control
-- [ ] **Emotion in TTS** - Emotional inflection in generated speech
-- [ ] **Multilingual TTS** - Support multiple languages in voice output
-- [ ] **Voice Speed Control** - Adjustable TTS playback speed
-- [ ] **Interruption Handling** - Stop TTS when user starts speaking
-- [ ] **Streaming TTS** - Start playing audio before full generation
-- [ ] **Audio File Input** - Transcribe audio files, not just microphone
+- [x] **Custom Wake Words** - Implemented `wake_word_trainer.py` with recording, MFCC/DTW training, and VoicePipeline integration (2026-02-04)
+- [x] **Multiple Voice Profiles** - VoicePipeline now supports profile switching via `set_voice_profile()`, `list_voice_profiles()`, and profile saving/loading (2026-02-04)
+- [x] **Voice Activity Detection** - Implemented multi-backend VAD in `voice/vad.py` with Silero, WebRTC, and energy-based detection (2026-02-04)
+- [x] **Noise Cancellation** - Implemented multi-backend noise reduction in `voice/noise_reduction.py` with noisereduce (spectral gating), scipy spectral subtraction, and energy-gate fallback (2026-02-04)
+- [x] **Echo Cancellation** - Implemented multi-backend AEC in `voice/echo_cancellation.py` with speexdsp, NLMS adaptive filter, and cross-correlation fallback (2026-02-04)
+- [x] **Audio Ducking** - Implemented cross-platform audio ducking in `voice/audio_ducking.py` with PulseAudio, ALSA, Windows (pycaw), and macOS support (2026-02-04)
+- [x] **SSML Support** - Implemented W3C SSML 1.1 parser in `voice/ssml.py` with prosody, breaks, emphasis, say-as, phonemes, and TTS integration (2026-02-04)
+- [x] **Emotion in TTS** - Implemented emotional speech in `voice/emotional_tts.py` with 25+ emotions, auto-detection, prosody profiles, and SSML generation (2026-02-04)
+- [x] **Multilingual TTS** - Implemented multi-language support in `voice/multilingual_tts.py` with 50+ languages, auto-detection, voice selection, and code-switching (2026-02-04)
+- [x] **Voice Speed Control** - Implemented adjustable TTS speed in `voice/speed_control.py` with 12 presets, 0.25-3.0x range, pitch preservation, and VoicePipeline integration (2026-02-04)
+- [x] **Interruption Handling** - Implemented barge-in detection in `voice/interruption.py` with VAD integration, multiple modes (immediate/confirmed), sensitivity levels, and TTS stop (2026-02-04)
+- [x] **Streaming TTS** - Implemented chunked audio generation in `voice/streaming_tts.py` with sentence splitting, 4 backends (pyttsx3/espeak/edge-tts/coqui), and low-latency playback (2026-02-04)
+- [x] **Audio File Input** - Implemented file transcription in `voice/audio_file_input.py` with 9 format support, 3 backends (Whisper/Vosk/SpeechRecognition), timestamps, and batch processing (2026-02-04)
 - [ ] **Speaker Diarization** - Identify different speakers in audio
 - [ ] **Punctuation Restoration** - Add punctuation to transcribed text
 - [ ] **Profanity Filter** - Option to filter profanity in transcription
@@ -136,24 +136,24 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 
 ## Architecture
 
-- [ ] **Singleton ModuleManager** - Use `get_manager()` consistently to prevent multiple registrations
+- [x] **Singleton ModuleManager** - Implemented `__new__` singleton pattern so `ModuleManager()` returns same instance as `get_manager()` (2026-02-04)
 - [x] **Async/Await Migration** - Move from threading to `asyncio` for API server - FastAPI/uvicorn async in web/server.py
 - [ ] **Config Validation** - Add pydantic/dataclass validation for config files
 - [ ] **Proper Error Returns** - Many functions return `[]`, `{}`, `""`, `0.0` on error instead of raising
 - [ ] **Neural Network Variance** - `core/nn.py` raises NotImplementedError for axis-specific variance
 - [ ] **Web Server Stubs** - `web/routes.py` creates stub Flask/Pydantic when not installed
-- [ ] **Event System** - Pub/sub event bus for module communication
+- [x] **Event System** - Implemented pub/sub `EventBus` in `utils/events.py` with patterns, priorities, and typed events (2026-02-04)
 - [ ] **Dependency Injection** - DI container for better testability
 - [x] **Plugin Architecture** - Formal plugin loading system - `ToolPluginLoader` with auto_discover
-- [ ] **Hook System** - Pre/post hooks for extensibility
-- [ ] **Middleware Pipeline** - Request/response middleware
-- [ ] **Service Registry** - Register and discover services
-- [ ] **Resource Pool** - Pool expensive resources (connections, models)
+- [x] **Hook System** - Implemented pre/post hooks in `utils/hooks.py` with priorities, context passing, and the `@hookable` decorator (2026-02-04)
+- [x] **Middleware Pipeline** - Implemented `utils/middleware.py` with Pipeline, Request/Response, logging, rate limiting, retry, caching middleware (2026-02-04)
+- [x] **Service Registry** - Implemented `utils/service_registry.py` with discovery, health checks, load balancing (2026-02-04)
+- [x] **Resource Pool** - Implemented `utils/resource_pool.py` with connection/model pooling, validation, timeouts (2026-02-04)
 - [x] **Lazy Loading** - Load modules only when needed - Extensive lazy loading in gui/tabs/__init__.py, comms/, federated/
 - [x] **Hot Swap** - Replace modules without restart - `ModelOrchestrator` in core/orchestrator.py supports hot-swap models
-- [ ] **Graceful Shutdown** - Clean shutdown handling
+- [x] **Graceful Shutdown** - Implemented `utils/shutdown.py` with signal handlers, atexit, priority callbacks, and timeouts (2026-02-04)
 - [x] **Health Checks** - Internal health monitoring - `HealthChecker` in core/health.py, `health_check_all()` in modules/manager.py
-- [ ] **Circuit Breaker Pattern** - Prevent cascade failures
+- [x] **Circuit Breaker Pattern** - Implemented `utils/circuit_breaker.py` with states, timeouts, decorators, async support (2026-02-04)
 - [ ] **Bulkhead Pattern** - Isolate failures
 - [x] **Retry Pattern** - Standardized retry logic - `TaskQueue` with retry logic, `NetworkOptimizer` with exponential backoff
 - [x] **Cache Abstraction** - Unified caching interface - `ToolCache` in tools/cache.py with memory + disk caching
@@ -179,7 +179,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [x] **Database Fallback** - SQLite when no database configured (working)
 - [x] **Cache Fallback** - File cache when Redis unavailable - `ToolCache` uses disk cache automatically
 - [x] **TTS Fallback** - pyttsx3 when cloud TTS unavailable (working)
-- [ ] **STT Fallback** - Local Whisper when cloud STT unavailable
+- [x] **STT Fallback** - Implemented automatic fallback chain: Whisper -> Vosk -> SpeechRecognition -> Builtin in voice_pipeline.py (2026-02-04)
 - [x] **Image Gen Fallback** - Placeholder when Stable Diffusion unavailable (working)
 - [ ] **Video Fallback** - Static image when video gen unavailable
 
@@ -330,7 +330,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Cutting-Edge AI Features (Best-in-Class)
-- [ ] **Chain-of-Thought Prompting** - Built-in CoT reasoning for complex tasks
+- [x] **Chain-of-Thought Prompting** - Built-in CoT reasoning for complex tasks - `[E:think]` token, `Agent.think()` method in multi_agent.py
 - [ ] **Tree-of-Thoughts** - Explore multiple reasoning paths simultaneously
 - [ ] **Constitutional AI** - Self-critique and harmlessness training
 - [ ] **Mixture of Experts** - MoE architecture for efficient large models
@@ -595,7 +595,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Prompt Analytics** - Track prompt performance
 - [ ] **System Prompts** - Configure system prompts
 - [ ] **Few-Shot Examples** - Include examples
-- [ ] **Chain of Thought** - CoT templates
+- [x] **Chain of Thought** - CoT templates - `[Forge:Thinking]` in system_messages.py, thinking tokens in tokenizer
 - [ ] **Output Formatting** - Format instructions
 - [ ] **JSON Mode** - Structured output
 - [ ] **Markdown Mode** - Markdown output
@@ -910,7 +910,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Embedding Compression** - Reduce embedding table size
 
 ### Reasoning & Intelligence
-- [ ] **Chain-of-Thought** - Built-in CoT prompting and parsing
+- [x] **Chain-of-Thought** - Built-in CoT prompting and parsing - `[E:think]` token in tokenizer, `Agent.think()` for step-by-step
 - [ ] **Tree-of-Thought** - Explore multiple reasoning paths
 - [ ] **Graph-of-Thought** - Non-linear reasoning structures
 - [ ] **Self-Consistency** - Sample multiple answers, vote on best
@@ -1092,6 +1092,92 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ---
 
+## Limitless AI - Zero Predefined Actions
+
+The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamically figured out from natural language. The AI learns HOW to do things, not just WHAT things it can do.
+
+### Core Philosophy
+- [x] **Universal Action System** - Single entry point for ANY request via `tools/universal_action.py` with `do()` function (2026-02-04)
+- [ ] **Zero Predefined Tools** - Remove all hardcoded tool definitions, generate them dynamically
+- [ ] **Action Discovery** - AI discovers available actions by exploring the system
+- [ ] **Capability Learning** - Learn new capabilities from user demonstrations
+- [ ] **Dynamic Tool Generation** - Create tool definitions on-the-fly from descriptions
+- [ ] **Self-Describing Actions** - AI describes what it CAN do, not what it's TOLD it can do
+- [ ] **Primitive Composition** - Compose complex actions from atomic primitives (read, write, execute, http, etc.)
+- [ ] **Action Abstraction** - Abstract learned sequences into reusable actions
+
+### Dynamic Execution
+- [ ] **Intent-to-Code** - Convert any intent directly to executable code
+- [ ] **Natural Language Programming** - Execute plain English as code
+- [ ] **Runtime Action Synthesis** - Generate action implementations at runtime
+- [ ] **Contextual Method Discovery** - Find relevant methods/APIs based on context
+- [ ] **API Autodiscovery** - Discover and use APIs without predefined wrappers
+- [ ] **Shell Command Generation** - Generate shell commands from descriptions
+- [ ] **Script Generation** - Write and execute scripts for any task
+- [ ] **Multi-Language Execution** - Execute Python, JS, Bash, etc. as needed
+
+### Learning & Adaptation
+- [ ] **Action Recording** - Record user actions to learn new capabilities
+- [ ] **Demonstration Learning** - Learn by watching user perform tasks
+- [ ] **Failure Recovery Learning** - Learn from failed attempts
+- [ ] **Action Refinement** - Improve actions based on outcomes
+- [ ] **Cross-Domain Transfer** - Apply learned actions to new domains
+- [ ] **Action Generalization** - Generalize specific actions to patterns
+- [ ] **User Feedback Integration** - Improve from "that's not what I meant"
+- [ ] **Success Pattern Mining** - Extract patterns from successful actions
+
+### Reasoning About Actions
+- [ ] **Action Planning** - Plan multi-step actions before execution
+- [ ] **Precondition Detection** - Understand what's needed before an action
+- [ ] **Effect Prediction** - Predict outcomes before executing
+- [ ] **Side Effect Awareness** - Understand unintended consequences
+- [ ] **Reversibility Analysis** - Know which actions can be undone
+- [ ] **Resource Estimation** - Estimate time/compute/disk needed
+- [ ] **Permission Checking** - Know what permissions are needed
+- [ ] **Safety Verification** - Verify action safety before execution
+
+### Expansion Mechanisms
+- [ ] **Plugin-Free Extension** - Add capabilities without code plugins
+- [ ] **Natural Language Plugins** - Define new capabilities in plain English
+- [ ] **Action Templates** - User-defined action templates
+- [ ] **Macro Recording** - Record action sequences as macros
+- [ ] **Workflow Learning** - Learn multi-step workflows
+- [ ] **Cross-App Automation** - Automate across different applications
+- [ ] **System Integration** - Integrate with any system dynamically
+- [ ] **Hardware Discovery** - Discover and use hardware capabilities
+
+### Avatar Limitless Actions
+- [ ] **Dynamic Animation** - Generate animations from descriptions, not presets
+- [ ] **Pose Synthesis** - Create poses on demand, no predefined poses
+- [ ] **Expression Generation** - Generate facial expressions dynamically
+- [ ] **Gesture Invention** - Invent new gestures as needed
+- [ ] **Movement Learning** - Learn movement styles from examples
+- [ ] **Contextual Reactions** - React appropriately to any context
+- [ ] **Personality-Driven Motion** - Motion reflects personality, not scripts
+- [ ] **Environment Adaptation** - Adapt behavior to environment
+
+### World Interaction
+- [ ] **Unrestricted Web Access** - Access any website/API dynamically
+- [ ] **File System Mastery** - Full file system operations from language
+- [ ] **Process Control** - Start/stop/manage any process
+- [ ] **Network Operations** - Perform any network operation
+- [ ] **Device Control** - Control any connected device
+- [ ] **Service Integration** - Integrate with any service on demand
+- [ ] **Data Transformation** - Transform any data format to any other
+- [ ] **System Administration** - Perform sysadmin tasks from language
+
+### Safety Without Limits
+- [ ] **Sandboxed Exploration** - Safely try new actions in sandbox
+- [ ] **Rollback Capability** - Undo any action
+- [ ] **Dry Run Mode** - Preview actions before executing
+- [ ] **Permission Prompts** - Ask before dangerous operations
+- [ ] **Audit Trail** - Log all actions for review
+- [ ] **Rate Limiting** - Prevent runaway automation
+- [ ] **Resource Caps** - Limit resource consumption
+- [ ] **Kill Switch** - Emergency stop for all actions
+
+---
+
 ## AI Autonomy & Agency
 
 ### Self-Directed Behavior
@@ -1129,31 +1215,31 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Learning from Decisions** - Improve from outcomes
 
 ### Goal Management
-- [ ] **Goal Inference** - Infer user's true goals
+- [x] **Goal Inference** - Infer user's true goals - `infer_goal_from_text()` in tools/goal_tracker.py detects goal phrases (2026-02-04)
 - [ ] **Goal Clarification** - Ask about unclear goals
-- [ ] **Goal Decomposition** - Break goals into subgoals
-- [ ] **Goal Prioritization** - Rank competing goals
-- [ ] **Goal Tracking** - Monitor progress toward goals
+- [x] **Goal Decomposition** - Break goals into subgoals - `decompose_goal()`, `suggest_decomposition()` with templates (2026-02-04)
+- [x] **Goal Prioritization** - Rank competing goals - `get_prioritized_goals()`, `GoalPriority` enum, urgency scoring (2026-02-04)
+- [x] **Goal Tracking** - Monitor progress toward goals - `GoalTracker` class with progress %, status, notes (2026-02-04)
 - [ ] **Goal Adaptation** - Adjust goals as situation changes
 - [ ] **Goal Conflicts** - Handle conflicting goals
-- [ ] **Long-Term Goals** - Track goals across sessions
-- [ ] **Goal Completion** - Recognize when goals are met
-- [ ] **Goal Abandonment** - Know when to give up
+- [x] **Long-Term Goals** - Track goals across sessions - Goals persisted to data/goals.json (2026-02-04)
+- [x] **Goal Completion** - Recognize when goals are met - `check_completion()`, `auto_complete_check()` (2026-02-04)
+- [x] **Goal Abandonment** - Know when to give up - `abandon_goal()` with reason tracking (2026-02-04)
 - [ ] **Meta-Goals** - Goals about how to pursue goals
 - [ ] **User Goal Modeling** - Understand user's overall objectives
 - [ ] **Goal Suggestions** - Suggest goals user might have
 - [ ] **Goal Refinement** - Help user refine vague goals
-- [ ] **Success Criteria** - Define what success looks like
+- [x] **Success Criteria** - Define what success looks like - `success_criteria` list on Goal dataclass (2026-02-04)
 
 ### Environmental Awareness
-- [ ] **System State Monitoring** - Know computer state
-- [ ] **File System Awareness** - Know what files exist
-- [ ] **Process Awareness** - Know running programs
-- [ ] **Network Awareness** - Know network status
-- [ ] **Time Awareness** - Know current time/date
+- [x] **System State Monitoring** - Know computer state - `SystemAwareness` in tools/system_awareness.py with CPU/memory/disk/load (2026-02-04)
+- [x] **File System Awareness** - Know what files exist - `list_directory()`, `find_files()`, `get_file_info()` in system_awareness.py (2026-02-04)
+- [x] **Process Awareness** - Know running programs - `get_processes()`, `find_process()`, `is_process_running()` (2026-02-04)
+- [x] **Network Awareness** - Know network status - `is_online()`, `get_network_info()` with IP/interfaces (2026-02-04)
+- [x] **Time Awareness** - Know current time/date - `TimeInfo`, `get_time_info()`, day/weekend/business hours (2026-02-04)
 - [ ] **Calendar Awareness** - Know user's schedule
 - [ ] **Location Awareness** - Know geographic context
-- [ ] **Device Awareness** - Know hardware capabilities
+- [x] **Device Awareness** - Know hardware capabilities - `get_hardware_info()` with CPU/GPU/USB/storage (2026-02-04)
 - [ ] **User Presence Detection** - Know if user is active
 - [ ] **Attention Detection** - Know if user is paying attention
 - [ ] **Context Switches** - Detect topic/task changes
@@ -1192,9 +1278,9 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Refactoring Suggestions** - Improve code structure
 - [ ] **Design Pattern Recognition** - Identify patterns
 - [ ] **API Usage** - Correct API usage
-- [ ] **Dependency Analysis** - Understand dependencies
+- [x] **Dependency Analysis** - Understand dependencies - `DependencyResolver` in marketplace/installer.py with circular detection
 - [ ] **Test Generation** - Create test cases
-- [ ] **Documentation Generation** - Write docs from code
+- [x] **Documentation Generation** - Write docs from code - `ModuleDocGenerator` in modules/docs.py with generate_markdown(), generate_all_markdown()
 - [ ] **Code Review** - Provide review feedback
 - [ ] **Style Enforcement** - Follow style guides
 - [ ] **Type Inference** - Infer types in dynamic languages
@@ -1384,7 +1470,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Visual Customization
 - [ ] **Theme Editor** - Create custom themes
-- [ ] **Color Picker** - Choose custom colors
+- [x] **Color Picker** - Choose custom colors - `ColorCustomizer._pick_color()` in shared_components.py with QColorDialog
 - [ ] **Font Selection** - Choose fonts
 - [ ] **Font Scaling** - Adjust font sizes
 - [ ] **Icon Packs** - Alternative icon sets
@@ -1477,7 +1563,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Table Viewer** - Interactive data tables
 - [ ] **Chart/Graph Display** - Data visualization
 - [ ] **Math Rendering** - LaTeX/MathJax support
-- [ ] **Diagram Rendering** - Mermaid/PlantUML
+- [x] **Diagram Rendering** - Mermaid/PlantUML - `generate_dependency_graph()` in modules/docs.py supports Mermaid
 - [ ] **Map Viewer** - Geographic maps
 
 ### Input Enhancements
@@ -1918,7 +2004,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 - [ ] **Language Selection** - Target language
 - [ ] **Framework Selection** - Framework-specific code
-- [ ] **Code Templates** - Starting templates
+- [x] **Code Templates** - Starting templates - `TEMPLATES` dict in builtin/code_gen.py with Python, JavaScript, HTML, SQL templates
 - [ ] **Code Explanation** - Explain generated code
 - [ ] **Code Refactoring** - Improve code
 - [ ] **Bug Fixing** - Fix issues
@@ -1932,7 +2018,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Import Organization** - Sort imports
 - [ ] **Dead Code Detection** - Find unused code
 - [ ] **Complexity Analysis** - Measure complexity
-- [ ] **Dependency Analysis** - Track dependencies
+- [x] **Dependency Analysis** - Track dependencies - `_topological_sort()`, `_detect_circular()` in marketplace/installer.py
 - [ ] **Version Diff** - Compare versions
 - [x] **Syntax Highlighting** - Colored code - Code blocks with syntax highlighting in chat_tab.py
 - [ ] **Line Numbers** - Show line numbers
@@ -2258,7 +2344,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Background Options** - Solid color, image, or transparent
 
 ### Interaction & Tracking
-- [ ] **Eye Tracking Integration** - Avatar looks where user looks (webcam-based)
+- [x] **Eye Tracking Integration** - Avatar looks where user looks (webcam-based) - `set_eye_tracking()`, `_update_eye_tracking()` in avatar_display.py
 - [ ] **Gesture Recognition** - Map user hand gestures to avatar actions
 - [ ] **Face Tracking** - Webcam face tracking to avatar expressions
 - [ ] **Mouse Follow** - Avatar eyes/head follow cursor
@@ -2349,7 +2435,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Weather Effects** - Rain, snow on avatar
 - [ ] **Particle Effects** - Sparkles, auras, effects
 - [ ] **Color Customization** - Recolor parts
-- [ ] **Size Scaling** - Adjust avatar size
+- [x] **Size Scaling** - Adjust avatar size - `ResizeHandle`, scroll wheel resize, corner drag in avatar_display.py
 - [ ] **Proportion Adjustment** - Modify body proportions
 - [ ] **Style Variants** - Chibi, realistic, stylized
 - [ ] **Seasonal Themes** - Holiday costumes
@@ -3763,7 +3849,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Code Coverage** - Test coverage
 - [ ] **Cyclomatic Complexity** - Complexity metrics
 - [ ] **Technical Debt** - Debt estimation
-- [ ] **Dependency Analysis** - Dependency graphs
+- [x] **Dependency Analysis** - Dependency graphs - `DependencyNode`, `DependencyResolver` classes in marketplace/installer.py
 - [ ] **Dead Code Detection** - Unused code
 - [ ] **Code Duplication** - Find duplicates
 - [ ] **Security Scanning** - Vulnerability detection
@@ -3922,7 +4008,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Formatter Integration** - Run formatters
 - [ ] **Test Runner** - Run tests
 - [ ] **Coverage Reporter** - Track coverage
-- [ ] **Dependency Graph** - Visualize dependencies
+- [x] **Dependency Graph** - Visualize dependencies - `generate_dependency_graph('mermaid')` in modules/docs.py
 - [ ] **Call Graph** - Visualize call flow
 - [ ] **Flame Graph** - Performance visualization
 - [ ] **Heap Dump** - Memory analysis
@@ -4639,7 +4725,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 ### Future Interfaces
 - [ ] **Brain-Computer Interface** - Neural input
 - [ ] **EMG Control** - Muscle signal input
-- [ ] **Eye Tracking** - Gaze-based control
+- [x] **Eye Tracking** - Gaze-based control - `_eye_tracking_enabled`, `_eye_offset_x/y` in avatar_display.py
 - [ ] **Haptic Feedback** - Touch feedback devices
 - [ ] **Smell/Taste Output** - Olfactory displays
 - [ ] **Holographic Display** - 3D hologram output

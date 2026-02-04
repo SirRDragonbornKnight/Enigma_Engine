@@ -460,6 +460,34 @@ class ModuleManager:
       → Saves config to data/module_config.json
       ← Used by GUI modules tab, CLI, and all module consumers
     """
+    
+    # Singleton instance storage
+    _instance: Optional['ModuleManager'] = None
+    _initialized: bool = False
+    
+    def __new__(cls, config_path: Optional[Path] = None, local_only: bool = True):
+        """
+        Singleton pattern: Return existing instance if available.
+        
+        This ensures that all code calling ModuleManager() gets the same
+        instance, preventing duplicate module registrations and state
+        inconsistencies.
+        """
+        global _manager
+        
+        # If global singleton exists, return it
+        if _manager is not None:
+            return _manager
+        
+        # If class-level singleton exists, return it  
+        if cls._instance is not None:
+            return cls._instance
+        
+        # Create new instance
+        instance = super().__new__(cls)
+        cls._instance = instance
+        _manager = instance
+        return instance
 
     def __init__(self, config_path: Optional[Path] = None, local_only: bool = True):
         """
@@ -469,6 +497,11 @@ class ModuleManager:
             config_path: Where to save/load module configuration
             local_only: If True, only allow local modules (no cloud APIs)
         """
+        # Singleton guard: Only initialize once
+        if ModuleManager._initialized:
+            return
+        ModuleManager._initialized = True
+        
         # ─────────────────────────────────────────────────────────────────────
         # THREAD SAFETY: Lock for module operations
         # ─────────────────────────────────────────────────────────────────────
@@ -1704,6 +1737,21 @@ class ModuleManager:
     def on_state_change(self, callback: Callable):
         """Register callback for module state changes."""
         self._on_state_change.append(callback)
+    
+    @classmethod
+    def reset_singleton(cls) -> None:
+        """
+        Reset the singleton instance.
+        
+        Use this only in testing to get a fresh ModuleManager.
+        In production, the singleton should persist for the lifetime
+        of the application.
+        """
+        global _manager
+        cls._instance = None
+        cls._initialized = False
+        _manager = None
+        logger.debug("ModuleManager singleton reset")
 
 
 # Global instance
@@ -1711,7 +1759,12 @@ _manager: Optional[ModuleManager] = None
 
 
 def get_manager() -> ModuleManager:
-    """Get the global module manager instance."""
+    """
+    Get the global module manager instance (singleton).
+    
+    This is the preferred way to access the ModuleManager.
+    Calling ModuleManager() directly also returns the same singleton.
+    """
     global _manager
     if _manager is None:
         _manager = ModuleManager()
@@ -1719,6 +1772,21 @@ def get_manager() -> ModuleManager:
 
 
 def set_manager(manager: ModuleManager) -> None:
-    """Set the global module manager instance."""
+    """
+    Set the global module manager instance.
+    
+    Use this to inject a custom manager (e.g., for testing).
+    """
     global _manager
     _manager = manager
+    ModuleManager._instance = manager
+    ModuleManager._initialized = True
+
+
+def reset_manager() -> None:
+    """
+    Reset the global module manager.
+    
+    Use this in testing to get a fresh instance.
+    """
+    ModuleManager.reset_singleton()
