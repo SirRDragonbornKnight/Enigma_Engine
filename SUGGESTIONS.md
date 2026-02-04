@@ -504,7 +504,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Voice Memos** - Record and transcribe
 - [ ] **Reminders** - Set reminders via AI
 - [ ] **Calendar Integration** - Schedule events
-- [ ] **Task Management** - Todo lists
+- [x] **Task Management** - Todo lists - `ChecklistManager` and `TaskScheduler` in tools/interactive_tools.py
 - [ ] **Email Drafts** - Draft emails on mobile
 - [ ] **Meeting Notes** - Transcribe meetings
 - [ ] **Travel Assistant** - Flight/hotel info
@@ -581,8 +581,8 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ## Prompt Engineering
 
-- [ ] **Prompt Templates** - Reusable templates
-- [ ] **Prompt Variables** - Template variables
+- [x] **Prompt Templates** - Reusable templates - `PromptTemplate` dataclass in core/prompt_builder.py
+- [x] **Prompt Variables** - Template variables - `PromptBuilder.build_chat_prompt()` with placeholders
 - [ ] **Prompt Library** - Save/load prompts
 - [ ] **Prompt Sharing** - Share prompts
 - [ ] **Prompt Versioning** - Track prompt changes
@@ -887,12 +887,12 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Core Architecture
 - [ ] **Mixture of Experts (MoE)** - Add MoE architecture option for efficient scaling
-- [ ] **Sliding Window Attention** - Extend context length without quadratic memory growth
+- [x] **Sliding Window Attention** - Extend context length without quadratic memory growth - `sliding_window` config in model.py
 - [ ] **Grouped Query Attention Tuning** - Optimize GQA head ratios per model size
-- [ ] **Rotary Position Embedding Scaling** - Support NTK-aware scaling for longer contexts
+- [x] **Rotary Position Embedding Scaling** - Support NTK-aware scaling for longer contexts - `rope_scaling_type` (linear/dynamic/yarn) in model.py
 - [ ] **Flash Attention 2/3** - Upgrade to latest Flash Attention versions
-- [ ] **PagedAttention** - vLLM-style paged KV cache for better memory efficiency
-- [ ] **Continuous Batching** - Dynamic batching for higher throughput on API server
+- [x] **PagedAttention** - vLLM-style paged KV cache for better memory efficiency - `PagedKVCache` in core/paged_attention.py
+- [x] **Continuous Batching** - Dynamic batching for higher throughput on API server - `BatchScheduler` in core/continuous_batching.py
 - [ ] **GGUF Export** - Export trained models to GGUF format for llama.cpp compatibility
 - [ ] **AWQ/GPTQ Quantization** - Better quantization methods beyond basic INT4/INT8
 - [ ] **GGML Backend** - Alternative backend for CPU inference
@@ -1097,14 +1097,14 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 ### Self-Directed Behavior
 - [ ] **Proactive Suggestions** - Offer help without being asked
 - [ ] **Anticipate Needs** - Predict what user will need next
-- [ ] **Background Processing** - Work on tasks while idle
+- [x] **Background Processing** - Work on tasks while idle - `AutonomousMode._run_background_task()` in core/autonomous.py
 - [ ] **Initiative Taking** - Start tasks autonomously when appropriate
 - [ ] **Opportunistic Learning** - Learn from ambient information
-- [ ] **Self-Improvement Goals** - Set own improvement targets
-- [ ] **Curiosity-Driven Exploration** - Explore to learn
+- [x] **Self-Improvement Goals** - Set own improvement targets - `AutonomousConfig.goals` in core/self_improvement.py
+- [x] **Curiosity-Driven Exploration** - Explore to learn - `AutonomousAction.EXPLORE_CURIOSITY` in core/autonomous.py
 - [ ] **Skill Acquisition** - Learn new skills autonomously
-- [ ] **Knowledge Seeking** - Research to fill knowledge gaps
-- [ ] **Performance Monitoring** - Track own performance metrics
+- [x] **Knowledge Seeking** - Research to fill knowledge gaps - `AutonomousAction.RESEARCH` with web search integration
+- [x] **Performance Monitoring** - Track own performance metrics - `PerformanceMetrics` in core/self_improvement.py
 - [ ] **Self-Debugging** - Diagnose and fix own issues
 - [ ] **Efficiency Optimization** - Find ways to work faster
 - [ ] **Quality Improvement** - Continuously improve output quality
@@ -1185,7 +1185,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Code Intelligence
 - [ ] **Code Completion** - Context-aware suggestions
-- [ ] **Code Explanation** - Explain any code
+- [x] **Code Explanation** - Explain any code - `ForgeCodeProvider.explain()` in gui/tabs/code_tab.py
 - [ ] **Bug Detection** - Find bugs before running
 - [ ] **Security Scanning** - Identify vulnerabilities
 - [ ] **Performance Analysis** - Find slow code
@@ -1956,7 +1956,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Camera Motion** - Pan/zoom/rotate
 - [ ] **Style Selection** - Visual style
 - [ ] **Audio Sync** - Sync to audio
-- [ ] **Lip Sync** - Sync to speech
+- [x] **Lip Sync** - Sync to speech - `LipSync` class in avatar/lip_sync.py with phoneme-to-viseme mapping
 - [ ] **Character Consistency** - Maintain characters
 - [ ] **Scene Transitions** - Fade/cut effects
 - [ ] **Preview Mode** - Low-res preview
@@ -2149,7 +2149,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Memory-Augmented Agents** - Long-term memory for persistent agents
 - [ ] **Code Interpreter** - Sandboxed Python execution for math/data tasks
 - [ ] **Browser Agent** - Automated web browsing for research tasks
-- [ ] **Multi-Agent Collaboration** - Multiple specialized agents working together
+- [x] **Multi-Agent Collaboration** - Multiple specialized agents working together - `MultiAgentSystem` in agents/multi_agent.py with AgentRole presets
 - [ ] **Tool Use Grounding** - Verify tool outputs against expected schemas
 - [ ] **Parallel Tool Calls** - Execute independent tools simultaneously
 - [ ] **Tool Retry Logic** - Auto-retry failed tool calls with backoff
@@ -2173,10 +2173,10 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **API Call Tool** - Make HTTP requests to external APIs
 - [ ] **Email Tool** - Send emails via SMTP
 - [ ] **Calendar Tool** - Manage calendar events
-- [ ] **File System Tool** - Read/write/search files
-- [ ] **Screenshot Tool** - Capture screen regions
+- [x] **File System Tool** - Read/write/search files - `ReadFileTool`, `WriteFileTool`, `ListDirectoryTool` in tools/file_tools.py
+- [x] **Screenshot Tool** - Capture screen regions - `ScreenCapture` in tools/vision.py
 - [x] **Clipboard Tool** - Read/write system clipboard - QApplication.clipboard() throughout codebase
-- [ ] **System Info Tool** - Get CPU/RAM/disk/network info
+- [x] **System Info Tool** - Get CPU/RAM/disk/network info - `get_system_info` tool in tool_registry.py
 - [ ] **Process Manager Tool** - List/kill running processes
 
 ---
@@ -2748,12 +2748,12 @@ Move items here when done:
 
 ### Game Integration
 - [ ] **Process Injection** - Read game memory safely
-- [ ] **Screen Capture** - Fast game screen reading
+- [x] **Screen Capture** - Fast game screen reading - `ScreenCapture` in tools/vision.py with scrot/PIL/mss backends
 - [ ] **Input Simulation** - Keyboard/mouse/controller
-- [ ] **Overlay System** - In-game UI overlay
-- [ ] **Hotkey System** - Game-specific hotkeys
+- [x] **Overlay System** - In-game UI overlay - `OverlayMode`, `MinimalOverlay`, `CompactOverlay`, `FullOverlay` in gui/overlay/overlay_modes.py
+- [x] **Hotkey System** - Game-specific hotkeys - `HotkeyManager` in core/hotkey_manager.py with toggle_game_mode hotkey
 - [ ] **Profile System** - Per-game configurations
-- [ ] **Auto-Detection** - Detect running games
+- [x] **Auto-Detection** - Detect running games - `GameModeWatcher` in core/game_mode.py auto-detects games
 - [ ] **Steam Integration** - Steam library access
 - [ ] **Game Database** - Store game-specific data
 
@@ -3934,7 +3934,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 
 ### Data Formats
 - [x] **JSON Export** - Export to JSON - `MemoryExporter.export_to_json()` in memory/export_import.py
-- [ ] **CSV Export** - Export to CSV
+- [x] **CSV Export** - Export to CSV - `MemoryExporter.export_to_csv()` in memory/export_import.py
 - [ ] **XML Export** - Export to XML
 - [ ] **YAML Export** - Export to YAML
 - [ ] **Markdown Export** - Export to Markdown
