@@ -150,13 +150,13 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Service Registry** - Register and discover services
 - [ ] **Resource Pool** - Pool expensive resources (connections, models)
 - [ ] **Lazy Loading** - Load modules only when needed
-- [ ] **Hot Swap** - Replace modules without restart
+- [x] **Hot Swap** - Replace modules without restart - `ModelOrchestrator` in core/orchestrator.py supports hot-swap models
 - [ ] **Graceful Shutdown** - Clean shutdown handling
 - [ ] **Health Checks** - Internal health monitoring
 - [ ] **Circuit Breaker Pattern** - Prevent cascade failures
 - [ ] **Bulkhead Pattern** - Isolate failures
 - [ ] **Retry Pattern** - Standardized retry logic
-- [ ] **Cache Abstraction** - Unified caching interface
+- [x] **Cache Abstraction** - Unified caching interface - `ToolCache` in tools/cache.py with memory + disk caching
 - [ ] **Storage Abstraction** - Unified file/blob storage
 - [ ] **Queue Abstraction** - Message queue interface
 - [ ] **Database Abstraction** - Support multiple backends
@@ -177,7 +177,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [ ] **GPU Memory Fallback** - Offload to CPU when VRAM full
 - [ ] **Network Fallback** - Offline mode when network unavailable
 - [x] **Database Fallback** - SQLite when no database configured (working)
-- [ ] **Cache Fallback** - File cache when Redis unavailable
+- [x] **Cache Fallback** - File cache when Redis unavailable - `ToolCache` uses disk cache automatically
 - [x] **TTS Fallback** - pyttsx3 when cloud TTS unavailable (working)
 - [ ] **STT Fallback** - Local Whisper when cloud STT unavailable
 - [x] **Image Gen Fallback** - Placeholder when Stable Diffusion unavailable (working)
@@ -195,10 +195,10 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [ ] **Vulkan Compute** - Vulkan GPU compute
 - [ ] **Multi-GPU** - Split across multiple GPUs
 - [ ] **GPU Memory Management** - Optimize VRAM usage
-- [ ] **Mixed Precision** - FP16/BF16 inference
+- [x] **Mixed Precision** - FP16/BF16 inference - `mixed_precision` config, `precision` setting in defaults.py, quantization.py FP16 support
 - [ ] **Tensor Cores** - NVIDIA tensor core usage
 - [x] **Quantized Operations** - INT8/INT4 acceleration - `quantize_model()`, `QuantizedLinear` in quantization.py with 4/8/16-bit support
-- [ ] **Flash Attention** - Memory-efficient attention
+- [x] **Flash Attention** - Memory-efficient attention - `flash_attn_func` in model.py with auto-detection
 - [ ] **PagedAttention** - vLLM-style paged attention
 - [x] **KV Cache Optimization** - Efficient KV cache - `cache_k/cache_v` in attention, `kv_cache_dtype` config option
 - [x] **Batched Inference** - Batch multiple requests - `batch_generate()` in inference.py
@@ -390,7 +390,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Conversation Search** - Full-text search across all chat history - `MemorySearch.full_text_search()` in memory/search.py
 - [x] **Keyboard Shortcuts** - Hotkeys for common actions - Implemented in `gui/gui_modes.py` KEYBOARD_SHORTCUTS
 - [ ] **Auto-save Drafts** - Save incomplete messages on close
-- [ ] **System Monitor Widget** - Floating widget showing GPU/CPU/RAM
+- [x] **System Monitor Widget** - Floating widget showing GPU/CPU/RAM - `ResourceMonitor` widget in gui/resource_monitor.py with real-time metrics
 - [x] **Model Benchmarking** - Compare inference speed/quality - `scripts/benchmark.py`, `core/benchmark.py`, benchmark button in scaling_tab
 - [ ] **Context Window Display** - Show how much context is used/remaining
 - [x] **Token Counter** - Live token count while typing - `_update_token_count()` in chat_tab.py shows chars/tokens as user types, color changes at thresholds
@@ -537,7 +537,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Privacy Settings** - Control data access
 - [ ] **Battery Optimization** - Save battery
 - [ ] **Storage Management** - Manage app storage
-- [ ] **Cache Control** - Clear cache options
+- [x] **Cache Control** - Clear cache options - `ToolCache.clear()` and `cleanup_expired()` methods
 - [ ] **Export Data** - Export from mobile
 
 ### Wearable Integration
@@ -656,25 +656,25 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ## Plugin System
 
-- [ ] **Plugin Discovery** - Find plugins
+- [x] **Plugin Discovery** - Find plugins - `ToolPluginLoader.discover_plugins()` auto-scans plugin directories
 - [ ] **Plugin Installation** - Install from registry
 - [ ] **Plugin Updates** - Update plugins
-- [ ] **Plugin Removal** - Uninstall plugins
-- [ ] **Plugin Configuration** - Configure plugins
+- [x] **Plugin Removal** - Uninstall plugins - `ToolPluginLoader.unload_plugin()` method
+- [x] **Plugin Configuration** - Configure plugins - `plugin_dirs` configuration + `get_plugin_info()`
 - [ ] **Plugin Dependencies** - Handle dependencies
 - [ ] **Plugin Conflicts** - Detect conflicts
 - [ ] **Plugin Isolation** - Sandbox plugins
 - [ ] **Plugin Permissions** - Permission system
-- [ ] **Plugin API** - Plugin development API
+- [x] **Plugin API** - Plugin development API - `register_tools()` or `TOOLS` export pattern in plugins.py
 - [ ] **Plugin Templates** - Starter templates
 - [ ] **Plugin Documentation** - Plugin docs
-- [ ] **Plugin Versioning** - Version management
+- [x] **Plugin Versioning** - Version management - Plugin info includes version field
 - [ ] **Plugin Signing** - Verify authenticity
 - [ ] **Plugin Ratings** - Community ratings
 - [ ] **Plugin Reviews** - User reviews
-- [ ] **Local Plugins** - Install from file
+- [x] **Local Plugins** - Install from file - `ToolPluginLoader.load_plugin()` loads from local .py files
 - [ ] **Git Plugins** - Install from git
-- [ ] **Plugin Dev Mode** - Development mode
+- [x] **Plugin Dev Mode** - Development mode - `auto_discover=False` option for manual control
 - [ ] **Plugin Debugging** - Debug plugins
 
 ---
@@ -875,10 +875,10 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Log Export** - Export logs for analysis
 - [ ] **Request Tracing** - Trace requests end-to-end
 - [ ] **Dependency Tracking** - Track external services
-- [ ] **Resource Monitoring** - CPU/RAM/GPU/disk
+- [x] **Resource Monitoring** - CPU/RAM/GPU/disk - `ResourceMonitor` widgets, `SystemMonitorTool`, `PerformanceMonitor`
 - [ ] **Queue Monitoring** - Request queue status
 - [ ] **Connection Pool** - Track active connections
-- [ ] **Cache Statistics** - Cache hit/miss rates
+- [x] **Cache Statistics** - Cache hit/miss rates - `ToolCache.get_statistics()` with hit_rate_percent
 - [ ] **Error Dashboard** - Error summary view
 
 ---
@@ -1512,7 +1512,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Color Blind Mode** - Color blind friendly
 - [ ] **Dyslexia Font** - OpenDyslexic option
 - [ ] **Reading Guide** - Line focus mode
-- [ ] **Text-to-Speech** - Read aloud feature
+- [x] **Text-to-Speech** - Read aloud feature - `_speak_response()`, TTS button in chat_tab.py
 
 ### Notification System
 - [x] **Toast Notifications** - Non-intrusive alerts - `NotificationManager` in notifications.py with Windows/Linux/Mac backends, `notify()` function
@@ -1934,9 +1934,9 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Complexity Analysis** - Measure complexity
 - [ ] **Dependency Analysis** - Track dependencies
 - [ ] **Version Diff** - Compare versions
-- [ ] **Syntax Highlighting** - Colored code
+- [x] **Syntax Highlighting** - Colored code - Code blocks with syntax highlighting in chat_tab.py
 - [ ] **Line Numbers** - Show line numbers
-- [ ] **Copy Button** - One-click copy
+- [x] **Copy Button** - One-click copy - `_copy_code_block()` with clipboard integration
 - [ ] **Download Button** - Download as file
 - [ ] **Run Button** - Execute code
 - [ ] **Share Button** - Share code snippet
@@ -2022,7 +2022,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 - [ ] **DPO/RLHF Training** - Direct Preference Optimization for alignment
 - [ ] **QLoRA Support** - Quantized LoRA for training larger models on limited VRAM
-- [ ] **Gradient Checkpointing** - Trade compute for memory during training
+- [x] **Gradient Checkpointing** - Trade compute for memory during training - `GradientCheckpointer` in core/checkpointing.py
 - [ ] **DeepSpeed Integration** - ZeRO optimization for distributed training
 - [ ] **Dataset Streaming** - Stream large datasets instead of loading into memory
 - [ ] **Curriculum Learning** - Progressive difficulty in training data
@@ -3862,7 +3862,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 
 ## Model Management
 
-- [ ] **Model Registry** - Track all models
+- [x] **Model Registry** - Track all models - `ModelRegistry` in core/model_registry.py with list_models(), save_model(), load_model()
 - [ ] **Model Versioning** - Version control for models
 - [ ] **Model Comparison** - A/B test models
 - [ ] **Model Lineage** - Track model ancestry
@@ -4171,11 +4171,11 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 ### Conversation Versioning
 - [ ] **Message History** - Full message history
 - [ ] **Edit History** - Track edits
-- [ ] **Undo/Redo** - Undo operations
+- [x] **Undo/Redo** - Undo operations - `UndoRedoManager` in utils/shortcuts.py
 - [ ] **Version Snapshots** - Save versions
 - [ ] **Version Comparison** - Diff versions
 - [ ] **Restore Versions** - Restore old versions
-- [ ] **Auto-Save** - Automatic saving
+- [x] **Auto-Save** - Automatic saving - `AutoSaveManager` in utils/discovery_mode.py
 - [ ] **Draft System** - Save drafts
 - [ ] **Conflict Resolution** - Handle conflicts
 - [ ] **Branch Conversations** - Fork conversations
@@ -4334,15 +4334,15 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 
 ### Visual Themes
 - [x] **Theme Engine** - Custom theme support - `ThemeManager` with load_custom_theme(), create_theme()
-- [ ] **Dark Mode** - Dark color scheme
-- [ ] **Light Mode** - Light color scheme
-- [ ] **High Contrast** - Accessibility theme
+- [x] **Dark Mode** - Dark color scheme - 'dark' preset (Catppuccin Mocha) in ThemeManager.PRESETS
+- [x] **Light Mode** - Light color scheme - 'light' preset in ThemeManager.PRESETS
+- [x] **High Contrast** - Accessibility theme - 'high_contrast' preset in ThemeManager.PRESETS
 - [ ] **OLED Mode** - True black for OLED
 - [ ] **Solarized** - Solarized theme
 - [ ] **Monokai** - Monokai theme
 - [ ] **Nord** - Nord theme
 - [ ] **Dracula** - Dracula theme
-- [ ] **Custom Colors** - User-defined colors
+- [x] **Custom Colors** - User-defined colors - `ThemeManager.create_custom_theme()` with ThemeColors
 
 ### Layout Customization
 - [ ] **Dock Panels** - Dockable UI panels
