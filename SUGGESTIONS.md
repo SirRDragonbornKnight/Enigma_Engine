@@ -455,7 +455,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Mobile Chat Interface
 - [ ] **Mobile Chat UI** - Touch-optimized chat
-- [ ] **Voice Input** - Speak messages
+- [x] **Voice Input** - Speak messages - `VoiceListener` in voice/listener.py with wake word detection
 - [x] **Voice Output** - AI speaks responses - Voice toggle in chat_tab.py, auto-speak option
 - [ ] **Swipe Actions** - Swipe to delete/copy/share
 - [ ] **Pull to Refresh** - Refresh conversations
@@ -489,7 +489,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Camera Analysis** - Real-time camera AI
 - [ ] **Photo Organization** - AI photo tagging
 - [ ] **Screenshot Analysis** - Analyze screenshots
-- [ ] **Text Recognition** - OCR on photos
+- [x] **Text Recognition** - OCR on photos - `SimpleOCR` in tools/simple_ocr.py, `OCRImageTool` in communication_tools.py
 - [ ] **Object Detection** - Identify objects
 - [ ] **Face Detection** - Detect faces
 - [ ] **Barcode Scanning** - Scan barcodes/QR
@@ -1034,7 +1034,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Elaboration** - Expand on brief inputs
 - [ ] **Summarization** - Condense long content
 - [ ] **Paraphrasing** - Restate in different words
-- [ ] **Translation** - Translate between languages
+- [x] **Translation** - Translate between languages - `TranslateTextTool` in tools/communication_tools.py using MyMemory API
 - [ ] **Code Generation** - Write functional code
 - [ ] **Creative Writing** - Generate stories, poems
 - [ ] **Technical Writing** - Generate documentation
@@ -1342,13 +1342,13 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 ## User Interface Enhancements
 
 ### Main Window
-- [ ] **Resizable Panels** - Drag to resize UI sections
+- [x] **Resizable Panels** - Drag to resize UI sections - `QSplitter` used throughout (chat_tab, notes_tab, persona_tab, etc.)
 - [ ] **Collapsible Sidebars** - Hide/show sidebars
 - [ ] **Tab Reordering** - Drag tabs to reorder
 - [ ] **Tab Pinning** - Pin frequently used tabs
 - [ ] **Tab Groups** - Group related tabs
 - [ ] **Detachable Tabs** - Pop out tabs to windows
-- [ ] **Split View** - Multiple panels side by side
+- [x] **Split View** - Multiple panels side by side - `QSplitter(Qt.Horizontal)` in examples_tab, notes_tab, persona_tab, sessions_tab
 - [ ] **Full Screen Mode** - Distraction-free mode
 - [ ] **Compact Mode** - Minimal UI for small screens
 - [ ] **Zen Mode** - Hide all UI except chat
@@ -1375,7 +1375,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Input History** - Arrow keys for history
 - [ ] **Multi-line Input** - Shift+Enter for newlines
 - [ ] **Input Preview** - Preview markdown rendering
-- [ ] **Character Counter** - Show input length
+- [x] **Character Counter** - Show input length - `token_count_label` in chat_tab.py with live char/token counting
 - [ ] **Typing Indicators** - Show AI is generating
 - [ ] **Read Receipts** - Track message read status
 - [ ] **Message Bookmarks** - Bookmark important messages
@@ -1631,7 +1631,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 ### Onboarding & Help UI
 - [ ] **Welcome Tour** - First-run guided tour
 - [ ] **Feature Spotlights** - Highlight new features
-- [ ] **Tooltips** - Helpful hover tips
+- [x] **Tooltips** - Helpful hover tips - `setToolTip()` used extensively throughout GUI (buttons, checkboxes, inputs)
 - [ ] **What's New** - Changelog popup
 - [ ] **Tips of the Day** - Daily tips
 - [ ] **Interactive Tutorials** - Step-by-step guides
@@ -3442,7 +3442,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **LaTeX** - Scientific document processing
 
 ### Document Features
-- [ ] **OCR** - Extract text from images
+- [x] **OCR** - Extract text from images - `SimpleOCR.extract_text()` in tools/simple_ocr.py
 - [ ] **Table Extraction** - Extract tables
 - [ ] **Image Extraction** - Pull images from docs
 - [ ] **Metadata Extraction** - Get document metadata
