@@ -26,16 +26,60 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from .voice_profile import VoiceProfile
+
+logger = logging.getLogger(__name__)
 
 # Audio constants for fallback analysis
 DEFAULT_SAMPLE_RATE = 44100  # Hz
 DEFAULT_CHANNELS = 2  # Stereo
 DEFAULT_BYTES_PER_SAMPLE = 2  # 16-bit audio
+
+
+@dataclass
+class TimbreFeatures:
+    """Voice timbre characteristics for cloning accuracy."""
+    
+    # Formants (resonant frequencies of vocal tract)
+    formants: List[float] = field(default_factory=lambda: [500, 1500, 2500])
+    formant_bandwidths: List[float] = field(default_factory=lambda: [90, 110, 170])
+    
+    # Spectral characteristics
+    spectral_centroid: float = 1500.0  # "Center of mass" of spectrum (Hz)
+    spectral_bandwidth: float = 2000.0  # Spread of spectrum (Hz)
+    spectral_rolloff: float = 4000.0   # Frequency below which 85% of energy is contained
+    spectral_flatness: float = 0.1     # How noise-like vs tonal (0=tonal, 1=noise)
+    
+    # Voice quality
+    jitter: float = 0.01              # Pitch perturbation (irregularity)
+    shimmer: float = 0.03             # Amplitude perturbation
+    harmonics_to_noise: float = 15.0  # HNR in dB (voice clarity)
+    
+    # Vocal tract characteristics
+    vocal_tract_length: float = 17.0  # Estimated in cm (affects formant spacing)
+    breathiness: float = 0.3          # 0=clear, 1=breathy
+    nasality: float = 0.2             # 0=oral, 1=nasal
+    
+    def to_dict(self) -> Dict:
+        return {
+            'formants': self.formants,
+            'formant_bandwidths': self.formant_bandwidths,
+            'spectral_centroid': self.spectral_centroid,
+            'spectral_bandwidth': self.spectral_bandwidth,
+            'spectral_rolloff': self.spectral_rolloff,
+            'spectral_flatness': self.spectral_flatness,
+            'jitter': self.jitter,
+            'shimmer': self.shimmer,
+            'harmonics_to_noise': self.harmonics_to_noise,
+            'vocal_tract_length': self.vocal_tract_length,
+            'breathiness': self.breathiness,
+            'nasality': self.nasality,
+        }
 
 
 @dataclass
@@ -53,6 +97,9 @@ class AudioFeatures:
     formants: Optional[List[float]] = None  # Formant frequencies
     spectral_centroid: Optional[float] = None
     zero_crossing_rate: Optional[float] = None
+    
+    # Timbre features for voice cloning
+    timbre: Optional[TimbreFeatures] = None
 
 
 class AudioAnalyzer:

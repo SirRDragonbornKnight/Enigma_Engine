@@ -130,7 +130,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Response Length Control** - Slider for response verbosity
 - [ ] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles
 - [ ] **Conversation Statistics** - Token counts, message counts, timestamps
-- [ ] **Session Timer** - Track time spent in conversation
+- [x] **Session Timer** - Track time spent in conversation - Session duration tracked in analytics_tab.py, uptime_timer in dashboard_tab.py
 
 ---
 
@@ -149,16 +149,16 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Middleware Pipeline** - Request/response middleware
 - [ ] **Service Registry** - Register and discover services
 - [ ] **Resource Pool** - Pool expensive resources (connections, models)
-- [ ] **Lazy Loading** - Load modules only when needed
+- [x] **Lazy Loading** - Load modules only when needed - Extensive lazy loading in gui/tabs/__init__.py, comms/, federated/
 - [x] **Hot Swap** - Replace modules without restart - `ModelOrchestrator` in core/orchestrator.py supports hot-swap models
 - [ ] **Graceful Shutdown** - Clean shutdown handling
-- [ ] **Health Checks** - Internal health monitoring
+- [x] **Health Checks** - Internal health monitoring - `HealthChecker` in core/health.py, `health_check_all()` in modules/manager.py
 - [ ] **Circuit Breaker Pattern** - Prevent cascade failures
 - [ ] **Bulkhead Pattern** - Isolate failures
-- [ ] **Retry Pattern** - Standardized retry logic
+- [x] **Retry Pattern** - Standardized retry logic - `TaskQueue` with retry logic, `NetworkOptimizer` with exponential backoff
 - [x] **Cache Abstraction** - Unified caching interface - `ToolCache` in tools/cache.py with memory + disk caching
 - [ ] **Storage Abstraction** - Unified file/blob storage
-- [ ] **Queue Abstraction** - Message queue interface
+- [x] **Queue Abstraction** - Message queue interface - `NetworkTaskQueue` in network/task_queue.py with priority handling, workers
 - [ ] **Database Abstraction** - Support multiple backends
 
 ---
@@ -608,7 +608,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 - [ ] **Dataset Upload** - Upload training data
 - [ ] **Dataset Preview** - View data samples
-- [ ] **Dataset Validation** - Validate format
+- [x] **Dataset Validation** - Validate format - `TrainingDataValidator` in utils/training_validator.py with validate_file(), validate_text()
 - [ ] **Dataset Splitting** - Train/val/test split
 - [ ] **Dataset Augmentation** - Augment data
 - [ ] **Hyperparameter UI** - Set training params
@@ -1362,7 +1362,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Chat Interface
 - [ ] **Message Grouping** - Group consecutive messages
-- [ ] **Message Timestamps** - Show/hide timestamps
+- [x] **Message Timestamps** - Show/hide timestamps - `message-time` class in web_server.py shows toLocaleTimeString()
 - [ ] **Message Threading** - Reply to specific messages
 - [ ] **Message Quoting** - Quote previous messages
 - [ ] **Message Forwarding** - Forward to other chats
@@ -1372,11 +1372,11 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Emoji Picker** - Emoji selection UI
 - [ ] **Mention System** - @mention support
 - [x] **Slash Commands** - /command shortcuts - Full command system in `_handle_chat_command()`: /image, /video, /code, /audio, /3d, /gif, /help, /clear, /new, navigation commands
-- [ ] **Input History** - Arrow keys for history
+- [x] **Input History** - Arrow keys for history - `history` list + Up/Down key navigation in system_tray.py
 - [ ] **Multi-line Input** - Shift+Enter for newlines
 - [ ] **Input Preview** - Preview markdown rendering
 - [x] **Character Counter** - Show input length - `token_count_label` in chat_tab.py with live char/token counting
-- [ ] **Typing Indicators** - Show AI is generating
+- [x] **Typing Indicators** - Show AI is generating - `typing-indicator` CSS class in web_server.py, web/static/
 - [ ] **Read Receipts** - Track message read status
 - [ ] **Message Bookmarks** - Bookmark important messages
 - [x] **Message Search** - Search within conversation - Ctrl+F in chat with highlight and count display
@@ -1572,11 +1572,11 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Avatar Poses** - Pose library
 - [ ] **Avatar Animations** - Animation browser
 - [ ] **Avatar Gallery** - Saved avatars
-- [ ] **Avatar Import** - Import custom models
+- [x] **Avatar Import** - Import custom models - `AvatarImportWizard` in avatar_dialogs.py with drag-drop, file picker
 - [ ] **Avatar Export** - Export avatars
 - [ ] **Avatar Shop** - Download avatars
 - [ ] **Avatar Creator** - Build from parts
-- [ ] **Avatar Presets** - Quick presets
+- [x] **Avatar Presets** - Quick presets - `avatar_preset_id` in persona_tab.py, `_load_avatar_presets()`
 - [ ] **Avatar Moods** - Mood settings
 - [ ] **Avatar Voice** - Voice selection
 - [ ] **Avatar Personality** - Personality sliders
@@ -1617,7 +1617,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Automation Rules** - If-this-then-that
 
 ### Context Menu Enhancements
-- [ ] **Right-Click Menus** - Comprehensive context menus
+- [x] **Right-Click Menus** - Comprehensive context menus - `_show_context_menu()` in system_tray.py, scheduler_tab.py
 - [ ] **Custom Actions** - Add custom menu items
 - [ ] **Quick Actions** - Common actions first
 - [ ] **Submenu Organization** - Logical submenus
@@ -1790,7 +1790,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Auto Backup** - Scheduled backups - `MemoryBackupScheduler` with schedule_backup(), list_backups()
 - [ ] **Incremental Backup** - Only changed files
 - [ ] **Backup Encryption** - Encrypted backups
-- [ ] **Backup Compression** - Compressed backups
+- [x] **Backup Compression** - Compressed backups - `MemoryExporter.export_compressed()` with gzip support
 - [ ] **Backup Verification** - Verify backup integrity
 - [ ] **Backup Rotation** - Keep N backups
 - [ ] **Backup to Cloud** - S3/GCS/Azure backup
@@ -4009,20 +4009,20 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 
 - [ ] **Query Caching** - Cache responses
 - [ ] **Embedding Caching** - Cache embeddings
-- [ ] **Result Caching** - Cache computations
+- [x] **Result Caching** - Cache computations - `ResponseCache` in network_optimizer.py with LRU + TTL
 - [ ] **Request Deduplication** - Merge identical requests
 - [ ] **Lazy Computation** - Compute on demand
-- [ ] **Batch Processing** - Batch similar requests
-- [ ] **Prefetching** - Predict and preload
-- [ ] **Connection Pooling** - Reuse connections
+- [x] **Batch Processing** - Batch similar requests - `NetworkOptimizer.batch_request()` in network_optimizer.py
+- [x] **Prefetching** - Predict and preload - Predictive prefetching in NetworkOptimizer
+- [x] **Connection Pooling** - Reuse connections - Connection pooling in network_optimizer.py
 - [ ] **Memory Pooling** - Reuse memory allocations
 - [ ] **Object Pooling** - Reuse objects
-- [ ] **Compression** - Compress data transfers
+- [x] **Compression** - Compress data transfers - `compress: bool` option with zlib in NetworkOptimizer
 - [ ] **Delta Updates** - Send only changes
 - [ ] **Incremental Processing** - Process incrementally
 - [ ] **Parallel Processing** - Multi-threaded operations
 - [ ] **Async Processing** - Non-blocking operations
-- [ ] **Priority Queues** - Prioritize important work
+- [x] **Priority Queues** - Prioritize important work - `priority` parameter (low/normal/high/critical) in OptimizedRequest
 - [ ] **Rate Limiting** - Prevent overload
 - [ ] **Backpressure** - Handle overload gracefully
 - [ ] **Load Shedding** - Drop excess load
