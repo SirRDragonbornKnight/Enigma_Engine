@@ -11,9 +11,9 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 - Add new ideas to the "Ideas (Not Yet Planned)" section
 
 ## Quick Stats
-<!-- Last updated: 2026-02-04 -->
-- **Completed:** 178 items
-- **Remaining:** ~3,657 items
+<!-- Last updated: 2026-02-05 -->
+- **Completed:** 184 items
+- **Remaining:** ~3,651 items
 
 ---
 
@@ -126,7 +126,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Conversation Tags** - Tag conversations for filtering - `ConversationTagManager` with colors, filtering, default tags (2026-02-05)
 - [x] **Quick Replies** - Suggested follow-up questions - Implemented in `utils/quick_replies.py` with contextual suggestions, learning from selections, custom rules (2026-02-04)
 - [x] **Stop Generation** - Already implemented in chat_tab.py, system_tray.py, and other tabs (2026-02-04)
-- [ ] **Retry with Different Model** - Quick model switch for retry
+- [x] **Retry with Different Model** - Quick model switch for retry - `ModelSwitcher` in utils/productivity_tools.py with model listing, switching, callbacks, capability matching (2026-02-05)
 - [x] **Response Length Control** - number input for response verbosity - `ResponseLengthController` with 5 presets, custom tokens, system hints (2026-02-05)
 - [x] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles - `TemperaturePresetManager` with 5 built-in presets, custom presets, cycling (2026-02-05)
 - [x] **Conversation Statistics** - Token counts, message counts, timestamps - `ConversationStats` class in memory/conversation_stats.py with `MessageStats`, `UsageMetrics`, daily/hourly analytics (2026-02-04)
@@ -413,7 +413,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 ### Productivity Tools
 - [ ] **Knowledge Graph** - Build and query knowledge graphs from conversations
 - [x] **Automatic Summarization** - Summarize long conversations - Implemented via Summary button using `memory/conversation_summary.py`
-- [ ] **Task Extraction** - Extract action items from conversations
+- [x] **Task Extraction** - Extract action items from conversations - `TaskExtractor` in utils/productivity_tools.py with action patterns, priority detection, date extraction, deduplication (2026-02-05)
 - [x] **Reminder System** - Set reminders through conversation - Implemented in `tools/interactive_tools.py` ReminderSystem
 - [ ] **Code Review Mode** - Structured code review workflow
 - [ ] **Research Assistant** - Literature review and citation help
@@ -423,8 +423,8 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Database Schema Designer** - Help design database schemas
 - [ ] **Architecture Advisor** - Suggest software architecture
 - [x] **Regex Helper** - Implemented `utils/regex_helper.py` with RegexHelper class, PatternBuilder fluent API, 25+ common patterns, explain(), test(), find_all() (2026-02-05)
-- [ ] **SQL Query Builder** - Natural language to SQL
-- [ ] **Commit Message Generator** - Suggest git commit messages
+- [x] **SQL Query Builder** - Natural language to SQL - `SQLQueryBuilder` in utils/productivity_tools.py with schema awareness, 4 SQL dialects, pattern matching (2026-02-05)
+- [x] **Commit Message Generator** - Suggest git commit messages - `CommitMessageGenerator` in utils/productivity_tools.py with diff analysis, conventional commits, scope detection (2026-02-05)
 - [ ] **Meeting Notes Formatter** - Format raw meeting notes into structured minutes
 - [ ] **Reading Time Estimator** - Show estimated read time for AI responses
 - [ ] **Message Reactions** - React to messages with emoji or quick feedback
@@ -2295,7 +2295,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Progress Tracking** - Visual progress for multi-step tasks
 - [ ] **Failure Recovery** - Graceful handling when tool chains fail
 - [ ] **Shell Command Tool** - Execute shell commands (with safety limits)
-- [ ] **SQL Query Tool** - Query databases with natural language
+- [x] **SQL Query Tool** - Query databases with natural language - `SQLQueryBuilder` in utils/productivity_tools.py (2026-02-05)
 - [ ] **API Call Tool** - Make HTTP requests to external APIs
 - [ ] **Email Tool** - Send emails via SMTP
 - [ ] **Calendar Tool** - Manage calendar events
@@ -3900,7 +3900,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Branch Management** - Branch operations
 - [ ] **Merge Assistance** - Conflict resolution
 - [ ] **Code Review** - PR review help
-- [ ] **Commit Messages** - Generate commit messages
+- [x] **Commit Messages** - Generate commit messages - `CommitMessageGenerator` in utils/productivity_tools.py (2026-02-05)
 - [ ] **Changelog Generation** - Generate changelogs
 - [ ] **Release Notes** - Release documentation
 - [ ] **Issue Triage** - Categorize issues
