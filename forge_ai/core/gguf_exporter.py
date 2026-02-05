@@ -1,5 +1,5 @@
 """
-GGUF Export
+GGUF Exporter
 
 DEPRECATED: This module has been consolidated into forge_ai.core.gguf
 Import from there instead:
@@ -26,9 +26,6 @@ from forge_ai.core.gguf import (
     GGUF_VERSION,
 )
 
-# Backward compatibility aliases
-TensorInfo = GGUFTensor
-
 __all__ = [
     'GGMLType',
     'GGUFValueType',
@@ -40,7 +37,6 @@ __all__ = [
     'GGUFExporter',
     'export_to_gguf',
     'convert_tensor_name',
-    'TensorInfo',
     'QUANT_TYPES',
     'GGML_BLOCK_SIZES',
     'GGUF_MAGIC',

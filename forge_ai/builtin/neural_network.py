@@ -611,11 +611,44 @@ def mean(a: Matrix, axis: Optional[int] = None) -> Union[float, Matrix]:
 
 def variance(a: Matrix, axis: Optional[int] = None) -> Union[float, Matrix]:
     """Compute variance along axis or of all elements."""
-    mu = mean(a, axis)
     if axis is None:
+        mu = mean(a, axis)
         return sum((x - mu) ** 2 for x in a.data) / len(a.data)
-    # For axis-specific, we'd need more work - simplified for now
-    raise NotImplementedError("Axis-specific variance not implemented")
+    elif axis == 0:
+        # Variance along rows (result is row vector)
+        mu = mean(a, axis=0)  # Row vector of column means
+        result = Matrix.zeros(1, a.cols)
+        for j in range(a.cols):
+            col_var = 0.0
+            for i in range(a.rows):
+                diff = a.data[i * a.cols + j] - mu.data[j]
+                col_var += diff * diff
+            result.data[j] = col_var / a.rows
+        return result
+    elif axis == 1:
+        # Variance along cols (result is column vector)
+        mu = mean(a, axis=1)  # Column vector of row means
+        result = Matrix.zeros(a.rows, 1)
+        for i in range(a.rows):
+            row_var = 0.0
+            start = i * a.cols
+            row_mean = mu.data[i]
+            for j in range(a.cols):
+                diff = a.data[start + j] - row_mean
+                row_var += diff * diff
+            result.data[i] = row_var / a.cols
+        return result
+    else:
+        raise ValueError(f"Invalid axis: {axis}")
+
+
+def std(a: Matrix, axis: Optional[int] = None) -> Union[float, Matrix]:
+    """Compute standard deviation along axis or of all elements."""
+    var = variance(a, axis)
+    if isinstance(var, float):
+        return math.sqrt(var)
+    else:
+        return Matrix(var.rows, var.cols, [math.sqrt(v) for v in var.data])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
