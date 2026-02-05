@@ -111,9 +111,9 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Image Gen Placeholder Removal** - `gui/tabs/image_tab.py` `PlaceholderImageProvider` generates fake images with watermark
 - [x] **Conversation Templates** - Pre-defined conversation starters - Implemented in `memory/conversation_templates.py` with 18 built-in templates, variable substitution, categories (2026-02-04)
 - [x] **System Prompt Library** - Save/load system prompts - Implemented in `memory/prompt_library.py` with 12 built-in prompts, categories, tags, search, export/import (2026-02-04)
-- [ ] **Message Editing** - Edit sent messages and regenerate from that point
+- [x] **Message Editing** - Edit sent messages and regenerate from that point - `Message.edit()`, `MessageEditor` in gui/chat_features.py (2026-02-05)
 - [ ] **Message Branching** - Create alternate responses, tree view
-- [ ] **Pin Messages** - Pin important messages in conversation
+- [x] **Pin Messages** - Pin important messages in conversation - `PinManager` in gui/chat_features.py with notes, persistence (2026-02-05)
 - [x] **Message Reactions** - Thumbs up/down for feedback collection - `FeedbackManager` in utils/message_feedback.py with reactions, ratings, categories, export for training (2026-02-05)
 - [x] **Copy Code Blocks** - Implemented in TextFormatter with clickable copy links (2026-02-04)
 - [x] **Syntax Highlighting** - Implemented language-aware code block styling with color headers (2026-02-04)
@@ -123,11 +123,11 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Voice Messages** - Record and send voice messages
 - [x] **Read Aloud** - TTS for AI responses - `_speak_response()` in system_tray.py, `btn_speak` in chat_tab.py
 - [ ] **Conversation Folders** - Organize chats into folders
-- [ ] **Conversation Tags** - Tag conversations for filtering
+- [x] **Conversation Tags** - Tag conversations for filtering - `ConversationTagManager` with colors, filtering, default tags (2026-02-05)
 - [x] **Quick Replies** - Suggested follow-up questions - Implemented in `utils/quick_replies.py` with contextual suggestions, learning from selections, custom rules (2026-02-04)
 - [x] **Stop Generation** - Already implemented in chat_tab.py, system_tray.py, and other tabs (2026-02-04)
 - [ ] **Retry with Different Model** - Quick model switch for retry
-- [ ] **Response Length Control** - number input for response verbosity
+- [x] **Response Length Control** - number input for response verbosity - `ResponseLengthController` with 5 presets, custom tokens, system hints (2026-02-05)
 - [ ] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles
 - [x] **Conversation Statistics** - Token counts, message counts, timestamps - `ConversationStats` class in memory/conversation_stats.py with `MessageStats`, `UsageMetrics`, daily/hourly analytics (2026-02-04)
 - [x] **Session Timer** - Track time spent in conversation - Session duration tracked in analytics_tab.py, uptime_timer in dashboard_tab.py
@@ -352,7 +352,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Continuous Batching** - vLLM-style continuous batching - Full implementation in `continuous_batching.py`
 
 ### World-Class User Experience
-- [ ] **AI Memory Visualization** - Visual graph of what AI remembers about you
+- [ ] **AI Memory Visualization** - Visual of what AI remembers about you
 - [ ] **Conversation Timeline** - Visual timeline of all interactions
 - [ ] **Thought Process Display** - Show AI's reasoning step-by-step
 - [ ] **Confidence Indicators** - Show how confident AI is in each response
@@ -372,6 +372,15 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Integration with Raycast** - macOS launcher integration
 - [ ] **Integration with Alfred** - macOS Alfred workflow
 - [ ] **Windows PowerToys Run** - Windows launcher integration
+- [ ] **Typing Indicator** - Show when AI is thinking/generating
+- [ ] **Message Timestamps** - Show human-readable time for each message
+- [ ] **Conversation Mood Tracker** - Track emotional tone across conversation
+- [ ] **Word Cloud Generator** - Visualize common topics from chats
+- [ ] **Daily Summary Email** - Email digest of conversations
+- [ ] **Focus Mode** - Minimize distractions, fullscreen chat
+- [ ] **Split View** - Chat + document/code side by side
+- [ ] **Floating Chat Window** - Always-on-top mini chat window
+- [ ] **Chat Shortcuts Bar** - Customizable quick action toolbar
 
 ### Core Improvements
 - [ ] **Multi-GPU Support** - Distribute model across multiple GPUs
@@ -416,6 +425,12 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Regex Helper** - Implemented `utils/regex_helper.py` with RegexHelper class, PatternBuilder fluent API, 25+ common patterns, explain(), test(), find_all() (2026-02-05)
 - [ ] **SQL Query Builder** - Natural language to SQL
 - [ ] **Commit Message Generator** - Suggest git commit messages
+- [ ] **Meeting Notes Formatter** - Format raw meeting notes into structured minutes
+- [ ] **Reading Time Estimator** - Show estimated read time for AI responses
+- [ ] **Message Reactions** - React to messages with emoji or quick feedback
+- [ ] **Quote Reply** - Reply to specific parts of messages with quotes
+- [ ] **Clipboard History** - Track clipboard for easy paste into chat
+- [ ] **Smart Reply Suggestions** - Show quick reply options like email apps
 
 ### Learning & Education
 - [ ] **Flashcard Generation** - Create flashcards from conversations
@@ -701,6 +716,31 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Bug Reports** - Report bugs
 - [ ] **Feature Requests** - Request features
 - [ ] **Community Forum** - Discussion forum
+
+---
+
+## Fun & Creative Features
+
+- [ ] **AI Storyteller** - Interactive fiction with branching narratives
+- [ ] **Character Creator** - Design custom AI characters with backstories
+- [ ] **Chat Games** - Play games (20 questions, trivia, word games) in chat
+- [ ] **Daily Challenge** - Daily prompts or puzzles from the AI
+- [ ] **Achievement System** - Earn badges for using features
+- [ ] **AI Art Gallery** - Browse and rate generated images
+- [ ] **Writing Prompts** - Get creative writing inspiration
+- [ ] **Mad Libs Mode** - Play mad libs with AI
+- [ ] **Fortune Teller** - Fun fortune-cookie style predictions
+- [ ] **Name Generator** - Generate names for characters, projects, pets
+- [ ] **Random Fact Mode** - AI shares interesting facts unprompted
+- [ ] **Joke Mode** - Tell jokes on command with rating feedback
+- [ ] **Debate Partner** - AI argues a position for practice
+- [ ] **Roleplay Mode** - AI takes on a character for immersive RP
+- [ ] **Time Capsule** - Write messages to open later
+- [ ] **Mood Journal** - Track mood through daily AI check-ins
+- [ ] **Language Practice** - AI converses in learning language
+- [ ] **Interview Prep** - Practice job interview questions
+- [ ] **Movie Recommender** - Get personalized movie suggestions
+- [ ] **Recipe Suggester** - AI suggests recipes based on ingredients
 
 ---
 
