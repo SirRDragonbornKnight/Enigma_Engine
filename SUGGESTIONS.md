@@ -129,7 +129,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Retry with Different Model** - Quick model switch for retry
 - [ ] **Response Length Control** - Slider for response verbosity
 - [ ] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles
-- [ ] **Conversation Statistics** - Token counts, message counts, timestamps
+- [x] **Conversation Statistics** - Token counts, message counts, timestamps - `ConversationStats` class in memory/conversation_stats.py with `MessageStats`, `UsageMetrics`, daily/hourly analytics (2026-02-04)
 - [x] **Session Timer** - Track time spent in conversation - Session duration tracked in analytics_tab.py, uptime_timer in dashboard_tab.py
 
 ---
@@ -138,7 +138,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 
 - [x] **Singleton ModuleManager** - Implemented `__new__` singleton pattern so `ModuleManager()` returns same instance as `get_manager()` (2026-02-04)
 - [x] **Async/Await Migration** - Move from threading to `asyncio` for API server - FastAPI/uvicorn async in web/server.py
-- [ ] **Config Validation** - Add pydantic/dataclass validation for config files
+- [x] **Config Validation** - Add pydantic/dataclass validation for config files - `BaseConfig`, `ModelConfig`, `TrainingConfig`, `ForgeConfig` dataclasses in config/validation.py with env var support (2026-02-04)
 - [ ] **Proper Error Returns** - Many functions return `[]`, `{}`, `""`, `0.0` on error instead of raising
 - [ ] **Neural Network Variance** - `core/nn.py` raises NotImplementedError for axis-specific variance
 - [ ] **Web Server Stubs** - `web/routes.py` creates stub Flask/Pydantic when not installed
@@ -450,7 +450,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Siri Integration** - Voice commands via Siri
 - [ ] **Google Assistant** - Voice commands on Android
 - [ ] **Share Extension** - Share to ForgeAI
-- [ ] **Clipboard Monitoring** - Optional clipboard access
+- [x] **Clipboard Monitoring** - Optional clipboard access - `ClipboardHistory` in utils/clipboard_history.py with monitoring thread, history persistence, search (2026-02-04)
 - [ ] **Quick Actions** - 3D Touch/long press shortcuts
 
 ### Mobile Chat Interface
@@ -557,7 +557,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 ## Memory & Context System
 
 - [ ] **Conversation Memory** - Remember past conversations
-- [ ] **Entity Memory** - Remember people/places/things
+- [x] **Entity Memory** - Remember people/places/things - `EntityMemory` class in memory/entity_memory.py with `Entity`, `Relationship` tracking, extraction, search (2026-02-04)
 - [ ] **Fact Memory** - Store factual knowledge
 - [ ] **Preference Memory** - Remember user preferences
 - [ ] **Skill Memory** - Remember learned skills
@@ -3997,7 +3997,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Trace Viewer** - Visualize execution traces
 - [ ] **Breakpoints** - Pause at specific points
 - [ ] **State Inspector** - Inspect internal state
-- [ ] **Config Validation** - Validate configs
+- [x] **Config Validation** - Validate configs - `ForgeConfig`, `ModelConfig`, `TrainingConfig` dataclasses in config/validation.py with `load_config()`, `save_config()` (2026-02-04)
 - [ ] **Schema Validation** - Validate data schemas
 - [ ] **Mock Mode** - Test without real inference
 - [ ] **Replay Mode** - Replay saved requests
@@ -4149,7 +4149,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **RSS Triggers** - Monitor RSS feeds
 - [ ] **Database Triggers** - React to DB changes
 - [ ] **API Polling** - Poll external APIs
-- [ ] **Clipboard Monitoring** - React to clipboard changes
+- [x] **Clipboard Monitoring** - React to clipboard changes - `ClipboardHistory.start_monitoring()` in utils/clipboard_history.py with callbacks (2026-02-04)
 - [ ] **Screenshot Automation** - Auto-capture screenshots
 - [ ] **Notification Actions** - Send notifications
 - [ ] **API Call Actions** - Make HTTP requests
@@ -4545,7 +4545,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Memory Diagnostics** - Memory usage analysis
 - [ ] **Network Diagnostics** - Check connectivity
 - [ ] **Model Validation** - Verify model integrity
-- [ ] **Config Validation** - Check configuration
+- [x] **Config Validation** - Check configuration - `validate_config()`, `validate_model_config()` etc in config/validation.py (2026-02-04)
 - [ ] **Permission Check** - Verify file permissions
 - [ ] **Port Check** - Check port availability
 - [ ] **Service Health** - Check all services
@@ -4598,7 +4598,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Custom UI** - Add UI components
 - [ ] **Custom Commands** - Add chat commands
 - [ ] **Custom Handlers** - Custom message handlers
-- [ ] **Custom Storage** - Custom storage backends
+- [x] **Custom Storage** - Custom storage backends - `StorageBackend` ABC in utils/storage_backends.py with `LocalStorage`, `S3Storage`, `AzureStorage` (2026-02-04)
 - [ ] **Custom Auth** - Custom authentication
 - [ ] **Custom Integrations** - Third-party integrations
 
@@ -4770,7 +4770,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Quick Commands** - Fast action execution
 - [ ] **Shortcuts Everywhere** - Keyboard shortcuts
 - [ ] **Drag and Drop** - Natural interactions
-- [ ] **Copy/Paste Enhanced** - Smart clipboard
+- [x] **Copy/Paste Enhanced** - Smart clipboard - `ClipboardHistory` with `ContentType` detection, search, pin/favorite, tags in utils/clipboard_history.py (2026-02-04)
 - [ ] **Search Everything** - Universal search
 - [ ] **Jump To** - Navigate anywhere quickly
 
