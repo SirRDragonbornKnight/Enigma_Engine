@@ -12,8 +12,8 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 
 ## Quick Stats
 <!-- Last updated: 2026-02-05 -->
-- **Completed:** 189 items
-- **Remaining:** ~3,646 items
+- **Completed:** 194 items
+- **Remaining:** ~3,641 items
 
 ---
 
@@ -459,7 +459,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Offline Mode** - Work without internet - Implemented in `utils/network_fallback.py` (2026-02-04)
 - [ ] **Local Model** - Run small models on device
 - [ ] **Cloud Fallback** - Use cloud when needed
-- [ ] **Push Notifications** - Receive notifications
+- [x] **Push Notifications** - Receive notifications - `PushNotificationService` in gui/notification_system.py with desktop notifications, plyer integration (2026-02-05)
 - [ ] **Background Sync** - Sync in background
 - [ ] **Widget Support** - Home screen widgets
 - [ ] **Siri Integration** - Voice commands via Siri
@@ -548,7 +548,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Dynamic Theme** - Match system theme - Theme system supports runtime switching
 - [ ] **Font Size** - Adjustable text size
 - [ ] **Haptic Feedback** - Vibration feedback
-- [ ] **Sound Settings** - Notification sounds
+- [x] **Sound Settings** - Notification sounds - `SoundSettings` in gui/notification_system.py with 8 sound types, profiles, volume control (2026-02-05)
 - [ ] **Privacy Settings** - Control data access
 - [ ] **Battery Optimization** - Save battery
 - [ ] **Storage Management** - Manage app storage
@@ -1477,12 +1477,12 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Full Screen Mode** - Distraction-free mode
 - [ ] **Compact Mode** - Minimal UI for small screens
 - [ ] **Zen Mode** - Hide all UI except chat
-- [ ] **Status Bar** - Show system status
+- [x] **Status Bar** - Show system status - `StatusBar` with items, progress, levels, click handlers (2026-02-05)
 - [ ] **Breadcrumbs** - Navigation trail
 - [ ] **Quick Actions** - Command palette (Ctrl+P)
 - [ ] **Recent Items** - Recently opened items
 - [ ] **Favorites** - Star favorite items
-- [ ] **Notifications Center** - Notification history
+- [x] **Notifications Center** - Notification history - `NotificationCenter` with history, filtering, bulk ops, persistence (2026-02-05)
 - [ ] **Activity Feed** - Recent activity log
 
 ### Chat Interface
@@ -1641,7 +1641,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 
 ### Notification System
 - [x] **Toast Notifications** - Non-intrusive alerts - `NotificationManager` in notifications.py with Windows/Linux/Mac backends, `notify()` function
-- [ ] **Notification Badges** - Unread counts
+- [x] **Notification Badges** - Unread counts - `NotificationBadge` with per-source counts, display formatting (2026-02-05)
 - [x] **Notification Sounds** - Custom sounds - `play_sound()` in notification backends, supports info/success/warning/error sounds
 - [x] **Notification Actions** - Quick actions - `Notification.actions` list with clickable action buttons
 - [x] **Notification Grouping** - Group similar alerts - `NotificationManager.group_notifications()` groups by type
