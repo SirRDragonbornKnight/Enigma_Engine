@@ -12,8 +12,8 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 
 ## Quick Stats
 <!-- Last updated: 2026-02-05 -->
-- **Completed:** 210 items
-- **Remaining:** ~3,465 items
+- **Completed:** 224 items
+- **Remaining:** ~3,390 items
 
 ---
 
@@ -294,8 +294,8 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [ ] **API Deprecation** - Graceful API deprecation
 - [x] **Rate Limit Headers** - Return rate limit info - `RateLimiter` class in `comms/auth.py` and `tools/rate_limiter.py`
 - [ ] **Pagination** - Cursor/offset pagination
-- [ ] **Filtering** - Query parameter filtering
-- [ ] **Sorting** - Query parameter sorting
+- [x] **Filtering** - Query parameter filtering - `Filter` class in utils/search_filter.py with fluent API, 12 operators (2026-02-05)
+- [x] **Sorting** - Query parameter sorting - `Sorter` class in utils/search_filter.py with multi-field, null handling (2026-02-05)
 - [ ] **Field Selection** - Return only requested fields
 - [ ] **Bulk Operations** - Batch API requests
 - [ ] **Async Operations** - Long-running job API
@@ -693,30 +693,6 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ---
 
-## Fun & Creative Features
-
-- [ ] **AI Storyteller** - Interactive fiction with branching narratives
-- [ ] **Character Creator** - Design custom AI characters with backstories
-- [ ] **Chat Games** - Play games (20 questions, trivia, word games) in chat
-- [ ] **Daily Challenge** - Daily prompts or puzzles from the AI
-- [ ] **Achievement System** - Earn badges for using features
-- [ ] **AI Art Gallery** - Browse and rate generated images
-- [ ] **Writing Prompts** - Get creative writing inspiration
-- [ ] **Mad Libs Mode** - Play mad libs with AI
-- [ ] **Fortune Teller** - Fun fortune-cookie style predictions
-- [ ] **Random Fact Mode** - AI shares interesting facts unprompted
-- [ ] **Joke Mode** - Tell jokes on command with rating feedback
-- [ ] **Debate Partner** - AI argues a position for practice
-- [ ] **Roleplay Mode** - AI takes on a character for immersive RP
-- [ ] **Time Capsule** - Write messages to open later
-- [ ] **Mood Journal** - Track mood through daily AI check-ins
-- [ ] **Language Practice** - AI converses in learning language
-- [ ] **Interview Prep** - Practice job interview questions
-- [ ] **Movie Recommender** - Get personalized movie suggestions
-- [ ] **Recipe Suggester** - AI suggests recipes based on ingredients
-
----
-
 ## Documentation & DX
 
 - [ ] **API Reference Docs** - Auto-generated docs from docstrings (Sphinx/pdoc)
@@ -757,7 +733,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Network Encryption** - TLS for all API communications
 - [x] **CORS Configuration** - Proper cross-origin settings - `cors_origins` in `config/defaults.py`, CORS() in servers
 - [ ] **CSRF Protection** - Token-based request validation
-- [ ] **Session Management** - Secure session handling
+- [x] **Session Management** - Secure session handling - `SessionManager` in core/session_manager.py with offline queue, auto-save (2026-02-05)
 - [ ] **IP Allowlisting** - Restrict API access by IP
 - [ ] **Request Signing** - HMAC request authentication
 - [x] **Prompt Injection Detection** - Implemented `utils/prompt_injection.py` with detector, InjectionType enum, ThreatLevel, pattern matching (2026-02-05)
@@ -928,14 +904,14 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 ### Memory & Context
 - [ ] **Working Memory** - Short-term scratchpad for reasoning
 - [ ] **Episodic Memory** - Remember specific interactions
-- [ ] **Semantic Memory** - Store learned facts persistently
+- [x] **Semantic Memory** - Store learned facts persistently - `AIFacts`, `PersistentInfoStorage` in memory/persistent_info.py with remember/recall (2026-02-05)
 - [ ] **Procedural Memory** - Remember how to do things
 - [ ] **Memory Consolidation** - Compress and organize memories
 - [ ] **Memory Retrieval** - Efficient recall of relevant info
 - [ ] **Memory Forgetting** - Graceful degradation of old info
 - [ ] **Memory Priority** - Important memories persist longer
-- [ ] **Cross-Session Memory** - Remember across conversations
-- [ ] **User-Specific Memory** - Per-user memory stores
+- [x] **Cross-Session Memory** - Remember across conversations - `PersistentInfoStorage` in memory/persistent_info.py with JSON persistence (2026-02-05)
+- [x] **User-Specific Memory** - Per-user memory stores - `UserPreferences` in memory/persistent_info.py with set/get/all methods (2026-02-05)
 - [ ] **Shared Memory** - Memory accessible across agents
 - [ ] **Memory Summarization** - Compress long conversations
 - [ ] **Memory Indexing** - Fast lookup of stored info
@@ -979,26 +955,6 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Shell Command Generation** - Generate shell commands from descriptions
 - [ ] **Script Generation** - Write and execute scripts for any task
 - [ ] **Multi-Language Execution** - Execute Python, JS, Bash, etc. as needed
-
-### Learning & Adaptation
-- [ ] **Action Recording** - Record user actions to learn new capabilities
-- [ ] **Demonstration Learning** - Learn by watching user perform tasks
-- [ ] **Failure Recovery Learning** - Learn from failed attempts
-- [ ] **Action Refinement** - Improve actions based on outcomes
-- [ ] **Cross-Domain Transfer** - Apply learned actions to new domains
-- [ ] **Action Generalization** - Generalize specific actions to patterns
-- [ ] **User Feedback Integration** - Improve from "that's not what I meant"
-- [ ] **Success Pattern Mining** - Extract patterns from successful actions
-
-### Reasoning About Actions
-- [ ] **Action Planning** - Plan multi-step actions before execution
-- [ ] **Precondition Detection** - Understand what's needed before an action
-- [ ] **Effect Prediction** - Predict outcomes before executing
-- [ ] **Side Effect Awareness** - Understand unintended consequences
-- [ ] **Reversibility Analysis** - Know which actions can be undone
-- [ ] **Resource Estimation** - Estimate time/compute/disk needed
-- [ ] **Permission Checking** - Know what permissions are needed
-- [ ] **Safety Verification** - Verify action safety before execution
 
 ### Expansion Mechanisms
 - [ ] **Plugin-Free Extension** - Add capabilities without code plugins
@@ -3593,7 +3549,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 
 ### User Control
 - [ ] **Data Access** - View collected data
-- [ ] **Data Export** - Export user data
+- [x] **Data Export** - Export user data - `DataExporter` in utils/data_exporter.py with JSON/CSV/Markdown/HTML/Text formats (2026-02-05)
 - [ ] **Data Deletion** - Delete user data
 - [ ] **Consent Management** - Manage consents
 - [ ] **Preference Center** - Privacy preferences
@@ -4494,41 +4450,10 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Debugging** - Help debug issues
 - [ ] **Performance** - Performance optimization
 
-### Creative Writing Mode
-- [ ] **Story Mode** - Long-form fiction
-- [ ] **Poetry Mode** - Generate poetry
-- [ ] **Script Mode** - Screenplay writing
-- [ ] **Article Mode** - Article/blog writing
-- [ ] **Marketing Mode** - Marketing copy
-- [ ] **Social Mode** - Social media posts
-- [ ] **Email Mode** - Email composition
-- [ ] **Resume Mode** - Resume writing
-- [ ] **Cover Letter Mode** - Cover letter writing
-- [ ] **Academic Mode** - Academic writing
-
 ### Research Mode
-- [ ] **Literature Review** - Research papers
-- [ ] **Fact Checking** - Verify claims
 - [ ] **Source Finding** - Find credible sources
-- [ ] **Summarization** - Summarize documents
-- [ ] **Comparison** - Compare information
-- [ ] **Timeline Building** - Historical timelines
-- [ ] **Relationship Mapping** - Entity relationships
 - [ ] **Citation Format** - Format citations
 - [ ] **Bibliography** - Generate bibliographies
-- [ ] **Annotation** - Annotate sources
-
-### Teaching Mode
-- [ ] **Adaptive Difficulty** - Adjust to learner
-- [ ] **Socratic Method** - Question-based teaching
-- [ ] **Worked Examples** - Step-by-step solutions
-- [ ] **Practice Problems** - Generate exercises
-- [ ] **Progress Tracking** - Track learning
-- [ ] **Misconception Detection** - Identify misunderstandings
-- [ ] **Remediation** - Address gaps
-- [ ] **Encouragement** - Motivational feedback
-- [ ] **Multiple Approaches** - Different explanations
-- [ ] **Visual Learning** - Diagrams and visuals
 
 ---
 
