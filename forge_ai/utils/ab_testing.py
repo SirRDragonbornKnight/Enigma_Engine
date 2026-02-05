@@ -282,7 +282,7 @@ class Experiment:
             "total_conversions": total_conversions,
             "overall_conversion_rate": total_conversions / total_impressions if total_impressions > 0 else 0.0,
             "variants": [v.to_dict() for v in self.variants],
-            "winner": self.get_winner().id if self.get_winner() else None,
+            "winner": (winner.id if (winner := self.get_winner()) else None),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None
         }

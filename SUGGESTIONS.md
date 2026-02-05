@@ -139,7 +139,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Singleton ModuleManager** - Implemented `__new__` singleton pattern so `ModuleManager()` returns same instance as `get_manager()` (2026-02-04)
 - [x] **Async/Await Migration** - Move from threading to `asyncio` for API server - FastAPI/uvicorn async in web/server.py
 - [x] **Config Validation** - Add pydantic/dataclass validation for config files - `BaseConfig`, `ModelConfig`, `TrainingConfig`, `ForgeConfig` dataclasses in config/validation.py with env var support (2026-02-04)
-- [ ] **Proper Error Returns** - Many functions return `[]`, `{}`, `""`, `0.0` on error instead of raising
+- [x] **Proper Error Returns** - Implemented `utils/errors.py` with ForgeError hierarchy, Result type, ErrorCode enum, ErrorAggregator, safe_call, error decorators (2026-02-05)
 - [ ] **Neural Network Variance** - `core/nn.py` raises NotImplementedError for axis-specific variance
 - [ ] **Web Server Stubs** - `web/routes.py` creates stub Flask/Pydantic when not installed
 - [x] **Event System** - Implemented pub/sub `EventBus` in `utils/events.py` with patterns, priorities, and typed events (2026-02-04)
@@ -170,7 +170,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [x] **Vector DB FAISS** - `memory/vector_db.py` falls back to `SimpleVectorDB` (pure Python) when FAISS unavailable (working)
 - [x] **Tokenizer Fallback** - `core/tokenizer.py` falls back to character/word tokenizer when tiktoken unavailable (working)
 - [x] **Local Embeddings** - `gui/tabs/embeddings_tab.py` has built-in fallback when sentence-transformers unavailable (working)
-- [ ] **Context Relevance Scoring** - TODO comment says "could add semantic relevance scoring"
+- [x] **Context Relevance Scoring** - Implemented `utils/relevance_scoring.py` with TF-IDF, BM25, Jaccard, Cosine scorers and context ranking (2026-02-05)
 - [x] **Flash Attention Fallback** - Standard attention when flash-attn unavailable (working)
 - [x] **Triton Fallback** - Pure PyTorch when Triton unavailable (working)
 - [x] **CUDA Fallback** - CPU fallback when CUDA unavailable (working)
@@ -228,7 +228,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [ ] **Intel AMX** - Intel Advanced Matrix Extensions
 - [ ] **SIMD Optimization** - Single instruction, multiple data
 - [ ] **Multi-Core** - Parallel CPU execution
-- [ ] **Thread Pooling** - Efficient thread reuse
+- [x] **Thread Pooling** - Implemented `utils/thread_pool.py` with ThreadPoolManager, WorkerPool, priority queues, task results (2026-02-05)
 - [ ] **CPU Pinning** - Pin to specific cores
 - [ ] **NUMA Awareness** - NUMA-aware memory
 - [ ] **Cache Optimization** - CPU cache efficiency
@@ -240,7 +240,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [ ] **Unit Test Coverage** - Many modules lack tests (federated/, avatar/bone_control.py, tools/game_router.py)
 - [ ] **Integration Tests** - End-to-end tests for module loading → inference → tool execution flow
 - [ ] **Mock External APIs** - Tests for image_tab, audio_tab, etc. should mock OpenAI/Replicate calls
-- [ ] **CI/CD Pipeline** - GitHub Actions for automated testing on push
+- [x] **CI/CD Pipeline** - Already exists at `.github/workflows/ci.yml` with Python 3.9-3.13 matrix, PR checks (2026-02-05)
 - [ ] **Type Hints Coverage** - Add type hints to functions missing them, run mypy in strict mode
 - [ ] **Load Testing** - Test under heavy load
 - [ ] **Stress Testing** - Test at resource limits

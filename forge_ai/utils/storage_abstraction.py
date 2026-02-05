@@ -298,12 +298,18 @@ class LocalStorage(StorageBackend):
         path = self._full_path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
         
+        # Convert to bytes
+        data_bytes: bytes
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data_bytes = data.encode('utf-8')
         elif hasattr(data, 'read'):
-            data = data.read()
+            data_bytes = data.read()  # type: ignore
+        elif isinstance(data, (bytearray, memoryview)):
+            data_bytes = bytes(data)
+        else:
+            data_bytes = data
         
-        path.write_bytes(data)
+        path.write_bytes(data_bytes)
         
         # Store metadata in sidecar file
         if metadata or content_type:
@@ -316,10 +322,10 @@ class LocalStorage(StorageBackend):
         
         return StorageMetadata(
             key=key,
-            size=len(data),
+            size=len(data_bytes),
             content_type=content_type,
             last_modified=datetime.fromtimestamp(path.stat().st_mtime),
-            etag=self._calculate_etag(data),
+            etag=self._calculate_etag(data_bytes),
             custom_metadata=metadata or {}
         )
     
@@ -495,19 +501,24 @@ class MemoryStorage(StorageBackend):
         metadata: Optional[Dict[str, str]] = None
     ) -> StorageMetadata:
         """Store object in memory."""
+        data_bytes: bytes
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data_bytes = data.encode('utf-8')
         elif hasattr(data, 'read'):
-            data = data.read()
+            data_bytes = data.read()  # type: ignore
+        elif isinstance(data, (bytearray, memoryview)):
+            data_bytes = bytes(data)
+        else:
+            data_bytes = data
         
-        self._objects[key] = data
+        self._objects[key] = data_bytes
         
         meta = StorageMetadata(
             key=key,
-            size=len(data),
+            size=len(data_bytes),
             content_type=content_type,
             last_modified=datetime.now(),
-            etag=hashlib.md5(data).hexdigest(),
+            etag=hashlib.md5(data_bytes).hexdigest(),
             custom_metadata=metadata or {}
         )
         self._metadata[key] = meta
@@ -822,14 +833,19 @@ class StorageManager:
         results = {}
         
         # Ensure we have bytes
+        data_bytes: bytes
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data_bytes = data.encode('utf-8')
         elif hasattr(data, 'read'):
-            data = data.read()
+            data_bytes = data.read()  # type: ignore
+        elif isinstance(data, (bytearray, memoryview)):
+            data_bytes = bytes(data)
+        else:
+            data_bytes = data
         
         for name, backend in self._backends.items():
             try:
-                results[name] = backend.put(key, data, content_type, metadata)
+                results[name] = backend.put(key, data_bytes, content_type, metadata)
             except Exception as e:
                 results[name] = str(e)
         

@@ -27,7 +27,7 @@ class QueryResult:
     """Result from a database query."""
     rows: List[Dict[str, Any]] = field(default_factory=list)
     affected_rows: int = 0
-    last_insert_id: Optional[int] = None
+    last_insert_id: Optional[Union[int, str]] = None  # str for MongoDB ObjectId
     success: bool = True
     error: Optional[str] = None
     
@@ -41,7 +41,7 @@ class QueryResult:
         """Get first row."""
         return self.rows[0] if self.rows else None
     
-    def scalar(self, column: str = None) -> Any:
+    def scalar(self, column: Optional[str] = None) -> Any:
         """Get single value from first row."""
         if not self.rows:
             return None
@@ -817,6 +817,8 @@ class DatabaseManager:
             Database backend or None
         """
         db_name = name or self._default
+        if db_name is None:
+            return None
         return self._databases.get(db_name)
     
     def connect(self, name: str) -> bool:

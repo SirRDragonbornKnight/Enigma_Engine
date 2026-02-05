@@ -439,8 +439,8 @@ def injectable(
             pass
     """
     def decorator(cls: Type[T]) -> Type[T]:
-        cls._di_lifetime = lifetime
-        cls._di_interface = interface or cls
+        setattr(cls, '_di_lifetime', lifetime)
+        setattr(cls, '_di_interface', interface or cls)
         return cls
     
     return decorator
@@ -448,22 +448,22 @@ def injectable(
 
 def singleton(cls: Type[T]) -> Type[T]:
     """Decorator to mark a class as singleton."""
-    cls._di_lifetime = Lifetime.SINGLETON
-    cls._di_interface = cls
+    setattr(cls, '_di_lifetime', Lifetime.SINGLETON)
+    setattr(cls, '_di_interface', cls)
     return cls
 
 
 def scoped(cls: Type[T]) -> Type[T]:
     """Decorator to mark a class as scoped."""
-    cls._di_lifetime = Lifetime.SCOPED
-    cls._di_interface = cls
+    setattr(cls, '_di_lifetime', Lifetime.SCOPED)
+    setattr(cls, '_di_interface', cls)
     return cls
 
 
 def transient(cls: Type[T]) -> Type[T]:
     """Decorator to mark a class as transient."""
-    cls._di_lifetime = Lifetime.TRANSIENT
-    cls._di_interface = cls
+    setattr(cls, '_di_lifetime', Lifetime.TRANSIENT)
+    setattr(cls, '_di_interface', cls)
     return cls
 
 
