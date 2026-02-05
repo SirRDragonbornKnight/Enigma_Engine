@@ -143,7 +143,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Neural Network Variance** - `core/nn.py` raises NotImplementedError for axis-specific variance
 - [ ] **Web Server Stubs** - `web/routes.py` creates stub Flask/Pydantic when not installed
 - [x] **Event System** - Implemented pub/sub `EventBus` in `utils/events.py` with patterns, priorities, and typed events (2026-02-04)
-- [ ] **Dependency Injection** - DI container for better testability
+- [x] **Dependency Injection** - Implemented `utils/di_container.py` with Container, Lifetime scopes, decorators (@injectable, @singleton, @scoped) (2026-02-05)
 - [x] **Plugin Architecture** - Formal plugin loading system - `ToolPluginLoader` with auto_discover
 - [x] **Hook System** - Implemented pre/post hooks in `utils/hooks.py` with priorities, context passing, and the `@hookable` decorator (2026-02-04)
 - [x] **Middleware Pipeline** - Implemented `utils/middleware.py` with Pipeline, Request/Response, logging, rate limiting, retry, caching middleware (2026-02-04)
@@ -157,7 +157,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Bulkhead Pattern** - Implemented `utils/bulkhead.py` with partitions, semaphore concurrency limiting, queue management, metrics (2026-02-05)
 - [x] **Retry Pattern** - Standardized retry logic - `TaskQueue` with retry logic, `NetworkOptimizer` with exponential backoff
 - [x] **Cache Abstraction** - Unified caching interface - `ToolCache` in tools/cache.py with memory + disk caching
-- [ ] **Storage Abstraction** - Unified file/blob storage
+- [x] **Storage Abstraction** - Implemented `utils/storage_abstraction.py` with StorageBackend ABC, LocalStorage, MemoryStorage, S3Storage (2026-02-05)
 - [x] **Queue Abstraction** - Message queue interface - `NetworkTaskQueue` in network/task_queue.py with priority handling, workers
 - [ ] **Database Abstraction** - Support multiple backends
 
@@ -298,7 +298,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [x] **WebSocket Support** - Real-time bidirectional communication for chat - Implemented in web interface (see WEB_INTERFACE_COMPLETE.md)
 - [ ] **GraphQL API** - Alternative to REST API
 - [ ] **gRPC Support** - High-performance RPC
-- [ ] **Webhook System** - Send events to external URLs
+- [x] **Webhook System** - Implemented `comms/webhooks.py` with WebhookManager, event types, retries, signatures (2026-02-05)
 - [ ] **OAuth Provider** - Act as OAuth server
 - [ ] **OAuth Client** - Login via Google/GitHub/etc
 - [ ] **API Versioning** - v1/v2/etc API versions
@@ -747,7 +747,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Session Management** - Secure session handling
 - [ ] **IP Allowlisting** - Restrict API access by IP
 - [ ] **Request Signing** - HMAC request authentication
-- [ ] **Prompt Injection Detection** - Detect manipulation attempts
+- [x] **Prompt Injection Detection** - Implemented `utils/prompt_injection.py` with detector, InjectionType enum, ThreatLevel, pattern matching (2026-02-05)
 - [x] **Output Filtering** - Implemented `utils/output_filter.py` with OutputFilter class, PII redaction, secret detection, custom rules (2026-02-05)
 - [x] **PII Detection** - Flag/redact personal information - `DataFilter._contains_pii()` and `sanitize()` in `learning/data_filter.py` with email, phone, SSN, CC patterns
 - [ ] **GDPR Compliance** - Data export and deletion tools
