@@ -12,8 +12,8 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 
 ## Quick Stats
 <!-- Last updated: 2026-02-05 -->
-- **Completed:** 194 items
-- **Remaining:** ~3,641 items
+- **Completed:** 210 items
+- **Remaining:** ~3,465 items
 
 ---
 
@@ -206,20 +206,9 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 
 ### NPU/TPU Support
 - [ ] **Google TPU** - TPU acceleration
-- [ ] **Intel NPU** - Intel AI accelerator
-- [ ] **Qualcomm NPU** - Qualcomm AI Engine
 - [ ] **Apple ANE** - Apple Neural Engine
-- [ ] **Google Coral** - Coral Edge TPU
-- [ ] **Hailo NPU** - Hailo AI processor
-- [ ] **Rockchip NPU** - Rockchip RK3588 NPU
 - [ ] **NVIDIA Jetson** - Jetson edge AI
-- [ ] **AMD Ryzen AI** - AMD NPU support
-- [ ] **Intel Movidius** - Movidius VPU
-- [ ] **Arm Ethos** - Arm AI accelerator
-- [ ] **Mythic AMP** - Analog compute
-- [ ] **Graphcore IPU** - Graphcore support
-- [ ] **Cerebras** - Cerebras WSE support
-- [ ] **SambaNova** - SambaNova support
+- [ ] **Intel NPU** - Intel AI accelerator
 
 ### CPU Optimization
 - [ ] **AVX/AVX2** - x86 vector instructions
@@ -431,21 +420,6 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Quote Reply** - Reply to specific parts of messages with quotes
 - [x] **Clipboard History** - Track clipboard for easy paste into chat - `ClipboardHistory` in gui/ui_utilities.py with pinning, search, persistence (2026-02-05)
 - [ ] **Smart Reply Suggestions** - Show quick reply options like email apps
-
-### Learning & Education
-- [ ] **Flashcard Generation** - Create flashcards from conversations
-- [ ] **Quiz Mode** - AI generates quizzes on topics discussed
-- [ ] **Interview Practice** - Mock interview simulations
-- [ ] **Language Learning** - Language practice with corrections
-- [ ] **Math Solver** - Step-by-step math problem solving
-- [ ] **Algorithm Explainer** - Explain algorithms step-by-step
-
-### Creative Tools
-- [ ] **Story Co-Writing** - Collaborative fiction writing
-- [ ] **Blog Post Generator** - Generate blog post drafts
-- [ ] **Translation Helper** - Translate with context awareness
-- [ ] **Grammar Checker** - Grammar and style suggestions
-- [ ] **Tone Adjuster** - Rewrite text in different tones
 
 ---
 
@@ -950,29 +924,6 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 ### Reasoning & Intelligence
 - [x] **Chain-of-Thought** - Built-in CoT prompting and parsing - `[E:think]` token in tokenizer, `Agent.think()` for step-by-step
-- [ ] **Tree-of-Thought** - Explore multiple reasoning paths
-- [ ] **Graph-of-Thought** - Non-linear reasoning structures
-- [ ] **Self-Consistency** - Sample multiple answers, vote on best
-- [ ] **Reflexion** - Self-reflection and correction loops
-- [ ] **Metacognition** - Model awareness of its own capabilities
-- [ ] **Uncertainty Estimation** - Know when it doesn't know
-- [ ] **Calibrated Confidence** - Accurate probability estimates
-- [ ] **Logical Reasoning** - Explicit logic chain validation
-- [ ] **Mathematical Reasoning** - Step-by-step math with verification
-- [ ] **Causal Reasoning** - Understand cause and effect
-- [ ] **Analogical Reasoning** - Draw parallels between domains
-- [ ] **Counterfactual Thinking** - "What if" scenario exploration
-- [ ] **Abductive Reasoning** - Best explanation inference
-- [ ] **Inductive Reasoning** - Pattern generalization
-- [ ] **Deductive Reasoning** - Rule application
-- [ ] **Common Sense Reasoning** - Implicit world knowledge
-- [ ] **Spatial Reasoning** - Understand 3D relationships
-- [ ] **Temporal Reasoning** - Understand time sequences
-- [ ] **Social Reasoning** - Understand human dynamics
-- [ ] **Ethical Reasoning** - Consider moral implications
-- [ ] **Strategic Reasoning** - Game theory and planning
-- [ ] **Probabilistic Reasoning** - Handle uncertainty properly
-- [ ] **Constraint Satisfaction** - Solve within constraints
 
 ### Memory & Context
 - [ ] **Working Memory** - Short-term scratchpad for reasoning
@@ -993,141 +944,15 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [x] **Memory Export** - Backup and restore memories - `MemoryBackupScheduler` in memory/backup.py with create_backup(), restore_backup()
 - [ ] **Infinite Context** - Handle arbitrarily long contexts
 
-### Learning & Adaptation
-- [ ] **Online Learning** - Learn from interactions in real-time
-- [ ] **Few-Shot Learning** - Learn from minimal examples
-- [ ] **Zero-Shot Transfer** - Apply to new tasks without examples
-- [ ] **Meta-Learning** - Learn how to learn
-- [ ] **Curriculum Learning** - Progressive skill building
-- [ ] **Active Learning** - Ask for clarification when needed
-- [ ] **Reinforcement from Feedback** - Learn from user corrections
-- [ ] **Preference Learning** - Adapt to user preferences
-- [ ] **Style Adaptation** - Match user communication style
-- [ ] **Domain Adaptation** - Specialize to user's field
-- [ ] **Continual Learning** - Learn without forgetting
-- [ ] **Transfer Learning** - Apply knowledge across domains
-- [ ] **Self-Supervised Learning** - Learn from unlabeled data
-- [ ] **Imitation Learning** - Learn from demonstrations
-- [ ] **Inverse RL** - Infer goals from behavior
-
-### Self-Awareness & Introspection
-- [ ] **Capability Awareness** - Know what it can/can't do
-- [ ] **Knowledge Boundaries** - Recognize limits of knowledge
-- [ ] **Confidence Calibration** - Accurate self-assessment
-- [ ] **Error Detection** - Recognize own mistakes
-- [ ] **Self-Correction** - Fix errors autonomously
-- [ ] **Explanation Generation** - Explain own reasoning
-- [ ] **Decision Justification** - Justify choices made
-- [ ] **Assumption Surfacing** - Reveal hidden assumptions
-- [ ] **Bias Awareness** - Recognize potential biases
-- [ ] **Limitation Disclosure** - Proactively state limitations
-- [ ] **Help Seeking** - Know when to ask for help
-- [ ] **Task Decomposition** - Break complex tasks into steps
-- [ ] **Progress Monitoring** - Track task completion
-- [ ] **Resource Estimation** - Estimate time/compute needed
-- [ ] **Failure Prediction** - Anticipate potential issues
-
 ### Personality & Character
 - [x] **Personality Profiles** - Configurable personality traits - `Persona` class with system_prompt, tone, traits in utils/personas.py
-- [ ] **Consistency Maintenance** - Stay in character
-- [ ] **Emotional Modeling** - Simulated emotional responses
-- [ ] **Mood Dynamics** - Mood changes based on context
-- [ ] **Rapport Building** - Build relationship over time
-- [ ] **Humor Generation** - Appropriate humor injection
-- [ ] **Empathy Simulation** - Understand user feelings
-- [ ] **Patience Modeling** - Handle frustration gracefully
-- [ ] **Curiosity Expression** - Show interest in topics
-- [ ] **Enthusiasm Variation** - Vary energy by topic
-- [ ] **Formality Adjustment** - Match conversation formality
-- [ ] **Cultural Sensitivity** - Respect cultural differences
-- [ ] **Age-Appropriate** - Adjust for user age
 - [x] **Persona Switching** - Different personas for different tasks - `PersonaManager.get_persona()`, `list_personas()`, `apply_persona()`
-- [ ] **Character Memory** - Remember persona details
 
 ### Language Understanding
-- [ ] **Intent Classification** - Understand user goals
-- [ ] **Entity Extraction** - Pull out key information
-- [ ] **Coreference Resolution** - Track pronouns and references
-- [ ] **Sentiment Analysis** - Understand emotional tone
-- [ ] **Sarcasm Detection** - Recognize sarcasm and irony
-- [ ] **Implication Understanding** - Read between the lines
 - [x] **Context Tracking** - Maintain conversation context - `ContextTracker` in core/context_awareness.py with entity/topic tracking
-- [ ] **Topic Tracking** - Follow topic changes
-- [ ] **Clarification Requests** - Ask when ambiguous
-- [ ] **Paraphrase Detection** - Recognize rephrased questions
-- [ ] **Multilingual Understanding** - Process multiple languages
-- [ ] **Code Understanding** - Parse and understand code
-- [ ] **Technical Jargon** - Understand domain terminology
-- [ ] **Slang/Colloquialisms** - Handle informal language
-- [ ] **Typo Tolerance** - Understand despite errors
 
 ### Language Generation
-- [ ] **Coherent Long-Form** - Generate long coherent text
-- [ ] **Structured Output** - Generate JSON, XML, etc.
-- [ ] **Format Adherence** - Follow specified formats
-- [ ] **Length Control** - Generate to target length
-- [ ] **Style Control** - Match requested writing style
-- [ ] **Tone Control** - Adjust formality/emotion
-- [ ] **Audience Adaptation** - Write for target audience
-- [ ] **Simplification** - Explain complex things simply
-- [ ] **Elaboration** - Expand on brief inputs
-- [ ] **Summarization** - Condense long content
-- [ ] **Paraphrasing** - Restate in different words
 - [x] **Translation** - Translate between languages - `TranslateTextTool` in tools/communication_tools.py using MyMemory API
-- [ ] **Code Generation** - Write functional code
-- [ ] **Creative Writing** - Generate stories, poems
-- [ ] **Technical Writing** - Generate documentation
-
-### World Knowledge
-- [ ] **Factual Knowledge** - Accurate world facts
-- [ ] **Current Events** - Awareness of recent events
-- [ ] **Historical Knowledge** - Understanding of history
-- [ ] **Scientific Knowledge** - Science and research
-- [ ] **Technical Knowledge** - Engineering and tech
-- [ ] **Cultural Knowledge** - Arts, customs, traditions
-- [ ] **Geographic Knowledge** - Places and locations
-- [ ] **Biographical Knowledge** - People and their work
-- [ ] **Procedural Knowledge** - How to do things
-- [ ] **Domain Expertise** - Deep knowledge in fields
-- [ ] **Knowledge Updates** - Incorporate new information
-- [ ] **Knowledge Verification** - Check facts before stating
-- [ ] **Source Attribution** - Cite knowledge sources
-- [ ] **Knowledge Gaps** - Identify missing knowledge
-- [ ] **Knowledge Integration** - Combine multiple sources
-
-### Planning & Execution
-- [ ] **Goal Setting** - Define clear objectives
-- [ ] **Plan Generation** - Create action plans
-- [ ] **Plan Evaluation** - Assess plan quality
-- [ ] **Plan Adaptation** - Modify plans as needed
-- [ ] **Contingency Planning** - Backup plans for failures
-- [ ] **Resource Allocation** - Assign resources efficiently
-- [ ] **Scheduling** - Sequence tasks optimally
-- [ ] **Dependency Tracking** - Understand task dependencies
-- [ ] **Progress Tracking** - Monitor plan execution
-- [ ] **Bottleneck Detection** - Identify slowdowns
-- [ ] **Optimization** - Improve plans iteratively
-- [ ] **Multi-Step Execution** - Execute complex sequences
-- [ ] **Parallel Execution** - Run independent tasks together
-- [ ] **Rollback Capability** - Undo failed steps
-- [ ] **Completion Verification** - Confirm task success
-
-### Collaboration & Communication
-- [ ] **Turn Taking** - Appropriate conversation flow
-- [ ] **Active Listening** - Show understanding of input
-- [ ] **Clarifying Questions** - Ask for needed info
-- [ ] **Feedback Integration** - Use feedback to improve
-- [ ] **Teaching Ability** - Explain concepts clearly
-- [ ] **Learning from User** - Absorb user expertise
-- [ ] **Negotiation** - Find mutually good solutions
-- [ ] **Conflict Resolution** - Handle disagreements
-- [ ] **Consensus Building** - Work toward agreement
-- [ ] **Delegation** - Assign subtasks appropriately
-- [ ] **Status Reporting** - Keep user informed
-- [ ] **Expectation Setting** - Set realistic expectations
-- [ ] **Disappointment Handling** - Manage unmet expectations
-- [ ] **Appreciation Expression** - Acknowledge user input
-- [ ] **Boundary Setting** - Maintain appropriate limits
 
 ---
 
@@ -1606,19 +1431,19 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Map Viewer** - Geographic maps
 
 ### Input Enhancements
-- [ ] **Voice Input Button** - Click to speak
-- [ ] **Voice Waveform** - Show audio waveform
-- [ ] **Screen Capture Button** - Capture screen area
-- [x] **File Drop Zone** - Drag files to attach - `DropZoneWidget` in avatar/avatar_dialogs.py with drag-and-drop support
+- [x] **Voice Input Button** - Click to speak - `VoiceInputVisualizer` in gui/input_enhancements.py with level monitoring
+- [x] **Voice Waveform** - Show audio waveform - `AudioLevel`, `get_waveform_data()` in gui/input_enhancements.py
+- [x] **Screen Capture Button** - Capture screen area - `ScreenCapture` in gui/input_enhancements.py with full/region capture
+- [x] **File Drop Zone** - Drag files to attach - `FileDropHandler` in gui/input_enhancements.py + `DropZoneWidget` in avatar/avatar_dialogs.py
 - [x] **Clipboard Paste** - Paste images/files - QApplication.clipboard() used in chat_tab.py, tool_manager_tab.py
 - [ ] **Drawing Canvas** - Sketch input
 - [ ] **Handwriting Recognition** - Handwritten input
 - [ ] **Camera Input** - Take photos in-app
 - [ ] **QR Code Scanner** - Scan QR codes
 - [ ] **Document Scanner** - Scan documents
-- [ ] **Multi-File Upload** - Upload multiple files
-- [ ] **File Preview** - Preview before sending
-- [ ] **Input Suggestions** - Auto-complete suggestions
+- [x] **Multi-File Upload** - Upload multiple files - `MultiFileUploader` in gui/input_enhancements.py with progress tracking
+- [x] **File Preview** - Preview before sending - `DroppedFile.preview` thumbnail generation in gui/input_enhancements.py
+- [x] **Input Suggestions** - Auto-complete suggestions - `InputSuggestions` in gui/input_enhancements.py with slash commands
 - [ ] **Smart Compose** - AI-assisted typing
 - [ ] **Grammar Check** - Real-time grammar
 
@@ -1738,7 +1563,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Plugin Updates** - Update notifications
 - [ ] **Plugin Dev Mode** - Development mode
 - [ ] **Tool Builder** - Create custom tools
-- [ ] **Workflow Builder** - Visual workflows
+- [x] **Workflow Builder** - Visual workflows - `WorkflowManager`, `WorkflowBuilder` in utils/workflow_builder.py with node system
 - [ ] **Automation Rules** - If-this-then-that
 
 ### Context Menu Enhancements
@@ -2004,9 +1829,9 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Timezone Handling** - Multi-timezone support
 - [ ] **Holiday Awareness** - Skip holidays
 - [ ] **Maintenance Windows** - Pause during maintenance
-- [ ] **Trigger Types** - Time/event/webhook triggers
-- [ ] **Workflow Builder** - Visual workflow editor
-- [ ] **Workflow Templates** - Pre-built workflows
+- [x] **Trigger Types** - Time/event/webhook triggers - `TriggerType` enum with MANUAL/SCHEDULE/MESSAGE/KEYWORD/FILE/API in workflow_builder.py
+- [x] **Workflow Builder** - Visual workflow editor - `Workflow`, `WorkflowNode`, `WorkflowExecutor` in utils/workflow_builder.py
+- [x] **Workflow Templates** - Pre-built workflows - `WorkflowTemplates` class with chat/conditional/scheduled/pipeline templates
 
 ---
 
@@ -4170,16 +3995,16 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Task Chains** - Sequential task execution
 
 ### Workflow Builder
-- [ ] **Visual Workflow Editor** - Drag-and-drop workflow design
-- [ ] **Node-Based Logic** - Connect nodes for logic flow
-- [ ] **Conditional Branching** - If/else in workflows
-- [ ] **Loop Constructs** - Repeat actions
+- [x] **Visual Workflow Editor** - Drag-and-drop workflow design - `Workflow`, `WorkflowNode`, `NodePosition` in utils/workflow_builder.py
+- [x] **Node-Based Logic** - Connect nodes for logic flow - `Connection`, `NodePort`, `NodeType` system in workflow_builder.py
+- [x] **Conditional Branching** - If/else in workflows - `NodeType.CONDITION` with true/false output ports, `_evaluate_condition()`
+- [x] **Loop Constructs** - Repeat actions - `NodeType.LOOP` support in workflow_builder.py
 - [ ] **Parallel Execution** - Run steps in parallel
-- [ ] **Error Handling** - Catch and handle errors
+- [x] **Error Handling** - Catch and handle errors - `ExecutionContext.errors`, try/except in `_execute_node()`
 - [ ] **Retry Logic** - Auto-retry failed steps
 - [ ] **Timeout Handling** - Handle slow steps
-- [ ] **Workflow Templates** - Pre-built workflows
-- [ ] **Workflow Sharing** - Share workflows with others
+- [x] **Workflow Templates** - Pre-built workflows - `WorkflowTemplates` with simple_chat, conditional, scheduled, data_pipeline
+- [x] **Workflow Sharing** - Share workflows with others - `export_workflow()`, `import_workflow()` JSON serialization
 
 ### Automation Actions
 - [ ] **File Watchers** - Trigger on file changes
