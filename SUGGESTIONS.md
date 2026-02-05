@@ -117,18 +117,18 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Message Reactions** - Thumbs up/down for feedback collection - `FeedbackManager` in utils/message_feedback.py with reactions, ratings, categories, export for training (2026-02-05)
 - [x] **Copy Code Blocks** - Implemented in TextFormatter with clickable copy links (2026-02-04)
 - [x] **Syntax Highlighting** - Implemented language-aware code block styling with color headers (2026-02-04)
-- [ ] **Markdown Preview** - Toggle rendered/raw markdown view
+- [x] **Markdown Preview** - Toggle rendered/raw markdown view - `MarkdownPreview` in gui/conversation_organizer.py with render/raw/split modes (2026-02-05)
 - [ ] **Image Paste** - Paste images directly into chat
 - [ ] **File Attachments** - Attach files to messages
 - [ ] **Voice Messages** - Record and send voice messages
 - [x] **Read Aloud** - TTS for AI responses - `_speak_response()` in system_tray.py, `btn_speak` in chat_tab.py
-- [ ] **Conversation Folders** - Organize chats into folders
+- [x] **Conversation Folders** - Organize chats into folders - `FolderManager` with nested folders, colors, icons, smart suggestions (2026-02-05)
 - [x] **Conversation Tags** - Tag conversations for filtering - `ConversationTagManager` with colors, filtering, default tags (2026-02-05)
 - [x] **Quick Replies** - Suggested follow-up questions - Implemented in `utils/quick_replies.py` with contextual suggestions, learning from selections, custom rules (2026-02-04)
 - [x] **Stop Generation** - Already implemented in chat_tab.py, system_tray.py, and other tabs (2026-02-04)
 - [ ] **Retry with Different Model** - Quick model switch for retry
 - [x] **Response Length Control** - number input for response verbosity - `ResponseLengthController` with 5 presets, custom tokens, system hints (2026-02-05)
-- [ ] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles
+- [x] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles - `TemperaturePresetManager` with 5 built-in presets, custom presets, cycling (2026-02-05)
 - [x] **Conversation Statistics** - Token counts, message counts, timestamps - `ConversationStats` class in memory/conversation_stats.py with `MessageStats`, `UsageMetrics`, daily/hourly analytics (2026-02-04)
 - [x] **Session Timer** - Track time spent in conversation - Session duration tracked in analytics_tab.py, uptime_timer in dashboard_tab.py
 
@@ -362,7 +362,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Real-Time Collaboration** - Multiple users chat with same AI
 - [x] **AI Personas** - Switch between different AI personalities - `PersonaManager` in utils/personas.py with teacher, assistant, tech_expert, friend, researcher, creative presets
 - [x] **Conversation Templates** - Pre-built conversation starters - See `memory/conversation_templates.py` (2026-02-04)
-- [ ] **Smart Suggestions** - Suggest follow-up questions
+- [x] **Smart Suggestions** - Suggest follow-up questions - `QuickReplyGenerator` in utils/quick_replies.py with rules, learning, context analysis (2026-02-05)
 - [ ] **Voice Interruption** - Stop AI mid-response by speaking
 - [ ] **Ambient Mode** - Always-listening background assistant
 - [ ] **Proactive Suggestions** - AI offers help based on context
@@ -372,7 +372,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Integration with Raycast** - macOS launcher integration
 - [ ] **Integration with Alfred** - macOS Alfred workflow
 - [ ] **Windows PowerToys Run** - Windows launcher integration
-- [ ] **Typing Indicator** - Show when AI is thinking/generating
+- [x] **Typing Indicator** - Show when AI is thinking/generating - `TypingIndicator` in gui/conversation_organizer.py with states (thinking/generating/processing) (2026-02-05)
 - [ ] **Message Timestamps** - Show human-readable time for each message
 - [ ] **Conversation Mood Tracker** - Track emotional tone across conversation
 - [ ] **Word Cloud Generator** - Visualize common topics from chats
