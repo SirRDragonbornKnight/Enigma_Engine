@@ -820,6 +820,12 @@ class QuickCommandOverlay(QWidget):
         """Toggle always on top setting."""
         current_on_top = bool(self.windowFlags() & Qt.WindowStaysOnTopHint)
         new_on_top = not current_on_top
+        
+        # Defer the actual toggle to avoid issues with context menu event loop
+        QTimer.singleShot(0, lambda: self._apply_always_on_top(new_on_top))
+    
+    def _apply_always_on_top(self, new_on_top: bool):
+        """Apply always on top setting (called deferred from toggle)."""
         self.set_always_on_top(new_on_top)
         
         # Save setting
@@ -917,14 +923,23 @@ class QuickCommandOverlay(QWidget):
     
     def set_always_on_top(self, on_top: bool):
         """Update the always-on-top setting at runtime."""
+        # Save geometry before changing flags (Qt resets it)
+        saved_geometry = self.geometry()
+        was_visible = self.isVisible()
+        
         current_flags = self.windowFlags()
         if on_top:
             self.setWindowFlags(current_flags | Qt.WindowStaysOnTopHint)
         else:
             self.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
-        # Re-show after changing flags (required by Qt)
-        if self.isVisible():
+        
+        # Restore geometry and re-show after changing flags (required by Qt)
+        self.setGeometry(saved_geometry)
+        if was_visible:
             self.show()
+            # Ensure window is raised and activated
+            self.raise_()
+            self.activateWindow()
     
     def _update_responding_indicator(self):
         """Update status text only - no chat spam."""

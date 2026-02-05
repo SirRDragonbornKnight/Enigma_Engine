@@ -335,7 +335,7 @@ class NetworkTab(QWidget):
             self._flask_app = create_app()
             
             def run_server():
-                \"\"\"Run Flask server in background thread.\"\"\"
+                """Run Flask server in background thread."""
                 try:
                     # Use threaded=True for handling multiple requests
                     self._flask_app.run(

@@ -109,8 +109,8 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Batch Processing** - Queue multiple prompts for batch inference - `batch_generate()` in inference.py, continuous_batching.py
 - [ ] **Model Comparison** - Side-by-side comparison of different model responses
 - [ ] **Image Gen Placeholder Removal** - `gui/tabs/image_tab.py` `PlaceholderImageProvider` generates fake images with watermark
-- [ ] **Conversation Templates** - Pre-defined conversation starters
-- [ ] **System Prompt Library** - Save/load system prompts
+- [x] **Conversation Templates** - Pre-defined conversation starters - Implemented in `memory/conversation_templates.py` with 18 built-in templates, variable substitution, categories (2026-02-04)
+- [x] **System Prompt Library** - Save/load system prompts - Implemented in `memory/prompt_library.py` with 12 built-in prompts, categories, tags, search, export/import (2026-02-04)
 - [ ] **Message Editing** - Edit sent messages and regenerate from that point
 - [ ] **Message Branching** - Create alternate responses, tree view
 - [ ] **Pin Messages** - Pin important messages in conversation
@@ -124,7 +124,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Read Aloud** - TTS for AI responses - `_speak_response()` in system_tray.py, `btn_speak` in chat_tab.py
 - [ ] **Conversation Folders** - Organize chats into folders
 - [ ] **Conversation Tags** - Tag conversations for filtering
-- [ ] **Quick Replies** - Suggested follow-up questions
+- [x] **Quick Replies** - Suggested follow-up questions - Implemented in `utils/quick_replies.py` with contextual suggestions, learning from selections, custom rules (2026-02-04)
 - [x] **Stop Generation** - Already implemented in chat_tab.py, system_tray.py, and other tabs (2026-02-04)
 - [ ] **Retry with Different Model** - Quick model switch for retry
 - [ ] **Response Length Control** - Slider for response verbosity
@@ -175,7 +175,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [x] **Triton Fallback** - Pure PyTorch when Triton unavailable (working)
 - [x] **CUDA Fallback** - CPU fallback when CUDA unavailable (working)
 - [x] **GPU Memory Fallback** - Implemented in `core/memory_fallback.py` with OOM detection, automatic CPU offload, memory monitoring, and retry strategies (2026-02-04)
-- [ ] **Network Fallback** - Offline mode when network unavailable
+- [x] **Network Fallback** - Offline mode when network unavailable - Implemented in `utils/network_fallback.py` with connectivity monitoring, request queuing, offline cache, auto-retry (2026-02-04)
 - [x] **Database Fallback** - SQLite when no database configured (working)
 - [x] **Cache Fallback** - File cache when Redis unavailable - `ToolCache` uses disk cache automatically
 - [x] **TTS Fallback** - pyttsx3 when cloud TTS unavailable (working)
@@ -361,7 +361,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Multi-Modal Reasoning** - Combine text + image + audio understanding
 - [ ] **Real-Time Collaboration** - Multiple users chat with same AI
 - [x] **AI Personas** - Switch between different AI personalities - `PersonaManager` in utils/personas.py with teacher, assistant, tech_expert, friend, researcher, creative presets
-- [ ] **Conversation Templates** - Pre-built conversation starters
+- [x] **Conversation Templates** - Pre-built conversation starters - See `memory/conversation_templates.py` (2026-02-04)
 - [ ] **Smart Suggestions** - Suggest follow-up questions
 - [ ] **Voice Interruption** - Stop AI mid-response by speaking
 - [ ] **Ambient Mode** - Always-listening background assistant
@@ -392,7 +392,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Auto-save Drafts** - Save incomplete messages on close
 - [x] **System Monitor Widget** - Floating widget showing GPU/CPU/RAM - `ResourceMonitor` widget in gui/resource_monitor.py with real-time metrics
 - [x] **Model Benchmarking** - Compare inference speed/quality - `scripts/benchmark.py`, `core/benchmark.py`, benchmark button in scaling_tab
-- [ ] **Context Window Display** - Show how much context is used/remaining
+- [x] **Context Window Display** - Show how much context is used/remaining - Implemented in `utils/context_window.py` with token tracking, progress bars, usage warnings, model size presets (2026-02-04)
 - [x] **Token Counter** - Live token count while typing - `_update_token_count()` in chat_tab.py shows chars/tokens as user types, color changes at thresholds
 - [x] **Response Regenerate** - Button to regenerate last response - "Regenerate" link added to response feedback bar, `_regenerate_response()` in chat_tab.py re-sends original input
 - [ ] **Training Checkpoint UI** - Save/resume training with visual progress
@@ -441,7 +441,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Native iOS App** - Swift/SwiftUI native option
 - [ ] **Native Android App** - Kotlin native option
 - [ ] **Flutter Option** - Dart/Flutter alternative
-- [ ] **Offline Mode** - Work without internet
+- [x] **Offline Mode** - Work without internet - Implemented in `utils/network_fallback.py` (2026-02-04)
 - [ ] **Local Model** - Run small models on device
 - [ ] **Cloud Fallback** - Use cloud when needed
 - [ ] **Push Notifications** - Receive notifications
@@ -466,7 +466,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Document Scanner** - Scan documents
 - [ ] **Location Sharing** - Share location
 - [ ] **Contact Sharing** - Share contacts
-- [ ] **Quick Replies** - Suggested responses
+- [x] **Quick Replies** - Suggested responses - See `utils/quick_replies.py` (2026-02-04)
 - [ ] **Message Reactions** - React to messages
 - [ ] **Read Receipts** - See when AI processes
 
@@ -583,7 +583,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 - [x] **Prompt Templates** - Reusable templates - `PromptTemplate` dataclass in core/prompt_builder.py
 - [x] **Prompt Variables** - Template variables - `PromptBuilder.build_chat_prompt()` with placeholders
-- [ ] **Prompt Library** - Save/load prompts
+- [x] **Prompt Library** - Save/load prompts - Implemented in `memory/prompt_library.py` (2026-02-04)
 - [ ] **Prompt Sharing** - Share prompts
 - [ ] **Prompt Versioning** - Track prompt changes
 - [ ] **Prompt Testing** - Test prompts
@@ -593,7 +593,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Prompt Branching** - Conditional prompts
 - [ ] **Prompt Debugging** - Debug prompt issues
 - [ ] **Prompt Analytics** - Track prompt performance
-- [ ] **System Prompts** - Configure system prompts
+- [x] **System Prompts** - Configure system prompts - See `memory/prompt_library.py` for system prompt management (2026-02-04)
 - [ ] **Few-Shot Examples** - Include examples
 - [x] **Chain of Thought** - CoT templates - `[Forge:Thinking]` in system_messages.py, thinking tokens in tokenizer
 - [ ] **Output Formatting** - Format instructions
