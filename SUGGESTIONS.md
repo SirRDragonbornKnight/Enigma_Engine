@@ -1529,7 +1529,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Response Diff** - Compare regenerations
 - [ ] **Inline Editing** - Edit AI responses
 - [ ] **Collaborative Editing** - Multi-user editing
-- [ ] **Response Templates** - Template responses
+- [x] **Response Templates** - Template responses - `ResponseTemplates` class in utils/response_templates.py with 15 built-in templates, variable substitution, format conversion (2026-02-04)
 
 ### Code Display & Editing
 - [ ] **Syntax Highlighting Themes** - Multiple code themes
@@ -2584,7 +2584,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Data Annotation Tool** - Label training data in GUI
 - [ ] **Conversation Analytics** - Insights on chat patterns, common topics
 - [ ] **Memory Cleanup** - Auto-archive or delete old conversations
-- [ ] **Import/Export Formats** - Support Alpaca, ShareGPT, JSONL formats
+- [x] **Import/Export Formats** - Support Alpaca, ShareGPT, JSONL formats - `Exporter` class in utils/export_formats.py with JSON, JSONL, CSV, TSV, Markdown, HTML, YAML, XML handlers (2026-02-04)
 - [ ] **PII Scrubbing** - Auto-detect and redact personal info from training data
 - [ ] **Data Augmentation** - Generate variations of training data
 - [ ] **Data Quality Scoring** - Rate training data quality
@@ -4021,10 +4021,10 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 ### Data Formats
 - [x] **JSON Export** - Export to JSON - `MemoryExporter.export_to_json()` in memory/export_import.py
 - [x] **CSV Export** - Export to CSV - `MemoryExporter.export_to_csv()` in memory/export_import.py
-- [ ] **XML Export** - Export to XML
-- [ ] **YAML Export** - Export to YAML
-- [ ] **Markdown Export** - Export to Markdown
-- [ ] **HTML Export** - Export to HTML
+- [x] **XML Export** - Export to XML - `XMLHandler` in utils/export_formats.py (2026-02-04)
+- [x] **YAML Export** - Export to YAML - `YAMLHandler` in utils/export_formats.py (2026-02-04)
+- [x] **Markdown Export** - Export to Markdown - `MarkdownHandler` in utils/export_formats.py (2026-02-04)
+- [x] **HTML Export** - Export to HTML - `HTMLHandler` in utils/export_formats.py (2026-02-04)
 - [ ] **PDF Export** - Export to PDF
 - [ ] **Parquet Export** - Export to Parquet
 - [ ] **SQLite Export** - Export to SQLite
@@ -4246,7 +4246,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Download Limits** - Limit downloads
 - [ ] **Embed Codes** - Embed in websites
 - [ ] **Social Sharing** - Share to social media
-- [ ] **Export Options** - Various export formats
+- [x] **Export Options** - Various export formats - `Exporter` with `export()`, `import_file()`, `convert()` in utils/export_formats.py (2026-02-04)
 - [ ] **Version Sharing** - Share specific versions
 - [ ] **Selective Sharing** - Share parts only
 
