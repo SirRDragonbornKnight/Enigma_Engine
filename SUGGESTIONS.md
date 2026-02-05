@@ -367,8 +367,8 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Ambient Mode** - Always-listening background assistant
 - [ ] **Proactive Suggestions** - AI offers help based on context
 - [ ] **Learning Mode Toggle** - Explicitly train AI on corrections
-- [ ] **Export to Obsidian** - Export conversations to Obsidian vault
-- [ ] **Export to Notion** - Export to Notion pages
+- [x] **Export to Obsidian** - Export conversations to Obsidian vault - `ConversationExporter` in gui/session_manager.py with frontmatter, callouts (2026-02-05)
+- [x] **Export to Notion** - Export to Notion pages - `ExportFormat.NOTION` in session_manager.py, JSON/HTML/Markdown export supported (2026-02-05)
 - [ ] **Integration with Raycast** - macOS launcher integration
 - [ ] **Integration with Alfred** - macOS Alfred workflow
 - [ ] **Windows PowerToys Run** - Windows launcher integration
@@ -377,7 +377,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Conversation Mood Tracker** - Track emotional tone across conversation
 - [ ] **Word Cloud Generator** - Visualize common topics from chats
 - [ ] **Daily Summary Email** - Email digest of conversations
-- [ ] **Focus Mode** - Minimize distractions, fullscreen chat
+- [x] **Focus Mode** - Minimize distractions, fullscreen chat - `FocusMode` in gui/session_manager.py with hide elements, callbacks (2026-02-05)
 - [ ] **Split View** - Chat + document/code side by side
 - [ ] **Floating Chat Window** - Always-on-top mini chat window
 - [ ] **Chat Shortcuts Bar** - Customizable quick action toolbar
@@ -398,7 +398,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Conversation Branching** - Fork conversations to explore different paths
 - [x] **Conversation Search** - Full-text search across all chat history - `MemorySearch.full_text_search()` in memory/search.py
 - [x] **Keyboard Shortcuts** - Hotkeys for common actions - Implemented in `gui/gui_modes.py` KEYBOARD_SHORTCUTS
-- [ ] **Auto-save Drafts** - Save incomplete messages on close
+- [x] **Auto-save Drafts** - Save incomplete messages on close - `DraftManager` in gui/session_manager.py with auto-save, per-conversation drafts (2026-02-05)
 - [x] **System Monitor Widget** - Floating widget showing GPU/CPU/RAM - `ResourceMonitor` widget in gui/resource_monitor.py with real-time metrics
 - [x] **Model Benchmarking** - Compare inference speed/quality - `scripts/benchmark.py`, `core/benchmark.py`, benchmark button in scaling_tab
 - [x] **Context Window Display** - Show how much context is used/remaining - Implemented in `utils/context_window.py` with token tracking, progress bars, usage warnings, model size presets (2026-02-04)
@@ -407,7 +407,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Training Checkpoint UI** - Save/resume training with visual progress
 - [ ] **GPU Memory Profiler** - Track VRAM usage per module
 - [x] **Structured Logging** - Proper logging levels (DEBUG/INFO/WARN) - All modules use Python logging
-- [ ] **Config Editor GUI** - Visual editor for config files
+- [x] **Config Editor GUI** - Visual editor for config files - `ConfigEditor` in gui/session_manager.py with field types, categories, validation (2026-02-05)
 - [ ] **Mobile App** - React Native companion app
 
 ### Productivity Tools
