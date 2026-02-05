@@ -114,7 +114,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [ ] **Message Editing** - Edit sent messages and regenerate from that point
 - [ ] **Message Branching** - Create alternate responses, tree view
 - [ ] **Pin Messages** - Pin important messages in conversation
-- [ ] **Message Reactions** - Thumbs up/down for feedback collection
+- [x] **Message Reactions** - Thumbs up/down for feedback collection - `FeedbackManager` in utils/message_feedback.py with reactions, ratings, categories, export for training (2026-02-05)
 - [x] **Copy Code Blocks** - Implemented in TextFormatter with clickable copy links (2026-02-04)
 - [x] **Syntax Highlighting** - Implemented language-aware code block styling with color headers (2026-02-04)
 - [ ] **Markdown Preview** - Toggle rendered/raw markdown view
@@ -467,7 +467,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Location Sharing** - Share location
 - [ ] **Contact Sharing** - Share contacts
 - [x] **Quick Replies** - Suggested responses - See `utils/quick_replies.py` (2026-02-04)
-- [ ] **Message Reactions** - React to messages
+- [x] **Message Reactions** - React to messages - `MessageReaction`, `FeedbackManager.react()` in utils/message_feedback.py (2026-02-05)
 - [ ] **Read Receipts** - See when AI processes
 
 ### Mobile Avatar Features
@@ -1366,7 +1366,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 ### Performance Monitoring
 - [ ] **Response Quality Tracking** - Track answer quality over time
 - [ ] **Error Rate Monitoring** - Track mistakes and failures
-- [ ] **User Satisfaction Metrics** - Track thumbs up/down
+- [x] **User Satisfaction Metrics** - Track thumbs up/down - `FeedbackManager.get_stats()` tracks positive ratio, ratings in utils/message_feedback.py (2026-02-05)
 - [ ] **Task Success Rate** - Track completed vs failed tasks
 - [x] **Response Time Tracking** - Monitor latency - `response_time_ms` tracked in `modules/manager.py` health checks
 - [ ] **Resource Usage Tracking** - Monitor compute/memory
@@ -1526,7 +1526,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Response Export** - Export single response
 - [ ] **Response Share Link** - Shareable response URLs
 - [ ] **Response History** - All regenerations saved
-- [ ] **Response Diff** - Compare regenerations
+- [x] **Response Diff** - Compare regenerations - `TextDiff` class in utils/text_diff.py with unified, side-by-side, inline HTML diff (2026-02-05)
 - [ ] **Inline Editing** - Edit AI responses
 - [ ] **Collaborative Editing** - Multi-user editing
 - [x] **Response Templates** - Template responses - `ResponseTemplates` class in utils/response_templates.py with 15 built-in templates, variable substitution, format conversion (2026-02-04)
@@ -1544,7 +1544,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Find & Replace** - Search in code blocks
 - [ ] **Go to Definition** - Click to jump
 - [ ] **Peek Definition** - Inline preview
-- [ ] **Code Diff View** - Show code changes
+- [x] **Code Diff View** - Show code changes - `TextDiff.compare()` with chunks, line numbers, HTML visualization in utils/text_diff.py (2026-02-05)
 - [ ] **Code Review Mode** - Review code changes
 - [ ] **Run Code Button** - Execute code inline
 - [ ] **Code Playground** - Interactive code sandbox
@@ -4766,7 +4766,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 - [ ] **Templates** - Pre-built starting points
 - [ ] **Presets** - Saved configurations
 - [ ] **Macros** - Record and replay actions
-- [ ] **Snippets** - Reusable text/code
+- [x] **Snippets** - Reusable text/code - `SnippetManager` in utils/code_snippets.py with templates, tags, language detection, import/export (2026-02-05)
 - [ ] **Quick Commands** - Fast action execution
 - [ ] **Shortcuts Everywhere** - Keyboard shortcuts
 - [ ] **Drag and Drop** - Natural interactions
