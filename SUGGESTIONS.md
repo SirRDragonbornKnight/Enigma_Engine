@@ -12,8 +12,8 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 
 ## Quick Stats
 <!-- Last updated: 2026-02-05 -->
-- **Completed:** 184 items
-- **Remaining:** ~3,651 items
+- **Completed:** 189 items
+- **Remaining:** ~3,646 items
 
 ---
 
@@ -429,7 +429,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Reading Time Estimator** - Show estimated read time for AI responses
 - [ ] **Message Reactions** - React to messages with emoji or quick feedback
 - [ ] **Quote Reply** - Reply to specific parts of messages with quotes
-- [ ] **Clipboard History** - Track clipboard for easy paste into chat
+- [x] **Clipboard History** - Track clipboard for easy paste into chat - `ClipboardHistory` in gui/ui_utilities.py with pinning, search, persistence (2026-02-05)
 - [ ] **Smart Reply Suggestions** - Show quick reply options like email apps
 
 ### Learning & Education
@@ -730,7 +730,6 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Writing Prompts** - Get creative writing inspiration
 - [ ] **Mad Libs Mode** - Play mad libs with AI
 - [ ] **Fortune Teller** - Fun fortune-cookie style predictions
-- [ ] **Name Generator** - Generate names for characters, projects, pets
 - [ ] **Random Fact Mode** - AI shares interesting facts unprompted
 - [ ] **Joke Mode** - Tell jokes on command with rating feedback
 - [ ] **Debate Partner** - AI argues a position for practice
@@ -1495,7 +1494,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Message Scheduling** - Schedule messages
 - [ ] **Draft Messages** - Save unsent messages
 - [ ] **Message Templates** - Quick insert templates
-- [ ] **Emoji Picker** - Emoji selection UI
+- [x] **Emoji Picker** - Emoji selection UI - `EmojiPicker` with categories, search, recent, favorites (2026-02-05)
 - [ ] **Mention System** - @mention support
 - [x] **Slash Commands** - /command shortcuts - Full command system in `_handle_chat_command()`: /image, /video, /code, /audio, /3d, /gif, /help, /clear, /new, navigation commands
 - [x] **Input History** - Arrow keys for history - `history` list + Up/Down key navigation in system_tray.py
@@ -1504,7 +1503,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [x] **Character Counter** - Show input length - `token_count_label` in chat_tab.py with live char/token counting
 - [x] **Typing Indicators** - Show AI is generating - `typing-indicator` CSS class in web_server.py, web/static/
 - [ ] **Read Receipts** - Track message read status
-- [ ] **Message Bookmarks** - Bookmark important messages
+- [x] **Message Bookmarks** - Bookmark important messages - `BookmarkManager` with notes, tags, colors, export (2026-02-05)
 - [x] **Message Search** - Search within conversation - Ctrl+F in chat with highlight and count display
 - [ ] **Jump to Date** - Navigate by date
 
@@ -1540,12 +1539,12 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 ### Tab System Enhancements
 - [ ] **Tab Preview on Hover** - Thumbnail preview
 - [ ] **Tab Search** - Search open tabs
-- [ ] **Tab History** - Recently closed tabs
+- [x] **Tab History** - Recently closed tabs - `TabHistory` and `TabManager` in gui/ui_utilities.py (2026-02-05)
 - [ ] **Tab Restore** - Reopen closed tabs
 - [ ] **Tab Duplicate** - Clone current tab
 - [ ] **Tab Mute** - Mute individual tabs
 - [ ] **Tab Sleep** - Suspend inactive tabs
-- [ ] **Tab Color Coding** - Custom tab colors
+- [x] **Tab Color Coding** - Custom tab colors - `TabColorManager` with presets, type-based auto-color (2026-02-05)
 - [ ] **Tab Icons** - Custom tab icons
 - [ ] **Vertical Tabs** - Tabs on the side
 - [ ] **Tab Tree View** - Hierarchical tabs
