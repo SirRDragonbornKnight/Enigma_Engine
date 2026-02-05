@@ -12,8 +12,8 @@ A comprehensive list of improvements, features, and fixes for ForgeAI. Check ite
 
 ## Quick Stats
 <!-- Last updated: 2026-02-04 -->
-- **Completed:** 173 items
-- **Remaining:** ~3,662 items
+- **Completed:** 178 items
+- **Remaining:** ~3,657 items
 
 ---
 
@@ -66,9 +66,9 @@ These are marked as implemented but are actually stubs or return hardcoded value
 - [x] **Interruption Handling** - Implemented barge-in detection in `voice/interruption.py` with VAD integration, multiple modes (immediate/confirmed), sensitivity levels, and TTS stop (2026-02-04)
 - [x] **Streaming TTS** - Implemented chunked audio generation in `voice/streaming_tts.py` with sentence splitting, 4 backends (pyttsx3/espeak/edge-tts/coqui), and low-latency playback (2026-02-04)
 - [x] **Audio File Input** - Implemented file transcription in `voice/audio_file_input.py` with 9 format support, 3 backends (Whisper/Vosk/SpeechRecognition), timestamps, and batch processing (2026-02-04)
-- [ ] **Speaker Diarization** - Identify different speakers in audio
-- [ ] **Punctuation Restoration** - Add punctuation to transcribed text
-- [ ] **Profanity Filter** - Option to filter profanity in transcription
+- [x] **Speaker Diarization** - Implemented multi-backend diarization in `voice/speaker_diarization.py` with pyannote-audio, resemblyzer, SpeechBrain, and energy-based fallback (2026-02-04)
+- [x] **Punctuation Restoration** - Implemented in `voice/punctuation_restoration.py` with deepmultilingualpunctuation, punctuators, NeMo, transformers, and rule-based fallback (2026-02-04)
+- [x] **Profanity Filter** - Implemented in `voice/profanity_filter.py` with better-profanity, profanity-filter, alt-profanity-check, leetspeak detection, and built-in word list (2026-02-04)
 
 ---
 
@@ -101,7 +101,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 ## Features
 
 - [x] **Streaming Response API** - Add SSE streaming to `/v1/chat/completions` endpoint - `_stream_chat_response()` in openai_api.py
-- [ ] **Model Download Progress** - Show progress bars when downloading HuggingFace models
+- [x] **Model Download Progress** - Implemented in `core/download_progress.py` with tqdm/rich progress bars, speed/ETA, GUI callbacks, and PyQt5 widget (2026-02-04)
 - [ ] **Memory Usage Dashboard** - Live RAM/VRAM usage in GUI with per-module breakdown
 - [x] **Plugin System** - Allow custom modules without modifying core code - `ToolPluginLoader` in tools/plugins.py
 - [x] **Dark/Light Theme Toggle** - Theme switching in settings - `ThemeManager` in gui/theme_system.py with dark/light/custom themes
@@ -174,7 +174,7 @@ These work but fall back to simpler/slower methods. They are implemented and fun
 - [x] **Flash Attention Fallback** - Standard attention when flash-attn unavailable (working)
 - [x] **Triton Fallback** - Pure PyTorch when Triton unavailable (working)
 - [x] **CUDA Fallback** - CPU fallback when CUDA unavailable (working)
-- [ ] **GPU Memory Fallback** - Offload to CPU when VRAM full
+- [x] **GPU Memory Fallback** - Implemented in `core/memory_fallback.py` with OOM detection, automatic CPU offload, memory monitoring, and retry strategies (2026-02-04)
 - [ ] **Network Fallback** - Offline mode when network unavailable
 - [x] **Database Fallback** - SQLite when no database configured (working)
 - [x] **Cache Fallback** - File cache when Redis unavailable - `ToolCache` uses disk cache automatically
