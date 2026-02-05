@@ -127,7 +127,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Quick Replies** - Suggested follow-up questions - Implemented in `utils/quick_replies.py` with contextual suggestions, learning from selections, custom rules (2026-02-04)
 - [x] **Stop Generation** - Already implemented in chat_tab.py, system_tray.py, and other tabs (2026-02-04)
 - [ ] **Retry with Different Model** - Quick model switch for retry
-- [ ] **Response Length Control** - Slider for response verbosity
+- [ ] **Response Length Control** - number input for response verbosity
 - [ ] **Temperature Preset Buttons** - Quick creative/balanced/precise toggles
 - [x] **Conversation Statistics** - Token counts, message counts, timestamps - `ConversationStats` class in memory/conversation_stats.py with `MessageStats`, `UsageMetrics`, daily/hourly analytics (2026-02-04)
 - [x] **Session Timer** - Track time spent in conversation - Session duration tracked in analytics_tab.py, uptime_timer in dashboard_tab.py
@@ -154,7 +154,7 @@ These have broad exception handling that could hide bugs (reviewed 2026-02-04 - 
 - [x] **Graceful Shutdown** - Implemented `utils/shutdown.py` with signal handlers, atexit, priority callbacks, and timeouts (2026-02-04)
 - [x] **Health Checks** - Internal health monitoring - `HealthChecker` in core/health.py, `health_check_all()` in modules/manager.py
 - [x] **Circuit Breaker Pattern** - Implemented `utils/circuit_breaker.py` with states, timeouts, decorators, async support (2026-02-04)
-- [ ] **Bulkhead Pattern** - Isolate failures
+- [x] **Bulkhead Pattern** - Implemented `utils/bulkhead.py` with partitions, semaphore concurrency limiting, queue management, metrics (2026-02-05)
 - [x] **Retry Pattern** - Standardized retry logic - `TaskQueue` with retry logic, `NetworkOptimizer` with exponential backoff
 - [x] **Cache Abstraction** - Unified caching interface - `ToolCache` in tools/cache.py with memory + disk caching
 - [ ] **Storage Abstraction** - Unified file/blob storage
@@ -413,7 +413,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **Test Case Generator** - Generate unit test cases
 - [ ] **Database Schema Designer** - Help design database schemas
 - [ ] **Architecture Advisor** - Suggest software architecture
-- [ ] **Regex Helper** - Build and explain regex patterns
+- [x] **Regex Helper** - Implemented `utils/regex_helper.py` with RegexHelper class, PatternBuilder fluent API, 25+ common patterns, explain(), test(), find_all() (2026-02-05)
 - [ ] **SQL Query Builder** - Natural language to SQL
 - [ ] **Commit Message Generator** - Suggest git commit messages
 
@@ -733,7 +733,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 
 - [ ] **API Key Encryption** - Store API keys encrypted at rest, not plaintext in config
 - [x] **Rate Limiting** - Add rate limiting to API server - `RateLimiter` in `comms/auth.py` and `tools/rate_limiter.py`
-- [ ] **Input Sanitization Audit** - Review all user inputs for injection vulnerabilities
+- [x] **Input Sanitization Audit** - Implemented `utils/input_sanitizer.py` with InputSanitizer class, SQL/XSS/command/path injection prevention, validation rules (2026-02-05)
 - [x] **Audit Logging** - Log all API calls and tool executions for security review - `ToolExecutionHistory` in `tools/history.py`, `denied_attempts` in `tools/permissions.py`
 - [x] **Sandboxed Code Execution** - `tools/tool_executor.py` code execution in isolated container - `ModuleSandbox` in `modules/sandbox.py` with path, network, memory, CPU limits
 - [ ] **Authentication System** - User login with password/OAuth
@@ -748,7 +748,7 @@ Add new ideas here! Format: `- [ ] **Title** - Description`
 - [ ] **IP Allowlisting** - Restrict API access by IP
 - [ ] **Request Signing** - HMAC request authentication
 - [ ] **Prompt Injection Detection** - Detect manipulation attempts
-- [ ] **Output Filtering** - Filter sensitive data from responses
+- [x] **Output Filtering** - Implemented `utils/output_filter.py` with OutputFilter class, PII redaction, secret detection, custom rules (2026-02-05)
 - [x] **PII Detection** - Flag/redact personal information - `DataFilter._contains_pii()` and `sanitize()` in `learning/data_filter.py` with email, phone, SSN, CC patterns
 - [ ] **GDPR Compliance** - Data export and deletion tools
 - [ ] **SOC2 Audit Trail** - Compliance logging
@@ -1488,7 +1488,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [ ] **Window Tiling** - Automatic window arrangement
 - [x] **Picture-in-Picture** - Floating mini window - `QuickCommandOverlay` class in system_tray.py provides floating Quick Chat window with stay-on-top option
 - [ ] **Always on Top Toggle** - Per-window always-on-top
-- [ ] **Window Opacity Slider** - Adjustable transparency
+- [ ] **Window Opacity number input** - Adjustable transparency
 - [ ] **Window Shake to Minimize** - Gesture support
 - [ ] **Window Memory** - Remember size/position per monitor
 - [ ] **Multi-Monitor Support** - Different layouts per display
@@ -1665,7 +1665,7 @@ The goal: ForgeAI should have NO hardcoded actions. Everything should be dynamic
 - [x] **Avatar Presets** - Quick presets - `avatar_preset_id` in persona_tab.py, `_load_avatar_presets()`
 - [ ] **Avatar Moods** - Mood settings
 - [ ] **Avatar Voice** - Voice selection
-- [ ] **Avatar Personality** - Personality sliders
+- [ ] **Avatar Personality** - Personality number input
 - [ ] **Avatar Schedule** - Behavior schedule
 
 ### Model & Training UI
@@ -3304,7 +3304,7 @@ The AI plays games like a human - screen + inputs only. No game-specific code ne
 
 ### Personality System
 - [ ] **Personality Presets** - Helpful, creative, precise, casual
-- [ ] **Personality Sliders** - Adjust traits
+- [ ] **Personality number input** - Adjust traits
 - [ ] **Personality Memory** - Remember personality setting
 - [ ] **Personality Evolution** - Grow over time
 - [ ] **Mood System** - Current mood affects responses
