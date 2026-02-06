@@ -9,10 +9,13 @@ Uses multiple discovery methods:
 """
 
 import json
+import logging
 import socket
 import threading
 import time
 from typing import Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceDiscovery:
@@ -58,7 +61,7 @@ class DeviceDiscovery:
                 cb(name, info)
             except Exception as e:
                 # Log but don't fail on callback errors
-                print(f"Warning: Discovery callback failed: {e}")
+                logger.warning(f"Discovery callback failed: {e}")
     
     def get_local_ip(self) -> str:
         """Get this machine's local IP address."""
@@ -79,7 +82,7 @@ class DeviceDiscovery:
         self._running = True
         self._listener_thread = threading.Thread(target=self._listen_loop, daemon=True)
         self._listener_thread.start()
-        print(f"Discovery listener started on port {self.BROADCAST_PORT}")
+        logger.info(f"Discovery listener started on port {self.BROADCAST_PORT}")
     
     def stop_listener(self):
         """Stop the discovery listener."""
@@ -95,7 +98,7 @@ class DeviceDiscovery:
         try:
             sock.bind(("", self.BROADCAST_PORT))
         except OSError as e:
-            print(f"Could not bind to port {self.BROADCAST_PORT}: {e}")
+            logger.error(f"Could not bind to port {self.BROADCAST_PORT}: {e}")
             return
         
         while self._running:
@@ -128,7 +131,7 @@ class DeviceDiscovery:
                             self.discovered[name] = device_info
                             
                             if is_new:
-                                print(f"Discovered node: {name} at {addr[0]}:{device_info['port']}")
+                                logger.info(f"Discovered node: {name} at {addr[0]}:{device_info['port']}")
                                 self._notify_discover(name, device_info)
                     except (json.JSONDecodeError, KeyError, ValueError) as e:
                         # Invalid discovery message format
@@ -138,7 +141,7 @@ class DeviceDiscovery:
                 pass
             except Exception as e:
                 if self._running:
-                    print(f"Discovery error: {e}")
+                    logger.error(f"Discovery error: {e}")
         
         sock.close()
     

@@ -8,6 +8,7 @@ flask>=2.0.0
 flask-cors>=3.0.10
 sqlalchemy>=1.4.0
 numpy>=1.21.0
+cryptography>=41.0.0
 
 # === MODEL & TRAINING ===
 # PyTorch - install manually for your platform:

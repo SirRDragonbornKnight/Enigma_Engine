@@ -1,0 +1,87 @@
+# Maintainer: ForgeAI Team <team@forgeai.dev>
+# ForgeAI AUR Package
+# Install with: yay -S forgeai or paru -S forgeai
+
+pkgname=forgeai
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Fully modular AI framework for local and cloud AI"
+arch=('x86_64' 'aarch64')
+url="https://github.com/forgeai/forge_ai"
+license=('MIT')
+depends=(
+    'python>=3.10'
+    'python-pytorch'
+    'python-numpy'
+    'python-pyqt5'
+)
+makedepends=(
+    'python-build'
+    'python-installer'
+    'python-wheel'
+    'python-setuptools'
+)
+optdepends=(
+    'python-pytorch-cuda: NVIDIA GPU acceleration'
+    'python-pytorch-rocm: AMD GPU acceleration'
+    'portaudio: Voice input/output'
+    'ffmpeg: Video/audio processing'
+    'python-sentence-transformers: Local embeddings'
+    'python-diffusers: Local image generation'
+)
+provides=('forgeai')
+conflicts=('forgeai-git')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/forgeai/forge_ai/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "${srcdir}/${pkgname}-${pkgver}"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "${srcdir}/${pkgname}-${pkgver}"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+
+    # Install license
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+
+    # Install documentation
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+    
+    # Install desktop file
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/forgeai.desktop" << EOF
+[Desktop Entry]
+Name=ForgeAI
+Comment=Local AI Framework
+Exec=forgeai-gui
+Icon=forgeai
+Terminal=false
+Type=Application
+Categories=Development;Science;ArtificialIntelligence;
+Keywords=AI;LLM;Chat;Machine Learning;
+EOF
+
+    # Install icon
+    install -Dm644 assets/icon.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/forgeai.png"
+    
+    # Install shell completions
+    install -Dm644 completion/forgeai.bash "${pkgdir}/usr/share/bash-completion/completions/forgeai"
+    install -Dm644 completion/forgeai.zsh "${pkgdir}/usr/share/zsh/site-functions/_forgeai"
+    install -Dm644 completion/forgeai.fish "${pkgdir}/usr/share/fish/vendor_completions.d/forgeai.fish"
+
+    # Create symlinks for CLI
+    install -dm755 "${pkgdir}/usr/bin"
+    
+    cat > "${pkgdir}/usr/bin/forgeai" << 'EOF'
+#!/bin/bash
+exec python -m forge_ai.run "$@"
+EOF
+    chmod +x "${pkgdir}/usr/bin/forgeai"
+    
+    cat > "${pkgdir}/usr/bin/forgeai-gui" << 'EOF'
+#!/bin/bash
+exec python -m forge_ai.run --gui "$@"
+EOF
+    chmod +x "${pkgdir}/usr/bin/forgeai-gui"
+}

@@ -242,7 +242,7 @@ class VoiceEngine:
                 try:
                     self.profile = VoiceProfile.load(profile)
                 except FileNotFoundError:
-                    print(warning_msg(f"Profile '{profile}' not found, using default"))
+                    logger.warning(f"Profile '{profile}' not found, using default")
                     self.profile = PRESET_PROFILES["default"]
                     return False
         elif isinstance(profile, dict):
@@ -295,7 +295,7 @@ class VoiceEngine:
                 if target_voice:
                     self._engine.setProperty('voice', target_voice)
         except Exception as e:
-            print(warning_msg(f"Could not apply voice settings: {e}"))
+            logger.warning(f"Could not apply voice settings: {e}")
     
     def get_available_voices(self) -> List[Dict[str, str]]:
         """Get list of available system voices."""
@@ -404,10 +404,10 @@ class VoiceEngine:
                     speed = int(175 * self.profile.speed)
                     subprocess.run(['espeak', '-p', str(pitch), '-s', str(speed), text], check=False)
                 else:
-                    print(f"[TTS] {text}")
+                    logger.info(f"[TTS fallback] {text}")
                     
         except Exception as e:
-            print(error_msg(f"TTS failed: {e}"))
+            logger.error(f"TTS failed: {e}")
     
     def save_profile(self, name: str = None) -> Path:
         """Save current profile to file."""

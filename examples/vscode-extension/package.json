@@ -1,0 +1,205 @@
+{
+  "name": "forgeai-vscode",
+  "displayName": "ForgeAI",
+  "description": "AI-powered coding assistant powered by ForgeAI",
+  "version": "1.0.0",
+  "publisher": "forgeai",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Snippets",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "assistant",
+    "code generation",
+    "autocomplete",
+    "forge"
+  ],
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forgeai/forgeai-vscode"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "forgeai.chat",
+        "title": "ForgeAI: Open Chat"
+      },
+      {
+        "command": "forgeai.explainCode",
+        "title": "ForgeAI: Explain Code"
+      },
+      {
+        "command": "forgeai.generateCode",
+        "title": "ForgeAI: Generate Code"
+      },
+      {
+        "command": "forgeai.refactorCode",
+        "title": "ForgeAI: Refactor Code"
+      },
+      {
+        "command": "forgeai.addComments",
+        "title": "ForgeAI: Add Comments"
+      },
+      {
+        "command": "forgeai.generateTests",
+        "title": "ForgeAI: Generate Tests"
+      },
+      {
+        "command": "forgeai.findBugs",
+        "title": "ForgeAI: Find Bugs"
+      },
+      {
+        "command": "forgeai.optimizeCode",
+        "title": "ForgeAI: Optimize Code"
+      },
+      {
+        "command": "forgeai.askAboutFile",
+        "title": "ForgeAI: Ask About This File"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "forgeai.explainCode",
+          "when": "editorHasSelection",
+          "group": "forgeai@1"
+        },
+        {
+          "command": "forgeai.refactorCode",
+          "when": "editorHasSelection",
+          "group": "forgeai@2"
+        },
+        {
+          "command": "forgeai.addComments",
+          "when": "editorHasSelection",
+          "group": "forgeai@3"
+        },
+        {
+          "command": "forgeai.generateTests",
+          "when": "editorHasSelection",
+          "group": "forgeai@4"
+        },
+        {
+          "command": "forgeai.findBugs",
+          "when": "editorHasSelection",
+          "group": "forgeai@5"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "forgeai.chat",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f"
+      },
+      {
+        "command": "forgeai.generateCode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
+      },
+      {
+        "command": "forgeai.explainCode",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      }
+    ],
+    "configuration": {
+      "title": "ForgeAI",
+      "properties": {
+        "forgeai.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of the ForgeAI API server"
+        },
+        "forgeai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for authentication (optional)"
+        },
+        "forgeai.model": {
+          "type": "string",
+          "default": "default",
+          "description": "Model to use for code generation"
+        },
+        "forgeai.maxTokens": {
+          "type": "number",
+          "default": 2048,
+          "description": "Maximum tokens in response"
+        },
+        "forgeai.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Temperature for generation (0-2)"
+        },
+        "forgeai.inlineCompletions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline code completions"
+        },
+        "forgeai.autoSuggest": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically suggest improvements"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "forgeai",
+          "title": "ForgeAI",
+          "icon": "images/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "forgeai": [
+        {
+          "id": "forgeai.chat",
+          "name": "Chat",
+          "type": "webview"
+        },
+        {
+          "id": "forgeai.history",
+          "name": "History"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/test-electron": "^2.3.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}

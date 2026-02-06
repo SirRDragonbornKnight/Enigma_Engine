@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ForgeAI Chocolatey Package -->
+<!-- Install with: choco install forgeai -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>forgeai</id>
+    <version>1.0.0</version>
+    <title>ForgeAI</title>
+    <authors>ForgeAI Team</authors>
+    <projectUrl>https://github.com/forgeai/forge_ai</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/forgeai/forge_ai/main/assets/icon.png</iconUrl>
+    <licenseUrl>https://github.com/forgeai/forge_ai/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/forgeai/forge_ai</projectSourceUrl>
+    <docsUrl>https://github.com/forgeai/forge_ai/wiki</docsUrl>
+    <bugTrackerUrl>https://github.com/forgeai/forge_ai/issues</bugTrackerUrl>
+    <tags>ai ml llm chatbot pytorch local-ai deep-learning</tags>
+    <summary>Fully modular AI framework for local and cloud AI</summary>
+    <description>
+ForgeAI is a fully modular AI framework where everything is a toggleable module.
+This prevents conflicts and allows flexible configuration from Raspberry Pi to datacenter.
+
+## Features
+- Local LLM inference with multiple backends
+- Image, video, audio, and 3D generation
+- Voice input/output with wake word detection
+- Game mode with overlay
+- Multi-device networking
+- Cross-platform GUI
+
+## Usage
+After installation:
+- `forgeai` - Start CLI
+- `forgeai-gui` - Start GUI
+- `forgeai --serve` - Start API server
+    </description>
+    <releaseNotes>https://github.com/forgeai/forge_ai/releases</releaseNotes>
+    <dependencies>
+      <dependency id="python" version="[3.10,3.13)" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

@@ -3,6 +3,9 @@ Whisper Speech-to-Text - Much more accurate than Vosk/SpeechRecognition.
 
 Uses OpenAI's Whisper model locally (no API needed).
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 class WhisperSTT:
     """
@@ -26,7 +29,7 @@ class WhisperSTT:
             self.model = whisper.load_model(self.model_size)
             return True
         except ImportError:
-            print("Install whisper: pip install openai-whisper")
+            logger.warning("Whisper not installed. Install with: pip install openai-whisper")
             return False
     
     def transcribe(self, audio_path: str) -> str:

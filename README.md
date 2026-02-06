@@ -115,6 +115,112 @@ Choose based on your hardware:
 | xl | ~600M | 12GB | RTX 4090, excellent results |
 | xxl | ~1.5B | 16GB+ | Multi-GPU, near-production |
 
+## Usage Examples
+
+### Quick Chat with Your AI
+
+```python
+from forge_ai.core.inference import ForgeEngine
+
+# Load model and chat
+engine = ForgeEngine()
+engine.load_model("models/my_ai")
+
+response = engine.generate("Hello! How are you?")
+print(response)
+```
+
+### Training a New Model
+
+```python
+from forge_ai.core.model import create_model
+from forge_ai.core.training import Trainer, TrainingConfig
+from forge_ai.core.tokenizer import get_tokenizer
+
+# Create model and tokenizer
+model = create_model("small")
+tokenizer = get_tokenizer("char")
+
+# Configure training
+config = TrainingConfig(
+    epochs=20,
+    batch_size=4,
+    learning_rate=0.0001,
+    warmup_steps=100
+)
+
+# Train
+trainer = Trainer(model, tokenizer, config)
+trainer.train("data/training.txt")
+trainer.save("models/my_trained_ai")
+```
+
+### Using the Module System
+
+```python
+from forge_ai.modules import ModuleManager
+
+# Initialize manager (auto-discovers all modules)
+manager = ModuleManager()
+
+# Load core modules
+manager.load('model')
+manager.load('tokenizer')
+manager.load('inference')
+
+# Load image generation (local Stable Diffusion)
+manager.load('image_gen_local')
+
+# Generate an image
+image_mod = manager.get_module('image_gen_local')
+result = image_mod.generate("a sunset over mountains")
+result.save("sunset.png")
+
+# Unload when done
+manager.unload('image_gen_local')
+```
+
+### Saving and Loading Conversations
+
+```python
+from forge_ai.memory.manager import ConversationManager
+from forge_ai.memory.export import export_conversation
+
+# Save conversations
+conv_mgr = ConversationManager()
+conv_mgr.add_message("user", "What's the weather?")
+conv_mgr.add_message("assistant", "I don't have weather data, but I can help you find it!")
+conv_mgr.save()
+
+# Export to different formats
+export_conversation(conv_mgr.messages, "chat.md", format="markdown")
+export_conversation(conv_mgr.messages, "chat.html", format="html")
+```
+
+### Using System Prompts
+
+```python
+from forge_ai.prompts.system_prompts import get_prompt, list_prompts
+
+# See available prompts
+print(list_prompts())  # ['assistant', 'coder', 'tutor', ...]
+
+# Get a coding-focused prompt
+system_prompt = get_prompt("coder")
+print(system_prompt)
+```
+
+### Benchmarking Performance
+
+```python
+from forge_ai.utils.benchmark_inference import quick_benchmark
+
+# Quick benchmark of current model
+report = quick_benchmark("models/my_ai")
+print(f"Speed: {report.tokens_per_second:.1f} tokens/s")
+print(f"Memory: {report.peak_memory_mb:.0f} MB")
+```
+
 ## Project Structure
 
 ```

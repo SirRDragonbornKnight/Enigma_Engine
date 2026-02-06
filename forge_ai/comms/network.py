@@ -60,6 +60,7 @@ and let AIs have conversations with each other.
 """
 
 import json
+import logging
 import queue
 import socket
 import threading
@@ -71,6 +72,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from ..config import CONFIG
+
+logger = logging.getLogger(__name__)
 
 
 class Message:
@@ -298,7 +301,7 @@ class ForgeNode:
                 "messages": [m.to_dict() for m in msgs]
             })
         
-        print(f"Starting Forge node '{self.name}' on {host}:{self.port}")
+        logger.info(f"Starting Forge node '{self.name}' on {host}:{self.port}")
         
         if blocking:
             app.run(host=host, port=self.port, debug=False)
@@ -309,7 +312,7 @@ class ForgeNode:
             )
             self._server_thread.start()
             self._running = True
-            print(f"Server started in background on port {self.port}")
+            logger.info(f"Server started in background on port {self.port}")
     
     def stop_server(self):
         """Stop the server (if running in background)."""
@@ -358,11 +361,11 @@ class ForgeNode:
                 "last_seen": datetime.now().isoformat()
             }
             
-            print(f"Connected to peer '{peer_name}' at {url}")
+            logger.info(f"Connected to peer '{peer_name}' at {url}")
             return True
             
         except Exception as e:
-            print(f"Failed to connect to {url}: {e}")
+            logger.error(f"Failed to connect to {url}: {e}")
             return False
     
     def _get_local_ip(self) -> str:
@@ -592,7 +595,7 @@ class ModelExporter:
         # Clean up directory
         shutil.rmtree(package_dir)
         
-        print(f"Exported model '{model_name}' to {zip_path}")
+        logger.info(f"Exported model '{model_name}' to {zip_path}")
         return str(zip_path)
     
     @staticmethod
@@ -661,7 +664,7 @@ class ModelExporter:
         # Clean up
         shutil.rmtree(temp_dir)
         
-        print(f"Imported model as '{model_name}'")
+        logger.info(f"Imported model as '{model_name}'")
         return model_name
 
 
