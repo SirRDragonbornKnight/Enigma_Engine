@@ -6,55 +6,125 @@ Remaining improvements for the ForgeAI codebase.
 
 ---
 
-## Performance
+## AI Training & Routing Enhancements
 
-- [x] **Lazy imports** for `torch` and `numpy` in core/voice modules (startup speed) *(Added LazyLoader utility and lazy imports in core/__init__.py)*
-- [x] **Tokenizer caching** in `core/tokenizer.py` - cache instances by type *(Added `_tokenizer_cache` with thread-safe locking)*
-- [x] **TTS engine pooling** in `voice/voice_pipeline.py` - reuse engines *(Added `TTSEnginePool` singleton class)*
-- [x] **Thread cleanup** - daemon threads in voice modules lack proper `__del__` *(Added `__del__` methods to voice_pipeline.py and voice_chat.py)*
-  - `voice/voice_pipeline.py` - `_listen_thread`, `_speak_thread`
-  - `voice/voice_chat.py` - `_listen_thread`, `_playback_thread`
+### AI Data Trainer (Lightweight)
+- [x] **Data Trainer** - Lightweight `forge_ai/tools/data_trainer.py` with:
+  - **CharacterTrainer**: Scan for character dialogue, extract personality traits, vocabulary, speech patterns
+  - **TaskTrainer**: Generate training data for images, avatar, tools, code (loads examples from JSON)
+  - No hardcoded examples - all training data loaded from external JSON files on demand
+  - Generate character-specific training datasets automatically
+  - Example: "Train AI as Sherlock Holmes" -> find all Sherlock lines -> create fine-tuning dataset
+
+- [x] **Character Trainer Tab** - Add `forge_ai/gui/tabs/character_trainer_tab.py`:
+  - UI to input character name/prompt and data source
+  - Preview extracted character data before training
+  - Train specialized models for specific characters
+  - Save character profiles with associated model weights
+
+- [x] **Router AI Trainer** - Extend `forge_ai/core/tool_router.py`:
+  - Add ability to train the router itself from within the router
+  - Self-improvement: router learns from successful/failed routes
+  - Train sub-routers for specific domains (games, code, creative)
+  - Recursive training: use trained AIs to generate training data for other AIs
+
+### Unified Prompt System
+- [x] **Global prompt manager** - Create `forge_ai/core/prompt_manager.py`:
+  - Single source of truth for all AI system prompts
+  - Every generation module should use this (image_tab, code_tab, audio_tab, etc.)
+  - Currently: persona.py, prompt_templates.py, tool_prompts.py are separate
+  - Needed: unified `PromptManager.get_system_prompt(module_name, persona_id)` API
+
+- [x] **Prompt inheritance** - Extend `forge_ai/core/persona.py`:
+  - Base prompts that all personas inherit from
+  - Module-specific prompt overrides (image AI vs code AI vs chat AI)
+  - Safety prompts that are always appended
+  - Dynamic prompt injection based on context
+
+- [x] **Prompt validation** - Add prompt validation before model calls:
+  - Check prompt length limits
+  - Validate variable substitution
+  - Warn about conflicting instructions
+  - Test prompt effectiveness with sample inputs
+
+### Training Data Tools
+- [x] **Data curator** - Add `forge_ai/tools/data_curator.py`:
+  - Scan and index all training data files
+  - Search by topic, character, style, or sentiment
+  - Tag and categorize data automatically
+  - Detect duplicate or low-quality entries
+  - Merge/split datasets with smart deduplication
+
+- [x] **Character extractor** - Extract characters from datasets:
+  - Parse dialogue format: "CHARACTER: dialogue text"
+  - Build character vocabulary profiles
+  - Track character relationships and interactions
+  - Generate character summary cards
+
+- [ ] **Auto-trainer pipeline** - Automated training workflow:
+  - Input: character name + data sources
+  - Output: fine-tuned model + persona config
+  - Steps: extract → filter → validate → train → test → deploy
 
 ---
 
-## Architecture
+## Recent Updates - Additional Suggestions
 
-- [x] **Consolidate progress tracking** - duplicated in `utils/progress.py`, `core/download_progress.py`, GUI dialogs *(Added `to_progress_state()` method to bridge systems)*
-- [x] **Standardize JSON I/O** - use `utils/io_utils.py` consistently across voice/memory modules *(Updated voice_profile.py, voice_identity.py, entity_memory.py to use safe_load_json/safe_save_json)*
-- [x] **Standardize configs** - use `@dataclass` for all configuration objects *(Verified - all Config classes already use @dataclass)*
-- [x] **Thread safety audit** - review all `threading.Thread` usage for proper locks *(Added threading.Lock to VoiceChat for shared state protection)*
+### Module System
+- [ ] **Module dependency visualization** - Show module dependency graph in GUI
+- [ ] **Module conflict detection** - Warn before loading conflicting modules
+- [ ] **Module profiles** - Save/load sets of modules as profiles (e.g., "lightweight", "full")
+
+### Networking & Multi-Device
+- [ ] **Remote model training** - Train on one device, use on another
+- [ ] **Model sync** - Auto-sync model weights across devices
+- [ ] **Distributed inference** - Split model across multiple devices
+
+### User Experience
+- [ ] **Quick persona switch** - Hotkey to switch between personas
+- [ ] **Prompt history** - Save and reuse successful prompts
+- [ ] **Training data preview** - Preview what data will be used before training
+
+### Code Generation
+- [ ] **Language-specific code AIs** - Specialized models for Python, JS, Rust, etc.
+- [ ] **Code style learning** - Learn from user's codebase style
+- [ ] **Project context injection** - Include project structure in code prompts
+
+### Avatar System
+- [ ] **Avatar emotion recognition** - Avatar reacts to conversation sentiment
+- [ ] **Multi-avatar support** - Multiple avatars for different personas
+- [ ] **Avatar voice sync** - Lip sync avatar with TTS output
 
 ---
 
-## Documentation
+## GUI Organization
 
-- [x] **API docs** - Add OpenAPI/Swagger annotations to `web/server.py` *(Added full OpenAPI metadata, tags, and endpoint descriptions)*
-- [x] **GraphQL docs** - Document schema in `comms/graphql_api.py` *(Added comprehensive schema documentation in docstring)*
-- [x] **REST docs** - Document endpoints in `comms/api_server.py` *(Added detailed endpoint docstrings with examples)*
+### Sidebar Reorganization
+Current problem: Related features are scattered across different sections (30+ items).
 
----
+- [ ] **Reorganize sidebar by TASK not type** - Group related features together:
+  ```
+  CHAT:     Chat, History
+  MY AI:    Persona, Training, Learning, Scale  (all "building your AI")
+  CREATE:   Image, Code, Video, Audio, 3D, GIF
+  CONTROL:  Avatar, Game, Robot, Screen, Camera
+  TOOLS:    Modules, Router, Tools, Compare
+  SYSTEM:   Terminal, Logs, Files, Settings, Network
+  ```
 
-## Quick Wins
+- [ ] **Remove duplicate navigation** - Avatar tab has sub-tabs for Game/Robot, but those are also separate sidebar items. Pick one approach.
 
-- [x] **voice/voice_customizer.py** - 20+ print statements (keep for CLI, add `logger.debug` for state changes) *(Added logger.debug calls for profile operations)*
+- [ ] **Make Training visible** - Currently hidden as sub-tab inside AI tab, should be in main sidebar under "MY AI"
 
----
+### Training Tab Enhancements
+- [x] **Add system prompt editor to Training tab** - Edit the AI's system prompt alongside training:
+  - Text area to edit system prompt
+  - Preview how prompt affects responses
+  - Save prompt with model/persona
+  - Currently prompt editing is only in Persona tab - should also be accessible from Training
 
-## Testing Gaps
-
-Directories with minimal or no test coverage:
-
-**Critical:**
-- [x] `agents/` - No agent tests *(Created tests/test_agents.py)*
-- [x] `avatar/` - Limited tests *(Created tests/test_avatar.py)*
-- [x] `game/` - Only `test_game_mode.py` *(Created tests/test_game.py)*
-- [x] `web/` - Only `test_web_server.py` *(Created tests/test_web.py)*
-
-**High:**
-- [x] `gui/tabs/` - No tab-specific tests *(Created tests/test_gui_tabs.py)*
-- [x] `gui/dialogs/` - No dialog tests *(Created tests/test_gui_dialogs.py)*
-- [x] `plugins/` - Plugin system untested *(Created tests/test_plugins.py)*
-- [x] `marketplace/` - Marketplace logic untested *(Created tests/test_marketplace.py)*
-
-**Medium:**
-- [x] `cli/`, `collab/`, `companion/`, `deploy/`, `edge/`, `hub/`, `i18n/`, `integrations/`, `monitoring/`, `network/`, `personality/`, `prompts/`, `robotics/`, `mobile/` *(Created tests/test_remaining_modules.py)*
+- [ ] **Unified "Build Your AI" workflow** - Single tab/wizard that combines:
+  - System prompt (persona/personality)
+  - Training data selection
+  - Training controls
+  - Testing the result

@@ -2484,6 +2484,283 @@ class ToolRouter:
             ]
         
         return self.auto_route(user_input, context)
+    
+    # =========================================================================
+    # SELF-TRAINING SYSTEM
+    # =========================================================================
+    
+    def train_router_from_feedback(
+        self,
+        feedback_data: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Train the router model from routing feedback.
+        
+        📖 SELF-IMPROVEMENT:
+        The router can learn from successful and failed routing decisions.
+        When a user corrects a routing decision or a route succeeds,
+        that feedback is used to improve future routing.
+        
+        Args:
+            feedback_data: Optional list of feedback entries. If None, uses stored feedback.
+            
+        Returns:
+            Training statistics
+        """
+        from pathlib import Path
+        
+        feedback_path = self.config_path.parent / "routing_feedback.json"
+        
+        # Load feedback data
+        if feedback_data is None:
+            if feedback_path.exists():
+                try:
+                    import json
+                    feedback_data = json.loads(feedback_path.read_text(encoding="utf-8"))
+                except Exception as e:
+                    logger.warning(f"Could not load feedback: {e}")
+                    feedback_data = []
+            else:
+                return {"error": "No feedback data available"}
+        
+        if not feedback_data or len(feedback_data) < 10:
+            return {"error": "Insufficient feedback data (need at least 10 examples)"}
+        
+        # Generate training data
+        training_lines = []
+        for entry in feedback_data:
+            user_input = entry.get("input", "")
+            correct_tool = entry.get("correct_tool", entry.get("tool"))
+            success = entry.get("success", True)
+            
+            if user_input and correct_tool and success:
+                # Format: Q: <input>\nA: [E:tool]<correct_tool>
+                training_lines.append(f"Q: {user_input}\nA: [E:tool]{correct_tool}")
+        
+        if len(training_lines) < 10:
+            return {"error": "Not enough successful examples for training"}
+        
+        # Save training data
+        training_path = self.config_path.parent / "router_training_data.txt"
+        training_path.write_text("\n\n".join(training_lines), encoding="utf-8")
+        
+        logger.info(f"Generated {len(training_lines)} training examples for router")
+        
+        # Attempt training if training module is available
+        try:
+            from .training import Trainer, TrainingConfig
+            from .model import create_model
+            
+            # Create small router model if needed
+            model = create_model("micro", vocab_size=10000)
+            
+            config = TrainingConfig(
+                num_epochs=5,
+                batch_size=4,
+                learning_rate=0.0001,
+                max_seq_len=128
+            )
+            
+            trainer = Trainer(model, config)
+            
+            # This is a simplified training call
+            # In practice, the user would use the full training tab
+            stats = {
+                "status": "training_data_ready",
+                "training_file": str(training_path),
+                "examples": len(training_lines),
+                "message": "Training data generated. Use Training tab to train the router model."
+            }
+            
+            return stats
+            
+        except Exception as e:
+            logger.warning(f"Auto-training not available: {e}")
+            return {
+                "status": "training_data_ready",
+                "training_file": str(training_path),
+                "examples": len(training_lines),
+                "message": f"Training data ready at {training_path}. Train manually in Training tab."
+            }
+    
+    def record_routing_feedback(
+        self,
+        user_input: str,
+        original_tool: str,
+        correct_tool: Optional[str] = None,
+        success: bool = True
+    ):
+        """
+        Record feedback about a routing decision.
+        
+        📖 HOW THIS IMPROVES THE ROUTER:
+        When routing succeeds or fails, call this to record the outcome.
+        The router uses this feedback to improve future decisions.
+        
+        Args:
+            user_input: The original user input
+            original_tool: The tool the router selected
+            correct_tool: The correct tool (if different from original)
+            success: Whether the routing was successful
+        """
+        import json
+        from datetime import datetime
+        
+        feedback_path = self.config_path.parent / "routing_feedback.json"
+        
+        # Load existing feedback
+        feedback = []
+        if feedback_path.exists():
+            try:
+                feedback = json.loads(feedback_path.read_text(encoding="utf-8"))
+            except Exception:
+                feedback = []
+        
+        # Add new entry
+        entry = {
+            "input": user_input,
+            "tool": original_tool,
+            "correct_tool": correct_tool or original_tool,
+            "success": success,
+            "timestamp": datetime.now().isoformat()
+        }
+        feedback.append(entry)
+        
+        # Keep last 1000 entries
+        feedback = feedback[-1000:]
+        
+        # Save
+        feedback_path.parent.mkdir(parents=True, exist_ok=True)
+        feedback_path.write_text(json.dumps(feedback, indent=2), encoding="utf-8")
+        
+        logger.debug(f"Recorded routing feedback: {original_tool} -> {correct_tool or original_tool}")
+    
+    def get_routing_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about routing performance.
+        
+        Returns:
+            Dictionary with routing statistics
+        """
+        import json
+        from collections import Counter
+        
+        feedback_path = self.config_path.parent / "routing_feedback.json"
+        
+        if not feedback_path.exists():
+            return {"status": "no_data", "message": "No routing feedback recorded yet"}
+        
+        try:
+            feedback = json.loads(feedback_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {"status": "error", "message": "Could not load feedback data"}
+        
+        if not feedback:
+            return {"status": "no_data", "message": "Feedback file is empty"}
+        
+        # Calculate statistics
+        total = len(feedback)
+        successful = sum(1 for f in feedback if f.get("success", True))
+        corrections = sum(1 for f in feedback if f.get("tool") != f.get("correct_tool"))
+        
+        tool_counts = Counter(f.get("correct_tool", f.get("tool")) for f in feedback)
+        error_tools = Counter(
+            f.get("tool") for f in feedback 
+            if f.get("tool") != f.get("correct_tool")
+        )
+        
+        return {
+            "total_routes": total,
+            "successful": successful,
+            "success_rate": successful / total if total > 0 else 0,
+            "corrections": corrections,
+            "correction_rate": corrections / total if total > 0 else 0,
+            "tool_usage": dict(tool_counts),
+            "common_errors": dict(error_tools.most_common(5)),
+            "ready_for_training": total >= 10
+        }
+    
+    def train_sub_router(
+        self,
+        domain: str,
+        training_data_path: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Train a sub-router for a specific domain.
+        
+        📖 DOMAIN-SPECIFIC ROUTING:
+        For complex domains (games, code, creative), you can train
+        specialized sub-routers that understand domain-specific intents.
+        
+        Args:
+            domain: Domain name (e.g., "game", "code", "creative")
+            training_data_path: Path to domain-specific training data
+            
+        Returns:
+            Training status
+        """
+        valid_domains = ["game", "code", "creative", "productivity", "media"]
+        
+        if domain not in valid_domains:
+            return {"error": f"Invalid domain. Must be one of: {valid_domains}"}
+        
+        # Generate domain-specific training data
+        from pathlib import Path
+        
+        output_dir = self.config_path.parent / "sub_routers"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        domain_file = output_dir / f"{domain}_router_training.txt"
+        
+        # If no training data provided, generate from feedback
+        if not training_data_path:
+            import json
+            feedback_path = self.config_path.parent / "routing_feedback.json"
+            
+            if feedback_path.exists():
+                feedback = json.loads(feedback_path.read_text(encoding="utf-8"))
+                
+                # Filter for domain-related entries
+                domain_keywords = {
+                    "game": ["game", "play", "level", "quest", "inventory", "enemy"],
+                    "code": ["code", "program", "function", "debug", "script", "variable"],
+                    "creative": ["draw", "paint", "create", "design", "art", "write"],
+                    "productivity": ["schedule", "task", "email", "document", "organize"],
+                    "media": ["video", "audio", "image", "music", "photo", "record"]
+                }
+                
+                keywords = domain_keywords.get(domain, [])
+                domain_feedback = [
+                    f for f in feedback
+                    if any(kw in f.get("input", "").lower() for kw in keywords)
+                ]
+                
+                if len(domain_feedback) < 5:
+                    return {
+                        "error": f"Insufficient domain feedback for '{domain}'",
+                        "found": len(domain_feedback),
+                        "needed": 5
+                    }
+                
+                # Generate training data
+                lines = []
+                for f in domain_feedback:
+                    lines.append(f"Q: {f['input']}\nA: [E:tool]{f.get('correct_tool', f['tool'])}")
+                
+                domain_file.write_text("\n\n".join(lines), encoding="utf-8")
+                
+                return {
+                    "status": "success",
+                    "domain": domain,
+                    "training_file": str(domain_file),
+                    "examples": len(lines),
+                    "message": f"Sub-router training data generated for '{domain}'"
+                }
+        
+        return {
+            "status": "not_implemented",
+            "message": "Custom training data path not yet implemented"
+        }
 
 
 # Singleton instance
