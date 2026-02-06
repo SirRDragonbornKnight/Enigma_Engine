@@ -5444,11 +5444,31 @@ def create_avatar_subtab(parent):
     parent.browse_avatars_btn.clicked.connect(lambda: _browse_avatars(parent))
     gallery_layout.addWidget(parent.browse_avatars_btn)
     
-    # Import avatar button
+    # Import avatar button (single file)
     parent.import_avatar_btn = QPushButton("Import Avatar...")
     parent.import_avatar_btn.setToolTip("Import a new avatar from files or .forgeavatar bundle")
     parent.import_avatar_btn.clicked.connect(lambda: _import_avatar(parent))
     gallery_layout.addWidget(parent.import_avatar_btn)
+    
+    # Import multiple files button
+    parent.import_multiple_btn = QPushButton("Import Multiple Files...")
+    parent.import_multiple_btn.setToolTip("Select and import multiple avatar files at once (images or 3D models)")
+    parent.import_multiple_btn.clicked.connect(lambda: _import_multiple_avatars(parent))
+    gallery_layout.addWidget(parent.import_multiple_btn)
+    
+    # Import from Downloads button
+    parent.import_downloads_btn = QPushButton("Import from Downloads")
+    parent.import_downloads_btn.setToolTip("Quick import avatars from your Downloads folder")
+    parent.import_downloads_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
+    parent.import_downloads_btn.clicked.connect(lambda: _import_from_downloads(parent))
+    gallery_layout.addWidget(parent.import_downloads_btn)
+    
+    # Import & Extract ZIP button  
+    parent.import_zip_btn = QPushButton("Import ZIP/Archive...")
+    parent.import_zip_btn.setToolTip("Import and extract avatar ZIP files (e.g., downloaded glTF models)")
+    parent.import_zip_btn.setStyleSheet("background: #f5c2e7; color: #1e1e2e; font-weight: bold;")
+    parent.import_zip_btn.clicked.connect(lambda: _import_zip_archive(parent))
+    gallery_layout.addWidget(parent.import_zip_btn)
     
     # Generate samples button
     parent.generate_samples_btn = QPushButton("Generate Samples")
@@ -7978,6 +7998,297 @@ def _import_avatar(parent):
     except Exception as e:
         parent.avatar_status.setText(f"Error: {e}")
         parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _import_multiple_avatars(parent):
+    """Import multiple avatar files at once."""
+    all_exts = " ".join(f"*{ext}" for ext in ALL_AVATAR_EXTENSIONS)
+    img_exts = " ".join(f"*{ext}" for ext in IMAGE_EXTENSIONS)
+    model_exts = " ".join(f"*{ext}" for ext in MODEL_3D_EXTENSIONS)
+    
+    paths, _ = QFileDialog.getOpenFileNames(
+        parent,
+        "Import Multiple Avatars",
+        str(Path.home() / "Downloads"),
+        f"All Avatars ({all_exts});;Images ({img_exts});;3D Models ({model_exts});;All Files (*)"
+    )
+    
+    if not paths:
+        return
+    
+    imported = 0
+    for path_str in paths:
+        path = Path(path_str)
+        try:
+            # Copy to appropriate directory
+            if path.suffix.lower() in IMAGE_EXTENSIONS:
+                dest = AVATAR_IMAGES_DIR / path.name
+            else:
+                dest = AVATAR_MODELS_DIR / path.name
+            
+            # Don't overwrite existing files
+            if dest.exists():
+                base = dest.stem
+                suffix = dest.suffix
+                counter = 1
+                while dest.exists():
+                    dest = dest.parent / f"{base}_{counter}{suffix}"
+                    counter += 1
+            
+            import shutil
+            shutil.copy2(path, dest)
+            imported += 1
+        except Exception as e:
+            logger.error(f"Failed to import {path.name}: {e}")
+    
+    if imported > 0:
+        parent.avatar_status.setText(f"Imported {imported} avatar(s)!")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        _refresh_avatar(parent)
+    else:
+        parent.avatar_status.setText("No avatars imported")
+        parent.avatar_status.setStyleSheet("color: #fab387;")
+
+
+def _import_from_downloads(parent):
+    """Quick import from Downloads folder - shows files available there."""
+    downloads_path = Path.home() / "Downloads"
+    
+    if not downloads_path.exists():
+        parent.avatar_status.setText("Downloads folder not found")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    # Find avatar files in Downloads
+    avatar_files = []
+    zip_files = []
+    
+    for ext in ALL_AVATAR_EXTENSIONS:
+        avatar_files.extend(downloads_path.glob(f"*{ext}"))
+    
+    # Also find ZIP files that might contain avatars
+    zip_files.extend(downloads_path.glob("*.zip"))
+    
+    if not avatar_files and not zip_files:
+        parent.avatar_status.setText("No avatar files found in Downloads")
+        parent.avatar_status.setStyleSheet("color: #fab387;")
+        # Open file dialog to Downloads anyway
+        _import_multiple_avatars(parent)
+        return
+    
+    # Show dialog to select which files to import
+    from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QListWidget, QListWidgetItem
+    
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Import from Downloads")
+    dialog.setMinimumSize(400, 300)
+    layout = QVBoxLayout(dialog)
+    
+    label = QLabel(f"Found {len(avatar_files)} avatar file(s) and {len(zip_files)} ZIP file(s) in Downloads:")
+    layout.addWidget(label)
+    
+    file_list = QListWidget()
+    file_list.setSelectionMode(QListWidget.MultiSelection)
+    
+    for path in avatar_files:
+        item = QListWidgetItem(f"[Avatar] {path.name}")
+        item.setData(Qt.UserRole, ("avatar", str(path)))
+        file_list.addItem(item)
+        item.setSelected(True)  # Select all by default
+    
+    for path in zip_files:
+        item = QListWidgetItem(f"[ZIP] {path.name}")
+        item.setData(Qt.UserRole, ("zip", str(path)))
+        file_list.addItem(item)
+        item.setSelected(True)
+    
+    layout.addWidget(file_list)
+    
+    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+    
+    if dialog.exec_() != QDialog.Accepted:
+        return
+    
+    # Import selected files
+    imported = 0
+    extracted = 0
+    
+    for item in file_list.selectedItems():
+        file_type, file_path = item.data(Qt.UserRole)
+        path = Path(file_path)
+        
+        try:
+            if file_type == "avatar":
+                # Copy avatar file
+                if path.suffix.lower() in IMAGE_EXTENSIONS:
+                    dest = AVATAR_IMAGES_DIR / path.name
+                else:
+                    dest = AVATAR_MODELS_DIR / path.name
+                
+                if not dest.exists():
+                    import shutil
+                    shutil.copy2(path, dest)
+                    imported += 1
+                else:
+                    # File already exists
+                    imported += 1
+                    
+            elif file_type == "zip":
+                # Extract ZIP file
+                count = _extract_avatar_zip(path, AVATAR_MODELS_DIR)
+                extracted += count
+                
+        except Exception as e:
+            logger.error(f"Failed to import {path.name}: {e}")
+    
+    status_parts = []
+    if imported > 0:
+        status_parts.append(f"{imported} file(s) imported")
+    if extracted > 0:
+        status_parts.append(f"{extracted} file(s) extracted from ZIPs")
+    
+    if status_parts:
+        parent.avatar_status.setText(", ".join(status_parts) + "!")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        _refresh_avatar(parent)
+    else:
+        parent.avatar_status.setText("No files imported")
+        parent.avatar_status.setStyleSheet("color: #fab387;")
+
+
+def _import_zip_archive(parent):
+    """Import and extract avatar ZIP/archive files."""
+    paths, _ = QFileDialog.getOpenFileNames(
+        parent,
+        "Import Avatar Archives",
+        str(Path.home() / "Downloads"),
+        "Archives (*.zip *.7z *.tar.gz *.tar);;ZIP Files (*.zip);;All Files (*)"
+    )
+    
+    if not paths:
+        return
+    
+    total_extracted = 0
+    
+    for path_str in paths:
+        path = Path(path_str)
+        try:
+            count = _extract_avatar_zip(path, AVATAR_MODELS_DIR)
+            total_extracted += count
+        except Exception as e:
+            logger.error(f"Failed to extract {path.name}: {e}")
+            parent.avatar_status.setText(f"Error extracting {path.name}: {e}")
+            parent.avatar_status.setStyleSheet("color: #f38ba8;")
+    
+    if total_extracted > 0:
+        parent.avatar_status.setText(f"Extracted {total_extracted} avatar file(s)!")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        _refresh_avatar(parent)
+    else:
+        parent.avatar_status.setText("No avatar files found in archive(s)")
+        parent.avatar_status.setStyleSheet("color: #fab387;")
+
+
+def _extract_avatar_zip(zip_path: Path, dest_dir: Path) -> int:
+    """
+    Extract avatar files from a ZIP archive.
+    
+    Returns the number of avatar files extracted.
+    """
+    import zipfile
+    import shutil
+    
+    extracted_count = 0
+    
+    if not zip_path.suffix.lower() == '.zip':
+        logger.warning(f"Only ZIP files supported, got: {zip_path.suffix}")
+        return 0
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            # Get list of files in the archive
+            namelist = zf.namelist()
+            
+            # Find avatar files (images and 3D models)
+            avatar_files = []
+            for name in namelist:
+                name_lower = name.lower()
+                # Skip directories
+                if name.endswith('/'):
+                    continue
+                # Skip macOS resource forks
+                if '__MACOSX' in name or name.startswith('.'):
+                    continue
+                
+                # Check if it's an avatar file
+                for ext in ALL_AVATAR_EXTENSIONS:
+                    if name_lower.endswith(ext):
+                        avatar_files.append(name)
+                        break
+            
+            if not avatar_files:
+                logger.info(f"No avatar files found in {zip_path.name}")
+                return 0
+            
+            # Create a subfolder for this archive (to keep related files together)
+            archive_name = zip_path.stem
+            archive_dest = dest_dir / archive_name
+            archive_dest.mkdir(parents=True, exist_ok=True)
+            
+            # Extract avatar files
+            for name in avatar_files:
+                # Get just the filename, strip any directory paths
+                filename = Path(name).name
+                dest_path = archive_dest / filename
+                
+                # Extract the file
+                with zf.open(name) as src:
+                    with open(dest_path, 'wb') as dst:
+                        shutil.copyfileobj(src, dst)
+                
+                extracted_count += 1
+                logger.info(f"Extracted: {filename} -> {dest_path}")
+            
+            # Also extract any texture files that might be associated with 3D models
+            texture_exts = {'.png', '.jpg', '.jpeg', '.tga', '.bmp', '.dds'}
+            for name in namelist:
+                name_lower = name.lower()
+                if name.endswith('/') or '__MACOSX' in name:
+                    continue
+                
+                for ext in texture_exts:
+                    if name_lower.endswith(ext) and name not in avatar_files:
+                        # This is a texture, extract it too
+                        filename = Path(name).name
+                        dest_path = archive_dest / filename
+                        
+                        with zf.open(name) as src:
+                            with open(dest_path, 'wb') as dst:
+                                shutil.copyfileobj(src, dst)
+                        
+                        logger.info(f"Extracted texture: {filename}")
+                        break
+            
+            # If only one avatar file, also copy it to the main models dir for easy access
+            if extracted_count == 1:
+                first_file = archive_dest / Path(avatar_files[0]).name
+                if first_file.exists():
+                    main_dest = dest_dir / first_file.name
+                    if not main_dest.exists():
+                        shutil.copy2(first_file, main_dest)
+                        logger.info(f"Also copied to: {main_dest}")
+    
+    except zipfile.BadZipFile:
+        logger.error(f"Invalid ZIP file: {zip_path}")
+        raise ValueError(f"Invalid ZIP file: {zip_path.name}")
+    except Exception as e:
+        logger.error(f"Error extracting {zip_path}: {e}")
+        raise
+    
+    return extracted_count
 
 
 def _generate_sample_avatars(parent):
