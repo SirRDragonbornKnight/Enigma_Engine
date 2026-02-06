@@ -52,6 +52,111 @@ DEFAULT_TTS_VOLUME = 1.0
 THREAD_JOIN_TIMEOUT = 2.0
 
 
+# =============================================================================
+# TTS Engine Pool - Reuse engines across pipeline instances
+# =============================================================================
+class TTSEnginePool:
+    """
+    Pool of TTS engines for efficient reuse.
+    
+    Creating TTS engines (especially pyttsx3) is expensive. This pool
+    allows multiple VoicePipeline instances to share engines.
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._engines = {}
+                    cls._instance._in_use = set()
+                    cls._instance._pool_lock = threading.Lock()
+        return cls._instance
+    
+    def acquire(self, engine_type: str = "pyttsx3", config: dict = None) -> dict:
+        """
+        Acquire a TTS engine from the pool or create a new one.
+        
+        Args:
+            engine_type: Type of engine ("pyttsx3", "elevenlabs", "builtin")
+            config: Optional configuration for the engine
+            
+        Returns:
+            Engine dict with type and engine instance
+        """
+        with self._pool_lock:
+            # Find available engine of this type
+            for key, engine in self._engines.items():
+                if key.startswith(engine_type) and key not in self._in_use:
+                    self._in_use.add(key)
+                    logger.debug(f"Reusing TTS engine from pool: {key}")
+                    return engine
+            
+            # Create new engine
+            engine = self._create_engine(engine_type, config)
+            if engine:
+                key = f"{engine_type}_{len(self._engines)}"
+                self._engines[key] = engine
+                self._in_use.add(key)
+                logger.debug(f"Created new TTS engine: {key}")
+                return engine
+            
+            return {"type": "builtin"}
+    
+    def release(self, engine: dict):
+        """Release an engine back to the pool."""
+        with self._pool_lock:
+            for key, eng in self._engines.items():
+                if eng is engine and key in self._in_use:
+                    self._in_use.discard(key)
+                    logger.debug(f"Released TTS engine to pool: {key}")
+                    return
+    
+    def _create_engine(self, engine_type: str, config: dict = None) -> dict:
+        """Create a new TTS engine."""
+        config = config or {}
+        
+        if engine_type == "pyttsx3":
+            try:
+                import pyttsx3
+                engine = pyttsx3.init()
+                engine.setProperty('rate', config.get('rate', DEFAULT_TTS_RATE))
+                engine.setProperty('volume', config.get('volume', DEFAULT_TTS_VOLUME))
+                return {"type": "pyttsx3", "engine": engine}
+            except Exception as e:
+                logger.warning(f"Failed to create pyttsx3 engine: {e}")
+                return None
+        
+        elif engine_type == "elevenlabs":
+            import os
+            api_key = os.environ.get("ELEVENLABS_API_KEY", "")
+            if api_key:
+                return {"type": "elevenlabs", "api_key": api_key}
+            return None
+        
+        return {"type": "builtin"}
+    
+    def cleanup(self):
+        """Clean up all engines in the pool."""
+        with self._pool_lock:
+            for key, engine in self._engines.items():
+                if engine.get("type") == "pyttsx3" and "engine" in engine:
+                    try:
+                        engine["engine"].stop()
+                    except Exception:
+                        pass
+            self._engines.clear()
+            self._in_use.clear()
+            logger.debug("TTS engine pool cleaned up")
+
+
+# Global TTS engine pool
+_tts_pool = TTSEnginePool()
+
+
 class VoiceMode(Enum):
     """Voice pipeline modes."""
     FULL = auto()          # Full voice in/out
@@ -241,6 +346,26 @@ class VoicePipeline:
         self._cleanup_engines()
         
         logger.info("Voice pipeline stopped")
+    
+    def __del__(self):
+        """Ensure proper cleanup when the object is garbage collected."""
+        try:
+            self._running = False
+            
+            # Release TTS engine back to pool
+            if self._tts_engine:
+                _tts_pool.release(self._tts_engine)
+                self._tts_engine = None
+            
+            # Signal threads to stop (don't wait - daemon threads will die with process)
+            if hasattr(self, '_tts_queue') and self._tts_queue:
+                try:
+                    self._tts_queue.put_nowait(None)
+                except Exception:
+                    pass
+        except Exception:
+            # Ignore errors during garbage collection
+            pass
     
     def set_mode(self, mode: VoiceMode):
         """Change voice mode."""
@@ -506,17 +631,16 @@ class VoicePipeline:
         self._stt_engine = stt_engine
     
     def _init_tts(self):
-        """Initialize text-to-speech engine."""
+        """Initialize text-to-speech engine using the pool."""
         try:
-            if self.config.tts_engine == "pyttsx3":
-                self._tts_engine = self._init_pyttsx3()
-            elif self.config.tts_engine == "elevenlabs":
-                self._tts_engine = self._init_elevenlabs()
-            else:
-                self._tts_engine = self._init_builtin_tts()
+            config = {
+                'rate': self.config.tts_rate,
+                'volume': self.config.tts_volume
+            }
+            self._tts_engine = _tts_pool.acquire(self.config.tts_engine, config)
         except Exception as e:
             logger.warning(f"Failed to init TTS ({self.config.tts_engine}): {e}")
-            self._tts_engine = self._init_builtin_tts()
+            self._tts_engine = {"type": "builtin"}
     
     def _init_whisper(self):
         """Initialize Whisper STT."""
@@ -912,11 +1036,10 @@ class VoicePipeline:
     
     def _cleanup_engines(self):
         """Cleanup audio engines."""
-        if self._tts_engine and self._tts_engine.get("type") == "pyttsx3":
-            try:
-                self._tts_engine["engine"].stop()
-            except Exception as e:
-                logger.debug(f"TTS cleanup error (non-fatal): {e}")
+        # Release TTS engine back to pool instead of destroying it
+        if self._tts_engine:
+            _tts_pool.release(self._tts_engine)
+            self._tts_engine = None
     
     def _listen_loop(self):
         """Main listening loop."""

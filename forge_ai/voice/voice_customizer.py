@@ -28,12 +28,15 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from .voice_effects import VoiceEffects
 from .voice_profile import PRESET_PROFILES, VoiceEngine, VoiceProfile
+
+logger = logging.getLogger(__name__)
 
 
 class VoiceCustomizer:
@@ -120,6 +123,7 @@ class VoiceCustomizer:
             current.description = description
         
         print(f"\n✓ Voice profile '{current.name}' created!")
+        logger.debug(f"Voice profile created: {current.name} (pitch={current.pitch:.2f}, speed={current.speed:.2f})")
         return current
     
     def _print_current_settings(self, profile: VoiceProfile):
@@ -250,6 +254,7 @@ class VoiceCustomizer:
         
         profile = VoiceProfile(**data)
         print(f"✓ Imported voice profile '{profile.name}' from {path}")
+        logger.debug(f"Imported voice profile: {profile.name} from {path}")
         
         return profile
     
@@ -273,6 +278,7 @@ class VoiceCustomizer:
             json.dump(data, f, indent=2)
         
         print(f"✓ Exported voice profile to {filepath}")
+        logger.debug(f"Exported voice profile '{profile.name}' to {filepath}")
         return filepath
     
     def compare_voices(

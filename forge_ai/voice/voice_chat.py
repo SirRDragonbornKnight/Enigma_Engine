@@ -458,6 +458,28 @@ class VoiceChat:
         
         logger.info("Voice chat stopped")
     
+    def __del__(self):
+        """Ensure proper cleanup when the object is garbage collected."""
+        try:
+            self._running = False
+            
+            # Close audio stream
+            if hasattr(self, '_audio_stream') and self._audio_stream:
+                try:
+                    self._audio_stream.close()
+                except Exception:
+                    pass
+            
+            # Signal playback queue to stop (don't wait - daemon threads will die with process)
+            if hasattr(self, '_playback_queue') and self._playback_queue:
+                try:
+                    self._playback_queue.put_nowait(None)
+                except Exception:
+                    pass
+        except Exception:
+            # Ignore errors during garbage collection
+            pass
+    
     def _listen_loop(self):
         """Main listening loop."""
         while self._running:

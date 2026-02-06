@@ -110,10 +110,32 @@ def create_app():
 
     @app.route("/health")
     def health():
+        """
+        Health check endpoint.
+        
+        Returns:
+            JSON: {"ok": true} if server is running
+            
+        Example:
+            curl http://localhost:5000/health
+        """
         return jsonify({"ok": True})
     
     @app.route("/info")
     def info():
+        """
+        Get server information and available endpoints.
+        
+        Returns:
+            JSON containing:
+            - name: Server name
+            - version: API version
+            - endpoints: List of available endpoints
+            - authentication: Auth configuration
+            
+        Example:
+            curl http://localhost:5000/info
+        """
         api_key_configured = CONFIG.get("forgeai_api_key") is not None
         auth_required = CONFIG.get("require_api_key", True)
         return jsonify({
@@ -128,7 +150,23 @@ def create_app():
     
     @app.route("/generate_key", methods=["POST"])
     def generate_key():
-        """Generate a new API key (for initial setup only)."""
+        """
+        Generate a new API key for authentication.
+        
+        Only works if no API key is currently configured.
+        
+        Returns:
+            JSON containing:
+            - api_key: The generated key
+            - message: Instructions for use
+            - example: Shell command to set the key
+            
+        Errors:
+            403: API key already configured
+            
+        Example:
+            curl -X POST http://localhost:5000/generate_key
+        """
         # Only allow if no key is set yet
         if CONFIG.get("forgeai_api_key"):
             return jsonify({
@@ -146,6 +184,30 @@ def create_app():
     @app.route("/generate", methods=["POST"])
     @require_api_key
     def generate():
+        """
+        Generate text from a prompt using the AI model.
+        
+        Request Body (JSON):
+            - prompt (str): The input text to generate from
+            - max_gen (int, optional): Maximum tokens to generate (1-2048, default: 50)
+            - temperature (float, optional): Creativity level (0.0-2.0, default: 1.0)
+            
+        Returns:
+            JSON containing:
+            - text: The generated text
+            
+        Errors:
+            400: Invalid parameter values
+            401: Unauthorized (missing or invalid API key)
+            503: AI engine not available
+            500: Generation failed
+            
+        Example:
+            curl -X POST http://localhost:5000/generate \\
+                 -H "Content-Type: application/json" \\
+                 -H "X-API-Key: YOUR_API_KEY" \\
+                 -d '{"prompt": "Hello, AI!", "max_gen": 100}'
+        """
         data = request.json or {}
         prompt = data.get("prompt", "")
         

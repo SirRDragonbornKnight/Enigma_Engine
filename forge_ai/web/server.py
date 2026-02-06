@@ -167,7 +167,36 @@ class ForgeWebServer:
                 "Install with: pip install fastapi uvicorn python-multipart"
             )
         
-        self.app = FastAPI(title="ForgeAI Web", version="1.0.0")
+        self.app = FastAPI(
+            title="ForgeAI Web API",
+            description="""
+## ForgeAI Web API
+
+Self-hosted AI assistant web interface with REST API support.
+
+### Features
+- Real-time chat via WebSocket
+- Multi-conversation management
+- Image, code, and audio generation endpoints
+- Voice recognition and synthesis
+- Model configuration and management
+
+### Authentication
+Most endpoints require authentication. Pass `token` query parameter or use WebSocket auth.
+
+### WebSocket
+Connect to `/ws` for real-time chat. Send JSON messages with `type` field.
+            """,
+            version="1.0.0",
+            docs_url="/docs",
+            redoc_url="/redoc",
+            openapi_tags=[
+                {"name": "health", "description": "Health and status endpoints"},
+                {"name": "chat", "description": "Chat and conversation endpoints"},
+                {"name": "generation", "description": "AI content generation endpoints"},
+                {"name": "settings", "description": "Configuration endpoints"},
+            ]
+        )
         self.host = host
         self.port = port
         self.require_auth = require_auth
@@ -297,14 +326,22 @@ class ForgeWebServer:
                 return FileResponse(html_file)
             return HTMLResponse(content=self._get_default_html())
         
-        @self.app.get("/health")
+        @self.app.get("/health", tags=["health"])
         async def health():
-            """Health check endpoint."""
+            """
+            Health check endpoint.
+            
+            Returns the current service status. Use this for load balancer health checks.
+            """
             return {"status": "ok", "service": "ForgeAI Web"}
         
-        @self.app.get("/api/info")
+        @self.app.get("/api/info", tags=["health"])
         async def info():
-            """Get server information."""
+            """
+            Get server information.
+            
+            Returns details about the running server including host, port, and auth requirements.
+            """
             return {
                 "name": "ForgeAI Web Server",
                 "version": "1.0.0",
@@ -313,9 +350,19 @@ class ForgeWebServer:
                 "auth_required": self.require_auth
             }
         
-        @self.app.post("/api/chat")
+        @self.app.post("/api/chat", tags=["chat"])
         async def chat(message: ChatMessage, authenticated: bool = Depends(self._verify_token)):
-            """Chat endpoint - send message, get response."""
+            """
+            Send a chat message and receive an AI response.
+            
+            **Parameters:**
+            - content: The message text to send
+            - conversation_id: Optional conversation ID to continue a conversation
+            - max_tokens: Maximum tokens in the response (default: 200)
+            - temperature: Response creativity 0.0-2.0 (default: 0.8)
+            
+            **Returns:** AI response text and conversation ID
+            """
             try:
                 # Get inference engine
                 response_text = await self._generate_response(message.content)
@@ -329,9 +376,13 @@ class ForgeWebServer:
                 logger.error(f"Chat error: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.get("/api/conversations")
+        @self.app.get("/api/conversations", tags=["chat"])
         async def list_conversations(authenticated: bool = Depends(self._verify_token)):
-            """List all conversations."""
+            """
+            List all saved conversations.
+            
+            Returns a list of conversation IDs, names, and message counts.
+            """
             try:
                 from ..memory.manager import ConversationManager
                 conv_manager = ConversationManager()
@@ -354,9 +405,16 @@ class ForgeWebServer:
                 logger.error(f"Error listing conversations: {e}")
                 return {"conversations": []}
         
-        @self.app.get("/api/conversations/{conv_id}")
+        @self.app.get("/api/conversations/{conv_id}", tags=["chat"])
         async def get_conversation(conv_id: str, authenticated: bool = Depends(self._verify_token)):
-            """Get specific conversation."""
+            """
+            Get a specific conversation by ID.
+            
+            **Parameters:**
+            - conv_id: Unique conversation identifier
+            
+            **Returns:** Conversation messages and metadata
+            """
             try:
                 from ..memory.manager import ConversationManager
                 conv_manager = ConversationManager()
@@ -365,9 +423,13 @@ class ForgeWebServer:
             except Exception as e:
                 raise HTTPException(status_code=404, detail=f"Conversation not found: {e}")
         
-        @self.app.delete("/api/conversations/{conv_id}")
+        @self.app.delete("/api/conversations/{conv_id}", tags=["chat"])
         async def delete_conversation(conv_id: str, authenticated: bool = Depends(self._verify_token)):
-            """Delete conversation."""
+            """
+            Delete a conversation.
+            
+            Permanently removes all messages in the conversation.
+            """
             try:
                 from ..memory.manager import ConversationManager
                 conv_manager = ConversationManager()
@@ -378,18 +440,36 @@ class ForgeWebServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
         
-        @self.app.post("/api/generate/image")
+        @self.app.post("/api/generate/image", tags=["generation"])
         async def generate_image(request: GenerateImageRequest, authenticated: bool = Depends(self._verify_token)):
-            """Generate image."""
+            """
+            Generate an image from a text prompt.
+            
+            **Requires:** image_gen module to be loaded
+            
+            **Parameters:**
+            - prompt: Description of the image to generate
+            - width: Image width in pixels (default: 512)
+            - height: Image height in pixels (default: 512)
+            - steps: Number of diffusion steps (default: 20)
+            """
             return {
                 "success": True,
                 "message": "Image generation requires image_gen module to be loaded",
                 "prompt": request.prompt
             }
         
-        @self.app.post("/api/generate/code")
+        @self.app.post("/api/generate/code", tags=["generation"])
         async def generate_code(request: GenerateCodeRequest, authenticated: bool = Depends(self._verify_token)):
-            """Generate code."""
+            """
+            Generate code from a text description.
+            
+            **Requires:** code_gen module to be loaded
+            
+            **Parameters:**
+            - prompt: Description of the code to generate
+            - language: Programming language (default: python)
+            """
             return {
                 "success": True,
                 "message": "Code generation requires code_gen module to be loaded",

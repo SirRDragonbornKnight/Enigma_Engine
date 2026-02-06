@@ -1,11 +1,130 @@
 """
-GraphQL API
+GraphQL API for ForgeAI
 
-Alternative GraphQL interface for ForgeAI.
+Alternative GraphQL interface providing type-safe queries and mutations.
 
 FILE: forge_ai/comms/graphql_api.py
 TYPE: API
 MAIN CLASSES: GraphQLAPI, ForgeSchema
+
+================================================================================
+GRAPHQL SCHEMA DOCUMENTATION
+================================================================================
+
+## Types
+
+### Message
+    - id: String - Unique message identifier
+    - role: String - "user" or "assistant"
+    - content: String - Message text
+    - timestamp: Float - Unix timestamp
+    - metadata: String - JSON metadata
+
+### Conversation
+    - id: String - Conversation identifier
+    - title: String - Conversation title
+    - messages: [Message] - List of messages
+    - createdAt: Float - Creation timestamp
+    - updatedAt: Float - Last update timestamp
+
+### ModelInfo
+    - name: String - Model name
+    - size: String - Model size category
+    - loaded: Boolean - Whether model is currently loaded
+    - parameters: Int - Number of parameters
+    - contextLength: Int - Maximum context length
+
+### GenerationResult
+    - text: String - Generated text
+    - tokensGenerated: Int - Number of tokens generated
+    - generationTime: Float - Time taken in seconds
+    - finishReason: String - Why generation stopped
+
+### Module
+    - name: String - Module name
+    - category: String - Module category
+    - status: String - "loaded", "unloaded", "error"
+    - description: String - Module description
+    - dependencies: [String] - Required dependencies
+
+### Tool
+    - name: String - Tool name
+    - description: String - Tool description
+    - parameters: String - JSON parameter schema
+
+### SystemStatus
+    - uptime: Float - System uptime in seconds
+    - memoryUsedMB: Float - Memory usage
+    - gpuMemoryUsedMB: Float - GPU memory usage
+    - activeModules: [String] - List of loaded modules
+    - modelLoaded: Boolean - Whether a model is loaded
+
+## Queries
+
+    conversations: [Conversation] - List all conversations
+    conversation(id: String!): Conversation - Get specific conversation
+    models: [ModelInfo] - List available models
+    modules: [Module] - List all modules
+    tools: [Tool] - List available tools
+    systemStatus: SystemStatus - Get system status
+
+## Mutations
+
+    generate(prompt: String!, options: GenerationOptionsInput): GenerationResult
+    sendMessage(conversationId: String, message: MessageInput!): Message
+    createConversation(title: String): Conversation
+    deleteConversation(id: String!): Boolean
+    loadModule(name: String!): Module
+    unloadModule(name: String!): Boolean
+
+## Input Types
+
+### MessageInput
+    - role: String! - "user" or "assistant"
+    - content: String! - Message text
+
+### GenerationOptionsInput
+    - maxTokens: Int
+    - temperature: Float
+    - topP: Float
+    - topK: Int
+    - stopSequences: [String]
+
+## Example Queries
+
+```graphql
+# Generate text
+mutation {
+  generate(prompt: "Hello, AI!", options: {maxTokens: 100, temperature: 0.8}) {
+    text
+    tokensGenerated
+    generationTime
+  }
+}
+
+# List conversations
+query {
+  conversations {
+    id
+    title
+    messages {
+      role
+      content
+    }
+  }
+}
+
+# Get system status
+query {
+  systemStatus {
+    uptime
+    memoryUsedMB
+    modelLoaded
+    activeModules
+  }
+}
+```
+================================================================================
 """
 
 import asyncio

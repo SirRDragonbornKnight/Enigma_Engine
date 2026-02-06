@@ -593,9 +593,15 @@ class TiktokenWrapper:
 # Tokenizer Loading Functions
 # =============================================================================
 
+# Tokenizer cache for reuse - maps (tokenizer_type, vocab_path) to instance
+_tokenizer_cache: Dict[tuple, Any] = {}
+_tokenizer_cache_lock = __import__('threading').Lock()
+
+
 def get_tokenizer(
     tokenizer_type: str = "auto",
-    vocab_path: Optional[Union[str, Path]] = None
+    vocab_path: Optional[Union[str, Path]] = None,
+    use_cache: bool = True
 ) -> Any:
     """
     Get the best available tokenizer.
@@ -609,11 +615,27 @@ def get_tokenizer(
             - "char": Character-level tokenizer
             - "simple": Simple character tokenizer
         vocab_path: Optional path to vocabulary file
+        use_cache: Whether to cache and reuse tokenizer instances (default: True)
 
     Returns:
         Tokenizer instance
     """
     vocab_path = Path(vocab_path) if vocab_path else VOCAB_DIR
+    
+    # Check cache first
+    cache_key = (tokenizer_type, str(vocab_path))
+    if use_cache:
+        with _tokenizer_cache_lock:
+            if cache_key in _tokenizer_cache:
+                logger.debug(f"Using cached tokenizer: {tokenizer_type}")
+                return _tokenizer_cache[cache_key]
+
+    def _cache_and_return(tok):
+        """Helper to cache tokenizer before returning."""
+        if use_cache:
+            with _tokenizer_cache_lock:
+                _tokenizer_cache[cache_key] = tok
+        return tok
 
     # Try tiktoken first (fastest)
     if tokenizer_type in ("auto", "tiktoken"):
@@ -621,7 +643,7 @@ def get_tokenizer(
             import tiktoken
             tok = TiktokenWrapper()
             logger.info("Loaded tiktoken tokenizer (cl100k_base)")
-            return tok
+            return _cache_and_return(tok)
         except ImportError:
             if tokenizer_type == "tiktoken":
                 logger.error("tiktoken not available. Install with: pip install tiktoken")
@@ -640,11 +662,11 @@ def get_tokenizer(
             if bpe_vocab.exists():
                 tok = AdvancedBPETokenizer(vocab_file=bpe_vocab)
                 logger.info(f"Loaded BPE tokenizer from {bpe_vocab}")
-                return tok
+                return _cache_and_return(tok)
             elif tokenizer_type in ("bpe", "advanced"):
                 # Return untrained BPE tokenizer
                 logger.warning("BPE tokenizer not trained. Use train_tokenizer() first.")
-                return AdvancedBPETokenizer()
+                return _cache_and_return(AdvancedBPETokenizer())
         except Exception as e:
             logger.warning(f"Could not load BPE tokenizer: {e}")
             if tokenizer_type in ("bpe", "advanced"):
@@ -660,14 +682,14 @@ def get_tokenizer(
             if char_vocab.exists():
                 tok = CharacterTokenizer(vocab_file=char_vocab, use_dictionary=True)
                 logger.info(f"Loaded character tokenizer from {char_vocab}")
-                return tok
+                return _cache_and_return(tok)
             else:
                 # Create new character tokenizer
                 tok = CharacterTokenizer(use_dictionary=True)
                 VOCAB_DIR.mkdir(parents=True, exist_ok=True)
                 tok.save_vocab(VOCAB_DIR / "char_vocab.json")
                 logger.info("Created new character tokenizer")
-                return tok
+                return _cache_and_return(tok)
         except Exception as e:
             logger.warning(f"Could not load character tokenizer: {e}")
             if tokenizer_type in ("char", "character"):
@@ -679,14 +701,14 @@ def get_tokenizer(
     if simple_vocab.exists():
         tok = SimpleTokenizer(simple_vocab)
         logger.info(f"Loaded simple tokenizer from {simple_vocab}")
-        return tok
+        return _cache_and_return(tok)
 
     # Create new simple tokenizer
     tok = SimpleTokenizer()
     VOCAB_DIR.mkdir(parents=True, exist_ok=True)
     tok.save_vocab(VOCAB_DIR / "simple_vocab.json")
     logger.info("Created new simple tokenizer")
-    return tok
+    return _cache_and_return(tok)
 
 
 def load_tokenizer(tokenizer_type: str = "auto") -> Any:
@@ -696,6 +718,13 @@ def load_tokenizer(tokenizer_type: str = "auto") -> Any:
     Alias for get_tokenizer() for backwards compatibility.
     """
     return get_tokenizer(tokenizer_type)
+
+
+def clear_tokenizer_cache():
+    """Clear the tokenizer cache to free memory or force reload."""
+    with _tokenizer_cache_lock:
+        _tokenizer_cache.clear()
+    logger.debug("Tokenizer cache cleared")
 
 
 def train_tokenizer(
@@ -785,6 +814,7 @@ __all__ = [
     "get_tokenizer",
     "load_tokenizer",
     "train_tokenizer",
+    "clear_tokenizer_cache",
 
     # Classes
     "SimpleTokenizer",

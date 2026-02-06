@@ -10,6 +10,9 @@ Provides progress tracking for model downloads:
 - Resumable downloads
 - Multi-file tracking
 
+NOTE: This module integrates with forge_ai.utils.progress for GUI callbacks.
+      Use ProgressTracker for general progress, DownloadTracker for model downloads.
+
 USAGE:
     from forge_ai.core.download_progress import DownloadTracker, download_with_progress
     
@@ -40,6 +43,9 @@ from enum import Enum, auto
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+# Import common progress utilities for GUI integration
+from ..utils.progress import ProgressState, ProgressTracker
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +104,22 @@ class DownloadProgress:
     def size_str(self) -> str:
         """Human-readable size progress."""
         return f"{format_size(self.downloaded)} / {format_size(self.file_size)}"
+    
+    def to_progress_state(self) -> ProgressState:
+        """
+        Convert to common ProgressState for GUI integration.
+        
+        This allows download progress to be displayed using the same
+        GUI components as other progress operations.
+        """
+        return ProgressState(
+            task_name=f"Downloading {self.file_name}",
+            total=self.file_size if self.file_size > 0 else None,
+            current=self.downloaded,
+            status=f"{self.speed_str} - {self.eta_str}" if self.speed > 0 else "",
+            started_at=time.time() - (self.downloaded / self.speed if self.speed > 0 else 0),
+            finished_at=time.time() if self.state == DownloadState.COMPLETED else None
+        )
 
 
 def format_size(size_bytes: int) -> str:
