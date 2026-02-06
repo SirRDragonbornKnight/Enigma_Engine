@@ -2324,6 +2324,23 @@ def create_settings_tab(parent):
     # This avoids PyAudio ctypes callback errors during GUI initialization
     # _refresh_audio_devices(parent)  # Delayed - click Refresh to enumerate
     
+    # Profanity filter toggle
+    profanity_row = QHBoxLayout()
+    parent.profanity_filter_checkbox = QCheckBox("Enable Profanity Filter")
+    parent.profanity_filter_checkbox.setChecked(True)  # Default enabled
+    parent.profanity_filter_checkbox.setToolTip(
+        "Filter profanity from voice transcription and text output"
+    )
+    parent.profanity_filter_checkbox.stateChanged.connect(
+        lambda state: _toggle_profanity_filter(parent, state)
+    )
+    profanity_row.addWidget(parent.profanity_filter_checkbox)
+    profanity_row.addStretch()
+    audio_layout.addLayout(profanity_row)
+    
+    # Load saved profanity filter setting
+    _load_profanity_filter_setting(parent)
+    
     # Link to Audio tab
     audio_link_row = QHBoxLayout()
     go_to_audio_btn = QPushButton("Open Audio Tab")
@@ -4289,3 +4306,54 @@ def _test_microphone(parent):
     thread = threading.Thread(target=run_test, daemon=True)
     thread.start()
 
+
+def _toggle_profanity_filter(parent, state):
+    """Toggle profanity filter on/off."""
+    import json
+    from ...config import CONFIG
+    
+    enabled = state == Checked
+    
+    try:
+        from ...voice.profanity_filter import get_profanity_filter
+        pf = get_profanity_filter()
+        pf.set_enabled(enabled)
+        logger.info(f"Profanity filter {'enabled' if enabled else 'disabled'}")
+    except ImportError:
+        logger.debug("Profanity filter module not available")
+    except Exception as e:
+        logger.error(f"Failed to toggle profanity filter: {e}")
+    
+    # Save to settings
+    try:
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        settings = {}
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+        settings["profanity_filter_enabled"] = enabled
+        settings_path.write_text(json.dumps(settings, indent=2))
+    except Exception as e:
+        logger.debug(f"Failed to save profanity filter setting: {e}")
+
+
+def _load_profanity_filter_setting(parent):
+    """Load profanity filter setting from config."""
+    import json
+    from ...config import CONFIG
+    
+    try:
+        settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
+        if settings_path.exists():
+            settings = json.loads(settings_path.read_text())
+            enabled = settings.get("profanity_filter_enabled", True)
+            if hasattr(parent, 'profanity_filter_checkbox'):
+                parent.profanity_filter_checkbox.setChecked(enabled)
+            # Apply to filter
+            try:
+                from ...voice.profanity_filter import get_profanity_filter
+                pf = get_profanity_filter()
+                pf.set_enabled(enabled)
+            except ImportError:
+                pass
+    except Exception as e:
+        logger.debug(f"Failed to load profanity filter setting: {e}")
