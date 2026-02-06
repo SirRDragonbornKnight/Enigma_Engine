@@ -10,6 +10,21 @@ Features:
   - Voice activation support ("Hey ForgeAI")
   - Background AI processing
   - Natural language command execution
+
+Module Organization (3200+ lines):
+==================================
+Lines 71-165:    Utility Functions (get_current_model_name, kill_other_forge_ai_instances)
+Lines 166-352:   CommandProcessor - Process natural language commands (~186 lines)
+Lines 353-423:   HelpWindow - Standalone help display window (~70 lines)
+Lines 424-1910:  QuickCommandOverlay - Floating command overlay (~1486 lines)
+                 - UI setup, chat display, input handling
+                 - Voice processing, streaming support
+                 - Resize and drag functionality
+Lines 1911-3150: ForgeSystemTray - Main system tray integration (~1239 lines)
+                 - Tray icon and menu management
+                 - Command routing and action handling
+                 - Screen recording, screenshot capture
+Lines 3150-3208: Factory Functions (create_system_tray, cleanup_all_system_trays)
 """
 
 import logging

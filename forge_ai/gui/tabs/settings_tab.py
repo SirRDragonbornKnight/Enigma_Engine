@@ -3,6 +3,28 @@ Settings Tab - Resource management and application settings.
 
 Allows users to control CPU/RAM usage so the AI doesn't hog resources
 while gaming or doing other tasks.
+
+Module Organization (4270+ lines, 92 functions):
+================================================
+Lines 35-70:    Navigation & Helpers (_go_to_tab, _get_env_key)
+Lines 75-155:   API Keys (_save_api_keys, _toggle_key_visibility)
+Lines 155-275:  Feature Toggles (_toggle_hotkeys, _toggle_avatar_autonomous, _toggle_web_server)
+Lines 277-365:  Robot Mode (_change_robot_mode, _robot_estop, _toggle_robot_camera)
+Lines 367-689:  Game Mode (~15 functions: detection, overlay, aggressive mode)
+Lines 689-775:  AI Lock (_toggle_ai_lock, _get_lockable_widgets)
+Lines 777-890:  Monitor/Display Position (_populate_monitors, _move_to_monitor)
+Lines 893-1010: Cloud Mode (_toggle_cloud_mode, _update_cloud_model_options)
+Lines 1007-1130: Window Management (_toggle_always_on_top, _reset_window_position)
+Lines 1155-1560: Chat & System Prompt (~15 functions: presets, names, prompts)
+Lines 1584-2900: create_settings_tab() - Main Settings UI Builder
+Lines 2870-3030: Status Indicators (_create_status_indicator, _refresh_connections)
+Lines 3031-3150: Cache Management (_get_cache_path, _clear_cache)
+Lines 3162-3280: Theme & Display (_apply_theme, _apply_font_scale, _apply_ui_theme)
+Lines 3283-3450: Resources & Backend (_apply_resource_mode, _apply_nn_backend)
+Lines 3450-3755: Device Profile (~10 functions: auto-detect, apply, save/load)
+Lines 3755-3930: Settings Application (_apply_all_settings, _toggle_autonomous)
+Lines 3926-4060: Zoom & Personality (_apply_zoom, _apply_personality_preset)
+Lines 4059+:    Audio Devices (_get_audio_devices, _test_microphone)
 """
 
 import logging

@@ -9,6 +9,23 @@ Features:
   - Expression controls for live avatar expression changes
   - Color customization with presets
   - Avatar preset system for quick switching
+
+Module Organization (7462+ lines, 10 classes):
+=============================================
+Lines 1-160:     Imports, constants, Qt flag compatibility
+Lines 159-1244:  OpenGL3DWidget - 3D model rendering (~1086 lines)
+                 - Sketchfab-style controls (orbit, zoom, pan)
+                 - Lighting, wireframe, auto-rotate
+Lines 1245-2003: AvatarOverlayWindow - Desktop overlay base (~759 lines)
+Lines 2004-2171: DragBarWidget - Draggable title bar (~168 lines)
+Lines 2172-2436: FloatingDragBar - Floating drag bar (~265 lines)
+Lines 2437-2864: AvatarHitLayer - Click-through hit detection (~428 lines)
+Lines 2865-3164: BoneHitRegion - Bone-specific click regions (~300 lines)
+Lines 3165-3256: ResizeHandle - Corner resize handles (~92 lines)
+Lines 3257-3507: BoneHitManager - Manages all hit regions (~251 lines)
+Lines 3508-4778: Avatar3DOverlayWindow - 3D overlay window (~1271 lines)
+Lines 4779-5800: AvatarPreviewWidget - Main preview widget (~1022 lines)
+Lines 5800-7462: Helper functions (create_avatar_subtab, load/save, presets)
 """
 # type: ignore[attr-defined]
 # PyQt5 type stubs are incomplete; runtime works correctly

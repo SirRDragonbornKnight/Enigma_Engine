@@ -64,6 +64,21 @@ SEE ALSO:
     • forge_ai/gui/styles.py       - Theme CSS styles
     • forge_ai/gui/theme_system.py - Theme management
     • data/gui_settings.json       - Saved GUI preferences
+
+Module Organization (7380+ lines):
+==================================
+Lines 124-348:   AIGenerationWorker - Background AI thread (~225 lines)
+Lines 349-1169:  GenerationPreviewPopup - Preview dialog (~821 lines)
+Lines 1170-1556: SetupWizard - First-run model creation (~387 lines)
+Lines 1557-7380: EnhancedMainWindow - Main application window (~5823 lines)
+                 - Initialization & setup (1557-1900)
+                 - Tab management (1900-2700)
+                 - Model & engine handling (2700-3500)
+                 - Menu & toolbar setup (3500-4500)
+                 - Chat handling (4500-5200)
+                 - Avatar & overlay integration (5200-5800)
+                 - Settings & persistence (5800-6500)
+                 - Utility methods (6500-7380)
 """
 import json
 import logging

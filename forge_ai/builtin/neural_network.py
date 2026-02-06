@@ -29,6 +29,27 @@ Usage:
     # Auto-selects best accelerator
     model = PureTransformer(vocab_size=1000, d_model=64, n_layers=2)
     output = model.forward(input_ids)
+
+Module Organization (3295+ lines, 15 classes):
+==============================================
+Lines 45-140:    Accelerator Detection (Cython, Numba, PyPy)
+Lines 142-304:   PureConfig - Model configuration (~163 lines)
+Lines 305-809:   Matrix - Pure Python matrix operations (~505 lines)
+                 - matmul, transpose, softmax, gelu, etc.
+Lines 810-918:   RoPEFrequencies - Rotary Position Embeddings (~109 lines)
+Lines 919-1002:  PureLinear - Linear layer (~84 lines)
+Lines 1003-1082: PureLayerNorm - Layer normalization (~80 lines)
+Lines 1083-1156: PureRMSNorm - RMS normalization (~74 lines)
+Lines 1157-1215: PureEmbedding - Token embeddings (~59 lines)
+Lines 1216-1467: PureAttention - Multi-head attention (~252 lines)
+Lines 1468-1553: PureFeedForward - Feed-forward network (~86 lines)
+Lines 1554-1665: PureTransformerBlock - Transformer block (~112 lines)
+Lines 1666-2081: PureTransformer - Full transformer model (~416 lines)
+Lines 2082-2101: PureSGD - SGD optimizer (~20 lines)
+Lines 2102-2658: PureAdam - Adam optimizer (~557 lines)
+Lines 2659-2771: PureTokenizer - Simple tokenizer (~113 lines)
+Lines 2772-3143: PureChat - Chat interface (~371 lines)
+Lines 3143-3295: Factory functions (get_model_for_size, convert_*, load_*)
 """
 
 import json

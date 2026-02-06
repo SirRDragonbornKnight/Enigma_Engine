@@ -279,10 +279,10 @@ class TestInputSanitization:
     def test_sanitizer_module_exists(self):
         """Test that input sanitizer exists."""
         try:
-            from forge_ai.utils.input_sanitizer import sanitize_input
+            from forge_ai.utils.input_sanitizer import sanitize
             # If it exists, test basic functionality
-            result = sanitize_input("<script>alert('xss')</script>")
-            assert "<script>" not in result
+            result = sanitize("<script>alert('xss')</script>")
+            assert "<script>" not in result.sanitized
         except ImportError:
             # Module may not exist - that's okay
             pytest.skip("input_sanitizer module not found")
