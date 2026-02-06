@@ -293,3 +293,54 @@ You now have:
 ✅ **Safe limits** preventing unnatural poses
 
 The avatar responds naturally to commands like "wave", "nod", "look left", etc. - all through bone animations with highest priority! 🎯
+
+---
+
+## 🖼️ 2D Avatars with Parallax Effect
+
+Don't have a 3D model? Use the **2.5D Parallax Effect** to make any 2D image look 3D!
+
+### What is Parallax?
+
+Parallax creates a depth illusion by splitting an image into layers that move at different speeds. Background moves more, foreground moves less - just like real 3D!
+
+### How to Use
+
+1. **Load a 2D image** (PNG, JPG, GIF)
+2. Look for the **"2.5D Parallax Effect (NEW!)"** box in the right panel
+3. Click **"AI: Generate Layers"** - AI auto-splits your image into depth layers
+4. Check **"Enable Parallax Effect"**
+5. Move your mouse over the avatar - it has depth now!
+
+### Manual Layers (Advanced)
+
+For best results, provide your own layer files:
+
+| Filename | Depth | Movement |
+|----------|-------|----------|
+| `avatar_bg.png` | 0.0 (back) | Moves most |
+| `avatar_body.png` | 0.3 | Medium movement |
+| `avatar_face.png` | 0.6 | Less movement |
+| `avatar_eyes.png` | 0.9 (front) | Moves least |
+
+Click **"Load Layer Files"** and select them in order (back to front).
+
+### AI Layer Generation
+
+The AI layer generator uses two methods:
+
+1. **With AI libraries** (`pip install transformers torch`):
+   - Uses Intel MiDaS depth estimation
+   - Creates 4 layers based on actual depth analysis
+   - Best quality results
+
+2. **Fallback (no extra libraries)**:
+   - Creates 3 layers based on distance from center
+   - Outer edges = background, center = foreground
+   - Still adds nice depth effect!
+
+### Adjust the Effect
+
+- **Depth slider**: 5 (subtle) to 40 (dramatic) movement
+- **Follow Cursor**: Avatar "looks at" your mouse
+- Works with the desktop overlay too!

@@ -216,33 +216,12 @@ STYLE_TTS_BTN = """
     }
 """
 
-STYLE_VOICE_TOGGLE = """
-    QPushButton {
-        background-color: #333;
-        border: 1px solid #555;
-        border-radius: 4px;
-        color: #bac2de;
-        font-size: 12px;
-        font-weight: bold;
-    }
-    QPushButton:hover {
-        background-color: #444;
-        border-color: #2ecc71;
-    }
-    QPushButton:checked {
-        background-color: #2ecc71;
-        border-color: #27ae60;
-        color: white;
-    }
-"""
-
-# Button dimensions
+# Button dimensions - consistent sizing for all input buttons
 BUTTON_WIDTH_SMALL = 80
 BUTTON_WIDTH_MEDIUM = 110
 BUTTON_HEIGHT = 36
-VOICE_TOGGLE_SIZE = (50, 28)
-TTS_BTN_SIZE = (55, 36)
-REC_BTN_SIZE = (60, 36)
+TTS_BTN_SIZE = (80, 36)  # Match Send button size
+REC_BTN_SIZE = (80, 36)  # Match Send button size
 ATTACH_BTN_SIZE = (36, 36)
 
 # Attachment styles
@@ -617,7 +596,7 @@ def _create_input_section(parent, layout):
 
 
 def _create_status_bar(parent, layout):
-    """Build the bottom status bar with learning and voice indicators."""
+    """Build the bottom status bar with learning indicator."""
     bottom_layout = QHBoxLayout()
     bottom_layout.setSpacing(8)
     
@@ -643,14 +622,7 @@ def _create_status_bar(parent, layout):
     parent.learning_indicator.mousePressEvent = lambda e: _toggle_learning(parent)
     bottom_layout.addWidget(parent.learning_indicator)
     
-    # Voice toggle button
-    parent.voice_toggle_btn = QPushButton("OFF")
-    parent.voice_toggle_btn.setFixedSize(*VOICE_TOGGLE_SIZE)
-    parent.voice_toggle_btn.setCheckable(True)
-    parent.voice_toggle_btn.setToolTip("AI Voice: Click to toggle auto-speak")
-    parent.voice_toggle_btn.setStyleSheet(STYLE_VOICE_TOGGLE)
-    parent.voice_toggle_btn.clicked.connect(lambda: _toggle_voice_output(parent))
-    bottom_layout.addWidget(parent.voice_toggle_btn)
+    # Note: Voice toggle moved to input area (btn_speak) to reduce redundant indicators
     
     layout.addLayout(bottom_layout)
 
@@ -956,21 +928,10 @@ def _update_tts_button_state(parent):
 
 
 def _update_voice_button_state(parent):
-    """Update the voice toggle button appearance based on state."""
+    """Update the voice button appearance based on state."""
     is_on = getattr(parent, 'auto_speak', False)
     
-    # Update status bar voice toggle button
-    if hasattr(parent, 'voice_toggle_btn'):
-        parent.voice_toggle_btn.setChecked(is_on)
-        
-        if is_on:
-            parent.voice_toggle_btn.setText("ON")
-            parent.voice_toggle_btn.setToolTip("AI Voice: ON\nAI will speak responses")
-        else:
-            parent.voice_toggle_btn.setText("OFF")
-            parent.voice_toggle_btn.setToolTip("AI Voice: OFF")
-    
-    # Also update the TTS button state
+    # Update the TTS button state (the only voice indicator now)
     _update_tts_button_state(parent)
 
 

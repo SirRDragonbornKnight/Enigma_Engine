@@ -4794,7 +4794,7 @@ class Avatar3DOverlayWindow(QWidget):
 
 
 class AvatarPreviewWidget(QFrame):
-    """2D image preview with drag-to-rotate for 3D simulation."""
+    """2D image preview with parallax 2.5D effect support."""
     
     expression_changed = pyqtSignal(str)  # Signal when expression changes
     
@@ -4805,14 +4805,54 @@ class AvatarPreviewWidget(QFrame):
         self._svg_mode = False
         self._current_svg = None
         
+        # Parallax 2.5D settings
+        self._parallax_enabled = False
+        self._parallax_layers = []  # List of (pixmap, depth) tuples, depth 0-1 (0=back, 1=front)
+        self._parallax_offset_x = 0.0  # -1 to 1, controlled by mouse or AI
+        self._parallax_offset_y = 0.0
+        self._parallax_intensity = 15  # Max pixel offset for parallax
+        self._mouse_tracking_parallax = False
+        
         self.setMinimumSize(250, 250)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMouseTracking(True)  # Enable mouse tracking for parallax
         # No border in stylesheet - we draw it in paintEvent to wrap tight around image
         self.setStyleSheet("""
             QFrame {
                 background: #1e1e2e;
             }
         """)
+    
+    def set_parallax_enabled(self, enabled: bool):
+        """Enable/disable parallax effect."""
+        self._parallax_enabled = enabled
+        self.update()
+    
+    def set_parallax_layers(self, layers: list):
+        """Set parallax layers. Each layer is (QPixmap, depth 0-1)."""
+        self._parallax_layers = layers
+        self.update()
+    
+    def set_parallax_offset(self, x: float, y: float):
+        """Set parallax offset (-1 to 1). Called by AI or mouse tracking."""
+        self._parallax_offset_x = max(-1, min(1, x))
+        self._parallax_offset_y = max(-1, min(1, y))
+        self.update()
+    
+    def set_mouse_tracking_parallax(self, enabled: bool):
+        """Enable mouse-based parallax (eyes follow cursor)."""
+        self._mouse_tracking_parallax = enabled
+    
+    def mouseMoveEvent(self, event: QMouseEvent):
+        """Track mouse for parallax effect."""
+        if self._mouse_tracking_parallax and self._parallax_enabled:
+            # Calculate offset based on mouse position relative to center
+            center_x = self.width() / 2
+            center_y = self.height() / 2
+            offset_x = (event.x() - center_x) / center_x
+            offset_y = (event.y() - center_y) / center_y
+            self.set_parallax_offset(offset_x, offset_y)
+        super().mouseMoveEvent(event)
         
     def set_avatar(self, pixmap: QPixmap):
         """Set avatar image."""
@@ -4918,7 +4958,44 @@ class AvatarPreviewWidget(QFrame):
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         
-        if self.pixmap:
+        # Parallax mode: render layers with depth-based offsets
+        if self._parallax_enabled and self._parallax_layers:
+            base_x = (self.width() - self.pixmap.width()) // 2 if self.pixmap else self.width() // 2
+            base_y = (self.height() - self.pixmap.height()) // 2 if self.pixmap else self.height() // 2
+            
+            # Draw subtle background
+            painter.setPen(Qt_NoPen)
+            painter.setBrush(QColor(30, 30, 46, 80))
+            if self.pixmap:
+                painter.drawRoundedRect(base_x - 5, base_y - 5, 
+                    self.pixmap.width() + 10, self.pixmap.height() + 10, 12, 12)
+            
+            # Draw each layer with parallax offset based on depth
+            for layer_pixmap, depth in self._parallax_layers:
+                # Deeper layers (depth closer to 0) move MORE (parallax effect)
+                # Front layers (depth closer to 1) move LESS
+                parallax_factor = 1.0 - depth  # Invert so background moves more
+                offset_x = int(self._parallax_offset_x * self._parallax_intensity * parallax_factor)
+                offset_y = int(self._parallax_offset_y * self._parallax_intensity * parallax_factor)
+                
+                # Scale layer to fit
+                size = min(self.width(), self.height()) - 20
+                if size > 0:
+                    scaled = layer_pixmap.scaled(size, size, Qt_KeepAspectRatio, Qt_SmoothTransformation)
+                    lx = (self.width() - scaled.width()) // 2 + offset_x
+                    ly = (self.height() - scaled.height()) // 2 + offset_y
+                    painter.drawPixmap(lx, ly, scaled)
+            
+            # Draw border
+            if self.pixmap:
+                pen = painter.pen()
+                pen.setColor(QColor("#45475a"))
+                pen.setWidth(2)
+                painter.setPen(pen)
+                painter.setBrush(Qt_NoBrush)
+                painter.drawRoundedRect(base_x - 3, base_y - 3, 
+                    self.pixmap.width() + 6, self.pixmap.height() + 6, 10, 10)
+        elif self.pixmap:
             x = (self.width() - self.pixmap.width()) // 2
             y = (self.height() - self.pixmap.height()) // 2
             
@@ -4964,10 +5041,33 @@ def create_avatar_subtab(parent):
     # Left side - Preview and basic controls
     left_panel = QVBoxLayout()
     
-    # Header
+    # Header with format help
     header = QLabel("Avatar Display")
     header.setObjectName("header")
     left_panel.addWidget(header)
+    
+    # Format help section - collapsible info box
+    format_help = QLabel(
+        "2D: PNG, JPG, GIF | 3D: GLB (best), GLTF, OBJ, FBX\n"
+        "GLB = single file with textures | GLTF = folder with separate files\n"
+        "Free avatars: VRoid Hub, Mixamo, Ready Player Me, Sketchfab"
+    )
+    format_help.setStyleSheet(
+        "color: #89b4fa; font-size: 10px; padding: 4px 8px; "
+        "background: #1e1e2e; border: 1px solid #45475a; border-radius: 4px;"
+    )
+    format_help.setWordWrap(True)
+    format_help.setToolTip(
+        "GLB vs GLTF:\\n"
+        "- GLB: Single binary file, includes all textures. RECOMMENDED - just drag and drop!\\n"
+        "- GLTF: JSON file + separate texture images. Need to keep all files together.\\n\\n"
+        "Best sources for free avatars:\\n"
+        "- VRoid Hub (anime style, VRM format - convert to GLB)\\n"
+        "- Ready Player Me (realistic, free GLB export)\\n"
+        "- Mixamo (animated characters)\\n"
+        "- Sketchfab (search for 'avatar' with downloadable filter)"
+    )
+    left_panel.addWidget(format_help)
     
     # Get avatar controller
     avatar = get_avatar()
@@ -5056,13 +5156,44 @@ def create_avatar_subtab(parent):
     if HAS_OPENGL and HAS_TRIMESH:
         render_row = QHBoxLayout()
         parent.use_3d_render_checkbox = QCheckBox("Enable 3D Rendering")
+        parent.use_3d_render_checkbox.setToolTip(
+            "Turn ON to view 3D models (GLB, GLTF, OBJ, FBX).\n"
+            "Required for 3D avatars to display properly."
+        )
+        parent.use_3d_render_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: #89b4fa;
+                font-weight: bold;
+                padding: 4px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #89b4fa;
+                border-radius: 3px;
+                background: transparent;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #a6e3a1;
+                border-radius: 3px;
+                background: #a6e3a1;
+            }
+        """)
         # Don't set checked yet - widgets don't exist
         parent.use_3d_render_checkbox.toggled.connect(lambda c: _toggle_3d_render(parent, c))
         render_row.addWidget(parent.use_3d_render_checkbox)
         render_row.addStretch()
         left_panel.addLayout(render_row)
     else:
+        # Show message that 3D libraries are missing
         parent.use_3d_render_checkbox = None
+        missing_3d_label = QLabel("3D avatars need: pip install trimesh PyOpenGL")
+        missing_3d_label.setStyleSheet(
+            "color: #fab387; font-size: 10px; padding: 2px;"
+        )
+        left_panel.addWidget(missing_3d_label)
     
     # Preview widgets (stacked - 2D and 3D)
     parent.avatar_preview_2d = AvatarPreviewWidget()
@@ -5118,10 +5249,17 @@ def create_avatar_subtab(parent):
     # Load and Apply buttons
     btn_row2 = QHBoxLayout()
     parent.load_btn = QPushButton("Load Avatar")
+    parent.load_btn.setToolTip(
+        "Load an avatar file from your computer.\\n\\n"
+        "2D Images: PNG, JPG, GIF, BMP, WEBP\\n"
+        "3D Models: GLB, GLTF, OBJ, FBX, DAE\\n\\n"
+        "Free 3D avatars: VRoid Hub, Mixamo, Sketchfab"
+    )
     parent.load_btn.clicked.connect(lambda: _load_avatar_file(parent))
     btn_row2.addWidget(parent.load_btn)
     
     parent.apply_btn = QPushButton("Apply Avatar")
+    parent.apply_btn.setToolTip("Make the selected avatar your active avatar")
     parent.apply_btn.clicked.connect(lambda: _apply_avatar(parent))
     parent.apply_btn.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold;")
     btn_row2.addWidget(parent.apply_btn)
@@ -5155,6 +5293,89 @@ def create_avatar_subtab(parent):
     
     actions_group.setLayout(actions_layout)
     right_panel.addWidget(actions_group)
+    
+    # === Parallax 2.5D Effect (for 2D images) ===
+    parallax_group = QGroupBox("2.5D Parallax Effect (NEW!)")
+    parallax_group.setStyleSheet("""
+        QGroupBox {
+            border: 2px solid #f5c2e7;
+            border-radius: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            font-weight: bold;
+        }
+        QGroupBox::title {
+            color: #f5c2e7;
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px;
+        }
+    """)
+    parallax_group.setToolTip(
+        "Make 2D images look 3D by splitting into layers that move at different speeds.\\n"
+        "Works with any PNG/JPG image - AI can auto-generate layers!"
+    )
+    parallax_layout = QVBoxLayout()
+    parallax_layout.setSpacing(6)
+    
+    # Enable parallax
+    parent.parallax_check = QCheckBox("Enable Parallax Effect")
+    parent.parallax_check.setChecked(False)
+    parent.parallax_check.setToolTip("Enable 2.5D depth effect for 2D avatars")
+    parent.parallax_check.stateChanged.connect(
+        lambda state: _toggle_parallax(parent, state == 2)
+    )
+    parallax_layout.addWidget(parent.parallax_check)
+    
+    # Mouse tracking for parallax
+    parent.parallax_mouse_check = QCheckBox("Follow Cursor")
+    parent.parallax_mouse_check.setChecked(True)
+    parent.parallax_mouse_check.setToolTip("Layers react to mouse position (like eyes following you)")
+    parent.parallax_mouse_check.setEnabled(False)  # Enabled when parallax is on
+    parent.parallax_mouse_check.stateChanged.connect(
+        lambda state: _toggle_parallax_mouse(parent, state == 2)
+    )
+    parallax_layout.addWidget(parent.parallax_mouse_check)
+    
+    # Intensity slider
+    intensity_row = QHBoxLayout()
+    intensity_row.addWidget(QLabel("Depth:"))
+    parent.parallax_intensity_slider = QSlider(Qt.Horizontal)
+    parent.parallax_intensity_slider.setRange(5, 40)
+    parent.parallax_intensity_slider.setValue(15)
+    parent.parallax_intensity_slider.setToolTip("How much the layers move (5=subtle, 40=dramatic)")
+    parent.parallax_intensity_slider.setEnabled(False)
+    parent.parallax_intensity_slider.valueChanged.connect(
+        lambda v: _set_parallax_intensity(parent, v)
+    )
+    intensity_row.addWidget(parent.parallax_intensity_slider)
+    parent.parallax_intensity_label = QLabel("15")
+    intensity_row.addWidget(parent.parallax_intensity_label)
+    parallax_layout.addLayout(intensity_row)
+    
+    # AI Generate Layers button
+    parent.ai_generate_layers_btn = QPushButton("AI: Generate Layers")
+    parent.ai_generate_layers_btn.setToolTip(
+        "Use AI to automatically split your 2D image into depth layers.\\n"
+        "Creates: background, body, face, eyes/accessories"
+    )
+    parent.ai_generate_layers_btn.setStyleSheet(
+        "background: #f5c2e7; color: #1e1e2e; font-weight: bold;"
+    )
+    parent.ai_generate_layers_btn.clicked.connect(lambda: _ai_generate_parallax_layers(parent))
+    parallax_layout.addWidget(parent.ai_generate_layers_btn)
+    
+    # Load custom layers button
+    parent.load_layers_btn = QPushButton("Load Layer Files")
+    parent.load_layers_btn.setToolTip(
+        "Load your own layer files (e.g., avatar_bg.png, avatar_body.png, avatar_face.png).\\n"
+        "Name files with _bg, _body, _face, _eyes suffixes for auto-depth ordering."
+    )
+    parent.load_layers_btn.clicked.connect(lambda: _load_parallax_layers(parent))
+    parallax_layout.addWidget(parent.load_layers_btn)
+    
+    parallax_group.setLayout(parallax_layout)
+    right_panel.addWidget(parallax_group)
     
     # === Behavior Controls ===
     behavior_group = QGroupBox("Behavior Controls")
@@ -6351,6 +6572,273 @@ def _toggle_avatar(parent, enabled):
         parent.avatar_status.setStyleSheet("color: #6c7086;")
 
 
+# ============================================================================
+# Parallax 2.5D Effect Functions
+# ============================================================================
+
+def _toggle_parallax(parent, enabled: bool):
+    """Toggle parallax effect for 2D avatars."""
+    parent.avatar_preview_2d.set_parallax_enabled(enabled)
+    
+    # Enable/disable related controls
+    parent.parallax_mouse_check.setEnabled(enabled)
+    parent.parallax_intensity_slider.setEnabled(enabled)
+    
+    if enabled:
+        # Check if we have layers
+        if not parent.avatar_preview_2d._parallax_layers:
+            parent.avatar_status.setText("Parallax ON - Click 'AI: Generate Layers' or 'Load Layers'")
+            parent.avatar_status.setStyleSheet("color: #f5c2e7;")
+        else:
+            parent.avatar_status.setText(f"Parallax ON - {len(parent.avatar_preview_2d._parallax_layers)} layers active")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        
+        # Enable mouse tracking by default
+        if parent.parallax_mouse_check.isChecked():
+            parent.avatar_preview_2d.set_mouse_tracking_parallax(True)
+    else:
+        parent.avatar_preview_2d.set_mouse_tracking_parallax(False)
+        parent.avatar_status.setText("Parallax disabled")
+        parent.avatar_status.setStyleSheet("color: #6c7086;")
+
+
+def _toggle_parallax_mouse(parent, enabled: bool):
+    """Toggle mouse-based parallax tracking."""
+    parent.avatar_preview_2d.set_mouse_tracking_parallax(enabled)
+
+
+def _set_parallax_intensity(parent, value: int):
+    """Set parallax effect intensity."""
+    parent.avatar_preview_2d._parallax_intensity = value
+    parent.parallax_intensity_label.setText(str(value))
+    parent.avatar_preview_2d.update()
+
+
+def _load_parallax_layers(parent):
+    """Load custom parallax layer files."""
+    paths, _ = QFileDialog.getOpenFileNames(
+        parent,
+        "Select Layer Images (ordered back to front)",
+        str(AVATAR_IMAGES_DIR),
+        "Images (*.png *.jpg *.jpeg *.webp);;All Files (*)"
+    )
+    
+    if not paths:
+        return
+    
+    layers = []
+    num_layers = len(paths)
+    
+    for i, path_str in enumerate(paths):
+        path = Path(path_str)
+        pixmap = QPixmap(str(path))
+        if not pixmap.isNull():
+            # Auto-assign depth based on filename or order
+            name = path.stem.lower()
+            if '_bg' in name or '_back' in name or 'background' in name:
+                depth = 0.0
+            elif '_body' in name or 'body' in name:
+                depth = 0.3
+            elif '_face' in name or 'face' in name or 'head' in name:
+                depth = 0.6
+            elif '_eyes' in name or 'eyes' in name or '_front' in name:
+                depth = 0.9
+            else:
+                # Distribute evenly based on position
+                depth = i / max(1, num_layers - 1)
+            
+            layers.append((pixmap, depth))
+    
+    if layers:
+        # Sort by depth (back to front)
+        layers.sort(key=lambda x: x[1])
+        parent.avatar_preview_2d.set_parallax_layers(layers)
+        
+        # Auto-enable parallax
+        parent.parallax_check.setChecked(True)
+        
+        parent.avatar_status.setText(f"Loaded {len(layers)} parallax layers")
+        parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+    else:
+        parent.avatar_status.setText("No valid images loaded")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _ai_generate_parallax_layers(parent):
+    """Use AI to generate depth layers from a single 2D image."""
+    if not parent.original_pixmap and not parent.avatar_preview_2d.original_pixmap:
+        parent.avatar_status.setText("Load an image first!")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+        return
+    
+    parent.avatar_status.setText("Generating layers... (this may take a moment)")
+    parent.avatar_status.setStyleSheet("color: #89dceb;")
+    QApplication.processEvents()
+    
+    try:
+        # Get the original pixmap
+        pixmap = parent.avatar_preview_2d.original_pixmap
+        if not pixmap:
+            parent.avatar_status.setText("No image to process!")
+            parent.avatar_status.setStyleSheet("color: #f38ba8;")
+            return
+        
+        # Convert QPixmap to numpy array for processing
+        img = pixmap.toImage()
+        width, height = img.width(), img.height()
+        
+        # Try using depth estimation model if available
+        layers = _generate_layers_from_depth(parent, img, width, height)
+        
+        if layers:
+            parent.avatar_preview_2d.set_parallax_layers(layers)
+            parent.parallax_check.setChecked(True)
+            parent.avatar_status.setText(f"Generated {len(layers)} depth layers!")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+        else:
+            # Fallback: create simple layered version
+            layers = _generate_simple_layers(parent, pixmap)
+            parent.avatar_preview_2d.set_parallax_layers(layers)
+            parent.parallax_check.setChecked(True)
+            parent.avatar_status.setText("Generated simple layers (install torch for better AI)")
+            parent.avatar_status.setStyleSheet("color: #fab387;")
+            
+    except Exception as e:
+        logger.error(f"Error generating parallax layers: {e}")
+        parent.avatar_status.setText(f"Error: {str(e)[:50]}")
+        parent.avatar_status.setStyleSheet("color: #f38ba8;")
+
+
+def _generate_layers_from_depth(parent, qimage, width, height):
+    """Generate layers using AI depth estimation."""
+    try:
+        # Try to use depth estimation
+        import numpy as np
+        from PIL import Image
+        
+        # Convert QImage to PIL Image
+        qimage = qimage.convertToFormat(QImage.Format_RGBA8888)
+        ptr = qimage.bits()
+        ptr.setsize(height * width * 4)
+        arr = np.array(ptr).reshape(height, width, 4)
+        pil_img = Image.fromarray(arr[:, :, :3])  # RGB only
+        
+        # Try different depth estimation methods
+        depth_map = None
+        
+        # Method 1: Try transformers depth estimation
+        try:
+            from transformers import pipeline
+            depth_estimator = pipeline("depth-estimation", model="Intel/dpt-hybrid-midas")
+            result = depth_estimator(pil_img)
+            depth_map = np.array(result['depth'])
+            print("[Parallax] Using transformers depth estimation")
+        except Exception:
+            pass
+        
+        # Method 2: Try MiDaS directly
+        if depth_map is None:
+            try:
+                import torch
+                midas = torch.hub.load("intel-isl/MiDaS", "MiDaS_small")
+                midas.eval()
+                
+                transform = torch.hub.load("intel-isl/MiDaS", "transforms").small_transform
+                input_batch = transform(pil_img)
+                
+                with torch.no_grad():
+                    prediction = midas(input_batch)
+                    depth_map = prediction.squeeze().cpu().numpy()
+                print("[Parallax] Using MiDaS depth estimation")
+            except Exception:
+                pass
+        
+        if depth_map is None:
+            return None
+        
+        # Normalize depth map to 0-1
+        depth_map = (depth_map - depth_map.min()) / (depth_map.max() - depth_map.min() + 1e-8)
+        
+        # Create 4 layers based on depth ranges
+        layers = []
+        depth_ranges = [(0.0, 0.25), (0.25, 0.5), (0.5, 0.75), (0.75, 1.0)]
+        
+        for i, (d_min, d_max) in enumerate(depth_ranges):
+            # Create mask for this depth range
+            mask = ((depth_map >= d_min) & (depth_map < d_max)).astype(np.uint8) * 255
+            
+            # Apply mask to original image
+            layer_arr = arr.copy()
+            layer_arr[:, :, 3] = mask  # Set alpha channel
+            
+            # Convert back to QPixmap
+            layer_img = QImage(layer_arr.data, width, height, width * 4, QImage.Format_RGBA8888)
+            layer_pixmap = QPixmap.fromImage(layer_img.copy())
+            
+            depth_value = (d_min + d_max) / 2
+            layers.append((layer_pixmap, depth_value))
+        
+        return layers
+        
+    except ImportError:
+        return None
+    except Exception as e:
+        logger.warning(f"Depth estimation failed: {e}")
+        return None
+
+
+def _generate_simple_layers(parent, pixmap):
+    """Generate simple parallax layers without AI (center-weighted)."""
+    # Create 3 simple layers: edge (back), middle, center (front)
+    img = pixmap.toImage()
+    width, height = img.width(), img.height()
+    
+    layers = []
+    
+    try:
+        import numpy as np
+        
+        # Convert to numpy
+        img = img.convertToFormat(QImage.Format_RGBA8888)
+        ptr = img.bits()
+        ptr.setsize(height * width * 4)
+        arr = np.array(ptr).reshape(height, width, 4).copy()
+        
+        # Create distance-from-center map
+        y, x = np.ogrid[:height, :width]
+        center_x, center_y = width / 2, height / 2
+        distance = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+        max_dist = np.sqrt(center_x**2 + center_y**2)
+        distance = distance / max_dist  # Normalize to 0-1
+        
+        # Layer 1: Outer edges (background, depth=0)
+        mask1 = (distance > 0.6).astype(np.uint8) * 255
+        layer1 = arr.copy()
+        layer1[:, :, 3] = np.minimum(layer1[:, :, 3], mask1)
+        l1_img = QImage(layer1.data, width, height, width * 4, QImage.Format_RGBA8888)
+        layers.append((QPixmap.fromImage(l1_img.copy()), 0.0))
+        
+        # Layer 2: Middle ring (body, depth=0.5)
+        mask2 = ((distance > 0.3) & (distance <= 0.6)).astype(np.uint8) * 255
+        layer2 = arr.copy()
+        layer2[:, :, 3] = np.minimum(layer2[:, :, 3], mask2)
+        l2_img = QImage(layer2.data, width, height, width * 4, QImage.Format_RGBA8888)
+        layers.append((QPixmap.fromImage(l2_img.copy()), 0.5))
+        
+        # Layer 3: Center (face/focus, depth=1.0)
+        mask3 = (distance <= 0.3).astype(np.uint8) * 255
+        layer3 = arr.copy()
+        layer3[:, :, 3] = np.minimum(layer3[:, :, 3], mask3)
+        l3_img = QImage(layer3.data, width, height, width * 4, QImage.Format_RGBA8888)
+        layers.append((QPixmap.fromImage(l3_img.copy()), 1.0))
+        
+    except ImportError:
+        # No numpy - just use the original image as a single layer
+        layers.append((pixmap, 0.5))
+    
+    return layers
+
+
 def _toggle_eye_tracking(parent, enabled: bool):
     """Toggle avatar eye tracking - look at mouse cursor."""
     parent.eye_tracking_enabled = enabled
@@ -7023,10 +7511,27 @@ def _refresh_list(parent, preserve_selection=False):
     parent.avatar_combo.clear()
     parent.avatar_combo.addItem("-- Select Avatar --", None)
     
-    # JSON configs
+    # System config files to SKIP (these are NOT avatars)
+    SYSTEM_CONFIG_FILES = {
+        "avatar_settings.json",
+        "avatar_registry.json", 
+        "ai_avatar_state.json",
+        "settings.json",
+        "registry.json",
+        "state.json",
+        "config.json",
+    }
+    
+    # JSON avatar configs (but skip system files)
     if AVATAR_CONFIG_DIR.exists():
         for f in sorted(AVATAR_CONFIG_DIR.glob("*.json")):
+            # Skip system config files
+            if f.name.lower() in SYSTEM_CONFIG_FILES:
+                continue
             cfg = _load_json(f)
+            # Only add if it looks like an avatar config (has image_path or model_path)
+            if not cfg.get("image_path") and not cfg.get("model_path") and not cfg.get("type"):
+                continue
             is_3d = cfg.get("type") == "3d" or "model_path" in cfg
             suffix = " (3D)" if is_3d else ""
             parent.avatar_combo.addItem(f"{f.stem}{suffix}", ("config", str(f)))
@@ -7151,6 +7656,12 @@ def _preview_image(parent, path: Path):
         if parent.use_3d_render_checkbox:
             parent.use_3d_render_checkbox.setEnabled(False)
             parent.use_3d_render_checkbox.setChecked(False)
+        
+        # Suggest parallax effect for 2D images
+        parent.avatar_status.setText(
+            f"Loaded: {path.name} - Try '2.5D Parallax' for depth effect!"
+        )
+        parent.avatar_status.setStyleSheet("color: #f5c2e7;")
 
 
 def _preview_3d_model(parent, path: Path):
@@ -7203,7 +7714,7 @@ def _preview_3d_model(parent, path: Path):
 
 
 def _create_model_info_card(parent, path: Path):
-    """Create an info card pixmap for 3D model."""
+    """Create an info card pixmap for 3D model with clear instructions."""
     size = 256
     pixmap = QPixmap(size, size)
     pixmap.fill(QColor("#1e1e2e"))
@@ -7216,24 +7727,24 @@ def _create_model_info_card(parent, path: Path):
     font = painter.font()
     font.setPointSize(36)
     painter.setFont(font)
-    painter.drawText(0, 40, size, 60, Qt_AlignCenter, "[3D]")
+    painter.drawText(0, 30, size, 50, Qt_AlignCenter, "[3D]")
     
-    # "3D Model" label
-    font.setPointSize(14)
+    # "3D Model Loaded" label
+    font.setPointSize(12)
     font.setBold(True)
     painter.setFont(font)
-    painter.setPen(QColor("#cdd6f4"))
-    painter.drawText(0, 100, size, 25, Qt_AlignCenter, "3D Model")
+    painter.setPen(QColor("#a6e3a1"))
+    painter.drawText(0, 80, size, 25, Qt_AlignCenter, "3D Model Loaded!")
     
     # File name
     font.setPointSize(10)
     font.setBold(False)
     painter.setFont(font)
-    painter.setPen(QColor("#a6e3a1"))
+    painter.setPen(QColor("#cdd6f4"))
     name = path.name
     if len(name) > 25:
         name = name[:22] + "..."
-    painter.drawText(0, 130, size, 20, Qt_AlignCenter, name)
+    painter.drawText(0, 110, size, 20, Qt_AlignCenter, name)
     
     # File size
     size_kb = path.stat().st_size / 1024
@@ -7242,16 +7753,68 @@ def _create_model_info_card(parent, path: Path):
         size_str = f"{size_kb/1024:.1f} MB"
     else:
         size_str = f"{size_kb:.1f} KB"
-    painter.drawText(0, 155, size, 20, Qt_AlignCenter, size_str)
+    painter.drawText(0, 135, size, 20, Qt_AlignCenter, size_str)
     
-    # Instructions
+    # Clear instructions based on state
     font.setPointSize(9)
+    font.setBold(True)
     painter.setFont(font)
-    painter.setPen(QColor("#fab387"))
-    painter.drawText(0, 200, size, 40, Qt_AlignCenter, "Enable '3D Rendering'\nfor full preview")
+    
+    if not HAS_OPENGL or not HAS_TRIMESH:
+        # Libraries missing
+        painter.setPen(QColor("#f38ba8"))
+        painter.drawText(0, 165, size, 20, Qt_AlignCenter, "Missing 3D Libraries!")
+        font.setBold(False)
+        painter.setFont(font)
+        painter.setPen(QColor("#fab387"))
+        painter.drawText(0, 185, size, 60, Qt_AlignCenter, 
+            "Run in terminal:\npip install trimesh PyOpenGL")
+    elif parent.use_3d_render_checkbox and not parent.use_3d_render_checkbox.isChecked():
+        # Checkbox exists but unchecked - give VERY clear location
+        painter.setPen(QColor("#a6e3a1"))
+        painter.drawText(0, 160, size, 20, Qt_AlignCenter, "To view this 3D model:")
+        font.setBold(False)
+        painter.setFont(font)
+        painter.setPen(QColor("#89b4fa"))
+        # Draw arrow pointing up
+        painter.drawText(0, 178, size, 20, Qt_AlignCenter, "^ ^ ^ ^ ^")
+        painter.setPen(QColor("#fab387"))
+        painter.drawText(0, 198, size, 50, Qt_AlignCenter,
+            "Check the BLUE checkbox\n'Enable 3D Rendering'\nright above this preview")
+    else:
+        # Should be showing but failed
+        painter.setPen(QColor("#fab387"))
+        painter.drawText(0, 175, size, 50, Qt_AlignCenter,
+            "Click 'Apply Avatar'\nto load the model")
     
     painter.end()
     parent.avatar_preview_2d.set_avatar(pixmap)
+    
+    # Auto-enable 3D rendering if checkbox exists and model is 3D
+    if parent.use_3d_render_checkbox and not parent.use_3d_render_checkbox.isChecked():
+        # Schedule auto-enable with a delay so UI is ready
+        QTimer.singleShot(100, lambda: _auto_enable_3d_for_model(parent, path))
+
+
+def _auto_enable_3d_for_model(parent, path: Path):
+    """Auto-enable 3D rendering when a 3D model is loaded."""
+    try:
+        if parent.use_3d_render_checkbox and not parent.use_3d_render_checkbox.isChecked():
+            # Enable the checkbox - this triggers _toggle_3d_render
+            parent.use_3d_render_checkbox.setChecked(True)
+            
+            # Update status to let user know what happened
+            parent.avatar_status.setText(f"3D enabled for: {path.name}")
+            parent.avatar_status.setStyleSheet("color: #a6e3a1;")
+            
+            # Load the model into the 3D viewer
+            if parent.avatar_preview_3d and hasattr(parent, '_current_path'):
+                try:
+                    parent.avatar_preview_3d.load_model(str(path))
+                except Exception as e:
+                    logger.warning(f"Could not load 3D model: {e}")
+    except Exception as e:
+        logger.warning(f"Auto-enable 3D failed: {e}")
 
 
 def _apply_avatar(parent):

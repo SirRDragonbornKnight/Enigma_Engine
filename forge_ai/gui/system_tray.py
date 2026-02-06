@@ -1293,7 +1293,7 @@ class QuickCommandOverlay(QWidget):
         self._on_chat()
     
     def _toggle_voice_output_small(self):
-        """Toggle voice output (removed button - kept for compatibility)."""
+        """Toggle voice output (kept for compatibility)."""
         self._auto_speak = not self._auto_speak
         
         status = "ON" if self._auto_speak else "OFF"
@@ -1303,12 +1303,8 @@ class QuickCommandOverlay(QWidget):
         main_window = self._get_main_window()
         if main_window:
             main_window.auto_speak = self._auto_speak
-            if hasattr(main_window, 'voice_toggle_btn'):
-                main_window.voice_toggle_btn.setChecked(self._auto_speak)
-                if self._auto_speak:
-                    main_window.voice_toggle_btn.setText("Voice ON")
-                else:
-                    main_window.voice_toggle_btn.setText("Voice OFF")
+            if hasattr(main_window, 'btn_speak'):
+                main_window.btn_speak.setChecked(self._auto_speak)
     
     def _speak_last_response(self):
         """Speak the last AI response."""

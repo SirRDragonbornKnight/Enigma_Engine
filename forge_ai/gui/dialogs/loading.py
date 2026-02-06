@@ -190,10 +190,23 @@ class ModelLoadingDialog(QDialog):
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
         
-        # Hidden terminal for log compatibility
+        # Terminal for log output - visible so users can see what's happening
         self.terminal = QTextEdit()
         self.terminal.setReadOnly(True)
-        self.terminal.hide()
+        self.terminal.setMaximumHeight(100)
+        self.terminal.setStyleSheet("""
+            QTextEdit {
+                background-color: #1e1e2e;
+                color: #6c7086;
+                border: 1px solid #313244;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 10px;
+                padding: 4px;
+            }
+        """)
+        self.terminal.setPlaceholderText("Loading log...")
+        layout.addWidget(self.terminal)
         
         # Dummy progress for backwards compatibility
         self.progress = QProgressBar()

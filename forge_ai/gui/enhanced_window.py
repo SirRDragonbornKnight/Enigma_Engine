@@ -2167,12 +2167,11 @@ class EnhancedMainWindow(QMainWindow):
             self.auto_speak_action.setText(f"AI Auto-Speak ({'ON' if self.auto_speak else 'OFF'})")
             self.auto_speak_action.blockSignals(False)
         
-        # Apply to voice toggle button in chat tab
-        if hasattr(self, 'voice_toggle_btn'):
-            self.voice_toggle_btn.blockSignals(True)
-            self.voice_toggle_btn.setChecked(self.auto_speak)
-            self.voice_toggle_btn.setText("ON" if self.auto_speak else "OFF")
-            self.voice_toggle_btn.blockSignals(False)
+        # Apply to voice button in chat tab
+        if hasattr(self, 'btn_speak'):
+            self.btn_speak.blockSignals(True)
+            self.btn_speak.setChecked(self.auto_speak)
+            self.btn_speak.blockSignals(False)
         
         # Apply microphone enabled to menu action
         if hasattr(self, 'microphone_action'):
@@ -3945,15 +3944,11 @@ class EnhancedMainWindow(QMainWindow):
                 else:
                     self.auto_speak_action.setText("AI Auto-Speak (OFF)")
         
-        # Sync with voice_toggle_btn in chat tab
-        if hasattr(self, 'voice_toggle_btn'):
-            self.voice_toggle_btn.blockSignals(True)
-            self.voice_toggle_btn.setChecked(self.auto_speak)
-            if self.auto_speak:
-                self.voice_toggle_btn.setText("Voice ON")
-            else:
-                self.voice_toggle_btn.setText("Voice OFF")
-            self.voice_toggle_btn.blockSignals(False)
+        # Sync with voice button in chat tab
+        if hasattr(self, 'btn_speak'):
+            self.btn_speak.blockSignals(True)
+            self.btn_speak.setChecked(self.auto_speak)
+            self.btn_speak.blockSignals(False)
     
     def _toggle_microphone(self, checked):
         """Toggle microphone listening by loading/unloading voice input module."""

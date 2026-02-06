@@ -186,17 +186,52 @@ See [docs/VOICE_CUSTOMIZATION.md](docs/VOICE_CUSTOMIZATION.md) for advanced opti
 Give your AI a visual presence with the avatar system:
 
 ### Enable Avatar
-1. Go to **Modules** tab
-2. Enable the **avatar** module
-3. Go to **Avatar** tab
-4. Load or create an avatar
+1. Go to **Modules** tab → Enable **avatar** module
+2. Go to **Avatar** tab
+3. Click **Load Avatar** to select an image or 3D model
+4. Click **Apply Avatar**, then **Run** to show on desktop
+
+### Supported Formats
+
+| Type | Formats | Best Choice |
+|------|---------|-------------|
+| **2D** | PNG, JPG, GIF, WEBP | PNG with transparency |
+| **3D** | GLB, GLTF, OBJ, FBX | **GLB** (single file, includes textures) |
+
+**Where to get free avatars:**
+- [Ready Player Me](https://readyplayer.me/) - Create realistic 3D avatar (free GLB export)
+- [VRoid Hub](https://hub.vroid.com/) - Anime-style avatars
+- [Mixamo](https://mixamo.com/) - Animated characters
+- [Sketchfab](https://sketchfab.com/) - Search "avatar" with downloadable filter
+
+### 2.5D Parallax Effect (Make 2D Look 3D!)
+
+Turn any flat image into a pseudo-3D avatar that follows your cursor:
+
+1. Load a 2D image (PNG/JPG)
+2. In the right panel, find **2.5D Parallax Effect**
+3. Click **AI: Generate Layers** (auto-splits image into depth layers)
+4. Check **Enable Parallax Effect**
+5. Move your mouse - the avatar has depth now!
+
+**Manual layers**: Name your files with suffixes for auto-depth:
+- `avatar_bg.png` → background (moves most)
+- `avatar_body.png` → middle layer  
+- `avatar_face.png` → foreground (moves least)
+
+### 3D Models
+
+For 3D avatars (GLB/GLTF):
+1. Load the file - **3D Rendering auto-enables**
+2. If you see a gray preview, check the **Enable 3D Rendering** checkbox above the preview
+3. Use mouse to orbit, scroll to zoom
 
 ### Avatar During Chat
 - Avatar automatically shows expressions based on conversation emotion
 - Enable **Auto-Speak** for lip-sync animation
 - Avatar responds to happy, sad, thinking, surprised emotions
 
-See [docs/AVATAR_SYSTEM_GUIDE.md](docs/AVATAR_SYSTEM_GUIDE.md) for creating custom avatars.
+See [docs/AVATAR_SYSTEM_GUIDE.md](docs/AVATAR_SYSTEM_GUIDE.md) for advanced customization.
 
 ---
 
