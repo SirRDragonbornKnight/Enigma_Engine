@@ -430,15 +430,38 @@ def _create_chat_display(parent, layout):
     )
     parent.chat_display.setOpenExternalLinks(False)
     parent.chat_display.anchorClicked.connect(lambda url: _handle_chat_link(parent, url))
-    parent.chat_display.setPlaceholderText(
-        "Start chatting with your AI...\n\n"
-        "Tips:\n"
-        "- Just ask naturally - 'Generate an image of a sunset'\n"
-        "- The AI auto-detects what you want to create\n"
-        "- Rate responses to help the AI learn\n"
-        "- Click 'Regenerate' on AI responses to get alternate versions\n"
-        "- Press Ctrl+F to search"
-    )
+    
+    # Show welcome message for first-time users
+    no_model = not (hasattr(parent, 'current_model_name') and parent.current_model_name)
+    if no_model:
+        parent.chat_display.setHtml("""
+<div style="text-align: center; padding: 40px;">
+<h2 style="color: #89b4fa;">Welcome to ForgeAI!</h2>
+<p style="color: #cdd6f4; font-size: 14px;">
+Create your first AI to start chatting.
+</p>
+<p style="color: #bac2de; font-size: 12px; margin-top: 20px;">
+<b>Getting Started:</b><br>
+1. Go to <b>Model Manager</b> (bottom-left)<br>
+2. Click <b>+ Template</b> to create from a ready-made kit<br>
+3. Or click <b>+ New</b> for a blank AI
+</p>
+<p style="color: #6c7086; font-size: 11px; margin-top: 30px;">
+Tip: The "Friendly Chatbot" template includes training data<br>
+so your AI can chat right away!
+</p>
+</div>
+""")
+    else:
+        parent.chat_display.setPlaceholderText(
+            "Start chatting with your AI...\n\n"
+            "Tips:\n"
+            "- Just ask naturally - 'Generate an image of a sunset'\n"
+            "- The AI auto-detects what you want to create\n"
+            "- Rate responses to help the AI learn\n"
+            "- Click 'Regenerate' on AI responses to get alternate versions\n"
+            "- Press Ctrl+F to search"
+        )
     parent.chat_display.setStyleSheet("""
         QTextEdit {
             font-size: 12px;

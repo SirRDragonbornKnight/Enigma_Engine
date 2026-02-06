@@ -158,6 +158,12 @@ class ModelManagerDialog(QDialog):
         new_btn.clicked.connect(self._on_new_model)
         quick_btns.addWidget(new_btn)
         
+        template_btn = QPushButton("+ Template")
+        template_btn.setStyleSheet("background-color: #f9e2af; color: #1e1e2e;")
+        template_btn.setToolTip("Create AI from a ready-made template (easiest!)")
+        template_btn.clicked.connect(self._on_quick_create)
+        quick_btns.addWidget(template_btn)
+        
         load_btn = QPushButton("Load")
         load_btn.setStyleSheet("background-color: #89b4fa; color: #1e1e2e;")
         load_btn.clicked.connect(self._on_load_model)
@@ -710,6 +716,24 @@ Checkpoints: {checkpoints}
                 QMessageBox.information(self, "Success", f"Created model '{result['name']}'")
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
+    
+    def _on_quick_create(self):
+        """Create a new AI from a starter kit template (easiest way)."""
+        try:
+            from .quick_create import show_quick_create_dialog
+            
+            ai_name = show_quick_create_dialog(self.registry, self)
+            if ai_name:
+                self._refresh_list()
+                # Select the newly created model
+                for i in range(self.model_list.count()):
+                    item = self.model_list.item(i)
+                    if item.data(Qt.UserRole) == ai_name:
+                        self.model_list.setCurrentItem(item)
+                        self._on_select_model(item)
+                        break
+        except ImportError as e:
+            QMessageBox.warning(self, "Error", f"Quick Create not available: {e}")
     
     def _on_backup(self):
         """Backup the selected model to a zip file."""
