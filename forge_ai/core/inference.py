@@ -56,16 +56,17 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 import torch.nn.functional as F
 
-from .model import Forge, create_model, MODEL_PRESETS
-from .tokenizer import get_tokenizer
 from ..config import CONFIG
-from ..utils.system_messages import system_msg, info_msg
+from ..utils.system_messages import info_msg, system_msg
+from .model import MODEL_PRESETS, Forge, create_model
+from .tokenizer import get_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -159,9 +160,9 @@ class ForgeEngine:
         cls,
         model: Any,
         tokenizer: Any,
-        device: Optional[str] = None,
+        device: str | None = None,
         use_half: bool = False
-    ) -> "ForgeEngine":
+    ) -> ForgeEngine:
         """
         Create engine directly from model and tokenizer objects.
         
@@ -185,7 +186,7 @@ class ForgeEngine:
             ForgeEngine instance ready for generation
         """
         import torch
-        
+
         # Create instance without calling __init__ (bypass normal initialization)
         engine = object.__new__(cls)
         
@@ -220,13 +221,13 @@ class ForgeEngine:
 
     def __init__(
         self,
-        model_path: Optional[Union[str, Path]] = None,
-        tokenizer_path: Optional[Union[str, Path]] = None,
-        device: Optional[str] = None,
+        model_path: str | Path | None = None,
+        tokenizer_path: str | Path | None = None,
+        device: str | None = None,
         use_half: bool = False,
         model_size: str = "auto",
         enable_tools: bool = False,
-        module_manager: Optional[Any] = None,
+        module_manager: Any | None = None,
         use_routing: bool = False
     ):
         """
@@ -316,7 +317,7 @@ class ForgeEngine:
         # Log what we loaded
         self._log_init_info()
 
-    def _select_device(self, device: Optional[str]) -> torch.device:
+    def _select_device(self, device: str | None) -> torch.device:
         """Select the best available device."""
         if device is not None:
             return torch.device(device)
@@ -356,8 +357,8 @@ class ForgeEngine:
     def _apply_offloading(self):
         """Apply CPU+GPU offloading to the model."""
         try:
-            from .offloading import apply_offloading, OffloadingConfig, get_memory_info
-            
+            from .offloading import OffloadingConfig, apply_offloading, get_memory_info
+
             # Log memory info
             mem_info = get_memory_info()
             logger.info(f"[Forge:Offload] CPU RAM available: {mem_info['cpu_available_gb']:.1f}GB")
@@ -391,8 +392,8 @@ class ForgeEngine:
 
     def _load_tokenizer(
         self,
-        tokenizer_path: Optional[Union[str, Path]],
-        model_path: Optional[Union[str, Path]]
+        tokenizer_path: str | Path | None,
+        model_path: str | Path | None
     ) -> Any:
         """Load the tokenizer."""
         # Try explicit tokenizer path first
@@ -441,7 +442,7 @@ class ForgeEngine:
 
     def _load_model(
         self,
-        model_path: Optional[Union[str, Path]],
+        model_path: str | Path | None,
         model_size: str
     ) -> Forge:
         """
@@ -464,7 +465,7 @@ class ForgeEngine:
         if model_size == "auto":
             try:
                 from .hardware_detection import detect_hardware, get_optimal_config
-                
+
                 # Detect hardware
                 profile = detect_hardware()
                 
@@ -616,7 +617,7 @@ class ForgeEngine:
 
         return model
 
-    def _infer_model_size(self, state_dict: Dict) -> str:
+    def _infer_model_size(self, state_dict: dict) -> str:
         """Infer model size from state dict."""
         # Look for hidden dimension from embedding layer
         hidden_dim = None
@@ -673,7 +674,7 @@ class ForgeEngine:
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
-        stop_strings: Optional[List[str]] = None,
+        stop_strings: list[str] | None = None,
         use_cache: bool = True,
         execute_tools: bool = None,
         max_tool_iterations: int = 5
@@ -824,7 +825,7 @@ class ForgeEngine:
         prompt: str,
         max_tokens: int = 100,
         **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> Generator[str]:
         """
         Stream generated tokens one at a time.
         
@@ -895,7 +896,7 @@ class ForgeEngine:
         
         return False
     
-    def _try_direct_routing(self, intent: str, prompt: str) -> Optional[str]:
+    def _try_direct_routing(self, intent: str, prompt: str) -> str | None:
         """
         Try to handle the request directly without main AI.
         
@@ -944,7 +945,7 @@ class ForgeEngine:
         Extracts description and calls the appropriate tool directly.
         """
         import re
-        
+
         # Common patterns for extracting the actual content description
         description = prompt
         
@@ -985,7 +986,7 @@ class ForgeEngine:
     def _direct_web_search(self, prompt: str) -> str:
         """Direct web search without AI intermediary."""
         import re
-        
+
         # Extract search query
         query = prompt
         patterns = [
@@ -1026,7 +1027,7 @@ class ForgeEngine:
         top_k: int,
         top_p: float,
         repetition_penalty: float,
-        stop_strings: Optional[List[str]],
+        stop_strings: list[str] | None,
         use_cache: bool
     ) -> str:
         """
@@ -1278,7 +1279,7 @@ class ForgeEngine:
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1
-    ) -> Generator[str, None, None]:
+    ) -> Generator[str]:
         """
         Stream generated tokens one at a time.
 
@@ -1340,10 +1341,10 @@ class ForgeEngine:
 
     def batch_generate(
         self,
-        prompts: List[str],
+        prompts: list[str],
         max_gen: int = 100,
         **kwargs
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Generate text for multiple prompts in a single batched forward pass.
 
@@ -1473,7 +1474,7 @@ class ForgeEngine:
     # Chat Interface
     # =========================================================================
     
-    def clear_kv_cache(self):
+    def clear_kv_cache(self) -> None:
         """
         Clear the KV-cache to prevent hallucinations from stale context.
         
@@ -1522,12 +1523,12 @@ class ForgeEngine:
     
     def _truncate_history(
         self,
-        history: List[Dict[str, str]],
+        history: list[dict[str, str]],
         current_message: str,
-        system_prompt: Optional[str] = None,
-        max_history_tokens: Optional[int] = None,
+        system_prompt: str | None = None,
+        max_history_tokens: int | None = None,
         reserve_for_response: int = 200
-    ) -> List[Dict[str, str]]:
+    ) -> list[dict[str, str]]:
         """
         Truncate conversation history to fit within context window.
         
@@ -1587,8 +1588,8 @@ class ForgeEngine:
     def chat(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
+        history: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
         max_gen: int = 200,
         auto_truncate: bool = True,
         **kwargs
@@ -1671,8 +1672,8 @@ class ForgeEngine:
     def chat_with_tools(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
+        history: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
         max_gen: int = 200,
         fallback_to_chat: bool = True,
         **kwargs
@@ -1696,7 +1697,7 @@ class ForgeEngine:
             Response (either from tool execution or chat)
         """
         from .universal_router import chat_with_tools as universal_chat
-        
+
         # Create a chat function that preserves history/system prompt
         def chat_fn(msg, **kw):
             return self.chat(
@@ -1716,11 +1717,11 @@ class ForgeEngine:
     def stream_chat(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
+        history: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
         max_gen: int = 200,
         **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> Generator[str]:
         """
         Stream chat-style generation.
 
@@ -1828,7 +1829,7 @@ class ForgeEngine:
         """
         from .tool_interface import ToolInterface
         from .tool_prompts import get_tool_enabled_system_prompt
-        
+
         # Create tool interface
         tool_interface = ToolInterface(module_manager)
         
@@ -1895,7 +1896,7 @@ class ForgeEngine:
         max_tool_iterations: int = 5,
         include_system_prompt: bool = True,
         **kwargs
-    ):
+    ) -> Generator[str]:
         """
         Stream generation with tool execution support.
         
@@ -1961,7 +1962,7 @@ class ForgeEngine:
 
 def generate(
     prompt: str,
-    model_path: Optional[str] = None,
+    model_path: str | None = None,
     max_gen: int = 100,
     **kwargs
 ) -> str:
@@ -1982,8 +1983,8 @@ def generate(
 
 
 def load_engine(
-    model_path: Optional[str] = None,
-    device: Optional[str] = None
+    model_path: str | None = None,
+    device: str | None = None
 ) -> ForgeEngine:
     """
     Load an inference engine.

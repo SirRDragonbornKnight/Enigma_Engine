@@ -35,7 +35,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, List, Dict, Callable, Tuple, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Platform detection
 IS_WINDOWS = sys.platform == 'win32'
@@ -44,16 +44,37 @@ IS_MAC = sys.platform == 'darwin'
 
 # Try PyQt5 imports - may not be available on headless systems
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QApplication, QLabel, QVBoxLayout, QGraphicsOpacityEffect, QMenu
-    )
     from PyQt5.QtCore import (
-        Qt, QTimer, QPoint, QRect, QPropertyAnimation, QEasingCurve,
-        pyqtSignal, QSize, QByteArray, QObject
+        QByteArray,
+        QEasingCurve,
+        QObject,
+        QPoint,
+        QPropertyAnimation,
+        QRect,
+        QSize,
+        Qt,
+        QTimer,
+        pyqtSignal,
     )
     from PyQt5.QtGui import (
-        QPixmap, QPainter, QColor, QCursor, QFont, QFontMetrics,
-        QPainterPath, QBrush, QPen, QScreen
+        QBrush,
+        QColor,
+        QCursor,
+        QFont,
+        QFontMetrics,
+        QPainter,
+        QPainterPath,
+        QPen,
+        QPixmap,
+        QScreen,
+    )
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QGraphicsOpacityEffect,
+        QLabel,
+        QMenu,
+        QVBoxLayout,
+        QWidget,
     )
     HAS_PYQT = True
 except ImportError:
@@ -209,7 +230,7 @@ class DesktopPetWindow(QWidget):
         
         # Animation state
         self._frame = 0
-        self._animation_frames: List[QPixmap] = []
+        self._animation_frames: list[QPixmap] = []
         
         self.setMouseTracking(True)
     
@@ -480,7 +501,7 @@ class DesktopPet(QObject):
         self._personality = None
         
         # Sprites for different states
-        self._sprites: Dict[str, QPixmap] = {}
+        self._sprites: dict[str, QPixmap] = {}
         self._current_sprite_key = "idle"
         
         # Animation
@@ -501,7 +522,10 @@ class DesktopPet(QObject):
             return
         
         try:
-            from ..avatar.renderers.default_sprites import generate_sprite, SPRITE_TEMPLATES
+            from ..avatar.renderers.default_sprites import (
+                SPRITE_TEMPLATES,
+                generate_sprite,
+            )
         except ImportError:
             return
         
@@ -527,7 +551,7 @@ class DesktopPet(QObject):
         """Set sprite for a state."""
         self._sprites[state] = pixmap
     
-    def load_sprite_sheet(self, path: str, state_mapping: Dict[str, Tuple[int, int]]):
+    def load_sprite_sheet(self, path: str, state_mapping: dict[str, tuple[int, int]]):
         """
         Load sprites from a sprite sheet.
         

@@ -264,7 +264,7 @@ class FAISSVectorDB(VectorDBInterface):
     def load(self, path: Path) -> None:
         """Load index from disk."""
         import pickle
-        
+
         # Load FAISS index
         self.index = self.faiss.read_index(str(path))
         

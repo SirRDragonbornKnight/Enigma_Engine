@@ -38,15 +38,14 @@ USAGE:
 # NEW LEARNING COMPONENTS
 # =============================================================================
 
-# Conversation learning detection
-from .conversation_detector import (
-    ConversationDetector,
-    DetectedLearning,
-    detect_learning,
-    is_correction,
-    is_teaching,
-    is_feedback,
+# Model bootstrap (from core module)
+from ..core.model_bootstrap import (
+    ModelBootstrap,
+    StartingPoint,
+    bootstrap_model,
+    list_starting_points,
 )
+from .aggregation import AggregationMethod, SecureAggregator
 
 # Chat system integration
 from .chat_integration import (
@@ -55,29 +54,30 @@ from .chat_integration import (
     create_chat_integration,
 )
 
-# Model bootstrap (from core module)
-from ..core.model_bootstrap import (
-    ModelBootstrap,
-    StartingPoint,
-    bootstrap_model,
-    list_starting_points,
+# Conversation learning detection
+from .conversation_detector import (
+    ConversationDetector,
+    DetectedLearning,
+    detect_learning,
+    is_correction,
+    is_feedback,
+    is_teaching,
 )
+from .coordinator import CoordinatorMode, FederatedCoordinator
+from .data_filter import FederatedDataFilter, TrainingExample
+from .federated import (
+    FederatedLearning,
+    FederatedMode,
+    PrivacyLevel,
+    WeightUpdate,
+)
+from .privacy import DifferentialPrivacy
+from .trust import TrustManager
 
 # =============================================================================
 # FEDERATED LEARNING COMPONENTS (Existing)
 # =============================================================================
 
-from .federated import (
-    FederatedLearning,
-    WeightUpdate,
-    FederatedMode,
-    PrivacyLevel,
-)
-from .privacy import DifferentialPrivacy
-from .aggregation import SecureAggregator, AggregationMethod
-from .coordinator import FederatedCoordinator, CoordinatorMode
-from .data_filter import FederatedDataFilter, TrainingExample
-from .trust import TrustManager
 
 # Alias for backwards compatibility
 DataFilter = FederatedDataFilter

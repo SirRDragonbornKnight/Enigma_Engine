@@ -8,12 +8,20 @@ Allows users to:
 - View personality description
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
-    QPushButton, QSlider, QCheckBox, QTextEdit,
-    QMessageBox, QFrame
-)
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSlider,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
 
@@ -417,10 +425,11 @@ def _save_custom_preset(parent):
         return
     
     try:
-        from pathlib import Path
-        from ...config import CONFIG
         import json
-        
+        from pathlib import Path
+
+        from ...config import CONFIG
+
         # Get current trait values
         traits = {}
         for trait_key, slider in parent.trait_sliders.items():

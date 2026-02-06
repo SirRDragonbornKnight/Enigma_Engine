@@ -12,10 +12,13 @@ When idle, the AI can autonomously:
 from __future__ import annotations
 
 import json
+import logging
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class DiscoveryMode:
@@ -91,9 +94,9 @@ class DiscoveryMode:
         """Load past discoveries."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, OSError):
                 return []
         return []
     
@@ -236,7 +239,7 @@ Consider what builds on recent topics or fills knowledge gaps. Reply with ONLY t
             }
         
         # Extract topics
-        topics = list(set(d['topic'] for d in self.discoveries))
+        topics = list({d['topic'] for d in self.discoveries})
         
         return {
             'total_discoveries': len(self.discoveries),
@@ -352,7 +355,7 @@ class AutoSaveManager:
             self.last_save[f"conv_{conversation_id}"] = datetime.now()
             return True
         except Exception as e:
-            print(f"Auto-save failed: {e}")
+            logger.warning(f"Auto-save conversation failed: {e}")
             return False
     
     def save_training_state(self, model_name: str, state: Dict) -> bool:
@@ -384,7 +387,7 @@ class AutoSaveManager:
             self.last_save[f"train_{model_name}"] = datetime.now()
             return True
         except Exception as e:
-            print(f"Auto-save failed: {e}")
+            logger.warning(f"Auto-save training state failed: {e}")
             return False
     
     def save_config(self, config_name: str, config: Dict) -> bool:
@@ -416,7 +419,7 @@ class AutoSaveManager:
             self.last_save[f"config_{config_name}"] = datetime.now()
             return True
         except Exception as e:
-            print(f"Auto-save failed: {e}")
+            logger.warning(f"Auto-save config failed: {e}")
             return False
     
     def list_auto_saves(self) -> List[Dict[str, Any]]:
@@ -424,7 +427,7 @@ class AutoSaveManager:
         saves = []
         for file in self.storage_dir.glob("*.json"):
             try:
-                with open(file, 'r') as f:
+                with open(file) as f:
                     data = json.load(f)
                 saves.append({
                     'file': file.name,
@@ -433,7 +436,7 @@ class AutoSaveManager:
                             'training' if 'state' in data else
                             'config'
                 })
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, OSError):
                 continue
         
         # Sort by timestamp
@@ -453,10 +456,10 @@ class AutoSaveManager:
         save_path = self.storage_dir / f"conversation_{conversation_id}.json"
         if save_path.exists():
             try:
-                with open(save_path, 'r') as f:
+                with open(save_path) as f:
                     data = json.load(f)
                 return data.get('messages', [])
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, OSError):
                 return None
         return None
     
@@ -471,12 +474,12 @@ class AutoSaveManager:
         
         for file in self.storage_dir.glob("*.json"):
             try:
-                with open(file, 'r') as f:
+                with open(file) as f:
                     data = json.load(f)
                 timestamp = datetime.fromisoformat(data.get('timestamp', ''))
                 if timestamp < cutoff:
                     file.unlink()
-            except (json.JSONDecodeError, IOError, ValueError):
+            except (json.JSONDecodeError, OSError, ValueError):
                 continue
 
 

@@ -16,7 +16,8 @@ Usage:
 
 import logging
 import re
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ class WeightMapper:
             return tensor
         
         import torch
-        
+
         # GPT-2 style models: combined QKV needs splitting
         if 'c_attn' in source_name and source_format == 'huggingface':
             # Check if this is a Q, K, or V weight
@@ -151,7 +152,7 @@ class WeightMapper:
         # No transformation needed
         return tensor
     
-    def _get_hf_mappings(self) -> Dict[str, List[str]]:
+    def _get_hf_mappings(self) -> dict[str, list[str]]:
         """
         Get HuggingFace to Forge name mappings.
         
@@ -239,7 +240,7 @@ class WeightMapper:
             ]
         }
     
-    def _get_gguf_mappings(self) -> Dict[str, List[str]]:
+    def _get_gguf_mappings(self) -> dict[str, list[str]]:
         """
         Get GGUF to Forge name mappings.
         
@@ -304,7 +305,7 @@ class WeightMapper:
             ]
         }
     
-    def _get_onnx_mappings(self) -> Dict[str, List[str]]:
+    def _get_onnx_mappings(self) -> dict[str, list[str]]:
         """
         Get ONNX to Forge name mappings.
         
@@ -327,9 +328,9 @@ class WeightMapper:
     
     def map_huggingface_to_forge(
         self, 
-        hf_state_dict: Dict[str, Any],
+        hf_state_dict: dict[str, Any],
         forge_config: Optional[Any] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Map HuggingFace weight names to Forge names.
         
@@ -389,9 +390,9 @@ class WeightMapper:
     
     def map_gguf_to_forge(
         self,
-        gguf_tensors: Dict[str, Any],
+        gguf_tensors: dict[str, Any],
         forge_config: Optional[Any] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Map GGUF tensor names to Forge names.
         
@@ -439,9 +440,9 @@ class WeightMapper:
     
     def map_onnx_to_forge(
         self,
-        onnx_weights: Dict[str, Any],
+        onnx_weights: dict[str, Any],
         forge_config: Optional[Any] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Map ONNX weight names to Forge names.
         
@@ -466,7 +467,7 @@ class WeightMapper:
         logger.info(f"Mapped {len(forge_state_dict)} weights from ONNX to Forge")
         return forge_state_dict
     
-    def _detect_num_layers(self, state_dict: Dict[str, Any]) -> int:
+    def _detect_num_layers(self, state_dict: dict[str, Any]) -> int:
         """Detect number of transformer layers in state dict."""
         layer_indices = set()
         
@@ -560,7 +561,7 @@ class WeightMapper:
         
         return None
     
-    def dequantize_gguf_tensor(self, tensor_data: bytes, quant_type: str, shape: Tuple[int, ...]) -> Any:
+    def dequantize_gguf_tensor(self, tensor_data: bytes, quant_type: str, shape: tuple[int, ...]) -> Any:
         """
         Dequantize GGUF tensor data.
         
@@ -576,7 +577,7 @@ class WeightMapper:
             raise RuntimeError("torch required for dequantization")
         
         import torch
-        
+
         # Route to appropriate dequantization function from gguf_loader
         try:
             from .gguf_loader import dequantize_q4_0, dequantize_q8_0
@@ -610,9 +611,9 @@ class WeightMapper:
     
     def validate_mapping(
         self,
-        forge_state_dict: Dict[str, Any],
-        expected_keys: Optional[List[str]] = None
-    ) -> Tuple[bool, List[str]]:
+        forge_state_dict: dict[str, Any],
+        expected_keys: Optional[list[str]] = None
+    ) -> tuple[bool, list[str]]:
         """
         Validate that mapping produced expected keys.
         

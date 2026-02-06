@@ -72,7 +72,7 @@ class ShutdownManager:
     - Tracking shutdown state to prevent duplicate cleanup
     """
     
-    _instance: Optional['ShutdownManager'] = None
+    _instance: ShutdownManager | None = None
     _initialized: bool = False
     
     def __new__(cls):
@@ -87,7 +87,7 @@ class ShutdownManager:
             return
         ShutdownManager._initialized = True
         
-        self._callbacks: List[ShutdownCallback] = []
+        self._callbacks: list[ShutdownCallback] = []
         self._lock = threading.RLock()
         self._shutdown_started = False
         self._shutdown_complete = False
@@ -297,7 +297,7 @@ class ShutdownManager:
 
 
 # Global singleton access
-_manager: Optional[ShutdownManager] = None
+_manager: ShutdownManager | None = None
 
 
 def get_shutdown_manager() -> ShutdownManager:

@@ -14,7 +14,7 @@ IMPORTANT: There is ONE AI being trained. That same AI controls:
 All control comes from the same trained model.
 """
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from .avatar.avatar_display import create_avatar_subtab
 from .game.game_connection import create_game_subtab

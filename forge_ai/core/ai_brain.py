@@ -12,11 +12,11 @@ The AI learns from every interaction when continuous learning is enabled.
 """
 
 import json
-import time
-from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Optional, Any
 import threading
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 
@@ -58,9 +58,9 @@ class AIBrain:
         self.patterns_file = self.brain_dir / "learned_patterns.json"
 
         # In-memory state
-        self.current_conversation: List[Dict] = []
-        self.pending_training: List[Dict] = []
-        self.curiosities: List[str] = []
+        self.current_conversation: list[dict] = []
+        self.pending_training: list[dict] = []
+        self.curiosities: list[str] = []
 
         # Load existing data
         self._load_curiosities()
@@ -161,7 +161,7 @@ class AIBrain:
                 "explored": False
             })
 
-    def get_curiosities(self) -> List[str]:
+    def get_curiosities(self) -> list[str]:
         """Get list of things the AI is curious about."""
         return self.curiosities.copy()
 
@@ -170,7 +170,7 @@ class AIBrain:
         if topic in self.curiosities:
             self.curiosities.remove(topic)
 
-    def get_training_data(self) -> List[Dict]:
+    def get_training_data(self) -> list[dict]:
         """Get all training data for this AI."""
         data = []
         if self.training_file.exists():
@@ -222,7 +222,7 @@ class AIBrain:
         self.interactions_since_train = 0
         self.pending_training = []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get brain statistics."""
         return {
             "model_name": self.model_name,
@@ -234,7 +234,7 @@ class AIBrain:
             "curiosities_count": len(self.curiosities)
         }
 
-    def _append_to_jsonl(self, filepath: Path, data: Dict):
+    def _append_to_jsonl(self, filepath: Path, data: dict):
         """Append JSON line to file."""
         with open(filepath, 'a') as f:
             f.write(json.dumps(data) + '\n')
@@ -254,7 +254,7 @@ class AIBrain:
 
 
 # Global brain instance cache
-_brains: Dict[str, AIBrain] = {}
+_brains: dict[str, AIBrain] = {}
 
 
 def get_brain(model_name: str, auto_learn: bool = True) -> AIBrain:

@@ -47,12 +47,12 @@ USAGE:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 from .capability_registry import CapabilityRegistry, get_capability_registry
-from .model_pool import ModelPool, get_model_pool, ModelPoolConfig
 from .collaboration import ModelCollaboration, get_collaboration
-from .task_offloader import TaskOffloader, OffloaderConfig, get_offloader
+from .model_pool import ModelPool, ModelPoolConfig, get_model_pool
+from .task_offloader import OffloaderConfig, TaskOffloader, get_offloader
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +100,8 @@ class Task:
     
     capability: str                           # Required capability
     task: Any                                 # Task data (prompt, image, etc.)
-    context: Dict[str, Any] = field(default_factory=dict)
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     model_id: Optional[str] = None            # Specific model (or None for auto)
     timeout: float = 30.0
     require_sync: bool = True
@@ -116,7 +116,7 @@ class TaskResult:
     result: Any
     confidence: float = 0.0
     processing_time: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
 
@@ -173,13 +173,13 @@ class ModelOrchestrator:
             self.task_offloader = None
         
         # Model assignments (capability -> preferred model)
-        self._model_assignments: Dict[str, List[str]] = {}
+        self._model_assignments: dict[str, list[str]] = {}
         
         # Fallback chains (model -> list of fallback models)
-        self._fallback_chains: Dict[str, List[str]] = {}
+        self._fallback_chains: dict[str, list[str]] = {}
         
         # Task execution history
-        self._execution_history: List[Dict[str, Any]] = []
+        self._execution_history: list[dict[str, Any]] = []
         self._max_history = 1000
     
     # -------------------------------------------------------------------------
@@ -189,11 +189,11 @@ class ModelOrchestrator:
     def register_model(
         self,
         model_id: str,
-        capabilities: List[str],
-        metadata: Optional[Dict[str, Any]] = None,
-        performance_ratings: Optional[Dict[str, float]] = None,
+        capabilities: list[str],
+        metadata: Optional[dict[str, Any]] = None,
+        performance_ratings: Optional[dict[str, float]] = None,
         auto_detect: bool = True,
-        load_args: Optional[Dict[str, Any]] = None,
+        load_args: Optional[dict[str, Any]] = None,
         preload: bool = False,
     ) -> None:
         """
@@ -271,7 +271,7 @@ class ModelOrchestrator:
     def find_best_model(
         self,
         capability: str,
-        requirements: Optional[Dict[str, Any]] = None,
+        requirements: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
         """
         Find the best model for a capability.
@@ -304,7 +304,7 @@ class ModelOrchestrator:
         self,
         capability: str,
         min_performance: Optional[float] = None,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Find all models with a specific capability.
         
@@ -371,8 +371,8 @@ class ModelOrchestrator:
         self,
         capability: str,
         task: Any = None,
-        context: Optional[Dict[str, Any]] = None,
-        parameters: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
+        parameters: Optional[dict[str, Any]] = None,
         model_id: Optional[str] = None,
         async_execution: bool = False,
         priority: int = 5,
@@ -485,8 +485,8 @@ class ModelOrchestrator:
         self,
         capability: str,
         task: Any = None,
-        context: Optional[Dict[str, Any]] = None,
-        parameters: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
+        parameters: Optional[dict[str, Any]] = None,
         model_id: Optional[str] = None,
         priority: int = 5,
         callback: Optional[Callable[[Any], None]] = None,
@@ -585,8 +585,8 @@ class ModelOrchestrator:
         model_id: str,
         capability: str,
         task: Any,
-        context: Dict[str, Any],
-        parameters: Dict[str, Any],
+        context: dict[str, Any],
+        parameters: dict[str, Any],
     ) -> Any:
         """
         Execute a task on a specific model.
@@ -628,7 +628,7 @@ class ModelOrchestrator:
         engine: Any,
         capability: str,
         task: Any,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
     ) -> Any:
         """Execute task on a Forge model (ForgeEngine)."""
         if capability in ["text_generation", "chat", "reasoning"]:
@@ -643,7 +643,7 @@ class ModelOrchestrator:
         model: Any,
         capability: str,
         task: Any,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
     ) -> Any:
         """Execute task on a HuggingFace model."""
         # HuggingFace models typically have a generate method
@@ -661,7 +661,7 @@ class ModelOrchestrator:
         tool: Any,
         capability: str,
         task: Any,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
     ) -> Any:
         """Execute task on a local tool."""
         # Local tools are typically callable or have an execute method
@@ -681,7 +681,7 @@ class ModelOrchestrator:
         requesting_model: str,
         target_capability: str,
         task: Any,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
         target_model: Optional[str] = None,
     ) -> Any:
         """
@@ -720,7 +720,7 @@ class ModelOrchestrator:
     def set_fallback_chain(
         self,
         model_id: str,
-        fallback_models: List[str],
+        fallback_models: list[str],
     ) -> None:
         """
         Set fallback models for a model.
@@ -829,7 +829,7 @@ class ModelOrchestrator:
     # STATUS & ANALYTICS
     # -------------------------------------------------------------------------
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get orchestrator status."""
         status = {
             "registered_models": self.capability_registry.list_models(),
@@ -850,7 +850,7 @@ class ModelOrchestrator:
         
         return status
     
-    def _get_execution_stats(self) -> Dict[str, Any]:
+    def _get_execution_stats(self) -> dict[str, Any]:
         """Get task execution statistics."""
         if not self._execution_history:
             return {"total_executions": 0}

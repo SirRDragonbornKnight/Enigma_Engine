@@ -5,16 +5,24 @@ Examples Tab for ForgeAI GUI
 Provides an easy way to browse and run example scripts.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTextEdit, QListWidget, QListWidgetItem, QLabel,
-    QSplitter, QGroupBox, QMessageBox
-)
-from PyQt5.QtCore import Qt, QProcess
-from PyQt5.QtGui import QFont
-from pathlib import Path
 import os
+from pathlib import Path
 
+from PyQt5.QtCore import QProcess, Qt
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 # Example descriptions
 EXAMPLES = {
@@ -286,7 +294,7 @@ class ExamplesTab(QWidget):
         # Load code
         file_path = self.examples_dir / filename
         if file_path.exists():
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 code = f.read()
             self.code_view.setPlainText(code)
             self.run_btn.setEnabled(True)

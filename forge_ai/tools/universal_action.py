@@ -20,16 +20,18 @@ Usage:
     result = action.do("make the avatar wave while saying hello")
 """
 
-import os
-import re
 import json
 import logging
+import os
+import re
+import shlex
 import subprocess
 import threading
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Union
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ class ActionResult:
     result: Any = None
     error: Optional[str] = None
     action_type: str = "unknown"
-    steps_taken: List[str] = field(default_factory=list)
+    steps_taken: list[str] = field(default_factory=list)
     time_taken: float = 0.0
     
     def to_dict(self) -> dict:
@@ -70,7 +72,7 @@ class LearnedAction:
     """An action learned from demonstration or definition."""
     name: str
     description: str
-    steps: List[Dict[str, Any]]
+    steps: list[dict[str, Any]]
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     use_count: int = 0
     
@@ -91,7 +93,7 @@ class ActionPlanner:
         self.inference = inference_engine
         self._primitives = self._register_primitives()
     
-    def _register_primitives(self) -> Dict[str, Callable]:
+    def _register_primitives(self) -> dict[str, Callable]:
         """Register primitive actions that can be composed."""
         return {
             # File operations
@@ -126,7 +128,7 @@ class ActionPlanner:
             "schedule": self._schedule,
         }
     
-    def plan(self, request: str) -> List[Dict[str, Any]]:
+    def plan(self, request: str) -> list[dict[str, Any]]:
         """
         Create an action plan for a natural language request.
         
@@ -147,7 +149,7 @@ class ActionPlanner:
         # Fallback: single command execution
         return [{"action": "run_command", "params": {"command": request}}]
     
-    def _pattern_match(self, request: str) -> Optional[List[Dict]]:
+    def _pattern_match(self, request: str) -> Optional[list[dict]]:
         """Match common request patterns."""
         request_lower = request.lower()
         
@@ -187,13 +189,14 @@ print(f"Organized files in {{path}}")
             return self._plan_avatar_action(request)
         
         # Open application
-        if re.search(r"open\s+\w+", request_lower):
-            app = re.search(r"open\s+(\w+)", request_lower).group(1)
+        open_match = re.search(r"open\s+(\w+)", request_lower)
+        if open_match:
+            app = open_match.group(1)
             return [{"action": "run_command", "params": {"command": f"xdg-open {app} || open {app} || start {app}"}}]
         
         return None
     
-    def _plan_avatar_action(self, request: str) -> List[Dict]:
+    def _plan_avatar_action(self, request: str) -> list[dict]:
         """Plan avatar-related actions."""
         steps = []
         request_lower = request.lower()
@@ -217,8 +220,11 @@ print(f"Organized files in {{path}}")
         
         return steps or [{"action": "avatar_respond", "params": {"request": request}}]
     
-    def _ai_plan(self, request: str) -> List[Dict]:
+    def _ai_plan(self, request: str) -> list[dict]:
         """Use AI to generate action plan."""
+        if self.inference is None:
+            return [{"action": "interpret", "params": {"request": request}}]
+        
         prompt = f"""Break down this request into primitive actions.
 Available primitives: {list(self._primitives.keys())}
 
@@ -263,7 +269,7 @@ Respond with JSON array of steps, each with "action" and "params"."""
         Path(path).write_text(content)
         return True
     
-    def _list_dir(self, path: str) -> List[str]:
+    def _list_dir(self, path: str) -> list[str]:
         return [str(p) for p in Path(path).iterdir()]
     
     def _create_dir(self, path: str) -> bool:
@@ -288,7 +294,12 @@ Respond with JSON array of steps, each with "action" and "params"."""
         # Safety check
         if not self._is_safe_command(command):
             return "Command blocked for safety"
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout)
+        # Use shlex.split to avoid shell injection (shell=False)
+        try:
+            cmd_parts = shlex.split(command)
+        except ValueError as e:
+            return f"Invalid command syntax: {e}"
+        result = subprocess.run(cmd_parts, shell=False, capture_output=True, text=True, timeout=timeout)
         return result.stdout + result.stderr
     
     def _is_safe_command(self, command: str) -> bool:
@@ -308,11 +319,21 @@ Respond with JSON array of steps, each with "action" and "params"."""
     
     def _http_get(self, url: str) -> str:
         import urllib.request
+
+        # Validate URL scheme for security
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            raise ValueError(f"Invalid URL scheme: {parsed.scheme}. Only http/https allowed.")
         with urllib.request.urlopen(url, timeout=30) as r:
             return r.read().decode()
     
     def _http_post(self, url: str, data: dict) -> str:
         import urllib.request
+
+        # Validate URL scheme for security
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            raise ValueError(f"Invalid URL scheme: {parsed.scheme}. Only http/https allowed.")
         req = urllib.request.Request(url, json.dumps(data).encode(), {'Content-Type': 'application/json'})
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.read().decode()
@@ -338,7 +359,34 @@ Respond with JSON array of steps, each with "action" and "params"."""
         return True
     
     def _run_python(self, code: str) -> Any:
-        exec_globals = {}
+        """Execute Python code in a restricted environment.
+        
+        WARNING: This is inherently dangerous. Consider using RestrictedPython
+        or removing this capability entirely for production use.
+        """
+        # Block dangerous patterns
+        dangerous_patterns = [
+            r'\bimport\s+os\b', r'\bimport\s+subprocess\b', r'\bimport\s+sys\b',
+            r'\b__import__\b', r'\beval\b', r'\bexec\b', r'\bopen\s*\(',
+            r'\bcompile\b', r'\bglobals\b', r'\blocals\b', r'\bgetattr\b',
+            r'\bsetattr\b', r'\bdelattr\b', r'\b__builtins__\b', r'\b__class__\b',
+        ]
+        for pattern in dangerous_patterns:
+            if re.search(pattern, code, re.IGNORECASE):
+                logger.warning(f"Blocked dangerous Python code pattern: {pattern}")
+                return "Code blocked for safety: contains restricted patterns"
+        
+        # Create restricted globals
+        exec_globals = {
+            '__builtins__': {
+                'len': len, 'str': str, 'int': int, 'float': float, 'bool': bool,
+                'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
+                'range': range, 'enumerate': enumerate, 'zip': zip,
+                'min': min, 'max': max, 'sum': sum, 'abs': abs, 'round': round,
+                'sorted': sorted, 'reversed': reversed, 'print': print,
+                'True': True, 'False': False, 'None': None,
+            }
+        }
         exec(code, exec_globals)
         return exec_globals.get('result', True)
     
@@ -374,12 +422,12 @@ class UniversalAction:
         self.allow_learning = allow_learning
         
         # Learned actions
-        self._learned_actions: Dict[str, LearnedAction] = {}
+        self._learned_actions: dict[str, LearnedAction] = {}
         self._actions_file = Path.home() / ".forge_ai" / "learned_actions.json"
         self._load_learned_actions()
         
         # Execution context
-        self._context: Dict[str, Any] = {}
+        self._context: dict[str, Any] = {}
     
     def do(self, request: str) -> ActionResult:
         """
@@ -455,7 +503,7 @@ class UniversalAction:
                 time_taken=time.time() - start_time,
             )
     
-    def learn(self, name: str, description: str, steps: List[Dict]) -> bool:
+    def learn(self, name: str, description: str, steps: list[dict]) -> bool:
         """
         Learn a new action from steps.
         
@@ -516,7 +564,7 @@ class UniversalAction:
             return True
         return False
     
-    def list_learned(self) -> List[Dict]:
+    def list_learned(self) -> list[dict]:
         """List all learned actions."""
         return [a.to_dict() for a in self._learned_actions.values()]
     
@@ -539,7 +587,7 @@ class UniversalAction:
         
         return None
     
-    def _substitute_vars(self, params: Dict) -> Dict:
+    def _substitute_vars(self, params: dict) -> dict:
         """Substitute {var} placeholders with context values."""
         result = {}
         for key, value in params.items():

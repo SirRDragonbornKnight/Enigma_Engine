@@ -5,9 +5,10 @@ All tools execute system commands that AI cannot learn.
 
 import os
 import subprocess
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 
@@ -17,7 +18,7 @@ class SystemMonitorTool(Tool):
     description = "Get CPU, memory, disk usage, and temperature."
     parameters = {"detailed": "Show detailed breakdown (default: False)"}
     
-    def execute(self, detailed: bool = False, **kwargs) -> Dict[str, Any]:
+    def execute(self, detailed: bool = False, **kwargs) -> dict[str, Any]:
         try:
             result = {"success": True, "timestamp": datetime.now().isoformat()}
             
@@ -63,7 +64,7 @@ class ProcessListTool(Tool):
     description = "List running processes sorted by CPU/memory usage."
     parameters = {"sort_by": "Sort by: cpu, memory, name (default: cpu)", "limit": "Max processes (default: 20)"}
     
-    def execute(self, sort_by: str = "cpu", limit: int = 20, **kwargs) -> Dict[str, Any]:
+    def execute(self, sort_by: str = "cpu", limit: int = 20, **kwargs) -> dict[str, Any]:
         try:
             try:
                 import psutil
@@ -89,7 +90,7 @@ class ProcessKillTool(Tool):
     description = "Kill a process by PID or name."
     parameters = {"pid": "Process ID (optional)", "name": "Process name (optional)", "signal": "Signal: TERM, KILL (default: TERM)"}
     
-    def execute(self, pid: int = None, name: str = None, signal: str = "TERM", **kwargs) -> Dict[str, Any]:
+    def execute(self, pid: int = None, name: str = None, signal: str = "TERM", **kwargs) -> dict[str, Any]:
         try:
             import signal as sig
             signals = {"TERM": sig.SIGTERM, "KILL": sig.SIGKILL, "HUP": sig.SIGHUP}
@@ -112,7 +113,7 @@ class SSHExecuteTool(Tool):
     description = "Execute command on remote machine via SSH."
     parameters = {"host": "user@host", "command": "Command to run", "timeout": "Timeout seconds (default: 30)"}
     
-    def execute(self, host: str, command: str, timeout: int = 30, **kwargs) -> Dict[str, Any]:
+    def execute(self, host: str, command: str, timeout: int = 30, **kwargs) -> dict[str, Any]:
         try:
             result = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', host, command],
                                    capture_output=True, text=True, timeout=timeout)
@@ -129,7 +130,7 @@ class DockerListTool(Tool):
     description = "List Docker containers."
     parameters = {"all": "Show all containers (default: True)"}
     
-    def execute(self, all: bool = True, **kwargs) -> Dict[str, Any]:
+    def execute(self, all: bool = True, **kwargs) -> dict[str, Any]:
         try:
             cmd = ['docker', 'ps', '--format', '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}']
             if all: cmd.insert(2, '-a')
@@ -148,7 +149,7 @@ class DockerControlTool(Tool):
     description = "Start, stop, restart, or get logs from Docker container."
     parameters = {"container": "Container name/ID", "action": "start, stop, restart, remove, logs"}
     
-    def execute(self, container: str, action: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, container: str, action: str, **kwargs) -> dict[str, Any]:
         try:
             if action not in ['start', 'stop', 'restart', 'remove', 'logs']:
                 return {"success": False, "error": "Invalid action"}
@@ -167,7 +168,7 @@ class GitStatusTool(Tool):
     description = "Check git repository status."
     parameters = {"path": "Repository path (default: .)"}
     
-    def execute(self, path: str = ".", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str = ".", **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             if not (path / '.git').exists(): return {"success": False, "error": "Not a git repo"}
@@ -193,7 +194,7 @@ class GitCommitTool(Tool):
     description = "Stage and commit changes."
     parameters = {"message": "Commit message", "path": "Repository path (default: .)", "add_all": "Add all changes (default: True)"}
     
-    def execute(self, message: str, path: str = ".", add_all: bool = True, **kwargs) -> Dict[str, Any]:
+    def execute(self, message: str, path: str = ".", add_all: bool = True, **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             if add_all:
@@ -215,7 +216,7 @@ class GitPushTool(Tool):
     description = "Push commits to remote repository."
     parameters = {"path": "Repository path (default: .)", "remote": "Remote name (default: origin)"}
     
-    def execute(self, path: str = ".", remote: str = "origin", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str = ".", remote: str = "origin", **kwargs) -> dict[str, Any]:
         try:
             result = subprocess.run(['git', 'push', remote], cwd=str(Path(path).resolve()), capture_output=True, text=True, timeout=120)
             return {"success": result.returncode == 0, "output": result.stderr + result.stdout}
@@ -229,7 +230,7 @@ class GitPullTool(Tool):
     description = "Pull changes from remote repository."
     parameters = {"path": "Repository path (default: .)", "remote": "Remote name (default: origin)"}
     
-    def execute(self, path: str = ".", remote: str = "origin", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str = ".", remote: str = "origin", **kwargs) -> dict[str, Any]:
         try:
             result = subprocess.run(['git', 'pull', remote], cwd=str(Path(path).resolve()), capture_output=True, text=True, timeout=120)
             return {"success": result.returncode == 0, "output": result.stdout + result.stderr}

@@ -39,9 +39,10 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generator, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class MemoryConfig:
     auto_store: bool = True
     
     # Memory types to search
-    search_types: List[str] = field(default_factory=lambda: [
+    search_types: list[str] = field(default_factory=lambda: [
         "conversation", "fact", "preference", "instruction"
     ])
     
@@ -106,11 +107,11 @@ class MemoryAugmentedEngine:
     
     def __init__(
         self,
-        engine: Optional[Any] = None,
-        vector_db: Optional[Any] = None,
-        embedding_generator: Optional[Any] = None,
-        config: Optional[MemoryConfig] = None,
-        model_name: Optional[str] = None
+        engine: Any | None = None,
+        vector_db: Any | None = None,
+        embedding_generator: Any | None = None,
+        config: MemoryConfig | None = None,
+        model_name: str | None = None
     ):
         """
         Initialize memory-augmented engine.
@@ -164,10 +165,9 @@ class MemoryAugmentedEngine:
             self.vector_db = vector_db
         else:
             try:
-                from .vector_db import SimpleVectorDB
-                
                 # Per-model storage path
                 from ..config import CONFIG
+                from .vector_db import SimpleVectorDB
                 if model_name:
                     models_dir = Path(CONFIG.get("models_dir", "models"))
                     db_path = models_dir / model_name / "memory_vectors.npz"
@@ -210,7 +210,7 @@ class MemoryAugmentedEngine:
         # ─────────────────────────────────────────────────────────────────────
         # CONVERSATION HISTORY (for current session)
         # ─────────────────────────────────────────────────────────────────────
-        self.conversation_history: List[Dict[str, str]] = []
+        self.conversation_history: list[dict[str, str]] = []
         
         logger.info(
             f"MemoryAugmentedEngine initialized "
@@ -225,6 +225,7 @@ class MemoryAugmentedEngine:
         
         # Fallback: hash-based embedding
         import hashlib
+
         import numpy as np
         hash_obj = hashlib.sha256(text.encode())
         hash_bytes = hash_obj.digest()
@@ -242,7 +243,7 @@ class MemoryAugmentedEngine:
         self,
         content: str,
         memory_type: str = "conversation",
-        metadata: Optional[Dict] = None
+        metadata: dict | None = None
     ) -> str:
         """
         Store a message in the vector database for future retrieval.
@@ -261,7 +262,7 @@ class MemoryAugmentedEngine:
         
         try:
             import numpy as np
-            
+
             # Generate unique ID
             memory_id = f"mem_{int(time.time() * 1000)}_{hash(content) % 100000}"
             
@@ -291,9 +292,9 @@ class MemoryAugmentedEngine:
     def retrieve_memories(
         self,
         query: str,
-        top_k: Optional[int] = None,
-        memory_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        top_k: int | None = None,
+        memory_types: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """
         Retrieve relevant memories for a query.
         
@@ -348,7 +349,7 @@ class MemoryAugmentedEngine:
             logger.error(f"Failed to retrieve memories: {e}")
             return []
     
-    def _format_memory_context(self, memories: List[Dict]) -> str:
+    def _format_memory_context(self, memories: list[dict]) -> str:
         """Format retrieved memories as context string."""
         if not memories:
             return ""
@@ -471,7 +472,7 @@ class MemoryAugmentedEngine:
         prompt: str,
         use_memory: bool = True,
         **kwargs
-    ) -> Generator[str, None, None]:
+    ) -> Generator[str]:
         """
         Stream generate with memory augmentation.
         
@@ -508,7 +509,7 @@ class MemoryAugmentedEngine:
     def chat(
         self,
         message: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         use_memory: bool = True,
         **kwargs
     ) -> str:
@@ -608,7 +609,7 @@ class MemoryAugmentedEngine:
             except Exception as e:
                 logger.error(f"Failed to save memories: {e}")
     
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict[str, Any]:
         """Get memory system statistics."""
         return {
             "total_memories": self.vector_db.count() if self.vector_db else 0,
@@ -634,10 +635,10 @@ class MemoryAugmentedEngine:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-_default_engine: Optional[MemoryAugmentedEngine] = None
+_default_engine: MemoryAugmentedEngine | None = None
 
 
-def get_memory_engine(model_name: Optional[str] = None) -> MemoryAugmentedEngine:
+def get_memory_engine(model_name: str | None = None) -> MemoryAugmentedEngine:
     """
     Get or create the default memory-augmented engine.
     
@@ -705,7 +706,7 @@ def store_memory(content: str, memory_type: str = "conversation") -> str:
     return engine.store_memory(content, memory_type)
 
 
-def search_memories(query: str, top_k: int = 5) -> List[Dict]:
+def search_memories(query: str, top_k: int = 5) -> list[dict]:
     """
     Search for relevant memories.
     

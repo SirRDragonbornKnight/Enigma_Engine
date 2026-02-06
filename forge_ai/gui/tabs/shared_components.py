@@ -12,16 +12,25 @@ Features:
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable, List
+from typing import Any, Callable, Dict, List, Optional
 
 try:
+    from PyQt5.QtCore import QEvent, Qt, pyqtSignal
+    from PyQt5.QtGui import QColor, QCursor, QPainter, QPixmap
     from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QComboBox, QGroupBox, QColorDialog,
-        QDialog, QSlider, QSpinBox, QCheckBox
+        QCheckBox,
+        QColorDialog,
+        QComboBox,
+        QDialog,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QSlider,
+        QSpinBox,
+        QVBoxLayout,
+        QWidget,
     )
-    from PyQt5.QtCore import Qt, pyqtSignal, QEvent
-    from PyQt5.QtGui import QColor, QCursor, QPixmap, QPainter
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -138,7 +147,7 @@ class PresetSelector(QWidget):
         super().__init__(parent)
         self.category = category
         self.presets = STYLE_PRESETS.get(category, {})
-        self._custom_presets: Dict[str, dict] = {}
+        self._custom_presets: dict[str, dict] = {}
         
         self._setup_ui()
         self._load_custom_presets()
@@ -277,10 +286,10 @@ class ColorCustomizer(QWidget):
         self.secondary_btn.setStyleSheet(f"background: {self._colors['secondary']}; color: white;")
         self.accent_btn.setStyleSheet(f"background: {self._colors['accent']}; color: white;")
     
-    def get_colors(self) -> Dict[str, str]:
+    def get_colors(self) -> dict[str, str]:
         return self._colors.copy()
     
-    def set_colors(self, colors: Dict[str, str]):
+    def set_colors(self, colors: dict[str, str]):
         self._colors.update(colors)
         self._update_buttons()
 
@@ -332,14 +341,14 @@ class SettingsPersistence:
         self.tab_name = tab_name
         self.path = SETTINGS_DIR / f"{tab_name}_settings.json"
     
-    def save(self, settings: Dict[str, Any]):
+    def save(self, settings: dict[str, Any]):
         try:
             with open(self.path, 'w') as f:
                 json.dump(settings, f, indent=2)
         except Exception:
             pass
     
-    def load(self) -> Dict[str, Any]:
+    def load(self) -> dict[str, Any]:
         if self.path.exists():
             try:
                 with open(self.path) as f:
@@ -349,7 +358,7 @@ class SettingsPersistence:
         return {}
 
 
-def create_settings_group(title: str, widgets: List[tuple]) -> QGroupBox:
+def create_settings_group(title: str, widgets: list[tuple]) -> QGroupBox:
     """Create a settings group box with label-widget pairs.
     
     Args:
@@ -478,16 +487,16 @@ class DirectoryWatcher:
         watcher.stop()   # Stop watching
     """
     
-    def __init__(self, directory: Path, extensions: Optional[List[str]] = None, 
+    def __init__(self, directory: Path, extensions: Optional[list[str]] = None, 
                  interval_ms: int = 3000, recursive: bool = True):
         from PyQt5.QtCore import QTimer
         
         self.directory = Path(directory)
-        self.extensions = set(ext.lower() for ext in (extensions or []))
+        self.extensions = {ext.lower() for ext in (extensions or [])}
         self.interval = interval_ms
         self.recursive = recursive
-        self._callbacks: List[Callable] = []
-        self._last_state: Dict[str, float] = {}
+        self._callbacks: list[Callable] = []
+        self._last_state: dict[str, float] = {}
         self._timer: Optional[QTimer] = None
     
     def on_change(self, callback: Callable):
@@ -508,7 +517,7 @@ class DirectoryWatcher:
             self._timer.stop()
             self._timer = None
     
-    def _scan_files(self) -> Dict[str, float]:
+    def _scan_files(self) -> dict[str, float]:
         """Scan directory and return file paths with modification times."""
         files = {}
         if not self.directory.exists():

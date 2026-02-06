@@ -161,7 +161,7 @@ class AWQQuantizer:
     
     def quantize(
         self,
-        calibration_data: List[str]
+        calibration_data: list[str]
     ) -> nn.Module:
         """
         Quantize model using AWQ.
@@ -188,8 +188,8 @@ class AWQQuantizer:
     
     def _collect_activation_stats(
         self,
-        calibration_data: List[str]
-    ) -> Dict[str, torch.Tensor]:
+        calibration_data: list[str]
+    ) -> dict[str, torch.Tensor]:
         """Collect activation statistics for all linear layers."""
         act_scales = {}
         hooks = []
@@ -329,7 +329,7 @@ class AWQQuantizer:
     def _quantize_weight(
         self,
         W: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Quantize weights with grouping."""
         out_features, in_features = W.shape
         group_size = self.config.q_group_size
@@ -436,7 +436,7 @@ class AWQQuantizer:
 def quantize_model_awq(
     model: nn.Module,
     tokenizer: Any,
-    calibration_data: List[str],
+    calibration_data: list[str],
     w_bit: int = 4,
     group_size: int = 128
 ) -> nn.Module:

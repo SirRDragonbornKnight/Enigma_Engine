@@ -22,22 +22,37 @@ USAGE:
 
 import logging
 from typing import Optional
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QGroupBox, QListWidget, QTextEdit, QComboBox, QSpinBox,
-    QCheckBox, QDoubleSpinBox, QLineEdit, QMessageBox,
-    QListWidgetItem, QFrame, QProgressBar, QGridLayout
-)
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
+from ...config import CONFIG
 from ...federated import (
     FederatedLearning,
-    FederationRole,
-    FederationMode,
     FederationDiscovery,
+    FederationMode,
+    FederationRole,
 )
-from ...config import CONFIG
 
 logger = logging.getLogger(__name__)
 

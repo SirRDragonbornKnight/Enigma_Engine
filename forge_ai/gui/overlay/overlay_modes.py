@@ -4,8 +4,8 @@ Overlay Modes - Different display modes for the AI overlay.
 Defines the different modes the overlay can be in and the positions it can occupy.
 """
 
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
 
 

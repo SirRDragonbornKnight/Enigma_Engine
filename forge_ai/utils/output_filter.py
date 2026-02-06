@@ -14,8 +14,9 @@ Part of the ForgeAI security utilities.
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Set, Callable, Pattern
 from enum import Enum
+from re import Pattern
+from typing import Any, Callable, Dict, List, Optional, Set
 
 
 class SensitiveDataType(Enum):
@@ -41,10 +42,10 @@ class RedactionResult:
     original: str
     filtered: str
     redactions_made: int
-    types_redacted: List[SensitiveDataType] = field(default_factory=list)
-    redaction_details: List[Dict[str, Any]] = field(default_factory=list)
+    types_redacted: list[SensitiveDataType] = field(default_factory=list)
+    redaction_details: list[dict[str, Any]] = field(default_factory=list)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "original": self.original,
@@ -70,7 +71,7 @@ class FilterRule:
 
 
 # Sensitive data patterns
-SENSITIVE_PATTERNS: Dict[SensitiveDataType, Dict[str, Any]] = {
+SENSITIVE_PATTERNS: dict[SensitiveDataType, dict[str, Any]] = {
     SensitiveDataType.EMAIL: {
         "pattern": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
         "replacement": "[EMAIL REDACTED]",
@@ -218,7 +219,7 @@ class OutputFilter:
         self.redact_paths = redact_paths
         
         # Compile patterns
-        self._compiled_patterns: Dict[SensitiveDataType, Pattern] = {}
+        self._compiled_patterns: dict[SensitiveDataType, Pattern] = {}
         for dtype, info in SENSITIVE_PATTERNS.items():
             self._compiled_patterns[dtype] = re.compile(
                 info["pattern"], 
@@ -236,12 +237,12 @@ class OutputFilter:
         ]
         
         # Custom rules
-        self._custom_rules: List[FilterRule] = []
+        self._custom_rules: list[FilterRule] = []
     
     def filter(
         self,
         text: str,
-        types: Optional[Set[SensitiveDataType]] = None
+        types: Optional[set[SensitiveDataType]] = None
     ) -> RedactionResult:
         """
         Filter sensitive data from text.
@@ -256,8 +257,8 @@ class OutputFilter:
         original = text
         filtered = text
         total_redactions = 0
-        types_redacted: Set[SensitiveDataType] = set()
-        details: List[Dict[str, Any]] = []
+        types_redacted: set[SensitiveDataType] = set()
+        details: list[dict[str, Any]] = []
         
         # Determine which types to redact
         if types is None:
@@ -429,7 +430,7 @@ class OutputFilter:
     def detect_sensitive_data(
         self,
         text: str
-    ) -> Dict[SensitiveDataType, int]:
+    ) -> dict[SensitiveDataType, int]:
         """
         Detect sensitive data without redacting.
         
@@ -575,7 +576,7 @@ class ContentFilter:
             (re.compile(p, re.IGNORECASE), cat) for p, cat in self._harmful_patterns
         ]
     
-    def categorize(self, text: str) -> Set[str]:
+    def categorize(self, text: str) -> set[str]:
         """
         Categorize content by detected issues.
         
@@ -650,7 +651,7 @@ def redact_secrets(text: str) -> str:
     return OutputFilter().redact_secrets(text)
 
 
-def detect_sensitive(text: str) -> Dict[SensitiveDataType, int]:
+def detect_sensitive(text: str) -> dict[SensitiveDataType, int]:
     """Quick sensitive data detection."""
     return OutputFilter().detect_sensitive_data(text)
 

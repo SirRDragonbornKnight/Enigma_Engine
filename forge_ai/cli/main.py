@@ -27,11 +27,10 @@ EXAMPLES:
 """
 
 import argparse
-import sys
 import os
+import sys
 from pathlib import Path
-from typing import Optional, List
-
+from typing import List, Optional
 
 # =============================================================================
 # CLI Commands
@@ -99,9 +98,10 @@ def cmd_pull(args):
         print(f"Creating {size} model...")
         
         try:
-            from ..core.model import create_model
-            from ..config import CONFIG
             import torch
+
+            from ..config import CONFIG
+            from ..core.model import create_model
             
             model = create_model(size)
             
@@ -138,9 +138,9 @@ def cmd_run(args):
     print("Type 'exit' or 'quit' to end the conversation.\n")
     
     try:
-        from ..core.inference import ForgeEngine
         from ..config import CONFIG
-        
+        from ..core.inference import ForgeEngine
+
         # Find the model
         models_dir = Path(CONFIG.get("models_dir", "models"))
         model_path = None
@@ -327,8 +327,9 @@ def cmd_show(args):
     """Show model information."""
     model_name = args.model
     
-    from ..config import CONFIG
     import torch
+
+    from ..config import CONFIG
     
     models_dir = Path(CONFIG.get("models_dir", "models"))
     model_path = models_dir / f"{model_name}.pth"
@@ -416,8 +417,8 @@ def cmd_train(args):
     print("  Forge Training")
     print(f"{'='*50}\n")
     
-    from ..core.training import train_model
     from ..config import CONFIG
+    from ..core.training import train_model
     
     data_path = args.data or Path(CONFIG.get("data_dir", "data")) / "training.txt"
     model_size = args.size or "small"
@@ -453,9 +454,10 @@ def cmd_quantize(args):
     print(f"  Quantizing: {model_name}")
     print(f"{'='*50}\n")
     
-    from ..config import CONFIG
-    from ..core.quantization import quantize_model, QuantConfig
     import torch
+
+    from ..config import CONFIG
+    from ..core.quantization import QuantConfig, quantize_model
     
     models_dir = Path(CONFIG.get("models_dir", "models"))
     model_path = models_dir / f"{model_name}.pth"
@@ -466,7 +468,7 @@ def cmd_quantize(args):
     
     print(f"Loading model...")
     from ..core.model import create_model
-    
+
     # Load checkpoint
     checkpoint = torch.load(model_path, map_location="cpu")
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -522,7 +524,7 @@ def cmd_create(args):
     # Parse Modelfile
     config = {"base": "forge-small", "system": ""}
     
-    with open(modelfile, 'r') as f:
+    with open(modelfile) as f:
         for line in f:
             line = line.strip()
             if line.startswith("FROM "):
@@ -537,9 +539,11 @@ def cmd_create(args):
     print(f"Base model: {config['base']}")
     
     # Copy base model with new config
-    from ..config import CONFIG
-    import torch
     import json
+
+    import torch
+
+    from ..config import CONFIG
     
     models_dir = Path(CONFIG.get("models_dir", "models"))
     base_path = models_dir / f"{config['base']}.pth"

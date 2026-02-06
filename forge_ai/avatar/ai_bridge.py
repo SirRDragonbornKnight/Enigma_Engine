@@ -44,11 +44,11 @@ Usage:
 """
 
 import re
-from typing import Optional, Callable, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
-    from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+    from PyQt5.QtCore import QObject, QTimer, pyqtSignal
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -78,27 +78,27 @@ class ExplicitCommands:
     """
     
     # Emotions - how the avatar feels
-    EMOTIONS: List[str] = field(default_factory=lambda: [
+    EMOTIONS: list[str] = field(default_factory=lambda: [
         "happy", "sad", "surprised", "thinking", "confused",
         "neutral", "angry", "excited", "curious", "worried",
         "proud", "embarrassed", "loving", "mischievous", "focused"
     ])
     
     # Gestures - physical movements
-    GESTURES: List[str] = field(default_factory=lambda: [
+    GESTURES: list[str] = field(default_factory=lambda: [
         "wave", "nod", "shake", "shrug", "point", "bow",
         "clap", "thumbsup", "peace", "facepalm", "salute",
         "dance", "spin", "jump"
     ])
     
     # Actions - state changes
-    ACTIONS: List[str] = field(default_factory=lambda: [
+    ACTIONS: list[str] = field(default_factory=lambda: [
         "think", "listen", "talk", "idle", "celebrate",
         "acknowledge", "attention", "relax", "alert", "sleep"
     ])
     
     # Facial expressions
-    EXPRESSIONS: List[str] = field(default_factory=lambda: [
+    EXPRESSIONS: list[str] = field(default_factory=lambda: [
         "wink", "blink", "eyebrow_raise", "smile", "frown",
         "smirk", "pout", "gasp", "eye_roll", "tongue_out"
     ])
@@ -108,7 +108,7 @@ class ExplicitCommands:
 COMMAND_PATTERN = re.compile(r'\[(\w+):(\w+)\]', re.IGNORECASE)
 
 
-def parse_explicit_commands(text: str) -> Tuple[str, List[AvatarCommand]]:
+def parse_explicit_commands(text: str) -> tuple[str, list[AvatarCommand]]:
     """
     Parse explicit AI commands from text.
     
@@ -168,33 +168,33 @@ Commands are hidden from users - they only see: "Hello! Great to see you!"
 class EmotionKeywords:
     """Keywords that indicate emotions in AI responses."""
     
-    HAPPY: List[str] = field(default_factory=lambda: [
+    HAPPY: list[str] = field(default_factory=lambda: [
         "happy", "glad", "great", "awesome", "wonderful", "fantastic",
         "excited", "love", "enjoy", "amazing", "excellent", "perfect",
         "yay", "hooray", "nice", "good", "pleased", "delighted",
         "!", "😊", "😄", "🎉", ":)", ":D", "haha", "lol"
     ])
     
-    SAD: List[str] = field(default_factory=lambda: [
+    SAD: list[str] = field(default_factory=lambda: [
         "sorry", "sad", "unfortunately", "regret", "apologize",
         "can't", "cannot", "unable", "impossible", "difficult",
         "worry", "concern", "afraid", "disappointed", "miss",
         "😢", "😔", ":("
     ])
     
-    SURPRISED: List[str] = field(default_factory=lambda: [
+    SURPRISED: list[str] = field(default_factory=lambda: [
         "wow", "whoa", "amazing", "incredible", "unbelievable",
         "surprising", "unexpected", "really", "seriously",
         "oh my", "no way", "what", "!!", "😮", "😲", "🤯"
     ])
     
-    THINKING: List[str] = field(default_factory=lambda: [
+    THINKING: list[str] = field(default_factory=lambda: [
         "hmm", "let me think", "consider", "perhaps", "maybe",
         "possibly", "i think", "i believe", "interesting",
         "analyzing", "processing", "calculating", "...", "🤔"
     ])
     
-    CONFUSED: List[str] = field(default_factory=lambda: [
+    CONFUSED: list[str] = field(default_factory=lambda: [
         "confused", "unclear", "don't understand", "not sure",
         "what do you mean", "could you clarify", "?", "hmm",
         "🤨", "😕"
@@ -205,27 +205,27 @@ class EmotionKeywords:
 class GestureKeywords:
     """Keywords that trigger gestures."""
     
-    WAVE: List[str] = field(default_factory=lambda: [
+    WAVE: list[str] = field(default_factory=lambda: [
         "hello", "hi", "hey", "greetings", "welcome",
         "goodbye", "bye", "see you", "farewell", "👋"
     ])
     
-    NOD: List[str] = field(default_factory=lambda: [
+    NOD: list[str] = field(default_factory=lambda: [
         "yes", "correct", "right", "exactly", "indeed",
         "agree", "sure", "of course", "absolutely", "definitely"
     ])
     
-    SHAKE: List[str] = field(default_factory=lambda: [
+    SHAKE: list[str] = field(default_factory=lambda: [
         "no", "incorrect", "wrong", "disagree", "not really",
         "i don't think so", "nope"
     ])
     
-    SHRUG: List[str] = field(default_factory=lambda: [
+    SHRUG: list[str] = field(default_factory=lambda: [
         "i don't know", "not sure", "maybe", "perhaps",
         "hard to say", "depends", "🤷"
     ])
     
-    POINT: List[str] = field(default_factory=lambda: [
+    POINT: list[str] = field(default_factory=lambda: [
         "look at", "check out", "see here", "notice",
         "here is", "this is", "that is", "👉"
     ])
@@ -266,7 +266,7 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
         self._enable_explicit = enable_explicit_commands
         
         # Track explicit commands received this response
-        self._explicit_commands: List[AvatarCommand] = []
+        self._explicit_commands: list[AvatarCommand] = []
         
         # Keyword matchers for automatic detection
         self._emotion_keywords = EmotionKeywords()
@@ -549,7 +549,7 @@ class AIAvatarBridge(QObject if HAS_PYQT else object):
         
         return self.generate_with_avatar(engine, enhanced_prompt, **kwargs)
     
-    def get_commands_for_response(self) -> List[AvatarCommand]:
+    def get_commands_for_response(self) -> list[AvatarCommand]:
         """Get all explicit commands that were processed for the current/last response."""
         return self._explicit_commands.copy()
     
@@ -711,7 +711,7 @@ def process_ai_response(text: str, avatar=None) -> str:
     return cleaned
 
 
-def list_avatar_commands() -> Dict[str, List[str]]:
+def list_avatar_commands() -> dict[str, list[str]]:
     """
     Get all available explicit commands.
     

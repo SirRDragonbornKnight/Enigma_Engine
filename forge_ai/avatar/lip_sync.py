@@ -5,8 +5,8 @@ Basic lip sync for speaking animations.
 Maps phonemes to mouth shapes (visemes).
 """
 
-from typing import List, Tuple
 import re
+from typing import List, Tuple
 
 
 class LipSync:
@@ -48,7 +48,7 @@ class LipSync:
         self.current_viseme = "silence"
         self._viseme_duration = 0.1  # Default 100ms per viseme
     
-    def text_to_visemes(self, text: str) -> List[Tuple[str, float]]:
+    def text_to_visemes(self, text: str) -> list[tuple[str, float]]:
         """
         Convert text to timed viseme sequence.
         
@@ -109,7 +109,7 @@ class LipSync:
         
         return phoneme_map.get(phoneme.upper(), 'consonant')
     
-    def sync_with_audio(self, audio_data, text: str) -> List[Tuple[str, float, float]]:
+    def sync_with_audio(self, audio_data, text: str) -> list[tuple[str, float, float]]:
         """
         Sync visemes with audio data.
         
@@ -154,7 +154,7 @@ class LipSync:
         
         return "mouth_closed"
     
-    def animate_speaking(self, text: str) -> List[str]:
+    def animate_speaking(self, text: str) -> list[str]:
         """
         Generate frame-by-frame mouth shapes for speaking animation.
         

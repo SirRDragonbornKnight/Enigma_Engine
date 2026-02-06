@@ -96,11 +96,11 @@ class PunctuationResult:
 class PunctuationRestorer:
     """Multi-backend punctuation restoration system."""
     
-    def __init__(self, config: Optional[PunctuationConfig] = None):
+    def __init__(self, config: PunctuationConfig | None = None):
         """Initialize restorer with config."""
         self.config = config or PunctuationConfig()
-        self._backend: Optional[Any] = None
-        self._backend_type: Optional[PunctuationBackend] = None
+        self._backend: Any | None = None
+        self._backend_type: PunctuationBackend | None = None
         
         # Common contractions for rule-based restoration
         self._contractions = {
@@ -320,7 +320,7 @@ class PunctuationRestorer:
             capitalizations_fixed=caps_fixed
         )
     
-    def restore_batch(self, texts: List[str]) -> List[PunctuationResult]:
+    def restore_batch(self, texts: list[str]) -> list[PunctuationResult]:
         """Restore punctuation for multiple texts."""
         backend = self._init_backend()
         
@@ -337,12 +337,12 @@ class PunctuationRestorer:
         # Fall back to sequential processing
         return [self.restore(text) for text in texts]
     
-    def _restore_deep_punctuation(self, text: str) -> Tuple[str, float]:
+    def _restore_deep_punctuation(self, text: str) -> tuple[str, float]:
         """Restore using deepmultilingualpunctuation."""
         result = self._backend.restore_punctuation(text)
         return result, 0.9  # This library doesn't return confidence
     
-    def _restore_punctuators(self, text: str) -> Tuple[str, float]:
+    def _restore_punctuators(self, text: str) -> tuple[str, float]:
         """Restore using punctuators."""
         results = self._backend.infer([text])
         if results and results[0]:
@@ -351,14 +351,14 @@ class PunctuationRestorer:
             return restored, 0.85
         return text, 0.0
     
-    def _restore_nemo(self, text: str) -> Tuple[str, float]:
+    def _restore_nemo(self, text: str) -> tuple[str, float]:
         """Restore using NeMo."""
         result = self._backend.add_punctuation_capitalization([text])
         if result:
             return result[0], 0.9
         return text, 0.0
     
-    def _restore_transformers(self, text: str) -> Tuple[str, float]:
+    def _restore_transformers(self, text: str) -> tuple[str, float]:
         """Restore using transformers pipeline."""
         # Split into chunks if too long
         words = text.split()
@@ -406,7 +406,7 @@ class PunctuationRestorer:
         
         return final_text, avg_confidence
     
-    def _restore_simple(self, text: str) -> Tuple[str, float]:
+    def _restore_simple(self, text: str) -> tuple[str, float]:
         """Simple rule-based punctuation restoration."""
         # Normalize whitespace
         text = re.sub(r'\s+', ' ', text.strip())
@@ -473,11 +473,11 @@ class PunctuationRestorer:
 
 
 # Singleton instance
-_restorer_instance: Optional[PunctuationRestorer] = None
+_restorer_instance: PunctuationRestorer | None = None
 
 
 def get_punctuation_restorer(
-    config: Optional[PunctuationConfig] = None
+    config: PunctuationConfig | None = None
 ) -> PunctuationRestorer:
     """Get or create a singleton restorer instance."""
     global _restorer_instance
@@ -494,7 +494,7 @@ def restore_punctuation(text: str) -> str:
     return result.text
 
 
-def restore_punctuation_batch(texts: List[str]) -> List[str]:
+def restore_punctuation_batch(texts: list[str]) -> list[str]:
     """Quick batch punctuation restoration."""
     restorer = get_punctuation_restorer()
     results = restorer.restore_batch(texts)

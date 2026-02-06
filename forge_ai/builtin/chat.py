@@ -5,11 +5,11 @@ A simple rule-based chatbot that works without any AI model.
 Provides basic conversation when torch/models aren't available.
 """
 
-import re
 import random
+import re
 import time
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class BuiltinChat:
@@ -20,7 +20,7 @@ class BuiltinChat:
     
     def __init__(self):
         self.is_loaded = False
-        self.conversation_history: List[Dict[str, str]] = []
+        self.conversation_history: list[dict[str, str]] = []
         self.user_name = "User"
         self.bot_name = "Forge"
         
@@ -200,7 +200,7 @@ class BuiltinChat:
         self._response_cycle_indices['default'] = (idx + 1) % len(self.default_responses)
         return response
     
-    def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, **kwargs) -> dict[str, Any]:
         """Generate a response to the prompt."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}
@@ -243,6 +243,6 @@ class BuiltinChat:
         """Clear conversation history."""
         self.conversation_history.clear()
     
-    def get_history(self) -> List[Dict[str, str]]:
+    def get_history(self) -> list[dict[str, str]]:
         """Get conversation history."""
         return self.conversation_history.copy()

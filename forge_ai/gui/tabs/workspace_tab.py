@@ -8,21 +8,39 @@ A unified space for:
 """
 
 import json
-from pathlib import Path
 from datetime import datetime
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QLineEdit, QListWidget, QListWidgetItem,
-    QSplitter, QGroupBox, QInputDialog, QMessageBox,
-    QTabWidget, QFrame, QPlainTextEdit,
-    QSpinBox, QProgressBar, QFileDialog, QScrollArea,
-    QDialogButtonBox, QDialog, QCheckBox
-)
+from pathlib import Path
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .shared_components import NoScrollComboBox
 from ...config import CONFIG
+from .shared_components import NoScrollComboBox
 
 
 def create_workspace_tab(parent):
@@ -657,7 +675,7 @@ def _load_user_presets():
     path = _get_user_presets_path()
     if path.exists():
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
             logger.debug(f"Could not load user presets: {e}")
@@ -840,7 +858,7 @@ def _save_to_gui_settings(parent):
     settings = {}
     if settings_path.exists():
         try:
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
         except Exception as e:
             logger.debug(f"Could not load gui_settings for save: {e}")
@@ -864,7 +882,7 @@ def _apply_prompt_to_chat(parent):
     settings = {}
     if settings_path.exists():
         try:
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
         except Exception as e:
             logger.debug(f"Could not load gui_settings for apply: {e}")
@@ -902,7 +920,7 @@ def _refresh_notes_list(parent):
     
     for note_file in sorted(notes_dir.glob("*.json"), reverse=True):
         try:
-            with open(note_file, 'r') as f:
+            with open(note_file) as f:
                 note = json.load(f)
             item = QListWidgetItem(note.get("title", note_file.stem))
             item.setData(Qt.UserRole, str(note_file))
@@ -918,7 +936,7 @@ def _load_note(parent, item):
         return
     
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             note = json.load(f)
         parent.workspace_note_title.setText(note.get("title", ""))
         parent.workspace_note_editor.setText(note.get("content", ""))

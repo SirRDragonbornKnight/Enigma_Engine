@@ -8,23 +8,28 @@ Bidirectional model transfer - share your models AND use community models.
 
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from .base import (
-    ExportProvider, ExportResult, ExportStatus, ProviderConfig,
-    ImportProvider, ImportResult, ImportStatus
+    ExportProvider,
+    ExportResult,
+    ExportStatus,
+    ImportProvider,
+    ImportResult,
+    ImportStatus,
+    ProviderConfig,
 )
-from .huggingface import HuggingFaceProvider, HuggingFaceImporter
-from .replicate import ReplicateProvider, ReplicateImporter
-from .ollama import OllamaProvider, OllamaImporter
-from .wandb import WandBProvider, WandBImporter
+from .huggingface import HuggingFaceImporter, HuggingFaceProvider
+from .ollama import OllamaImporter, OllamaProvider
 from .onnx import ONNXProvider
+from .replicate import ReplicateImporter, ReplicateProvider
+from .wandb import WandBImporter, WandBProvider
 
 logger = logging.getLogger(__name__)
 
 
 # Registry of all export providers
-EXPORT_PROVIDERS: Dict[str, Type[ExportProvider]] = {
+EXPORT_PROVIDERS: dict[str, type[ExportProvider]] = {
     "huggingface": HuggingFaceProvider,
     "hf": HuggingFaceProvider,  # Alias
     "replicate": ReplicateProvider,
@@ -35,7 +40,7 @@ EXPORT_PROVIDERS: Dict[str, Type[ExportProvider]] = {
 }
 
 # Registry of all import providers
-IMPORT_PROVIDERS: Dict[str, Type[ImportProvider]] = {
+IMPORT_PROVIDERS: dict[str, type[ImportProvider]] = {
     "huggingface": HuggingFaceImporter,
     "hf": HuggingFaceImporter,  # Alias
     "replicate": ReplicateImporter,
@@ -107,8 +112,8 @@ class ModelHub:
         """
         from ...config import CONFIG
         self.models_dir = Path(models_dir or CONFIG["models_dir"])
-        self._export_providers: Dict[str, ExportProvider] = {}
-        self._import_providers: Dict[str, ImportProvider] = {}
+        self._export_providers: dict[str, ExportProvider] = {}
+        self._import_providers: dict[str, ImportProvider] = {}
     
     # ===================
     # Provider Management
@@ -118,7 +123,7 @@ class ModelHub:
         """Get or create an export provider instance."""
         name = name.lower()
         if name not in EXPORT_PROVIDERS:
-            available = list(set(p.NAME for p in EXPORT_PROVIDERS.values()))
+            available = list({p.NAME for p in EXPORT_PROVIDERS.values()})
             raise ValueError(f"Unknown export provider: {name}. Available: {available}")
         
         if name not in self._export_providers:
@@ -131,7 +136,7 @@ class ModelHub:
         """Get or create an import provider instance."""
         name = name.lower()
         if name not in IMPORT_PROVIDERS:
-            available = list(set(p.NAME for p in IMPORT_PROVIDERS.values()))
+            available = list({p.NAME for p in IMPORT_PROVIDERS.values()})
             raise ValueError(f"Unknown import provider: {name}. Available: {available}")
         
         if name not in self._import_providers:
@@ -140,7 +145,7 @@ class ModelHub:
         
         return self._import_providers[name]
     
-    def list_export_providers(self) -> List[ProviderConfig]:
+    def list_export_providers(self) -> list[ProviderConfig]:
         """List all available export providers."""
         seen = set()
         configs = []
@@ -150,7 +155,7 @@ class ModelHub:
                 seen.add(provider_class.NAME)
         return configs
     
-    def list_import_providers(self) -> List[str]:
+    def list_import_providers(self) -> list[str]:
         """List all available import providers."""
         seen = set()
         names = []
@@ -170,7 +175,7 @@ class ModelHub:
         provider: str = "huggingface",
         limit: int = 20,
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for models on a platform.
         
@@ -245,7 +250,7 @@ class ModelHub:
         
         return result
     
-    def list_available(self, provider: str = "ollama", **kwargs) -> List[Dict[str, Any]]:
+    def list_available(self, provider: str = "ollama", **kwargs) -> list[dict[str, Any]]:
         """
         List models available on a platform.
         
@@ -277,7 +282,7 @@ class ModelHub:
         provider = self._get_export_provider(name)
         return provider.get_config()
     
-    def list_exportable_models(self) -> Dict[str, Dict[str, Any]]:
+    def list_exportable_models(self) -> dict[str, dict[str, Any]]:
         """
         List all ForgeAI models that can be exported.
         
@@ -368,9 +373,9 @@ class ModelHub:
     def export_all(
         self,
         model_name: str,
-        providers: Optional[List[str]] = None,
+        providers: Optional[list[str]] = None,
         **provider_kwargs
-    ) -> Dict[str, ExportResult]:
+    ) -> dict[str, ExportResult]:
         """
         Export a model to multiple providers.
         
@@ -480,7 +485,7 @@ def search_models(
     provider: str = "huggingface",
     limit: int = 20,
     **kwargs
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Quick search function.
     
@@ -496,11 +501,11 @@ def search_models(
     return get_hub().search(query, provider, limit=limit, **kwargs)
 
 
-def list_export_providers() -> List[ProviderConfig]:
+def list_export_providers() -> list[ProviderConfig]:
     """List all available export providers."""
     return get_hub().list_export_providers()
 
 
-def list_import_providers() -> List[str]:
+def list_import_providers() -> list[str]:
     """List all available import providers."""
     return get_hub().list_import_providers()

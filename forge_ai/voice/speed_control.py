@@ -60,7 +60,7 @@ class SpeedPreset(Enum):
 
 
 # Preset to speed multiplier mapping
-PRESET_SPEEDS: Dict[SpeedPreset, float] = {
+PRESET_SPEEDS: dict[SpeedPreset, float] = {
     SpeedPreset.VERY_SLOW: 0.5,
     SpeedPreset.SLOW: 0.75,
     SpeedPreset.NORMAL: 1.0,
@@ -454,7 +454,7 @@ class SpeedController:
 
 
 # Global speed controller instance
-_controller: Optional[SpeedController] = None
+_controller: SpeedController | None = None
 
 
 def get_speed_controller(config: SpeedConfig = None) -> SpeedController:

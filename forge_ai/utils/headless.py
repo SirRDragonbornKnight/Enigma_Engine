@@ -12,11 +12,11 @@ Part of the ForgeAI platform utilities.
 """
 
 import os
-import sys
 import platform
+import sys
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Callable
 from enum import Enum
+from typing import Any, Callable, Dict, Optional
 
 
 class DisplayEnvironment(Enum):

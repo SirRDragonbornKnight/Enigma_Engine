@@ -71,7 +71,7 @@ class SystemPrompt:
     content: str
     category: str = "general"
     description: str = ""
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     author: str = ""
     version: str = "1.0"
     
@@ -82,9 +82,9 @@ class SystemPrompt:
     favorite: bool = False
     
     # Configuration hints
-    suggested_temperature: Optional[float] = None
-    suggested_max_tokens: Optional[int] = None
-    model_hint: Optional[str] = None  # Suggested model type
+    suggested_temperature: float | None = None
+    suggested_max_tokens: int | None = None
+    model_hint: str | None = None  # Suggested model type
     
     def __post_init__(self):
         if not self.created_at:
@@ -92,12 +92,12 @@ class SystemPrompt:
         if not self.updated_at:
             self.updated_at = self.created_at
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SystemPrompt':
+    def from_dict(cls, data: dict[str, Any]) -> SystemPrompt:
         """Create from dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
     
@@ -112,7 +112,7 @@ class SystemPrompt:
 
 
 # Built-in prompts
-BUILTIN_PROMPTS: List[SystemPrompt] = [
+BUILTIN_PROMPTS: list[SystemPrompt] = [
     SystemPrompt(
         name="Helpful Assistant",
         content="""You are a helpful, harmless, and honest AI assistant. You aim to provide accurate, thoughtful responses while being transparent about your limitations. If you're unsure about something, you say so. If asked to do something harmful or unethical, you politely decline and explain why.""",
@@ -233,7 +233,7 @@ class PromptLibrary:
     search, and organization features.
     """
     
-    def __init__(self, library_path: Optional[Path] = None):
+    def __init__(self, library_path: Path | None = None):
         """
         Initialize the prompt library.
         
@@ -244,7 +244,7 @@ class PromptLibrary:
         self._library_path.mkdir(parents=True, exist_ok=True)
         
         self._prompts_file = self._library_path / "prompts.json"
-        self._prompts: Dict[str, SystemPrompt] = {}
+        self._prompts: dict[str, SystemPrompt] = {}
         
         self._load_library()
     
@@ -259,7 +259,7 @@ class PromptLibrary:
         # Load custom prompts
         if self._prompts_file.exists():
             try:
-                with open(self._prompts_file, 'r', encoding='utf-8') as f:
+                with open(self._prompts_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for item in data.get("prompts", []):
                         prompt = SystemPrompt.from_dict(item)
@@ -300,7 +300,7 @@ class PromptLibrary:
         content: str,
         category: str = "custom",
         description: str = "",
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         **kwargs
     ) -> SystemPrompt:
         """
@@ -352,7 +352,7 @@ class PromptLibrary:
         logger.info(f"Saved prompt: {name}")
         return prompt
     
-    def get_prompt(self, name: str) -> Optional[SystemPrompt]:
+    def get_prompt(self, name: str) -> SystemPrompt | None:
         """
         Get a prompt by name.
         
@@ -372,7 +372,7 @@ class PromptLibrary:
         
         return prompt
     
-    def get_prompt_content(self, name: str) -> Optional[str]:
+    def get_prompt_content(self, name: str) -> str | None:
         """Get just the prompt content by name."""
         prompt = self.get_prompt(name)
         return prompt.content if prompt else None
@@ -403,23 +403,23 @@ class PromptLibrary:
         
         return False
     
-    def list_prompts(self) -> List[SystemPrompt]:
+    def list_prompts(self) -> list[SystemPrompt]:
         """Get all prompts."""
         return list(self._prompts.values())
     
-    def list_by_category(self, category: str) -> List[SystemPrompt]:
+    def list_by_category(self, category: str) -> list[SystemPrompt]:
         """Get prompts in a category."""
         return [p for p in self._prompts.values() if p.category == category]
     
-    def list_categories(self) -> List[str]:
+    def list_categories(self) -> list[str]:
         """Get all categories in use."""
-        return list(set(p.category for p in self._prompts.values()))
+        return list({p.category for p in self._prompts.values()})
     
-    def list_favorites(self) -> List[SystemPrompt]:
+    def list_favorites(self) -> list[SystemPrompt]:
         """Get favorite prompts."""
         return [p for p in self._prompts.values() if p.favorite]
     
-    def list_recent(self, limit: int = 10) -> List[SystemPrompt]:
+    def list_recent(self, limit: int = 10) -> list[SystemPrompt]:
         """Get recently used prompts."""
         sorted_prompts = sorted(
             self._prompts.values(),
@@ -428,7 +428,7 @@ class PromptLibrary:
         )
         return sorted_prompts[:limit]
     
-    def list_popular(self, limit: int = 10) -> List[SystemPrompt]:
+    def list_popular(self, limit: int = 10) -> list[SystemPrompt]:
         """Get most used prompts."""
         sorted_prompts = sorted(
             self._prompts.values(),
@@ -437,7 +437,7 @@ class PromptLibrary:
         )
         return sorted_prompts[:limit]
     
-    def search(self, query: str) -> List[SystemPrompt]:
+    def search(self, query: str) -> list[SystemPrompt]:
         """
         Search prompts by keyword.
         
@@ -452,14 +452,14 @@ class PromptLibrary:
         
         return [p for p in self._prompts.values() if p.matches_search(query)]
     
-    def search_by_tag(self, tag: str) -> List[SystemPrompt]:
+    def search_by_tag(self, tag: str) -> list[SystemPrompt]:
         """Get prompts with a specific tag."""
         tag_lower = tag.lower()
         return [p for p in self._prompts.values() if tag_lower in [t.lower() for t in p.tags]]
     
-    def list_tags(self) -> List[str]:
+    def list_tags(self) -> list[str]:
         """Get all tags in use."""
-        tags: Set[str] = set()
+        tags: set[str] = set()
         for prompt in self._prompts.values():
             tags.update(prompt.tags)
         return sorted(tags)
@@ -476,7 +476,7 @@ class PromptLibrary:
         
         return False
     
-    def export_prompt(self, name: str) -> Optional[str]:
+    def export_prompt(self, name: str) -> str | None:
         """
         Export a prompt as JSON.
         
@@ -498,7 +498,7 @@ class PromptLibrary:
             "prompts": [p.to_dict() for p in self._prompts.values()]
         }, indent=2)
     
-    def import_prompt(self, json_data: str) -> Optional[SystemPrompt]:
+    def import_prompt(self, json_data: str) -> SystemPrompt | None:
         """
         Import a prompt from JSON.
         
@@ -527,7 +527,7 @@ class PromptLibrary:
             Number of prompts imported
         """
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 data = json.load(f)
             
             count = 0
@@ -546,7 +546,7 @@ class PromptLibrary:
             logger.error(f"Failed to import from file: {e}")
             return 0
     
-    def duplicate_prompt(self, name: str, new_name: str) -> Optional[SystemPrompt]:
+    def duplicate_prompt(self, name: str, new_name: str) -> SystemPrompt | None:
         """
         Duplicate a prompt with a new name.
         
@@ -581,10 +581,10 @@ class PromptLibrary:
 
 
 # Singleton instance
-_library_instance: Optional[PromptLibrary] = None
+_library_instance: PromptLibrary | None = None
 
 
-def get_prompt_library(path: Optional[Path] = None) -> PromptLibrary:
+def get_prompt_library(path: Path | None = None) -> PromptLibrary:
     """Get or create the singleton library instance."""
     global _library_instance
     if _library_instance is None:
@@ -593,17 +593,17 @@ def get_prompt_library(path: Optional[Path] = None) -> PromptLibrary:
 
 
 # Convenience functions
-def get_system_prompt(name: str) -> Optional[str]:
+def get_system_prompt(name: str) -> str | None:
     """Quick access to a system prompt by name."""
     prompt = get_prompt_library().get_prompt(name)
     return prompt.content if prompt else None
 
 
-def list_system_prompts() -> List[str]:
+def list_system_prompts() -> list[str]:
     """List all available prompt names."""
     return [p.name for p in get_prompt_library().list_prompts()]
 
 
-def search_prompts(query: str) -> List[SystemPrompt]:
+def search_prompts(query: str) -> list[SystemPrompt]:
     """Search prompts by keyword."""
     return get_prompt_library().search(query)

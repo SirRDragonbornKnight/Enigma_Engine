@@ -14,12 +14,13 @@ References:
 - "Accelerating Large Language Model Decoding with Speculative Sampling"
 """
 
+import logging
+from dataclasses import dataclass
+from typing import Any, Callable, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, List, Any, Callable
-from dataclasses import dataclass
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class SpeculativeDecoder:
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
-        stop_tokens: Optional[List[int]] = None
+        stop_tokens: Optional[list[int]] = None
     ) -> str:
         """
         Generate text using speculative decoding.
@@ -159,7 +160,7 @@ class SpeculativeDecoder:
         temperature: float,
         top_p: float,
         top_k: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Generate draft tokens using the small model."""
         draft_ids = []
         draft_probs = []
@@ -212,7 +213,7 @@ class SpeculativeDecoder:
         temperature: float,
         top_p: float,
         top_k: int
-    ) -> Tuple[torch.Tensor, int]:
+    ) -> tuple[torch.Tensor, int]:
         """Verify draft tokens with target model."""
         # Concatenate input with draft tokens
         full_ids = torch.cat([input_ids, draft_ids], dim=1)

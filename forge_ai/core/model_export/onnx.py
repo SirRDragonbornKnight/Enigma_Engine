@@ -8,7 +8,7 @@ mobile, web browsers, and various inference engines.
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 import torch
 
@@ -62,10 +62,10 @@ class ONNXProvider(ExportProvider):
     SUPPORTED_FORMATS = ["onnx"]
     WEBSITE = "https://onnx.ai"
     
-    def _build_model(self, config: Dict[str, Any]) -> torch.nn.Module:
+    def _build_model(self, config: dict[str, Any]) -> torch.nn.Module:
         """Build a ForgeAI model from config for export."""
         from ..model import Forge, ForgeConfig
-        
+
         # Convert to ForgeConfig
         model_config = ForgeConfig.from_dict(config)
         model = Forge(config=model_config)

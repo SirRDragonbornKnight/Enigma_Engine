@@ -72,13 +72,13 @@ deployment on any device from Raspberry Pi Zero to datacenter GPUs.
     • docs/multi_device_guide.md      - Multi-device setup
 """
 
+import logging
 import os
 import platform
 import subprocess
-import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class HardwareProfile:
         
         return "\n".join(lines)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "total_ram_gb": self.total_ram_gb,
@@ -191,7 +191,7 @@ class HardwareProfile:
 # 🔍 DETECTION FUNCTIONS
 # =============================================================================
 
-def _detect_memory() -> Tuple[float, float]:
+def _detect_memory() -> tuple[float, float]:
     """
     Detect RAM total and available.
     
@@ -206,7 +206,7 @@ def _detect_memory() -> Tuple[float, float]:
         
         if system == "Linux":
             # Parse /proc/meminfo (most accurate on Linux)
-            with open("/proc/meminfo", "r") as f:
+            with open("/proc/meminfo") as f:
                 for line in f:
                     if "MemTotal" in line:
                         # Value is in KB
@@ -257,7 +257,7 @@ def _detect_memory() -> Tuple[float, float]:
     return total_ram, available_ram
 
 
-def _detect_gpu() -> Tuple[Optional[str], Optional[float], bool, bool]:
+def _detect_gpu() -> tuple[Optional[str], Optional[float], bool, bool]:
     """
     Detect GPU capabilities.
     
@@ -271,7 +271,7 @@ def _detect_gpu() -> Tuple[Optional[str], Optional[float], bool, bool]:
     
     try:
         import torch
-        
+
         # Check CUDA (NVIDIA)
         if torch.cuda.is_available():
             has_cuda = True
@@ -312,7 +312,7 @@ def _detect_gpu() -> Tuple[Optional[str], Optional[float], bool, bool]:
     return gpu_name, vram_gb, has_cuda, has_mps
 
 
-def _detect_cpu() -> Tuple[int, str]:
+def _detect_cpu() -> tuple[int, str]:
     """
     Detect CPU cores and model.
     
@@ -326,7 +326,7 @@ def _detect_cpu() -> Tuple[int, str]:
         system = platform.system()
         
         if system == "Linux":
-            with open("/proc/cpuinfo", "r") as f:
+            with open("/proc/cpuinfo") as f:
                 for line in f:
                     if "model name" in line.lower():
                         model = line.split(":")[1].strip()
@@ -353,7 +353,7 @@ def _detect_cpu() -> Tuple[int, str]:
     return cores, model
 
 
-def _detect_raspberry_pi() -> Tuple[bool, Optional[str]]:
+def _detect_raspberry_pi() -> tuple[bool, Optional[str]]:
     """
     Detect if running on Raspberry Pi and which model.
     
@@ -374,7 +374,7 @@ def _detect_raspberry_pi() -> Tuple[bool, Optional[str]]:
     
     # Check /proc/cpuinfo for BCM (Broadcom) chips
     try:
-        with open("/proc/cpuinfo", "r") as f:
+        with open("/proc/cpuinfo") as f:
             cpuinfo = f.read().lower()
             if "raspberry" in cpuinfo or "bcm" in cpuinfo:
                 is_pi = True
@@ -389,7 +389,7 @@ def _detect_raspberry_pi() -> Tuple[bool, Optional[str]]:
     
     for path in model_paths:
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 model_str = f.read().strip().replace("\x00", "")
                 if "Raspberry Pi" in model_str:
                     is_pi = True
@@ -435,7 +435,7 @@ def _recommend_model_and_quant(
     has_mps: bool,
     is_raspberry_pi: bool,
     pi_model: Optional[str]
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """
     Recommend model size and quantization based on hardware.
     
@@ -631,7 +631,7 @@ def recommend_model_size(profile: Optional[HardwareProfile] = None) -> str:
 # ⚙️ OPTIMAL CONFIG GENERATION
 # =============================================================================
 
-def get_optimal_config(profile: HardwareProfile) -> Dict[str, Any]:
+def get_optimal_config(profile: HardwareProfile) -> dict[str, Any]:
     """
     Get optimal ForgeConfig parameters for the given hardware profile.
     
@@ -705,7 +705,7 @@ def get_optimal_config(profile: HardwareProfile) -> Dict[str, Any]:
     return config
 
 
-def estimate_memory_usage(size: str, quantization: str = "none") -> Dict[str, float]:
+def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, float]:
     """
     Estimate RAM and VRAM requirements for a given model configuration.
     

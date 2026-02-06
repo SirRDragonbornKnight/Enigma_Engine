@@ -23,6 +23,7 @@ USAGE:
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, Tuple
+
 import numpy as np
 
 from .federation import ModelUpdate
@@ -37,7 +38,7 @@ class CompressedUpdate:
     """
     device_id: str
     round_number: int
-    compressed_deltas: Dict[str, 'CompressedTensor']
+    compressed_deltas: dict[str, 'CompressedTensor']
     num_samples: int
     loss: float
     compression_ratio: float = 0.0
@@ -69,10 +70,10 @@ class CompressedTensor:
     Compressed representation of a tensor.
     """
     data: np.ndarray
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     dtype: str
     compression_method: str
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
     
     def decompress(self) -> np.ndarray:
         """
@@ -114,9 +115,9 @@ class SparseUpdate:
     """
     Sparse model update (only non-zero or top-K values).
     """
-    indices: Tuple[np.ndarray, ...]
+    indices: tuple[np.ndarray, ...]
     values: np.ndarray
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     
     def to_dense(self) -> np.ndarray:
         """
@@ -256,7 +257,7 @@ class UpdateCompressor:
             metadata=metadata,
         )
     
-    def _quantize_array(self, weights: np.ndarray, bits: int) -> Tuple[np.ndarray, Dict]:
+    def _quantize_array(self, weights: np.ndarray, bits: int) -> tuple[np.ndarray, dict]:
         """
         Quantize array to specified bits.
         
@@ -303,7 +304,7 @@ class UpdateCompressor:
         
         return quantized, metadata
     
-    def _get_quantization_metadata(self, values: np.ndarray) -> Dict:
+    def _get_quantization_metadata(self, values: np.ndarray) -> dict:
         """Get quantization metadata for values."""
         _, metadata = self._quantize_array(values, self.quantization_bits)
         return metadata

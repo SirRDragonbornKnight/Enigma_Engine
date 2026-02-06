@@ -26,17 +26,17 @@ CONNECTED FILES:
 ================================================================================
 """
 
-import time
 import logging
+import time
 from enum import Enum
-from typing import Optional, Callable, List, Tuple
 from pathlib import Path
+from typing import Callable, List, Optional, Tuple
 
 import torch
 
-from .model import create_model, Forge
-from .tokenizer import get_tokenizer
 from ..config import CONFIG
+from .model import Forge, create_model
+from .tokenizer import get_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -954,7 +954,7 @@ class ModelBootstrap:
         Uses lightweight training optimized for quick initialization.
         """
         from .training import Trainer, TrainingConfig
-        
+
         # Parse training data into examples
         examples = ModelBootstrap._parse_training_data(training_data)
         
@@ -1022,7 +1022,7 @@ class ModelBootstrap:
         return model
     
     @staticmethod
-    def _parse_training_data(data: str) -> List[Tuple[str, str]]:
+    def _parse_training_data(data: str) -> list[tuple[str, str]]:
         """
         Parse instruction/response format training data.
         

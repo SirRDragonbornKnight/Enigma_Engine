@@ -70,8 +70,12 @@ __author__ = "ForgeAI Team"
 # Cross-device integration (Pi + Phone + Gaming PC)
 try:
     from .integration import (
-        CrossDeviceSystem, SystemRole, DeviceEndpoint,
-        quick_setup_gaming_pc, quick_setup_phone, quick_setup_pi,
+        CrossDeviceSystem,
+        DeviceEndpoint,
+        SystemRole,
+        quick_setup_gaming_pc,
+        quick_setup_phone,
+        quick_setup_pi,
     )
     HAS_INTEGRATION = True
 except ImportError:

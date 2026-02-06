@@ -1,12 +1,20 @@
 """AI Terminal tab for ForgeAI GUI - view AI processing in real-time."""
 
 from datetime import datetime
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QPlainTextEdit, QCheckBox, QGroupBox, QSpinBox
-)
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QTextCursor
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
 

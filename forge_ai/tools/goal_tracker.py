@@ -10,14 +10,14 @@ Supports:
 """
 
 import json
+import logging
 import time
 import uuid
-from pathlib import Path
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Set
-from dataclasses import dataclass, field, asdict
 from enum import Enum
-import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +48,18 @@ class Goal:
     status: GoalStatus = GoalStatus.NOT_STARTED
     priority: GoalPriority = GoalPriority.MEDIUM
     parent_id: Optional[str] = None  # For subgoals
-    subgoal_ids: List[str] = field(default_factory=list)
+    subgoal_ids: list[str] = field(default_factory=list)
     progress: float = 0.0  # 0-100
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     completed_at: Optional[float] = None
     due_date: Optional[str] = None
-    tags: List[str] = field(default_factory=list)
-    notes: List[str] = field(default_factory=list)
-    success_criteria: List[str] = field(default_factory=list)
-    blockers: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    success_criteria: list[str] = field(default_factory=list)
+    blockers: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         d = asdict(self)
         d['status'] = self.status.value
@@ -67,7 +67,7 @@ class Goal:
         return d
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Goal':
+    def from_dict(cls, data: dict[str, Any]) -> 'Goal':
         """Create from dictionary."""
         data['status'] = GoalStatus(data.get('status', 'not_started'))
         data['priority'] = GoalPriority(data.get('priority', 2))
@@ -88,14 +88,14 @@ class GoalTracker:
     
     def __init__(self, storage_path: Optional[Path] = None):
         self.storage_path = storage_path or Path("data/goals.json")
-        self.goals: Dict[str, Goal] = {}
+        self.goals: dict[str, Goal] = {}
         self._load()
         
     def _load(self):
         """Load goals from storage."""
         try:
             if self.storage_path.exists():
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     data = json.load(f)
                     for gid, gdata in data.get('goals', {}).items():
                         self.goals[gid] = Goal.from_dict(gdata)
@@ -124,8 +124,8 @@ class GoalTracker:
         priority: GoalPriority = GoalPriority.MEDIUM,
         parent_id: Optional[str] = None,
         due_date: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        success_criteria: Optional[List[str]] = None
+        tags: Optional[list[str]] = None,
+        success_criteria: Optional[list[str]] = None
     ) -> Goal:
         """Create a new goal."""
         goal = Goal(
@@ -161,39 +161,39 @@ class GoalTracker:
         """Get a goal by ID."""
         return self.goals.get(goal_id)
     
-    def get_all_goals(self) -> List[Goal]:
+    def get_all_goals(self) -> list[Goal]:
         """Get all goals."""
         return list(self.goals.values())
     
-    def get_active_goals(self) -> List[Goal]:
+    def get_active_goals(self) -> list[Goal]:
         """Get goals that are in progress or not started."""
         return [g for g in self.goals.values() 
                 if g.status in (GoalStatus.NOT_STARTED, GoalStatus.IN_PROGRESS)]
     
-    def get_top_level_goals(self) -> List[Goal]:
+    def get_top_level_goals(self) -> list[Goal]:
         """Get goals that are not subgoals."""
         return [g for g in self.goals.values() if g.parent_id is None]
     
-    def get_subgoals(self, goal_id: str) -> List[Goal]:
+    def get_subgoals(self, goal_id: str) -> list[Goal]:
         """Get subgoals of a goal."""
         goal = self.goals.get(goal_id)
         if not goal:
             return []
         return [self.goals[sid] for sid in goal.subgoal_ids if sid in self.goals]
     
-    def get_goals_by_status(self, status: GoalStatus) -> List[Goal]:
+    def get_goals_by_status(self, status: GoalStatus) -> list[Goal]:
         """Get goals by status."""
         return [g for g in self.goals.values() if g.status == status]
     
-    def get_goals_by_priority(self, priority: GoalPriority) -> List[Goal]:
+    def get_goals_by_priority(self, priority: GoalPriority) -> list[Goal]:
         """Get goals by priority."""
         return [g for g in self.goals.values() if g.priority == priority]
     
-    def get_goals_by_tag(self, tag: str) -> List[Goal]:
+    def get_goals_by_tag(self, tag: str) -> list[Goal]:
         """Get goals with a specific tag."""
         return [g for g in self.goals.values() if tag in g.tags]
     
-    def search_goals(self, query: str) -> List[Goal]:
+    def search_goals(self, query: str) -> list[Goal]:
         """Search goals by title or description."""
         q = query.lower()
         return [g for g in self.goals.values() 
@@ -327,7 +327,7 @@ class GoalTracker:
     
     # ========== Goal Decomposition ==========
     
-    def decompose_goal(self, goal_id: str, subtasks: List[str]) -> List[Goal]:
+    def decompose_goal(self, goal_id: str, subtasks: list[str]) -> list[Goal]:
         """Break a goal into subgoals."""
         goal = self.goals.get(goal_id)
         if not goal:
@@ -345,7 +345,7 @@ class GoalTracker:
                 
         return subgoals
     
-    def suggest_decomposition(self, goal_id: str) -> List[str]:
+    def suggest_decomposition(self, goal_id: str) -> list[str]:
         """
         Suggest how to break down a goal.
         Returns list of suggested subtask titles.
@@ -400,7 +400,7 @@ class GoalTracker:
     
     # ========== Goal Inference ==========
     
-    def infer_goal_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+    def infer_goal_from_text(self, text: str) -> Optional[dict[str, Any]]:
         """
         Infer a potential goal from user text.
         Returns goal data if a goal is detected.
@@ -479,7 +479,7 @@ class GoalTracker:
             
         return False
     
-    def auto_complete_check(self) -> List[Goal]:
+    def auto_complete_check(self) -> list[Goal]:
         """Check all goals and auto-complete those that are done."""
         completed = []
         for goal in self.get_active_goals():
@@ -490,7 +490,7 @@ class GoalTracker:
     
     # ========== Prioritization ==========
     
-    def get_prioritized_goals(self) -> List[Goal]:
+    def get_prioritized_goals(self) -> list[Goal]:
         """Get active goals sorted by priority and urgency."""
         active = self.get_active_goals()
         
@@ -508,8 +508,8 @@ class GoalTracker:
                         s += 200  # Overdue
                     elif days_left < 3:
                         s += 100  # Due soon
-                except:
-                    pass
+                except ValueError:
+                    pass  # Invalid date format
             return s
             
         return sorted(active, key=score, reverse=True)
@@ -524,7 +524,7 @@ class GoalTracker:
     
     # ========== Reporting ==========
     
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a summary of all goals."""
         goals = list(self.goals.values())
         
@@ -618,7 +618,7 @@ def complete(goal_id: str) -> Optional[Goal]:
     """Mark goal complete."""
     return get_tracker().complete_goal(goal_id)
 
-def my_goals() -> List[Goal]:
+def my_goals() -> list[Goal]:
     """Get active goals."""
     return get_tracker().get_active_goals()
 

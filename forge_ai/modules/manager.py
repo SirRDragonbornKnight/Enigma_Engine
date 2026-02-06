@@ -71,7 +71,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from .registry import Module
@@ -296,7 +296,7 @@ class Module:
         category=ModuleCategory.EXTENSION,
     )
 
-    def __init__(self, manager: 'ModuleManager', config: Dict[str, Any] = None):
+    def __init__(self, manager: ModuleManager, config: Dict[str, Any] = None):
         """
         Initialize module instance.
         
@@ -462,7 +462,7 @@ class ModuleManager:
     """
     
     # Singleton instance storage
-    _instance: Optional['ModuleManager'] = None
+    _instance: Optional[ModuleManager] = None
     _initialized: bool = False
     
     def __new__(cls, config_path: Optional[Path] = None, local_only: bool = True):
@@ -1000,7 +1000,7 @@ class ModuleManager:
             True if loaded successfully
         """
         from .sandbox import ModuleSandbox, create_default_sandbox_config
-        
+
         # Create default sandbox config if not provided
         if sandbox_config is None:
             sandbox_config = create_default_sandbox_config(module_id)
@@ -1291,9 +1291,10 @@ class ModuleManager:
         
         # Get system resource usage
         try:
-            import psutil
             import os
-            
+
+            import psutil
+
             # Current process
             process = psutil.Process(os.getpid())
             
@@ -1457,7 +1458,7 @@ class ModuleManager:
         if not path.exists():
             return False
 
-        with open(path, 'r') as f:
+        with open(path) as f:
             config = json.load(f)
 
         # Load modules in dependency order
@@ -1506,8 +1507,9 @@ class ModuleManager:
             
             # Check resource usage (basic checks)
             try:
-                import psutil
                 import os
+
+                import psutil
                 process = psutil.Process(os.getpid())
                 mem_percent = process.memory_percent()
                 
@@ -1644,7 +1646,7 @@ class ModuleManager:
     # 🎯 ORCHESTRATOR INTEGRATION - Capability Registration
     # =========================================================================
     
-    def _register_module_capabilities(self, module_id: str, module_info: 'ModuleInfo') -> None:
+    def _register_module_capabilities(self, module_id: str, module_info: ModuleInfo) -> None:
         """
         Register module capabilities with the orchestrator.
         

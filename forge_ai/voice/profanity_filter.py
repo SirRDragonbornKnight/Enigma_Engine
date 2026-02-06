@@ -91,11 +91,11 @@ class FilterConfig:
     language: str = "en"
     
     # Custom lists
-    additional_words: Set[str] = field(default_factory=set)
-    allowed_words: Set[str] = field(default_factory=set)
+    additional_words: set[str] = field(default_factory=set)
+    allowed_words: set[str] = field(default_factory=set)
     
     # Word list file
-    custom_wordlist_path: Optional[Path] = None
+    custom_wordlist_path: Path | None = None
 
 
 @dataclass
@@ -105,8 +105,8 @@ class FilterResult:
     original: str
     filtered: str  
     contains_profanity: bool
-    detected_words: List[str] = field(default_factory=list)
-    positions: List[Tuple[int, int]] = field(default_factory=list)
+    detected_words: list[str] = field(default_factory=list)
+    positions: list[tuple[int, int]] = field(default_factory=list)
     
     @property
     def profanity_count(self) -> int:
@@ -139,12 +139,12 @@ class ProfanityFilter:
         '+': 't', '(': 'c', ')': 'c'
     }
     
-    def __init__(self, config: Optional[FilterConfig] = None):
+    def __init__(self, config: FilterConfig | None = None):
         """Initialize filter with config."""
         self.config = config or FilterConfig()
-        self._backend: Optional[Any] = None
-        self._backend_type: Optional[FilterBackend] = None
-        self._word_list: Set[str] = set()
+        self._backend: Any | None = None
+        self._backend_type: FilterBackend | None = None
+        self._word_list: set[str] = set()
         
         # Load custom word list if provided
         if self.config.custom_wordlist_path:
@@ -257,7 +257,7 @@ class ProfanityFilter:
     def _load_wordlist(self, path: Path) -> None:
         """Load custom word list from file."""
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 for line in f:
                     word = line.strip().lower()
                     if word and not word.startswith('#'):
@@ -339,7 +339,7 @@ class ProfanityFilter:
         
         return False
     
-    def detect(self, text: str) -> List[str]:
+    def detect(self, text: str) -> list[str]:
         """Detect and return all profane words in text."""
         if not self.config.enabled or not text:
             return []
@@ -386,8 +386,8 @@ class ProfanityFilter:
     def censor(
         self,
         text: str,
-        style: Optional[CensorStyle] = None,
-        replacement: Optional[str] = None
+        style: CensorStyle | None = None,
+        replacement: str | None = None
     ) -> str:
         """
         Censor profanity in text.
@@ -490,8 +490,8 @@ class ProfanityFilter:
     def filter_text(
         self,
         text: str,
-        style: Optional[CensorStyle] = None,
-        replacement: Optional[str] = None
+        style: CensorStyle | None = None,
+        replacement: str | None = None
     ) -> FilterResult:
         """
         Filter text with full result details.
@@ -523,7 +523,7 @@ class ProfanityFilter:
             positions=positions
         )
     
-    def add_words(self, words: List[str]) -> None:
+    def add_words(self, words: list[str]) -> None:
         """Add words to the filter."""
         normalized = {w.lower() for w in words}
         self.config.additional_words.update(normalized)
@@ -534,7 +534,7 @@ class ProfanityFilter:
         elif self._backend_type == FilterBackend.SIMPLE:
             self._word_list.update(normalized)
     
-    def remove_words(self, words: List[str]) -> None:
+    def remove_words(self, words: list[str]) -> None:
         """Remove words from the filter (allow them)."""
         normalized = {w.lower() for w in words}
         self.config.allowed_words.update(normalized)
@@ -554,11 +554,11 @@ class ProfanityFilter:
 
 
 # Singleton instance
-_filter_instance: Optional[ProfanityFilter] = None
+_filter_instance: ProfanityFilter | None = None
 
 
 def get_profanity_filter(
-    config: Optional[FilterConfig] = None
+    config: FilterConfig | None = None
 ) -> ProfanityFilter:
     """Get or create a singleton filter instance."""
     global _filter_instance

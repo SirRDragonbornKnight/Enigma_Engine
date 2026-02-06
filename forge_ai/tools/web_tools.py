@@ -16,7 +16,7 @@ import urllib.request
 from typing import Any
 
 from .tool_registry import Tool
-from .url_safety import URLSafety, ContentFilter
+from .url_safety import ContentFilter, URLSafety
 
 logger = logging.getLogger(__name__)
 

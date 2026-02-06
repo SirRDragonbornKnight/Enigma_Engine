@@ -11,38 +11,38 @@ Contains the core components of the ForgeAI AI framework:
 - Self-Improvement & Autonomous Learning
 """
 
-# Model
-from .model import (
-    Forge,
-    TinyForge,  # Backwards compatibility alias
-    Enigma,     # Legacy name for backwards compatibility
-    ForgeConfig,
-    create_model,
-    MODEL_PRESETS,
-)
-
 # Inference
 from .inference import ForgeEngine, generate, load_engine
 
+# Model
+from .model import Enigma  # Legacy name for backwards compatibility
+from .model import TinyForge  # Backwards compatibility alias
+from .model import (
+    MODEL_PRESETS,
+    Forge,
+    ForgeConfig,
+    create_model,
+)
+
 # Training
 from .training import (
+    QADataset,
+    TextDataset,
     Trainer,
     TrainingConfig,
-    train_model,
     load_trained_model,
-    TextDataset,
-    QADataset,
+    train_model,
 )
 
 # Self-Improvement System (NEW)
 try:
     from .self_improvement import (
+        AutonomousConfig,
         LearningEngine,
         LearningExample,
         LearningSource,
-        Priority,
         PerformanceMetrics,
-        AutonomousConfig,
+        Priority,
         get_learning_engine,
     )
 except ImportError:
@@ -56,7 +56,7 @@ except ImportError:
 
 # Autonomous Mode (UPDATED with real implementations)
 try:
-    from .autonomous import AutonomousMode, AutonomousManager, AutonomousAction
+    from .autonomous import AutonomousAction, AutonomousManager, AutonomousMode
 except ImportError:
     AutonomousMode = None
     AutonomousManager = None
@@ -64,15 +64,18 @@ except ImportError:
 
 # Tokenizers
 from .tokenizer import (
+    SimpleTokenizer,
     get_tokenizer,
     load_tokenizer,
     train_tokenizer,
-    SimpleTokenizer,
 )
 
 # Try to import Forge tokenizer (may fail if dependencies missing)
 try:
-    from .advanced_tokenizer import ForgeTokenizer, AdvancedBPETokenizer  # AdvancedBPETokenizer is alias
+    from .advanced_tokenizer import (  # AdvancedBPETokenizer is alias
+        AdvancedBPETokenizer,
+        ForgeTokenizer,
+    )
 except ImportError:
     ForgeTokenizer = None
     AdvancedBPETokenizer = None
@@ -95,9 +98,14 @@ from .model_registry import ModelRegistry
 # Engine Pool (for efficient engine reuse)
 try:
     from .engine_pool import (
-        EnginePool, EnginePoolConfig, PooledEngine,
-        get_engine, release_engine, get_engine_context,
-        get_pool, create_fallback_response,
+        EnginePool,
+        EnginePoolConfig,
+        PooledEngine,
+        create_fallback_response,
+        get_engine,
+        get_engine_context,
+        get_pool,
+        release_engine,
     )
 except ImportError:
     EnginePool = None
@@ -112,8 +120,11 @@ except ImportError:
 # Prompt Builder (for consistent prompt formatting)
 try:
     from .prompt_builder import (
-        PromptBuilder, PromptTemplate, get_prompt_builder,
-        build_chat_prompt, extract_response,
+        PromptBuilder,
+        PromptTemplate,
+        build_chat_prompt,
+        extract_response,
+        get_prompt_builder,
     )
 except ImportError:
     PromptBuilder = None
@@ -124,19 +135,19 @@ except ImportError:
 
 # Hardware detection
 try:
-    from .hardware import get_hardware, HardwareProfile
+    from .hardware import HardwareProfile, get_hardware
 except ImportError:
     get_hardware = None
     HardwareProfile = None
 
 # Advanced hardware detection (Pi, edge devices)
 try:
+    from .hardware_detection import HardwareProfile as AdvancedHardwareProfile
     from .hardware_detection import (
         detect_hardware,
-        recommend_model_size,
-        get_optimal_config,
         estimate_memory_usage,
-        HardwareProfile as AdvancedHardwareProfile,
+        get_optimal_config,
+        recommend_model_size,
     )
 except ImportError:
     detect_hardware = None
@@ -147,7 +158,7 @@ except ImportError:
 
 # Quantization (optional)
 try:
-    from .quantization import quantize_model, load_quantized, auto_quantize, QuantConfig
+    from .quantization import QuantConfig, auto_quantize, load_quantized, quantize_model
 except ImportError:
     quantize_model = None
     load_quantized = None
@@ -157,8 +168,13 @@ except ImportError:
 # Device Profiles (optional)
 try:
     from .device_profiles import (
-        DeviceProfiler, DeviceClass, DeviceCapabilities, ProfileSettings,
-        get_device_profiler, get_optimal_settings, get_recommended_model_size,
+        DeviceCapabilities,
+        DeviceClass,
+        DeviceProfiler,
+        ProfileSettings,
+        get_device_profiler,
+        get_optimal_settings,
+        get_recommended_model_size,
     )
 except ImportError:
     DeviceProfiler = None
@@ -171,7 +187,7 @@ except ImportError:
 
 # Low Power Inference (optional)
 try:
-    from .low_power_inference import LowPowerEngine, LowPowerConfig
+    from .low_power_inference import LowPowerConfig, LowPowerEngine
 except ImportError:
     LowPowerEngine = None
     LowPowerConfig = None
@@ -179,7 +195,10 @@ except ImportError:
 # Gaming Mode (optional)
 try:
     from .gaming_mode import (
-        GamingMode, GamingPriority, GamingProfile, ResourceLimits,
+        GamingMode,
+        GamingPriority,
+        GamingProfile,
+        ResourceLimits,
         get_gaming_mode,
     )
 except ImportError:
@@ -192,7 +211,9 @@ except ImportError:
 # Adaptive Engine (optional)
 try:
     from .adaptive_engine import (
-        AdaptiveEngine, AdaptiveConfig, AdaptiveMode,
+        AdaptiveConfig,
+        AdaptiveEngine,
+        AdaptiveMode,
         get_adaptive_engine,
     )
 except ImportError:
@@ -205,8 +226,8 @@ except ImportError:
 try:
     from .universal_router import (
         UniversalToolRouter,
-        get_universal_router,
         chat_with_tools,
+        get_universal_router,
     )
 except ImportError:
     UniversalToolRouter = None
@@ -223,11 +244,9 @@ def _lazy_load_huggingface():
     global HuggingFaceModel, HuggingFaceEngine, load_huggingface_model
     if HuggingFaceModel is None:
         try:
-            from .huggingface_loader import (
-                HuggingFaceModel as _HFM,
-                HuggingFaceEngine as _HFE,
-                load_huggingface_model as _load,
-            )
+            from .huggingface_loader import HuggingFaceEngine as _HFE
+            from .huggingface_loader import HuggingFaceModel as _HFM
+            from .huggingface_loader import load_huggingface_model as _load
             HuggingFaceModel = _HFM
             HuggingFaceEngine = _HFE
             load_huggingface_model = _load
@@ -251,11 +270,9 @@ def _lazy_load_hf_exporter():
     global HuggingFaceExporter, export_model_to_hub, export_model_locally
     if HuggingFaceExporter is None:
         try:
-            from .huggingface_exporter import (
-                HuggingFaceExporter as _HFE,
-                export_model_to_hub as _export_hub,
-                export_model_locally as _export_local,
-            )
+            from .huggingface_exporter import HuggingFaceExporter as _HFE
+            from .huggingface_exporter import export_model_locally as _export_local
+            from .huggingface_exporter import export_model_to_hub as _export_hub
             HuggingFaceExporter = _HFE
             export_model_to_hub = _export_hub
             export_model_locally = _export_local
@@ -273,11 +290,9 @@ def _lazy_load_model_exporter():
     global ModelExporter, export_model, list_export_providers
     if ModelExporter is None:
         try:
-            from .model_export import (
-                ModelExporter as _ME,
-                export_model as _export,
-                list_export_providers as _list_providers,
-            )
+            from .model_export import ModelExporter as _ME
+            from .model_export import export_model as _export
+            from .model_export import list_export_providers as _list_providers
             ModelExporter = _ME
             export_model = _export
             list_export_providers = _list_providers
@@ -294,10 +309,8 @@ def _lazy_load_wants_system():
     global AIWantsSystem, get_wants_system
     if AIWantsSystem is None:
         try:
-            from .wants_system import (
-                AIWantsSystem as _AWS,
-                get_wants_system as _get_wants,
-            )
+            from .wants_system import AIWantsSystem as _AWS
+            from .wants_system import get_wants_system as _get_wants
             AIWantsSystem = _AWS
             get_wants_system = _get_wants
         except ImportError:
@@ -321,8 +334,8 @@ def _lazy_load_learned_generator():
 # Orchestration System (optional)
 try:
     from .capability_registry import (
-        CapabilityRegistry,
         Capability,
+        CapabilityRegistry,
         ModelCapabilityEntry,
         get_capability_registry,
     )
@@ -334,9 +347,9 @@ except ImportError:
 
 try:
     from .model_pool import (
+        ModelEntry,
         ModelPool,
         ModelPoolConfig,
-        ModelEntry,
         get_model_pool,
     )
 except ImportError:
@@ -347,10 +360,10 @@ except ImportError:
 
 try:
     from .collaboration import (
-        ModelCollaboration,
-        CollaborationType,
         CollaborationRequest,
         CollaborationResponse,
+        CollaborationType,
+        ModelCollaboration,
         get_collaboration,
     )
 except ImportError:
@@ -377,8 +390,8 @@ except ImportError:
 
 try:
     from .task_offloader import (
-        TaskOffloader,
         OffloaderConfig,
+        TaskOffloader,
         TaskStatus,
         get_offloader,
     )
@@ -390,9 +403,9 @@ except ImportError:
 
 try:
     from .standalone_tools import (
-        use_tool,
-        list_available_tools,
         get_tool_info,
+        list_available_tools,
+        use_tool,
     )
 except ImportError:
     use_tool = None

@@ -6,16 +6,29 @@ of task offloading settings.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QGroupBox, QFormLayout,
-    QComboBox, QCheckBox, QSpinBox, QProgressBar, QFrame,
-    QGridLayout, QMessageBox, QLineEdit
-)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +38,7 @@ class DeviceItem(QWidget):
     
     clicked = pyqtSignal(str)  # device_id
     
-    def __init__(self, device_info: Dict[str, Any], parent=None):
+    def __init__(self, device_info: dict[str, Any], parent=None):
         super().__init__(parent)
         self.device_id = device_info.get("id", "unknown")
         self.device_info = device_info
@@ -103,7 +116,7 @@ class DevicesTab(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._devices: Dict[str, Dict] = {}
+        self._devices: dict[str, dict] = {}
         self._selected_device: Optional[str] = None
         self._setup_ui()
         self._setup_refresh_timer()
@@ -255,7 +268,7 @@ class DevicesTab(QWidget):
         try:
             from ..comms.discovery import DeviceDiscovery
             from ..network import get_inference_gateway
-            
+
             # Get discovered devices
             discovery = DeviceDiscovery("ForgeAI", 5000)
             devices = discovery.discovered
@@ -278,7 +291,7 @@ class DevicesTab(QWidget):
         except Exception as e:
             logger.error(f"Failed to refresh devices: {e}")
     
-    def _update_device_list(self, devices: Dict[str, Dict]):
+    def _update_device_list(self, devices: dict[str, dict]):
         """Update the device list widget."""
         self._devices = devices
         current = self.device_list.currentItem()
@@ -363,7 +376,7 @@ class DevicesTab(QWidget):
         mode = modes[index] if index < len(modes) else "auto"
         
         try:
-            from ..network import get_inference_gateway, InferenceMode
+            from ..network import InferenceMode, get_inference_gateway
             gateway = get_inference_gateway()
             gateway.mode = InferenceMode(mode)
             logger.info(f"Offload mode changed to: {mode}")

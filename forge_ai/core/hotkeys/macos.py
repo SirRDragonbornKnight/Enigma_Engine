@@ -4,10 +4,10 @@ macOS Hotkey Backend - Global hotkey implementation for macOS.
 Uses Quartz Event Taps for system-wide hotkey capture.
 """
 
-import sys
 import logging
+import sys
 import threading
-from typing import Callable, Dict, Optional, Any
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +16,21 @@ HAS_QUARTZ = False
 if sys.platform == 'darwin':
     try:
         # PyObjC modules for macOS
-        from Quartz import (
-            CGEventMaskBit, CGEventTapCreate, CGEventTapEnable,
-            kCGEventKeyDown, kCGHeadInsertEventTap,
-            kCGSessionEventTap, CFMachPortCreateRunLoopSource,
-            CFRunLoopAddSource, CFRunLoopGetCurrent, CFRunLoopRun,
-            CFRunLoopStop, kCFRunLoopCommonModes
-        )
         from Cocoa import NSEvent
+        from Quartz import (
+            CFMachPortCreateRunLoopSource,
+            CFRunLoopAddSource,
+            CFRunLoopGetCurrent,
+            CFRunLoopRun,
+            CFRunLoopStop,
+            CGEventMaskBit,
+            CGEventTapCreate,
+            CGEventTapEnable,
+            kCFRunLoopCommonModes,
+            kCGEventKeyDown,
+            kCGHeadInsertEventTap,
+            kCGSessionEventTap,
+        )
         HAS_QUARTZ = True
     except ImportError:
         logger.warning("PyObjC not available for macOS hotkeys")
@@ -49,7 +56,7 @@ class MacOSHotkeyBackend:
     
     def __init__(self):
         """Initialize macOS hotkey backend."""
-        self._hotkeys: Dict[str, Dict[str, Any]] = {}
+        self._hotkeys: dict[str, dict[str, Any]] = {}
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()

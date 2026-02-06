@@ -550,7 +550,7 @@ class ToolRouter:
         """Load routing configuration."""
         if self.config_path.exists():
             try:
-                with open(self.config_path, "r") as f:
+                with open(self.config_path) as f:
                     data = json.load(f)
                 
                 for tool_name, models in data.get("assignments", {}).items():
@@ -591,7 +591,7 @@ class ToolRouter:
                 logger.warning(f"Specialized models config not found: {config_path}")
                 return
             
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 config = json.load(f)
             
             if not config.get("enabled", False):
@@ -612,7 +612,7 @@ class ToolRouter:
         
         try:
             from .tokenizer import get_tokenizer
-            
+
             # Try to load from configured path
             if hasattr(self, '_specialized_config'):
                 tokenizer_path = self._specialized_config.get("shared_tokenizer")
@@ -659,8 +659,9 @@ class ToolRouter:
         
         try:
             import torch
+
             from .model import Forge
-            
+
             # Load model checkpoint (weights_only=False needed for full checkpoint with config)
             # This is safe because we only load from our own trained models directory
             checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
@@ -1160,8 +1161,8 @@ class ToolRouter:
     def _load_huggingface_model(self, repo_id: str) -> Any:
         """Load a HuggingFace model for text generation."""
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
             import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
             
             device = "cuda" if torch.cuda.is_available() else "cpu"
             
@@ -1479,10 +1480,11 @@ class ToolRouter:
     def _execute_hf_image(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute image generation with HuggingFace diffusion model."""
         try:
-            from diffusers import StableDiffusionPipeline, DiffusionPipeline
-            import torch
-            from pathlib import Path
             import time
+            from pathlib import Path
+
+            import torch
+            from diffusers import DiffusionPipeline, StableDiffusionPipeline
             
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             
@@ -1538,10 +1540,11 @@ class ToolRouter:
     def _execute_hf_audio(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute audio/TTS with HuggingFace model."""
         try:
-            import torch
-            from pathlib import Path
             import time
+            from pathlib import Path
+
             import scipy.io.wavfile as wavfile
+            import torch
             
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             text = params.get("text", params.get("prompt", ""))
@@ -1609,10 +1612,11 @@ class ToolRouter:
     def _execute_hf_video(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute video generation with HuggingFace model."""
         try:
-            from diffusers import DiffusionPipeline
-            import torch
-            from pathlib import Path
             import time
+            from pathlib import Path
+
+            import torch
+            from diffusers import DiffusionPipeline
             
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             
@@ -1655,10 +1659,11 @@ class ToolRouter:
     def _execute_hf_3d(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute 3D generation with HuggingFace Shap-E."""
         try:
-            from diffusers import ShapEPipeline
-            import torch
-            from pathlib import Path
             import time
+            from pathlib import Path
+
+            import torch
+            from diffusers import ShapEPipeline
             
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             
@@ -1708,8 +1713,8 @@ class ToolRouter:
     def _execute_hf_vision(self, assignment: ModelAssignment, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute vision/image understanding with HuggingFace model."""
         try:
-            from transformers import pipeline
             from PIL import Image
+            from transformers import pipeline
             
             model_id = assignment.model_id.split(":", 1)[1] if ":" in assignment.model_id else assignment.model_id
             

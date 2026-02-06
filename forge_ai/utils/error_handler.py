@@ -285,7 +285,7 @@ class GracefulFileHandler:
                     ]
                 }
             
-            with open(path_obj, 'r', encoding=encoding) as f:
+            with open(path_obj, encoding=encoding) as f:
                 content = f.read()
             
             return {
@@ -402,7 +402,7 @@ def graceful_errors(context: Optional[str] = None):
 if __name__ == "__main__":
     # Test error handling
     import json
-    
+
     # Test file not found
     result = GracefulFileHandler.read_file("/nonexistent/file.txt")
     print("File not found error:")

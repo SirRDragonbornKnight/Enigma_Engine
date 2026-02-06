@@ -351,7 +351,7 @@ class BatteryManager:
         """Read battery on Linux."""
         try:
             from pathlib import Path
-            
+
             # Check /sys/class/power_supply/
             power_supply = Path("/sys/class/power_supply")
             

@@ -32,7 +32,7 @@ import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,8 @@ class GameConfig:
     system_prompt: str = ""         # Game-specific prompt
     
     # Detection
-    process_names: List[str] = field(default_factory=list)  # ["game.exe"]
-    window_titles: List[str] = field(default_factory=list)  # ["Game Window"]
+    process_names: list[str] = field(default_factory=list)  # ["game.exe"]
+    window_titles: list[str] = field(default_factory=list)  # ["Game Window"]
     
     # Behavior
     multiplayer_aware: bool = False
@@ -81,9 +81,9 @@ class GameConfig:
     
     # Knowledge
     wiki_url: str = ""              # For web lookup
-    command_list: List[str] = field(default_factory=list)   # In-game commands
+    command_list: list[str] = field(default_factory=list)   # In-game commands
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "name": self.name,
             "type": self.type.value,
@@ -100,7 +100,7 @@ class GameConfig:
         }
     
     @staticmethod
-    def from_dict(data: Dict) -> 'GameConfig':
+    def from_dict(data: dict) -> 'GameConfig':
         return GameConfig(
             name=data.get("name", "Unknown"),
             type=GameType(data.get("type", "other")),
@@ -118,7 +118,7 @@ class GameConfig:
 
 
 # Pre-configured games (users can add more)
-DEFAULT_GAMES: Dict[str, GameConfig] = {
+DEFAULT_GAMES: dict[str, GameConfig] = {
     "minecraft": GameConfig(
         name="Minecraft",
         type=GameType.SANDBOX,
@@ -248,7 +248,7 @@ class GameAIRouter:
     """
     
     def __init__(self, config_path: Optional[str] = None):
-        self._games: Dict[str, GameConfig] = {}
+        self._games: dict[str, GameConfig] = {}
         self._active_game: Optional[str] = None
         self._detection_thread: Optional[threading.Thread] = None
         self._detecting = False
@@ -268,8 +268,8 @@ class GameAIRouter:
         self._load_configs()
         
         # Callbacks
-        self._on_game_detected: List[Callable] = []
-        self._on_game_changed: List[Callable] = []
+        self._on_game_detected: list[Callable] = []
+        self._on_game_changed: list[Callable] = []
     
     @property
     def active_game(self) -> Optional[str]:
@@ -282,7 +282,7 @@ class GameAIRouter:
         return None
     
     @property
-    def available_games(self) -> List[str]:
+    def available_games(self) -> list[str]:
         return list(self._games.keys())
     
     # ===== Game Registration =====
@@ -339,7 +339,7 @@ class GameAIRouter:
         """Detect currently running game."""
         try:
             import psutil
-            
+
             # Get running processes
             running = set()
             for proc in psutil.process_iter(['name']):
@@ -474,7 +474,7 @@ class GameAIRouter:
                 return config.system_prompt
         return ""
     
-    def get_model_config(self) -> Dict[str, Any]:
+    def get_model_config(self) -> dict[str, Any]:
         """Get model configuration for active game."""
         if self._active_game:
             config = self._games.get(self._active_game)
@@ -517,7 +517,11 @@ class GameAIRouter:
         release_after = False
         if engine is None:
             try:
-                from forge_ai.core.engine_pool import get_engine, release_engine, create_fallback_response
+                from forge_ai.core.engine_pool import (
+                    create_fallback_response,
+                    get_engine,
+                    release_engine,
+                )
                 engine = get_engine()
                 release_after = True
                 if engine is None:
@@ -588,7 +592,7 @@ class GameAIRouter:
         """Load user game configs from file."""
         if self._config_path.exists():
             try:
-                with open(self._config_path, 'r') as f:
+                with open(self._config_path) as f:
                     data = json.load(f)
                 
                 for game_id, game_data in data.items():

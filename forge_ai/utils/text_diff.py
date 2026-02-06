@@ -56,8 +56,8 @@ class ChangeType(str, Enum):
 @dataclass
 class DiffLine:
     """A single line in a diff."""
-    line_num_old: Optional[int]
-    line_num_new: Optional[int]
+    line_num_old: int | None
+    line_num_new: int | None
     change_type: ChangeType
     content: str
     old_content: str = ""
@@ -70,7 +70,7 @@ class DiffChunk:
     old_count: int
     new_start: int
     new_count: int
-    lines: List[DiffLine] = field(default_factory=list)
+    lines: list[DiffLine] = field(default_factory=list)
 
 
 @dataclass
@@ -78,7 +78,7 @@ class DiffResult:
     """Result of a text diff operation."""
     old_text: str
     new_text: str
-    chunks: List[DiffChunk]
+    chunks: list[DiffChunk]
     
     # Statistics
     additions: int = 0
@@ -189,10 +189,10 @@ class TextDiff:
     
     def _parse_unified_diff(
         self,
-        diff_lines: List[str],
-        old_lines: List[str],
-        new_lines: List[str]
-    ) -> List[DiffChunk]:
+        diff_lines: list[str],
+        old_lines: list[str],
+        new_lines: list[str]
+    ) -> list[DiffChunk]:
         """Parse unified diff output into chunks."""
         chunks = []
         current_chunk = None
@@ -257,7 +257,7 @@ class TextDiff:
     
     def _generate_html(
         self,
-        chunks: List[DiffChunk],
+        chunks: list[DiffChunk],
         old_text: str,
         new_text: str
     ) -> str:
@@ -327,7 +327,7 @@ class TextDiff:
         self,
         old_text: str,
         new_text: str
-    ) -> List[Tuple[str, ChangeType]]:
+    ) -> list[tuple[str, ChangeType]]:
         """
         Compare texts word by word.
         
@@ -366,7 +366,7 @@ class TextDiff:
         self,
         old_text: str,
         new_text: str
-    ) -> List[Tuple[str, ChangeType]]:
+    ) -> list[tuple[str, ChangeType]]:
         """
         Compare texts character by character.
         
@@ -562,7 +562,7 @@ class TextDiff:
         
         return ''.join(result)
     
-    def _tokenize_for_diff(self, text: str) -> List[str]:
+    def _tokenize_for_diff(self, text: str) -> list[str]:
         """Tokenize text for diffing, preserving whitespace."""
         return re.findall(r'\S+|\s+', text)
     
@@ -596,7 +596,7 @@ class TextDiff:
         text: str,
         pattern: str,
         threshold: float = 0.6
-    ) -> List[Tuple[int, str, float]]:
+    ) -> list[tuple[int, str, float]]:
         """
         Find lines similar to a pattern.
         
@@ -618,7 +618,7 @@ class TextDiff:
 
 
 # Singleton instance
-_diff_instance: Optional[TextDiff] = None
+_diff_instance: TextDiff | None = None
 
 
 def get_text_diff() -> TextDiff:

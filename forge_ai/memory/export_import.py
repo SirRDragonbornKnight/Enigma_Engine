@@ -2,15 +2,15 @@
 Memory Export/Import API
 Allows exporting and importing memories across sessions and devices.
 """
-import logging
-import json
-import zipfile
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 import hashlib
+import json
+import logging
+import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from .categorization import MemoryCategorization, Memory, MemoryType
+from .categorization import Memory, MemoryCategorization, MemoryType
 from .vector_db import VectorDBInterface
 
 logger = logging.getLogger(__name__)
@@ -31,10 +31,10 @@ class MemoryExporter:
     def export_to_json(
         self,
         path: Path,
-        memory_types: Optional[List[MemoryType]] = None,
+        memory_types: Optional[list[MemoryType]] = None,
         include_metadata: bool = True,
         compress: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Export memories to JSON format with optional compression.
         
@@ -72,6 +72,7 @@ class MemoryExporter:
         # Save to file
         if compress:
             import gzip
+
             # Add .gz extension if not present
             if not str(path).endswith('.gz'):
                 path = Path(str(path) + '.gz')
@@ -95,8 +96,8 @@ class MemoryExporter:
     def export_compressed(
         self,
         path: Path,
-        memory_types: Optional[List[MemoryType]] = None
-    ) -> Dict[str, Any]:
+        memory_types: Optional[list[MemoryType]] = None
+    ) -> dict[str, Any]:
         """
         Export with maximum compression.
         
@@ -117,8 +118,8 @@ class MemoryExporter:
     def export_to_csv(
         self,
         path: Path,
-        memory_types: Optional[List[MemoryType]] = None
-    ) -> Dict[str, Any]:
+        memory_types: Optional[list[MemoryType]] = None
+    ) -> dict[str, Any]:
         """
         Export memories to CSV format.
         
@@ -170,7 +171,7 @@ class MemoryExporter:
         path: Path,
         include_vectors: bool = False,
         vector_db: Optional[VectorDBInterface] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Export complete memory system to a zip archive.
         
@@ -248,7 +249,7 @@ class MemoryImporter:
         path: Path,
         merge: bool = True,
         overwrite_duplicates: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Import memories from JSON format (supports compressed files).
         
@@ -269,7 +270,7 @@ class MemoryImporter:
             with gzip.open(path, 'rt', encoding='utf-8') as f:
                 data = json.load(f)
         else:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 data = json.load(f)
         
         memories = data.get('memories', [])
@@ -312,7 +313,7 @@ class MemoryImporter:
         self,
         path: Path,
         merge: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Import memories from CSV format.
         
@@ -333,7 +334,7 @@ class MemoryImporter:
         
         imported = 0
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             reader = csv.DictReader(f)
             
             for row in reader:
@@ -363,7 +364,7 @@ class MemoryImporter:
         merge: bool = True,
         import_vectors: bool = False,
         vector_db: Optional[VectorDBInterface] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Import complete memory system from archive.
         
@@ -410,7 +411,7 @@ class MemoryImporter:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
     
-    def validate_import_file(self, path: Path) -> Dict[str, Any]:
+    def validate_import_file(self, path: Path) -> dict[str, Any]:
         """
         Validate import file without importing.
         
@@ -422,7 +423,7 @@ class MemoryImporter:
         """
         try:
             if path.suffix == '.json':
-                with open(path, 'r') as f:
+                with open(path) as f:
                     data = json.load(f)
                 
                 return {

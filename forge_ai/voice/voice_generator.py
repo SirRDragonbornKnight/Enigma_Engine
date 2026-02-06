@@ -60,8 +60,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .voice_profile import VoiceProfile, PROFILES_DIR
 from ..config import CONFIG
+from .voice_profile import PROFILES_DIR, VoiceProfile
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class AIVoiceGenerator:
     
     def generate_voice_from_personality(
         self, 
-        personality: 'AIPersonality',
+        personality: AIPersonality,
         base_voice: str = "default"
     ) -> VoiceProfile:
         """
@@ -294,7 +294,7 @@ class AIVoiceGenerator:
     def evolve_voice(
         self,
         profile: VoiceProfile,
-        personality: 'AIPersonality',
+        personality: AIPersonality,
         evolution_rate: float = 0.1
     ) -> VoiceProfile:
         """
@@ -392,7 +392,7 @@ class AIVoiceGenerator:
             return False
         
         try:
-            with open(history_file, 'r') as f:
+            with open(history_file) as f:
                 data = json.load(f)
             
             self.evolution_history = {
@@ -411,7 +411,7 @@ class AIVoiceGenerator:
 
 # Convenience functions
 def generate_voice_for_personality(
-    personality: 'AIPersonality',
+    personality: AIPersonality,
     base_voice: str = "default"
 ) -> VoiceProfile:
     """Generate voice profile from personality."""

@@ -14,8 +14,8 @@ Part of the ForgeAI security utilities.
 
 import re
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Set, Tuple
 from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 class ThreatLevel(Enum):
@@ -44,12 +44,12 @@ class DetectionResult:
     """Result of injection detection."""
     is_suspicious: bool
     threat_level: ThreatLevel
-    injection_types: List[InjectionType] = field(default_factory=list)
-    matched_patterns: List[str] = field(default_factory=list)
+    injection_types: list[InjectionType] = field(default_factory=list)
+    matched_patterns: list[str] = field(default_factory=list)
     confidence: float = 0.0
     details: str = ""
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "is_suspicious": self.is_suspicious,
@@ -62,7 +62,7 @@ class DetectionResult:
 
 
 # Pattern categories with threat levels
-INJECTION_PATTERNS: Dict[InjectionType, List[Tuple[str, ThreatLevel, str]]] = {
+INJECTION_PATTERNS: dict[InjectionType, list[tuple[str, ThreatLevel, str]]] = {
     InjectionType.INSTRUCTION_OVERRIDE: [
         # Direct overrides
         (r'\bignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?|guidelines?)\b', 
@@ -217,7 +217,7 @@ class PromptInjectionDetector:
     def __init__(
         self,
         sensitivity: ThreatLevel = ThreatLevel.LOW,
-        custom_patterns: Optional[List[Tuple[str, ThreatLevel, str]]] = None
+        custom_patterns: Optional[list[tuple[str, ThreatLevel, str]]] = None
     ):
         """
         Initialize detector.
@@ -230,7 +230,7 @@ class PromptInjectionDetector:
         self._custom_patterns = custom_patterns or []
         
         # Compile all patterns
-        self._compiled_patterns: Dict[InjectionType, List[Tuple[re.Pattern, ThreatLevel, str]]] = {}
+        self._compiled_patterns: dict[InjectionType, list[tuple[re.Pattern, ThreatLevel, str]]] = {}
         
         for injection_type, patterns in INJECTION_PATTERNS.items():
             compiled = []
@@ -259,10 +259,10 @@ class PromptInjectionDetector:
         Returns:
             DetectionResult with findings
         """
-        injection_types: Set[InjectionType] = set()
-        matched_patterns: List[str] = []
+        injection_types: set[InjectionType] = set()
+        matched_patterns: list[str] = []
         max_threat = ThreatLevel.NONE
-        details: List[str] = []
+        details: list[str] = []
         
         # Check each pattern category
         for injection_type, patterns in self._compiled_patterns.items():
@@ -378,7 +378,7 @@ class PromptInjectionDetector:
         except re.error:
             return False
     
-    def analyze_detailed(self, text: str) -> Dict[str, Any]:
+    def analyze_detailed(self, text: str) -> dict[str, Any]:
         """
         Get detailed analysis of text.
         
@@ -426,7 +426,7 @@ class PromptInjectionDetector:
         self,
         match_count: int,
         max_threat: ThreatLevel,
-        injection_types: Set[InjectionType]
+        injection_types: set[InjectionType]
     ) -> float:
         """Calculate confidence score."""
         if match_count == 0:
@@ -443,7 +443,7 @@ class PromptInjectionDetector:
         
         return min(base + threat_boost + type_boost, 1.0)
     
-    def _get_recommendations(self, result: DetectionResult) -> List[str]:
+    def _get_recommendations(self, result: DetectionResult) -> list[str]:
         """Get security recommendations based on findings."""
         recommendations = []
         
@@ -493,6 +493,6 @@ def sanitize_prompt(text: str) -> str:
     return PromptInjectionDetector().sanitize(text)
 
 
-def analyze_prompt(text: str) -> Dict[str, Any]:
+def analyze_prompt(text: str) -> dict[str, Any]:
     """Get detailed analysis."""
     return PromptInjectionDetector().analyze_detailed(text)

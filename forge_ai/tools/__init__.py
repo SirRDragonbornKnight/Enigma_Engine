@@ -58,63 +58,70 @@ USAGE:
         limiter.record_request("web_search")
 """
 
-from .tool_registry import Tool, ToolRegistry, get_registry, execute_tool
-from .vision import ScreenCapture, ScreenVision, get_screen_vision, ScreenVisionTool, FindOnScreenTool
-from .tool_definitions import (
-    ToolDefinition, 
-    ToolParameter,
-    get_tool_definition,
-    get_all_tools,
-    get_tools_by_category,
-    get_available_tools_for_prompt,
+# New tool modules - available for direct import
+from . import (
+    automation_tools,
+    browser_tools,
+    communication_tools,
+    data_tools,
+    gaming_tools,
+    iot_tools,
+    knowledge_tools,
+    media_tools,
+    productivity_tools,
 )
-from .tool_executor import ToolExecutor, execute_tool_from_text
-
-# High-priority features
-from .async_executor import AsyncToolExecutor
-from .cache import ToolCache, CACHEABLE_TOOLS
-from .rate_limiter import RateLimiter, DEFAULT_RATE_LIMITS
-
-# Medium-priority features
-from .history import ToolExecution, ToolExecutionHistory
-from .permissions import (
-    PermissionLevel,
-    ToolPermissionManager,
-    DEFAULT_TOOL_PERMISSIONS,
-    CONFIRMATION_REQUIRED_TOOLS,
-    default_confirmation_callback,
-)
-from .dependencies import (
-    ToolDependencyChecker,
-    TOOL_DEPENDENCIES,
-    TOOL_COMMANDS,
-    INSTALL_INSTRUCTIONS,
-)
-from .parallel import ParallelToolExecutor
 
 # Low-priority features
 from .analytics import ToolAnalytics, UsageRecord
-from .validation import ToolSchemaValidator
-from .plugins import ToolPluginLoader
-from .streaming import StreamingToolResult, StreamingToolExecutor, StreamState
 
-# New tool modules - available for direct import
-from . import automation_tools
-from . import knowledge_tools
-from . import communication_tools
-from . import media_tools
-from . import productivity_tools
-from . import iot_tools
-from . import data_tools
-from . import gaming_tools
-from . import browser_tools
-
-# Robot and Game control systems
-from .robot_modes import RobotModeController, RobotMode, get_mode_controller
+# High-priority features
+from .async_executor import AsyncToolExecutor
+from .cache import CACHEABLE_TOOLS, ToolCache
+from .dependencies import (
+    INSTALL_INSTRUCTIONS,
+    TOOL_COMMANDS,
+    TOOL_DEPENDENCIES,
+    ToolDependencyChecker,
+)
 from .game_router import GameAIRouter, GameConfig, get_game_router
 
+# Medium-priority features
+from .history import ToolExecution, ToolExecutionHistory
+from .parallel import ParallelToolExecutor
+from .permissions import (
+    CONFIRMATION_REQUIRED_TOOLS,
+    DEFAULT_TOOL_PERMISSIONS,
+    PermissionLevel,
+    ToolPermissionManager,
+    default_confirmation_callback,
+)
+from .plugins import ToolPluginLoader
+from .rate_limiter import DEFAULT_RATE_LIMITS, RateLimiter
+
+# Robot and Game control systems
+from .robot_modes import RobotMode, RobotModeController, get_mode_controller
+from .streaming import StreamingToolExecutor, StreamingToolResult, StreamState
+from .tool_definitions import (
+    ToolDefinition,
+    ToolParameter,
+    get_all_tools,
+    get_available_tools_for_prompt,
+    get_tool_definition,
+    get_tools_by_category,
+)
+from .tool_executor import ToolExecutor, execute_tool_from_text
+
 # Tool Manager for enabling/disabling tools
-from .tool_manager import ToolManager, get_tool_manager, PRESETS, TOOL_CATEGORIES
+from .tool_manager import PRESETS, TOOL_CATEGORIES, ToolManager, get_tool_manager
+from .tool_registry import Tool, ToolRegistry, execute_tool, get_registry
+from .validation import ToolSchemaValidator
+from .vision import (
+    FindOnScreenTool,
+    ScreenCapture,
+    ScreenVision,
+    ScreenVisionTool,
+    get_screen_vision,
+)
 
 __all__ = [
     # Core

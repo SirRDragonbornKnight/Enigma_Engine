@@ -12,9 +12,10 @@ Tools:
 
 import os
 import subprocess
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 from .tool_registry import Tool
 
 # Output directories
@@ -43,7 +44,7 @@ class MusicGenerateTool(Tool):
     }
     
     def execute(self, prompt: str, duration: int = 10, 
-                output_name: str = None, **kwargs) -> Dict[str, Any]:
+                output_name: str = None, **kwargs) -> dict[str, Any]:
         try:
             duration = min(int(duration), 30)  # Cap at 30 seconds
             
@@ -54,10 +55,10 @@ class MusicGenerateTool(Tool):
             
             # Try audiocraft/musicgen
             try:
-                from audiocraft.models import MusicGen
-                from audiocraft.data.audio import audio_write
                 import torch
-                
+                from audiocraft.data.audio import audio_write
+                from audiocraft.models import MusicGen
+
                 # Use small model for faster generation
                 model = MusicGen.get_pretrained('facebook/musicgen-small')
                 model.set_generation_params(duration=duration)
@@ -100,8 +101,9 @@ class MusicGenerateTool(Tool):
             
             # Generate simple MIDI as fallback
             try:
-                from midiutil import MIDIFile
                 import random
+
+                from midiutil import MIDIFile
                 
                 midi = MIDIFile(1)
                 midi.addTempo(0, 0, 120)
@@ -166,7 +168,7 @@ class RemoveBackgroundTool(Tool):
     }
     
     def execute(self, input_path: str, output_path: str = None,
-                model: str = "u2net", **kwargs) -> Dict[str, Any]:
+                model: str = "u2net", **kwargs) -> dict[str, Any]:
         try:
             input_path = Path(input_path).expanduser().resolve()
             
@@ -180,8 +182,8 @@ class RemoveBackgroundTool(Tool):
             
             # Try rembg (most popular)
             try:
-                from rembg import remove
                 from PIL import Image
+                from rembg import remove
                 
                 with open(input_path, 'rb') as f:
                     input_data = f.read()
@@ -246,7 +248,7 @@ class UpscaleImageTool(Tool):
     }
     
     def execute(self, input_path: str, output_path: str = None,
-                scale: int = 2, **kwargs) -> Dict[str, Any]:
+                scale: int = 2, **kwargs) -> dict[str, Any]:
         try:
             input_path = Path(input_path).expanduser().resolve()
             
@@ -262,10 +264,10 @@ class UpscaleImageTool(Tool):
             
             # Try Real-ESRGAN
             try:
-                from basicsr.archs.rrdbnet_arch import RRDBNet
-                from realesrgan import RealESRGANer
                 import cv2
                 import numpy as np
+                from basicsr.archs.rrdbnet_arch import RRDBNet
+                from realesrgan import RealESRGANer
                 
                 model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
                 upsampler = RealESRGANer(scale=4, model_path='weights/RealESRGAN_x4plus.pth', model=model)
@@ -342,7 +344,7 @@ class StyleTransferTool(Tool):
     }
     
     def execute(self, content_path: str, style: str = "monet",
-                output_path: str = None, strength: float = 0.8, **kwargs) -> Dict[str, Any]:
+                output_path: str = None, strength: float = 0.8, **kwargs) -> dict[str, Any]:
         try:
             content_path = Path(content_path).expanduser().resolve()
             
@@ -359,7 +361,7 @@ class StyleTransferTool(Tool):
                 import torch
                 import torchvision.transforms as transforms
                 from PIL import Image
-                
+
                 # Simple color-based style transfer as fallback
                 img = Image.open(content_path)
                 
@@ -418,7 +420,7 @@ class ConvertAudioTool(Tool):
     }
     
     def execute(self, input_path: str, output_format: str,
-                output_path: str = None, bitrate: str = "192k", **kwargs) -> Dict[str, Any]:
+                output_path: str = None, bitrate: str = "192k", **kwargs) -> dict[str, Any]:
         try:
             input_path = Path(input_path).expanduser().resolve()
             
@@ -497,7 +499,7 @@ class ExtractAudioTool(Tool):
     }
     
     def execute(self, input_path: str, output_path: str = None,
-                format: str = "mp3", **kwargs) -> Dict[str, Any]:
+                format: str = "mp3", **kwargs) -> dict[str, Any]:
         try:
             input_path = Path(input_path).expanduser().resolve()
             
@@ -571,7 +573,7 @@ class AudioVisualizeTool(Tool):
     }
     
     def execute(self, input_path: str, output_path: str = None,
-                style: str = "waveform", color: str = "blue", **kwargs) -> Dict[str, Any]:
+                style: str = "waveform", color: str = "blue", **kwargs) -> dict[str, Any]:
         try:
             import numpy as np
             

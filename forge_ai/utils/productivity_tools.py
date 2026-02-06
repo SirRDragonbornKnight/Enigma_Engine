@@ -10,14 +10,14 @@ Developer productivity features:
 Part of the ForgeAI productivity suite.
 """
 
+import logging
 import re
+import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Tuple, Union
-from pathlib import Path
 from enum import Enum, auto
-import logging
-import subprocess
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ class CommitMessageGenerator:
             logger.warning(f"Failed to get git diff: {e}")
             return ""
     
-    def get_staged_files(self) -> List[str]:
+    def get_staged_files(self) -> list[str]:
         """Get list of staged files."""
         try:
             result = subprocess.run(
@@ -152,7 +152,7 @@ class CommitMessageGenerator:
             logger.warning(f"Failed to get staged files: {e}")
             return []
     
-    def analyze_changes(self, diff: str, files: List[str]) -> Dict[str, Any]:
+    def analyze_changes(self, diff: str, files: list[str]) -> dict[str, Any]:
         """
         Analyze changes to determine commit type and scope.
         
@@ -204,7 +204,7 @@ class CommitMessageGenerator:
         diff: Optional[str] = None,
         description: Optional[str] = None,
         max_suggestions: int = 3
-    ) -> List[CommitSuggestion]:
+    ) -> list[CommitSuggestion]:
         """
         Generate commit message suggestions.
         
@@ -258,7 +258,7 @@ class CommitMessageGenerator:
         
         return suggestions[:max_suggestions]
     
-    def _generate_title(self, files: List[str], analysis: Dict[str, Any]) -> str:
+    def _generate_title(self, files: list[str], analysis: dict[str, Any]) -> str:
         """Generate commit title from analysis."""
         if len(files) == 1:
             filename = Path(files[0]).name
@@ -271,12 +271,12 @@ class CommitMessageGenerator:
         else:
             verb = self._get_verb(analysis["type"])
             # Group by directory
-            dirs = set(str(Path(f).parent) for f in files)
+            dirs = {str(Path(f).parent) for f in files}
             if len(dirs) == 1:
                 return f"{verb} files in {list(dirs)[0]}"
             return f"{verb} {len(files)} files"
     
-    def _generate_body(self, files: List[str], diff: str) -> str:
+    def _generate_body(self, files: list[str], diff: str) -> str:
         """Generate commit body with details."""
         if len(files) <= 5:
             return ""
@@ -289,7 +289,7 @@ class CommitMessageGenerator:
         
         return "\n".join(lines)
     
-    def _generate_alternatives(self, files: List[str], analysis: Dict[str, Any]) -> List[str]:
+    def _generate_alternatives(self, files: list[str], analysis: dict[str, Any]) -> list[str]:
         """Generate alternative title phrasings."""
         alternatives = []
         
@@ -348,9 +348,9 @@ class ExtractedTask:
     assignee: Optional[str] = None
     source_message: str = ""
     confidence: float = 0.5
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "title": self.title,
             "description": self.description,
@@ -408,9 +408,9 @@ class TaskExtractor:
     
     def extract_tasks(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         min_confidence: float = 0.3
-    ) -> List[ExtractedTask]:
+    ) -> list[ExtractedTask]:
         """
         Extract tasks from conversation messages.
         
@@ -439,7 +439,7 @@ class TaskExtractor:
         
         return self._deduplicate_tasks(tasks)
     
-    def _extract_from_text(self, text: str) -> List[ExtractedTask]:
+    def _extract_from_text(self, text: str) -> list[ExtractedTask]:
         """Extract tasks from a single text."""
         tasks = []
         
@@ -494,7 +494,7 @@ class TaskExtractor:
                 return match.group(1)
         return None
     
-    def _deduplicate_tasks(self, tasks: List[ExtractedTask]) -> List[ExtractedTask]:
+    def _deduplicate_tasks(self, tasks: list[ExtractedTask]) -> list[ExtractedTask]:
         """Remove duplicate tasks."""
         seen_titles = set()
         unique_tasks = []
@@ -510,7 +510,7 @@ class TaskExtractor:
     
     def format_task_list(
         self,
-        tasks: List[ExtractedTask],
+        tasks: list[ExtractedTask],
         format_type: str = "markdown"
     ) -> str:
         """
@@ -561,7 +561,7 @@ class SQLQuery:
     query: str
     dialect: SQLDialect = SQLDialect.SQLITE
     explanation: str = ""
-    tables_used: List[str] = field(default_factory=list)
+    tables_used: list[str] = field(default_factory=list)
     confidence: float = 0.5
 
 
@@ -602,7 +602,7 @@ class SQLQueryBuilder:
     
     def __init__(
         self,
-        schema: Optional[Dict[str, List[str]]] = None,
+        schema: Optional[dict[str, list[str]]] = None,
         dialect: SQLDialect = SQLDialect.SQLITE
     ):
         """
@@ -616,13 +616,13 @@ class SQLQueryBuilder:
         self.dialect = dialect
         
         # Compile patterns
-        self._patterns: Dict[str, List[re.Pattern]] = {}
+        self._patterns: dict[str, list[re.Pattern]] = {}
         for pattern_type, patterns in self.PATTERNS.items():
             self._patterns[pattern_type] = [
                 re.compile(p, re.IGNORECASE) for p in patterns
             ]
     
-    def set_schema(self, schema: Dict[str, List[str]]):
+    def set_schema(self, schema: dict[str, list[str]]):
         """Set database schema."""
         self.schema = schema
     
@@ -773,7 +773,7 @@ class SQLQueryBuilder:
                 return table
         return None
     
-    def suggest_queries(self, table: str) -> List[SQLQuery]:
+    def suggest_queries(self, table: str) -> list[SQLQuery]:
         """Suggest common queries for a table."""
         suggestions = [
             SQLQuery(
@@ -815,7 +815,7 @@ class ModelOption:
     display_name: str
     description: str = ""
     size: str = ""  # "small", "medium", "large"
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     is_local: bool = True
     api_key_required: bool = False
 
@@ -838,7 +838,7 @@ class ModelSwitcher:
         ModelOption("forge_large", "Forge Large", "Quality local model", "large", ["chat", "code", "reasoning"], True),
     ]
     
-    def __init__(self, models: Optional[List[ModelOption]] = None):
+    def __init__(self, models: Optional[list[ModelOption]] = None):
         """
         Initialize model switcher.
         
@@ -847,9 +847,9 @@ class ModelSwitcher:
         """
         self.models = {m.name: m for m in (models or self.DEFAULT_MODELS)}
         self.current_model: Optional[str] = None
-        self._switch_callbacks: List[Callable[[str, str], None]] = []
+        self._switch_callbacks: list[Callable[[str, str], None]] = []
     
-    def get_available_models(self) -> List[ModelOption]:
+    def get_available_models(self) -> list[ModelOption]:
         """Get all available models."""
         return list(self.models.values())
     
@@ -890,7 +890,7 @@ class ModelSwitcher:
         """Register callback for model switches."""
         self._switch_callbacks.append(callback)
     
-    def get_models_for_capability(self, capability: str) -> List[ModelOption]:
+    def get_models_for_capability(self, capability: str) -> list[ModelOption]:
         """Get models that have a specific capability."""
         return [m for m in self.models.values() if capability in m.capabilities]
     

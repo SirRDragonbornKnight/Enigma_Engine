@@ -36,17 +36,18 @@ USAGE:
 """
 
 import math
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
+
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, List, Callable, Dict, Any, Union
+from torch.utils.data import DataLoader, Dataset
 
+from ..config import CONFIG
 from .model import Forge, TinyForge  # TinyForge is backwards compat alias
 from .model_registry import ModelRegistry
 from .tokenizer import load_tokenizer
-from ..config import CONFIG
 
 
 class TextDataset(Dataset):
@@ -111,7 +112,7 @@ class TextDataset(Dataset):
     def __len__(self) -> int:
         return len(self.chunks)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         chunk = self.chunks[idx]
         # For language modeling: input is all but last token, labels are all but first
         return {
@@ -231,7 +232,7 @@ class ForgeTrainer:
         if data_path:
             data_file = Path(data_path)
             if data_file.exists():
-                with open(data_file, "r", encoding="utf-8") as f:
+                with open(data_file, encoding="utf-8") as f:
                     text = f.read()
             else:
                 raise FileNotFoundError(f"Training data not found: {data_path}")
@@ -262,7 +263,7 @@ class ForgeTrainer:
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)  # Ignore padding
         self.current_epoch = 0
         self.global_step = 0
-        self.training_history: List[Dict[str, Any]] = []
+        self.training_history: list[dict[str, Any]] = []
         self.best_loss = float('inf')
 
     def _get_scheduler(self, num_training_steps: int):
@@ -283,7 +284,7 @@ class ForgeTrainer:
         log_every: int = 10,
         eval_every: Optional[int] = None,
         early_stopping_patience: Optional[int] = None,
-        callbacks: Optional[List[Callable]] = None,
+        callbacks: Optional[list[Callable]] = None,
     ):
         """
         Train the model.

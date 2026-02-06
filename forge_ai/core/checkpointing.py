@@ -14,7 +14,8 @@ Usage:
 
 import functools
 import logging
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -111,7 +112,7 @@ class GradientCheckpointer:
     def checkpoint_module(
         self,
         module: nn.Module,
-        layer_types: Optional[Tuple[type, ...]] = None
+        layer_types: Optional[tuple[type, ...]] = None
     ):
         """
         Apply checkpointing to a module's submodules.
@@ -226,7 +227,7 @@ def checkpoint_model(
     return model
 
 
-def _get_transformer_layers(model: nn.Module) -> List[nn.Module]:
+def _get_transformer_layers(model: nn.Module) -> list[nn.Module]:
     """Find transformer layers in a model."""
     layers = []
     

@@ -11,13 +11,13 @@ Part of the ForgeAI GUI features.
 """
 
 import json
-import time
-import os
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Union
-from pathlib import Path
-from enum import Enum, auto
 import logging
+import os
+import time
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class MessageDraft:
     updated_at: float = field(default_factory=time.time)
     cursor_position: int = 0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "conversation_id": self.conversation_id,
             "text": self.text,
@@ -45,7 +45,7 @@ class MessageDraft:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MessageDraft':
+    def from_dict(cls, data: dict[str, Any]) -> 'MessageDraft':
         return cls(
             conversation_id=data.get("conversation_id", ""),
             text=data.get("text", ""),
@@ -80,7 +80,7 @@ class DraftManager:
         """
         self.storage_path = storage_path
         self.auto_save_interval = auto_save_interval
-        self.drafts: Dict[str, MessageDraft] = {}
+        self.drafts: dict[str, MessageDraft] = {}
         self._last_save: float = 0
         self._dirty: bool = False
         
@@ -154,7 +154,7 @@ class DraftManager:
             self._dirty = True
             self._save()
     
-    def get_all_drafts(self) -> List[MessageDraft]:
+    def get_all_drafts(self) -> list[MessageDraft]:
         """Get all drafts."""
         return list(self.drafts.values())
     
@@ -225,7 +225,7 @@ class ConversationExporter:
     def export(
         self,
         conversation_name: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         output_path: Optional[Path] = None
     ) -> str:
         """
@@ -260,7 +260,7 @@ class ConversationExporter:
     def _export_markdown(
         self,
         name: str,
-        messages: List[Dict[str, Any]]
+        messages: list[dict[str, Any]]
     ) -> str:
         """Export to Markdown format."""
         lines = [f"# {name}\n"]
@@ -293,7 +293,7 @@ class ConversationExporter:
     def _export_obsidian(
         self,
         name: str,
-        messages: List[Dict[str, Any]]
+        messages: list[dict[str, Any]]
     ) -> str:
         """Export to Obsidian-compatible Markdown with frontmatter."""
         lines = []
@@ -341,7 +341,7 @@ class ConversationExporter:
     def _export_json(
         self,
         name: str,
-        messages: List[Dict[str, Any]]
+        messages: list[dict[str, Any]]
     ) -> str:
         """Export to JSON format."""
         data = {
@@ -356,7 +356,7 @@ class ConversationExporter:
     def _export_html(
         self,
         name: str,
-        messages: List[Dict[str, Any]]
+        messages: list[dict[str, Any]]
     ) -> str:
         """Export to HTML format."""
         html = [
@@ -406,7 +406,7 @@ class ConversationExporter:
     def _export_text(
         self,
         name: str,
-        messages: List[Dict[str, Any]]
+        messages: list[dict[str, Any]]
     ) -> str:
         """Export to plain text format."""
         lines = [f"{name}", "=" * len(name), ""]
@@ -429,7 +429,7 @@ class ConversationExporter:
         self,
         vault_path: Path,
         conversation_name: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         folder: str = "ForgeAI"
     ) -> Path:
         """
@@ -485,7 +485,7 @@ class ConfigField:
     value_type: ConfigValueType
     description: str = ""
     default: Any = None
-    options: Optional[List[str]] = None  # For SELECT type
+    options: Optional[list[str]] = None  # For SELECT type
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     category: str = "General"
@@ -557,8 +557,8 @@ class ConfigEditor:
             config_path: Path to config file
         """
         self.config_path = config_path
-        self.fields: Dict[str, ConfigField] = {}
-        self.values: Dict[str, Any] = {}
+        self.fields: dict[str, ConfigField] = {}
+        self.values: dict[str, Any] = {}
         
         # Register common fields
         for field in self.COMMON_FIELDS:
@@ -624,16 +624,16 @@ class ConfigEditor:
         
         return False
     
-    def get_fields_by_category(self) -> Dict[str, List[ConfigField]]:
+    def get_fields_by_category(self) -> dict[str, list[ConfigField]]:
         """Get fields organized by category."""
-        categories: Dict[str, List[ConfigField]] = {}
+        categories: dict[str, list[ConfigField]] = {}
         for field in self.fields.values():
             if field.category not in categories:
                 categories[field.category] = []
             categories[field.category].append(field)
         return categories
     
-    def get_all_values(self) -> Dict[str, Any]:
+    def get_all_values(self) -> dict[str, Any]:
         """Get all config values."""
         return dict(self.values)
     
@@ -691,7 +691,7 @@ class FocusMode:
         self.dim_background: bool = True
         self.fullscreen: bool = False
         self.auto_activate_typing: bool = False
-        self._callbacks: List[Callable[[bool], None]] = []
+        self._callbacks: list[Callable[[bool], None]] = []
     
     def enable(self, fullscreen: bool = False):
         """Enable focus mode."""
@@ -725,7 +725,7 @@ class FocusMode:
             except Exception as e:
                 logger.warning(f"Focus mode callback error: {e}")
     
-    def get_hidden_elements(self) -> List[str]:
+    def get_hidden_elements(self) -> list[str]:
         """Get list of UI elements to hide."""
         hidden = []
         if self.enabled:
@@ -737,7 +737,7 @@ class FocusMode:
                 hidden.append("status_bar")
         return hidden
     
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Get current focus mode state."""
         return {
             "enabled": self.enabled,
@@ -749,7 +749,7 @@ class FocusMode:
             "auto_activate_typing": self.auto_activate_typing
         }
     
-    def restore_state(self, state: Dict[str, Any]):
+    def restore_state(self, state: dict[str, Any]):
         """Restore focus mode state."""
         self.hide_sidebar = state.get("hide_sidebar", True)
         self.hide_toolbar = state.get("hide_toolbar", True)
@@ -793,7 +793,7 @@ class SessionManager:
         """Save all pending data before closing."""
         self.drafts.save_now()
     
-    def get_quick_settings(self) -> Dict[str, Any]:
+    def get_quick_settings(self) -> dict[str, Any]:
         """Get commonly accessed settings."""
         return {
             "temperature": self.config.get("temperature", 0.7),

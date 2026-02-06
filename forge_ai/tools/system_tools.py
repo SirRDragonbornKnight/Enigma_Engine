@@ -14,7 +14,8 @@ import re
 import shlex
 import subprocess
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,7 @@ class RunCommandTool(Tool):
         
         return True, None
     
-    def execute(self, command: str, timeout: int = 30, cwd: str = None, safe_mode: bool = True, **kwargs) -> Dict[str, Any]:
+    def execute(self, command: str, timeout: int = 30, cwd: str = None, safe_mode: bool = True, **kwargs) -> dict[str, Any]:
         """
         Execute a shell command.
         
@@ -205,7 +206,7 @@ class ScreenshotTool(Tool):
             self._capture = ScreenCapture()
         return self._capture
     
-    def execute(self, output_path: str = "screenshot.png", region: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, output_path: str = "screenshot.png", region: str = None, **kwargs) -> dict[str, Any]:
         try:
             output_path = Path(output_path).expanduser().resolve()
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -246,7 +247,7 @@ class GetSystemInfoTool(Tool):
     description = "Get information about the system (OS, CPU, memory, disk, etc.)"
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             info = {
                 "os": platform.system(),
@@ -301,7 +302,7 @@ class GetSystemInfoTool(Tool):
 
 if __name__ == "__main__":
     import json
-    
+
     # Test system info
     tool = GetSystemInfoTool()
     result = tool.execute()

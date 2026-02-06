@@ -48,10 +48,10 @@ class HealthStatus:
     """Health check result."""
     status: str  # 'healthy', 'degraded', 'unhealthy'
     message: str
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.utcnow)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'status': self.status,
             'message': self.message,
@@ -72,7 +72,7 @@ class SystemMetrics:
     gpu_memory_total_mb: Optional[float] = None
     gpu_utilization: Optional[float] = None
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'cpu_percent': self.cpu_percent,
             'memory_percent': self.memory_percent,
@@ -106,7 +106,7 @@ class HealthChecker:
         self.check_interval = check_interval
         self.unhealthy_threshold = unhealthy_threshold
         
-        self._custom_checks: Dict[str, Callable[[], HealthStatus]] = {}
+        self._custom_checks: dict[str, Callable[[], HealthStatus]] = {}
         self._last_check_time: Optional[datetime] = None
         self._consecutive_failures = 0
         self._is_ready = False
@@ -345,7 +345,7 @@ class HealthChecker:
             if not success:
                 self._error_count += 1
     
-    def get_request_stats(self) -> Dict[str, Any]:
+    def get_request_stats(self) -> dict[str, Any]:
         """Get request statistics."""
         with self._lock:
             latencies = list(self._request_latencies)
@@ -370,7 +370,7 @@ class HealthChecker:
             'latency_max_ms': max(latencies)
         }
     
-    def get_full_status(self) -> Dict[str, Any]:
+    def get_full_status(self) -> dict[str, Any]:
         """Get comprehensive status report."""
         liveness = self.check_liveness()
         readiness = self.check_readiness()
@@ -448,7 +448,7 @@ class HealthCheckMiddleware:
         self.app = app
         self.checker = checker
     
-    def __call__(self, environ: Dict, start_response: Callable) -> Any:
+    def __call__(self, environ: dict, start_response: Callable) -> Any:
         start_time = time.time()
         success = True
         

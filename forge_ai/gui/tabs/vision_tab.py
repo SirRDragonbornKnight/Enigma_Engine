@@ -7,12 +7,21 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QPlainTextEdit, QGroupBox, QListWidget, QListWidgetItem
-)
+
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QPlainTextEdit,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ...config import CONFIG
 

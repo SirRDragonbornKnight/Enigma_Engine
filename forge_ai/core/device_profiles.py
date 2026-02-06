@@ -12,15 +12,15 @@ Automatically detects hardware and provides optimal settings for:
 This is the foundation for running ForgeAI on ANY device.
 """
 
+import logging
 import os
-import sys
 import platform
+import sys
 import threading
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
-import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class ProfileSettings:
 
 
 # Pre-defined profiles for common hardware
-DEVICE_PROFILES: Dict[DeviceClass, ProfileSettings] = {
+DEVICE_PROFILES: dict[DeviceClass, ProfileSettings] = {
     DeviceClass.EMBEDDED: ProfileSettings(
         recommended_model_size="nano",
         max_model_params=2_000_000,
@@ -294,7 +294,7 @@ class DeviceProfiler:
         self._capabilities: Optional[DeviceCapabilities] = None
         self._device_class: Optional[DeviceClass] = None
         self._profile: Optional[ProfileSettings] = None
-        self._custom_overrides: Dict[str, Any] = {}
+        self._custom_overrides: dict[str, Any] = {}
         
     def detect(self, force: bool = False) -> DeviceCapabilities:
         """
@@ -320,12 +320,12 @@ class DeviceProfiler:
         # Raspberry Pi detection
         if caps.platform_system == "linux":
             try:
-                with open("/proc/cpuinfo", "r") as f:
+                with open("/proc/cpuinfo") as f:
                     cpuinfo = f.read().lower()
                     if "raspberry" in cpuinfo or "bcm" in cpuinfo:
                         caps.is_raspberry_pi = True
                         caps.has_neon = True
-            except (IOError, OSError):
+            except OSError:
                 pass  # /proc/cpuinfo not available on this system
             
             # Android detection
@@ -334,10 +334,10 @@ class DeviceProfiler:
             
             # WSL detection
             try:
-                with open("/proc/version", "r") as f:
+                with open("/proc/version") as f:
                     if "microsoft" in f.read().lower():
                         caps.is_wsl = True
-            except (IOError, OSError):
+            except OSError:
                 pass  # /proc/version not available
             
             # Container detection
@@ -354,7 +354,7 @@ class DeviceProfiler:
         
         try:
             if caps.platform_system == "linux":
-                with open("/proc/cpuinfo", "r") as f:
+                with open("/proc/cpuinfo") as f:
                     for line in f:
                         if "flags" in line.lower():
                             flags = line.lower()
@@ -362,7 +362,7 @@ class DeviceProfiler:
                             caps.has_avx2 = "avx2" in flags
                             caps.has_avx512 = "avx512" in flags
                             break
-        except (IOError, OSError):
+        except OSError:
             pass  # CPU flags not available on this system
         
         # ARM detection
@@ -372,7 +372,7 @@ class DeviceProfiler:
         # Memory detection
         try:
             if caps.platform_system == "linux":
-                with open("/proc/meminfo", "r") as f:
+                with open("/proc/meminfo") as f:
                     for line in f:
                         if "MemTotal" in line:
                             caps.ram_total_mb = int(line.split()[1]) // 1024
@@ -428,7 +428,7 @@ class DeviceProfiler:
             import shutil
             total, used, free = shutil.disk_usage(Path.home())
             caps.disk_free_gb = free / (1024**3)
-        except (OSError, IOError):
+        except OSError:
             caps.disk_free_gb = 10.0  # Assume 10GB
         
         self._capabilities = caps
@@ -614,7 +614,7 @@ class DeviceProfiler:
         
         return "\n".join(lines)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Export profile as dictionary."""
         caps = self.detect()
         device_class = self.classify()

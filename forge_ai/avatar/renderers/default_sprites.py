@@ -4,10 +4,9 @@ Default Avatar Sprites
 Built-in SVG sprite templates that don't require external assets.
 """
 
-from typing import Dict
 import base64
 from io import BytesIO
-
+from typing import Dict
 
 # SVG sprite templates
 SPRITE_TEMPLATES = {
@@ -632,9 +631,10 @@ def generate_sprite_png(
     
     try:
         # Try PIL with svg support
-        from PIL import Image
         import io
-        
+
+        from PIL import Image
+
         # For now, return SVG data - PIL doesn't handle SVG well without extra deps
         return svg.encode('utf-8')
     except ImportError:

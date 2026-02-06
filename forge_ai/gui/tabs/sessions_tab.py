@@ -1,13 +1,20 @@
 """History tab for ForgeAI GUI - view saved chat sessions per AI."""
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QListWidget, QTextEdit, QSplitter, QGroupBox, QFrame
-)
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QPushButton,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
-
 
 
 def create_sessions_tab(parent):

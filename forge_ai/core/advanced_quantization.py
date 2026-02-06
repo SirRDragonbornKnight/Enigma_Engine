@@ -15,18 +15,16 @@ from forge_ai.core.awq_quantization import (
     AWQLinear,
     AWQQuantizer,
 )
-
+from forge_ai.core.gptq_quantization import QuantizedLinear  # Use GPTQ version
 from forge_ai.core.gptq_quantization import (
-    GPTQConfig,
     GPTQ,
+    GPTQConfig,
     GPTQQuantizer,
-    QuantizedLinear,  # Use GPTQ version
 )
-
 from forge_ai.core.quantization import (
-    QuantConfig,
-    GGMLQuantType,
     GGMLQuantConfig,
+    GGMLQuantType,
+    QuantConfig,
 )
 
 # Backwards compat aliases

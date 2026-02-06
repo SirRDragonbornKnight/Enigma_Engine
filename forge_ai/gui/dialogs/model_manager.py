@@ -6,21 +6,32 @@ This is a large dialog extracted from enhanced_window.py for better maintainabil
 
 import json
 import shutil
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QListWidget, QGroupBox,
-    QLineEdit, QMessageBox, QTextEdit,
-    QApplication, QDialogButtonBox, QCheckBox, QInputDialog,
-    QWizard
-)
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWizard,
+)
 
-from ..tabs.shared_components import NoScrollComboBox
 from ...core.model_registry import ModelRegistry
 from ...core.model_scaling import grow_model, shrink_model
+from ..tabs.shared_components import NoScrollComboBox
 
 
 class ModelManagerDialog(QDialog):
@@ -307,7 +318,7 @@ class ModelManagerDialog(QDialog):
         """Refresh the model list from disk."""
         try:
             self.registry._load_registry()
-        except (IOError, OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError):
             pass
         
         self.model_list.clear()
@@ -631,9 +642,10 @@ Checkpoints: {checkpoints}
             cache_msg = ""
             if clear_cache:
                 try:
-                    from huggingface_hub import scan_cache_dir
                     import os
-                    
+
+                    from huggingface_hub import scan_cache_dir
+
                     # Get HF cache directory
                     cache_dir = os.environ.get("HF_HOME", 
                                  os.environ.get("HUGGINGFACE_HUB_CACHE",
@@ -1136,7 +1148,7 @@ Checkpoints: {checkpoints}
             if not routing_path.exists():
                 return
             
-            with open(routing_path, "r") as f:
+            with open(routing_path) as f:
                 routing = json.load(f)
             
             changed = False

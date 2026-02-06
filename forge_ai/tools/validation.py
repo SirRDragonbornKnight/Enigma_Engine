@@ -6,7 +6,7 @@ Validates tool parameters against schemas with detailed error reporting.
 """
 
 import logging
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,8 @@ class ToolSchemaValidator:
     def validate(
         self,
         tool_definition,
-        params: Dict[str, Any]
-    ) -> Tuple[bool, List[str], Dict[str, Any]]:
+        params: dict[str, Any]
+    ) -> tuple[bool, list[str], dict[str, Any]]:
         """
         Validate parameters against tool schema.
         
@@ -96,7 +96,7 @@ class ToolSchemaValidator:
         param_name: str,
         value: Any,
         param_def
-    ) -> Tuple[bool, Optional[str], Any]:
+    ) -> tuple[bool, Optional[str], Any]:
         """
         Validate a single parameter value.
         
@@ -150,8 +150,8 @@ class ToolSchemaValidator:
     
     def validate_multiple(
         self,
-        tool_calls: List[Tuple[Any, Dict[str, Any]]]
-    ) -> List[Tuple[bool, List[str], Dict[str, Any]]]:
+        tool_calls: list[tuple[Any, dict[str, Any]]]
+    ) -> list[tuple[bool, list[str], dict[str, Any]]]:
         """
         Validate multiple tool calls.
         
@@ -172,7 +172,7 @@ class ToolSchemaValidator:
     def get_validation_report(
         self,
         tool_definition,
-        params: Dict[str, Any]
+        params: dict[str, Any]
     ) -> str:
         """
         Generate human-readable validation report.

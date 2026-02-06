@@ -31,11 +31,11 @@ import logging
 import platform
 import shlex
 import shutil
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from ..utils.system_messages import warning_msg, error_msg
+from ..utils.system_messages import error_msg, warning_msg
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +94,11 @@ class VoiceProfile:
         return filepath
     
     @classmethod
-    def load(cls, name: str, directory: Path = PROFILES_DIR) -> 'VoiceProfile':
+    def load(cls, name: str, directory: Path = PROFILES_DIR) -> VoiceProfile:
         """Load profile from JSON file."""
         filepath = directory / f"{name.lower().replace(' ', '_')}.json"
         if filepath.exists():
-            with open(filepath, 'r') as f:
+            with open(filepath) as f:
                 data = json.load(f)
                 return cls(**data)
         raise FileNotFoundError(f"Voice profile '{name}' not found")
@@ -369,8 +369,8 @@ class VoiceEngine:
     
     def _platform_speak(self, text: str):
         """Platform-specific TTS fallback."""
-        import subprocess
         import os
+        import subprocess
         
         try:
             system = platform.system()

@@ -21,9 +21,9 @@ Usage:
 import logging
 import threading
 import time
-from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,8 @@ class TrackingMode(Enum):
 class PoseData:
     """Container for pose tracking data."""
     timestamp: float
-    landmarks: Dict[str, List[Tuple[float, float, float]]]  # x, y, z normalized coords
-    visibility: Dict[str, List[float]]  # Visibility scores for each landmark
+    landmarks: dict[str, list[tuple[float, float, float]]]  # x, y, z normalized coords
+    visibility: dict[str, list[float]]  # Visibility scores for each landmark
     tracking_mode: str
 
 

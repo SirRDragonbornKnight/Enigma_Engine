@@ -85,7 +85,7 @@ class VoiceCharacteristics:
     breathiness: float = 0.3       # Breathiness level
     
     # Spectral characteristics
-    formants: List[float] = field(default_factory=lambda: [500, 1500, 2500])
+    formants: list[float] = field(default_factory=lambda: [500, 1500, 2500])
     spectral_tilt: float = -6.0    # dB per octave
     harmonics_to_noise: float = 10.0  # HNR in dB
     
@@ -93,7 +93,7 @@ class VoiceCharacteristics:
     pause_frequency: float = 0.5   # Pauses per second
     pause_duration: float = 0.2    # Average pause length
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'pitch_mean': self.pitch_mean,
             'pitch_std': self.pitch_std,
@@ -108,7 +108,7 @@ class VoiceCharacteristics:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'VoiceCharacteristics':
+    def from_dict(cls, data: dict) -> VoiceCharacteristics:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -121,12 +121,12 @@ class ClonedVoice:
     characteristics: VoiceCharacteristics
     
     # Source info
-    source_samples: List[str] = field(default_factory=list)
+    source_samples: list[str] = field(default_factory=list)
     total_duration: float = 0.0  # Total sample duration in seconds
     
     # Storage
-    profile_path: Optional[Path] = None
-    model_path: Optional[Path] = None  # For neural cloning
+    profile_path: Path | None = None
+    model_path: Path | None = None  # For neural cloning
     
     # Metadata
     created_at: str = ""
@@ -137,7 +137,7 @@ class ClonedVoice:
             from datetime import datetime
             self.created_at = datetime.now().isoformat()
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'name': self.name,
             'method': self.method.value,
@@ -151,7 +151,7 @@ class ClonedVoice:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'ClonedVoice':
+    def from_dict(cls, data: dict) -> ClonedVoice:
         return cls(
             name=data['name'],
             method=CloningMethod(data['method']),
@@ -176,7 +176,7 @@ class ClonedVoice:
             Audio data as bytes
         """
         from .voice_profile import VoiceProfile
-        
+
         # Create voice profile from characteristics
         profile = VoiceProfile(
             name=self.name,
@@ -213,7 +213,7 @@ class VoiceCloner:
         self.profiles_dir = profiles_dir or Path(CONFIG.get("data_dir", "data")) / "voice_profiles" / "cloned"
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
         
-        self._cloned_voices: Dict[str, ClonedVoice] = {}
+        self._cloned_voices: dict[str, ClonedVoice] = {}
         self._load_profiles()
         
         logger.info(f"Voice cloner initialized with {len(self._cloned_voices)} profiles")
@@ -242,7 +242,7 @@ class VoiceCloner:
     def clone_voice(
         self,
         name: str,
-        samples: List[Union[str, Path]],
+        samples: list[str | Path],
         method: CloningMethod = CloningMethod.SPECTRAL,
         description: str = ""
     ) -> ClonedVoice:
@@ -300,7 +300,7 @@ class VoiceCloner:
     
     def _analyze_samples(
         self,
-        samples: List[Path],
+        samples: list[Path],
         method: CloningMethod
     ) -> VoiceCharacteristics:
         """Analyze audio samples to extract voice characteristics."""
@@ -328,7 +328,7 @@ class VoiceCloner:
                 harmonics_to_noise=spectral.harmonics_to_noise,
             )
     
-    def _simple_analysis(self, samples: List[Path]) -> VoiceCharacteristics:
+    def _simple_analysis(self, samples: list[Path]) -> VoiceCharacteristics:
         """Simple analysis using basic audio properties."""
         characteristics = VoiceCharacteristics()
         
@@ -361,7 +361,7 @@ class VoiceCloner:
         
         return characteristics
     
-    def _spectral_analysis(self, samples: List[Path]) -> VoiceCharacteristics:
+    def _spectral_analysis(self, samples: list[Path]) -> VoiceCharacteristics:
         """Spectral analysis for detailed voice characteristics."""
         if not SCIPY_AVAILABLE or not NUMPY_AVAILABLE:
             logger.warning("scipy/numpy not available, using simple analysis")
@@ -417,7 +417,7 @@ class VoiceCloner:
         
         return characteristics
     
-    def _neural_analysis(self, samples: List[Path]) -> VoiceCharacteristics:
+    def _neural_analysis(self, samples: list[Path]) -> VoiceCharacteristics:
         """
         Neural network-based voice analysis using multiple backends.
         
@@ -449,7 +449,7 @@ class VoiceCloner:
         logger.info("Neural backends unavailable - falling back to spectral analysis")
         return self._spectral_analysis(samples)
     
-    def _try_local_neural_analysis(self, samples: List[Path]) -> Optional[VoiceCharacteristics]:
+    def _try_local_neural_analysis(self, samples: list[Path]) -> VoiceCharacteristics | None:
         """
         Local neural voice analysis using PyTorch models.
         
@@ -588,7 +588,7 @@ class VoiceCloner:
         
         return filterbank
     
-    def _mfcc_to_formants(self, mfcc: np.ndarray, sr: int) -> List[float]:
+    def _mfcc_to_formants(self, mfcc: np.ndarray, sr: int) -> list[float]:
         """Approximate formant frequencies from MFCC coefficients."""
         # This is a rough approximation based on MFCC structure
         # Higher MFCCs capture finer spectral details related to formants
@@ -616,7 +616,7 @@ class VoiceCloner:
         except Exception:
             return base_formants
     
-    def _try_elevenlabs_analysis(self, samples: List[Path]) -> Optional[VoiceCharacteristics]:
+    def _try_elevenlabs_analysis(self, samples: list[Path]) -> VoiceCharacteristics | None:
         """
         Use ElevenLabs API for voice analysis.
         
@@ -630,7 +630,7 @@ class VoiceCloner:
         
         try:
             import requests
-            
+
             # Use the first sample for analysis
             sample_path = samples[0] if samples else None
             if not sample_path or not sample_path.exists():
@@ -688,7 +688,7 @@ class VoiceCloner:
         
         return None
     
-    def _try_coqui_analysis(self, samples: List[Path]) -> Optional[VoiceCharacteristics]:
+    def _try_coqui_analysis(self, samples: list[Path]) -> VoiceCharacteristics | None:
         """
         Use Coqui TTS speaker encoder for voice analysis.
         
@@ -696,8 +696,8 @@ class VoiceCloner:
         through their speaker encoder model.
         """
         try:
-            from TTS.tts.utils.speakers import SpeakerManager
             from TTS.encoder.utils.generic_utils import setup_encoder_model
+            from TTS.tts.utils.speakers import SpeakerManager
             from TTS.utils.audio import AudioProcessor
         except ImportError:
             logger.debug("Coqui TTS not available")
@@ -784,7 +784,7 @@ class VoiceCloner:
             logger.debug(f"Coqui analysis failed: {e}")
             return None
     
-    def _load_audio(self, path: Path) -> Tuple[np.ndarray, int]:
+    def _load_audio(self, path: Path) -> tuple[np.ndarray, int]:
         """Load audio file as numpy array."""
         path = Path(path)
         
@@ -861,7 +861,7 @@ class VoiceCloner:
         
         return 150.0
     
-    def _estimate_formants(self, audio: np.ndarray, sr: int, num_formants: int = 5) -> List[float]:
+    def _estimate_formants(self, audio: np.ndarray, sr: int, num_formants: int = 5) -> list[float]:
         """Estimate formant frequencies using LPC analysis."""
         if not SCIPY_AVAILABLE:
             return [500, 1500, 2500]  # Default formants
@@ -872,7 +872,7 @@ class VoiceCloner:
         
         # LPC analysis
         from scipy.signal import lfilter
-        
+
         # Number of LPC coefficients
         order = 2 + sr // 1000
         
@@ -909,11 +909,11 @@ class VoiceCloner:
         
         return -6.0
     
-    def get_voice(self, name: str) -> Optional[ClonedVoice]:
+    def get_voice(self, name: str) -> ClonedVoice | None:
         """Get a cloned voice by name."""
         return self._cloned_voices.get(name)
     
-    def list_voices(self) -> List[ClonedVoice]:
+    def list_voices(self) -> list[ClonedVoice]:
         """List all cloned voices."""
         return list(self._cloned_voices.values())
     
@@ -949,7 +949,7 @@ class VoiceCloner:
         
         return True
     
-    def import_voice(self, import_path: Path) -> Optional[ClonedVoice]:
+    def import_voice(self, import_path: Path) -> ClonedVoice | None:
         """Import a voice profile from a file."""
         import_path = Path(import_path)
         if not import_path.exists():
@@ -975,7 +975,7 @@ class VoiceCloner:
 
 
 # Global cloner instance
-_cloner: Optional[VoiceCloner] = None
+_cloner: VoiceCloner | None = None
 
 
 def get_voice_cloner() -> VoiceCloner:

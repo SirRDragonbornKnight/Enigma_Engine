@@ -2,19 +2,33 @@
 
 import logging
 import re
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QLineEdit, QProgressBar, QFileDialog,
-    QPlainTextEdit, QMessageBox, QInputDialog, QGroupBox,
-    QFrame, QDialog, QTextEdit, QDialogButtonBox, QCheckBox,
-    QScrollArea
-)
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ...config import CONFIG
 from .shared_components import NoScrollComboBox
@@ -525,7 +539,7 @@ def _import_from_url(parent):
                 )
                 
                 # Update UI on main thread
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     preview_text, "setPlainText",
                     Qt.QueuedConnection,
@@ -533,28 +547,28 @@ def _import_from_url(parent):
                 )
                 
             except urllib.error.HTTPError as e:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     preview_text, "setPlainText",
                     Qt.QueuedConnection,
                     Q_ARG(str, f"HTTP Error {e.code}: {e.reason}")
                 )
             except urllib.error.URLError as e:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     preview_text, "setPlainText",
                     Qt.QueuedConnection,
                     Q_ARG(str, f"Network Error: {e}")
                 )
             except Exception as e:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     preview_text, "setPlainText",
                     Qt.QueuedConnection,
                     Q_ARG(str, f"Error: {e}")
                 )
             finally:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     fetch_btn, "setEnabled",
                     Qt.QueuedConnection,
@@ -692,7 +706,7 @@ def _populate_prompt_templates(parent):
     user_presets_path = Path(CONFIG.get("data_dir", "data")) / "user_prompts.json"
     if user_presets_path.exists():
         try:
-            with open(user_presets_path, 'r', encoding='utf-8') as f:
+            with open(user_presets_path, encoding='utf-8') as f:
                 user_presets = json.load(f)
             for name in user_presets.keys():
                 parent.training_prompt_combo.addItem(f"[User] {name}", f"user_{name}")
@@ -761,7 +775,7 @@ Assistant: Of course! I'd be happy to help with coding. What would you like to k
         user_presets_path = Path(CONFIG.get("data_dir", "data")) / "user_prompts.json"
         if user_presets_path.exists():
             try:
-                with open(user_presets_path, 'r', encoding='utf-8') as f:
+                with open(user_presets_path, encoding='utf-8') as f:
                     user_presets = json.load(f)
                 if preset_name in user_presets:
                     return user_presets[preset_name]
@@ -773,7 +787,7 @@ Assistant: Of course! I'd be happy to help with coding. What would you like to k
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             try:
-                with open(settings_path, 'r', encoding='utf-8') as f:
+                with open(settings_path, encoding='utf-8') as f:
                     settings = json.load(f)
                 return settings.get("system_prompt", "")
             except Exception as e:

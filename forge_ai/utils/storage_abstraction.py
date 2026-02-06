@@ -6,19 +6,19 @@ This file maintains backward compatibility.
 """
 
 from enum import Enum
-from typing import Dict, Any, Optional, Union, BinaryIO
+from typing import Any, BinaryIO, Dict, Optional, Union
 
 # Re-export everything from the main module
 from forge_ai.utils.storage_backends import (
-    StorageObject,
-    StorageBackend,
+    AzureStorage,
     LocalStorage,
     MemoryStorage,
     S3Storage,
-    AzureStorage,
-    get_storage,
+    StorageBackend,
+    StorageObject,
     get_local_storage,
     get_memory_storage,
+    get_storage,
 )
 
 
@@ -65,7 +65,7 @@ class StorageManager:
     """
     
     def __init__(self):
-        self._backends: Dict[str, StorageBackend] = {}
+        self._backends: dict[str, StorageBackend] = {}
         self._default: Optional[str] = None
     
     def add_backend(self, name: str, backend: StorageBackend, default: bool = False):
@@ -81,10 +81,15 @@ class StorageManager:
             raise StorageError(f"Unknown storage backend: {name}")
         return self._backends[name]
     
-    def put_all(self, key: str, data: Union[bytes, BinaryIO, str], **kwargs) -> Dict[str, Any]:
+    def put_all(self, key: str, data: Union[bytes, BinaryIO, str], **kwargs) -> dict[str, Any]:
         """Put object to all backends."""
         results = {}
-        data_bytes = data.encode('utf-8') if isinstance(data, str) else (data.read() if hasattr(data, 'read') else data)
+        if isinstance(data, str):
+            data_bytes = data.encode('utf-8')
+        elif hasattr(data, 'read'):
+            data_bytes = data.read()  # type: ignore[union-attr]
+        else:
+            data_bytes = bytes(data)  # type: ignore[arg-type]
         
         for name, backend in self._backends.items():
             try:
@@ -93,7 +98,7 @@ class StorageManager:
                 results[name] = str(e)
         return results
     
-    def delete_all(self, key: str) -> Dict[str, bool]:
+    def delete_all(self, key: str) -> dict[str, bool]:
         """Delete object from all backends."""
         return {name: backend.delete(key) for name, backend in self._backends.items()}
 

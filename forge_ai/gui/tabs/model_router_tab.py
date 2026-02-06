@@ -4,18 +4,33 @@ Model Router Tab - Assign models to tools.
 Clean, modern interface for configuring which AI models handle which tasks.
 """
 
-from typing import Dict, List, Optional, Any
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QScrollArea, QFrame, QListWidget, QListWidgetItem, 
-    QSpinBox, QMessageBox, QSizePolicy, QSplitter, QTextEdit,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
-)
+from typing import Any, Dict, List, Optional
+
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
-
 
 # Tool categories and styling
 TOOL_CATEGORIES = {
@@ -104,7 +119,7 @@ class ModelRouterTab(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.assignments: Dict[str, List[Dict]] = {}  # tool -> [{model_id, priority}]
+        self.assignments: dict[str, list[dict]] = {}  # tool -> [{model_id, priority}]
         self._setup_ui()
         self._load_config()
         

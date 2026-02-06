@@ -5,11 +5,11 @@ Rate Limiting for Tool Execution
 Prevents abuse and manages API quotas by limiting tool execution rates.
 """
 
-import time
 import logging
-from typing import Dict, Optional
+import time
 from collections import deque
 from datetime import datetime
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class RateLimiter:
     
     def __init__(
         self,
-        custom_limits: Optional[Dict[str, int]] = None,
+        custom_limits: Optional[dict[str, int]] = None,
         window_seconds: int = 60
     ):
         """
@@ -54,10 +54,10 @@ class RateLimiter:
         self.window_seconds = window_seconds
         
         # Track requests per tool: {tool_name: deque of timestamps}
-        self.requests: Dict[str, deque] = {}
+        self.requests: dict[str, deque] = {}
         
         # Track blocked attempts
-        self.blocked_count: Dict[str, int] = {}
+        self.blocked_count: dict[str, int] = {}
         
         logger.info(f"RateLimiter initialized with {len(self.limits)} tool limits")
     
@@ -236,7 +236,7 @@ class RateLimiter:
         self.limits[tool_name] = limit
         logger.info(f"Set rate limit for {tool_name}: {limit} requests/{self.window_seconds}s")
     
-    def get_statistics(self) -> Dict[str, any]:
+    def get_statistics(self) -> dict[str, any]:
         """Get rate limiting statistics."""
         stats = {
             "tools_tracked": len(self.requests),

@@ -7,13 +7,26 @@ The same AI being trained learns to interact with these games.
 Supports loading connection configs from files instead of presets.
 """
 
-from pathlib import Path
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QGroupBox, QLineEdit, QSpinBox, QTextEdit, QFileDialog,
-    QDialog, QDialogButtonBox, QCheckBox, QFormLayout, QMessageBox
-)
 import json
+from pathlib import Path
+
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ....config import CONFIG
 from ..shared_components import NoScrollComboBox
@@ -427,7 +440,7 @@ def _on_game_config_changed(parent, index):
         return
     
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = json.load(f)
         
         # Apply config to UI
@@ -654,7 +667,11 @@ def _change_active_game(parent):
         if dialog.exec_() == QDialog.Accepted:
             config = dialog.get_config()
             try:
-                from forge_ai.tools.game_router import get_game_router, GameConfig, GameType
+                from forge_ai.tools.game_router import (
+                    GameConfig,
+                    GameType,
+                    get_game_router,
+                )
                 router = get_game_router()
                 
                 # Create GameConfig from dialog
@@ -739,7 +756,7 @@ def _save_custom_game(config: dict):
     existing = []
     if custom_games_file.exists():
         try:
-            with open(custom_games_file, 'r') as f:
+            with open(custom_games_file) as f:
                 existing = json.load(f)
         except Exception:
             existing = []
@@ -767,7 +784,7 @@ def _load_custom_games(parent):
         return
     
     try:
-        with open(custom_games_file, 'r') as f:
+        with open(custom_games_file) as f:
             games = json.load(f)
         
         for game in games:
@@ -788,7 +805,11 @@ def _load_custom_games(parent):
                 
                 # Also register with router
                 try:
-                    from forge_ai.tools.game_router import get_game_router, GameConfig, GameType
+                    from forge_ai.tools.game_router import (
+                        GameConfig,
+                        GameType,
+                        get_game_router,
+                    )
                     router = get_game_router()
                     game_config = GameConfig(
                         name=game.get("name", game.get("id")),
@@ -815,7 +836,7 @@ def _load_custom_games(parent):
 def _start_coplay(parent):
     """Start co-play mode."""
     try:
-        from forge_ai.tools.game_coplay import get_coplayer, CoPlayRole, InputMethod
+        from forge_ai.tools.game_coplay import CoPlayRole, InputMethod, get_coplayer
         
         coplayer = get_coplayer()
         

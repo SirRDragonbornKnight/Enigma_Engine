@@ -7,11 +7,11 @@ Messages sent from either chat appear in both immediately.
 """
 
 import time
-from typing import Optional, Dict, Any, List, Callable
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 try:
-    from PyQt5.QtCore import QObject, pyqtSignal, QMetaObject, Qt, Q_ARG
+    from PyQt5.QtCore import Q_ARG, QMetaObject, QObject, Qt, pyqtSignal
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -19,7 +19,6 @@ except ImportError:
     pyqtSignal = lambda *args: None
 
 from ..config import CONFIG
-
 
 # Maximum messages to keep in memory (prevents unbounded growth)
 MAX_MESSAGES = 200
@@ -37,7 +36,7 @@ class ChatMessage:
         self.source = source  # "main" or "quick"
         self.timestamp = timestamp or time.time()
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "role": self.role,
             "text": self.text,
@@ -46,7 +45,7 @@ class ChatMessage:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ChatMessage":
+    def from_dict(cls, data: dict[str, Any]) -> "ChatMessage":
         return cls(
             role=data.get("role", "user"),
             text=data.get("text", ""),
@@ -102,7 +101,7 @@ class ChatSync(QObject if HAS_PYQT else object):
                 # Just initialize as a regular object, signals won't work
                 pass
         
-        self._messages: List[ChatMessage] = []
+        self._messages: list[ChatMessage] = []
         self._model_name = "No model"
         self._user_display_name = "You"
         self._engine = None
@@ -112,7 +111,7 @@ class ChatSync(QObject if HAS_PYQT else object):
         self._stop_requested = False
         
         # Response tracking for feedback
-        self._response_history: Dict[int, Dict] = {}
+        self._response_history: dict[int, dict] = {}
     
     def set_main_window(self, window):
         """Connect the main window."""
@@ -140,7 +139,7 @@ class ChatSync(QObject if HAS_PYQT else object):
         self._user_display_name = name
     
     @property
-    def messages(self) -> List[ChatMessage]:
+    def messages(self) -> list[ChatMessage]:
         """Get all messages."""
         return self._messages.copy()
     
@@ -309,7 +308,7 @@ class ChatSync(QObject if HAS_PYQT else object):
     def _clean_response(self, response) -> str:
         """Clean and validate AI response."""
         import re
-        
+
         # Check if response is a tensor (model didn't decode output)
         if hasattr(response, 'shape') or 'tensor' in str(type(response)).lower():
             try:
@@ -469,7 +468,7 @@ class ChatSync(QObject if HAS_PYQT else object):
         except Exception as e:
             logger.debug(f"Could not sync to quick chat: {e}")
     
-    def get_history_for_context(self, max_messages: int = 6) -> List[Dict]:
+    def get_history_for_context(self, max_messages: int = 6) -> list[dict]:
         """Get recent messages for AI context."""
         recent = self._messages[-max_messages:] if len(self._messages) > max_messages else self._messages
         return [

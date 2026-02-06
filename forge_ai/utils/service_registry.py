@@ -30,16 +30,14 @@ Usage:
             pass
 """
 
-import time
-import threading
-import logging
 import hashlib
 import json
+import logging
+import threading
+import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import (
-    Any, Callable, Dict, List, Optional, Set, TypeVar, Generic
-)
+from typing import Any, Callable, Dict, Generic, List, Optional, Set, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +96,8 @@ class Service:
     endpoint: str
     version: str = "1.0.0"
     instance_id: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    tags: Set[str] = field(default_factory=set)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    tags: set[str] = field(default_factory=set)
     weight: int = 1
     zone: str = "default"
     health_check_url: Optional[str] = None
@@ -164,7 +162,7 @@ class LoadBalancer:
     """Load balancing strategies for service selection."""
     
     @staticmethod
-    def round_robin(services: List[Service], state: Dict[str, Any]) -> Optional[Service]:
+    def round_robin(services: list[Service], state: dict[str, Any]) -> Optional[Service]:
         """Round-robin selection."""
         if not services:
             return None
@@ -175,7 +173,7 @@ class LoadBalancer:
         return service
     
     @staticmethod
-    def weighted(services: List[Service], state: Dict[str, Any]) -> Optional[Service]:
+    def weighted(services: list[Service], state: dict[str, Any]) -> Optional[Service]:
         """Weighted random selection."""
         if not services:
             return None
@@ -193,7 +191,7 @@ class LoadBalancer:
         return services[-1]
     
     @staticmethod
-    def least_latency(services: List[Service], state: Dict[str, Any]) -> Optional[Service]:
+    def least_latency(services: list[Service], state: dict[str, Any]) -> Optional[Service]:
         """Select service with lowest latency."""
         if not services:
             return None
@@ -201,7 +199,7 @@ class LoadBalancer:
         return min(services, key=lambda s: s.health.latency_ms or float('inf'))
     
     @staticmethod
-    def random(services: List[Service], state: Dict[str, Any]) -> Optional[Service]:
+    def random(services: list[Service], state: dict[str, Any]) -> Optional[Service]:
         """Random selection."""
         if not services:
             return None
@@ -210,7 +208,7 @@ class LoadBalancer:
         return random.choice(services)
     
     @staticmethod
-    def zone_aware(services: List[Service], state: Dict[str, Any], preferred_zone: str = "default") -> Optional[Service]:
+    def zone_aware(services: list[Service], state: dict[str, Any], preferred_zone: str = "default") -> Optional[Service]:
         """Prefer services in the same zone."""
         if not services:
             return None
@@ -254,14 +252,14 @@ class ServiceRegistry:
         self.heartbeat_timeout = heartbeat_timeout
         self.auto_deregister = auto_deregister
         
-        self._services: Dict[str, Dict[str, Service]] = {}  # name -> instance_id -> Service
+        self._services: dict[str, dict[str, Service]] = {}  # name -> instance_id -> Service
         self._lock = threading.RLock()
-        self._lb_state: Dict[str, Dict[str, Any]] = {}  # Load balancer state per service
+        self._lb_state: dict[str, dict[str, Any]] = {}  # Load balancer state per service
         
         self._health_check_thread: Optional[threading.Thread] = None
         self._running = False
         
-        self._listeners: List[Callable[[str, Service, str], None]] = []
+        self._listeners: list[Callable[[str, Service, str], None]] = []
     
     def register(self, service: Service) -> bool:
         """
@@ -338,9 +336,9 @@ class ServiceRegistry:
         self,
         name: str,
         version: Optional[str] = None,
-        tags: Optional[Set[str]] = None,
+        tags: Optional[set[str]] = None,
         healthy_only: bool = True,
-    ) -> List[Service]:
+    ) -> list[Service]:
         """
         Discover services by criteria.
         
@@ -408,7 +406,7 @@ class ServiceRegistry:
         balancer = strategies.get(strategy, LoadBalancer.weighted)
         return balancer(services, lb_state)
     
-    def get_all_services(self) -> Dict[str, List[Service]]:
+    def get_all_services(self) -> dict[str, list[Service]]:
         """Get all registered services."""
         with self._lock:
             return {
@@ -544,8 +542,8 @@ class ServiceRegistry:
             return
         
         try:
-            import urllib.request
             import urllib.error
+            import urllib.request
             
             start = time.time()
             request = urllib.request.Request(
@@ -647,7 +645,7 @@ def set_registry(registry: ServiceRegistry) -> None:
 def service_provider(
     name: str,
     version: str = "1.0.0",
-    tags: Optional[Set[str]] = None,
+    tags: Optional[set[str]] = None,
     endpoint: Optional[str] = None,
     **metadata
 ):

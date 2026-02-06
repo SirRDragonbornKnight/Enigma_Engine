@@ -62,10 +62,10 @@ executes tools with timeouts, and returns structured results.
 from __future__ import annotations
 
 import json
-import re
 import logging
-import signal
 import platform
+import re
+import signal
 import time
 from contextlib import contextmanager
 from typing import Any
@@ -651,12 +651,12 @@ class ToolExecutor:
             
             # Try to use the image tab provider directly (bypasses module system)
             try:
-                from ..gui.tabs.image_tab import get_provider
-                
                 # Get local SD provider
                 # Choose provider based on what's available
                 # Replicate is fast and cheap, local SD is slow on Pi
                 import os
+
+                from ..gui.tabs.image_tab import get_provider
                 if os.environ.get("REPLICATE_API_TOKEN"):
                     provider_name = 'replicate'
                 elif os.environ.get("OPENAI_API_KEY"):
@@ -814,7 +814,7 @@ class ToolExecutor:
     def _execute_control_avatar_bones(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute bone-level avatar control."""
         try:
-            from ..avatar.ai_control import get_ai_avatar_control, BoneCommand
+            from ..avatar.ai_control import BoneCommand, get_ai_avatar_control
             
             ai_control = get_ai_avatar_control()
             action = params.get("action", "")
@@ -919,7 +919,7 @@ class ToolExecutor:
                 if settings_path.exists():
                     try:
                         existing = json.loads(settings_path.read_text())
-                    except (json.JSONDecodeError, IOError) as e:
+                    except (json.JSONDecodeError, OSError) as e:
                         logger.debug(f"Could not read avatar settings: {e}")
                         existing = {}
                 
@@ -1117,9 +1117,10 @@ class ToolExecutor:
     def _execute_generate_gif(self, module, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute GIF generation by creating multiple image frames."""
         try:
-            from pathlib import Path
-            from PIL import Image
             import os
+            from pathlib import Path
+
+            from PIL import Image
             
             frames_prompts = params.get("frames", [])
             fps = params.get("fps", 5)
@@ -1213,9 +1214,10 @@ class ToolExecutor:
     def _execute_edit_image(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute image editing operations."""
         try:
-            from pathlib import Path
-            from PIL import Image, ImageEnhance, ImageFilter
             import os
+            from pathlib import Path
+
+            from PIL import Image, ImageEnhance, ImageFilter
             
             image_path = params.get("image_path", "")
             edit_type = params.get("edit_type", "")
@@ -1322,9 +1324,10 @@ class ToolExecutor:
     def _execute_edit_gif(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute GIF editing operations."""
         try:
-            from pathlib import Path
-            from PIL import Image
             import os
+            from pathlib import Path
+
+            from PIL import Image
             
             gif_path = params.get("gif_path", "")
             edit_type = params.get("edit_type", "")
@@ -1461,8 +1464,8 @@ class ToolExecutor:
     def _execute_edit_video(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute video editing operations."""
         try:
-            from pathlib import Path
             import os
+            from pathlib import Path
             
             video_path = params.get("video_path", "")
             edit_type = params.get("edit_type", "")

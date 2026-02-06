@@ -20,10 +20,10 @@ Optional dependencies:
 - json: Model file parsing
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-import json
+from typing import Any, Dict, List, Optional
 
 # Check for image processing
 try:
@@ -70,14 +70,14 @@ class Live2DModel:
     
     # File references
     moc_file: str = ""
-    texture_files: List[str] = field(default_factory=list)
+    texture_files: list[str] = field(default_factory=list)
     physics_file: str = ""
     pose_file: str = ""
     user_data_file: str = ""
     
     # Expressions and motions
-    expressions: Dict[str, Live2DExpression] = field(default_factory=dict)
-    motions: Dict[str, List[Live2DMotion]] = field(default_factory=dict)
+    expressions: dict[str, Live2DExpression] = field(default_factory=dict)
+    motions: dict[str, list[Live2DMotion]] = field(default_factory=dict)
     
     # Model directory
     base_path: str = ""
@@ -92,20 +92,20 @@ class Live2DModel:
         """Check if model has motions."""
         return any(len(m) > 0 for m in self.motions.values())
     
-    def get_expression_names(self) -> List[str]:
+    def get_expression_names(self) -> list[str]:
         """Get available expression names."""
         return list(self.expressions.keys())
     
-    def get_motion_groups(self) -> List[str]:
+    def get_motion_groups(self) -> list[str]:
         """Get motion group names."""
         return list(self.motions.keys())
     
-    def get_texture_paths(self) -> List[Path]:
+    def get_texture_paths(self) -> list[Path]:
         """Get full paths to texture files."""
         base = Path(self.base_path)
         return [base / tex for tex in self.texture_files]
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -135,7 +135,7 @@ class Live2DLoader:
     
     def __init__(self):
         """Initialize Live2D loader."""
-        self._cache: Dict[str, Live2DModel] = {}
+        self._cache: dict[str, Live2DModel] = {}
     
     @staticmethod
     def is_available() -> bool:
@@ -143,7 +143,7 @@ class Live2DLoader:
         return LIVE2D_AVAILABLE
     
     @staticmethod
-    def get_requirements() -> List[str]:
+    def get_requirements() -> list[str]:
         """Get recommended packages."""
         return ["Pillow (for textures)", "Live2D Cubism SDK (for rendering)"]
     
@@ -193,7 +193,7 @@ class Live2DLoader:
     
     def _load_model(self, model_json_path: Path) -> Optional[Live2DModel]:
         """Internal model loading."""
-        with open(model_json_path, 'r', encoding='utf-8') as f:
+        with open(model_json_path, encoding='utf-8') as f:
             model_data = json.load(f)
         
         model = Live2DModel()
@@ -279,7 +279,7 @@ class Live2DLoader:
         """Clear model cache."""
         self._cache.clear()
     
-    def get_cached_models(self) -> List[str]:
+    def get_cached_models(self) -> list[str]:
         """Get cached model paths."""
         return list(self._cache.keys())
 

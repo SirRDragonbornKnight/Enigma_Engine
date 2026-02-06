@@ -5,9 +5,9 @@ Base classes for model export and import providers.
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, Dict, Any, List
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class ExportResult:
     url: Optional[str] = None  # URL to access the exported model
     local_path: Optional[str] = None  # Local path if exported locally
     message: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     
     @property
     def success(self) -> bool:
@@ -60,7 +60,7 @@ class ImportResult:
     source_id: str = ""  # Original ID on the platform
     local_path: Optional[str] = None
     message: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     
     @property
     def success(self) -> bool:
@@ -79,7 +79,7 @@ class ProviderConfig:
     description: str
     requires_auth: bool = False
     auth_env_var: Optional[str] = None  # Environment variable for auth token
-    supported_formats: List[str] = field(default_factory=lambda: ["pytorch"])
+    supported_formats: list[str] = field(default_factory=lambda: ["pytorch"])
     website: Optional[str] = None
     can_export: bool = True
     can_import: bool = True
@@ -97,7 +97,7 @@ class ExportProvider(ABC):
     DESCRIPTION: str = "Base export provider"
     REQUIRES_AUTH: bool = False
     AUTH_ENV_VAR: Optional[str] = None
-    SUPPORTED_FORMATS: List[str] = ["pytorch"]
+    SUPPORTED_FORMATS: list[str] = ["pytorch"]
     WEBSITE: Optional[str] = None
     
     def __init__(self, models_dir: Optional[str] = None):
@@ -129,7 +129,7 @@ class ExportProvider(ABC):
             raise ValueError(f"Model '{model_name}' not found at {model_path}")
         return model_path
     
-    def _load_config(self, model_path: Path) -> Dict[str, Any]:
+    def _load_config(self, model_path: Path) -> dict[str, Any]:
         """Load model configuration."""
         import json
         config_path = model_path / "config.json"
@@ -138,7 +138,7 @@ class ExportProvider(ABC):
         with open(config_path) as f:
             return json.load(f)
     
-    def _load_metadata(self, model_path: Path) -> Dict[str, Any]:
+    def _load_metadata(self, model_path: Path) -> dict[str, Any]:
         """Load model metadata."""
         import json
         metadata_path = model_path / "metadata.json"
@@ -147,7 +147,7 @@ class ExportProvider(ABC):
                 return json.load(f)
         return {}
     
-    def _load_weights(self, model_path: Path, device: str = "cpu") -> Dict[str, Any]:
+    def _load_weights(self, model_path: Path, device: str = "cpu") -> dict[str, Any]:
         """Load model weights."""
         import torch
         weights_path = model_path / "weights.pth"
@@ -219,7 +219,7 @@ class ImportProvider(ABC):
     DESCRIPTION: str = "Base import provider"
     REQUIRES_AUTH: bool = False
     AUTH_ENV_VAR: Optional[str] = None
-    SUPPORTED_FORMATS: List[str] = ["pytorch"]
+    SUPPORTED_FORMATS: list[str] = ["pytorch"]
     WEBSITE: Optional[str] = None
     
     def __init__(self, models_dir: Optional[str] = None):
@@ -260,12 +260,13 @@ class ImportProvider(ABC):
         model_path: Path,
         source: str,
         source_id: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ):
         """Register an imported model in the ForgeAI registry."""
-        from ..model_registry import ModelRegistry
         import json
         from datetime import datetime
+
+        from ..model_registry import ModelRegistry
         
         registry = ModelRegistry(str(self.models_dir))
         
@@ -318,7 +319,7 @@ class ImportProvider(ABC):
         query: str,
         limit: int = 10,
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for models on the platform.
         
@@ -331,6 +332,6 @@ class ImportProvider(ABC):
         """
         pass
     
-    def list_models(self, **kwargs) -> List[Dict[str, Any]]:
+    def list_models(self, **kwargs) -> list[dict[str, Any]]:
         """List available models (if supported)."""
         return []

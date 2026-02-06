@@ -18,13 +18,12 @@ Part of the ForgeAI resilience patterns.
 import asyncio
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Callable, TypeVar, Generic
-from enum import Enum
 from collections import deque
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass, field
+from enum import Enum
 from functools import wraps
-
+from typing import Any, Callable, Dict, Generic, Optional, TypeVar
 
 T = TypeVar('T')
 
@@ -100,7 +99,7 @@ class BulkheadMetrics:
             return 0.0
         return (self.rejected_requests / self.total_requests) * 100
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "partition": self.partition,
@@ -376,7 +375,7 @@ class Bulkhead:
     
     def __init__(self):
         """Initialize bulkhead manager."""
-        self._partitions: Dict[str, BulkheadPartition] = {}
+        self._partitions: dict[str, BulkheadPartition] = {}
         self._lock = threading.Lock()
     
     def create_partition(
@@ -512,11 +511,11 @@ class Bulkhead:
         partition = self._partitions.get(partition_name)
         return partition.metrics if partition else None
     
-    def get_all_metrics(self) -> Dict[str, BulkheadMetrics]:
+    def get_all_metrics(self) -> dict[str, BulkheadMetrics]:
         """Get metrics for all partitions."""
         return {name: p.metrics for name, p in self._partitions.items()}
     
-    def get_health(self) -> Dict[str, BulkheadState]:
+    def get_health(self) -> dict[str, BulkheadState]:
         """Get health state of all partitions."""
         return {name: p.metrics.state for name, p in self._partitions.items()}
     

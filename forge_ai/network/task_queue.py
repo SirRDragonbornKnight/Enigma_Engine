@@ -255,9 +255,9 @@ class NetworkTaskQueue:
         
         try:
             # Import here to avoid circular imports
-            from .load_balancer import LoadBalancer, BalancingStrategy
             from ..comms.remote_client import RemoteClient
-            
+            from .load_balancer import BalancingStrategy, LoadBalancer
+
             # Get server (use specific or load balance)
             if task.target_server:
                 address, port = task.target_server.split(":")

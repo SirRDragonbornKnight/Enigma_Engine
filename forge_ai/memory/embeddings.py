@@ -45,7 +45,7 @@ class EmbeddingGenerator:
         """Initialize local sentence-transformers model."""
         try:
             from sentence_transformers import SentenceTransformer
-            
+
             # Use default model if not specified
             if model_name is None:
                 model_name = "all-MiniLM-L6-v2"  # Fast and good quality
@@ -71,9 +71,10 @@ class EmbeddingGenerator:
     def _init_openai(self):
         """Initialize OpenAI embeddings."""
         try:
-            import openai
             import os
-            
+
+            import openai
+
             # Get API key from environment
             api_key = os.environ.get("OPENAI_API_KEY")
             if not api_key:

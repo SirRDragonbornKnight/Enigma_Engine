@@ -15,10 +15,11 @@ with more documentation and features. Consider importing from there instead:
     )
 """
 import math
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 
 class FeedForward(nn.Module):

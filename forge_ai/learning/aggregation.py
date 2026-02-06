@@ -6,11 +6,11 @@ Supports multiple aggregation methods including simple averaging, weighted
 averaging, and secure multi-party computation.
 """
 
-import uuid
 import logging
-from enum import Enum
+import uuid
 from datetime import datetime
-from typing import List, Dict, Any
+from enum import Enum
+from typing import Any, Dict, List
 
 try:
     import numpy as np
@@ -42,12 +42,12 @@ class SecureAggregator:
     
     def __init__(self):
         """Initialize the aggregator."""
-        self.aggregation_history: List[Dict[str, Any]] = []
+        self.aggregation_history: list[dict[str, Any]] = []
         logger.info("Secure aggregator initialized")
     
     def aggregate_updates(
         self,
-        updates: List[Any],  # List of WeightUpdate objects
+        updates: list[Any],  # List of WeightUpdate objects
         method: AggregationMethod = AggregationMethod.WEIGHTED,
     ) -> Any:  # Returns WeightUpdate
         """
@@ -86,7 +86,7 @@ class SecureAggregator:
         
         return result
     
-    def _simple_average(self, updates: List[Any]) -> Any:
+    def _simple_average(self, updates: list[Any]) -> Any:
         """
         Simple average of all updates.
         
@@ -144,7 +144,7 @@ class SecureAggregator:
             }
         )
     
-    def _weighted_average(self, updates: List[Any]) -> Any:
+    def _weighted_average(self, updates: list[Any]) -> Any:
         """
         Weighted average by number of training samples.
         
@@ -218,7 +218,7 @@ class SecureAggregator:
             }
         )
     
-    def _secure_aggregation(self, updates: List[Any]) -> Any:
+    def _secure_aggregation(self, updates: list[Any]) -> Any:
         """
         Secure aggregation using multi-party computation.
         
@@ -245,7 +245,7 @@ class SecureAggregator:
         
         return result
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get aggregation statistics."""
         return {
             "total_aggregations": len(self.aggregation_history),
@@ -260,7 +260,7 @@ def test_aggregation():
         return
     
     from .federated import WeightUpdate
-    
+
     # Create test updates
     updates = [
         WeightUpdate(

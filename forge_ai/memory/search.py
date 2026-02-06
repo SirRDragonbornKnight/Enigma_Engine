@@ -194,6 +194,7 @@ class MemorySearch:
         else:
             # Use simple fallback
             import hashlib
+
             import numpy as np
             hash_obj = hashlib.sha256(query.encode())
             hash_bytes = hash_obj.digest()

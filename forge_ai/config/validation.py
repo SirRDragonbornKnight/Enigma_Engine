@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_type_hints
@@ -80,19 +80,19 @@ class QuantizationType(str, Enum):
     BF16 = "bf16"
 
 
-def validate_range(value: Union[int, float], min_val: Union[int, float], max_val: Union[int, float], name: str) -> None:
+def validate_range(value: int | float, min_val: int | float, max_val: int | float, name: str) -> None:
     """Validate a value is within range."""
     if not min_val <= value <= max_val:
         raise ConfigError(f"{name} must be between {min_val} and {max_val}, got {value}")
 
 
-def validate_positive(value: Union[int, float], name: str) -> None:
+def validate_positive(value: int | float, name: str) -> None:
     """Validate a value is positive."""
     if value <= 0:
         raise ConfigError(f"{name} must be positive, got {value}")
 
 
-def validate_path_exists(path: Union[str, Path], name: str, must_exist: bool = False) -> Path:
+def validate_path_exists(path: str | Path, name: str, must_exist: bool = False) -> Path:
     """Validate a path."""
     p = Path(path)
     if must_exist and not p.exists():
@@ -112,7 +112,7 @@ class BaseConfig:
         """Override to add custom validation."""
         pass
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
     
@@ -126,7 +126,7 @@ class BaseConfig:
         return json.dumps(data, indent=indent, default=str)
     
     @classmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
+    def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Create from dictionary."""
         # Filter to only valid fields
         valid_fields = {f.name for f in fields(cls)}
@@ -134,12 +134,12 @@ class BaseConfig:
         return cls(**filtered)
     
     @classmethod
-    def from_json(cls: Type[T], json_str: str) -> T:
+    def from_json(cls: type[T], json_str: str) -> T:
         """Create from JSON string."""
         return cls.from_dict(json.loads(json_str))
     
     @classmethod
-    def from_env(cls: Type[T], prefix: str = "FORGE") -> T:
+    def from_env(cls: type[T], prefix: str = "FORGE") -> T:
         """
         Create from environment variables.
         
@@ -164,7 +164,7 @@ class BaseConfig:
         
         return cls(**data) if data else cls()
     
-    def merge(self, other: Union[Dict[str, Any], 'BaseConfig']) -> 'BaseConfig':
+    def merge(self, other: dict[str, Any] | BaseConfig) -> BaseConfig:
         """Merge with another config or dict (other takes precedence)."""
         current = self.to_dict()
         other_dict = other.to_dict() if isinstance(other, BaseConfig) else other
@@ -187,7 +187,7 @@ class ModelConfig(BaseConfig):
     # Attention settings
     use_flash_attention: bool = True
     use_gqa: bool = False  # Grouped Query Attention
-    n_kv_heads: Optional[int] = None
+    n_kv_heads: int | None = None
     
     # Normalization
     rms_norm_eps: float = 1e-5
@@ -223,7 +223,7 @@ class TrainingConfig(BaseConfig):
     learning_rate: float = 1e-4
     batch_size: int = 32
     epochs: int = 10
-    max_steps: Optional[int] = None
+    max_steps: int | None = None
     
     # Optimizer
     optimizer: str = "adamw"
@@ -242,8 +242,8 @@ class TrainingConfig(BaseConfig):
     gradient_accumulation_steps: int = 1
     
     # Data
-    train_data_path: Optional[str] = None
-    val_data_path: Optional[str] = None
+    train_data_path: str | None = None
+    val_data_path: str | None = None
     val_split: float = 0.1
     
     # Checkpointing
@@ -289,8 +289,8 @@ class InferenceConfig(BaseConfig):
     num_beams: int = 1
     
     # Stop conditions
-    stop_sequences: List[str] = field(default_factory=list)
-    eos_token_id: Optional[int] = None
+    stop_sequences: list[str] = field(default_factory=list)
+    eos_token_id: int | None = None
     
     # Batching
     batch_size: int = 1
@@ -315,8 +315,8 @@ class APIConfig(BaseConfig):
     port: int = 8080
     
     # Security
-    api_key: Optional[str] = None
-    cors_origins: List[str] = field(default_factory=lambda: ["*"])
+    api_key: str | None = None
+    cors_origins: list[str] = field(default_factory=lambda: ["*"])
     
     # Rate limiting
     rate_limit_enabled: bool = True
@@ -330,8 +330,8 @@ class APIConfig(BaseConfig):
     workers: int = 1
     
     # SSL
-    ssl_certfile: Optional[str] = None
-    ssl_keyfile: Optional[str] = None
+    ssl_certfile: str | None = None
+    ssl_keyfile: str | None = None
     
     def validate(self) -> None:
         validate_range(self.port, 1, 65535, "port")
@@ -372,7 +372,7 @@ class VoiceConfig(BaseConfig):
     
     # TTS
     tts_engine: str = "pyttsx3"  # pyttsx3, elevenlabs, openai
-    tts_voice: Optional[str] = None
+    tts_voice: str | None = None
     tts_rate: int = 150
     
     # STT
@@ -417,7 +417,7 @@ class ForgeConfig(BaseConfig):
             raise ConfigError(f"Invalid log_level: {self.log_level}")
 
 
-def load_config(path: Union[str, Path], config_class: Type[T] = ForgeConfig) -> T:
+def load_config(path: str | Path, config_class: type[T] = ForgeConfig) -> T:
     """
     Load configuration from a file.
     
@@ -434,7 +434,7 @@ def load_config(path: Union[str, Path], config_class: Type[T] = ForgeConfig) -> 
         logger.warning(f"Config file not found: {path}, using defaults")
         return config_class()
     
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         if path.suffix in ('.yaml', '.yml'):
             try:
                 import yaml
@@ -447,7 +447,7 @@ def load_config(path: Union[str, Path], config_class: Type[T] = ForgeConfig) -> 
     return config_class.from_dict(data)
 
 
-def save_config(config: BaseConfig, path: Union[str, Path]) -> None:
+def save_config(config: BaseConfig, path: str | Path) -> None:
     """
     Save configuration to a file.
     
@@ -471,7 +471,7 @@ def save_config(config: BaseConfig, path: Union[str, Path]) -> None:
             json.dump(data, f, indent=2, default=str)
 
 
-def validate_config(config: Union[Dict[str, Any], BaseConfig], config_class: Type[T] = ForgeConfig) -> T:
+def validate_config(config: dict[str, Any] | BaseConfig, config_class: type[T] = ForgeConfig) -> T:
     """
     Validate a configuration dictionary.
     
@@ -491,7 +491,7 @@ def validate_config(config: Union[Dict[str, Any], BaseConfig], config_class: Typ
     return config_class.from_dict(config)
 
 
-def get_config_schema(config_class: Type[BaseConfig] = ForgeConfig) -> Dict[str, Any]:
+def get_config_schema(config_class: type[BaseConfig] = ForgeConfig) -> dict[str, Any]:
     """
     Get JSON schema for a config class.
     

@@ -27,13 +27,13 @@ Usage:
             breaker.record_failure(e)
 """
 
-import time
-import threading
 import logging
-from enum import Enum
+import threading
+import time
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Any, Dict, List, Type
+from enum import Enum
 from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class CircuitStats:
     last_success_time: Optional[float] = None
     consecutive_failures: int = 0
     consecutive_successes: int = 0
-    state_changes: List[tuple] = field(default_factory=list)
+    state_changes: list[tuple] = field(default_factory=list)
     
     def success_rate(self) -> float:
         """Calculate success rate."""
@@ -107,7 +107,7 @@ class CircuitBreaker:
         recovery_timeout: float = 30.0,
         half_open_max_calls: int = 1,
         success_threshold: int = 1,
-        excluded_exceptions: Optional[List[Type[Exception]]] = None,
+        excluded_exceptions: Optional[list[type[Exception]]] = None,
         on_state_change: Optional[Callable[[str, CircuitState, CircuitState], None]] = None,
     ):
         """
@@ -285,7 +285,7 @@ class CircuitBreaker:
 
 
 # Global circuit breaker registry
-_circuit_breakers: Dict[str, CircuitBreaker] = {}
+_circuit_breakers: dict[str, CircuitBreaker] = {}
 _registry_lock = threading.Lock()
 
 
@@ -372,7 +372,7 @@ def circuit_breaker(
     return decorator
 
 
-def list_breakers() -> Dict[str, dict]:
+def list_breakers() -> dict[str, dict]:
     """List all circuit breakers and their stats."""
     with _registry_lock:
         return {

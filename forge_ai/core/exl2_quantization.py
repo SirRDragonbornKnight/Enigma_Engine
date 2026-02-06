@@ -13,15 +13,16 @@ This module provides:
 - Integration with ExLlamaV2 for inference
 """
 
+import json
+import logging
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import torch
 import torch.nn as nn
-from typing import Dict, List, Optional, Tuple, Any, Union
-from dataclasses import dataclass, field
-import logging
-from pathlib import Path
-import json
-import math
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,8 @@ class LayerMeasurement:
     rows: int
     columns: int
     numel: int
-    bits_options: List[float] = field(default_factory=list)
-    errors: Dict[float, float] = field(default_factory=dict)  # bits -> error
+    bits_options: list[float] = field(default_factory=list)
+    errors: dict[float, float] = field(default_factory=dict)  # bits -> error
     selected_bits: float = 4.0
 
 
@@ -76,17 +77,17 @@ class EXL2Quantizer:
     
     def __init__(self, config: Optional[EXL2Config] = None):
         self.config = config or EXL2Config()
-        self._measurements: Dict[str, LayerMeasurement] = {}
-        self._bit_allocation: Dict[str, float] = {}
+        self._measurements: dict[str, LayerMeasurement] = {}
+        self._bit_allocation: dict[str, float] = {}
         self._calibration_data: Optional[torch.Tensor] = None
     
     def calibrate(
         self,
         model: nn.Module,
         tokenizer: Any,
-        calibration_texts: List[str],
+        calibration_texts: list[str],
         device: str = "cuda"
-    ) -> Dict[str, LayerMeasurement]:
+    ) -> dict[str, LayerMeasurement]:
         """
         Calibrate quantization using sample data.
         
@@ -128,7 +129,7 @@ class EXL2Quantizer:
     def _prepare_calibration_data(
         self,
         tokenizer: Any,
-        texts: List[str],
+        texts: list[str],
         device: str
     ) -> torch.Tensor:
         """Tokenize and prepare calibration data."""
@@ -320,7 +321,7 @@ class EXL2Quantizer:
         
         return quantized
     
-    def _split_name(self, name: str) -> Tuple[str, str]:
+    def _split_name(self, name: str) -> tuple[str, str]:
         """Split module name into parent and child."""
         parts = name.rsplit('.', 1)
         if len(parts) == 1:
@@ -452,7 +453,7 @@ class EXL2Linear(nn.Module):
 def quantize_model_exl2(
     model: nn.Module,
     tokenizer: Any,
-    calibration_texts: List[str],
+    calibration_texts: list[str],
     target_bpw: float = 4.0,
     output_dir: Optional[str] = None
 ) -> nn.Module:

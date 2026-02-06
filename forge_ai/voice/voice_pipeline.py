@@ -328,8 +328,8 @@ class VoicePipeline:
             True if profile was set successfully
         """
         try:
-            from .voice_profile import VoiceProfile, PRESET_PROFILES
-            
+            from .voice_profile import PRESET_PROFILES, VoiceProfile
+
             # Store current profile
             if isinstance(profile_name_or_obj, str):
                 if profile_name_or_obj.lower() in PRESET_PROFILES:
@@ -354,7 +354,7 @@ class VoicePipeline:
             logger.error(f"Failed to set voice profile: {e}")
             return False
     
-    def get_voice_profile(self) -> Optional['VoiceProfile']:
+    def get_voice_profile(self) -> Optional[VoiceProfile]:
         """Get the current voice profile."""
         return getattr(self, '_current_voice_profile', None)
     
@@ -366,7 +366,7 @@ class VoicePipeline:
             List of profile names
         """
         try:
-            from .voice_profile import VoiceProfile, PRESET_PROFILES
+            from .voice_profile import PRESET_PROFILES, VoiceProfile
             
             profiles = list(PRESET_PROFILES.keys())
             profiles.extend(VoiceProfile.list_profiles())
@@ -530,7 +530,7 @@ class VoicePipeline:
     def _init_vosk(self):
         """Initialize Vosk STT."""
         try:
-            from vosk import Model, KaldiRecognizer
+            from vosk import KaldiRecognizer, Model
             model_path = Path(__file__).parent / "models" / "vosk-model-small"
             if model_path.exists():
                 model = Model(str(model_path))
@@ -620,7 +620,7 @@ class VoicePipeline:
         
         try:
             import numpy as np
-            
+
             # Convert to numpy if needed
             input_was_bytes = isinstance(audio, bytes)
             if input_was_bytes:
@@ -647,7 +647,7 @@ class VoicePipeline:
             return
         
         try:
-            from .echo_cancellation import EchoCanceller, EchoCancellationConfig
+            from .echo_cancellation import EchoCancellationConfig, EchoCanceller
             
             ec_config = EchoCancellationConfig(
                 sample_rate=self.config.sample_rate
@@ -675,7 +675,7 @@ class VoicePipeline:
         
         try:
             import numpy as np
-            
+
             # Convert to numpy if needed
             if isinstance(audio, bytes):
                 audio_np = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
@@ -705,7 +705,7 @@ class VoicePipeline:
         
         try:
             import numpy as np
-            
+
             # Convert to numpy if needed
             input_was_bytes = isinstance(audio, bytes)
             if input_was_bytes:
@@ -750,7 +750,7 @@ class VoicePipeline:
             return
         
         try:
-            from .speed_control import SpeedController, SpeedConfig
+            from .speed_control import SpeedConfig, SpeedController
             
             speed_config = SpeedConfig(
                 default_speed=self.config.speed_multiplier,
@@ -826,10 +826,12 @@ class VoicePipeline:
         
         try:
             from .interruption import (
-                InterruptionHandler, InterruptionConfig,
-                InterruptionMode, InterruptionSensitivity
+                InterruptionConfig,
+                InterruptionHandler,
+                InterruptionMode,
+                InterruptionSensitivity,
             )
-            
+
             # Map config strings to enums
             mode_map = {
                 "immediate": InterruptionMode.IMMEDIATE,
@@ -1040,9 +1042,9 @@ class VoicePipeline:
     def _recognize_whisper(self) -> str:
         """Recognize using Whisper."""
         try:
-            import sounddevice as sd
             import numpy as np
-            
+            import sounddevice as sd
+
             # Record audio
             duration = 5.0  # seconds
             audio = sd.rec(
@@ -1073,9 +1075,10 @@ class VoicePipeline:
     def _recognize_vosk(self) -> str:
         """Recognize using Vosk."""
         try:
-            from vosk import KaldiRecognizer
-            import sounddevice as sd
             import json
+
+            import sounddevice as sd
+            from vosk import KaldiRecognizer
             
             rec = KaldiRecognizer(self._stt_engine["model"], self.config.sample_rate)
             
@@ -1221,9 +1224,10 @@ class VoicePipeline:
         3. wave (built-in) - WAV only fallback
         """
         try:
-            import sounddevice as sd
-            import numpy as np
             from io import BytesIO
+
+            import numpy as np
+            import sounddevice as sd
             
             audio_array = None
             sample_rate = 44100
@@ -1231,7 +1235,7 @@ class VoicePipeline:
             # Try pydub first (handles MP3, OGG, etc.)
             try:
                 from pydub import AudioSegment
-                
+
                 # Detect format from magic bytes
                 if audio_data[:3] == b'ID3' or audio_data[:2] == b'\xff\xfb':
                     # MP3 format
@@ -1348,8 +1352,9 @@ class VoicePipeline:
         
         # Try Vosk for keyword spotting (free, offline)
         try:
-            import vosk
             import json
+
+            import vosk
             
             if not hasattr(self, '_vosk_recognizer') or self._vosk_recognizer is None:
                 # Initialize Vosk with small model
@@ -1407,7 +1412,7 @@ class VoicePipeline:
         
         return False
     
-    def set_custom_wake_word(self, model: 'WakeWordModel'):
+    def set_custom_wake_word(self, model: WakeWordModel):
         """
         Set a custom trained wake word model.
         

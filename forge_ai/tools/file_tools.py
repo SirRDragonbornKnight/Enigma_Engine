@@ -38,7 +38,7 @@ except ImportError:
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit
 
 
-def _check_path_allowed(path: str, resolve_first: bool = True) -> Dict[str, Any]:
+def _check_path_allowed(path: str, resolve_first: bool = True) -> dict[str, Any]:
     """
     Check if path is allowed. Returns error dict if blocked.
     
@@ -78,7 +78,7 @@ class ReadFileTool(Tool):
         "encoding": "File encoding (default: utf-8)",
     }
     
-    def execute(self, path: str, max_lines: Optional[int] = None, encoding: str = "utf-8", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, max_lines: Optional[int] = None, encoding: str = "utf-8", **kwargs) -> dict[str, Any]:
         """
         Execute the read file operation.
         
@@ -112,7 +112,7 @@ class ReadFileTool(Tool):
             if file_size > 100 * 1024 * 1024:  # 100MB limit
                 return {"success": False, "error": f"File too large: {file_size} bytes (limit: 100MB)"}
             
-            with open(path, "r", encoding=encoding) as f:
+            with open(path, encoding=encoding) as f:
                 if max_lines:
                     lines = []
                     for i, line in enumerate(f):
@@ -148,7 +148,7 @@ class WriteFileTool(Tool):
         "mode": "Write mode: 'overwrite' or 'append' (default: overwrite)",
     }
     
-    def execute(self, path: str, content: str, mode: str = "overwrite", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, content: str, mode: str = "overwrite", **kwargs) -> dict[str, Any]:
         """
         Execute the write file operation.
         
@@ -204,7 +204,7 @@ class ListDirectoryTool(Tool):
         "pattern": "Filter files by pattern like '*.txt' (default: all files)",
     }
     
-    def execute(self, path: str, recursive: bool = False, pattern: str = "*", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, recursive: bool = False, pattern: str = "*", **kwargs) -> dict[str, Any]:
         try:
             # Security check - prevent access to blocked paths
             blocked = _check_path_allowed(path)
@@ -258,7 +258,7 @@ class MoveFileTool(Tool):
         "destination": "The new path for the file",
     }
     
-    def execute(self, source: str, destination: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, source: str, destination: str, **kwargs) -> dict[str, Any]:
         try:
             source = Path(source).expanduser().resolve()
             destination = Path(destination).expanduser().resolve()
@@ -333,7 +333,7 @@ class DeleteFileTool(Tool):
                 pass
         return False
     
-    def execute(self, path: str, confirm: str = "no", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, confirm: str = "no", **kwargs) -> dict[str, Any]:
         try:
             if confirm.lower() != "yes":
                 return {

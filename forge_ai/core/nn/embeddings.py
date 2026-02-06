@@ -7,9 +7,10 @@ Contains:
 - LearnedEmbedding: Learned positional embeddings
 """
 import math
+from typing import Tuple
+
 import torch
 import torch.nn as nn
-from typing import Tuple
 
 
 class RotaryEmbedding(nn.Module):
@@ -41,7 +42,7 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("cos_cached", emb.cos()[None, None, :, :])
         self.register_buffer("sin_cached", emb.sin()[None, None, :, :])
     
-    def forward(self, x: torch.Tensor, seq_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, seq_len: int) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Get cos and sin for the given sequence length.
         
@@ -68,7 +69,7 @@ def apply_rotary_pos_emb(
     k: torch.Tensor, 
     cos: torch.Tensor, 
     sin: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Apply rotary position embeddings to queries and keys.
     

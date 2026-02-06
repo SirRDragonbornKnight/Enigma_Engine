@@ -82,7 +82,7 @@ class SecretSharing:
         # Use a large prime for security
         self.prime = prime or 2**127 - 1  # 12th Mersenne prime
     
-    def share_secret(self, secret: int) -> List[SecretShare]:
+    def share_secret(self, secret: int) -> list[SecretShare]:
         """
         Split a secret into shares using Shamir's scheme.
         
@@ -120,7 +120,7 @@ class SecretSharing:
         
         return shares
     
-    def reconstruct_secret(self, shares: List[SecretShare]) -> int:
+    def reconstruct_secret(self, shares: list[SecretShare]) -> int:
         """
         Reconstruct the secret from shares using Lagrange interpolation.
         
@@ -158,7 +158,7 @@ class SecretSharing:
         
         return secret
     
-    def share_array(self, arr: 'np.ndarray') -> List[SecretShare]:
+    def share_array(self, arr: 'np.ndarray') -> list[SecretShare]:
         """
         Share an array by sharing each element.
         
@@ -203,7 +203,7 @@ class SecretSharing:
         
         return shares
     
-    def reconstruct_array(self, shares: List[SecretShare], shape: tuple) -> 'np.ndarray':
+    def reconstruct_array(self, shares: list[SecretShare], shape: tuple) -> 'np.ndarray':
         """
         Reconstruct array from additive shares.
         
@@ -240,9 +240,9 @@ class SecureSumProtocol:
         """
         self.num_parties = num_parties
         self.seed = seed
-        self.masks: Dict[Tuple[int, int], 'np.ndarray'] = {}
+        self.masks: dict[tuple[int, int], 'np.ndarray'] = {}
     
-    def generate_pairwise_masks(self, party_id: int, data_shape: tuple) -> Dict[int, 'np.ndarray']:
+    def generate_pairwise_masks(self, party_id: int, data_shape: tuple) -> dict[int, 'np.ndarray']:
         """
         Generate pairwise masks for a party.
         
@@ -301,7 +301,7 @@ class SecureSumProtocol:
         
         return masked
     
-    def aggregate(self, masked_updates: List['np.ndarray']) -> 'np.ndarray':
+    def aggregate(self, masked_updates: list['np.ndarray']) -> 'np.ndarray':
         """
         Aggregate masked updates.
         
@@ -334,8 +334,8 @@ class PaillierEncryption:
             key_size: Bit size for key generation
         """
         self.key_size = key_size
-        self.public_key: Optional[Tuple[int, int]] = None
-        self.private_key: Optional[Tuple[int, int]] = None
+        self.public_key: Optional[tuple[int, int]] = None
+        self.private_key: Optional[tuple[int, int]] = None
         self._generate_keys()
     
     def _generate_keys(self):
@@ -465,7 +465,7 @@ class HomomorphicAggregator:
         """
         self.paillier = paillier or PaillierEncryption()
     
-    def encrypt_update(self, update: 'np.ndarray', scale: int = 1000000) -> List[int]:
+    def encrypt_update(self, update: 'np.ndarray', scale: int = 1000000) -> list[int]:
         """
         Encrypt a weight update.
         
@@ -493,8 +493,8 @@ class HomomorphicAggregator:
     
     def aggregate_encrypted(
         self,
-        encrypted_updates: List[List[int]]
-    ) -> List[int]:
+        encrypted_updates: list[list[int]]
+    ) -> list[int]:
         """
         Aggregate encrypted updates homomorphically.
         
@@ -518,7 +518,7 @@ class HomomorphicAggregator:
     
     def decrypt_aggregate(
         self,
-        encrypted_aggregate: List[int],
+        encrypted_aggregate: list[int],
         shape: tuple,
         num_parties: int,
         scale: int = 1000000
@@ -591,8 +591,8 @@ class SecureAggregationProtocol:
     def prepare_update(
         self,
         party_id: int,
-        update: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        update: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Prepare a party's update for secure aggregation.
         
@@ -630,8 +630,8 @@ class SecureAggregationProtocol:
     
     def aggregate(
         self,
-        protected_updates: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        protected_updates: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Aggregate protected updates.
         
@@ -689,7 +689,7 @@ class SecureAggregationProtocol:
         return result
 
 
-def integrate_with_federated_learning(updates: List[Any], method: str = "masking") -> Any:
+def integrate_with_federated_learning(updates: list[Any], method: str = "masking") -> Any:
     """
     Integrate secure aggregation with the federated learning system.
     
@@ -700,9 +700,10 @@ def integrate_with_federated_learning(updates: List[Any], method: str = "masking
     Returns:
         Securely aggregated WeightUpdate
     """
-    from .federated import WeightUpdate
     import uuid
     from datetime import datetime
+
+    from .federated import WeightUpdate
     
     if not updates:
         raise ValueError("No updates to aggregate")

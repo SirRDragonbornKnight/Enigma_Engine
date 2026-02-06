@@ -57,11 +57,11 @@ class MessageStats:
     response_time: float = 0.0  # seconds
     conversation_id: str = ""
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MessageStats':
+    def from_dict(cls, data: dict[str, Any]) -> MessageStats:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -79,7 +79,7 @@ class ConversationSummary:
     user_tokens: int
     assistant_tokens: int
     avg_response_time: float
-    topics: List[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -105,7 +105,7 @@ class ConversationStats:
     Track and analyze conversation statistics.
     """
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Initialize conversation stats tracker.
         
@@ -116,17 +116,17 @@ class ConversationStats:
         self._data_path.mkdir(parents=True, exist_ok=True)
         
         self._stats_file = self._data_path / "conversation_stats.json"
-        self._messages: List[MessageStats] = []
-        self._conversations: Dict[str, List[MessageStats]] = defaultdict(list)
+        self._messages: list[MessageStats] = []
+        self._conversations: dict[str, list[MessageStats]] = defaultdict(list)
         
         # Current conversation tracking
-        self._current_conversation_id: Optional[str] = None
-        self._conversation_start: Optional[datetime] = None
+        self._current_conversation_id: str | None = None
+        self._conversation_start: datetime | None = None
         
         # Aggregated counters
         self._total_tokens = 0
         self._total_messages = 0
-        self._response_times: List[float] = []
+        self._response_times: list[float] = []
         
         self._load_stats()
     
@@ -134,7 +134,7 @@ class ConversationStats:
         """Load statistics from disk."""
         if self._stats_file.exists():
             try:
-                with open(self._stats_file, 'r', encoding='utf-8') as f:
+                with open(self._stats_file, encoding='utf-8') as f:
                     data = json.load(f)
                     
                     for msg_data in data.get("messages", []):
@@ -171,7 +171,7 @@ class ConversationStats:
         except Exception as e:
             logger.error(f"Failed to save stats: {e}")
     
-    def start_conversation(self, conversation_id: Optional[str] = None) -> str:
+    def start_conversation(self, conversation_id: str | None = None) -> str:
         """
         Start tracking a new conversation.
         
@@ -189,7 +189,7 @@ class ConversationStats:
         logger.debug(f"Started conversation: {self._current_conversation_id}")
         return self._current_conversation_id
     
-    def end_conversation(self) -> Optional[ConversationSummary]:
+    def end_conversation(self) -> ConversationSummary | None:
         """
         End the current conversation and get summary.
         
@@ -240,7 +240,7 @@ class ConversationStats:
         content: str,
         tokens: int = 0,
         response_time: float = 0.0,
-        conversation_id: Optional[str] = None
+        conversation_id: str | None = None
     ) -> MessageStats:
         """
         Track a message.
@@ -285,7 +285,7 @@ class ConversationStats:
         
         return stats
     
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get overall statistics summary.
         
@@ -324,7 +324,7 @@ class ConversationStats:
             "last_message": self._messages[-1].timestamp if self._messages else None
         }
     
-    def get_usage_by_day(self, days: int = 30) -> List[Dict[str, Any]]:
+    def get_usage_by_day(self, days: int = 30) -> list[dict[str, Any]]:
         """
         Get usage statistics grouped by day.
         
@@ -335,7 +335,7 @@ class ConversationStats:
             List of daily statistics
         """
         cutoff = datetime.now() - timedelta(days=days)
-        daily_stats: Dict[str, Dict[str, Any]] = defaultdict(lambda: {
+        daily_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {
             "messages": 0,
             "tokens": 0,
             "user_messages": 0,
@@ -376,7 +376,7 @@ class ConversationStats:
         
         return result
     
-    def get_usage_by_hour(self) -> Dict[int, int]:
+    def get_usage_by_hour(self) -> dict[int, int]:
         """
         Get message distribution by hour of day.
         
@@ -394,7 +394,7 @@ class ConversationStats:
         
         return dict(hourly)
     
-    def get_conversation_stats(self, conversation_id: str) -> Optional[ConversationSummary]:
+    def get_conversation_stats(self, conversation_id: str) -> ConversationSummary | None:
         """
         Get statistics for a specific conversation.
         
@@ -419,7 +419,8 @@ class ConversationStats:
             start = datetime.fromisoformat(messages[0].timestamp)
             end = datetime.fromisoformat(messages[-1].timestamp)
             duration = (end - start).total_seconds()
-        except:
+        except (ValueError, IndexError) as e:
+            logger.debug(f"Could not calculate duration: {e}")
             duration = 0
         
         return ConversationSummary(
@@ -436,7 +437,7 @@ class ConversationStats:
             avg_response_time=avg_response
         )
     
-    def get_top_conversations(self, limit: int = 10, by: str = "tokens") -> List[ConversationSummary]:
+    def get_top_conversations(self, limit: int = 10, by: str = "tokens") -> list[ConversationSummary]:
         """
         Get top conversations by a metric.
         
@@ -491,7 +492,7 @@ class ConversationStats:
                 msg_date = datetime.fromisoformat(msg.timestamp)
                 if msg_date >= cutoff:
                     filtered.append(msg)
-            except:
+            except ValueError:
                 continue
         
         if not filtered:
@@ -512,7 +513,7 @@ class ConversationStats:
             )
         
         # Calculate metrics
-        conversations = set(m.conversation_id for m in filtered)
+        conversations = {m.conversation_id for m in filtered}
         user_msgs = [m for m in filtered if m.role == "user"]
         assistant_msgs = [m for m in filtered if m.role == "assistant"]
         response_times = [m.response_time for m in assistant_msgs if m.response_time > 0]
@@ -583,10 +584,10 @@ class ConversationStats:
 
 
 # Singleton instance
-_stats_instance: Optional[ConversationStats] = None
+_stats_instance: ConversationStats | None = None
 
 
-def get_conversation_stats(data_path: Optional[Path] = None) -> ConversationStats:
+def get_conversation_stats(data_path: Path | None = None) -> ConversationStats:
     """Get or create the singleton stats instance."""
     global _stats_instance
     if _stats_instance is None:
@@ -600,6 +601,6 @@ def track_message(role: str, content: str, tokens: int = 0, response_time: float
     get_conversation_stats().track_message(role, content, tokens, response_time)
 
 
-def get_stats_summary() -> Dict[str, Any]:
+def get_stats_summary() -> dict[str, Any]:
     """Get quick summary."""
     return get_conversation_stats().get_summary()

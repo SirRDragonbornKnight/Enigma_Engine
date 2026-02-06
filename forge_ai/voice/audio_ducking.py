@@ -343,8 +343,8 @@ class AudioDucker:
     def _duck_windows(self):
         """Duck audio using Windows pycaw."""
         try:
-            from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
             from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
             
             sessions = AudioUtilities.GetAllSessions()
             
@@ -444,7 +444,7 @@ class AudioDucker:
 
 
 # Singleton instance for easy use
-_ducker: Optional[AudioDucker] = None
+_ducker: AudioDucker | None = None
 
 
 def get_ducker(config: AudioDuckingConfig = None) -> AudioDucker:

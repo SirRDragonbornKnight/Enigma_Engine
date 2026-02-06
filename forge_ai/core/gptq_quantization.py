@@ -48,7 +48,7 @@ class Quantizer:
     
     def __init__(
         self,
-        shape: Tuple[int, ...],
+        shape: tuple[int, ...],
         bits: int = 4,
         group_size: int = 128,
         sym: bool = True
@@ -63,7 +63,7 @@ class Quantizer:
         self.scale = None
         self.zero = None
     
-    def find_params(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def find_params(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Find optimal scale and zero point."""
         if self.group_size < x.shape[-1]:
             # Reshape for group quantization
@@ -175,7 +175,7 @@ class GPTQ:
         self.H += inp.T @ inp
         self.nsamples += inp.shape[0]
     
-    def quantize(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def quantize(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Quantize the layer weights using GPTQ.
         
@@ -412,7 +412,7 @@ class GPTQQuantizer:
     
     def quantize(
         self,
-        calibration_data: List[str],
+        calibration_data: list[str],
         bits: Optional[int] = None
     ) -> nn.Module:
         """
@@ -450,8 +450,8 @@ class GPTQQuantizer:
     
     def _prepare_calibration(
         self,
-        texts: List[str]
-    ) -> List[torch.Tensor]:
+        texts: list[str]
+    ) -> list[torch.Tensor]:
         """Prepare calibration inputs."""
         inputs = []
         
@@ -468,7 +468,7 @@ class GPTQQuantizer:
         self,
         name: str,
         layer: nn.Linear,
-        calibration_inputs: List[torch.Tensor]
+        calibration_inputs: list[torch.Tensor]
     ):
         """Quantize a single layer."""
         # Create GPTQ quantizer for this layer
@@ -533,7 +533,7 @@ class GPTQQuantizer:
 def quantize_model_gptq(
     model: nn.Module,
     tokenizer: Any,
-    calibration_data: List[str],
+    calibration_data: list[str],
     bits: int = 4,
     group_size: int = 128
 ) -> nn.Module:

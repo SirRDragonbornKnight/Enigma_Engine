@@ -13,14 +13,14 @@ MAIN CLASSES: PluginRepository, LocalRepository, RemoteRepository
 import json
 import logging
 import shutil
+import urllib.request
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
-import urllib.request
 
 from ..config import CONFIG
-from .marketplace import PluginInfo, PluginCategory, PluginVersion
+from .marketplace import PluginCategory, PluginInfo, PluginVersion
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class PluginRepository(ABC):
     """Base class for plugin repositories."""
     
     @abstractmethod
-    def get_plugins(self) -> List[PluginInfo]:
+    def get_plugins(self) -> list[PluginInfo]:
         """Get all plugins from this repository."""
         pass
     
@@ -64,7 +64,7 @@ class LocalRepository(PluginRepository):
         self.path = Path(path)
         self.path.mkdir(parents=True, exist_ok=True)
         self.index_file = self.path / "index.json"
-        self._plugins: Dict[str, PluginInfo] = {}
+        self._plugins: dict[str, PluginInfo] = {}
         self._load_index()
     
     def _load_index(self):
@@ -88,7 +88,7 @@ class LocalRepository(PluginRepository):
         with open(self.index_file, 'w') as f:
             json.dump(data, f, indent=2)
     
-    def get_plugins(self) -> List[PluginInfo]:
+    def get_plugins(self) -> list[PluginInfo]:
         """Get all plugins."""
         return list(self._plugins.values())
     
@@ -120,7 +120,7 @@ class LocalRepository(PluginRepository):
         shutil.copy(src, dest)
         return True
     
-    def add_plugin(self, plugin_path: Path, metadata: Dict) -> PluginInfo:
+    def add_plugin(self, plugin_path: Path, metadata: dict) -> PluginInfo:
         """
         Add a plugin to the local repository.
         
@@ -205,7 +205,7 @@ class RemoteRepository(PluginRepository):
         self.base_url = base_url.rstrip('/')
         self.cache_dir = cache_dir or Path(CONFIG.get("cache_dir", ".cache")) / "repos"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._plugins: Dict[str, PluginInfo] = {}
+        self._plugins: dict[str, PluginInfo] = {}
         self._last_fetch: Optional[datetime] = None
     
     def _fetch_index(self, force: bool = False) -> bool:
@@ -255,7 +255,7 @@ class RemoteRepository(PluginRepository):
             
             return False
     
-    def get_plugins(self) -> List[PluginInfo]:
+    def get_plugins(self) -> list[PluginInfo]:
         """Get all plugins."""
         self._fetch_index()
         return list(self._plugins.values())
@@ -294,7 +294,7 @@ class RepositoryManager:
     
     def __init__(self):
         """Initialize repository manager."""
-        self.repositories: List[PluginRepository] = []
+        self.repositories: list[PluginRepository] = []
         self._local_repo: Optional[LocalRepository] = None
     
     def add_repository(self, repo: PluginRepository):
@@ -314,7 +314,7 @@ class RepositoryManager:
         self.repositories.append(repo)
         return repo
     
-    def get_all_plugins(self) -> List[PluginInfo]:
+    def get_all_plugins(self) -> list[PluginInfo]:
         """Get plugins from all repositories."""
         plugins = {}
         for repo in self.repositories:

@@ -274,7 +274,7 @@ class MemoryBackupScheduler:
         backups_sorted = sorted(backups, key=lambda b: b['age_days'])
         
         # Keep minimum newest backups
-        to_keep = set(b['path'] for b in backups_sorted[:keep_minimum])
+        to_keep = {b['path'] for b in backups_sorted[:keep_minimum]}
         
         # Also keep backups within the retention period
         cutoff_days = keep_days

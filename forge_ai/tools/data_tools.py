@@ -2,15 +2,16 @@
 Data Tools - CSV, JSON, SQL, plotting (requires pandas/matplotlib).
 """
 
+import csv
+import json
+import logging
 import os
 import re
-import json
 import sqlite3
-import csv
-import logging
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class CSVAnalyzeTool(Tool):
     description = "Load and analyze CSV file. Returns stats, columns, sample data."
     parameters = {"path": "CSV file path", "rows": "Sample rows (default: 5)"}
     
-    def execute(self, path: str, rows: int = 5, **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, rows: int = 5, **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             if not path.exists(): return {"success": False, "error": f"File not found: {path}"}
@@ -43,7 +44,7 @@ class CSVAnalyzeTool(Tool):
                 result["missing"] = df.isnull().sum().to_dict()
                 return result
             except ImportError:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(path, encoding='utf-8') as f:
                     reader = csv.DictReader(f)
                     sample = [row for i, row in enumerate(reader) if i < rows]
                 return {"success": True, "columns": reader.fieldnames, "sample": sample, "note": "Install pandas for stats"}
@@ -57,7 +58,7 @@ class CSVQueryTool(Tool):
     description = "Query CSV using simple filters (column > value)."
     parameters = {"path": "CSV file path", "query": "Filter like 'age > 30'", "limit": "Max rows (default: 100)"}
     
-    def execute(self, path: str, query: str, limit: int = 100, **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, query: str, limit: int = 100, **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             try:
@@ -87,7 +88,7 @@ class PlotChartTool(Tool):
     parameters = {"data": "CSV path or JSON data", "chart_type": "line, bar, scatter, pie, histogram", 
                   "x": "X column", "y": "Y column", "title": "Chart title"}
     
-    def execute(self, data: str, chart_type: str = "line", x: str = None, y: str = None, title: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, data: str, chart_type: str = "line", x: str = None, y: str = None, title: str = None, **kwargs) -> dict[str, Any]:
         try:
             import matplotlib
             matplotlib.use('Agg')
@@ -132,10 +133,10 @@ class JSONQueryTool(Tool):
     description = "Query JSON using dot notation (e.g., 'users.0.name')."
     parameters = {"path": "JSON file path (or None)", "query": "Dot notation path", "data": "Direct JSON string"}
     
-    def execute(self, query: str, path: str = None, data: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, query: str, path: str = None, data: str = None, **kwargs) -> dict[str, Any]:
         try:
             if path:
-                with open(Path(path).expanduser().resolve(), 'r') as f: json_data = json.load(f)
+                with open(Path(path).expanduser().resolve()) as f: json_data = json.load(f)
             elif data:
                 json_data = json.loads(data) if isinstance(data, str) else data
             else:
@@ -162,7 +163,7 @@ class SQLQueryTool(Tool):
     description = "Execute SELECT query on SQLite database."
     parameters = {"database": "Database path", "query": "SQL SELECT query", "limit": "Max rows (default: 100)"}
     
-    def execute(self, database: str, query: str, limit: int = 100, **kwargs) -> Dict[str, Any]:
+    def execute(self, database: str, query: str, limit: int = 100, **kwargs) -> dict[str, Any]:
         try:
             db_path = Path(database).expanduser().resolve()
             if not db_path.exists(): return {"success": False, "error": f"Database not found: {db_path}"}
@@ -187,7 +188,7 @@ class SQLExecuteTool(Tool):
     description = "Execute INSERT/UPDATE/DELETE on SQLite database."
     parameters = {"database": "Database path", "statement": "SQL statement"}
     
-    def execute(self, database: str, statement: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, database: str, statement: str, **kwargs) -> dict[str, Any]:
         try:
             db_path = Path(database).expanduser().resolve()
             conn = sqlite3.connect(str(db_path))
@@ -207,7 +208,7 @@ class DataConvertTool(Tool):
     description = "Convert CSV↔JSON, JSON↔YAML."
     parameters = {"input_path": "Input file", "output_format": "csv, json, yaml", "output_path": "Output file (optional)"}
     
-    def execute(self, input_path: str, output_format: str, output_path: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, input_path: str, output_format: str, output_path: str = None, **kwargs) -> dict[str, Any]:
         try:
             input_path = Path(input_path).expanduser().resolve()
             suffix = input_path.suffix.lower()

@@ -10,16 +10,28 @@ Features:
 """
 
 import json
-from pathlib import Path
 from datetime import datetime
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QLineEdit, QListWidget, QListWidgetItem,
-    QSplitter, QGroupBox, QInputDialog, QMessageBox,
-    QTabWidget, QFrame
-)
+from pathlib import Path
+
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import (
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
 
@@ -41,10 +53,10 @@ class NotesManager:
         notes = []
         for note_file in sorted(self.notes_dir.glob("*.json"), reverse=True):
             try:
-                with open(note_file, 'r') as f:
+                with open(note_file) as f:
                     note = json.load(f)
                     notes.append(note)
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 pass  # Skip corrupted or unreadable note files
         return notes
     
@@ -52,7 +64,7 @@ class NotesManager:
         """Get a note by name."""
         note_file = self.notes_dir / f"{name}.json"
         if note_file.exists():
-            with open(note_file, 'r') as f:
+            with open(note_file) as f:
                 return json.load(f)
         return None
     
@@ -70,10 +82,10 @@ class NotesManager:
         note_file = self.notes_dir / f"{name}.json"
         if note_file.exists():
             try:
-                with open(note_file, 'r') as f:
+                with open(note_file) as f:
                     existing = json.load(f)
                     note["created"] = existing.get("created", note["created"])
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 pass  # Keep new creation date if existing file is unreadable
         
         with open(note_file, 'w') as f:
@@ -112,9 +124,9 @@ class BookmarksManager:
     def _load(self) -> list:
         if self.bookmarks_file.exists():
             try:
-                with open(self.bookmarks_file, 'r') as f:
+                with open(self.bookmarks_file) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 pass  # Return empty list if bookmarks file is corrupted
         return []
     

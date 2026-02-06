@@ -67,13 +67,13 @@ import json
 import logging
 import re
 import subprocess
-import time
 import threading
-from pathlib import Path
-from threading import Lock
-from typing import Dict, Optional, List, Callable
+import time
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
+from pathlib import Path
+from threading import Lock
+from typing import Callable, Dict, List, Optional
 
 from ..config import CONFIG
 
@@ -167,7 +167,7 @@ class AvatarController:
         self._customizer: Optional['AvatarCustomizer'] = None
         
         # Event callbacks
-        self._callbacks: Dict[str, List[Callable]] = {
+        self._callbacks: dict[str, list[Callable]] = {
             "state_change": [],
             "move": [],
             "speak": [],
@@ -179,7 +179,7 @@ class AvatarController:
         self._current_expression: str = "neutral"
         
         # Animation queue (thread-safe)
-        self._animation_queue: List[Dict] = []
+        self._animation_queue: list[dict] = []
         self._animation_lock = Lock()
         self._animation_thread: Optional[threading.Thread] = None
         self._running = False
@@ -361,7 +361,7 @@ class AvatarController:
                 self._execute_animation({"type": "idle", "duration": 2.0})
             time.sleep(0.05)  # 20 FPS
     
-    def _execute_animation(self, animation: Dict) -> None:
+    def _execute_animation(self, animation: dict) -> None:
         """Execute a single animation."""
         anim_type = animation.get("type", "idle")
         duration = animation.get("duration", 1.0)
@@ -434,8 +434,8 @@ class AvatarController:
         """Center avatar on screen."""
         try:
             # Try to get screen dimensions
-            import subprocess
             import platform
+            import subprocess
             
             width, height = 1920, 1080  # Default fallback
             
@@ -497,7 +497,7 @@ class AvatarController:
     
     # === AI Control Interface ===
     
-    def control(self, action: str, value: str = "") -> Dict:
+    def control(self, action: str, value: str = "") -> dict:
         """
         Control avatar from AI tool calls.
         
@@ -858,7 +858,7 @@ class AvatarController:
         if self._renderer:
             self._renderer.set_color(color)
     
-    def list_available_models(self) -> List[str]:
+    def list_available_models(self) -> list[str]:
         """List available avatar models in the avatars directory."""
         avatars_dir = Path(CONFIG.get("data_dir", "data")) / "avatars"
         if not avatars_dir.exists():
@@ -1037,7 +1037,7 @@ class AvatarController:
         if not Path(path).exists():
             return
         
-        with open(path, "r") as f:
+        with open(path) as f:
             config_dict = json.load(f)
         
         self.config.enabled = config_dict.get("enabled", False)
@@ -1087,7 +1087,7 @@ class AvatarRenderer:
         if self._visible:
             logger.debug(f"Moving to ({x}, {y})")
     
-    def render_frame(self, animation_data: Dict = None) -> None:
+    def render_frame(self, animation_data: dict = None) -> None:
         """Render a single frame."""
         pass  # Implement with actual rendering
     
@@ -1143,9 +1143,9 @@ class ScreenInteractor:
     """
     
     def __init__(self):
-        self._window_cache: Dict[str, Dict] = {}
+        self._window_cache: dict[str, dict] = {}
     
-    def find_window(self, title: str) -> Optional[Dict]:
+    def find_window(self, title: str) -> Optional[dict]:
         """
         Find a window by title.
         
@@ -1166,7 +1166,7 @@ class ScreenInteractor:
         
         return None
     
-    def _find_window_linux(self, title: str) -> Optional[Dict]:
+    def _find_window_linux(self, title: str) -> Optional[dict]:
         """Find window on Linux using wmctrl or xdotool."""
         import subprocess
         
@@ -1220,7 +1220,7 @@ class ScreenInteractor:
         
         return None
     
-    def _find_window_windows(self, title: str) -> Optional[Dict]:
+    def _find_window_windows(self, title: str) -> Optional[dict]:
         """Find window on Windows."""
         try:
             import ctypes
@@ -1262,7 +1262,7 @@ class ScreenInteractor:
         
         return None
     
-    def _find_window_macos(self, title: str) -> Optional[Dict]:
+    def _find_window_macos(self, title: str) -> Optional[dict]:
         """Find window on macOS."""
         try:
             import subprocess

@@ -19,10 +19,10 @@ Requirements:
 Install: pip install pygltflib trimesh numpy
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-import json
+from typing import Any, Dict, List, Optional
 
 # Check for required libraries
 try:
@@ -51,8 +51,8 @@ class VRMBlendShape:
     """A VRM blend shape (expression)."""
     name: str
     preset: str = ""  # VRM preset name (joy, angry, sorrow, fun, etc.)
-    binds: List[Dict] = field(default_factory=list)  # Mesh + index + weight
-    material_values: List[Dict] = field(default_factory=list)
+    binds: list[dict] = field(default_factory=list)  # Mesh + index + weight
+    material_values: list[dict] = field(default_factory=list)
     is_binary: bool = False
 
 
@@ -90,10 +90,10 @@ class VRMModel:
     vertex_count: int = 0
     
     # Skeleton
-    humanoid_bones: Dict[str, VRMHumanBone] = field(default_factory=dict)
+    humanoid_bones: dict[str, VRMHumanBone] = field(default_factory=dict)
     
     # Expressions
-    blend_shapes: Dict[str, VRMBlendShape] = field(default_factory=dict)
+    blend_shapes: dict[str, VRMBlendShape] = field(default_factory=dict)
     
     # Internal data
     gltf_data: Any = None
@@ -104,11 +104,11 @@ class VRMModel:
         """Check if model has blend shapes for expressions."""
         return len(self.blend_shapes) > 0
     
-    def get_expression_names(self) -> List[str]:
+    def get_expression_names(self) -> list[str]:
         """Get list of available expression names."""
         return list(self.blend_shapes.keys())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "title": self.title,
@@ -145,7 +145,7 @@ class VRMLoader:
     
     def __init__(self):
         """Initialize VRM loader."""
-        self._cache: Dict[str, VRMModel] = {}
+        self._cache: dict[str, VRMModel] = {}
     
     @staticmethod
     def is_available() -> bool:
@@ -153,7 +153,7 @@ class VRMLoader:
         return VRM_AVAILABLE
     
     @staticmethod
-    def get_requirements() -> List[str]:
+    def get_requirements() -> list[str]:
         """Get list of required packages."""
         return ["pygltflib", "numpy", "trimesh (optional)"]
     
@@ -195,7 +195,7 @@ class VRMLoader:
     def _load_vrm(self, path: Path) -> Optional[VRMModel]:
         """Internal VRM loading."""
         import pygltflib  # type: ignore[import-not-found]
-        
+
         # Load glTF base
         gltf = pygltflib.GLTF2().load(str(path))
         
@@ -222,7 +222,7 @@ class VRMLoader:
         self._cache[str(path.absolute())] = model
         return model
     
-    def _parse_vrm_extension(self, model: VRMModel, vrm_ext: Dict):
+    def _parse_vrm_extension(self, model: VRMModel, vrm_ext: dict):
         """Parse VRM 0.x extension data."""
         # Metadata
         if 'meta' in vrm_ext:
@@ -265,7 +265,7 @@ class VRMLoader:
                 key = preset if preset else name
                 model.blend_shapes[key.lower()] = shape
     
-    def _parse_vrm1_extension(self, model: VRMModel, vrm_ext: Dict):
+    def _parse_vrm1_extension(self, model: VRMModel, vrm_ext: dict):
         """Parse VRM 1.0 extension data."""
         # VRM 1.0 has different structure
         if 'meta' in vrm_ext:
@@ -291,7 +291,7 @@ class VRMLoader:
         """Clear the model cache."""
         self._cache.clear()
     
-    def get_cached_models(self) -> List[str]:
+    def get_cached_models(self) -> list[str]:
         """Get list of cached model paths."""
         return list(self._cache.keys())
 

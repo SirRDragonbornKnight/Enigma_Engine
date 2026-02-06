@@ -23,9 +23,9 @@ Example:
 """
 
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class FeatureStatus:
     model_type: Optional[str] = None  # "chat", "vision", "code", etc.
     is_working: bool = False
     error: Optional[str] = None
-    recommended_models: List[str] = field(default_factory=list)
+    recommended_models: list[str] = field(default_factory=list)
 
 
 # Feature requirements - what type of model each feature needs
@@ -160,7 +160,7 @@ class AIIntegration:
                 logger.error(f"Could not load model registry: {e}")
         return self._model_registry
     
-    def get_integration_status(self) -> Dict[str, FeatureStatus]:
+    def get_integration_status(self) -> dict[str, FeatureStatus]:
         """
         Get status of all features - which have models, which don't.
         
@@ -294,7 +294,7 @@ class AIIntegration:
         model = models_by_size.get(model_size, models_by_size["small"])
         return self.setup_feature("vision", f"huggingface:{model}")
     
-    def test_feature(self, feature: str) -> Dict[str, Any]:
+    def test_feature(self, feature: str) -> dict[str, Any]:
         """
         Test if a feature is working.
         

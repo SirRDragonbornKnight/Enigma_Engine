@@ -31,18 +31,18 @@ Usage:
     output = model.forward(input_ids)
 """
 
-import math
-import random
 import json
+import math
+import multiprocessing as mp
+import os
+import platform
+import random
 import struct
 import sys
-import platform
-from typing import List, Optional, Tuple, Dict, Any, Union, Callable
 from dataclasses import dataclass
-from pathlib import Path
-import multiprocessing as mp
 from functools import partial
-import os
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # OPTIONAL ACCELERATORS (Auto-detected, priority: Cython > Numba > PyPy > Pure)
@@ -60,8 +60,8 @@ except ImportError:
 # Try to import Numba for JIT compilation (100-300x speedup)
 NUMBA_AVAILABLE = False
 try:
-    from numba import jit, prange
     import numba
+    from numba import jit, prange
     NUMBA_AVAILABLE = True
     if not CYTHON_AVAILABLE:
         print(f"[PureNN] Numba {numba.__version__} detected - JIT acceleration enabled!")
@@ -95,7 +95,7 @@ def is_numba_available() -> bool:
     return NUMBA_AVAILABLE
 
 
-def get_python_info() -> Dict[str, Any]:
+def get_python_info() -> dict[str, Any]:
     """Get Python runtime information."""
     return {
         "implementation": platform.python_implementation(),
@@ -312,7 +312,7 @@ class Matrix:
     
     __slots__ = ['data', 'rows', 'cols']
     
-    def __init__(self, rows: int, cols: int, data: Optional[List[float]] = None):
+    def __init__(self, rows: int, cols: int, data: Optional[list[float]] = None):
         self.rows = rows
         self.cols = cols
         if data is not None:
@@ -321,7 +321,7 @@ class Matrix:
             self.data = [0.0] * (rows * cols)
     
     @classmethod
-    def from_2d(cls, arr: List[List[float]]) -> 'Matrix':
+    def from_2d(cls, arr: list[list[float]]) -> 'Matrix':
         """Create matrix from 2D list."""
         rows = len(arr)
         cols = len(arr[0]) if rows > 0 else 0
@@ -365,28 +365,28 @@ class Matrix:
         std = math.sqrt(2.0 / (rows + cols))
         return cls.randn(rows, cols, std)
     
-    def __getitem__(self, idx: Tuple[int, int]) -> float:
+    def __getitem__(self, idx: tuple[int, int]) -> float:
         """Get element at (row, col)."""
         row, col = idx
         return self.data[row * self.cols + col]
     
-    def __setitem__(self, idx: Tuple[int, int], value: float):
+    def __setitem__(self, idx: tuple[int, int], value: float):
         """Set element at (row, col)."""
         row, col = idx
         self.data[row * self.cols + col] = value
     
-    def get_row(self, row: int) -> List[float]:
+    def get_row(self, row: int) -> list[float]:
         """Get a row as list."""
         start = row * self.cols
         return self.data[start:start + self.cols]
     
-    def set_row(self, row: int, values: List[float]):
+    def set_row(self, row: int, values: list[float]):
         """Set a row from list."""
         start = row * self.cols
         for i, v in enumerate(values):
             self.data[start + i] = v
     
-    def to_2d(self) -> List[List[float]]:
+    def to_2d(self) -> list[list[float]]:
         """Convert to 2D list."""
         result = []
         for i in range(self.rows):
@@ -411,7 +411,7 @@ class Matrix:
         return self.transpose()
     
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         """Return shape as tuple."""
         return (self.rows, self.cols)
     
@@ -520,7 +520,7 @@ def matmul_parallel(a: Matrix, b: Matrix, n_workers: int = 0) -> Matrix:
         return matmul(a, b)
 
 
-def _matmul_chunk(args: Tuple) -> List[float]:
+def _matmul_chunk(args: tuple) -> list[float]:
     """Worker function for parallel matmul."""
     a_data, a_cols, a_rows, b_data, b_rows, b_cols = args
     result = [0.0] * (a_rows * b_cols)
@@ -834,8 +834,8 @@ class RoPEFrequencies:
         self.theta = theta
         
         # Precompute cos and sin for all positions
-        self.cos_cache: List[List[float]] = []
-        self.sin_cache: List[List[float]] = []
+        self.cos_cache: list[list[float]] = []
+        self.sin_cache: list[list[float]] = []
         
         # freqs[i] = 1 / (theta^(2i/dim))
         freqs = []
@@ -853,7 +853,7 @@ class RoPEFrequencies:
             self.cos_cache.append(cos_row)
             self.sin_cache.append(sin_row)
     
-    def get_cos_sin(self, seq_len: int, start_pos: int = 0) -> Tuple[List[List[float]], List[List[float]]]:
+    def get_cos_sin(self, seq_len: int, start_pos: int = 0) -> tuple[list[list[float]], list[list[float]]]:
         """
         Get cos and sin values for a sequence.
         
@@ -871,7 +871,7 @@ class RoPEFrequencies:
         )
 
 
-def apply_rope(x: Matrix, cos_vals: List[List[float]], sin_vals: List[List[float]]) -> Matrix:
+def apply_rope(x: Matrix, cos_vals: list[list[float]], sin_vals: list[list[float]]) -> Matrix:
     """
     Apply rotary position embeddings to a matrix.
     
@@ -987,13 +987,13 @@ class PureLinear:
         
         return grad_input
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         """Return list of parameters."""
         if self.has_bias:
             return [self.weight, self.bias]
         return [self.weight]
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         """Return list of gradients."""
         if self.has_bias:
             return [self.weight_grad, self.bias_grad]
@@ -1023,7 +1023,7 @@ class PureLayerNorm:
         # Cache
         self._input_cache: Optional[Matrix] = None
         self._normalized_cache: Optional[Matrix] = None
-        self._std_cache: Optional[List[float]] = None
+        self._std_cache: Optional[list[float]] = None
     
     def forward(self, x: Matrix) -> Matrix:
         """Forward pass: normalize and scale."""
@@ -1073,10 +1073,10 @@ class PureLayerNorm:
         
         return grad_input
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         return [self.gamma, self.beta]
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         return [self.gamma_grad, self.beta_grad]
 
 
@@ -1095,7 +1095,7 @@ class PureRMSNorm:
         self.eps = eps
         self.gamma = Matrix.ones(1, normalized_shape)
         self.gamma_grad: Optional[Matrix] = None
-        self._rms_cache: Optional[List[float]] = None
+        self._rms_cache: Optional[list[float]] = None
         self._input_cache: Optional[Matrix] = None
     
     def forward(self, x: Matrix) -> Matrix:
@@ -1147,10 +1147,10 @@ class PureRMSNorm:
         
         return grad_input
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         return [self.gamma]
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         return [self.gamma_grad]
 
 
@@ -1166,9 +1166,9 @@ class PureEmbedding:
         # Initialize embeddings
         self.weight = Matrix.randn(num_embeddings, embedding_dim, std=0.02)
         self.weight_grad: Optional[Matrix] = None
-        self._input_cache: Optional[List[int]] = None
+        self._input_cache: Optional[list[int]] = None
     
-    def forward(self, input_ids: List[int]) -> Matrix:
+    def forward(self, input_ids: list[int]) -> Matrix:
         """
         Lookup embeddings for input IDs.
         
@@ -1202,10 +1202,10 @@ class PureEmbedding:
                 for j in range(self.embedding_dim):
                     self.weight_grad.data[emb_start + j] += grad_output.data[grad_start + j]
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         return [self.weight]
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         return [self.weight_grad]
 
 
@@ -1272,8 +1272,8 @@ class PureAttention:
             self.rope_freqs = None
         
         # KV Cache
-        self.cache_k: Optional[List[List[float]]] = None  # List of K vectors
-        self.cache_v: Optional[List[List[float]]] = None  # List of V vectors
+        self.cache_k: Optional[list[list[float]]] = None  # List of K vectors
+        self.cache_v: Optional[list[list[float]]] = None  # List of V vectors
         self.cache_seq_len: int = 0
         
         # Cache for backward
@@ -1448,7 +1448,7 @@ class PureAttention:
         self.cache_v = None
         self.cache_seq_len = 0
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         params = []
         params.extend(self.wq.parameters())
         params.extend(self.wk.parameters())
@@ -1456,7 +1456,7 @@ class PureAttention:
         params.extend(self.wo.parameters())
         return params
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         grads = []
         grads.extend(self.wq.gradients())
         grads.extend(self.wk.gradients())
@@ -1536,12 +1536,12 @@ class PureFeedForward:
             act = gelu(up)
             return self.down_proj.forward(act)
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         if self.use_swiglu:
             return self.w1.parameters() + self.w2.parameters() + self.w3.parameters()
         return self.up_proj.parameters() + self.down_proj.parameters()
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         if self.use_swiglu:
             return self.w1.gradients() + self.w2.gradients() + self.w3.gradients()
         return self.up_proj.gradients() + self.down_proj.gradients()
@@ -1642,7 +1642,7 @@ class PureTransformerBlock:
         # Simplified backward - for training use full implementation
         return grad_output
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         params = []
         params.extend(self.attn_norm.parameters())
         params.extend(self.attention.parameters())
@@ -1650,7 +1650,7 @@ class PureTransformerBlock:
         params.extend(self.ffn.parameters())
         return params
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         grads = []
         grads.extend(self.attn_norm.gradients())
         grads.extend(self.attention.gradients())
@@ -1719,7 +1719,7 @@ class PureTransformer:
     
     def forward(
         self, 
-        input_ids: List[int],
+        input_ids: list[int],
         use_cache: bool = False,
         start_pos: int = 0
     ) -> Matrix:
@@ -1770,14 +1770,14 @@ class PureTransformer:
     
     def generate(
         self,
-        input_ids: List[int],
+        input_ids: list[int],
         max_new_tokens: int = 50,
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.0,
         use_cache: bool = True
-    ) -> List[int]:
+    ) -> list[int]:
         """
         Generate tokens autoregressively with KV cache.
         
@@ -1836,7 +1836,7 @@ class PureTransformer:
                 # Get indices of top-k values
                 indexed = list(enumerate(last_logits))
                 indexed.sort(key=lambda x: x[1], reverse=True)
-                top_indices = set(i for i, _ in indexed[:top_k])
+                top_indices = {i for i, _ in indexed[:top_k]}
                 
                 # Zero out non-top-k
                 for i in range(len(last_logits)):
@@ -1861,7 +1861,7 @@ class PureTransformer:
                         break
                 
                 # Keep only tokens within top_p
-                allowed = set(i for i, _ in sorted_probs[:cutoff_idx])
+                allowed = {i for i, _ in sorted_probs[:cutoff_idx]}
                 for i in range(len(probs)):
                     if i not in allowed:
                         probs[i] = 0.0
@@ -1897,7 +1897,7 @@ class PureTransformer:
     
     def generate_stream(
         self,
-        input_ids: List[int],
+        input_ids: list[int],
         max_new_tokens: int = 50,
         temperature: float = 1.0,
         top_k: int = 50,
@@ -1948,7 +1948,7 @@ class PureTransformer:
             if top_k > 0:
                 indexed = list(enumerate(last_logits))
                 indexed.sort(key=lambda x: x[1], reverse=True)
-                top_indices = set(i for i, _ in indexed[:top_k])
+                top_indices = {i for i, _ in indexed[:top_k]}
                 for i in range(len(last_logits)):
                     if i not in top_indices:
                         last_logits[i] = -1e9
@@ -1969,7 +1969,7 @@ class PureTransformer:
                     if cumsum > top_p:
                         cutoff_idx = idx + 1
                         break
-                allowed = set(i for i, _ in sorted_probs[:cutoff_idx])
+                allowed = {i for i, _ in sorted_probs[:cutoff_idx]}
                 for i in range(len(probs)):
                     if i not in allowed:
                         probs[i] = 0.0
@@ -2000,7 +2000,7 @@ class PureTransformer:
         
         self.clear_cache()
     
-    def parameters(self) -> List[Matrix]:
+    def parameters(self) -> list[Matrix]:
         """Get all model parameters."""
         params = []
         params.extend(self.token_embedding.parameters())
@@ -2012,7 +2012,7 @@ class PureTransformer:
         params.extend(self.output_proj.parameters())
         return params
     
-    def gradients(self) -> List[Optional[Matrix]]:
+    def gradients(self) -> list[Optional[Matrix]]:
         """Get all gradients."""
         grads = []
         grads.extend(self.token_embedding.gradients())
@@ -2063,7 +2063,7 @@ class PureTransformer:
     
     def load(self, path: Path):
         """Load model weights from file."""
-        with open(path, 'r') as f:
+        with open(path) as f:
             weights = json.load(f)
         
         params = self.parameters()
@@ -2082,11 +2082,11 @@ class PureTransformer:
 class PureSGD:
     """Simple SGD optimizer."""
     
-    def __init__(self, parameters: List[Matrix], lr: float = 0.001):
+    def __init__(self, parameters: list[Matrix], lr: float = 0.001):
         self.parameters = parameters
         self.lr = lr
     
-    def step(self, gradients: List[Optional[Matrix]]):
+    def step(self, gradients: list[Optional[Matrix]]):
         """Apply gradients to parameters."""
         for param, grad in zip(self.parameters, gradients):
             if grad is not None:
@@ -2104,7 +2104,7 @@ class PureAdam:
     
     def __init__(
         self,
-        parameters: List[Matrix],
+        parameters: list[Matrix],
         lr: float = 0.001,
         beta1: float = 0.9,
         beta2: float = 0.999,
@@ -2121,7 +2121,7 @@ class PureAdam:
         self.m = [Matrix.zeros(p.rows, p.cols) for p in parameters]
         self.v = [Matrix.zeros(p.rows, p.cols) for p in parameters]
     
-    def step(self, gradients: List[Optional[Matrix]]):
+    def step(self, gradients: list[Optional[Matrix]]):
         """Apply Adam update."""
         self.t += 1
         
@@ -2143,7 +2143,7 @@ class PureAdam:
                 param.data[j] -= self.lr * m_hat / (math.sqrt(v_hat) + self.eps)
 
 
-def cross_entropy_loss(logits: Matrix, targets: List[int]) -> Tuple[float, Matrix]:
+def cross_entropy_loss(logits: Matrix, targets: list[int]) -> tuple[float, Matrix]:
     """
     Cross-entropy loss with gradient.
     
@@ -2291,7 +2291,7 @@ def get_model_for_size(size: str, vocab_size: int = None) -> Union['PureTransfor
             return PureTransformer(config)
 
 
-def list_available_sizes() -> Dict[str, Dict[str, Any]]:
+def list_available_sizes() -> dict[str, dict[str, Any]]:
     """
     List all available model sizes with their configurations.
     
@@ -2340,7 +2340,7 @@ def list_available_sizes() -> Dict[str, Dict[str, Any]]:
 # UTILITY FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def benchmark_matmul(size: int = 256, iterations: int = 5) -> Dict[str, float]:
+def benchmark_matmul(size: int = 256, iterations: int = 5) -> dict[str, float]:
     """
     Benchmark matrix multiplication performance.
     
@@ -2410,7 +2410,7 @@ def test_pure_transformer():
 # WEIGHT CONVERSION: PyTorch <-> Pure Python
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def convert_pytorch_to_pure(pytorch_state_dict: Dict[str, Any], config: PureConfig) -> 'PureTransformer':
+def convert_pytorch_to_pure(pytorch_state_dict: dict[str, Any], config: PureConfig) -> 'PureTransformer':
     """
     Convert a PyTorch Forge model's state dict to a PureTransformer.
     
@@ -2463,7 +2463,7 @@ def convert_pytorch_to_pure(pytorch_state_dict: Dict[str, Any], config: PureConf
     return model
 
 
-def convert_pure_to_pytorch(pure_model: 'PureTransformer') -> Dict[str, Any]:
+def convert_pure_to_pytorch(pure_model: 'PureTransformer') -> dict[str, Any]:
     """
     Convert a PureTransformer's weights to a PyTorch state dict format.
     
@@ -2587,7 +2587,7 @@ def load_pure_model(path: Path) -> 'PureTransformer':
     
     if path.suffix == '.json' or path.suffix == '':
         # JSON format
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         
         config = PureConfig(**data.get("config", {}))
@@ -2621,7 +2621,7 @@ def load_pure_model(path: Path) -> 'PureTransformer':
 # BATCHED OPERATIONS FOR EFFICIENCY
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def forward_batch(model: 'PureTransformer', batch: List[List[int]], n_workers: int = 0) -> List[Matrix]:
+def forward_batch(model: 'PureTransformer', batch: list[list[int]], n_workers: int = 0) -> list[Matrix]:
     """
     Process multiple sequences in parallel using multiprocessing.
     
@@ -2666,8 +2666,8 @@ class PureTokenizer:
     def __init__(self, vocab_size: int = 1000):
         self.vocab_size = vocab_size
         self._forge_tokenizer = None
-        self._simple_vocab: Dict[str, int] = {}
-        self._simple_vocab_rev: Dict[int, str] = {}
+        self._simple_vocab: dict[str, int] = {}
+        self._simple_vocab_rev: dict[int, str] = {}
         self._loaded = False
     
     def load(self) -> bool:
@@ -2725,7 +2725,7 @@ class PureTokenizer:
         # Build reverse mapping
         self._simple_vocab_rev = {v: k for k, v in self._simple_vocab.items()}
     
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         """Encode text to token IDs."""
         if not self._loaded:
             self.load()
@@ -2750,7 +2750,7 @@ class PureTokenizer:
         
         return tokens
     
-    def decode(self, ids: List[int]) -> str:
+    def decode(self, ids: list[int]) -> str:
         """Decode token IDs to text."""
         if not self._loaded:
             self.load()
@@ -2780,7 +2780,7 @@ class PureChat:
         self.model = model
         self.tokenizer = tokenizer or PureTokenizer(model.config.vocab_size)
         self.tokenizer.load()
-        self.history: List[Dict[str, str]] = []
+        self.history: list[dict[str, str]] = []
     
     def chat(
         self, 

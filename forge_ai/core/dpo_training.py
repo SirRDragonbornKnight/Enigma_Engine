@@ -38,16 +38,17 @@ DATA FORMAT:
     - rejected: The less preferred response
 """
 
+import copy
+import json
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-import logging
-from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple, Union, Callable
-from dataclasses import dataclass, field
-import json
-import copy
+from torch.utils.data import DataLoader, Dataset
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class PreferenceDataset(Dataset):
     
     def __init__(
         self,
-        data: List[Dict[str, str]],
+        data: list[dict[str, str]],
         tokenizer: Any,
         max_length: int = 512,
         max_prompt_length: int = 256
@@ -118,7 +119,7 @@ class PreferenceDataset(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         item = self.data[idx]
         
         prompt = item["prompt"]
@@ -155,7 +156,7 @@ class PreferenceDataset(Dataset):
             "prompt_length": len(prompt_tokens),
         }
     
-    def _pad(self, tokens: List[int], length: int) -> torch.Tensor:
+    def _pad(self, tokens: list[int], length: int) -> torch.Tensor:
         """Pad token list to length."""
         padded = tokens + [0] * (length - len(tokens))
         return torch.tensor(padded, dtype=torch.long)
@@ -221,7 +222,7 @@ def dpo_loss(
     reference_rejected_logps: torch.Tensor,
     beta: float = 0.1,
     label_smoothing: float = 0.0
-) -> Tuple[torch.Tensor, Dict[str, float]]:
+) -> tuple[torch.Tensor, dict[str, float]]:
     """
     Compute DPO loss.
     
@@ -283,7 +284,7 @@ def reference_free_dpo_loss(
     policy_chosen_logps: torch.Tensor,
     policy_rejected_logps: torch.Tensor,
     beta: float = 0.1
-) -> Tuple[torch.Tensor, Dict[str, float]]:
+) -> tuple[torch.Tensor, dict[str, float]]:
     """
     Reference-free DPO loss (simpler, no reference model needed).
     
@@ -365,15 +366,15 @@ class DPOTrainer:
         
         # Stats
         self.global_step = 0
-        self.training_history: List[Dict[str, float]] = []
+        self.training_history: list[dict[str, float]] = []
     
     def train(
         self,
-        train_data: List[Dict[str, str]],
-        eval_data: Optional[List[Dict[str, str]]] = None,
+        train_data: list[dict[str, str]],
+        eval_data: Optional[list[dict[str, str]]] = None,
         epochs: Optional[int] = None,
-        callback: Optional[Callable[[int, Dict[str, float]], None]] = None
-    ) -> Dict[str, Any]:
+        callback: Optional[Callable[[int, dict[str, float]], None]] = None
+    ) -> dict[str, Any]:
         """
         Train the model with DPO.
         
@@ -413,7 +414,7 @@ class DPOTrainer:
         best_accuracy = 0.0
         
         for epoch in range(epochs):
-            epoch_metrics: List[Dict[str, float]] = []
+            epoch_metrics: list[dict[str, float]] = []
             
             for batch_idx, batch in enumerate(train_loader):
                 # Move batch to device
@@ -514,7 +515,7 @@ class DPOTrainer:
             "history": self.training_history
         }
     
-    def _average_metrics(self, metrics_list: List[Dict[str, float]]) -> Dict[str, float]:
+    def _average_metrics(self, metrics_list: list[dict[str, float]]) -> dict[str, float]:
         """Average a list of metrics dicts."""
         if not metrics_list:
             return {}
@@ -555,7 +556,7 @@ class DPOTrainer:
 # Data Utilities
 # =============================================================================
 
-def load_preference_data(path: Union[str, Path]) -> List[Dict[str, str]]:
+def load_preference_data(path: Union[str, Path]) -> list[dict[str, str]]:
     """
     Load preference data from file.
     
@@ -575,12 +576,12 @@ def load_preference_data(path: Union[str, Path]) -> List[Dict[str, str]]:
     
     if path.suffix == ".jsonl":
         data = []
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             for line in f:
                 if line.strip():
                     data.append(json.loads(line))
     else:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
     
     # Validate
@@ -593,10 +594,10 @@ def load_preference_data(path: Union[str, Path]) -> List[Dict[str, str]]:
 
 
 def create_preference_pairs_from_ratings(
-    prompts: List[str],
-    responses: List[List[str]],
-    ratings: List[List[float]]
-) -> List[Dict[str, str]]:
+    prompts: list[str],
+    responses: list[list[str]],
+    ratings: list[list[float]]
+) -> list[dict[str, str]]:
     """
     Create preference pairs from rated responses.
     
@@ -642,7 +643,7 @@ def train_dpo(
     epochs: int = 3,
     beta: float = 0.1,
     **kwargs
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Quick function to run DPO training.
     
@@ -659,7 +660,7 @@ def train_dpo(
     """
     from .inference import ForgeEngine
     from .tokenizer import get_tokenizer
-    
+
     # Load model
     engine = ForgeEngine(model_path=model_path)
     model = engine.model

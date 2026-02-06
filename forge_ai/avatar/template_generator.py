@@ -5,20 +5,19 @@ Creates template sprite sheets and emotion image sets for artists to customize.
 Generates PSD-like layered structures and PNG templates with guidelines.
 """
 
-from pathlib import Path
-from typing import Optional, List, Dict
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional
 
 try:
+    from PyQt5.QtCore import QRect, Qt
+    from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
     from PyQt5.QtWidgets import QApplication
-    from PyQt5.QtGui import QPainter, QPixmap, QColor, QPen, QFont, QBrush
-    from PyQt5.QtCore import Qt, QRect
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 from ..config import CONFIG
-
 
 # Standard emotions for ForgeAI avatars
 STANDARD_EMOTIONS = [
@@ -37,7 +36,7 @@ EXTENDED_EMOTIONS = STANDARD_EMOTIONS + [
 class TemplateConfig:
     """Configuration for template generation."""
     size: int = 256  # Square size
-    emotions: List[str] = None
+    emotions: list[str] = None
     include_guidelines: bool = True
     include_face_guides: bool = True
     background_color: str = "#00000000"  # Transparent
@@ -72,7 +71,7 @@ class SpriteTemplateGenerator:
         self,
         name: str,
         config: Optional[TemplateConfig] = None
-    ) -> List[Path]:
+    ) -> list[Path]:
         """
         Generate individual template images for each emotion.
         
@@ -287,9 +286,9 @@ Enjoy creating!
 def generate_template(
     name: str,
     size: int = 256,
-    emotions: Optional[List[str]] = None,
+    emotions: Optional[list[str]] = None,
     include_spritesheet: bool = True
-) -> Dict[str, List[Path]]:
+) -> dict[str, list[Path]]:
     """
     Quick function to generate avatar templates.
     

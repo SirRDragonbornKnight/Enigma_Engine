@@ -32,8 +32,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .voice_profile import VoiceProfile, PRESET_PROFILES, VoiceEngine
 from .voice_effects import VoiceEffects
+from .voice_profile import PRESET_PROFILES, VoiceEngine, VoiceProfile
 
 
 class VoiceCustomizer:
@@ -245,7 +245,7 @@ class VoiceCustomizer:
         if not filepath.exists():
             raise FileNotFoundError(f"Profile file not found: {path}")
         
-        with open(filepath, 'r') as f:
+        with open(filepath) as f:
             data = json.load(f)
         
         profile = VoiceProfile(**data)

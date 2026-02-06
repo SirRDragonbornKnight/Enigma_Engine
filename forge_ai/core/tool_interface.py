@@ -30,11 +30,11 @@ Usage:
         formatted = tool_interface.format_tool_result(result)
 """
 
-import re
 import json
 import logging
-from typing import Optional, Dict, Any, List, Callable
+import re
 from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 class ToolCall:
     """Represents a parsed tool invocation from AI output."""
     tool_name: str
-    arguments: Dict[str, Any]
+    arguments: dict[str, Any]
     raw_text: str
     start_pos: int = 0
     end_pos: int = 0
@@ -76,8 +76,8 @@ class ToolInterface:
             module_manager: ModuleManager instance for accessing loaded modules
         """
         self.manager = module_manager
-        self.available_tools: Dict[str, Callable] = {}
-        self.tool_descriptions: Dict[str, str] = {}
+        self.available_tools: dict[str, Callable] = {}
+        self.tool_descriptions: dict[str, str] = {}
         
         # Output memory for referencing previous results
         from ..tools.history import get_output_memory
@@ -200,7 +200,7 @@ class ToolInterface:
             end_pos=end_pos
         )
     
-    def _parse_arguments(self, args_str: str) -> Dict[str, Any]:
+    def _parse_arguments(self, args_str: str) -> dict[str, Any]:
         """
         Parse function arguments from string.
         
@@ -337,7 +337,7 @@ class ToolInterface:
     # Tool Implementations
     # =========================================================================
     
-    def _generate_image(self, prompt: str = None, width: int = 512, height: int = 512, **kwargs) -> Dict[str, Any]:
+    def _generate_image(self, prompt: str = None, width: int = 512, height: int = 512, **kwargs) -> dict[str, Any]:
         """Generate an image using available image generation addon."""
         if prompt is None:
             prompt = kwargs.get('arg0', kwargs.get('text', ''))
@@ -382,7 +382,7 @@ class ToolInterface:
             "message": f"Image generation requested for: {prompt}"
         }
     
-    def _avatar_action(self, action: str = None, params: Any = None, **kwargs) -> Dict[str, Any]:
+    def _avatar_action(self, action: str = None, params: Any = None, **kwargs) -> dict[str, Any]:
         """Control the avatar."""
         if action is None:
             action = kwargs.get('arg0', 'speak')
@@ -401,7 +401,7 @@ class ToolInterface:
                 "message": f"Avatar action failed: {str(e)}"
             }
     
-    def _capture_screen(self, **kwargs) -> Dict[str, Any]:
+    def _capture_screen(self, **kwargs) -> dict[str, Any]:
         """Capture and analyze screen."""
         try:
             from ..tools.system_tools import ScreenshotTool
@@ -421,7 +421,7 @@ class ToolInterface:
             "message": "Screen capture requested"
         }
     
-    def _speak(self, text: str = None, **kwargs) -> Dict[str, Any]:
+    def _speak(self, text: str = None, **kwargs) -> dict[str, Any]:
         """Speak text using TTS."""
         if text is None:
             text = kwargs.get('arg0', kwargs.get('prompt', ''))
@@ -443,7 +443,7 @@ class ToolInterface:
                 "message": f"Speech requested: {text[:50]}..."
             }
     
-    def _search_web(self, query: str = None, **kwargs) -> Dict[str, Any]:
+    def _search_web(self, query: str = None, **kwargs) -> dict[str, Any]:
         """Search the web."""
         if query is None:
             query = kwargs.get('arg0', kwargs.get('prompt', kwargs.get('text', '')))
@@ -463,7 +463,7 @@ class ToolInterface:
                 "error": str(e)
             }
     
-    def _read_file(self, path: str = None, **kwargs) -> Dict[str, Any]:
+    def _read_file(self, path: str = None, **kwargs) -> dict[str, Any]:
         """Read file contents."""
         if path is None:
             path = kwargs.get('arg0', '')
@@ -483,7 +483,7 @@ class ToolInterface:
                 "error": str(e)
             }
     
-    def _write_file(self, path: str = None, content: str = None, **kwargs) -> Dict[str, Any]:
+    def _write_file(self, path: str = None, content: str = None, **kwargs) -> dict[str, Any]:
         """Write to file."""
         if path is None:
             path = kwargs.get('arg0', kwargs.get('path', ''))
@@ -505,7 +505,7 @@ class ToolInterface:
                 "error": str(e)
             }
     
-    def _list_directory(self, path: str = None, **kwargs) -> Dict[str, Any]:
+    def _list_directory(self, path: str = None, **kwargs) -> dict[str, Any]:
         """List directory contents."""
         if path is None:
             path = kwargs.get('arg0', kwargs.get('path', '.'))
@@ -522,7 +522,7 @@ class ToolInterface:
                 "error": str(e)
             }
     
-    def _get_last_output(self, category: str = None, **kwargs) -> Dict[str, Any]:
+    def _get_last_output(self, category: str = None, **kwargs) -> dict[str, Any]:
         """Get information about the last generated output."""
         if category is None:
             category = kwargs.get('arg0')
@@ -546,7 +546,7 @@ class ToolInterface:
                 "error": f"No previous {category or 'output'} found in this session"
             }
     
-    def _edit_last(self, reference: str = None, edit_type: str = None, params: Dict = None, **kwargs) -> Dict[str, Any]:
+    def _edit_last(self, reference: str = None, edit_type: str = None, params: dict = None, **kwargs) -> dict[str, Any]:
         """Edit a previous output by reference."""
         if reference is None:
             reference = kwargs.get('arg0', 'last')
@@ -588,7 +588,7 @@ class ToolInterface:
                 "error": f"Editing not supported for {category} outputs"
             }
     
-    def _edit_image_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+    def _edit_image_file(self, path: str, edit_type: str, params: dict) -> dict[str, Any]:
         """Edit an image file."""
         try:
             from ..tools.document_tools import edit_image
@@ -608,7 +608,7 @@ class ToolInterface:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _edit_video_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+    def _edit_video_file(self, path: str, edit_type: str, params: dict) -> dict[str, Any]:
         """Edit a video file."""
         try:
             from ..tools.document_tools import edit_video
@@ -627,7 +627,7 @@ class ToolInterface:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _edit_gif_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+    def _edit_gif_file(self, path: str, edit_type: str, params: dict) -> dict[str, Any]:
         """Edit a GIF file."""
         try:
             from ..tools.document_tools import edit_gif
@@ -646,7 +646,7 @@ class ToolInterface:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _edit_audio_file(self, path: str, edit_type: str, params: Dict) -> Dict[str, Any]:
+    def _edit_audio_file(self, path: str, edit_type: str, params: dict) -> dict[str, Any]:
         """Edit an audio file."""
         try:
             from ..tools.document_tools import edit_audio
@@ -673,14 +673,14 @@ class ToolInterface:
         """Clear the output memory (for new chat sessions)."""
         self.output_memory.clear()
     
-    def get_tools_list(self) -> List[Dict[str, str]]:
+    def get_tools_list(self) -> list[dict[str, str]]:
         """Get list of available tools with descriptions."""
         return [
             {"name": name, "description": desc}
             for name, desc in self.tool_descriptions.items()
         ]
     
-    def get_tool_names(self) -> List[str]:
+    def get_tool_names(self) -> list[str]:
         """Get list of available tool names."""
         return list(self.available_tools.keys())
 

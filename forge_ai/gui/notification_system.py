@@ -10,16 +10,16 @@ User notification features:
 Part of the ForgeAI GUI notification suite.
 """
 
-import time
 import json
-import threading
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Union
-from pathlib import Path
-from enum import Enum, auto
 import logging
-from datetime import datetime
 import queue
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +60,10 @@ class Notification:
     dismissed: bool = False
     sound: Optional[str] = None
     icon: Optional[str] = None
-    actions: List[Dict[str, str]] = field(default_factory=list)
+    actions: list[dict[str, str]] = field(default_factory=list)
     progress: Optional[float] = None  # 0-1 for progress notifications
     source: str = ""  # Module/feature that sent it
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     
     def age_seconds(self) -> float:
         """Get age in seconds."""
@@ -80,7 +80,7 @@ class Notification:
             return f"{int(age / 3600)}h ago"
         return f"{int(age / 86400)}d ago"
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "title": self.title,
@@ -120,7 +120,7 @@ class SoundProfile:
     name: str
     enabled: bool = True
     volume: float = 0.7  # 0-1
-    sounds: Dict[str, Optional[str]] = field(default_factory=dict)  # SoundType -> path
+    sounds: dict[str, Optional[str]] = field(default_factory=dict)  # SoundType -> path
 
 
 class SoundSettings:
@@ -165,8 +165,8 @@ class SoundSettings:
         self._enabled = True
         self._volume = 0.7
         self._muted = False
-        self._sounds: Dict[SoundType, Optional[str]] = self.DEFAULT_SOUNDS.copy()
-        self._enabled_types: Dict[SoundType, bool] = {t: True for t in SoundType}
+        self._sounds: dict[SoundType, Optional[str]] = self.DEFAULT_SOUNDS.copy()
+        self._enabled_types: dict[SoundType, bool] = {t: True for t in SoundType}
         self._profiles = self.BUILTIN_PROFILES.copy()
         self._current_profile = "default"
         
@@ -221,7 +221,7 @@ class SoundSettings:
         """Get sound file path for a type."""
         return self._sounds.get(sound_type)
     
-    def get_profiles(self) -> List[str]:
+    def get_profiles(self) -> list[str]:
         """Get available profile names."""
         return list(self._profiles.keys())
     
@@ -347,10 +347,10 @@ class StatusBar:
     
     def __init__(self):
         """Initialize status bar."""
-        self._items: Dict[str, StatusItem] = {}
-        self._order: List[str] = []
-        self._callbacks: List[Callable[[StatusItem], None]] = []
-        self._click_handlers: Dict[str, Callable[[], None]] = {}
+        self._items: dict[str, StatusItem] = {}
+        self._order: list[str] = []
+        self._callbacks: list[Callable[[StatusItem], None]] = []
+        self._click_handlers: dict[str, Callable[[], None]] = {}
         
         # Default items
         self._add_default_items()
@@ -421,7 +421,7 @@ class StatusBar:
         """Get a status item."""
         return self._items.get(item_id)
     
-    def get_all_items(self) -> List[StatusItem]:
+    def get_all_items(self) -> list[StatusItem]:
         """Get all visible items in order."""
         return [
             self._items[item_id]
@@ -504,14 +504,14 @@ class NotificationCenter:
         self.max_history = max_history
         self.persist_path = persist_path
         
-        self._notifications: List[Notification] = []
-        self._handlers: List[Callable[[Notification], None]] = []
+        self._notifications: list[Notification] = []
+        self._handlers: list[Callable[[Notification], None]] = []
         self._id_counter = 0
         self._lock = threading.Lock()
         
         # Unread badge count
         self._unread_count = 0
-        self._badge_callbacks: List[Callable[[int], None]] = []
+        self._badge_callbacks: list[Callable[[int], None]] = []
         
         if persist_path and persist_path.exists():
             self._load()
@@ -523,9 +523,9 @@ class NotificationCenter:
         type: NotificationType = NotificationType.INFO,
         priority: NotificationPriority = NotificationPriority.NORMAL,
         sound: Optional[str] = None,
-        actions: Optional[List[Dict[str, str]]] = None,
+        actions: Optional[list[dict[str, str]]] = None,
         source: str = "",
-        data: Optional[Dict[str, Any]] = None
+        data: Optional[dict[str, Any]] = None
     ) -> str:
         """
         Send a notification.
@@ -630,23 +630,23 @@ class NotificationCenter:
                         n.message = message
                     break
     
-    def get_all(self) -> List[Notification]:
+    def get_all(self) -> list[Notification]:
         """Get all notifications."""
         return self._notifications.copy()
     
-    def get_unread(self) -> List[Notification]:
+    def get_unread(self) -> list[Notification]:
         """Get unread notifications."""
         return [n for n in self._notifications if not n.read]
     
-    def get_by_type(self, type: NotificationType) -> List[Notification]:
+    def get_by_type(self, type: NotificationType) -> list[Notification]:
         """Get notifications by type."""
         return [n for n in self._notifications if n.type == type]
     
-    def get_by_priority(self, priority: NotificationPriority) -> List[Notification]:
+    def get_by_priority(self, priority: NotificationPriority) -> list[Notification]:
         """Get notifications by priority."""
         return [n for n in self._notifications if n.priority == priority]
     
-    def get_recent(self, limit: int = 20) -> List[Notification]:
+    def get_recent(self, limit: int = 20) -> list[Notification]:
         """Get recent notifications."""
         return self._notifications[:limit]
     
@@ -788,7 +788,7 @@ class PushNotificationService:
         """
         self.app_name = app_name
         self._enabled = True
-        self._click_handlers: Dict[str, Callable[[], None]] = {}
+        self._click_handlers: dict[str, Callable[[], None]] = {}
     
     @property
     def enabled(self) -> bool:
@@ -870,8 +870,8 @@ class NotificationBadge:
             max_badge: Maximum displayed count (shows "99+" above)
         """
         self.max_badge = max_badge
-        self._counts: Dict[str, int] = {}  # source -> count
-        self._callbacks: List[Callable[[int, Dict[str, int]], None]] = []
+        self._counts: dict[str, int] = {}  # source -> count
+        self._callbacks: list[Callable[[int, dict[str, int]], None]] = []
     
     def increment(self, source: str = "default", amount: int = 1):
         """Increment badge count."""
@@ -917,11 +917,11 @@ class NotificationBadge:
             return f"{self.max_badge}+"
         return str(total)
     
-    def get_by_source(self) -> Dict[str, int]:
+    def get_by_source(self) -> dict[str, int]:
         """Get counts by source."""
         return self._counts.copy()
     
-    def on_change(self, callback: Callable[[int, Dict[str, int]], None]):
+    def on_change(self, callback: Callable[[int, dict[str, int]], None]):
         """Register callback for badge changes."""
         self._callbacks.append(callback)
     

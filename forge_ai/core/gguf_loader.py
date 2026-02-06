@@ -17,7 +17,7 @@ Usage:
 
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ class GGUFModel:
         top_p: float = 0.95,
         top_k: int = 40,
         repeat_penalty: float = 1.1,
-        stop: Optional[List[str]] = None,
+        stop: Optional[list[str]] = None,
         stream: bool = False,
         **kwargs
     ) -> str:
@@ -219,7 +219,7 @@ class GGUFModel:
     
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         max_tokens: int = 256,
         temperature: float = 0.8,
         stream: bool = False,
@@ -271,19 +271,19 @@ class GGUFModel:
             logger.error(f"Chat failed: {e}")
             raise
     
-    def tokenize(self, text: str) -> List[int]:
+    def tokenize(self, text: str) -> list[int]:
         """Tokenize text to token IDs."""
         if not self.is_loaded:
             raise RuntimeError("Model not loaded. Call load() first.")
         return self.model.tokenize(text.encode('utf-8'))
     
-    def detokenize(self, tokens: List[int]) -> str:
+    def detokenize(self, tokens: list[int]) -> str:
         """Convert token IDs back to text."""
         if not self.is_loaded:
             raise RuntimeError("Model not loaded. Call load() first.")
         return self.model.detokenize(tokens).decode('utf-8')
     
-    def get_info(self) -> Dict[str, Any]:
+    def get_info(self) -> dict[str, Any]:
         """Get model information."""
         return {
             'model_path': str(self.model_path),
@@ -301,10 +301,13 @@ class GGUFModel:
     
     def __del__(self):
         """Cleanup on deletion."""
-        self.unload()
+        try:
+            self.unload()
+        except Exception:
+            pass  # Ignore cleanup errors during shutdown
 
 
-def list_gguf_models(models_dir: str = None) -> List[Path]:
+def list_gguf_models(models_dir: str = None) -> list[Path]:
     """
     List all GGUF model files in a directory.
     
@@ -354,7 +357,7 @@ def recommend_gpu_layers(model_size_gb: float, vram_gb: float) -> int:
         return 999  # Use a large number to offload all layers
 
 
-def parse_gguf_header(f) -> Dict[str, Any]:
+def parse_gguf_header(f) -> dict[str, Any]:
     """
     Parse GGUF file header.
     
@@ -377,7 +380,7 @@ def parse_gguf_header(f) -> Dict[str, Any]:
         ValueError: If not a valid GGUF file
     """
     import struct
-    
+
     # GGUF magic number (4 bytes)
     magic = f.read(4)
     if magic != b'GGUF':
@@ -401,7 +404,7 @@ def parse_gguf_header(f) -> Dict[str, Any]:
     }
 
 
-def parse_gguf_metadata(f, header: Dict) -> Dict[str, Any]:
+def parse_gguf_metadata(f, header: dict) -> dict[str, Any]:
     """
     Parse metadata key-value pairs from GGUF file.
     
@@ -495,9 +498,9 @@ def parse_gguf_metadata(f, header: Dict) -> Dict[str, Any]:
 
 def parse_gguf_tensors(
     f,
-    header: Dict,
+    header: dict,
     dequantize: bool = True
-) -> Dict[str, 'torch.Tensor']:
+) -> dict[str, 'torch.Tensor']:
     """
     Parse and extract tensors from GGUF file.
     
@@ -522,8 +525,8 @@ def parse_gguf_tensors(
     if not HAVE_TORCH:
         raise RuntimeError("torch required for tensor parsing")
     
-    import torch
     import numpy as np
+    import torch
     
     tensors = {}
     
@@ -640,7 +643,7 @@ def parse_gguf_tensors(
     return tensors
 
 
-def extract_config_from_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+def extract_config_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """
     Extract Forge config parameters from GGUF metadata.
     
@@ -838,9 +841,10 @@ def load_gguf_model(
         FileNotFoundError: If model file not found
     """
     # Import here to avoid circular imports
+    from pathlib import Path
+
     from .model import Forge, ForgeConfig
     from .weight_mapping import WeightMapper
-    from pathlib import Path
     
     logger.info(f"Loading GGUF model from: {gguf_model_path}")
     

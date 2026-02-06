@@ -31,14 +31,17 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import random
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .voice_profile import VoiceProfile, PROFILES_DIR
+logger = logging.getLogger(__name__)
+
 from ..config import CONFIG
+from .voice_profile import PROFILES_DIR, VoiceProfile
 
 try:
     from ..core.personality import AIPersonality, PersonalityTraits
@@ -78,7 +81,7 @@ class AIVoiceIdentity:
         
     def discover_voice(
         self,
-        personality: 'AIPersonality',
+        personality: AIPersonality,
         num_experiments: int = 5,
         base_voice: str = "default"
     ) -> VoiceProfile:
@@ -161,7 +164,7 @@ class AIVoiceIdentity:
     def _score_voice_alignment(
         self,
         profile: VoiceProfile,
-        traits: 'PersonalityTraits'
+        traits: PersonalityTraits
     ) -> float:
         """
         Score how well a voice profile aligns with personality traits.
@@ -439,7 +442,7 @@ class AIVoiceIdentity:
             return False
         
         try:
-            with open(identity_file, 'r') as f:
+            with open(identity_file) as f:
                 data = json.load(f)
             
             if data.get("current_identity"):
@@ -453,13 +456,13 @@ class AIVoiceIdentity:
             
             return True
         except Exception as e:
-            print(f"Error loading voice identity: {e}")
+            logger.error(f"Error loading voice identity: {e}")
             return False
 
 
 # Convenience functions
 def discover_voice(
-    personality: 'AIPersonality',
+    personality: AIPersonality,
     num_experiments: int = 5
 ) -> VoiceProfile:
     """

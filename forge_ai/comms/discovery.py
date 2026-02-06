@@ -12,7 +12,7 @@ import json
 import socket
 import threading
 import time
-from typing import Dict, List, Callable, Optional
+from typing import Callable, Dict, List, Optional
 
 
 class DeviceDiscovery:
@@ -34,16 +34,16 @@ class DeviceDiscovery:
         self.node_port = node_port
         
         # Discovered devices: {name: {"ip": ..., "port": ..., "last_seen": ...}}
-        self.discovered: Dict[str, Dict] = {}
+        self.discovered: dict[str, dict] = {}
         
         # Discovery callbacks
-        self._on_discover: List[Callable] = []
+        self._on_discover: list[Callable] = []
         
         # Listener thread
         self._listener_thread = None
         self._running = False
     
-    def on_discover(self, callback: Callable[[str, Dict], None]):
+    def on_discover(self, callback: Callable[[str, dict], None]):
         """
         Register a callback for when a device is discovered.
         
@@ -51,7 +51,7 @@ class DeviceDiscovery:
         """
         self._on_discover.append(callback)
     
-    def _notify_discover(self, name: str, info: Dict):
+    def _notify_discover(self, name: str, info: dict):
         """Notify all callbacks of a discovery."""
         for cb in self._on_discover:
             try:
@@ -68,7 +68,7 @@ class DeviceDiscovery:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except (OSError, socket.error):
+        except OSError:
             return "127.0.0.1"
     
     def start_listener(self):
@@ -142,7 +142,7 @@ class DeviceDiscovery:
         
         sock.close()
     
-    def broadcast_discover(self, timeout: float = 3.0) -> Dict[str, Dict]:
+    def broadcast_discover(self, timeout: float = 3.0) -> dict[str, dict]:
         """
         Send a discovery broadcast and collect responses.
         
@@ -159,7 +159,7 @@ class DeviceDiscovery:
         # Send broadcast
         try:
             sock.sendto(self.DISCOVERY_MESSAGE, ("<broadcast>", self.BROADCAST_PORT))
-        except (OSError, socket.error) as e:
+        except OSError as e:
             # Try specific broadcast address
             local_ip = self.get_local_ip()
             if "." in local_ip:
@@ -167,7 +167,7 @@ class DeviceDiscovery:
                 broadcast = f"{parts[0]}.{parts[1]}.{parts[2]}.255"
                 try:
                     sock.sendto(self.DISCOVERY_MESSAGE, (broadcast, self.BROADCAST_PORT))
-                except (OSError, socket.error):
+                except OSError:
                     pass  # Broadcast failed
         
         # Collect responses
@@ -201,7 +201,7 @@ class DeviceDiscovery:
         port: int = 5000,
         subnet: str = None,
         timeout: float = 0.5
-    ) -> Dict[str, Dict]:
+    ) -> dict[str, dict]:
         """
         Scan the local network for Forge nodes.
         
@@ -275,7 +275,7 @@ class DeviceDiscovery:
             return f"http://{info['ip']}:{info['port']}"
         return None
     
-    def discover_federated_peers(self, timeout: float = 3.0) -> List[Dict]:
+    def discover_federated_peers(self, timeout: float = 3.0) -> list[dict]:
         """
         Discover devices that support federated learning.
         
@@ -288,7 +288,7 @@ class DeviceDiscovery:
             List of peer devices with federated learning capabilities
         """
         import urllib.request
-        
+
         # First, discover all nodes
         self.broadcast_discover(timeout)
         
@@ -319,7 +319,7 @@ class DeviceDiscovery:
 
 
 # Convenience function
-def discover_forge_ai_nodes(node_name: str = "scanner", timeout: float = 3.0) -> Dict[str, Dict]:
+def discover_forge_ai_nodes(node_name: str = "scanner", timeout: float = 3.0) -> dict[str, dict]:
     """
     Quick function to discover Forge nodes on the network.
     
@@ -334,7 +334,7 @@ def discover_forge_ai_nodes(node_name: str = "scanner", timeout: float = 3.0) ->
     return discovery.broadcast_discover(timeout)
 
 
-def discover_federated_peers(node_name: str = "scanner", timeout: float = 3.0) -> List[Dict]:
+def discover_federated_peers(node_name: str = "scanner", timeout: float = 3.0) -> list[dict]:
     """
     Quick function to discover federated learning peers.
     

@@ -2,13 +2,13 @@
 Bias Detection and Ethics Tools for ForgeAI
 Scans datasets for biased patterns and offensive content, provides safe reinforcement.
 """
+import json
 import logging
 import re
-from typing import List, Dict, Any, Optional
-from pathlib import Path
-from dataclasses import dataclass
 from collections import Counter
-import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +18,9 @@ class BiasDetectionResult:
     """Result of bias detection scan."""
     is_biased: bool
     bias_score: float  # 0.0 to 1.0
-    issues_found: List[Dict[str, Any]]
-    statistics: Dict[str, Any]
-    recommendations: List[str]
+    issues_found: list[dict[str, Any]]
+    statistics: dict[str, Any]
+    recommendations: list[str]
 
 
 class BiasDetector:
@@ -57,7 +57,7 @@ class BiasDetector:
         'black', 'white', 'asian', 'hispanic', 'latino'
     ]
     
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: Optional[dict] = None):
         """
         Initialize bias detector.
         
@@ -144,7 +144,7 @@ class BiasDetector:
             recommendations=recommendations
         )
     
-    def scan_dataset(self, texts: List[str]) -> BiasDetectionResult:
+    def scan_dataset(self, texts: list[str]) -> BiasDetectionResult:
         """
         Scan an entire dataset for bias patterns.
         
@@ -237,7 +237,7 @@ class OffensiveContentFilter:
     def _load_blocklist(self, path: Path):
         """Load custom blocklist from file."""
         try:
-            with open(path, 'r') as f:
+            with open(path) as f:
                 for line in f:
                     term = line.strip().lower()
                     if term and not term.startswith('#'):
@@ -246,7 +246,7 @@ class OffensiveContentFilter:
         except Exception as e:
             logger.error(f"Failed to load blocklist: {e}")
     
-    def scan_text(self, text: str) -> Dict[str, Any]:
+    def scan_text(self, text: str) -> dict[str, Any]:
         """
         Scan text for offensive content.
         
@@ -272,7 +272,7 @@ class OffensiveContentFilter:
             'term_count': len(found_terms)
         }
     
-    def scan_dataset(self, texts: List[str]) -> Dict[str, Any]:
+    def scan_dataset(self, texts: list[str]) -> dict[str, Any]:
         """
         Scan dataset for offensive content.
         
@@ -337,7 +337,7 @@ class SafeReinforcementLogic:
             "Be mindful of sensitive topics"
         ]
     
-    def check_output_safety(self, text: str) -> Dict[str, Any]:
+    def check_output_safety(self, text: str) -> dict[str, Any]:
         """
         Check if AI output is safe and ethical.
         
@@ -388,7 +388,7 @@ class SafeReinforcementLogic:
 def scan_training_data(
     data_path: Path,
     output_report_path: Optional[Path] = None
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Scan training data for bias and offensive content.
     
@@ -404,7 +404,7 @@ def scan_training_data(
     # Load data
     texts = []
     try:
-        with open(data_path, 'r', encoding='utf-8') as f:
+        with open(data_path, encoding='utf-8') as f:
             for line in f:
                 texts.append(line.strip())
     except Exception as e:

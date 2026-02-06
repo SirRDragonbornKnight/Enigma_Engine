@@ -60,15 +60,15 @@ and let AIs have conversations with each other.
 """
 
 import json
-import threading
 import queue
+import socket
+import threading
 import time
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
-import socket
-import urllib.request
-import urllib.parse
+from typing import Any, Callable, Dict, List, Optional
 
 from ..config import CONFIG
 
@@ -92,7 +92,7 @@ class Message:
         self.timestamp = datetime.now().isoformat()
         self.id = f"{sender}_{int(time.time()*1000)}"
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "type": self.msg_type,
@@ -104,7 +104,7 @@ class Message:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> "Message":
+    def from_dict(cls, data: dict) -> "Message":
         msg = cls(
             msg_type=data.get("type", "chat"),
             content=data.get("content", ""),
@@ -144,14 +144,14 @@ class ForgeNode:
         self.model_name = model_name
         
         # Connected peers: {name: {"url": "...", "last_seen": ...}}
-        self.peers: Dict[str, Dict] = {}
+        self.peers: dict[str, dict] = {}
         
         # Message queues
         self.incoming_queue = queue.Queue()
         self.outgoing_queue = queue.Queue()
         
         # Conversation history
-        self.conversations: Dict[str, List[Message]] = {}
+        self.conversations: dict[str, list[Message]] = {}
         
         # Server thread
         self._server_thread = None
@@ -178,8 +178,8 @@ class ForgeNode:
                 device = "cuda" if torch.cuda.is_available() else "cpu"
             
             if self.model_name:
-                from ..core.model_registry import ModelRegistry
                 from ..core.inference import ForgeEngine
+                from ..core.model_registry import ModelRegistry
                 
                 registry = ModelRegistry()
                 model, config = registry.load_model(self.model_name)
@@ -207,7 +207,7 @@ class ForgeNode:
             host: Interface to bind to (0.0.0.0 = all interfaces)
             blocking: If True, block until server stops
         """
-        from flask import Flask, request, jsonify
+        from flask import Flask, jsonify, request
         from flask_cors import CORS
         
         app = Flask(f"forge_{self.name}")
@@ -373,7 +373,7 @@ class ForgeNode:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except (OSError, socket.error):
+        except OSError:
             return "127.0.0.1"
     
     # === Communication ===
@@ -455,7 +455,7 @@ class ForgeNode:
         initial_prompt: str = "Hello, let's have a conversation.",
         num_turns: int = 5,
         callback: Callable[[str, str], None] = None
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Start an AI-to-AI conversation with another node.
         
@@ -548,7 +548,7 @@ class ModelExporter:
         """
         import shutil
         import zipfile
-        
+
         from ..core.model_registry import ModelRegistry
         
         registry = ModelRegistry()
@@ -610,9 +610,9 @@ class ModelExporter:
         Returns:
             Name of the imported model
         """
-        import zipfile
         import shutil
-        
+        import zipfile
+
         from ..core.model_registry import ModelRegistry
         
         package_path = Path(package_path)
@@ -630,7 +630,7 @@ class ModelExporter:
             zipf.extractall(temp_dir)
         
         # Read manifest
-        with open(temp_dir / "manifest.json", "r") as f:
+        with open(temp_dir / "manifest.json") as f:
             manifest = json.load(f)
         
         original_name = manifest["name"]
@@ -646,7 +646,7 @@ class ModelExporter:
         shutil.move(temp_dir / "model", model_dir)
         
         # Update registry
-        with open(model_dir / "config.json", "r") as f:
+        with open(model_dir / "config.json") as f:
             config = json.load(f)
         
         registry.registry["models"][model_name] = {

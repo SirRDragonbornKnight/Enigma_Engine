@@ -21,12 +21,17 @@ all generation features accessible in one place.
 """
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QTabWidget, QPushButton, QTextEdit
-    )
     from PyQt5.QtCore import Qt
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QTabWidget,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -56,10 +61,10 @@ def create_create_tab(parent):
     
     # Import the individual tab creators
     try:
-        from .image_tab import create_image_tab
-        from .code_tab import create_code_tab
-        from .video_tab import create_video_tab
         from .audio_tab import create_audio_tab
+        from .code_tab import create_code_tab
+        from .image_tab import create_image_tab
+        from .video_tab import create_video_tab
     except ImportError as e:
         widget = QWidget()
         layout = QVBoxLayout(widget)

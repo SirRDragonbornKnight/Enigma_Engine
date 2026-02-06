@@ -17,22 +17,48 @@ import logging
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-from typing import Optional, Any, Dict
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QFileDialog, QCheckBox, QFrame, QSizePolicy,
-    QApplication, QOpenGLWidget, QMessageBox, QGroupBox,
-    QSlider, QColorDialog, QGridLayout, QScrollArea, QTextEdit,
-    QMenu
+from typing import Any, Dict, Optional
+
+from PyQt5.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, pyqtSignal
+from PyQt5.QtGui import (
+    QBitmap,
+    QColor,
+    QCursor,
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPen,
+    QPixmap,
+    QRegion,
+    QWheelEvent,
 )
-from PyQt5.QtCore import Qt, QTimer, QPoint, pyqtSignal, QSize, QByteArray
-from PyQt5.QtGui import QPixmap, QPainter, QColor, QCursor, QImage, QMouseEvent, QWheelEvent, QPen, QBitmap, QRegion
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QColorDialog,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QMessageBox,
+    QOpenGLWidget,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSlider,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..shared_components import NoScrollComboBox
 
 # Optional SVG support - not all PyQt5 installs have it
 try:
-    from PyQt5.QtSvg import QSvgWidget, QSvgRenderer
+    from PyQt5.QtSvg import QSvgRenderer, QSvgWidget
     HAS_SVG = True
 except ImportError:
     QSvgWidget = None  # type: ignore
@@ -66,10 +92,10 @@ import json
 import os
 import time
 
-from ....config import CONFIG
-from ....avatar import get_avatar, AvatarState
-from ....avatar.renderers.default_sprites import generate_sprite, SPRITE_TEMPLATES
+from ....avatar import AvatarState, get_avatar
 from ....avatar.customizer import AvatarCustomizer
+from ....avatar.renderers.default_sprites import SPRITE_TEMPLATES, generate_sprite
+from ....config import CONFIG
 
 # Try importing 3D libraries
 HAS_TRIMESH = False
@@ -78,8 +104,8 @@ trimesh = None
 np = None
 
 try:
-    import trimesh as _trimesh
     import numpy as _np
+    import trimesh as _trimesh
     trimesh = _trimesh
     np = _np
     HAS_TRIMESH = True
@@ -866,7 +892,7 @@ class OpenGL3DWidget(QOpenGLWidget):
             return False
         
         try:
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 orientations = json.load(f)
             
             model_key = Path(path).name
@@ -878,7 +904,7 @@ class OpenGL3DWidget(QOpenGLWidget):
                 print(f"[Avatar] Loaded saved orientation for {model_key}: pitch={data.get('pitch', 0)}°, yaw={data.get('yaw', 0)}°, roll={data.get('roll', 0)}°")
                 self.update()
                 return True
-        except (json.JSONDecodeError, IOError) as e:
+        except (json.JSONDecodeError, OSError) as e:
             print(f"[Avatar] Could not load orientation: {e}")
         
         return False
@@ -1578,7 +1604,10 @@ class AvatarOverlayWindow(QWidget):
         # Save position if we were dragging (per-avatar)
         if self._drag_pos is not None:
             try:
-                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    get_persistence,
+                    write_avatar_state_for_ai,
+                )
                 pos = self.pos()
                 persistence = get_persistence()
                 settings = persistence.load()
@@ -1592,7 +1621,10 @@ class AvatarOverlayWindow(QWidget):
         # Save size if we were resizing (per-avatar)
         if self._resize_edge is not None:
             try:
-                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    get_persistence,
+                    write_avatar_state_for_ai,
+                )
                 persistence = get_persistence()
                 settings = persistence.load()
                 if self._avatar_path:
@@ -1637,7 +1669,10 @@ class AvatarOverlayWindow(QWidget):
         
         if self._size != self._last_saved_size:
             try:
-                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    get_persistence,
+                    write_avatar_state_for_ai,
+                )
                 persistence = get_persistence()
                 settings = persistence.load()
                 if self._avatar_path:
@@ -1653,7 +1688,11 @@ class AvatarOverlayWindow(QWidget):
         """Save position and size when hidden."""
         super().hideEvent(a0)
         try:
-            from ....avatar.persistence import save_avatar_settings, save_position, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                save_position,
+                write_avatar_state_for_ai,
+            )
             pos = self.pos()
             save_position(pos.x(), pos.y())
             save_avatar_settings(overlay_size=self._size)
@@ -1689,7 +1728,10 @@ class AvatarOverlayWindow(QWidget):
             
             # Save size
             try:
-                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    save_avatar_settings,
+                    write_avatar_state_for_ai,
+                )
                 save_avatar_settings(overlay_size=self._size)
                 write_avatar_state_for_ai()
             except Exception:
@@ -1779,7 +1821,10 @@ class AvatarOverlayWindow(QWidget):
         self.update()  # Repaint to show/hide border
         # Save setting
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(resize_enabled=self._resize_enabled)
             write_avatar_state_for_ai()
         except Exception:
@@ -1813,7 +1858,10 @@ class AvatarOverlayWindow(QWidget):
             self._update_scaled_pixmap()
             # Save size (per-avatar)
             try:
-                from ....avatar.persistence import get_persistence, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    get_persistence,
+                    write_avatar_state_for_ai,
+                )
                 persistence = get_persistence()
                 settings = persistence.load()
                 if self._avatar_path:
@@ -1844,7 +1892,7 @@ class AvatarOverlayWindow(QWidget):
         try:
             import ctypes
             from ctypes import wintypes
-            
+
             # Check if this is WM_NCHITTEST (0x0084)
             WM_NCHITTEST = 0x0084
             HTTRANSPARENT = -1
@@ -3146,7 +3194,7 @@ class ResizeHandle(QWidget):
         
     def paintEvent(self, event):
         """Draw the resize handle."""
-        from PyQt5.QtGui import QPainter, QColor, QPen, QBrush
+        from PyQt5.QtGui import QBrush, QColor, QPainter, QPen
         
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -3257,7 +3305,7 @@ class BoneHitManager:
     
     def __init__(self, avatar_window):
         self._avatar = avatar_window
-        self._regions: Dict[str, BoneHitRegion] = {}
+        self._regions: dict[str, BoneHitRegion] = {}
         self._visible = False
         self._edit_mode = False
         
@@ -3710,7 +3758,7 @@ class Avatar3DOverlayWindow(QWidget):
         
         try:
             import ctypes
-            
+
             # Get current mouse position
             cursor_pos = QCursor.pos()
             local_pos = self.mapFromGlobal(cursor_pos)
@@ -3811,8 +3859,9 @@ class Avatar3DOverlayWindow(QWidget):
     def _apply_click_through_linux(self):
         """Linux: Make avatar window click-through using X11 input shape."""
         try:
-            from PyQt5.QtX11Extras import QX11Info
             import ctypes
+
+            from PyQt5.QtX11Extras import QX11Info
             
             x11 = ctypes.CDLL('libX11.so.6')
             xext = ctypes.CDLL('libXext.so.6')
@@ -3879,7 +3928,10 @@ class Avatar3DOverlayWindow(QWidget):
         self._apply_circular_mask()
         # Save position
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(control_bar_x=new_x, control_bar_y=new_y)
             write_avatar_state_for_ai()
         except Exception:
@@ -3912,9 +3964,9 @@ class Avatar3DOverlayWindow(QWidget):
         - Circular mask: avatar appears as circle
         - No mask: avatar appears as square/rectangle
         """
-        from PyQt5.QtGui import QRegion, QPainterPath
         from PyQt5.QtCore import QRectF
-        
+        from PyQt5.QtGui import QPainterPath, QRegion
+
         # Clear any existing mask first
         self.clearMask()
         
@@ -3983,9 +4035,9 @@ class Avatar3DOverlayWindow(QWidget):
                     # Connect bone controller if model has skeleton
                     if self._model_info['has_skeleton'] and self._model_info['skeleton_bones']:
                         try:
-                            from ....avatar.bone_control import get_bone_controller
                             from ....avatar import get_avatar
-                            
+                            from ....avatar.bone_control import get_bone_controller
+
                             # Get avatar controller first
                             avatar_controller = get_avatar()
                             if avatar_controller is None:
@@ -4147,7 +4199,10 @@ class Avatar3DOverlayWindow(QWidget):
             self.setCursor(QCursor(Qt_OpenHandCursor))
             # Save position
             try:
-                from ....avatar.persistence import save_position, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    save_position,
+                    write_avatar_state_for_ai,
+                )
                 pos = self.pos()
                 save_position(pos.x(), pos.y())
                 write_avatar_state_for_ai()
@@ -4299,7 +4354,10 @@ class Avatar3DOverlayWindow(QWidget):
         self.update()
         # Save setting
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(resize_enabled=self._resize_enabled)
             write_avatar_state_for_ai()
         except Exception as e:
@@ -4311,7 +4369,10 @@ class Avatar3DOverlayWindow(QWidget):
         self.update()
         # Save setting
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(reposition_enabled=self._reposition_enabled)
             write_avatar_state_for_ai()
         except Exception as e:
@@ -4327,7 +4388,10 @@ class Avatar3DOverlayWindow(QWidget):
         self.update()
         # Save setting
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(show_control_bar_3d=self._show_control_bar)
             write_avatar_state_for_ai()
         except Exception:
@@ -4362,7 +4426,10 @@ class Avatar3DOverlayWindow(QWidget):
         self._click_through_mode = True
         self.update()
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(click_through_mode_3d=self._click_through_mode)
             write_avatar_state_for_ai()
         except Exception:
@@ -4373,7 +4440,10 @@ class Avatar3DOverlayWindow(QWidget):
         self._click_through_mode = False
         self.update()
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(click_through_mode_3d=self._click_through_mode)
             write_avatar_state_for_ai()
         except Exception:
@@ -4408,7 +4478,10 @@ class Avatar3DOverlayWindow(QWidget):
                 self._hit_layer._sync_with_avatar()
             # Save size
             try:
-                from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+                from ....avatar.persistence import (
+                    save_avatar_settings,
+                    write_avatar_state_for_ai,
+                )
                 save_avatar_settings(overlay_3d_size=self._size)
                 write_avatar_state_for_ai()
             except Exception:
@@ -4470,7 +4543,10 @@ class Avatar3DOverlayWindow(QWidget):
     def _save_size_debounced(self):
         """Save size after debounce delay."""
         try:
-            from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                write_avatar_state_for_ai,
+            )
             save_avatar_settings(overlay_3d_size=self._size)
             write_avatar_state_for_ai()
         except Exception:
@@ -4486,7 +4562,7 @@ class Avatar3DOverlayWindow(QWidget):
             return
         
         try:
-            with open(command_path, 'r') as f:
+            with open(command_path) as f:
                 cmd = json.load(f)
             
             timestamp = cmd.get("timestamp", 0)
@@ -4623,7 +4699,7 @@ class Avatar3DOverlayWindow(QWidget):
                 info_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(info_path, 'w') as f:
                     json.dump(self._model_info, f, indent=2)
-        except (json.JSONDecodeError, IOError, ValueError):
+        except (json.JSONDecodeError, OSError, ValueError):
             pass
     
     def _do_speaking_pulse(self):
@@ -5417,12 +5493,13 @@ def _restore_avatar_settings(parent):
     """Restore saved avatar settings from gui_settings.json and avatar_settings.json."""
     try:
         from pathlib import Path
+
         from ....config import CONFIG
         settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
         if not settings_path.exists():
             return
         
-        with open(settings_path, 'r') as f:
+        with open(settings_path) as f:
             settings = json.load(f)
         
         # Restore auto-load setting
@@ -5600,8 +5677,9 @@ def _toggle_auto_run(parent, enabled: bool):
 def _save_auto_settings(parent):
     """Save avatar auto-load/auto-run settings to gui_settings.json."""
     try:
-        from pathlib import Path
         import json
+        from pathlib import Path
+
         from ....config import CONFIG
         
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
@@ -5610,7 +5688,7 @@ def _save_auto_settings(parent):
         settings = {}
         if settings_path.exists():
             try:
-                with open(settings_path, "r") as f:
+                with open(settings_path) as f:
                     settings = json.load(f)
             except Exception:
                 pass
@@ -5644,7 +5722,10 @@ def _toggle_resize_enabled(parent, enabled: bool):
     
     # Save setting to persistence
     try:
-        from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+        from ....avatar.persistence import (
+            save_avatar_settings,
+            write_avatar_state_for_ai,
+        )
         save_avatar_settings(resize_enabled=enabled)
         write_avatar_state_for_ai()
     except Exception as e:
@@ -5672,7 +5753,10 @@ def _toggle_reposition_enabled(parent, enabled: bool):
     
     # Save setting to persistence
     try:
-        from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+        from ....avatar.persistence import (
+            save_avatar_settings,
+            write_avatar_state_for_ai,
+        )
         save_avatar_settings(reposition_enabled=enabled)
         write_avatar_state_for_ai()
     except Exception as e:
@@ -5689,9 +5773,9 @@ def _toggle_reposition_enabled(parent, enabled: bool):
 def _reset_avatar_position(parent):
     """Reset avatar overlay position to center of primary screen."""
     try:
-        from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import QPoint
-        
+        from PyQt5.QtWidgets import QApplication
+
         # Get primary screen geometry
         screen = QApplication.primaryScreen()
         if screen:
@@ -5715,7 +5799,11 @@ def _reset_avatar_position(parent):
         
         # Save the new position to persistence
         try:
-            from ....avatar.persistence import save_position, save_avatar_settings, write_avatar_state_for_ai
+            from ....avatar.persistence import (
+                save_avatar_settings,
+                save_position,
+                write_avatar_state_for_ai,
+            )
             save_position(center_x, center_y)
             
             # Also clear per-avatar positions so it doesn't get overridden
@@ -6384,7 +6472,10 @@ def _toggle_overlay(parent):
             else:
                 # Fallback: load default size from persistence
                 try:
-                    from ....avatar.persistence import load_avatar_settings, load_position
+                    from ....avatar.persistence import (
+                        load_avatar_settings,
+                        load_position,
+                    )
                     avatar_settings = load_avatar_settings()
                     saved_size = avatar_settings.overlay_size
                     # Allow any reasonable size (50-2000)
@@ -6735,8 +6826,8 @@ def _auto_orient_model(parent):
 def _save_model_orientation(parent):
     """Save model orientation to settings file."""
     import json
-    from pathlib import Path
     import math
+    from pathlib import Path
     
     if not parent.avatar_preview_3d:
         parent.avatar_status.setText("No model loaded")
@@ -6762,9 +6853,9 @@ def _save_model_orientation(parent):
     orientations = {}
     if settings_path.exists():
         try:
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 orientations = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, OSError):
             orientations = {}
     
     # Save orientation for this model (use filename as key)
@@ -6786,15 +6877,15 @@ def _save_model_orientation(parent):
 def _load_model_orientation(parent, model_path: str):
     """Load saved orientation for a model."""
     import json
-    from pathlib import Path
     import math
+    from pathlib import Path
     
     settings_path = Path(CONFIG.get("data_dir", "data")) / "avatar" / "model_orientations.json"
     if not settings_path.exists():
         return None
     
     try:
-        with open(settings_path, 'r') as f:
+        with open(settings_path) as f:
             orientations = json.load(f)
         
         model_key = Path(model_path).name
@@ -6805,7 +6896,7 @@ def _load_model_orientation(parent, model_path: str):
                 'yaw': math.radians(data.get('yaw', 0)),
                 'roll': math.radians(data.get('roll', 0))
             }
-    except (json.JSONDecodeError, IOError):
+    except (json.JSONDecodeError, OSError):
         pass
     
     return None
@@ -6974,7 +7065,7 @@ def _refresh_list(parent, preserve_selection=False):
 def _load_json(path: Path) -> dict:
     """Load JSON file."""
     try:
-        with open(path, 'r') as f:
+        with open(path) as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError) as e:
         logger.debug(f"Failed to load JSON from {path}: {e}")
@@ -7157,7 +7248,10 @@ def _apply_avatar(parent):
     
     # Save current avatar to persistence for AI awareness
     try:
-        from ....avatar.persistence import save_avatar_settings, write_avatar_state_for_ai
+        from ....avatar.persistence import (
+            save_avatar_settings,
+            write_avatar_state_for_ai,
+        )
         save_avatar_settings(current_avatar=str(path))
         write_avatar_state_for_ai()
     except Exception as e:

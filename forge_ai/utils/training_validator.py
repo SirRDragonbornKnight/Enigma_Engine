@@ -4,8 +4,8 @@ Training Data Validator - Validate training data before training
 Checks training data format, quality, and provides suggestions for improvement.
 """
 
-from typing import Dict, Any
 from pathlib import Path
+from typing import Any, Dict
 
 
 class TrainingDataValidator:
@@ -32,7 +32,7 @@ class TrainingDataValidator:
         self.warnings = []
         self.suggestions = []
     
-    def validate_file(self, file_path: str) -> Dict[str, Any]:
+    def validate_file(self, file_path: str) -> dict[str, Any]:
         """
         Validate a training data file.
         
@@ -56,7 +56,7 @@ class TrainingDataValidator:
                 }
             
             # Read file
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(path, encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             
             # Run validations
@@ -228,7 +228,7 @@ class TrainingDataValidator:
         
         return True
     
-    def _calculate_statistics(self, content: str) -> Dict[str, Any]:
+    def _calculate_statistics(self, content: str) -> dict[str, Any]:
         """Calculate statistics about the training data."""
         lines = [l.strip() for l in content.split('\n') if l.strip()]
         
@@ -252,7 +252,7 @@ class TrainingDataValidator:
             'duplicate_rate': (len(lines) - len(set(lines))) / len(lines) if lines else 0
         }
     
-    def validate_text(self, text: str) -> Dict[str, Any]:
+    def validate_text(self, text: str) -> dict[str, Any]:
         """
         Validate training data from text content.
         
@@ -287,7 +287,7 @@ class TrainingDataValidator:
             'statistics': stats
         }
     
-    def generate_report(self, validation_result: Dict[str, Any]) -> str:
+    def generate_report(self, validation_result: dict[str, Any]) -> str:
         """
         Generate a human-readable report.
         

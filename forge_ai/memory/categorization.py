@@ -70,7 +70,7 @@ class Memory:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Memory':
+    def from_dict(cls, data: Dict[str, Any]) -> Memory:
         """Create from dictionary."""
         data['memory_type'] = MemoryType(data['memory_type'])
         return cls(**data)
@@ -364,7 +364,7 @@ class MemoryCategorization:
             logger.warning(f"Memory file not found: {path}")
             return
         
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         
         self.config = data.get('config', {})

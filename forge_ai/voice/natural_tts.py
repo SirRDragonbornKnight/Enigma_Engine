@@ -4,6 +4,11 @@ Natural Text-to-Speech using Coqui TTS or Bark.
 Much more natural sounding than pyttsx3.
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class NaturalTTS:
     """
     High-quality TTS using Coqui or Bark.
@@ -32,7 +37,7 @@ class NaturalTTS:
             self._tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC")
             return True
         except ImportError:
-            print("Install Coqui TTS: pip install TTS")
+            logger.warning("Coqui TTS not installed. Install with: pip install TTS")
             return False
     
     def _load_bark(self) -> bool:
@@ -43,14 +48,14 @@ class NaturalTTS:
             self._bark_sr = SAMPLE_RATE
             return True
         except ImportError:
-            print("Install Bark: pip install git+https://github.com/suno-ai/bark.git")
+            logger.warning("Bark not installed. Install with: pip install git+https://github.com/suno-ai/bark.git")
             return False
     
     def speak(self, text: str):
         """Speak text through speakers."""
-        import tempfile
         import os
         import subprocess
+        import tempfile
         
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             self.save(f.name, text)

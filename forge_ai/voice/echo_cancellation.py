@@ -82,7 +82,7 @@ class EchoCanceller:
         self._reference_buffer: deque = deque(maxlen=buffer_samples)
         
         # Adaptive filter state
-        self._filter_weights: Optional[np.ndarray] = None
+        self._filter_weights: np.ndarray | None = None
         self._filter_initialized = False
         
         # Detect available backends

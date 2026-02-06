@@ -19,9 +19,9 @@ USAGE:
 
 import json
 import logging
-from pathlib import Path
-from typing import Dict, Any, Optional, Callable, List
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ class UISettings:
         self._scale = 1.0
         self._theme_name = "cerulean"  # Default to cerulean
         self._theme = THEMES["cerulean"]
-        self._listeners: List[Callable[[], None]] = []
+        self._listeners: list[Callable[[], None]] = []
         
         # Load saved settings
         self._load_settings()
@@ -213,7 +213,7 @@ class UISettings:
             settings_path = Path(CONFIG["data_dir"]) / "ui_settings.json"
             
             if settings_path.exists():
-                with open(settings_path, "r") as f:
+                with open(settings_path) as f:
                     data = json.load(f)
                 
                 self._scale = data.get("scale", 1.0)
@@ -269,7 +269,7 @@ class UISettings:
         base_size = getattr(self._font_sizes, size_name, self._font_sizes.normal)
         return int(base_size * self._scale)
     
-    def get_all_font_sizes(self) -> Dict[str, int]:
+    def get_all_font_sizes(self) -> dict[str, int]:
         """Get all scaled font sizes."""
         return {
             "tiny": self.get_font_size("tiny"),
@@ -331,7 +331,7 @@ class UISettings:
         """Get current theme name."""
         return self._theme_name
     
-    def get_available_themes(self) -> List[str]:
+    def get_available_themes(self) -> list[str]:
         """Get list of available theme names."""
         return list(THEMES.keys())
     

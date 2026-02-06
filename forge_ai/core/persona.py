@@ -29,12 +29,12 @@ Usage:
 """
 
 import json
-import uuid
 import shutil
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict, field
+import uuid
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 from .personality import AIPersonality, PersonalityTraits
@@ -54,7 +54,7 @@ class AIPersona:
     created_at: str                      # When this AI was born
     
     # Personality (links to existing personality.py)
-    personality_traits: Dict[str, float] # humor, formality, etc.
+    personality_traits: dict[str, float] # humor, formality, etc.
     
     # Voice (links to existing voice system)
     voice_profile_id: str = "default"   # Which voice config to use
@@ -67,22 +67,22 @@ class AIPersona:
     response_style: str = "balanced"    # "concise", "detailed", "casual", etc.
     
     # Knowledge
-    knowledge_domains: List[str] = field(default_factory=list)  # What topics this AI knows about
-    memories: List[str] = field(default_factory=list)          # Important things to remember
+    knowledge_domains: list[str] = field(default_factory=list)  # What topics this AI knows about
+    memories: list[str] = field(default_factory=list)          # Important things to remember
     
     # Learning state
     learning_data_path: str = ""        # Path to this AI's training data
     model_weights_path: str = ""        # Path to fine-tuned weights (if any)
     
     # Customization
-    catchphrases: List[str] = field(default_factory=list)  # Signature phrases
-    preferences: Dict[str, Any] = field(default_factory=dict)  # User-defined preferences
+    catchphrases: list[str] = field(default_factory=list)  # Signature phrases
+    preferences: dict[str, Any] = field(default_factory=dict)  # User-defined preferences
     
     # Metadata
     version: str = "1.0"
     last_modified: str = ""
     description: str = ""
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     
     def __post_init__(self):
         """Initialize defaults after creation."""
@@ -93,12 +93,12 @@ class AIPersona:
         if not self.id:
             self.id = str(uuid.uuid4())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AIPersona':
+    def from_dict(cls, data: dict[str, Any]) -> 'AIPersona':
         """Create from dictionary."""
         return cls(**data)
     
@@ -142,7 +142,7 @@ class PersonaManager:
         self.templates_dir.mkdir(parents=True, exist_ok=True)
         
         self.current_persona_id: Optional[str] = None
-        self._personas_cache: Dict[str, AIPersona] = {}
+        self._personas_cache: dict[str, AIPersona] = {}
         
         # Load or create default persona
         self._ensure_default_persona()
@@ -211,7 +211,7 @@ class PersonaManager:
         persona_file = persona_dir / "persona.json"
         return persona_file.exists()
     
-    def list_personas(self) -> List[Dict[str, str]]:
+    def list_personas(self) -> list[dict[str, str]]:
         """
         List all available personas.
         
@@ -224,7 +224,7 @@ class PersonaManager:
                 persona_file = persona_dir / "persona.json"
                 if persona_file.exists():
                     try:
-                        with open(persona_file, 'r') as f:
+                        with open(persona_file) as f:
                             data = json.load(f)
                             personas.append({
                                 'id': data.get('id', persona_dir.name),
@@ -253,7 +253,7 @@ class PersonaManager:
             return None
         
         try:
-            with open(persona_file, 'r') as f:
+            with open(persona_file) as f:
                 data = json.load(f)
             return AIPersona.from_dict(data)
         except Exception as e:
@@ -439,7 +439,7 @@ class PersonaManager:
             return None
         
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 data = json.load(f)
             
             # Remove export metadata that's not part of the dataclass

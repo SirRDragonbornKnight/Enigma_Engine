@@ -5,12 +5,12 @@ Manages federated learning rounds and coordinates training across devices.
 Supports both centralized and decentralized (peer-to-peer) modes.
 """
 
-import uuid
-import time
 import logging
-from enum import Enum
+import time
+import uuid
 from datetime import datetime
-from typing import Dict, List, Set, Optional, Any
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +69,14 @@ class FederatedCoordinator:
         self.round_start_time: Optional[float] = None
         
         # Participants
-        self.participants: Set[str] = set()  # Device IDs
-        self.authorized_devices: Set[str] = set()  # Authorized device IDs
+        self.participants: set[str] = set()  # Device IDs
+        self.authorized_devices: set[str] = set()  # Authorized device IDs
         
         # Updates for current round
-        self.pending_updates: Dict[str, Any] = {}  # device_id -> WeightUpdate
+        self.pending_updates: dict[str, Any] = {}  # device_id -> WeightUpdate
         
         # Round history
-        self.round_history: List[Dict[str, Any]] = []
+        self.round_history: list[dict[str, Any]] = []
         
         logger.info(
             f"Federated coordinator initialized "
@@ -246,7 +246,7 @@ class FederatedCoordinator:
         self.round_state = RoundState.AGGREGATING
         
         # Aggregate updates
-        from .aggregation import SecureAggregator, AggregationMethod
+        from .aggregation import AggregationMethod, SecureAggregator
         
         aggregator = SecureAggregator()
         updates = list(self.pending_updates.values())
@@ -291,7 +291,7 @@ class FederatedCoordinator:
         
         return global_update
     
-    def get_round_status(self) -> Dict[str, Any]:
+    def get_round_status(self) -> dict[str, Any]:
         """Get current round status."""
         return {
             "current_round": self.current_round,
@@ -307,7 +307,7 @@ class FederatedCoordinator:
             ),
         }
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get coordinator statistics."""
         return {
             "mode": self.mode.value,
@@ -321,7 +321,7 @@ class FederatedCoordinator:
 def test_coordinator():
     """Test coordinator functionality."""
     from .federated import WeightUpdate
-    
+
     # Create coordinator
     coordinator = FederatedCoordinator(
         mode=CoordinatorMode.CENTRALIZED,

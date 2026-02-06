@@ -4,17 +4,31 @@ Module Manager Tab - Control all Forge capabilities
 
 Clean, functional interface for managing modules.
 """
-from typing import Dict, List, TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Dict, List, cast
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-    QLabel, QPushButton, QFrame, QGroupBox, QCheckBox,
-    QLineEdit, QProgressBar, QMessageBox, QSplitter,
-    QTextEdit, QSizePolicy, QListWidget, QListWidgetItem,
-    QStackedWidget
-)
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
 
@@ -164,7 +178,7 @@ class ModulesTab(QWidget):
     def __init__(self, parent=None, module_manager=None):
         super().__init__(parent)
         self.module_manager = module_manager
-        self.module_items: Dict[str, ModuleListItem] = {}
+        self.module_items: dict[str, ModuleListItem] = {}
         self._setup_ui()
         
         # Refresh timer
@@ -565,7 +579,16 @@ class ModulesTab(QWidget):
                 if enabled:
                     can_load, reason = self.module_manager.can_load(module_id)
                     if not can_load:
-                        self._log(f"Cannot load {module_id}: {reason}")
+                        # Use friendly error messages
+                        try:
+                            from ...modules.error_messages import (
+                                format_error_for_terminal,
+                                get_friendly_error,
+                            )
+                            error_info = get_friendly_error(module_id, reason)
+                            self._log(format_error_for_terminal(error_info).strip())
+                        except ImportError:
+                            self._log(f"Cannot load {module_id}: {reason}")
                     success = self.module_manager.load(module_id)
                 else:
                     success = self.module_manager.unload(module_id)
@@ -618,7 +641,16 @@ class ModulesTab(QWidget):
                 if enabled:
                     can_load, reason = self.module_manager.can_load(module_id)
                     if not can_load:
-                        self._log(f"Cannot load {module_id}: {reason}")
+                        # Use friendly error messages
+                        try:
+                            from ...modules.error_messages import (
+                                format_error_for_terminal,
+                                get_friendly_error,
+                            )
+                            error_info = get_friendly_error(module_id, reason)
+                            self._log(format_error_for_terminal(error_info).strip())
+                        except ImportError:
+                            self._log(f"Cannot load {module_id}: {reason}")
                     
                 if enabled:
                     success = self.module_manager.load(module_id)

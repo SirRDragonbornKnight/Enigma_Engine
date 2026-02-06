@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 try:
-    from flask import Flask, request, jsonify, Response
+    from flask import Flask, Response, jsonify, request
     from flask_cors import CORS
     HAS_FLASK = True
 except ImportError:
@@ -51,7 +51,7 @@ class MobileAPI:
         self._voice = None
         
         # Conversation context per device
-        self._contexts: Dict[str, list] = {}
+        self._contexts: dict[str, list] = {}
         
         # Setup routes
         self._setup_routes()
@@ -61,8 +61,8 @@ class MobileAPI:
         """Lazy load inference engine."""
         if self._engine is None:
             if self.model_name:
-                from ..core.model_registry import ModelRegistry
                 from ..core.inference import ForgeEngine
+                from ..core.model_registry import ModelRegistry
                 
                 registry = ModelRegistry()
                 model, config = registry.load_model(self.model_name)
@@ -85,6 +85,7 @@ class MobileAPI:
         if self._voice is None:
             try:
                 from ..voice import speak
+
                 # Create simple wrapper object
                 class SimpleVoice:
                     def speak(self, text):
@@ -92,9 +93,9 @@ class MobileAPI:
                     
                     def save_to_file(self, text, filepath):
                         """Save TTS output to file with multiple engine fallbacks."""
-                        import tempfile
                         import os
-                        
+                        import tempfile
+
                         # Try pyttsx3 first (most common)
                         try:
                             import pyttsx3
@@ -131,6 +132,7 @@ class MobileAPI:
                         # Try edge-tts (Microsoft Edge TTS)
                         try:
                             import asyncio
+
                             import edge_tts
                             
                             async def save_edge_tts():

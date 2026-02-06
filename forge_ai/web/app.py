@@ -12,17 +12,17 @@ Usage:
     run_web(host='0.0.0.0', port=8080)
 """
 
-import os
 import json
-import random
 import logging
-from pathlib import Path
+import os
+import random
 from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 try:
-    from flask import Flask, render_template, jsonify, request
+    from flask import Flask, jsonify, render_template, request
     from flask_cors import CORS
     FLASK_AVAILABLE = True
 except ImportError:
@@ -35,7 +35,6 @@ except ImportError:
     SOCKETIO_AVAILABLE = False
 
 from ..config import CONFIG
-
 
 # =============================================================================
 # Constants
@@ -440,7 +439,7 @@ def api_get_memories():
                 })
             except json.JSONDecodeError as e:
                 logger.warning(f"Corrupted conversation file {conv_file.name}: {e}")
-            except IOError as e:
+            except OSError as e:
                 logger.warning(f"Could not read conversation file {conv_file.name}: {e}")
         
         return jsonify({
@@ -546,8 +545,8 @@ def api_start_training():
         """Background training thread."""
         try:
             # Import training components
-            from forge_ai.core.training import Trainer, TrainingConfig
             from forge_ai.core.model_registry import get_model_registry
+            from forge_ai.core.training import Trainer, TrainingConfig
             
             registry = get_model_registry()
             

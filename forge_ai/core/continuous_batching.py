@@ -35,15 +35,17 @@ USAGE:
     response = server.generate("Hello!", max_tokens=50)
 """
 
+import logging
+import queue
+import threading
 import time
 import uuid
-import logging
-import threading
-import queue
-from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Any, Callable, Tuple, Generator
-from enum import Enum
+from collections.abc import Generator
 from concurrent.futures import Future
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import torch
 
 logger = logging.getLogger(__name__)
@@ -75,18 +77,18 @@ class GenerationRequest:
     
     # Input
     prompt: str = ""
-    prompt_tokens: List[int] = field(default_factory=list)
+    prompt_tokens: list[int] = field(default_factory=list)
     
     # Generation parameters
     max_tokens: int = 256
     temperature: float = 1.0
     top_p: float = 1.0
     top_k: int = 0
-    stop_sequences: List[str] = field(default_factory=list)
+    stop_sequences: list[str] = field(default_factory=list)
     
     # State
     status: RequestStatus = RequestStatus.PENDING
-    generated_tokens: List[int] = field(default_factory=list)
+    generated_tokens: list[int] = field(default_factory=list)
     generated_text: str = ""
     
     # Timing
@@ -167,7 +169,7 @@ class BatchScheduler:
         
         # Request queues
         self.pending_queue: queue.Queue[GenerationRequest] = queue.Queue(maxsize=max_queue_size)
-        self.running_batch: Dict[str, GenerationRequest] = {}
+        self.running_batch: dict[str, GenerationRequest] = {}
         
         # Sequence ID counter (for paged cache)
         self._next_seq_id = 0
@@ -192,7 +194,7 @@ class BatchScheduler:
         temperature: float = 1.0,
         top_p: float = 1.0,
         top_k: int = 0,
-        stop_sequences: Optional[List[str]] = None,
+        stop_sequences: Optional[list[str]] = None,
         on_token: Optional[Callable[[str], None]] = None
     ) -> Future:
         """
@@ -233,7 +235,7 @@ class BatchScheduler:
         
         return future
     
-    def get_batch(self) -> List[GenerationRequest]:
+    def get_batch(self) -> list[GenerationRequest]:
         """
         Get the next batch of requests to process.
         
@@ -335,7 +337,7 @@ class BatchScheduler:
         # Note: Can't easily cancel from queue without iterating
         logger.warning(f"Request {request_id} not found in running batch")
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get scheduler statistics."""
         return {
             "pending_requests": self.pending_queue.qsize(),
@@ -392,6 +394,7 @@ class InferenceServer:
         if use_paged_attention:
             try:
                 from .paged_attention import create_paged_cache
+
                 # Get model config
                 model_config = {
                     "n_layers": getattr(model, 'n_layers', 12),
@@ -518,7 +521,7 @@ class InferenceServer:
                 traceback.print_exc()
                 time.sleep(0.1)
     
-    def _process_batch_step(self, batch: List[GenerationRequest]):
+    def _process_batch_step(self, batch: list[GenerationRequest]):
         """
         Process one generation step for a batch.
         
@@ -608,7 +611,7 @@ class InferenceServer:
         logits[indices_to_remove] = float('-inf')
         return logits
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get server statistics."""
         stats = self.scheduler.get_stats()
         stats["server_running"] = self._running

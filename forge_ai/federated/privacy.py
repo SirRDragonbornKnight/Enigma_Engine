@@ -23,6 +23,7 @@ USAGE:
 
 import logging
 from typing import Dict
+
 import numpy as np
 
 from .federation import ModelUpdate
@@ -236,7 +237,7 @@ class PrivacyAccountant:
         """
         return self.spent_epsilon < self.total_epsilon
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """
         Get privacy statistics.
         

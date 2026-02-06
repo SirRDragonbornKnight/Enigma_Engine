@@ -7,7 +7,7 @@ Not as smart as AI but works without any installs.
 
 import re
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 # Code templates for common patterns
 TEMPLATES = {
@@ -258,7 +258,7 @@ class BuiltinCodeGen:
         """Unload."""
         self.is_loaded = False
     
-    def _extract_intent(self, prompt: str) -> Dict[str, Any]:
+    def _extract_intent(self, prompt: str) -> dict[str, Any]:
         """Extract intent and parameters from the prompt."""
         prompt_lower = prompt.lower()
         
@@ -313,7 +313,7 @@ class BuiltinCodeGen:
         
         return intent
     
-    def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, language: str = "python", **kwargs) -> dict[str, Any]:
         """Generate code based on the prompt."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}

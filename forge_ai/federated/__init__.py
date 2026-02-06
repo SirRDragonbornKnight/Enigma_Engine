@@ -57,33 +57,33 @@ SEE ALSO:
     • forge_ai/federated/compression.py - Update compression
 """
 
-from .federation import (
-    FederatedLearning,
-    FederationRole,
-    FederationMode,
-    ModelUpdate,
-    FederationInfo,
-)
 from .aggregation import (
     FederatedAggregator,
     SecureAggregation,
 )
-from .privacy import (
-    DifferentialPrivacy,
-)
 from .compression import (
-    UpdateCompressor,
     CompressedUpdate,
     SparseUpdate,
+    UpdateCompressor,
 )
 from .coordinator import (
     FederatedCoordinator,
 )
+from .discovery import (
+    FederationDiscovery,
+)
+from .federation import (
+    FederatedLearning,
+    FederationInfo,
+    FederationMode,
+    FederationRole,
+    ModelUpdate,
+)
 from .participant import (
     FederatedParticipant,
 )
-from .discovery import (
-    FederationDiscovery,
+from .privacy import (
+    DifferentialPrivacy,
 )
 
 __all__ = [

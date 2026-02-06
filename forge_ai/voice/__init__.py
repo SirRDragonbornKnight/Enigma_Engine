@@ -61,32 +61,44 @@ Components:
     - trigger_phrases.py: Wake word detection
 """
 
+# Audio analysis
+from .audio_analyzer import (
+    AudioAnalyzer,
+    analyze_audio,
+)
+from .audio_analyzer import compare_voices as compare_voice_audio
+from .audio_analyzer import (
+    estimate_voice_profile,
+)
+
+# Dynamic voice adaptation
+from .dynamic_adapter import (
+    DynamicVoiceAdapter,
+    adapt_voice_for_context,
+    adapt_voice_for_emotion,
+    adapt_voice_for_personality,
+)
+from .natural_tts import NaturalTTS
 from .stt_simple import transcribe_from_mic as listen
-from .voice_profile import (
-    VoiceProfile,
-    VoiceEngine,
-    speak,
-    set_voice,
-    get_engine,
-    list_presets,
-    list_custom_profiles,
-    list_system_voices,
-    PRESET_PROFILES,
+
+# Wake word detection
+from .trigger_phrases import (
+    SmartWakeWords,
+    TriggerPhraseDetector,
+    is_wake_word_active,
+    start_wake_word_detection,
+    stop_wake_word_detection,
+    suggest_wake_phrases,
+    train_custom_wake_phrase,
 )
 
-# Voice generation and cloning
-from .voice_generator import (
-    AIVoiceGenerator,
-    generate_voice_for_personality,
-    create_voice_from_samples,
-)
-
-# AI voice identity and self-discovery
-from .voice_identity import (
-    AIVoiceIdentity,
-    discover_voice,
-    describe_voice,
-    adjust_voice_from_feedback,
+# User customization tools
+from .voice_customizer import (
+    VoiceCustomizer,
+    compare_voices,
+    export_voice_profile,
+    import_voice_profile,
+    interactive_tuning,
 )
 
 # Voice effects system
@@ -94,49 +106,38 @@ from .voice_effects import (
     VoiceEffects,
     apply_effect,
     apply_effects,
-    effect_for_emotion,
     effect_for_context,
+    effect_for_emotion,
 )
 
-# Dynamic voice adaptation
-from .dynamic_adapter import (
-    DynamicVoiceAdapter,
-    adapt_voice_for_emotion,
-    adapt_voice_for_context,
-    adapt_voice_for_personality,
+# Voice generation and cloning
+from .voice_generator import (
+    AIVoiceGenerator,
+    create_voice_from_samples,
+    generate_voice_for_personality,
 )
 
-# User customization tools
-from .voice_customizer import (
-    VoiceCustomizer,
-    interactive_tuning,
-    import_voice_profile,
-    export_voice_profile,
-    compare_voices,
+# AI voice identity and self-discovery
+from .voice_identity import (
+    AIVoiceIdentity,
+    adjust_voice_from_feedback,
+    describe_voice,
+    discover_voice,
 )
-
-# Audio analysis
-from .audio_analyzer import (
-    AudioAnalyzer,
-    analyze_audio,
-    estimate_voice_profile,
-    compare_voices as compare_voice_audio,
-)
-
-# Wake word detection
-from .trigger_phrases import (
-    TriggerPhraseDetector,
-    SmartWakeWords,
-    suggest_wake_phrases,
-    train_custom_wake_phrase,
-    start_wake_word_detection,
-    stop_wake_word_detection,
-    is_wake_word_active,
+from .voice_profile import (
+    PRESET_PROFILES,
+    VoiceEngine,
+    VoiceProfile,
+    get_engine,
+    list_custom_profiles,
+    list_presets,
+    list_system_voices,
+    set_voice,
+    speak,
 )
 
 # New voice options (optional dependencies)
 from .whisper_stt import WhisperSTT
-from .natural_tts import NaturalTTS
 
 __all__ = [
     # Basic TTS/STT
@@ -282,7 +283,11 @@ __all__ = [
 # Voice pipeline for unified STT/TTS
 try:
     from .voice_pipeline import (
-        VoicePipeline, VoiceConfig, VoiceMode, VoiceDevice, SpeechSegment,
+        SpeechSegment,
+        VoiceConfig,
+        VoiceDevice,
+        VoiceMode,
+        VoicePipeline,
         get_voice_pipeline,
     )
 except ImportError:
@@ -296,7 +301,9 @@ except ImportError:
 # Noise reduction
 try:
     from .noise_reduction import (
-        NoiseReducer, NoiseReductionConfig, reduce_noise,
+        NoiseReducer,
+        NoiseReductionConfig,
+        reduce_noise,
     )
 except ImportError:
     NoiseReducer = None
@@ -306,7 +313,9 @@ except ImportError:
 # Echo cancellation
 try:
     from .echo_cancellation import (
-        EchoCanceller, EchoCancellationConfig, cancel_echo,
+        EchoCancellationConfig,
+        EchoCanceller,
+        cancel_echo,
     )
 except ImportError:
     EchoCanceller = None
@@ -316,7 +325,10 @@ except ImportError:
 # Audio ducking
 try:
     from .audio_ducking import (
-        AudioDucker, AudioDuckingConfig, duck_audio, get_ducker,
+        AudioDucker,
+        AudioDuckingConfig,
+        duck_audio,
+        get_ducker,
     )
 except ImportError:
     AudioDucker = None
@@ -327,8 +339,12 @@ except ImportError:
 # SSML support
 try:
     from .ssml import (
-        SSMLParser, SSMLProcessor, SSMLSegment, SSMLDocument,
-        ssml_to_text, strip_ssml,
+        SSMLDocument,
+        SSMLParser,
+        SSMLProcessor,
+        SSMLSegment,
+        ssml_to_text,
+        strip_ssml,
     )
 except ImportError:
     SSMLParser = None
@@ -341,8 +357,12 @@ except ImportError:
 # Emotional TTS
 try:
     from .emotional_tts import (
-        EmotionalTTS, Emotion, EmotionProfile, EmotionDetector,
-        detect_emotion, emotional_ssml,
+        Emotion,
+        EmotionalTTS,
+        EmotionDetector,
+        EmotionProfile,
+        detect_emotion,
+        emotional_ssml,
     )
 except ImportError:
     EmotionalTTS = None
@@ -355,8 +375,12 @@ except ImportError:
 # Multilingual TTS
 try:
     from .multilingual_tts import (
-        MultilingualTTS, Language, LanguageDetector, VoiceInfo,
-        detect_language, get_language_name,
+        Language,
+        LanguageDetector,
+        MultilingualTTS,
+        VoiceInfo,
+        detect_language,
+        get_language_name,
     )
 except ImportError:
     MultilingualTTS = None
@@ -369,8 +393,11 @@ except ImportError:
 # Speed control
 try:
     from .speed_control import (
-        SpeedController, SpeedConfig, SpeedPreset,
-        set_speed, get_speed,
+        SpeedConfig,
+        SpeedController,
+        SpeedPreset,
+        get_speed,
+        set_speed,
     )
 except ImportError:
     SpeedController = None
@@ -382,8 +409,12 @@ except ImportError:
 # Interruption handling
 try:
     from .interruption import (
-        InterruptionHandler, InterruptionConfig, InterruptionMode,
-        start_barge_in_detection, stop_barge_in_detection, was_interrupted,
+        InterruptionConfig,
+        InterruptionHandler,
+        InterruptionMode,
+        start_barge_in_detection,
+        stop_barge_in_detection,
+        was_interrupted,
     )
 except ImportError:
     InterruptionHandler = None
@@ -396,8 +427,11 @@ except ImportError:
 # Streaming TTS
 try:
     from .streaming_tts import (
-        StreamingTTS, StreamingConfig, AudioChunk,
-        stream_speak, stream_chunks,
+        AudioChunk,
+        StreamingConfig,
+        StreamingTTS,
+        stream_chunks,
+        stream_speak,
     )
 except ImportError:
     StreamingTTS = None
@@ -409,8 +443,11 @@ except ImportError:
 # Audio file input
 try:
     from .audio_file_input import (
-        AudioFileTranscriber, TranscriptionConfig, TranscriptionResult,
-        transcribe_file, transcribe_with_timestamps,
+        AudioFileTranscriber,
+        TranscriptionConfig,
+        TranscriptionResult,
+        transcribe_file,
+        transcribe_with_timestamps,
     )
 except ImportError:
     AudioFileTranscriber = None

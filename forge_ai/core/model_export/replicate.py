@@ -9,11 +9,19 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import torch
 
-from .base import ExportProvider, ImportProvider, ExportResult, ImportResult, ExportStatus, ImportStatus, ProviderConfig
+from .base import (
+    ExportProvider,
+    ExportResult,
+    ExportStatus,
+    ImportProvider,
+    ImportResult,
+    ImportStatus,
+    ProviderConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +79,7 @@ class ReplicateProvider(ExportProvider):
         self,
         output_path: Path,
         model_name: str,
-        config: Dict[str, Any]
+        config: dict[str, Any]
     ):
         """Create cog.yaml configuration file."""
         cog_config = f"""# Cog configuration for {model_name}
@@ -93,7 +101,7 @@ predict: "predict.py:Predictor"
         self,
         output_path: Path,
         model_name: str,
-        config: Dict[str, Any]
+        config: dict[str, Any]
     ):
         """Create predict.py for Cog."""
         predict_code = f'''"""
@@ -160,7 +168,7 @@ class Predictor(BasePredictor):
     def _create_model_py(
         self,
         output_path: Path,
-        config: Dict[str, Any]
+        config: dict[str, Any]
     ):
         """Create model.py with Forge architecture."""
         model_code = '''"""
@@ -518,7 +526,7 @@ class ReplicateImporter(ImportProvider):
         query: str,
         limit: int = 10,
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search Replicate for models."""
         if not HAVE_REPLICATE:
             logger.warning("replicate not installed")

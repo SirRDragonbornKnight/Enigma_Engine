@@ -7,16 +7,26 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 from typing import Optional
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QGroupBox, QMessageBox, QSlider,
-    QCheckBox, QFileDialog, QPlainTextEdit
-)
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker
-from PyQt5.QtGui import QPixmap, QImage
 
-from .shared_components import NoScrollComboBox
+from PyQt5.QtCore import QMutex, QMutexLocker, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
 from ...config import CONFIG
+from .shared_components import NoScrollComboBox
 
 # Try to import OpenCV
 try:
@@ -398,7 +408,7 @@ class CameraTab(QWidget):
             
         try:
             from PIL import Image
-            
+
             # Convert frame to PIL Image
             rgb_frame = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(rgb_frame)

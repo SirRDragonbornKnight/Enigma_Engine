@@ -90,7 +90,7 @@ class Question:
     asked_count: int = 0            # How many times this has been asked
     last_asked: float = 0           # Timestamp of last ask
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "text": self.text,
             "category": self.category.value,
@@ -102,7 +102,7 @@ class Question:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Question":
+    def from_dict(cls, data: dict[str, Any]) -> Question:
         return cls(
             text=data["text"],
             category=QuestionCategory(data.get("category", "random")),
@@ -253,7 +253,7 @@ class CuriosityConfig:
     same_question_cooldown: float = 86400.0 * 7  # 1 week
     
     # Probability weights for each category
-    category_weights: Dict[str, float] = field(default_factory=lambda: {
+    category_weights: dict[str, float] = field(default_factory=lambda: {
         "emotional": 0.20,
         "random": 0.15,
         "learning": 0.15,
@@ -266,10 +266,10 @@ class CuriosityConfig:
     })
     
     # Hours when the AI is more likely to ask emotional questions
-    check_in_hours: List[int] = field(default_factory=lambda: [9, 12, 18, 21])
+    check_in_hours: list[int] = field(default_factory=lambda: [9, 12, 18, 21])
     
     # Hours to avoid asking questions (quiet time)
-    quiet_hours: List[int] = field(default_factory=lambda: [23, 0, 1, 2, 3, 4, 5, 6])
+    quiet_hours: list[int] = field(default_factory=lambda: [23, 0, 1, 2, 3, 4, 5, 6])
     
     # Enable/disable the system
     enabled: bool = True
@@ -288,17 +288,17 @@ class AICuriosity:
     
     def __init__(
         self,
-        config: Optional[CuriosityConfig] = None,
-        model_name: Optional[str] = None
+        config: CuriosityConfig | None = None,
+        model_name: str | None = None
     ):
         self.config = config or CuriosityConfig()
         self.model_name = model_name
         
         # Tracking
         self._last_question_time: float = 0
-        self._questions_asked: List[Question] = []
-        self._user_answers: Dict[str, str] = {}  # question_text -> answer
-        self._topics_mentioned: List[str] = []   # For follow-up questions
+        self._questions_asked: list[Question] = []
+        self._user_answers: dict[str, str] = {}  # question_text -> answer
+        self._topics_mentioned: list[str] = []   # For follow-up questions
         
         # Storage
         from ..config import CONFIG
@@ -315,7 +315,7 @@ class AICuriosity:
         """Load saved curiosity state."""
         try:
             if self._storage_path.exists():
-                with open(self._storage_path, "r") as f:
+                with open(self._storage_path) as f:
                     data = json.load(f)
                 
                 self._user_answers = data.get("user_answers", {})
@@ -385,9 +385,9 @@ class AICuriosity:
     
     def get_question(
         self,
-        category: Optional[str] = None,
-        context: Optional[str] = None
-    ) -> Optional[Question]:
+        category: str | None = None,
+        context: str | None = None
+    ) -> Question | None:
         """
         Get a question for the AI to ask.
         
@@ -430,7 +430,7 @@ class AICuriosity:
         
         return question
     
-    def _pick_category(self, context: Optional[str] = None) -> QuestionCategory:
+    def _pick_category(self, context: str | None = None) -> QuestionCategory:
         """Pick a question category based on weights and context."""
         current_hour = datetime.now().hour
         
@@ -460,7 +460,7 @@ class AICuriosity:
         except ValueError:
             return QuestionCategory.RANDOM
     
-    def _get_question_from_bank(self, category: QuestionCategory) -> Optional[Question]:
+    def _get_question_from_bank(self, category: QuestionCategory) -> Question | None:
         """Get a question from the appropriate bank."""
         bank = QUESTION_BANKS.get(category, RANDOM_QUESTIONS)
         
@@ -498,7 +498,7 @@ class AICuriosity:
         
         return None
     
-    def _generate_follow_up(self, context: str) -> Optional[Question]:
+    def _generate_follow_up(self, context: str) -> Question | None:
         """Generate a follow-up question based on context."""
         if not context or not self._topics_mentioned:
             return None
@@ -570,7 +570,7 @@ class AICuriosity:
     def _extract_topics(self, text: str):
         """Extract potential follow-up topics from text."""
         import re
-        
+
         # Look for named entities (capitalized words)
         names = re.findall(r'\b[A-Z][a-z]+\b', text)
         
@@ -595,7 +595,7 @@ class AICuriosity:
         # Keep limited history
         self._topics_mentioned = self._topics_mentioned[-100:]
     
-    def get_user_knowledge(self) -> Dict[str, Any]:
+    def get_user_knowledge(self) -> dict[str, Any]:
         """
         Get what the AI has learned about the user.
         
@@ -684,10 +684,10 @@ class AICuriosity:
 # SINGLETON & CONVENIENCE FUNCTIONS
 # =============================================================================
 
-_curiosity_instance: Optional[AICuriosity] = None
+_curiosity_instance: AICuriosity | None = None
 
 
-def get_curiosity_system(model_name: Optional[str] = None) -> AICuriosity:
+def get_curiosity_system(model_name: str | None = None) -> AICuriosity:
     """Get or create the global curiosity system."""
     global _curiosity_instance
     if _curiosity_instance is None:
@@ -695,7 +695,7 @@ def get_curiosity_system(model_name: Optional[str] = None) -> AICuriosity:
     return _curiosity_instance
 
 
-def ask_user_question(category: Optional[str] = None) -> Optional[str]:
+def ask_user_question(category: str | None = None) -> str | None:
     """
     Get a question to ask the user.
     

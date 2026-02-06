@@ -11,9 +11,10 @@ Tools for personal assistant functionality:
 """
 
 import json
-from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from .tool_registry import Tool
 
 
@@ -28,13 +29,13 @@ class ChecklistManager:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self.checklists = self._load()
     
-    def _load(self) -> Dict:
+    def _load(self) -> dict:
         """Load checklists from storage."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 return {}
         return {}
     
@@ -43,7 +44,7 @@ class ChecklistManager:
         with open(self.storage_path, 'w') as f:
             json.dump(self.checklists, f, indent=2)
     
-    def create_checklist(self, name: str, items: List[str]) -> Dict[str, Any]:
+    def create_checklist(self, name: str, items: list[str]) -> dict[str, Any]:
         """Create a new checklist."""
         checklist_id = f"checklist_{len(self.checklists) + 1}"
         self.checklists[checklist_id] = {
@@ -59,11 +60,11 @@ class ChecklistManager:
             'items': len(items)
         }
     
-    def get_checklist(self, checklist_id: str) -> Optional[Dict]:
+    def get_checklist(self, checklist_id: str) -> Optional[dict]:
         """Get a specific checklist."""
         return self.checklists.get(checklist_id)
     
-    def list_checklists(self) -> List[Dict]:
+    def list_checklists(self) -> list[dict]:
         """List all checklists."""
         return [
             {
@@ -106,13 +107,13 @@ class TaskScheduler:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self.tasks = self._load()
     
-    def _load(self) -> Dict:
+    def _load(self) -> dict:
         """Load tasks from storage."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 return {}
         return {}
     
@@ -123,7 +124,7 @@ class TaskScheduler:
     
     def add_task(self, title: str, description: str = "", 
                  due_date: Optional[str] = None, 
-                 priority: str = "medium") -> Dict[str, Any]:
+                 priority: str = "medium") -> dict[str, Any]:
         """Add a new task."""
         task_id = f"task_{len(self.tasks) + 1}"
         self.tasks[task_id] = {
@@ -142,12 +143,12 @@ class TaskScheduler:
             'title': title
         }
     
-    def get_task(self, task_id: str) -> Optional[Dict]:
+    def get_task(self, task_id: str) -> Optional[dict]:
         """Get a specific task."""
         return self.tasks.get(task_id)
     
     def list_tasks(self, show_completed: bool = False, 
-                   priority: Optional[str] = None) -> List[Dict]:
+                   priority: Optional[str] = None) -> list[dict]:
         """List tasks with optional filtering."""
         tasks = []
         for tid, task in self.tasks.items():
@@ -207,13 +208,13 @@ class ReminderSystem:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self.reminders = self._load()
     
-    def _load(self) -> Dict:
+    def _load(self) -> dict:
         """Load reminders from storage."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 return {}
         return {}
     
@@ -223,7 +224,7 @@ class ReminderSystem:
             json.dump(self.reminders, f, indent=2)
     
     def set_reminder(self, message: str, remind_at: str, 
-                     repeat: Optional[str] = None) -> Dict[str, Any]:
+                     repeat: Optional[str] = None) -> dict[str, Any]:
         """Set a new reminder."""
         reminder_id = f"reminder_{len(self.reminders) + 1}"
         self.reminders[reminder_id] = {
@@ -242,11 +243,11 @@ class ReminderSystem:
             'remind_at': remind_at
         }
     
-    def get_reminder(self, reminder_id: str) -> Optional[Dict]:
+    def get_reminder(self, reminder_id: str) -> Optional[dict]:
         """Get a specific reminder."""
         return self.reminders.get(reminder_id)
     
-    def list_reminders(self, active_only: bool = True) -> List[Dict]:
+    def list_reminders(self, active_only: bool = True) -> list[dict]:
         """List all reminders."""
         reminders = []
         for rid, reminder in self.reminders.items():
@@ -264,7 +265,7 @@ class ReminderSystem:
         
         return reminders
     
-    def check_due_reminders(self) -> List[Dict]:
+    def check_due_reminders(self) -> list[dict]:
         """Check for reminders that are due."""
         due_reminders = []
         now = datetime.now()
@@ -322,7 +323,7 @@ class CreateChecklistTool(Tool):
     def __init__(self):
         self.manager = ChecklistManager()
     
-    def execute(self, name: str, items, **kwargs) -> Dict[str, Any]:
+    def execute(self, name: str, items, **kwargs) -> dict[str, Any]:
         try:
             # Parse items
             if isinstance(items, str):
@@ -349,7 +350,7 @@ class ListChecklistsTool(Tool):
     def __init__(self):
         self.manager = ChecklistManager()
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             checklists = self.manager.list_checklists()
             return {
@@ -378,7 +379,7 @@ class AddTaskTool(Tool):
     
     def execute(self, title: str, description: str = "", 
                 due_date: Optional[str] = None, 
-                priority: str = "medium", **kwargs) -> Dict[str, Any]:
+                priority: str = "medium", **kwargs) -> dict[str, Any]:
         try:
             return self.scheduler.add_task(title, description, due_date, priority)
         except Exception as e:
@@ -399,7 +400,7 @@ class ListTasksTool(Tool):
         self.scheduler = TaskScheduler()
     
     def execute(self, show_completed: bool = False, 
-                priority: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+                priority: Optional[str] = None, **kwargs) -> dict[str, Any]:
         try:
             tasks = self.scheduler.list_tasks(show_completed, priority)
             return {
@@ -423,7 +424,7 @@ class CompleteTaskTool(Tool):
     def __init__(self):
         self.scheduler = TaskScheduler()
     
-    def execute(self, task_id: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, task_id: str, **kwargs) -> dict[str, Any]:
         try:
             success = self.scheduler.complete_task(task_id)
             if success:
@@ -448,7 +449,7 @@ class SetReminderTool(Tool):
         self.system = ReminderSystem()
     
     def execute(self, message: str, remind_at: str, 
-                repeat: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+                repeat: Optional[str] = None, **kwargs) -> dict[str, Any]:
         try:
             return self.system.set_reminder(message, remind_at, repeat)
         except Exception as e:
@@ -467,7 +468,7 @@ class ListRemindersTool(Tool):
     def __init__(self):
         self.system = ReminderSystem()
     
-    def execute(self, active_only: bool = True, **kwargs) -> Dict[str, Any]:
+    def execute(self, active_only: bool = True, **kwargs) -> dict[str, Any]:
         try:
             reminders = self.system.list_reminders(active_only)
             return {
@@ -489,7 +490,7 @@ class CheckRemindersTool(Tool):
     def __init__(self):
         self.system = ReminderSystem()
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             due = self.system.check_due_reminders()
             return {
@@ -504,7 +505,7 @@ class CheckRemindersTool(Tool):
 if __name__ == "__main__":
     # Test the tools
     import json
-    
+
     # Test checklist
     tool = CreateChecklistTool()
     result = tool.execute("Shopping List", "Milk, Bread, Eggs, Cheese")

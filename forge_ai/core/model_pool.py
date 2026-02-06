@@ -34,14 +34,15 @@ USAGE:
 
 import gc
 import logging
-import psutil
 import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class ModelPoolConfig:
     offload_dir: Optional[str] = None
     
     # Preload models on startup
-    preload_models: List[str] = field(default_factory=list)
+    preload_models: list[str] = field(default_factory=list)
     
     # Share tokenizers across models when possible
     share_tokenizers: bool = True
@@ -102,7 +103,7 @@ class ModelEntry:
     last_used_at: str = field(default_factory=lambda: datetime.now().isoformat())
     use_count: int = 0
     in_use: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     
     def mark_used(self) -> None:
         """Mark model as being used."""
@@ -141,8 +142,8 @@ class ModelPool:
         """
         self.config = config or ModelPoolConfig()
         self._models: OrderedDict[str, ModelEntry] = OrderedDict()
-        self._shared_tokenizers: Dict[str, Any] = {}
-        self._shared_embeddings: Dict[str, Any] = {}
+        self._shared_tokenizers: dict[str, Any] = {}
+        self._shared_embeddings: dict[str, Any] = {}
         self._lock = threading.RLock()
         
         # Preload models if configured
@@ -160,7 +161,7 @@ class ModelPool:
     def get_model(
         self,
         model_id: str,
-        load_args: Optional[Dict[str, Any]] = None,
+        load_args: Optional[dict[str, Any]] = None,
     ) -> Any:
         """
         Get a model from the pool (loads if not already loaded).
@@ -216,7 +217,7 @@ class ModelPool:
     def preload(
         self,
         model_id: str,
-        load_args: Optional[Dict[str, Any]] = None,
+        load_args: Optional[dict[str, Any]] = None,
     ) -> None:
         """
         Preload a model before it's needed.
@@ -280,7 +281,7 @@ class ModelPool:
     # RESOURCE MANAGEMENT
     # -------------------------------------------------------------------------
     
-    def get_memory_usage(self) -> Dict[str, float]:
+    def get_memory_usage(self) -> dict[str, float]:
         """
         Get current memory usage statistics.
         
@@ -309,7 +310,7 @@ class ModelPool:
                 "num_models": len(self._models),
             }
     
-    def get_system_memory_info(self) -> Dict[str, float]:
+    def get_system_memory_info(self) -> dict[str, float]:
         """
         Get system-wide memory information.
         
@@ -423,8 +424,8 @@ class ModelPool:
     def _load_model(
         self,
         model_id: str,
-        load_args: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Any, str, str, float, Dict[str, Any]]:
+        load_args: Optional[dict[str, Any]] = None,
+    ) -> tuple[Any, str, str, float, dict[str, Any]]:
         """
         Load a model based on its ID format.
         
@@ -460,12 +461,12 @@ class ModelPool:
     def _load_forge_model(
         self,
         model_path: str,
-        load_args: Dict[str, Any],
-    ) -> Tuple[Any, str, str, float, Dict[str, Any]]:
+        load_args: dict[str, Any],
+    ) -> tuple[Any, str, str, float, dict[str, Any]]:
         """Load a Forge model."""
-        from .inference import load_engine
         from ..config import CONFIG
-        
+        from .inference import load_engine
+
         # Build full path
         if not Path(model_path).is_absolute():
             model_path = str(Path(CONFIG["models_dir"]) / model_path)
@@ -491,8 +492,8 @@ class ModelPool:
     def _load_huggingface_model(
         self,
         model_id: str,
-        load_args: Dict[str, Any],
-    ) -> Tuple[Any, str, str, float, Dict[str, Any]]:
+        load_args: dict[str, Any],
+    ) -> tuple[Any, str, str, float, dict[str, Any]]:
         """Load a HuggingFace model."""
         try:
             from .huggingface_loader import load_huggingface_model
@@ -523,8 +524,8 @@ class ModelPool:
     def _load_gguf_model(
         self,
         model_path: str,
-        load_args: Dict[str, Any],
-    ) -> Tuple[Any, str, str, float, Dict[str, Any]]:
+        load_args: dict[str, Any],
+    ) -> tuple[Any, str, str, float, dict[str, Any]]:
         """Load a GGUF model."""
         try:
             from .gguf_loader import GGUFModel
@@ -550,8 +551,8 @@ class ModelPool:
     def _load_local_model(
         self,
         identifier: str,
-        load_args: Dict[str, Any],
-    ) -> Tuple[Any, str, str, float, Dict[str, Any]]:
+        load_args: dict[str, Any],
+    ) -> tuple[Any, str, str, float, dict[str, Any]]:
         """Load a local tool/model."""
         # This is a placeholder for local tools like Stable Diffusion
         # The actual implementation would depend on the tool
@@ -627,7 +628,7 @@ class ModelPool:
     # POOL INFORMATION
     # -------------------------------------------------------------------------
     
-    def list_models(self) -> List[Dict[str, Any]]:
+    def list_models(self) -> list[dict[str, Any]]:
         """Get list of all loaded models with info."""
         with self._lock:
             return [

@@ -29,8 +29,9 @@ Usage:
 """
 
 import logging
+from collections.abc import Generator
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Generator, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,8 @@ try:
         AutoModelForCausalLM,
         AutoTokenizer,
     )
-    from transformers.generation.streamers import TextIteratorStreamer
     from transformers.generation.configuration_utils import GenerationConfig
+    from transformers.generation.streamers import TextIteratorStreamer
     from transformers.utils.quantization_config import BitsAndBytesConfig
     HAVE_TRANSFORMERS = True
 except ImportError:
@@ -76,7 +77,7 @@ def format_param_count(num_params: int) -> str:
     return str(num_params)
 
 
-def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> Dict[str, Any]:
+def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> dict[str, Any]:
     """
     Get model information from HuggingFace without downloading the full model.
     
@@ -112,7 +113,7 @@ def get_huggingface_model_info(model_id: str, timeout: float = 10.0) -> Dict[str
     
     try:
         from transformers import AutoConfig
-        
+
         # Fetch just the config (small download)
         config = AutoConfig.from_pretrained(model_id)
         
@@ -184,7 +185,7 @@ class HuggingFaceModel:
         load_in_4bit: bool = False,
         torch_dtype: Optional[str] = None,
         trust_remote_code: bool = False,
-        max_memory: Optional[Dict] = None,
+        max_memory: Optional[dict] = None,
     ):
         """
         Initialize HuggingFace model.
@@ -265,7 +266,7 @@ class HuggingFaceModel:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
             
             # Load model
-            model_kwargs: Dict[str, Any] = {
+            model_kwargs: dict[str, Any] = {
                 "trust_remote_code": self.trust_remote_code,
             }
             
@@ -324,7 +325,7 @@ class HuggingFaceModel:
         top_k: int = 50,
         repetition_penalty: float = 1.1,
         do_sample: bool = True,
-        stop_strings: Optional[List[str]] = None,
+        stop_strings: Optional[list[str]] = None,
         custom_tokenizer: Optional[Any] = None,
     ) -> str:
         """
@@ -491,15 +492,14 @@ class HuggingFaceModel:
         thread.start()
         
         # Yield tokens as they come
-        for token in streamer:
-            yield token
+        yield from streamer
         
         thread.join()
     
     def chat(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
+        history: Optional[list[dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
         max_new_tokens: int = 200,
         temperature: float = 0.7,
@@ -644,7 +644,7 @@ class HuggingFaceModel:
         
         return response
     
-    def _format_chat_simple(self, messages: List[Dict[str, str]]) -> str:
+    def _format_chat_simple(self, messages: list[dict[str, str]]) -> str:
         """Simple chat formatting for models without chat templates."""
         lines = []
         for msg in messages:
@@ -659,7 +659,7 @@ class HuggingFaceModel:
         lines.append("Assistant:")
         return "".join(lines)
     
-    def get_model_info(self) -> Dict[str, Any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get information about the loaded model."""
         if not self.is_loaded or self.model is None or self.tokenizer is None:
             return {"loaded": False, "model_id": self.model_id}
@@ -678,7 +678,7 @@ class HuggingFaceModel:
         }
     
     @classmethod
-    def list_suggested_models(cls) -> Dict[str, str]:
+    def list_suggested_models(cls) -> dict[str, str]:
         """List suggested models by category."""
         return cls.SUGGESTED_MODELS.copy()
 
@@ -715,7 +715,7 @@ class HuggingFaceEngine:
         self.hf_model.load()
         
         # Chat history for stateful conversations
-        self.chat_history: List[Dict[str, str]] = []
+        self.chat_history: list[dict[str, str]] = []
     
     def generate(
         self,
@@ -802,7 +802,7 @@ class HuggingFaceEngine:
         
         # Use the universal router that works with any model
         from .universal_router import chat_with_tools
-        
+
         # Create a chat function that includes history
         def chat_fn(msg, **kw):
             return self.chat(msg, max_gen=max_gen, temperature=temperature, 

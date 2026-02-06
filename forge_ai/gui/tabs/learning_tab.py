@@ -5,12 +5,22 @@ Displays learning statistics, training examples, and progress charts.
 """
 
 import logging
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox,
-    QPushButton, QProgressBar, QTextEdit, QCheckBox, QMessageBox,
-    QGridLayout, QFrame
-)
+
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -414,9 +424,9 @@ class LearningTab(QWidget):
             # Import and control autonomous learning system
             try:
                 from ..core.autonomous import (
-                    get_autonomous_learner,
+                    AutonomousConfig,
                     AutonomousLearner,
-                    AutonomousConfig
+                    get_autonomous_learner,
                 )
                 
                 learner = get_autonomous_learner(model_name)

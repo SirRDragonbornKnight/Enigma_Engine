@@ -34,23 +34,23 @@ from typing import TYPE_CHECKING
 # Only import for type checking, not at runtime
 if TYPE_CHECKING:
     from .enhanced_window import ForgeWindow
-    from .theme_system import ThemeColors, Theme, ThemeManager
     from .resource_monitor import ResourceMonitor
     from .tabs import (
-        create_chat_tab,
-        create_training_tab,
-        create_avatar_tab,
-        create_vision_tab,
-        create_sessions_tab,
-        create_instructions_tab,
-        create_terminal_tab,
-        log_to_terminal,
+        ExamplesTab,
         ModulesTab,
         ScalingTab,
-        create_scaling_tab,
-        ExamplesTab,
+        create_avatar_tab,
+        create_chat_tab,
         create_examples_tab,
+        create_instructions_tab,
+        create_scaling_tab,
+        create_sessions_tab,
+        create_terminal_tab,
+        create_training_tab,
+        create_vision_tab,
+        log_to_terminal,
     )
+    from .theme_system import Theme, ThemeColors, ThemeManager
 
 # Lazy loading cache
 _cache = {}
@@ -109,8 +109,15 @@ def launch_gui():
         int: Exit code from the application
     """
     try:
-        from PyQt5.QtWidgets import QApplication
         import sys
+
+        from PyQt5.QtCore import QCoreApplication, Qt
+        from PyQt5.QtWidgets import QApplication
+
+        # Enable high-DPI scaling for sharp rendering on 4K/Retina displays
+        # Must be set before QApplication is created
+        QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         
         from .enhanced_window import EnhancedMainWindow
         

@@ -55,7 +55,7 @@ class GUIModeManager:
             }
         }
     
-    def get_visible_tabs(self) -> Set[str]:
+    def get_visible_tabs(self) -> set[str]:
         """Get the set of tabs that should be visible in current mode."""
         return self._mode_tabs.get(self.mode, self._mode_tabs[GUIMode.STANDARD])
     
@@ -94,14 +94,31 @@ class GUIModeManager:
 
 # Keyboard shortcuts for all modes
 KEYBOARD_SHORTCUTS = {
+    # Window
+    "Alt+F4": "Close ForgeAI",
+    "Ctrl+Shift+F4": "Emergency quit",
+    "Escape": "Close popup/overlay",
+    
+    # Navigation
     "Ctrl+1": "Switch to Chat tab",
-    "Ctrl+2": "Switch to Create/Image tab",
+    "Ctrl+2": "Switch to Create/Image tab", 
     "Ctrl+3": "Switch to AI/Avatar tab",
     "Ctrl+,": "Open Settings",
-    "Ctrl+N": "New conversation",
+    
+    # Chat
     "Ctrl+Enter": "Send message",
+    "Ctrl+N": "New conversation",
     "Ctrl+Shift+V": "Paste and send",
+    "Ctrl+L": "Clear chat",
+    
+    # Features
     "Ctrl+Shift+Space": "Toggle game mode",
+    "Ctrl+M": "Toggle microphone",
+    "Ctrl+Shift+S": "Toggle auto-speak",
+    
+    # General
     "F1": "Quick help",
     "Tab": "Navigate UI elements",
+    "Ctrl+Plus": "Increase font size",
+    "Ctrl+Minus": "Decrease font size",
 }

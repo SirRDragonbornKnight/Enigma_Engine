@@ -12,7 +12,7 @@ The canonical MODEL_PRESETS are defined in forge_ai.core.model.
 """
 
 # Import from the canonical location
-from .model import MODEL_PRESETS, MODEL_DESCRIPTIONS, ForgeConfig
+from .model import MODEL_DESCRIPTIONS, MODEL_PRESETS, ForgeConfig
 
 
 def get_model_config(size: str = "tiny") -> dict:

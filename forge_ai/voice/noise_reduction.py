@@ -81,7 +81,7 @@ class NoiseReducer:
         self.config = config or NoiseReductionConfig()
         
         # Noise profile for spectral subtraction
-        self._noise_profile: Optional[np.ndarray] = None
+        self._noise_profile: np.ndarray | None = None
         self._noise_energy: float = 0.0
         
         # Detect available backends
@@ -192,7 +192,7 @@ class NoiseReducer:
         # Compute noise spectrum
         try:
             from scipy import signal as sig
-            
+
             # Compute spectrogram of noise
             _, _, Sxx = sig.spectrogram(
                 noise_sample,
@@ -250,7 +250,7 @@ class NoiseReducer:
         """Reduce noise using spectral subtraction."""
         try:
             from scipy import signal as sig
-            
+
             # STFT
             f, t, Zxx = sig.stft(
                 audio,

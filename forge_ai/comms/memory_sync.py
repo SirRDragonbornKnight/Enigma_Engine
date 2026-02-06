@@ -14,10 +14,10 @@ SYNC STRATEGIES:
 
 import json
 import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
-import urllib.request
 
 from ..config import CONFIG
 
@@ -39,10 +39,10 @@ class MemorySync:
         self.sync_state_file = self.memory_dir / "_sync_state.json"
         self.sync_state = self._load_sync_state()
     
-    def _load_sync_state(self) -> Dict:
+    def _load_sync_state(self) -> dict:
         """Load sync state from file."""
         if self.sync_state_file.exists():
-            with open(self.sync_state_file, "r") as f:
+            with open(self.sync_state_file) as f:
                 return json.load(f)
         return {"peers": {}}
     
@@ -51,22 +51,22 @@ class MemorySync:
         with open(self.sync_state_file, "w") as f:
             json.dump(self.sync_state, f, indent=2)
     
-    def get_all_memories(self) -> List[Dict]:
+    def get_all_memories(self) -> list[dict]:
         """Get all local memories."""
         memories = []
         for file in self.memory_dir.glob("*.json"):
             if file.name.startswith("_"):  # Skip metadata files
                 continue
             try:
-                with open(file, "r") as f:
+                with open(file) as f:
                     data = json.load(f)
                     data["_file"] = file.name
                     memories.append(data)
-            except (json.JSONDecodeError, IOError, OSError):
+            except (json.JSONDecodeError, OSError):
                 pass
         return memories
     
-    def get_memories_since(self, timestamp: str) -> List[Dict]:
+    def get_memories_since(self, timestamp: str) -> list[dict]:
         """Get memories created/modified after timestamp."""
         cutoff = datetime.fromisoformat(timestamp)
         memories = []
@@ -79,16 +79,16 @@ class MemorySync:
             mtime = datetime.fromtimestamp(file.stat().st_mtime)
             if mtime > cutoff:
                 try:
-                    with open(file, "r") as f:
+                    with open(file) as f:
                         data = json.load(f)
                         data["_file"] = file.name
                         memories.append(data)
-                except (json.JSONDecodeError, IOError, OSError):
+                except (json.JSONDecodeError, OSError):
                     pass
         
         return memories
     
-    def save_memory(self, memory: Dict, filename: str = None):
+    def save_memory(self, memory: dict, filename: str = None):
         """Save a memory to local storage."""
         if filename is None:
             filename = f"memory_{int(time.time())}.json"
@@ -99,7 +99,7 @@ class MemorySync:
         with open(filepath, "w") as f:
             json.dump(memory, f, indent=2)
     
-    def export_for_sync(self, peer_name: str = None) -> Dict:
+    def export_for_sync(self, peer_name: str = None) -> dict:
         """
         Export memories for syncing to another device.
         
@@ -125,7 +125,7 @@ class MemorySync:
             "memories": memories,
         }
     
-    def import_from_sync(self, sync_data: Dict, peer_name: str = None):
+    def import_from_sync(self, sync_data: dict, peer_name: str = None):
         """
         Import memories from another device.
         
@@ -158,7 +158,7 @@ class MemorySync:
         print(f"Imported {imported} memories from {source}")
         return imported
     
-    def sync_with_peer(self, peer_url: str, peer_name: str = None) -> Dict:
+    def sync_with_peer(self, peer_url: str, peer_name: str = None) -> dict:
         """
         Full two-way sync with a peer.
         
@@ -225,7 +225,7 @@ def add_sync_routes(app, memory_sync: MemorySync):
     
     Call this in your server setup to enable sync endpoints.
     """
-    from flask import request, jsonify
+    from flask import jsonify, request
     
     @app.route("/sync/receive", methods=["POST"])
     def sync_receive():
@@ -308,7 +308,7 @@ class OfflineSync:
         if not input_path.exists():
             raise ValueError(f"File not found: {input_path}")
         
-        with open(input_path, "r") as f:
+        with open(input_path) as f:
             sync_data = json.load(f)
         
         sync = MemorySync(memory_dir)

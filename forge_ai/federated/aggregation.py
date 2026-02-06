@@ -24,6 +24,7 @@ USAGE:
 
 import logging
 from typing import Dict, List
+
 import numpy as np
 
 from .federation import ModelUpdate
@@ -46,7 +47,7 @@ class FederatedAggregator:
         self.total_rounds = 0
         self.total_updates = 0
     
-    def aggregate_updates(self, updates: List[ModelUpdate]) -> Dict[str, np.ndarray]:
+    def aggregate_updates(self, updates: list[ModelUpdate]) -> dict[str, np.ndarray]:
         """
         Aggregate updates from all participants.
         
@@ -110,10 +111,10 @@ class FederatedAggregator:
     
     def apply_updates(
         self,
-        base_weights: Dict[str, np.ndarray],
-        aggregated_deltas: Dict[str, np.ndarray],
+        base_weights: dict[str, np.ndarray],
+        aggregated_deltas: dict[str, np.ndarray],
         learning_rate: float = 1.0
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Apply aggregated updates to base model weights.
         
@@ -139,7 +140,7 @@ class FederatedAggregator:
         logger.info(f"Applied updates to {len(updated_weights)} layers")
         return updated_weights
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """
         Get aggregation statistics.
         
@@ -174,7 +175,7 @@ class SecureAggregation:
             threshold: Minimum participants needed to reconstruct (default 2)
         """
         self.threshold = threshold
-        self._shares_received: Dict[str, List[np.ndarray]] = {}
+        self._shares_received: dict[str, list[np.ndarray]] = {}
         self._participant_count = 0
         logger.info(f"SecureAggregation initialized with threshold={threshold}")
     
@@ -182,7 +183,7 @@ class SecureAggregation:
         self,
         secret: np.ndarray,
         n_shares: int
-    ) -> List[np.ndarray]:
+    ) -> list[np.ndarray]:
         """
         Split a secret into n additive shares.
         
@@ -212,7 +213,7 @@ class SecureAggregation:
         
         return shares
     
-    def _reconstruct_secret(self, shares: List[np.ndarray]) -> np.ndarray:
+    def _reconstruct_secret(self, shares: list[np.ndarray]) -> np.ndarray:
         """
         Reconstruct secret from shares.
         
@@ -261,7 +262,7 @@ class SecureAggregation:
             num_samples=update.num_samples,
         )
     
-    def add_share(self, device_id: str, shares: Dict[str, np.ndarray]):
+    def add_share(self, device_id: str, shares: dict[str, np.ndarray]):
         """
         Add received shares from a participant.
         
@@ -276,8 +277,8 @@ class SecureAggregation:
     
     def decrypt_aggregate(
         self,
-        encrypted_updates: List['EncryptedUpdate']
-    ) -> Dict[str, np.ndarray]:
+        encrypted_updates: list['EncryptedUpdate']
+    ) -> dict[str, np.ndarray]:
         """
         Compute the aggregate from encrypted updates.
         
@@ -298,7 +299,7 @@ class SecureAggregation:
             return {}
         
         # Collect all shares
-        all_shares: Dict[str, List[np.ndarray]] = {}
+        all_shares: dict[str, list[np.ndarray]] = {}
         total_samples = 0
         
         for update in encrypted_updates:
@@ -335,7 +336,7 @@ class EncryptedUpdate:
         self,
         device_id: str,
         round_number: int,
-        encrypted_data: Dict,
+        encrypted_data: dict,
         num_samples: int
     ):
         """
@@ -364,7 +365,7 @@ class FederatedMedian:
         """Initialize median aggregator."""
         pass
     
-    def aggregate_updates(self, updates: List[ModelUpdate]) -> Dict[str, np.ndarray]:
+    def aggregate_updates(self, updates: list[ModelUpdate]) -> dict[str, np.ndarray]:
         """
         Aggregate updates using coordinate-wise median.
         

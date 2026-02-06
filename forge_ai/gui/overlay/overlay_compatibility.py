@@ -7,8 +7,8 @@ and its display mode.
 
 import logging
 import sys
-from typing import Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ class OverlayCompatibility:
             
         return adjustments
         
-    def check_game_overlay_support(self, game_exe: Optional[str] = None) -> Dict[str, Any]:
+    def check_game_overlay_support(self, game_exe: Optional[str] = None) -> dict[str, Any]:
         """
         Check if game allows overlays.
         
@@ -136,7 +136,7 @@ class OverlayCompatibility:
                 
         return result
         
-    def get_recommended_settings(self) -> Dict[str, Any]:
+    def get_recommended_settings(self) -> dict[str, Any]:
         """
         Get recommended overlay settings for current environment.
         

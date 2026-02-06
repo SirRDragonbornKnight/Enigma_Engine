@@ -10,7 +10,7 @@ This is a proper character-level tokenizer that:
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,8 @@ class CharacterTokenizer:
         self.unk_token_id = 3
 
         # Initialize vocabulary
-        self.token_to_id: Dict[str, int] = {}
-        self.id_to_token: Dict[int, str] = {}
+        self.token_to_id: dict[str, int] = {}
+        self.id_to_token: dict[int, str] = {}
 
         if vocab_file and vocab_file.exists():
             self._load_vocab(vocab_file)
@@ -199,7 +199,7 @@ class CharacterTokenizer:
         # Try to load external dictionary file
         if DICTIONARY_PATH.exists():
             try:
-                with open(DICTIONARY_PATH, 'r', encoding='utf-8') as f:
+                with open(DICTIONARY_PATH, encoding='utf-8') as f:
                     for line in f:
                         word = line.strip()
                         if word and word not in self.token_to_id and len(word) > 2:
@@ -224,11 +224,11 @@ class CharacterTokenizer:
         self.vocab_size = len(self.token_to_id)
         return new_id
 
-    def add_words(self, words: List[str]) -> List[int]:
+    def add_words(self, words: list[str]) -> list[int]:
         """Add multiple words. Returns their IDs."""
         return [self.add_word(word) for word in words]
 
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """
         Encode text to token IDs.
 
@@ -294,7 +294,7 @@ class CharacterTokenizer:
 
         return ids
 
-    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """Decode token IDs back to text."""
         tokens = []
 
@@ -343,7 +343,7 @@ class CharacterTokenizer:
 
     def _load_vocab(self, vocab_file: Path):
         """Load vocabulary from file."""
-        with open(vocab_file, 'r', encoding='utf-8') as f:
+        with open(vocab_file, encoding='utf-8') as f:
             data = json.load(f)
 
         self.token_to_id = data.get('token_to_id', data)
@@ -364,7 +364,7 @@ class CharacterTokenizer:
 
     def __call__(self, text: str, return_tensors: str = None,
                  padding: bool = None, truncation: bool = None,
-                 max_length: int = None, add_special_tokens: bool = True) -> Dict[str, Any]:
+                 max_length: int = None, add_special_tokens: bool = True) -> dict[str, Any]:
         """Tokenize text (HuggingFace-compatible interface)."""
         ids = self.encode(text, add_special_tokens=add_special_tokens)
 
@@ -383,7 +383,7 @@ class CharacterTokenizer:
     def __len__(self) -> int:
         return self.vocab_size
 
-    def get_vocab(self) -> Dict[str, int]:
+    def get_vocab(self) -> dict[str, int]:
         """Return the vocabulary."""
         return self.token_to_id.copy()
 

@@ -10,10 +10,10 @@ Supported formats:
 - Individual frames: Separate image files in a directory
 """
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-import json
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from PIL import Image
@@ -40,7 +40,7 @@ class SpriteFrame:
 class SpriteAnimation:
     """An animation sequence of frames."""
     name: str
-    frames: List[str] = field(default_factory=list)  # Frame names
+    frames: list[str] = field(default_factory=list)  # Frame names
     fps: float = 12.0
     loop: bool = True
 
@@ -61,23 +61,23 @@ class SpriteSheet:
     height: int = 0
     
     # Individual frames
-    frames: Dict[str, SpriteFrame] = field(default_factory=dict)
+    frames: dict[str, SpriteFrame] = field(default_factory=dict)
     
     # Animations (sequences of frames)
-    animations: Dict[str, SpriteAnimation] = field(default_factory=dict)
+    animations: dict[str, SpriteAnimation] = field(default_factory=dict)
     
     # The full image (if loaded)
     _image: Any = None
     
-    def get_frame_names(self) -> List[str]:
+    def get_frame_names(self) -> list[str]:
         """Get all frame names."""
         return list(self.frames.keys())
     
-    def get_animation_names(self) -> List[str]:
+    def get_animation_names(self) -> list[str]:
         """Get all animation names."""
         return list(self.animations.keys())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -122,7 +122,7 @@ class SpriteSheetLoader:
     
     def __init__(self):
         """Initialize loader."""
-        self._cache: Dict[str, SpriteSheet] = {}
+        self._cache: dict[str, SpriteSheet] = {}
     
     @staticmethod
     def is_available() -> bool:
@@ -134,7 +134,7 @@ class SpriteSheetLoader:
         filepath: str, 
         cols: int, 
         rows: int,
-        frame_names: Optional[List[str]] = None
+        frame_names: Optional[list[str]] = None
     ) -> Optional[SpriteSheet]:
         """
         Load a grid-based sprite sheet.
@@ -231,7 +231,7 @@ class SpriteSheetLoader:
             return None
         
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 data = json.load(f)
             
             sheet = SpriteSheet()

@@ -10,15 +10,15 @@ Tools:
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any
-from .tool_registry import Tool
+from typing import Any, Dict
 
+from .tool_registry import Tool
 
 # Path to AI command file - avatar reads this
 AVATAR_COMMAND_FILE = Path(__file__).parent.parent.parent / "data" / "avatar" / "ai_command.json"
 
 
-def _send_avatar_command(action: str, value: str = "") -> Dict[str, Any]:
+def _send_avatar_command(action: str, value: str = "") -> dict[str, Any]:
     """Write a command to the avatar command file for the avatar to pick up."""
     try:
         AVATAR_COMMAND_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,7 @@ class AvatarControlTool(Tool):
         "value": "Value for action (coords for move, size for resize, direction for orientation)",
     }
     
-    def execute(self, action: str, value: str = "", **kwargs) -> Dict[str, Any]:
+    def execute(self, action: str, value: str = "", **kwargs) -> dict[str, Any]:
         action = action.lower().strip()
         
         valid_actions = ["show", "hide", "jump", "pin", "unpin", "move", "resize", "orientation"]
@@ -80,7 +80,7 @@ class AvatarCustomizeTool(Tool):
         "rotate_speed", "reset"
     ]
     
-    def execute(self, setting: str, value: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         setting = setting.lower().strip()
         
         if setting not in self.VALID_SETTINGS:
@@ -106,7 +106,7 @@ class AvatarGestureTool(Tool):
     
     VALID_GESTURES = ["wave", "nod", "shake", "blink", "speak", "look_at"]
     
-    def execute(self, gesture: str, intensity: float = 1.0, **kwargs) -> Dict[str, Any]:
+    def execute(self, gesture: str, intensity: float = 1.0, **kwargs) -> dict[str, Any]:
         gesture = gesture.lower().strip()
         
         if gesture not in self.VALID_GESTURES:
@@ -137,7 +137,7 @@ class AvatarEmotionTool(Tool):
         "bored", "curious", "proud", "embarrassed"
     ]
     
-    def execute(self, emotion: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, emotion: str, **kwargs) -> dict[str, Any]:
         emotion = emotion.lower().strip()
         
         if emotion not in self.VALID_EMOTIONS:

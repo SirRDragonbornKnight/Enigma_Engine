@@ -78,8 +78,8 @@ class OffloadedTask:
     task_id: str
     capability: str
     task: Any
-    context: Dict[str, Any] = field(default_factory=dict)
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     model_id: Optional[str] = None
     priority: int = 5
     callback: Optional[Callable[[Any], None]] = None
@@ -295,15 +295,15 @@ class TaskOffloader:
         self._task_queue: queue.PriorityQueue = queue.PriorityQueue(maxsize=max_size)
         
         # Task tracking
-        self._tasks: Dict[str, OffloadedTask] = {}
+        self._tasks: dict[str, OffloadedTask] = {}
         self._task_lock = threading.RLock()
         
         # Result cache
-        self._cache: Dict[str, Any] = {}
-        self._cache_timestamps: Dict[str, float] = {}
+        self._cache: dict[str, Any] = {}
+        self._cache_timestamps: dict[str, float] = {}
         
         # Workers
-        self._workers: List[WorkerThread] = []
+        self._workers: list[WorkerThread] = []
         self._start_workers()
         
         # Cleanup thread
@@ -343,8 +343,8 @@ class TaskOffloader:
         self,
         capability: str,
         task: Any = None,
-        context: Optional[Dict[str, Any]] = None,
-        parameters: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
+        parameters: Optional[dict[str, Any]] = None,
         model_id: Optional[str] = None,
         priority: int = 5,
         callback: Optional[Callable[[Any], None]] = None,
@@ -510,7 +510,7 @@ class TaskOffloader:
         """Get the number of pending tasks in the queue."""
         return self._task_queue.qsize()
     
-    def get_pending_tasks(self) -> List[str]:
+    def get_pending_tasks(self) -> list[str]:
         """Get list of pending task IDs."""
         with self._task_lock:
             return [
@@ -519,7 +519,7 @@ class TaskOffloader:
                 if task.status == TaskStatus.PENDING
             ]
     
-    def get_running_tasks(self) -> List[str]:
+    def get_running_tasks(self) -> list[str]:
         """Get list of running task IDs."""
         with self._task_lock:
             return [
@@ -624,7 +624,7 @@ class TaskOffloader:
         """Generate cache key for a task."""
         import hashlib
         import json
-        
+
         # Create deterministic string from task
         cache_data = {
             "capability": task.capability,
@@ -715,7 +715,7 @@ class TaskOffloader:
     # STATUS & STATISTICS
     # -------------------------------------------------------------------------
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get offloader status and statistics."""
         with self._task_lock:
             pending = sum(

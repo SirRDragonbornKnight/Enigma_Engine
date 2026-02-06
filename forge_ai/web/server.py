@@ -8,18 +8,26 @@ NOTE: Requires FastAPI to be installed:
     pip install fastapi uvicorn python-multipart
 """
 
-import logging
-from pathlib import Path
-from typing import Optional, List
 import asyncio
+import logging
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import List, Optional
 
 # Check for FastAPI availability
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, status
-    from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi import (
+        Depends,
+        FastAPI,
+        HTTPException,
+        Query,
+        WebSocket,
+        WebSocketDisconnect,
+        status,
+    )
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
     FASTAPI_AVAILABLE = True
 except ImportError:
@@ -43,7 +51,7 @@ except ImportError:
             for k, v in kwargs.items():
                 setattr(self, k, v)
 
-from .auth import get_auth, WebAuth
+from .auth import WebAuth, get_auth
 from .discovery import LocalDiscovery, get_local_ip
 
 logger = logging.getLogger(__name__)
@@ -105,7 +113,7 @@ class ConnectionManager:
     """Manages WebSocket connections."""
     
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: list[WebSocket] = []
     
     async def connect(self, websocket: WebSocket):
         """Accept and store a new connection."""
@@ -192,7 +200,7 @@ class ForgeWebServer:
         # Get CORS origins from config
         try:
             from ..config import CONFIG
-            
+
             # Check for CORS configuration in config
             if hasattr(CONFIG, 'CORS_ORIGINS') and CONFIG.CORS_ORIGINS:
                 origins = CONFIG.CORS_ORIGINS
@@ -497,9 +505,10 @@ class ForgeWebServer:
             url = f"http://{get_local_ip()}:{self.port}?token={token}"
             
             try:
-                import qrcode
-                import io
                 import base64
+                import io
+
+                import qrcode
                 
                 qr = qrcode.QRCode(version=1, box_size=10, border=5)
                 qr.add_data(url)
@@ -623,7 +632,7 @@ class ForgeWebServer:
                             {
                                 "type": "response",
                                 "content": response,
-                                "timestamp": str(asyncio.get_event_loop().time())
+                                "timestamp": str(asyncio.get_running_loop().time())
                             },
                             websocket
                         )
@@ -653,13 +662,13 @@ class ForgeWebServer:
         prompt = prompt[:MAX_PROMPT_LENGTH]
         
         # Get the current event loop
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         
         def _sync_generate():
             """Synchronous generation function to run in thread pool."""
             try:
                 from ..core.inference import ForgeEngine
-                
+
                 # Create engine if needed (singleton pattern)
                 # Note: Engine creation is thread-safe due to GIL
                 engine = ForgeEngine()
@@ -699,7 +708,7 @@ class ForgeWebServer:
     def start(self, debug: bool = False):
         """Start the web server."""
         import uvicorn
-        
+
         # Start local network discovery
         self.discovery.advertise(self.port)
         
@@ -720,7 +729,7 @@ class ForgeWebServer:
             print(f"\nAuthentication Token: {token}")
             print(f"Connection URL: http://{local_ip}:{self.port}?token={token}")
         
-        print("\nAPI Documentation: http://localhost:{}/docs".format(self.port))
+        print(f"\nAPI Documentation: http://localhost:{self.port}/docs")
         print("="*60 + "\n")
         
         try:

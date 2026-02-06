@@ -36,27 +36,44 @@ Usage:
     ai_art = spawner.spawn_ai_generated("a cute cat", style="pixel")
 """
 
+import json
 import math
-import time
 import threading
+import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Dict, List, Callable, Any, Tuple
-import json
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Try PyQt5
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QLabel, QApplication, QMenu, QGraphicsDropShadowEffect
-    )
     from PyQt5.QtCore import (
-        Qt, QTimer, QPoint, QPropertyAnimation, QEasingCurve,
-        pyqtSignal, QSize, QRect
+        QEasingCurve,
+        QPoint,
+        QPropertyAnimation,
+        QRect,
+        QSize,
+        Qt,
+        QTimer,
+        pyqtSignal,
     )
     from PyQt5.QtGui import (
-        QPixmap, QPainter, QColor, QFont, QFontMetrics,
-        QPainterPath, QBrush, QPen, QLinearGradient
+        QBrush,
+        QColor,
+        QFont,
+        QFontMetrics,
+        QLinearGradient,
+        QPainter,
+        QPainterPath,
+        QPen,
+        QPixmap,
+    )
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QGraphicsDropShadowEffect,
+        QLabel,
+        QMenu,
+        QWidget,
     )
     HAS_PYQT = True
 except ImportError:
@@ -434,8 +451,8 @@ class ObjectSpawner:
     """
     
     def __init__(self):
-        self._objects: Dict[str, SpawnedObject] = {}
-        self._windows: Dict[str, ObjectWindow] = {}
+        self._objects: dict[str, SpawnedObject] = {}
+        self._windows: dict[str, ObjectWindow] = {}
         self._next_id = 0
         
         # Physics/cleanup timer
@@ -511,7 +528,7 @@ class ObjectSpawner:
             
             time.sleep(0.033)  # ~30 FPS
     
-    def set_avatar_position_callback(self, callback: Callable[[], Tuple[int, int]]):
+    def set_avatar_position_callback(self, callback: Callable[[], tuple[int, int]]):
         """Set callback to get avatar position for attached objects."""
         self._avatar_position_callback = callback
     
@@ -752,7 +769,7 @@ class ObjectSpawner:
         """Handle object click."""
         print(f"[ObjectSpawner] Object clicked: {obj_id}")
     
-    def get_objects(self) -> List[SpawnedObject]:
+    def get_objects(self) -> list[SpawnedObject]:
         """Get all current objects."""
         return list(self._objects.values())
 

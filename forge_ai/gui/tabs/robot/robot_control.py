@@ -7,16 +7,25 @@ The same AI being trained learns to control these robots.
 Supports loading connection configs from files instead of presets.
 """
 
-from pathlib import Path
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QGroupBox, QLineEdit, QTextEdit, QFileDialog, QCheckBox, QMessageBox
-)
 import json
+from pathlib import Path
+
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ....config import CONFIG
 from ..shared_components import NoScrollComboBox
-
 
 # Robot configs directory
 ROBOT_CONFIG_DIR = Path(CONFIG["data_dir"]) / "robot"
@@ -245,7 +254,7 @@ def _on_robot_config_changed(parent, index):
         return
     
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = json.load(f)
         
         # Apply config to UI
@@ -477,7 +486,7 @@ def _change_robot_mode(parent):
     mode = parent.robot_mode_combo.currentData()
     
     try:
-        from forge_ai.tools.robot_modes import get_mode_controller, RobotMode
+        from forge_ai.tools.robot_modes import RobotMode, get_mode_controller
         
         controller = get_mode_controller()
         
@@ -541,7 +550,7 @@ def _toggle_robot_camera(parent, state):
     enabled = state == 2
     
     try:
-        from forge_ai.tools.robot_modes import get_mode_controller, CameraConfig
+        from forge_ai.tools.robot_modes import CameraConfig, get_mode_controller
         
         controller = get_mode_controller()
         

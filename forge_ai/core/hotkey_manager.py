@@ -32,11 +32,11 @@ USAGE:
     manager.stop()
 """
 
-import sys
 import logging
+import sys
 import threading
-from typing import Callable, List, Dict, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class HotkeyManager:
     
     def __init__(self):
         """Initialize the hotkey manager."""
-        self._hotkeys: Dict[str, HotkeyInfo] = {}
+        self._hotkeys: dict[str, HotkeyInfo] = {}
         self._backend: Optional[Any] = None
         self._running = False
         self._lock = threading.Lock()
@@ -185,7 +185,7 @@ class HotkeyManager:
             for name in names:
                 self.unregister(name)
     
-    def list_registered(self) -> List[Dict[str, Any]]:
+    def list_registered(self) -> list[dict[str, Any]]:
         """
         List all registered hotkeys.
         

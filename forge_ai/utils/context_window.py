@@ -118,6 +118,7 @@ class TokenCounter:
         # Try sentencepiece
         try:
             import sentencepiece as spm
+
             # Use a simple estimate if no model loaded
             self._method = "sentencepiece_estimate"
             logger.info("Using sentencepiece estimate for token counting")
@@ -180,7 +181,7 @@ class ContextTracker:
     Track and manage context window usage.
     """
     
-    def __init__(self, config: Optional[ContextConfig] = None):
+    def __init__(self, config: ContextConfig | None = None):
         """
         Initialize context tracker.
         
@@ -190,10 +191,10 @@ class ContextTracker:
         self.config = config or ContextConfig()
         self._counter = TokenCounter(self.config.tokenizer_name)
         
-        self._messages: List[Dict[str, Any]] = []
+        self._messages: list[dict[str, Any]] = []
         self._system_prompt: str = ""
         
-        self._usage_callbacks: List[Callable[[ContextUsage], None]] = []
+        self._usage_callbacks: list[Callable[[ContextUsage], None]] = []
         self._warning_fired = False
     
     def set_system_prompt(self, prompt: str) -> int:
@@ -209,7 +210,7 @@ class ContextTracker:
         self._system_prompt = prompt
         return self._counter.count_tokens(prompt)
     
-    def add_message(self, role: str, content: str) -> Tuple[int, ContextUsage]:
+    def add_message(self, role: str, content: str) -> tuple[int, ContextUsage]:
         """
         Add a message and get updated usage.
         
@@ -333,7 +334,7 @@ class ContextTracker:
         
         return result
     
-    def get_colored_bar(self, width: int = 30) -> Tuple[str, str]:
+    def get_colored_bar(self, width: int = 30) -> tuple[str, str]:
         """
         Get progress bar with color suggestion.
         
@@ -362,7 +363,7 @@ class ContextTracker:
         usage = self.get_usage()
         return usage.remaining_tokens
     
-    def can_fit_message(self, content: str) -> Tuple[bool, int]:
+    def can_fit_message(self, content: str) -> tuple[bool, int]:
         """
         Check if a message can fit in remaining context.
         
@@ -420,7 +421,7 @@ class ContextTracker:
         self._warning_fired = False
         return removed
     
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a summary of context usage."""
         usage = self.get_usage()
         
@@ -498,12 +499,12 @@ def get_context_size(model_name: str) -> int:
 
 
 # Singleton instance
-_context_tracker_instance: Optional[ContextTracker] = None
+_context_tracker_instance: ContextTracker | None = None
 
 
 def get_context_tracker(
-    max_tokens: Optional[int] = None,
-    model_name: Optional[str] = None
+    max_tokens: int | None = None,
+    model_name: str | None = None
 ) -> ContextTracker:
     """
     Get or create the singleton context tracker.

@@ -13,11 +13,11 @@ How BPE works:
 This creates subword tokens that capture common patterns in YOUR specific data.
 """
 import json
-import re
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-from collections import Counter
 import logging
+import re
+from collections import Counter
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -56,15 +56,15 @@ class BPETokenizer:
         self.unk_token_id = 3
 
         # Vocabulary mappings
-        self.token_to_id: Dict[str, int] = {}
-        self.id_to_token: Dict[int, str] = {}
+        self.token_to_id: dict[str, int] = {}
+        self.id_to_token: dict[int, str] = {}
 
         # BPE merge rules (ordered list of merges)
-        self.merges: List[Tuple[str, str]] = []
-        self.merge_ranks: Dict[Tuple[str, str], int] = {}
+        self.merges: list[tuple[str, str]] = []
+        self.merge_ranks: dict[tuple[str, str], int] = {}
 
         # Cache for encoding
-        self.cache: Dict[str, List[int]] = {}
+        self.cache: dict[str, list[int]] = {}
 
         if vocab_file and vocab_file.exists():
             self.load(vocab_file)
@@ -88,7 +88,7 @@ class BPETokenizer:
                 self.id_to_token[next_id] = char
                 next_id += 1
 
-    def train(self, texts: List[str], vocab_size: int = 8000, min_frequency: int = 2,
+    def train(self, texts: list[str], vocab_size: int = 8000, min_frequency: int = 2,
               verbose: bool = True):
         """
         Train BPE on a list of texts.
@@ -180,7 +180,7 @@ class BPETokenizer:
             print(f"  Total merges: {len(self.merges)}")
             print("Training complete!")
 
-    def _pre_tokenize(self, text: str) -> List[str]:
+    def _pre_tokenize(self, text: str) -> list[str]:
         """Split text into words for BPE processing."""
         result = []
 
@@ -229,7 +229,7 @@ class BPETokenizer:
 
         return pair_freqs
 
-    def _apply_merge(self, word_freqs: Counter, pair: Tuple[str, str],
+    def _apply_merge(self, word_freqs: Counter, pair: tuple[str, str],
                      new_token: str) -> Counter:
         """Apply a merge to all words."""
         new_word_freqs: Counter = Counter()
@@ -250,7 +250,7 @@ class BPETokenizer:
 
         return new_word_freqs
 
-    def _tokenize_word(self, word: str) -> List[str]:
+    def _tokenize_word(self, word: str) -> list[str]:
         """Tokenize a single word using learned BPE merges."""
         if word in self.cache:
             return list(self.cache[word])
@@ -307,7 +307,7 @@ class BPETokenizer:
         self.cache[word] = tokens
         return tokens
 
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Encode text to token IDs."""
         ids = []
 
@@ -345,7 +345,7 @@ class BPETokenizer:
 
         return ids
 
-    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """Decode token IDs back to text."""
         tokens = []
 
@@ -396,7 +396,7 @@ class BPETokenizer:
 
     def load(self, path: Path):
         """Load tokenizer from file."""
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
 
         self.token_to_id = data['token_to_id']
@@ -418,7 +418,7 @@ class BPETokenizer:
 
     def __call__(self, text: str, return_tensors: str = None,
                  padding: bool = None, truncation: bool = None,
-                 max_length: int = None, add_special_tokens: bool = True) -> Dict[str, Any]:
+                 max_length: int = None, add_special_tokens: bool = True) -> dict[str, Any]:
         """Tokenize text (HuggingFace-compatible interface)."""
         ids = self.encode(text, add_special_tokens=add_special_tokens)
 
@@ -437,11 +437,11 @@ class BPETokenizer:
     def __len__(self) -> int:
         return self.vocab_size
 
-    def get_vocab(self) -> Dict[str, int]:
+    def get_vocab(self) -> dict[str, int]:
         return self.token_to_id.copy()
 
 
-def train_bpe_tokenizer(data_paths: List[str], vocab_size: int = 8000,
+def train_bpe_tokenizer(data_paths: list[str], vocab_size: int = 8000,
                         output_path: Optional[str] = None) -> BPETokenizer:
     """
     Train a BPE tokenizer on data files.
@@ -459,7 +459,7 @@ def train_bpe_tokenizer(data_paths: List[str], vocab_size: int = 8000,
     for path in data_paths:
         p = Path(path)
         if p.exists():
-            with open(p, 'r', encoding='utf-8') as f:
+            with open(p, encoding='utf-8') as f:
                 texts.append(f.read())
             print(f"Loaded {p} ({len(texts[-1])} chars)")
 

@@ -2,9 +2,9 @@
 Memory Deduplication for ForgeAI
 Detects and removes duplicate or near-duplicate memories.
 """
-import logging
 import hashlib
-from typing import List, Dict, Optional, Tuple
+import logging
+from typing import Dict, List, Optional, Tuple
 
 from .categorization import Memory, MemoryCategorization
 
@@ -22,7 +22,7 @@ class MemoryDeduplicator:
             memory_system: Memory categorization system
         """
         self.memory_system = memory_system
-        self._hash_cache: Dict[str, str] = {}  # hash -> memory_id
+        self._hash_cache: dict[str, str] = {}  # hash -> memory_id
         self._build_hash_cache()
     
     def _build_hash_cache(self):
@@ -64,7 +64,7 @@ class MemoryDeduplicator:
         content_hash = self.compute_hash(content)
         return self._hash_cache.get(content_hash)
     
-    def find_duplicates(self) -> List[Tuple[str, str]]:
+    def find_duplicates(self) -> list[tuple[str, str]]:
         """
         Find all duplicate pairs in the system.
         
@@ -74,7 +74,7 @@ class MemoryDeduplicator:
         memories = self.memory_system.get_all_memories()
         
         # Group by hash
-        hash_groups: Dict[str, List[Memory]] = {}
+        hash_groups: dict[str, list[Memory]] = {}
         
         for memory in memories:
             content_hash = self.compute_hash(memory.content)
@@ -111,7 +111,7 @@ class MemoryDeduplicator:
         memories = self.memory_system.get_all_memories()
         
         # Group by hash
-        hash_groups: Dict[str, List[Memory]] = {}
+        hash_groups: dict[str, list[Memory]] = {}
         
         for memory in memories:
             content_hash = self.compute_hash(memory.content)
@@ -153,7 +153,7 @@ class MemoryDeduplicator:
     def find_near_duplicates(
         self,
         similarity_threshold: float = 0.95
-    ) -> List[Tuple[str, str, float]]:
+    ) -> list[tuple[str, str, float]]:
         """
         Find near-duplicate memories using similarity.
         
@@ -239,7 +239,7 @@ class MemoryDeduplicator:
             return 0
         
         # Build groups of similar memories
-        groups: Dict[str, set] = {}  # representative_id -> set of similar ids
+        groups: dict[str, set] = {}  # representative_id -> set of similar ids
         
         for id1, id2, similarity in near_duplicates:
             # Find if either is already in a group
@@ -290,7 +290,7 @@ class MemoryDeduplicator:
         logger.info(f"Removed {removed_count} near-duplicate memories")
         return removed_count
     
-    def get_duplicate_statistics(self) -> Dict[str, any]:
+    def get_duplicate_statistics(self) -> dict[str, any]:
         """
         Get statistics about duplicates.
         

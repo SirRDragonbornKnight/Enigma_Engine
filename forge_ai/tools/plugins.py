@@ -5,13 +5,13 @@ Tool Plugin Discovery and Loading
 Discovers and loads custom tool plugins from configured directories.
 """
 
-import logging
 import importlib
 import importlib.util
 import inspect
+import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Callable, Any
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class ToolPluginLoader:
     
     def __init__(
         self,
-        plugin_dirs: Optional[List[Path]] = None,
+        plugin_dirs: Optional[list[Path]] = None,
         auto_discover: bool = True
     ):
         """
@@ -47,15 +47,15 @@ class ToolPluginLoader:
             ]
         
         self.plugin_dirs = plugin_dirs
-        self.discovered_plugins: Dict[str, Dict[str, Any]] = {}
-        self.loaded_plugins: Set[str] = set()
+        self.discovered_plugins: dict[str, dict[str, Any]] = {}
+        self.loaded_plugins: set[str] = set()
         
         logger.info(f"ToolPluginLoader initialized with {len(plugin_dirs)} search paths")
         
         if auto_discover:
             self.discover_plugins()
     
-    def discover_plugins(self) -> List[str]:
+    def discover_plugins(self) -> list[str]:
         """
         Discover plugins in configured directories.
         
@@ -95,7 +95,7 @@ class ToolPluginLoader:
         logger.info(f"Discovered {len(discovered)} plugin(s)")
         return discovered
     
-    def _inspect_plugin(self, plugin_file: Path) -> Optional[Dict[str, Any]]:
+    def _inspect_plugin(self, plugin_file: Path) -> Optional[dict[str, Any]]:
         """
         Inspect a plugin file for metadata.
         
@@ -187,7 +187,7 @@ class ToolPluginLoader:
             logger.exception(f"Failed to load plugin {plugin_name}: {e}")
             return False
     
-    def load_all(self) -> Dict[str, bool]:
+    def load_all(self) -> dict[str, bool]:
         """
         Load all discovered plugins.
         
@@ -231,7 +231,7 @@ class ToolPluginLoader:
             logger.exception(f"Failed to unload plugin {plugin_name}: {e}")
             return False
     
-    def get_plugin_info(self, plugin_name: str) -> Optional[Dict[str, Any]]:
+    def get_plugin_info(self, plugin_name: str) -> Optional[dict[str, Any]]:
         """
         Get information about a plugin.
         
@@ -251,7 +251,7 @@ class ToolPluginLoader:
         
         return info
     
-    def list_plugins(self) -> List[Dict[str, Any]]:
+    def list_plugins(self) -> list[dict[str, Any]]:
         """
         List all discovered plugins.
         
@@ -267,7 +267,7 @@ class ToolPluginLoader:
         
         return plugins
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get plugin loader statistics."""
         return {
             "plugin_dirs": [str(p) for p in self.plugin_dirs],

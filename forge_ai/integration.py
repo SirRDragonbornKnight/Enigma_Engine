@@ -31,9 +31,9 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List, Callable
 from enum import Enum, auto
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +87,14 @@ class CrossDeviceSystem:
         
         # Configuration
         self._role = SystemRole.STANDALONE
-        self._devices: Dict[str, DeviceEndpoint] = {}
+        self._devices: dict[str, DeviceEndpoint] = {}
         
         # State
         self._running = False
         self._lock = threading.Lock()
         
         # Event callbacks
-        self._callbacks: Dict[str, List[Callable]] = {
+        self._callbacks: dict[str, list[Callable]] = {
             "game_started": [],
             "game_ended": [],
             "battery_low": [],
@@ -254,7 +254,7 @@ class CrossDeviceSystem:
         
         logger.info("Cross-device system stopped")
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get system status."""
         status = {
             "role": self._role.name,
@@ -314,7 +314,11 @@ class CrossDeviceSystem:
         
         # Fallback to pooled engine (efficient reuse)
         try:
-            from forge_ai.core.engine_pool import get_engine, release_engine, create_fallback_response
+            from forge_ai.core.engine_pool import (
+                create_fallback_response,
+                get_engine,
+                release_engine,
+            )
             engine = get_engine()
             if engine is None:
                 return create_fallback_response("No engine available")
@@ -445,6 +449,7 @@ class CrossDeviceSystem:
         """Initialize mobile avatar server."""
         try:
             from forge_ai.avatar.mobile_avatar import MobileAvatarServer
+
             # Server is integrated with device sync
             logger.debug("Mobile avatar server initialized")
         except Exception as e:

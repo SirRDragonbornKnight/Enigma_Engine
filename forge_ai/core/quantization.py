@@ -21,13 +21,14 @@ Usage:
     model = auto_quantize(model)
 """
 
-import torch
-import torch.nn as nn
-from typing import Optional, List, Dict, Any, Union
-from dataclasses import dataclass, field
-from pathlib import Path
 import logging
 import warnings
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import torch
+import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class QuantConfig:
     bits: int = 8
     
     # Layers to exclude from quantization
-    exclude_layers: List[str] = field(default_factory=lambda: ['embed', 'ln_f', 'norm'])
+    exclude_layers: list[str] = field(default_factory=lambda: ['embed', 'ln_f', 'norm'])
     
     # Whether to quantize activations too
     quantize_activations: bool = False
@@ -180,7 +181,7 @@ def dynamic_quantize(model: nn.Module) -> nn.Module:
         return torch.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)
 
 
-def estimate_model_size(model: nn.Module, bits: int = 32) -> Dict[str, float]:
+def estimate_model_size(model: nn.Module, bits: int = 32) -> dict[str, float]:
     """Estimate model memory usage."""
     params = sum(p.numel() for p in model.parameters())
     size_mb = (params * 4) / (1024 * 1024)
@@ -472,7 +473,7 @@ def ggml_quantize(
     model: nn.Module,
     quant_type: str = GGMLQuantType.Q4_K_M,
     inplace: bool = False,
-    exclude_layers: Optional[List[str]] = None
+    exclude_layers: Optional[list[str]] = None
 ) -> nn.Module:
     """
     Apply GGML-style quantization to a model.
@@ -520,7 +521,7 @@ def ggml_quantize(
     return model
 
 
-def get_quant_type_info(quant_type: str) -> Dict[str, Any]:
+def get_quant_type_info(quant_type: str) -> dict[str, Any]:
     """Get information about a quantization type."""
     info = {
         "Q4_0": {"bits": 4, "desc": "4-bit, basic", "quality": "low", "size_ratio": 0.125},

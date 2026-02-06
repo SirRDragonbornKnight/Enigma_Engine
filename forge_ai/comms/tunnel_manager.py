@@ -37,15 +37,16 @@ like ngrok, localtunnel, or bore. Useful for remote access, mobile apps, demos.
     ← USED BY:   forge_ai/modules/registry.py (TunnelModule)
 """
 
-import logging
-import subprocess
-import time
-import re
 import json
-from typing import Optional, Dict, Any
+import logging
+import re
+import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from enum import Enum
-import threading
+from typing import Any, Dict, Optional
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -460,7 +461,10 @@ class TunnelManager:
     
     def __del__(self):
         """Cleanup on deletion."""
-        self.stop_tunnel()
+        try:
+            self.stop_tunnel()
+        except Exception:
+            pass  # Ignore cleanup errors during shutdown
 
 
 # Singleton instance for easy access

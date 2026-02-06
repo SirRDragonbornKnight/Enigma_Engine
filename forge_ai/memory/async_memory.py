@@ -4,10 +4,11 @@ Provides async/await interface for memory database and vector database operation
 """
 import asyncio
 import json
-import time
 import logging
-from typing import List, Dict, Any, Optional
+import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class AsyncMemoryDatabase:
         self,
         text: str,
         source: str = "user",
-        meta: Optional[Dict] = None
+        meta: Optional[dict] = None
     ) -> int:
         """
         Add a memory asynchronously.
@@ -93,7 +94,7 @@ class AsyncMemoryDatabase:
             await db.commit()
             return cursor.lastrowid
     
-    async def get_recent(self, n: int = 20) -> List[Dict[str, Any]]:
+    async def get_recent(self, n: int = 20) -> list[dict[str, Any]]:
         """
         Get recent memories asynchronously.
         
@@ -126,7 +127,7 @@ class AsyncMemoryDatabase:
                     for row in rows
                 ]
     
-    async def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """
         Search memories by text content asynchronously.
         
@@ -166,7 +167,7 @@ class AsyncMemoryDatabase:
                     for row in rows
                 ]
     
-    async def get_by_id(self, id_: int) -> Optional[Dict[str, Any]]:
+    async def get_by_id(self, id_: int) -> Optional[dict[str, Any]]:
         """
         Get a memory by ID asynchronously.
         
@@ -251,8 +252,8 @@ class AsyncVectorDB:
     async def add(
         self,
         vectors: np.ndarray,
-        ids: List[str],
-        metadata: Optional[List[Dict]] = None
+        ids: list[str],
+        metadata: Optional[list[dict]] = None
     ) -> None:
         """
         Add vectors asynchronously.
@@ -263,7 +264,7 @@ class AsyncVectorDB:
             metadata: Optional metadata
         """
         # Run sync operation in thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             self.vector_db.add,
@@ -276,7 +277,7 @@ class AsyncVectorDB:
         self,
         query_vector: np.ndarray,
         top_k: int = 5
-    ) -> List:
+    ) -> list:
         """
         Search for similar vectors asynchronously.
         
@@ -287,7 +288,7 @@ class AsyncVectorDB:
         Returns:
             List of (id, score, metadata) tuples
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             self.vector_db.search,
@@ -295,14 +296,14 @@ class AsyncVectorDB:
             top_k
         )
     
-    async def delete(self, ids: List[str]) -> None:
+    async def delete(self, ids: list[str]) -> None:
         """
         Delete vectors asynchronously.
         
         Args:
             ids: IDs to delete
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             self.vector_db.delete,
@@ -316,7 +317,7 @@ class AsyncVectorDB:
         Args:
             path: Path to save to
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             self.vector_db.save,
@@ -330,7 +331,7 @@ class AsyncVectorDB:
         Args:
             path: Path to load from
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             self.vector_db.load,
@@ -344,7 +345,7 @@ class AsyncVectorDB:
         Returns:
             Number of vectors
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             self.vector_db.count

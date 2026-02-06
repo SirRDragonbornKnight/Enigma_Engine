@@ -26,9 +26,9 @@ USAGE:
 import ast
 import os
 import sys
-from pathlib import Path
-from typing import Dict, List, Any, Set, Optional
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 
 @dataclass
@@ -36,11 +36,11 @@ class TabAnalysisResult:
     """Results of analyzing a single tab."""
     filepath: Path
     tab_name: str
-    issues: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    suggestions: List[str] = field(default_factory=list)
-    patterns_used: Set[str] = field(default_factory=set)
-    base_classes: List[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
+    patterns_used: set[str] = field(default_factory=set)
+    base_classes: list[str] = field(default_factory=list)
     has_error_handling: bool = False
     has_worker_thread: bool = False
     has_device_awareness: bool = False
@@ -58,7 +58,7 @@ class TabAnalyzer:
             tabs_dir = script_dir.parent / "gui" / "tabs"
         
         self.tabs_dir = tabs_dir
-        self.results: Dict[str, TabAnalysisResult] = {}
+        self.results: dict[str, TabAnalysisResult] = {}
         
         # Expected patterns
         self.expected_imports = {
@@ -103,7 +103,7 @@ class TabAnalyzer:
         result = TabAnalysisResult(filepath=filepath, tab_name=tab_name)
         
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 source = f.read()
             
             tree = ast.parse(source)
@@ -331,13 +331,13 @@ class TabAnalyzer:
         
         return "\n".join(lines)
     
-    def get_worst_tabs(self, n: int = 5) -> List[TabAnalysisResult]:
+    def get_worst_tabs(self, n: int = 5) -> list[TabAnalysisResult]:
         """Get the n worst-scoring tabs."""
         return sorted(self.results.values(), key=lambda r: r.score)[:n]
     
-    def get_issues_by_type(self) -> Dict[str, List[str]]:
+    def get_issues_by_type(self) -> dict[str, list[str]]:
         """Group all issues by type."""
-        issues_by_type: Dict[str, List[str]] = {}
+        issues_by_type: dict[str, list[str]] = {}
         
         for result in self.results.values():
             for issue in result.issues:

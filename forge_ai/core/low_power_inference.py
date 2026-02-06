@@ -31,14 +31,16 @@ Usage:
     response = engine.generate("Hello!")
 """
 
-import torch
-import torch.nn.functional as F
-from typing import Optional, List, Dict, Any, Generator
-from pathlib import Path
-import logging
 import gc
+import logging
 import os
 import warnings
+from collections.abc import Generator
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import torch
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +109,7 @@ class LowPowerConfig:
         config = cls()
         
         try:
-            from .device_profiles import get_device_profiler, DeviceClass
+            from .device_profiles import DeviceClass, get_device_profiler
             profiler = get_device_profiler()
             caps = profiler.detect()
             device_class = profiler.classify()
@@ -217,7 +219,7 @@ class LowPowerEngine:
     def _load_model(self, model_path: Optional[str]):
         """Load model with memory optimizations."""
         from ..config import CONFIG
-        
+
         # Find model file
         models_dir = Path(CONFIG.get("models_dir", "models"))
         if model_path:
@@ -270,10 +272,10 @@ class LowPowerEngine:
         model.eval()
         return model
     
-    def _create_model_from_state(self, state_dict: Dict[str, torch.Tensor]):
+    def _create_model_from_state(self, state_dict: dict[str, torch.Tensor]):
         """Create model architecture from state dict."""
-        from .model import create_model, MODEL_PRESETS
-        
+        from .model import MODEL_PRESETS, create_model
+
         # Find hidden dimension
         hidden_dim = None
         for key, tensor in state_dict.items():
@@ -509,7 +511,7 @@ class LowPowerEngine:
         
         gc.collect()
     
-    def get_memory_usage(self) -> Dict[str, float]:
+    def get_memory_usage(self) -> dict[str, float]:
         """Get current memory usage in MB."""
         import psutil
         
@@ -534,7 +536,7 @@ def get_engine(force_low_power: bool = False):
         ForgeEngine or LowPowerEngine depending on hardware
     """
     try:
-        from .device_profiles import get_device_profiler, DeviceClass
+        from .device_profiles import DeviceClass, get_device_profiler
         profiler = get_device_profiler()
         device_class = profiler.classify()
         

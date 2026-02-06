@@ -24,18 +24,18 @@ Usage:
     instances = manager.list_running_instances()
 """
 
-import os
 import json
-import uuid
+import os
 import time
-import psutil
-from pathlib import Path
-from typing import Optional, List, Dict, Any
+import uuid
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import psutil
 
 from ..config import CONFIG  # noqa: F401 - imported for side effects
-
 
 # Lock directory in user's home
 LOCK_DIR = Path.home() / ".forge_ai" / "locks"
@@ -53,18 +53,18 @@ class InstanceInfo:
     host: str = "localhost"
     port: Optional[int] = None
     status: str = "running"
-    locked_models: List[str] = None
+    locked_models: list[str] = None
     
     def __post_init__(self):
         if self.locked_models is None:
             self.locked_models = []
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'InstanceInfo':
+    def from_dict(cls, data: dict[str, Any]) -> 'InstanceInfo':
         """Create from dictionary."""
         return cls(**data)
 
@@ -88,7 +88,7 @@ class InstanceManager:
         """
         self.instance_id = instance_id or self._generate_instance_id()
         self.lock_file = LOCK_DIR / f"instance_{self.instance_id}.lock"
-        self.model_locks: Dict[str, Path] = {}
+        self.model_locks: dict[str, Path] = {}
         self.info = InstanceInfo(
             instance_id=self.instance_id,
             pid=os.getpid(),
@@ -137,7 +137,7 @@ class InstanceManager:
             # Check if lock file exists and is valid
             if lock_file.exists():
                 try:
-                    with open(lock_file, 'r') as f:
+                    with open(lock_file) as f:
                         lock_info = json.load(f)
                     
                     # Check if the process holding the lock is still alive
@@ -221,7 +221,7 @@ class InstanceManager:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return False
     
-    def list_running_instances(self) -> List[Dict[str, Any]]:
+    def list_running_instances(self) -> list[dict[str, Any]]:
         """
         List all running Forge instances.
         
@@ -236,7 +236,7 @@ class InstanceManager:
         # Read all instance lock files
         for lock_file in LOCK_DIR.glob("instance_*.lock"):
             try:
-                with open(lock_file, 'r') as f:
+                with open(lock_file) as f:
                     info = json.load(f)
                 
                 # Verify process is still alive
@@ -259,7 +259,7 @@ class InstanceManager:
         """Remove lock files for dead processes."""
         for lock_file in LOCK_DIR.glob("*.lock"):
             try:
-                with open(lock_file, 'r') as f:
+                with open(lock_file) as f:
                     info = json.load(f)
                 
                 pid = info.get('pid')
@@ -301,7 +301,7 @@ class InstanceManager:
         except Exception as e:
             print(f"Failed to send message: {e}")
     
-    def receive_messages(self) -> List[Dict[str, Any]]:
+    def receive_messages(self) -> list[dict[str, Any]]:
         """
         Receive messages sent to this instance.
         
@@ -316,7 +316,7 @@ class InstanceManager:
         
         for msg_file in messages_dir.glob(f"{self.instance_id}_*.msg"):
             try:
-                with open(msg_file, 'r') as f:
+                with open(msg_file) as f:
                     msg = json.load(f)
                 messages.append(msg)
                 
@@ -327,7 +327,7 @@ class InstanceManager:
         
         return messages
     
-    def get_instance_info(self, instance_id: str) -> Optional[Dict[str, Any]]:
+    def get_instance_info(self, instance_id: str) -> Optional[dict[str, Any]]:
         """
         Get information about a specific instance.
         
@@ -343,7 +343,7 @@ class InstanceManager:
             return None
         
         try:
-            with open(lock_file, 'r') as f:
+            with open(lock_file) as f:
                 info = json.load(f)
             
             # Verify process is alive
@@ -389,7 +389,7 @@ class InstanceManager:
 
 
 # Convenience functions
-def get_active_instances() -> List[Dict[str, Any]]:
+def get_active_instances() -> list[dict[str, Any]]:
     """Get list of all active Forge instances."""
     manager = InstanceManager()
     return manager.list_running_instances()

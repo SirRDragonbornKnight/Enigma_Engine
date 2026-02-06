@@ -13,11 +13,12 @@ Or from run.py:
 
 import sys
 
+
 def main():
     """Run Forge in background mode (system tray only)."""
     try:
-        from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QApplication
     except ImportError:
         print("Error: PyQt5 is required. Install with: pip install PyQt5")
         sys.exit(1)

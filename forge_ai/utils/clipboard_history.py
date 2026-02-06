@@ -77,7 +77,7 @@ class ClipboardItem:
     # User data
     pinned: bool = False
     favorite: bool = False
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     note: str = ""
     
     # Usage tracking
@@ -91,13 +91,13 @@ class ClipboardItem:
         if not self.last_used:
             self.last_used = self.created_at
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["content_type"] = self.content_type.value
         return data
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ClipboardItem':
+    def from_dict(cls, data: dict[str, Any]) -> ClipboardItem:
         if "content_type" in data:
             data["content_type"] = ContentType(data["content_type"])
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
@@ -133,7 +133,7 @@ def detect_content_type(content: str) -> ContentType:
         try:
             json.loads(content)
             return ContentType.JSON
-        except:
+        except (json.JSONDecodeError, ValueError):
             pass
     
     # Code detection (heuristic)
@@ -169,7 +169,7 @@ class ClipboardHistory:
     
     def __init__(
         self,
-        data_path: Optional[Path] = None,
+        data_path: Path | None = None,
         max_items: int = 1000,
         max_content_length: int = 100000
     ):
@@ -188,14 +188,14 @@ class ClipboardHistory:
         self._max_items = max_items
         self._max_content_length = max_content_length
         
-        self._items: Dict[str, ClipboardItem] = {}
-        self._order: List[str] = []  # Most recent first
+        self._items: dict[str, ClipboardItem] = {}
+        self._order: list[str] = []  # Most recent first
         
         self._monitoring = False
-        self._monitor_thread: Optional[threading.Thread] = None
+        self._monitor_thread: threading.Thread | None = None
         self._last_content = ""
         
-        self._callbacks: List[Callable[[ClipboardItem], None]] = []
+        self._callbacks: list[Callable[[ClipboardItem], None]] = []
         
         self._load_history()
     
@@ -203,7 +203,7 @@ class ClipboardHistory:
         """Load history from disk."""
         if self._history_file.exists():
             try:
-                with open(self._history_file, 'r', encoding='utf-8') as f:
+                with open(self._history_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for item_data in data.get("items", []):
                         item = ClipboardItem.from_dict(item_data)
@@ -229,7 +229,7 @@ class ClipboardHistory:
         """Generate a unique ID for content."""
         return hashlib.md5(content.encode()).hexdigest()[:12]
     
-    def _get_clipboard(self) -> Optional[str]:
+    def _get_clipboard(self) -> str | None:
         """Get current clipboard content."""
         try:
             # Try pyperclip first
@@ -247,8 +247,8 @@ class ClipboardHistory:
                 content = root.clipboard_get()
                 root.destroy()
                 return content
-            except:
-                pass
+            except (ImportError, tk.TclError) as e:
+                logger.debug(f"tkinter clipboard read failed: {e}")
             
             # Platform-specific fallbacks
             import sys
@@ -296,8 +296,8 @@ class ClipboardHistory:
                 root.update()
                 root.destroy()
                 return True
-            except:
-                pass
+            except (ImportError, tk.TclError) as e:
+                logger.debug(f"tkinter clipboard write failed: {e}")
             
             # Windows fallback
             import sys
@@ -311,7 +311,7 @@ class ClipboardHistory:
         
         return False
     
-    def add(self, content: str, source_app: str = "") -> Optional[ClipboardItem]:
+    def add(self, content: str, source_app: str = "") -> ClipboardItem | None:
         """
         Add content to history.
         
@@ -370,11 +370,11 @@ class ClipboardHistory:
         
         return item
     
-    def get(self, item_id: str) -> Optional[ClipboardItem]:
+    def get(self, item_id: str) -> ClipboardItem | None:
         """Get an item by ID."""
         return self._items.get(item_id)
     
-    def get_recent(self, limit: int = 20) -> List[ClipboardItem]:
+    def get_recent(self, limit: int = 20) -> list[ClipboardItem]:
         """Get recent clipboard items."""
         items = []
         for item_id in self._order[:limit]:
@@ -382,16 +382,16 @@ class ClipboardHistory:
                 items.append(self._items[item_id])
         return items
     
-    def get_pinned(self) -> List[ClipboardItem]:
+    def get_pinned(self) -> list[ClipboardItem]:
         """Get pinned items."""
         return [i for i in self._items.values() if i.pinned]
     
     def search(
         self,
         query: str,
-        content_type: Optional[ContentType] = None,
+        content_type: ContentType | None = None,
         limit: int = 20
-    ) -> List[ClipboardItem]:
+    ) -> list[ClipboardItem]:
         """
         Search clipboard history.
         
@@ -564,7 +564,7 @@ class ClipboardHistory:
         """Add a callback for new clipboard items."""
         self._callbacks.append(callback)
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get clipboard statistics."""
         type_counts = {}
         for item in self._items.values():
@@ -585,10 +585,10 @@ class ClipboardHistory:
 
 
 # Singleton instance
-_clipboard_instance: Optional[ClipboardHistory] = None
+_clipboard_instance: ClipboardHistory | None = None
 
 
-def get_clipboard_history(data_path: Optional[Path] = None) -> ClipboardHistory:
+def get_clipboard_history(data_path: Path | None = None) -> ClipboardHistory:
     """Get or create the singleton clipboard history."""
     global _clipboard_instance
     if _clipboard_instance is None:
@@ -597,16 +597,16 @@ def get_clipboard_history(data_path: Optional[Path] = None) -> ClipboardHistory:
 
 
 # Convenience functions
-def add_to_history(content: str) -> Optional[ClipboardItem]:
+def add_to_history(content: str) -> ClipboardItem | None:
     """Add content to clipboard history."""
     return get_clipboard_history().add(content)
 
 
-def get_recent_clips(limit: int = 20) -> List[ClipboardItem]:
+def get_recent_clips(limit: int = 20) -> list[ClipboardItem]:
     """Get recent clipboard items."""
     return get_clipboard_history().get_recent(limit)
 
 
-def search_clips(query: str) -> List[ClipboardItem]:
+def search_clips(query: str) -> list[ClipboardItem]:
     """Search clipboard history."""
     return get_clipboard_history().search(query)

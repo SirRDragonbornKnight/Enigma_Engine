@@ -23,22 +23,34 @@ USAGE:
 All generation tabs should use these patterns for consistency.
 """
 
+import gc
+import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Callable
-import gc
-import logging
+from typing import Any, Callable, Dict, List, Optional
 
 try:
+    from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
+    from PyQt5.QtGui import QFont, QImage, QPixmap
     from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QProgressBar, QGroupBox, QFrame,
-        QSizePolicy, QSpacerItem, QTextEdit, QSpinBox,
-        QDoubleSpinBox, QCheckBox, QApplication, QComboBox
+        QApplication,
+        QCheckBox,
+        QComboBox,
+        QDoubleSpinBox,
+        QFrame,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QProgressBar,
+        QPushButton,
+        QSizePolicy,
+        QSpacerItem,
+        QSpinBox,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
     )
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer
-    from PyQt5.QtGui import QFont, QPixmap, QImage
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -83,7 +95,7 @@ class StyleConfig:
         """Detect device class, screen properties, and UI class."""
         # Hardware detection
         try:
-            from ...core.device_profiles import get_device_profiler, DeviceClass
+            from ...core.device_profiles import DeviceClass, get_device_profiler
             profiler = get_device_profiler()
             self._device_class = profiler.classify()
         except ImportError:
@@ -501,9 +513,9 @@ class PreviewManager:
     """
     
     def __init__(self, max_cache_items: int = 5):
-        self._cache: Dict[str, QPixmap] = {}
+        self._cache: dict[str, QPixmap] = {}
         self._max_cache = max_cache_items
-        self._access_order: List[str] = []
+        self._access_order: list[str] = []
     
     def load_preview(
         self,
@@ -623,7 +635,7 @@ if HAS_PYQT:
             import time
             return time.time() - self._start_time
         
-        def emit_success(self, path: str = "", extra: Dict = None):
+        def emit_success(self, path: str = "", extra: dict = None):
             """Emit a successful result."""
             result = {
                 "success": True,
@@ -772,7 +784,7 @@ def open_in_viewer(path: str):
 
 
 def create_no_scroll_combo(
-    items: List[str] = None,
+    items: list[str] = None,
     tooltip: str = "",
     min_width: int = 120,
 ) -> 'QComboBox':

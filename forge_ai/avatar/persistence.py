@@ -9,13 +9,12 @@ Handles saving and loading avatar settings including:
 """
 
 import json
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import Optional, Dict, Any, Tuple
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 from ..config import CONFIG
-
 
 SETTINGS_FILE = Path(CONFIG.get("data_dir", "data")) / "avatar" / "avatar_settings.json"
 
@@ -29,7 +28,7 @@ class AvatarSettings:
     avatar_type: str = "PNG_BOUNCE"  # PNG_BOUNCE, ANIMATED_2D, SKELETAL_3D
     
     # Desktop position (for overlay)
-    screen_position: Tuple[int, int] = (100, 100)
+    screen_position: tuple[int, int] = (100, 100)
     overlay_size: int = 200
     
     # 3D specific
@@ -40,8 +39,8 @@ class AvatarSettings:
     overlay_3d_yaw: float = 0.0  # 3D overlay yaw rotation
     
     # Per-avatar size overrides (avatar_path -> size)
-    per_avatar_sizes: Dict[str, int] = field(default_factory=dict)
-    per_avatar_positions: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+    per_avatar_sizes: dict[str, int] = field(default_factory=dict)
+    per_avatar_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
     
     # Reposition mode (allows dragging to move avatar)
     reposition_enabled: bool = False
@@ -65,7 +64,7 @@ class AvatarSettings:
     ambient_strength: float = 0.15
     
     # Custom emotion mappings
-    emotion_mappings: Dict[str, str] = field(default_factory=dict)
+    emotion_mappings: dict[str, str] = field(default_factory=dict)
     
     # 3D Overlay - Control Bar Settings
     control_bar_x: int = 5
@@ -92,20 +91,20 @@ class AvatarSettings:
     hit_auto_track: bool = False  # Auto-track mode follows model bounds
     
     # Bone hit regions - per-bone hit area configs
-    bone_hit_configs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    bone_hit_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     bone_hit_visible: bool = False  # Show bone hit regions
     
     # Last modified
     last_modified: Optional[str] = None
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         data = asdict(self)
         data["last_modified"] = datetime.now().isoformat()
         return data
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AvatarSettings":
+    def from_dict(cls, data: dict[str, Any]) -> "AvatarSettings":
         """Create from dictionary."""
         # Handle tuple conversion
         if "screen_position" in data and isinstance(data["screen_position"], list):
@@ -138,7 +137,7 @@ class AvatarSettings:
         if avatar_path:
             self.per_avatar_sizes[avatar_path] = size
     
-    def get_position_for_avatar(self, avatar_path: str) -> Tuple[int, int]:
+    def get_position_for_avatar(self, avatar_path: str) -> tuple[int, int]:
         """Get the saved position for a specific avatar, or default."""
         if avatar_path and avatar_path in self.per_avatar_positions:
             return self.per_avatar_positions[avatar_path]
@@ -203,7 +202,7 @@ class AvatarPersistence:
         self.save(settings)
         return settings
     
-    def get_position(self) -> Tuple[int, int]:
+    def get_position(self) -> tuple[int, int]:
         """Get saved screen position."""
         return self.load().screen_position
     
@@ -211,7 +210,7 @@ class AvatarPersistence:
         """Save screen position."""
         self.update(screen_position=(x, y))
     
-    def get_colors(self) -> Dict[str, str]:
+    def get_colors(self) -> dict[str, str]:
         """Get color settings."""
         settings = self.load()
         return {
@@ -250,7 +249,7 @@ def save_position(x: int, y: int) -> None:
     get_persistence().set_position(x, y)
 
 
-def load_position() -> Tuple[int, int]:
+def load_position() -> tuple[int, int]:
     """Quick function to load position."""
     return get_persistence().get_position()
 
@@ -265,7 +264,7 @@ def load_avatar_settings() -> AvatarSettings:
     return get_persistence().load()
 
 
-def get_avatar_state_for_ai() -> Dict[str, Any]:
+def get_avatar_state_for_ai() -> dict[str, Any]:
     """
     Get complete avatar state for AI awareness.
     
@@ -313,7 +312,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
     try:
         orient_path = Path("data/avatar/model_orientations.json")
         if orient_path.exists():
-            with open(orient_path, 'r') as f:
+            with open(orient_path) as f:
                 orientations = json.load(f)
             # Get current model's orientation
             current_avatar = settings.current_avatar
@@ -331,7 +330,7 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
                         facing = "backward"
                     else:
                         facing = "left"
-    except (IOError, json.JSONDecodeError, KeyError):
+    except (OSError, json.JSONDecodeError, KeyError):
         pass  # Orientation data not available
     
     # Load model/mesh info from capabilities file
@@ -339,10 +338,10 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
     try:
         caps_path = Path("data/avatar/capabilities.json")
         if caps_path.exists():
-            with open(caps_path, 'r') as f:
+            with open(caps_path) as f:
                 caps = json.load(f)
             model_info = caps.get('model_info', {})
-    except (IOError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError):
         pass  # Capabilities not available
     
     # Load bone info
@@ -350,9 +349,9 @@ def get_avatar_state_for_ai() -> Dict[str, Any]:
     try:
         bone_path = Path("data/avatar/bone_info.json")
         if bone_path.exists():
-            with open(bone_path, 'r') as f:
+            with open(bone_path) as f:
                 bone_info = json.load(f)
-    except (IOError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError):
         pass  # Bone info not available
     
     return {

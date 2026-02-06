@@ -9,12 +9,12 @@ Works without any external dependencies using:
 """
 
 import os
-import sys
-import time
 import subprocess
+import sys
 import tempfile
+import time
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class BuiltinTTS:
@@ -29,7 +29,7 @@ class BuiltinTTS:
         self.rate = 150  # Words per minute (approximate)
         self.volume = 1.0
         self.voice_index = 0
-        self._voices: List[str] = []
+        self._voices: list[str] = []
         self._output_dir = Path(tempfile.gettempdir()) / "forge_tts"
         
     def load(self) -> bool:
@@ -94,7 +94,7 @@ class BuiltinTTS:
         if not self._voices:
             self._voices = ['Default']
     
-    def get_voices(self) -> List[str]:
+    def get_voices(self) -> list[str]:
         """Return available voices."""
         return self._voices
     
@@ -111,7 +111,7 @@ class BuiltinTTS:
         """Set volume (0.0 to 1.0)."""
         self.volume = max(0.0, min(1.0, volume))
     
-    def speak(self, text: str) -> Dict[str, Any]:
+    def speak(self, text: str) -> dict[str, Any]:
         """Speak text directly without saving to file."""
         if not self.is_loaded:
             return {"success": False, "error": "TTS not loaded"}
@@ -164,7 +164,7 @@ class BuiltinTTS:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, text: str, **kwargs) -> dict[str, Any]:
         """Generate audio file from text."""
         if not self.is_loaded:
             return {"success": False, "error": "TTS not loaded"}

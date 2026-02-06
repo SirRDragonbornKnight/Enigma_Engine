@@ -11,11 +11,11 @@ Models available for free:
 - Text: Many LLMs and chat models
 """
 
+import base64
 import os
 import time
-import base64
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 # Try to get HF token from environment (optional - free tier works without)
 HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
@@ -50,7 +50,7 @@ class HuggingFaceImage:
         self.is_loaded = False
     
     def generate(self, prompt: str, width: int = 512, height: int = 512,
-                 negative_prompt: str = "", **kwargs) -> Dict[str, Any]:
+                 negative_prompt: str = "", **kwargs) -> dict[str, Any]:
         """Generate image using HuggingFace Inference API."""
         if not self.is_loaded:
             self.load()
@@ -150,7 +150,7 @@ class HuggingFaceTTS:
     def unload(self):
         self.is_loaded = False
     
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, text: str, **kwargs) -> dict[str, Any]:
         """Generate audio using HuggingFace Inference API."""
         if not self.is_loaded:
             self.load()
@@ -244,7 +244,7 @@ class HuggingFaceChat:
         self.is_loaded = False
     
     def generate(self, prompt: str, max_tokens: int = 200, 
-                 temperature: float = 0.7, **kwargs) -> Dict[str, Any]:
+                 temperature: float = 0.7, **kwargs) -> dict[str, Any]:
         """Generate text using HuggingFace Inference API."""
         if not self.is_loaded:
             self.load()
@@ -340,7 +340,7 @@ class HuggingFaceEmbedding:
     def unload(self):
         self.is_loaded = False
     
-    def embed(self, texts: list, **kwargs) -> Dict[str, Any]:
+    def embed(self, texts: list, **kwargs) -> dict[str, Any]:
         """Generate embeddings using HuggingFace Inference API."""
         if not self.is_loaded:
             self.load()

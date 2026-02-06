@@ -30,11 +30,11 @@ USAGE:
 ================================================================================
 """
 
-import re
 import logging
-from typing import Optional, List, Tuple
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import List, Optional, Tuple
 
 # Import from existing self_improvement module
 from ..core.self_improvement import (
@@ -123,7 +123,7 @@ class ConversationDetector:
     # Each pattern is (regex_pattern, confidence_score)
     # Higher confidence = more certain this is the pattern type
     
-    CORRECTION_PATTERNS: List[Tuple[str, float]] = [
+    CORRECTION_PATTERNS: list[tuple[str, float]] = [
         # Direct corrections
         (r"no,?\s*(i meant|it's|it is|actually)", 0.9),
         (r"that'?s (wrong|incorrect|not right|not correct)", 0.95),
@@ -143,7 +143,7 @@ class ConversationDetector:
         (r"^no[,.]?\s+", 0.6),  # Simple "no" at start (lower confidence)
     ]
     
-    TEACHING_PATTERNS: List[Tuple[str, float]] = [
+    TEACHING_PATTERNS: list[tuple[str, float]] = [
         # Explicit teaching
         (r"(remember|note|learn) that (.+)", 0.9),
         (r"(fyi|for your information|just so you know),?\s*(.+)", 0.85),
@@ -173,7 +173,7 @@ class ConversationDetector:
         (r"keep in mind", 0.8),
     ]
     
-    POSITIVE_PATTERNS: List[Tuple[str, float]] = [
+    POSITIVE_PATTERNS: list[tuple[str, float]] = [
         # Affirmations (strict - require end of string or punctuation)
         (r"^(good|great|perfect|excellent|nice|awesome|correct|right|yes|exactly|precisely)[\s!.]*$", 0.9),
         (r"^(yep|yup|yeah|uh-?huh)[\s!.]*$", 0.8),
@@ -195,7 +195,7 @@ class ConversationDetector:
         (r"well (said|done|put)", 0.85),
     ]
     
-    NEGATIVE_PATTERNS: List[Tuple[str, float]] = [
+    NEGATIVE_PATTERNS: list[tuple[str, float]] = [
         # Explicit negative feedback
         (r"that('?s| is| was)? ?not (helpful|useful|right|what i asked)", 0.85),
         (r"(that|this)('?s| is)n'?t (helpful|useful|right|what i asked)", 0.85),
@@ -220,7 +220,7 @@ class ConversationDetector:
         # Track conversation state
         self.last_ai_response: Optional[str] = None
         self.last_user_message: Optional[str] = None
-        self.conversation_context: List[Tuple[str, str]] = []  # [(role, text), ...]
+        self.conversation_context: list[tuple[str, str]] = []  # [(role, text), ...]
         
         # Statistics
         self.detections_count = {
@@ -578,7 +578,7 @@ def is_teaching(message: str) -> bool:
     return detected is not None and detected.type == 'teaching'
 
 
-def is_feedback(message: str) -> Tuple[bool, Optional[str]]:
+def is_feedback(message: str) -> tuple[bool, Optional[str]]:
     """
     Check if a message is feedback and what kind.
     

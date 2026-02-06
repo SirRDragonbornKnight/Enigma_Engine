@@ -40,7 +40,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, Any, Optional, List, Callable, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class MotorConfig:
     """Configuration for a motor."""
     name: str
     motor_type: MotorType = MotorType.DC
-    gpio_pins: List[int] = field(default_factory=list)
+    gpio_pins: list[int] = field(default_factory=list)
     pwm_frequency: int = 1000
     min_duty: int = 0
     max_duty: int = 100
@@ -80,7 +80,7 @@ class SensorConfig:
     """Configuration for a sensor."""
     name: str
     sensor_type: SensorType
-    gpio_pins: List[int] = field(default_factory=list)
+    gpio_pins: list[int] = field(default_factory=list)
     i2c_address: int = 0
     sample_rate_hz: float = 10.0
 
@@ -91,10 +91,10 @@ class PiRobotConfig:
     name: str = "pi_robot"
     
     # Motor configurations
-    motors: Dict[str, MotorConfig] = field(default_factory=dict)
+    motors: dict[str, MotorConfig] = field(default_factory=dict)
     
     # Sensor configurations
-    sensors: Dict[str, SensorConfig] = field(default_factory=dict)
+    sensors: dict[str, SensorConfig] = field(default_factory=dict)
     
     # Network settings
     server_url: str = ""
@@ -129,14 +129,14 @@ class PiRobotController:
         # GPIO state
         self._gpio_initialized = False
         self._gpio = None  # RPi.GPIO module
-        self._pwm_objects: Dict[str, Any] = {}
+        self._pwm_objects: dict[str, Any] = {}
         
         # Motor state
-        self._motor_speeds: Dict[str, float] = {}
+        self._motor_speeds: dict[str, float] = {}
         
         # Sensor state
-        self._sensor_values: Dict[str, Any] = {}
-        self._sensor_threads: Dict[str, threading.Thread] = {}
+        self._sensor_values: dict[str, Any] = {}
+        self._sensor_threads: dict[str, threading.Thread] = {}
         
         # Network
         self._server_connected = False
@@ -152,8 +152,8 @@ class PiRobotController:
         self._lock = threading.Lock()
         
         # Callbacks
-        self._on_collision: List[Callable[[], None]] = []
-        self._on_command_complete: List[Callable[[str, bool], None]] = []
+        self._on_collision: list[Callable[[], None]] = []
+        self._on_command_complete: list[Callable[[str, bool], None]] = []
         
         # Initialize
         self._init_gpio()
@@ -504,7 +504,7 @@ class PiRobotController:
         """Get sensor value by name."""
         return self._sensor_values.get(name)
     
-    def get_all_sensors(self) -> Dict[str, Any]:
+    def get_all_sensors(self) -> dict[str, Any]:
         """Get all sensor values."""
         return self._sensor_values.copy()
     
@@ -613,7 +613,7 @@ class PiRobotController:
         else:
             return f"Unknown command: {command}"
     
-    def _execute_action(self, action: Dict[str, Any]):
+    def _execute_action(self, action: dict[str, Any]):
         """Execute a single action from server."""
         action_type = action.get("type", "")
         
@@ -652,7 +652,7 @@ class PiRobotController:
     # Status
     # ==========================================================================
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get robot status."""
         return {
             "running": self._running,

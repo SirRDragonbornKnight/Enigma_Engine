@@ -33,15 +33,13 @@ Usage:
 """
 
 import asyncio
-import time
 import logging
+import time
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import (
-    Any, Callable, Dict, List, Optional, TypeVar, Generic,
-    Awaitable, Union
-)
 from functools import wraps
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +59,8 @@ class Request:
         timestamp: Request creation time
     """
     data: Any
-    context: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     id: str = field(default_factory=lambda: f"req_{int(time.time() * 1000)}")
     timestamp: float = field(default_factory=time.time)
     
@@ -98,7 +96,7 @@ class Response:
     data: Any = None
     success: bool = True
     error: Optional[str] = None
-    context: Dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=dict)
     request_id: Optional[str] = None
     duration: float = 0.0
     
@@ -193,7 +191,7 @@ class Pipeline:
             name: Pipeline identifier
         """
         self.name = name
-        self._middleware: List[MiddlewareEntry] = []
+        self._middleware: list[MiddlewareEntry] = []
         self._final_handler: Optional[Callable[[Request], Awaitable[Response]]] = None
         self._error_handler: Optional[Callable[[Request, Exception], Awaitable[Response]]] = None
     
@@ -386,14 +384,18 @@ class Pipeline:
             Response from the chain
         """
         try:
-            loop = asyncio.get_event_loop()
+            # Check if there's already a running loop
+            loop = asyncio.get_running_loop()
+            # Running in async context - schedule in thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, self.process(request))
+                return future.result()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        return loop.run_until_complete(self.process(request))
+            # No running loop - use asyncio.run()
+            return asyncio.run(self.process(request))
     
-    def list_middleware(self) -> List[Dict[str, Any]]:
+    def list_middleware(self) -> list[dict[str, Any]]:
         """List all middleware with their status."""
         return [
             {
@@ -461,7 +463,7 @@ class RateLimitMiddleware(Middleware):
     def __init__(self, max_requests: int = 100, window_seconds: float = 60.0):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self._requests: List[float] = []
+        self._requests: list[float] = []
     
     async def __call__(self, request: Request, next_handler: NextHandler) -> Response:
         now = time.time()
@@ -511,7 +513,7 @@ class CacheMiddleware(Middleware):
     def __init__(self, ttl_seconds: float = 300.0, key_func: Optional[Callable[[Request], str]] = None):
         self.ttl_seconds = ttl_seconds
         self.key_func = key_func or (lambda r: str(r.data))
-        self._cache: Dict[str, tuple] = {}  # key -> (response, timestamp)
+        self._cache: dict[str, tuple] = {}  # key -> (response, timestamp)
     
     async def __call__(self, request: Request, next_handler: NextHandler) -> Response:
         key = self.key_func(request)
@@ -573,7 +575,7 @@ class TransformMiddleware(Middleware):
 
 
 # Global pipeline registry
-_pipelines: Dict[str, Pipeline] = {}
+_pipelines: dict[str, Pipeline] = {}
 
 
 def get_pipeline(name: str = "default") -> Pipeline:
@@ -583,7 +585,7 @@ def get_pipeline(name: str = "default") -> Pipeline:
     return _pipelines[name]
 
 
-def list_pipelines() -> List[str]:
+def list_pipelines() -> list[str]:
     """List all pipeline names."""
     return list(_pipelines.keys())
 

@@ -22,8 +22,9 @@ import os
 import re
 import time
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -37,8 +38,8 @@ class EvaluationResult:
     """Result from evaluation."""
     metric_name: str
     value: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    samples: Optional[List[Dict[str, Any]]] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    samples: Optional[list[dict[str, Any]]] = None
 
 
 @dataclass
@@ -46,8 +47,8 @@ class BenchmarkResult:
     """Result from benchmark evaluation."""
     benchmark_name: str
     accuracy: float
-    metrics: Dict[str, float] = field(default_factory=dict)
-    per_category: Dict[str, float] = field(default_factory=dict)
+    metrics: dict[str, float] = field(default_factory=dict)
+    per_category: dict[str, float] = field(default_factory=dict)
     num_samples: int = 0
     elapsed_time: float = 0.0
 
@@ -78,7 +79,7 @@ class Evaluator:
     @torch.no_grad()
     def calculate_perplexity(
         self,
-        texts: List[str],
+        texts: list[str],
         batch_size: int = 8,
         max_length: int = 512
     ) -> EvaluationResult:
@@ -152,8 +153,8 @@ class Evaluator:
     
     def calculate_bleu(
         self,
-        predictions: List[str],
-        references: List[List[str]],
+        predictions: list[str],
+        references: list[list[str]],
         max_n: int = 4
     ) -> EvaluationResult:
         """
@@ -225,13 +226,13 @@ class Evaluator:
     
     def calculate_rouge(
         self,
-        predictions: List[str],
-        references: List[str]
-    ) -> Dict[str, EvaluationResult]:
+        predictions: list[str],
+        references: list[str]
+    ) -> dict[str, EvaluationResult]:
         """
         Calculate ROUGE scores (ROUGE-1, ROUGE-2, ROUGE-L).
         """
-        def lcs_length(x: List[str], y: List[str]) -> int:
+        def lcs_length(x: list[str], y: list[str]) -> int:
             """Longest common subsequence length."""
             m, n = len(x), len(y)
             dp = [[0] * (n + 1) for _ in range(m + 1)]
@@ -294,8 +295,8 @@ class Evaluator:
     
     def evaluate_accuracy(
         self,
-        questions: List[str],
-        answers: List[str],
+        questions: list[str],
+        answers: list[str],
         generate_fn: Optional[Callable] = None,
         max_new_tokens: int = 50
     ) -> EvaluationResult:
@@ -337,7 +338,7 @@ class Evaluator:
     
     def measure_latency(
         self,
-        prompts: List[str],
+        prompts: list[str],
         max_new_tokens: int = 50,
         num_warmup: int = 3
     ) -> EvaluationResult:
@@ -407,10 +408,10 @@ class Evaluator:
     
     def evaluate_all(
         self,
-        eval_texts: List[str],
-        reference_texts: Optional[List[str]] = None,
-        qa_pairs: Optional[List[Tuple[str, str]]] = None
-    ) -> Dict[str, EvaluationResult]:
+        eval_texts: list[str],
+        reference_texts: Optional[list[str]] = None,
+        qa_pairs: Optional[list[tuple[str, str]]] = None
+    ) -> dict[str, EvaluationResult]:
         """
         Run all applicable evaluations.
         """
@@ -479,7 +480,7 @@ class BenchmarkRunner:
         Run HellaSwag benchmark (sentence completion).
         """
         # Load data
-        with open(data_path, 'r') as f:
+        with open(data_path) as f:
             data = [json.loads(line) for line in f]
         
         if num_samples:
@@ -536,7 +537,7 @@ class BenchmarkRunner:
     def run_mmlu(
         self,
         data_dir: str,
-        subjects: Optional[List[str]] = None,
+        subjects: Optional[list[str]] = None,
         num_shots: int = 5
     ) -> BenchmarkResult:
         """
@@ -558,7 +559,7 @@ class BenchmarkRunner:
         for subject in all_subjects:
             test_path = os.path.join(data_dir, f'{subject}_test.csv')
             
-            with open(test_path, 'r') as f:
+            with open(test_path) as f:
                 lines = f.readlines()
             
             correct = 0
@@ -622,10 +623,10 @@ class BenchmarkRunner:
 
 
 def compare_models(
-    models: List[Tuple[str, torch.nn.Module]],
+    models: list[tuple[str, torch.nn.Module]],
     tokenizer: Any,
-    eval_texts: List[str]
-) -> Dict[str, Dict[str, float]]:
+    eval_texts: list[str]
+) -> dict[str, dict[str, float]]:
     """
     Compare multiple models on the same evaluation data.
     

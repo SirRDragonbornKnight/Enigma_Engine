@@ -4,13 +4,14 @@ Keyboard Shortcuts System for Forge GUI
 Provides customizable keyboard shortcuts for faster navigation and actions.
 """
 
-from PyQt5.QtWidgets import QShortcut, QWidget
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtCore import Qt
-from typing import Dict, Callable, Optional
 import json
 import logging
 from pathlib import Path
+from typing import Callable, Dict, Optional
+
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QShortcut, QWidget
 
 logger = logging.getLogger(__name__)
 
@@ -96,16 +97,16 @@ class ShortcutManager:
         self.shortcuts = self._load_shortcuts()
         
         # Store QShortcut objects
-        self._shortcut_objects: Dict[str, QShortcut] = {}
+        self._shortcut_objects: dict[str, QShortcut] = {}
         
         # Store action callbacks
-        self._callbacks: Dict[str, Callable] = {}
+        self._callbacks: dict[str, Callable] = {}
     
-    def _load_shortcuts(self) -> Dict[str, str]:
+    def _load_shortcuts(self) -> dict[str, str]:
         """Load shortcuts from storage."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     custom = json.load(f)
                 # Merge with defaults
                 shortcuts = self.DEFAULT_SHORTCUTS.copy()
@@ -114,7 +115,7 @@ class ShortcutManager:
             except json.JSONDecodeError as e:
                 logger.warning(f"Corrupted shortcuts file, using defaults: {e}")
                 return self.DEFAULT_SHORTCUTS.copy()
-            except IOError as e:
+            except OSError as e:
                 logger.warning(f"Could not read shortcuts file: {e}")
                 return self.DEFAULT_SHORTCUTS.copy()
         return self.DEFAULT_SHORTCUTS.copy()
@@ -201,7 +202,7 @@ class ShortcutManager:
         """Get the key sequence for an action."""
         return self.shortcuts.get(action)
     
-    def get_all_shortcuts(self) -> Dict[str, str]:
+    def get_all_shortcuts(self) -> dict[str, str]:
         """Get all registered shortcuts."""
         return self.shortcuts.copy()
     
@@ -300,7 +301,7 @@ class UndoRedoManager:
         self.undo_stack = []
         self.redo_stack = []
     
-    def push_action(self, action: Dict):
+    def push_action(self, action: dict):
         """
         Push a new action onto the undo stack.
         
@@ -392,8 +393,9 @@ class UndoRedoManager:
 
 if __name__ == "__main__":
     # Test shortcut formatting
-    from PyQt5.QtWidgets import QApplication, QMainWindow
     import sys
+
+    from PyQt5.QtWidgets import QApplication, QMainWindow
     
     app = QApplication(sys.argv)
     window = QMainWindow()

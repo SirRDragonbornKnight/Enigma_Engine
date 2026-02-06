@@ -9,19 +9,35 @@ Features:
   - View task history and logs
 """
 
-import os
 import json
-from pathlib import Path
+import os
 from datetime import datetime, timedelta
+from pathlib import Path
+
+from PyQt5.QtCore import QDate, Qt, QTime, QTimer
+from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QTextEdit, QTableWidget, QTableWidgetItem,
-    QGroupBox, QHeaderView, QDialog, QFormLayout,
-    QSpinBox, QTimeEdit, QDateEdit, QCheckBox, QMessageBox,
-    QMenu, QSplitter
+    QCheckBox,
+    QDateEdit,
+    QDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QTimeEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, QTime, QDate, QTimer
-from PyQt5.QtGui import QFont, QColor
 
 from .shared_components import NoScrollComboBox
 
@@ -291,7 +307,7 @@ class SchedulerTab(QWidget):
         """Load scheduled tasks from file."""
         if SCHEDULER_FILE.exists():
             try:
-                with open(SCHEDULER_FILE, 'r') as f:
+                with open(SCHEDULER_FILE) as f:
                     data = json.load(f)
                     self.tasks = data.get("tasks", [])
             except Exception as e:
@@ -479,9 +495,9 @@ class SchedulerTab(QWidget):
                 if task_type == "Run Command":
                     # SECURITY: Validate and sanitize command before execution
                     # Only allow whitelisted safe commands
-                    import subprocess
                     import shlex
-                    
+                    import subprocess
+
                     # Whitelist of allowed command prefixes
                     ALLOWED_COMMANDS = [
                         'echo', 'date', 'whoami', 'ls', 'dir', 'pwd',

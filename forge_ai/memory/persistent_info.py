@@ -12,17 +12,17 @@ This allows both the user and AI to save information that persists
 across sessions and can be recalled when needed.
 """
 
-import json
-import time
-import threading
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Set, Union
-from pathlib import Path
-from enum import Enum
-from datetime import datetime
-import logging
 import hashlib
+import json
+import logging
 import re
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Union
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +64,12 @@ class StoredInfo:
     content: str
     info_type: InfoType
     source: str  # "user" or "ai"
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     priority: InfoPriority = InfoPriority.MEDIUM
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     expires_at: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     pinned: bool = False
     archived: bool = False
     
@@ -112,7 +112,7 @@ class StoredInfo:
         except Exception:
             return "unknown"
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -131,7 +131,7 @@ class StoredInfo:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StoredInfo":
+    def from_dict(cls, data: dict[str, Any]) -> "StoredInfo":
         """Create from dictionary."""
         return cls(
             id=data["id"],
@@ -210,7 +210,7 @@ class UserPreferences:
         
         return default
     
-    def all(self) -> Dict[str, Any]:
+    def all(self) -> dict[str, Any]:
         """Get all preferences."""
         result = {}
         for item in self._storage.list(info_type=InfoType.PREFERENCE):
@@ -255,7 +255,7 @@ class AIFacts:
             tags=["fact", category]
         )
     
-    def recall(self, query: str, limit: int = 10) -> List[str]:
+    def recall(self, query: str, limit: int = 10) -> list[str]:
         """Recall facts matching query."""
         items = self._storage.search(query=query, info_type=InfoType.FACT, limit=limit)
         return [item.content for item in items]
@@ -268,7 +268,7 @@ class AIFacts:
                 return True
         return False
     
-    def all_facts(self) -> List[str]:
+    def all_facts(self) -> list[str]:
         """Get all stored facts."""
         return [item.content for item in self._storage.list(info_type=InfoType.FACT)]
 
@@ -329,7 +329,7 @@ class ContextMemory:
                 return item.content
         return None
     
-    def get_all_context(self) -> Dict[str, str]:
+    def get_all_context(self) -> dict[str, str]:
         """Get all active context."""
         result = {}
         for item in self._storage.list(info_type=InfoType.CONTEXT):
@@ -374,7 +374,7 @@ class PersistentInfoStorage:
         self.storage_path = storage_path or Path("data/persistent_info.json")
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         
-        self._items: Dict[str, StoredInfo] = {}
+        self._items: dict[str, StoredInfo] = {}
         self._lock = threading.Lock()
         self._id_counter = 0
         
@@ -398,10 +398,10 @@ class PersistentInfoStorage:
         content: str,
         info_type: InfoType = InfoType.NOTE,
         source: str = "user",
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         priority: InfoPriority = InfoPriority.MEDIUM,
         expires_at: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ) -> str:
         """
         Add new information.
@@ -446,7 +446,7 @@ class PersistentInfoStorage:
         item_id: str,
         title: Optional[str] = None,
         content: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         priority: Optional[InfoPriority] = None,
         pinned: Optional[bool] = None
     ) -> bool:
@@ -514,10 +514,10 @@ class PersistentInfoStorage:
         self,
         info_type: Optional[InfoType] = None,
         source: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         include_archived: bool = False,
         pinned_only: bool = False
-    ) -> List[StoredInfo]:
+    ) -> list[StoredInfo]:
         """
         List items with optional filtering.
         
@@ -574,7 +574,7 @@ class PersistentInfoStorage:
         query: str,
         info_type: Optional[InfoType] = None,
         limit: int = 20
-    ) -> List[StoredInfo]:
+    ) -> list[StoredInfo]:
         """
         Search items by query.
         
@@ -617,7 +617,7 @@ class PersistentInfoStorage:
         
         return [item for _, item in results[:limit]]
     
-    def get_tags(self) -> List[str]:
+    def get_tags(self) -> list[str]:
         """Get all unique tags."""
         tags = set()
         for item in self._items.values():
@@ -625,14 +625,14 @@ class PersistentInfoStorage:
                 tags.update(item.tags)
         return sorted(tags)
     
-    def get_by_tag(self, tag: str) -> List[StoredInfo]:
+    def get_by_tag(self, tag: str) -> list[StoredInfo]:
         """Get all items with a specific tag."""
         return [
             item for item in self._items.values()
             if tag in item.tags and not item.archived and not item.is_expired()
         ]
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get storage statistics."""
         active = [i for i in self._items.values() if not i.archived and not i.is_expired()]
         
@@ -765,14 +765,14 @@ def remember(content: str, title: Optional[str] = None, source: str = "ai") -> s
     )
 
 
-def recall(query: str, limit: int = 5) -> List[str]:
+def recall(query: str, limit: int = 5) -> list[str]:
     """Quick function to recall information."""
     storage = get_storage()
     results = storage.search(query, limit=limit)
     return [f"{r.title}: {r.content}" for r in results]
 
 
-def save_note(title: str, content: str, tags: Optional[List[str]] = None) -> str:
+def save_note(title: str, content: str, tags: Optional[list[str]] = None) -> str:
     """Quick function to save a user note."""
     storage = get_storage()
     return storage.add(

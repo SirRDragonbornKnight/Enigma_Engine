@@ -7,9 +7,9 @@ Monitors feedback collection and triggers LoRA training when criteria are met.
 import logging
 import threading
 import time
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class TrainingScheduler:
             
             if state_file.exists():
                 import json
-                with open(state_file, 'r') as f:
+                with open(state_file) as f:
                     data = json.load(f)
                     if 'last_training_time' in data:
                         self.last_training_time = datetime.fromisoformat(data['last_training_time'])
@@ -198,7 +198,7 @@ class TrainingScheduler:
             with self._lock:
                 self.training_in_progress = False
     
-    def _get_training_examples(self, engine) -> List:
+    def _get_training_examples(self, engine) -> list:
         """
         Get high-quality examples for training.
         
@@ -223,7 +223,7 @@ class TrainingScheduler:
         # Limit size
         return good_examples[:self.max_examples_per_training]
     
-    def _prepare_lora_dataset(self, examples: List) -> List[Dict[str, str]]:
+    def _prepare_lora_dataset(self, examples: list) -> list[dict[str, str]]:
         """
         Prepare dataset in format suitable for LoRA training.
         
@@ -243,7 +243,7 @@ class TrainingScheduler:
             })
         return dataset
     
-    def _execute_lora_training(self, dataset: List[Dict[str, str]]) -> bool:
+    def _execute_lora_training(self, dataset: list[dict[str, str]]) -> bool:
         """
         Execute actual LoRA training using the LoRA training module.
         
@@ -254,10 +254,10 @@ class TrainingScheduler:
             True if training completed successfully
         """
         try:
+            from ..config import CONFIG
             from ..core.lora_training import LoRAConfig, LoRAModel, LoRATrainer
             from ..core.model import create_model
             from ..core.tokenizer import get_tokenizer
-            from ..config import CONFIG
             
             logger.info(f"Initializing LoRA training with config: {self.lora_config}")
             
@@ -339,7 +339,7 @@ class TrainingScheduler:
             logger.error(f"LoRA training failed: {e}", exc_info=True)
             return False
     
-    def _export_training_data(self, examples: List) -> Path:
+    def _export_training_data(self, examples: list) -> Path:
         """
         Export training examples to file for reference.
         
@@ -372,7 +372,7 @@ class TrainingScheduler:
         
         return export_path
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """
         Get current scheduler status.
         

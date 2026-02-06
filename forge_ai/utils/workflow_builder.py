@@ -11,17 +11,17 @@ Features:
 Part of the ForgeAI automation suite.
 """
 
+import copy
 import json
-import time
+import logging
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Set, Union
-from pathlib import Path
-from enum import Enum
 from datetime import datetime
-import logging
-import copy
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 logger = logging.getLogger(__name__)
 
@@ -94,18 +94,18 @@ class WorkflowNode:
     id: str
     name: str
     node_type: NodeType
-    config: Dict[str, Any] = field(default_factory=dict)
-    inputs: List[NodePort] = field(default_factory=list)
-    outputs: List[NodePort] = field(default_factory=list)
+    config: dict[str, Any] = field(default_factory=dict)
+    inputs: list[NodePort] = field(default_factory=list)
+    outputs: list[NodePort] = field(default_factory=list)
     position: NodePosition = field(default_factory=NodePosition)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     
     @classmethod
     def create_trigger(
         cls,
         trigger_type: TriggerType,
         name: str = "Trigger",
-        config: Optional[Dict] = None
+        config: Optional[dict] = None
     ) -> "WorkflowNode":
         """Create a trigger node."""
         return cls(
@@ -121,7 +121,7 @@ class WorkflowNode:
         cls,
         action_type: ActionType,
         name: str = "Action",
-        config: Optional[Dict] = None
+        config: Optional[dict] = None
     ) -> "WorkflowNode":
         """Create an action node."""
         return cls(
@@ -232,13 +232,13 @@ class Workflow:
     id: str
     name: str
     description: str = ""
-    nodes: Dict[str, WorkflowNode] = field(default_factory=dict)
-    connections: List[Connection] = field(default_factory=list)
-    variables: Dict[str, Any] = field(default_factory=dict)
+    nodes: dict[str, WorkflowNode] = field(default_factory=dict)
+    connections: list[Connection] = field(default_factory=list)
+    variables: dict[str, Any] = field(default_factory=dict)
     version: int = 1
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     
     @classmethod
     def create(cls, name: str, description: str = "") -> "Workflow":
@@ -288,11 +288,11 @@ class Workflow:
         self.connections = [c for c in self.connections if c.id != connection_id]
         self.updated_at = datetime.now().isoformat()
     
-    def get_start_nodes(self) -> List[WorkflowNode]:
+    def get_start_nodes(self) -> list[WorkflowNode]:
         """Get trigger/start nodes."""
         return [n for n in self.nodes.values() if n.node_type == NodeType.TRIGGER]
     
-    def get_next_nodes(self, node_id: str) -> List[tuple]:
+    def get_next_nodes(self, node_id: str) -> list[tuple]:
         """Get next connected nodes from a node."""
         result = []
         for conn in self.connections:
@@ -301,7 +301,7 @@ class Workflow:
                     result.append((self.nodes[conn.to_node], conn.to_port))
         return result
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
@@ -337,7 +337,7 @@ class Workflow:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Workflow":
+    def from_dict(cls, data: dict[str, Any]) -> "Workflow":
         """Create workflow from dictionary."""
         workflow = cls(
             id=data["id"],
@@ -523,7 +523,7 @@ class WorkflowTemplates:
         return wf
     
     @classmethod
-    def get_all(cls) -> Dict[str, Workflow]:
+    def get_all(cls) -> dict[str, Workflow]:
         """Get all available templates."""
         return {
             "simple_chat": cls.simple_chat_response(),
@@ -552,12 +552,12 @@ class ExecutionContext:
     """Context for workflow execution."""
     workflow_id: str
     run_id: str
-    variables: Dict[str, Any] = field(default_factory=dict)
+    variables: dict[str, Any] = field(default_factory=dict)
     input_data: Any = None
     output_data: Any = None
     current_node: Optional[str] = None
-    node_outputs: Dict[str, Any] = field(default_factory=dict)
-    errors: List[str] = field(default_factory=list)
+    node_outputs: dict[str, Any] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     status: ExecutionStatus = ExecutionStatus.PENDING
@@ -576,14 +576,14 @@ class WorkflowExecutor:
     
     def __init__(self):
         """Initialize executor."""
-        self._action_handlers: Dict[ActionType, Callable] = {}
-        self._running: Dict[str, ExecutionContext] = {}
+        self._action_handlers: dict[ActionType, Callable] = {}
+        self._running: dict[str, ExecutionContext] = {}
         self._lock = threading.Lock()
     
     def register_action(
         self,
         action_type: ActionType,
-        handler: Callable[[Dict, ExecutionContext], Any]
+        handler: Callable[[dict, ExecutionContext], Any]
     ):
         """Register an action handler."""
         self._action_handlers[action_type] = handler
@@ -770,6 +770,12 @@ class WorkflowExecutor:
             "bool": bool
         }
         
+        # Block dangerous patterns in condition
+        dangerous = ['__', 'import', 'exec', 'eval', 'compile', 'open', 'file']
+        if any(d in condition for d in dangerous):
+            logger.warning(f"Blocked dangerous condition pattern: {condition}")
+            return False
+        
         try:
             result = eval(condition, {"__builtins__": {}}, eval_ctx)
             return bool(result)
@@ -802,6 +808,12 @@ class WorkflowExecutor:
             "min": min,
             "max": max
         }
+        
+        # Block dangerous patterns in transform
+        dangerous = ['__', 'import', 'exec', 'eval', 'compile', 'open', 'file']
+        if any(d in transform for d in dangerous):
+            logger.warning(f"Blocked dangerous transform pattern: {transform}")
+            return input_data
         
         try:
             return eval(transform, {"__builtins__": {}}, eval_ctx)
@@ -845,7 +857,7 @@ class WorkflowManager:
         self.storage_path = storage_path or Path("data/workflows")
         self.storage_path.mkdir(parents=True, exist_ok=True)
         
-        self._workflows: Dict[str, Workflow] = {}
+        self._workflows: dict[str, Workflow] = {}
         self._executor = WorkflowExecutor()
         self._templates = WorkflowTemplates()
         
@@ -874,7 +886,7 @@ class WorkflowManager:
         """Get a workflow by ID."""
         return self._workflows.get(workflow_id)
     
-    def list(self) -> List[Workflow]:
+    def list(self) -> list[Workflow]:
         """List all workflows."""
         return list(self._workflows.values())
     
@@ -920,7 +932,7 @@ class WorkflowManager:
             logger.error(f"Import failed: {e}")
             return None
     
-    def get_templates(self) -> Dict[str, Workflow]:
+    def get_templates(self) -> dict[str, Workflow]:
         """Get available templates."""
         return self._templates.get_all()
     

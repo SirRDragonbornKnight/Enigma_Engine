@@ -13,8 +13,8 @@ Usage:
 """
 
 import re
-from typing import List, Tuple, Optional
 from difflib import get_close_matches
+from typing import List, Optional, Tuple
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -55,10 +55,10 @@ def levenshtein_distance(s1: str, s2: str) -> int:
 
 def find_closest_match(
     word: str,
-    candidates: List[str],
+    candidates: list[str],
     cutoff: float = 0.6,
     n: int = 3
-) -> List[Tuple[str, float]]:
+) -> list[tuple[str, float]]:
     """
     Find closest matches for a word from a list of candidates.
     
@@ -97,7 +97,7 @@ def find_closest_match(
 
 def suggest_command(
     input_cmd: str,
-    valid_commands: List[str],
+    valid_commands: list[str],
     threshold: float = 0.5
 ) -> Optional[str]:
     """
@@ -117,7 +117,7 @@ def suggest_command(
     return None
 
 
-def format_did_you_mean(input_word: str, suggestions: List[str]) -> str:
+def format_did_you_mean(input_word: str, suggestions: list[str]) -> str:
     """
     Format "Did you mean..." message.
     
@@ -209,10 +209,10 @@ def correct_typos(text: str, custom_dict: dict = None) -> str:
 def validate_parameter(
     value: str,
     param_type: str,
-    valid_options: List[str] = None,
+    valid_options: list[str] = None,
     min_val: float = None,
     max_val: float = None
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, Optional[str]]:
     """
     Validate a parameter value and provide helpful error messages.
     
@@ -269,7 +269,7 @@ def validate_parameter(
 def format_error_message(
     error: str,
     context: dict = None,
-    suggestions: List[str] = None
+    suggestions: list[str] = None
 ) -> str:
     """
     Format an error message with context and suggestions.

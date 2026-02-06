@@ -19,8 +19,8 @@ USAGE:
 
 import logging
 import sys
-from typing import Optional, Callable, TYPE_CHECKING
 from pathlib import Path
+from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
     from PyQt5.QtWidgets import QMainWindow
@@ -160,10 +160,11 @@ class HotkeyActions:
         
         try:
             # Use mss to capture screen
-            import mss
-            from PIL import Image
             import io
             from datetime import datetime
+
+            import mss
+            from PIL import Image
             
             with mss.mss() as sct:
                 # Capture primary monitor

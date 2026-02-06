@@ -16,14 +16,15 @@ References:
 - "Reducing Activation Recomputation in Large Transformer Models"
 """
 
-import torch
-import torch.nn as nn
-import torch.distributed as dist
-from torch.distributed import ReduceOp
-from typing import Optional, List, Tuple, Any, Dict
-from dataclasses import dataclass
 import logging
 import os
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+from torch.distributed import ReduceOp
 
 logger = logging.getLogger(__name__)
 

@@ -5,55 +5,82 @@ Forge Utilities
 Common utility functions used throughout ForgeAI.
 """
 import time
-from typing import Optional, Iterator, Any
+from collections.abc import Iterator
+from typing import Any, Optional
 
-# Re-export from submodules for convenience
-from .system_messages import (
-    system_msg, error_msg, warning_msg, info_msg, debug_msg, 
-    ai_msg, user_msg, forge_msg, enigma_msg, thinking_msg, memory_msg,
-    MessagePrefix
-)
-from .text_formatting import TextFormatter
-from .error_handler import ErrorHandler, GracefulFileHandler
-from .feedback import FeedbackCollector
-from .training_validator import TrainingDataValidator
-from .text_enhancement import (
-    levenshtein_distance, find_closest_match, suggest_command, 
-    format_did_you_mean
-)
-from .json_cache import (
-    read_json_cached, write_json_cached, invalidate_cache, get_cache_stats
-)
-
-# GPU utilities - common operations to avoid duplication
-from .gpu import (
-    clear_cuda_cache, get_gpu_memory_info, is_cuda_available,
-    is_mps_available, get_best_device
-)
-
-# JSON storage utilities
-from .storage import (
-    JsonStorageMixin, load_json_file, save_json_file
+# Battery management for mobile/embedded devices
+from .battery_manager import (
+    POWER_PROFILES,
+    BatteryManager,
+    PowerProfile,
+    PowerState,
+    get_battery_manager,
 )
 
 # Constants - centralized magic numbers
 from .constants import (
-    MAX_FILE_SIZE_BYTES, DEFAULT_WEB_TIMEOUT, DEFAULT_API_TIMEOUT,
-    DEFAULT_IMAGE_WIDTH, DEFAULT_IMAGE_HEIGHT, DEFAULT_MAX_NEW_TOKENS,
-    DEFAULT_TEMPERATURE, DEFAULT_TOP_K, DEFAULT_TOP_P
+    DEFAULT_API_TIMEOUT,
+    DEFAULT_IMAGE_HEIGHT,
+    DEFAULT_IMAGE_WIDTH,
+    DEFAULT_MAX_NEW_TOKENS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TOP_K,
+    DEFAULT_TOP_P,
+    DEFAULT_WEB_TIMEOUT,
+    MAX_FILE_SIZE_BYTES,
 )
+from .error_handler import ErrorHandler, GracefulFileHandler
+from .feedback import FeedbackCollector
 
-# Battery management for mobile/embedded devices
-from .battery_manager import (
-    BatteryManager, PowerState, PowerProfile, POWER_PROFILES,
-    get_battery_manager,
+# GPU utilities - common operations to avoid duplication
+from .gpu import (
+    clear_cuda_cache,
+    get_best_device,
+    get_gpu_memory_info,
+    is_cuda_available,
+    is_mps_available,
+)
+from .json_cache import (
+    get_cache_stats,
+    invalidate_cache,
+    read_json_cached,
+    write_json_cached,
 )
 
 # Performance monitoring
 from .performance_monitor import (
-    PerformanceMonitor, SystemMetrics, PerformanceAlert,
+    PerformanceAlert,
+    PerformanceMonitor,
+    SystemMetrics,
     get_performance_monitor,
 )
+
+# JSON storage utilities
+from .storage import JsonStorageMixin, load_json_file, save_json_file
+
+# Re-export from submodules for convenience
+from .system_messages import (
+    MessagePrefix,
+    ai_msg,
+    debug_msg,
+    enigma_msg,
+    error_msg,
+    forge_msg,
+    info_msg,
+    memory_msg,
+    system_msg,
+    thinking_msg,
+    user_msg,
+    warning_msg,
+)
+from .text_enhancement import (
+    find_closest_match,
+    format_did_you_mean,
+    levenshtein_distance,
+    suggest_command,
+)
+from .text_formatting import TextFormatter
+from .training_validator import TrainingDataValidator
 
 
 def progress_bar(

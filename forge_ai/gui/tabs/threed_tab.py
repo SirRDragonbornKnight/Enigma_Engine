@@ -6,23 +6,32 @@ Providers:
   - REPLICATE: Cloud 3D generation (requires replicate, API key)
 """
 
+import logging
 import os
 import time
-import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QGroupBox, QSpinBox, QDoubleSpinBox,
-        QFileDialog, QLineEdit
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QDoubleSpinBox,
+        QFileDialog,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QSpinBox,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -56,7 +65,7 @@ class Local3DGen:
         try:
             import torch
             from diffusers import ShapEPipeline
-            
+
             # Check GPU memory before loading (Shap-E needs ~4GB)
             if torch.cuda.is_available() and not self.use_cpu:
                 gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
@@ -129,7 +138,7 @@ class Local3DGen:
         self._device = None
     
     def generate(self, prompt: str, guidance_scale: float = 15.0,
-                 num_inference_steps: int = 64, **kwargs) -> Dict[str, Any]:
+                 num_inference_steps: int = 64, **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
         
@@ -220,7 +229,7 @@ class Cloud3DGen:
         self.client = None
         self.is_loaded = False
     
-    def generate(self, prompt: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -569,7 +578,7 @@ class ThreeDTab(QWidget):
             import threading
             def do_load():
                 success = provider.load()
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 if success:
                     device = getattr(provider, '_device', 'unknown')
                     QMetaObject.invokeMethod(

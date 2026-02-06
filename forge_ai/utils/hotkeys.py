@@ -218,7 +218,7 @@ class WindowsHotkeyListener:
     
     def _message_loop(self):
         """Windows message loop for hotkey events."""
-        from ctypes import wintypes, byref
+        from ctypes import byref, wintypes
         
         class MSG(self._ctypes.Structure):
             _fields_ = [

@@ -68,14 +68,14 @@ class Notification:
     type: NotificationType = NotificationType.INFO
     priority: NotificationPriority = NotificationPriority.NORMAL
     timestamp: datetime = field(default_factory=datetime.now)
-    icon: Optional[str] = None
+    icon: str | None = None
     sound: bool = True
-    actions: List[Dict[str, Any]] = field(default_factory=list)
+    actions: list[dict[str, Any]] = field(default_factory=list)
     timeout: int = 5000  # milliseconds
     read: bool = False
     dismissed: bool = False
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -123,11 +123,11 @@ class WindowsNotificationBackend(NotificationBackend):
         # Try Windows Runtime (winrt) for modern notifications
         if self._toaster is None:
             try:
-                from winrt.windows.ui.notifications import (
-                    ToastNotificationManager,
-                    ToastNotification
-                )
                 from winrt.windows.data.xml.dom import XmlDocument
+                from winrt.windows.ui.notifications import (
+                    ToastNotification,
+                    ToastNotificationManager,
+                )
                 self._winrt = True
                 logger.info("Using Windows Runtime backend")
             except ImportError:
@@ -163,12 +163,12 @@ class WindowsNotificationBackend(NotificationBackend):
     
     def _send_winrt(self, notification: Notification) -> bool:
         """Send using Windows Runtime."""
-        from winrt.windows.ui.notifications import (
-            ToastNotificationManager,
-            ToastNotification
-        )
         from winrt.windows.data.xml.dom import XmlDocument
-        
+        from winrt.windows.ui.notifications import (
+            ToastNotification,
+            ToastNotificationManager,
+        )
+
         # Create XML for toast
         xml = f"""
         <toast>
@@ -192,7 +192,7 @@ class WindowsNotificationBackend(NotificationBackend):
         
         return True
     
-    def _get_icon_path(self, icon_name: str) -> Optional[str]:
+    def _get_icon_path(self, icon_name: str) -> str | None:
         """Get icon file path."""
         icon_dir = Path(__file__).parent.parent / "data" / "icons"
         icon_file = icon_dir / f"{icon_name}.ico"
@@ -304,6 +304,7 @@ class LinuxNotificationBackend(NotificationBackend):
         """Play notification sound on Linux."""
         try:
             import subprocess
+
             # Try paplay (PulseAudio)
             sound_files = {
                 "info": "/usr/share/sounds/freedesktop/stereo/message.oga",
@@ -416,8 +417,8 @@ class NotificationSettings:
     def __init__(self):
         self.enabled = True
         self.sound = True
-        self.priority_override: Optional[NotificationPriority] = None
-        self.timeout_override: Optional[int] = None
+        self.priority_override: NotificationPriority | None = None
+        self.timeout_override: int | None = None
     
     def to_dict(self) -> dict:
         return {
@@ -428,7 +429,7 @@ class NotificationSettings:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'NotificationSettings':
+    def from_dict(cls, data: dict) -> NotificationSettings:
         settings = cls()
         settings.enabled = data.get("enabled", True)
         settings.sound = data.get("sound", True)
@@ -481,7 +482,7 @@ class DNDSchedule:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'DNDSchedule':
+    def from_dict(cls, data: dict) -> DNDSchedule:
         schedule = cls()
         schedule.enabled = data.get("enabled", False)
         schedule.start_hour = data.get("start_hour", 22)
@@ -506,16 +507,16 @@ class NotificationManager:
     """
     
     def __init__(self):
-        self.history: List[Notification] = []
+        self.history: list[Notification] = []
         self.max_history = 100
         self.do_not_disturb = False
         self.dnd_schedule = DNDSchedule()
         self.sound_enabled = True
-        self.type_settings: Dict[NotificationType, NotificationSettings] = {
+        self.type_settings: dict[NotificationType, NotificationSettings] = {
             t: NotificationSettings() for t in NotificationType
         }
-        self._backend: Optional[NotificationBackend] = None
-        self._callbacks: Dict[str, List[Callable]] = {
+        self._backend: NotificationBackend | None = None
+        self._callbacks: dict[str, list[Callable]] = {
             "on_send": [],
             "on_click": [],
             "on_dismiss": [],
@@ -633,12 +634,12 @@ class NotificationManager:
         self,
         title: str,
         message: str,
-        type: Union[str, NotificationType] = NotificationType.INFO,
-        priority: Union[str, NotificationPriority] = NotificationPriority.NORMAL,
-        icon: Optional[str] = None,
-        sound: Optional[bool] = None,
+        type: str | NotificationType = NotificationType.INFO,
+        priority: str | NotificationPriority = NotificationPriority.NORMAL,
+        icon: str | None = None,
+        sound: bool | None = None,
         timeout: int = 5000,
-        actions: Optional[List[Dict[str, Any]]] = None
+        actions: list[dict[str, Any]] | None = None
     ) -> str:
         """
         Send a notification.
@@ -767,9 +768,9 @@ class NotificationManager:
     
     def get_history(
         self,
-        limit: Optional[int] = None,
+        limit: int | None = None,
         unread_only: bool = False
-    ) -> List[Notification]:
+    ) -> list[Notification]:
         """Get notification history."""
         notifications = self.history
         
@@ -830,7 +831,7 @@ class NotificationManager:
 
 
 # Global instance
-_notification_manager: Optional[NotificationManager] = None
+_notification_manager: NotificationManager | None = None
 _manager_lock = threading.Lock()
 
 

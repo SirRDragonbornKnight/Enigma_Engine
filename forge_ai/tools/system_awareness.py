@@ -9,18 +9,18 @@ Provides the AI with awareness of:
 - Hardware capabilities
 """
 
-import os
-import sys
-import time
-import socket
-import platform
-import subprocess
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
 import json
 import logging
+import os
+import platform
+import socket
+import subprocess
+import sys
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,8 @@ class SystemInfo:
     disk_total_gb: float
     disk_free_gb: float
     uptime_hours: float
-    load_average: Tuple[float, float, float]
-    network_interfaces: List[str]
+    load_average: tuple[float, float, float]
+    network_interfaces: list[str]
     gpu_available: bool
     gpu_name: Optional[str] = None
 
@@ -81,7 +81,7 @@ class SystemAwareness:
     
     def __init__(self):
         self._boot_time: Optional[float] = None
-        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._cache: dict[str, tuple[float, Any]] = {}
         self._cache_ttl = 5.0  # seconds
         
     def _get_cached(self, key: str) -> Optional[Any]:
@@ -117,7 +117,7 @@ class SystemAwareness:
         total_mem = 0.0
         avail_mem = 0.0
         try:
-            with open('/proc/meminfo', 'r') as f:
+            with open('/proc/meminfo') as f:
                 for line in f:
                     if line.startswith('MemTotal:'):
                         total_mem = int(line.split()[1]) / (1024 * 1024)
@@ -139,7 +139,7 @@ class SystemAwareness:
         # Uptime
         uptime_hours = 0.0
         try:
-            with open('/proc/uptime', 'r') as f:
+            with open('/proc/uptime') as f:
                 uptime_hours = float(f.read().split()[0]) / 3600
         except Exception:
             pass
@@ -200,7 +200,7 @@ class SystemAwareness:
     def get_cpu_usage(self) -> float:
         """Get current CPU usage percentage."""
         try:
-            with open('/proc/stat', 'r') as f:
+            with open('/proc/stat') as f:
                 line = f.readline()
                 parts = line.split()
                 idle = int(parts[4])
@@ -208,7 +208,7 @@ class SystemAwareness:
                 
             time.sleep(0.1)
             
-            with open('/proc/stat', 'r') as f:
+            with open('/proc/stat') as f:
                 line = f.readline()
                 parts = line.split()
                 idle2 = int(parts[4])
@@ -223,7 +223,7 @@ class SystemAwareness:
             pass
         return 0.0
     
-    def get_memory_usage(self) -> Dict[str, float]:
+    def get_memory_usage(self) -> dict[str, float]:
         """Get memory usage details."""
         result = {
             'total_gb': 0.0,
@@ -232,7 +232,7 @@ class SystemAwareness:
             'percent_used': 0.0
         }
         try:
-            with open('/proc/meminfo', 'r') as f:
+            with open('/proc/meminfo') as f:
                 mem = {}
                 for line in f:
                     parts = line.split()
@@ -250,7 +250,7 @@ class SystemAwareness:
             pass
         return result
     
-    def get_disk_usage(self, path: str = '/') -> Dict[str, float]:
+    def get_disk_usage(self, path: str = '/') -> dict[str, float]:
         """Get disk usage for a path."""
         result = {
             'total_gb': 0.0,
@@ -280,7 +280,7 @@ class SystemAwareness:
         except OSError:
             return False
     
-    def get_network_info(self) -> Dict[str, Any]:
+    def get_network_info(self) -> dict[str, Any]:
         """Get network information."""
         info = {
             'online': self.is_online(),
@@ -308,7 +308,7 @@ class SystemAwareness:
     
     # ========== Process Awareness ==========
     
-    def get_processes(self, sort_by: str = 'memory', limit: int = 20) -> List[ProcessInfo]:
+    def get_processes(self, sort_by: str = 'memory', limit: int = 20) -> list[ProcessInfo]:
         """Get list of running processes."""
         processes = []
         
@@ -351,7 +351,7 @@ class SystemAwareness:
             
         return processes[:limit]
     
-    def find_process(self, name: str) -> List[ProcessInfo]:
+    def find_process(self, name: str) -> list[ProcessInfo]:
         """Find processes by name."""
         all_procs = self.get_processes(limit=100)
         return [p for p in all_procs if name.lower() in p.name.lower()]
@@ -360,7 +360,7 @@ class SystemAwareness:
         """Check if a process is running."""
         return len(self.find_process(name)) > 0
     
-    def get_python_processes(self) -> List[ProcessInfo]:
+    def get_python_processes(self) -> list[ProcessInfo]:
         """Get all Python processes."""
         return self.find_process('python')
     
@@ -384,7 +384,7 @@ class SystemAwareness:
         # Uptime
         uptime = 0.0
         try:
-            with open('/proc/uptime', 'r') as f:
+            with open('/proc/uptime') as f:
                 uptime = float(f.read().split()[0])
         except Exception:
             pass
@@ -418,7 +418,7 @@ class SystemAwareness:
     
     # ========== File System Awareness ==========
     
-    def list_directory(self, path: str, include_hidden: bool = False) -> List[Dict[str, Any]]:
+    def list_directory(self, path: str, include_hidden: bool = False) -> list[dict[str, Any]]:
         """List contents of a directory."""
         items = []
         try:
@@ -445,7 +445,7 @@ class SystemAwareness:
         """Check if a file exists."""
         return Path(path).exists()
     
-    def get_file_info(self, path: str) -> Optional[Dict[str, Any]]:
+    def get_file_info(self, path: str) -> Optional[dict[str, Any]]:
         """Get information about a file."""
         try:
             p = Path(path)
@@ -479,7 +479,7 @@ class SystemAwareness:
             size /= 1024
         return f"{size:.1f} PB"
     
-    def find_files(self, directory: str, pattern: str, recursive: bool = True) -> List[str]:
+    def find_files(self, directory: str, pattern: str, recursive: bool = True) -> list[str]:
         """Find files matching a pattern."""
         results = []
         try:
@@ -495,7 +495,7 @@ class SystemAwareness:
     
     # ========== Hardware Awareness ==========
     
-    def get_hardware_info(self) -> Dict[str, Any]:
+    def get_hardware_info(self) -> dict[str, Any]:
         """Get hardware information."""
         info = {
             'cpu': {},
@@ -508,7 +508,7 @@ class SystemAwareness:
         
         # CPU info
         try:
-            with open('/proc/cpuinfo', 'r') as f:
+            with open('/proc/cpuinfo') as f:
                 for line in f:
                     if line.startswith('model name'):
                         info['cpu']['model'] = line.split(':')[1].strip()

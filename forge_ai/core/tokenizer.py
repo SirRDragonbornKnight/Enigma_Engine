@@ -58,10 +58,10 @@ Converts sentences into sequences of integers for the neural network.
     • forge_ai/core/char_tokenizer.py     - Character tokenizer
     • forge_ai/core/advanced_tokenizer.py - Advanced tokenizer
 """
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Union, Protocol, runtime_checkable
-import logging
 import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Protocol, Union, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +94,11 @@ class TokenizerProtocol(Protocol):
     bos_token_id: int
     pad_token_id: int
     
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Convert text to token IDs."""
         ...
     
-    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """Convert token IDs back to text."""
         ...
 
@@ -115,7 +115,7 @@ def encode_text(
     add_special_tokens: bool = True,
     max_length: Optional[int] = None,
     truncate: bool = True
-) -> List[int]:
+) -> list[int]:
     """
     Encode text using any tokenizer with a unified interface.
     
@@ -165,7 +165,7 @@ def encode_text(
 
 def decode_tokens(
     tokenizer: Any,
-    ids: List[int],
+    ids: list[int],
     skip_special_tokens: bool = True
 ) -> str:
     """
@@ -211,7 +211,7 @@ def get_vocab_size(tokenizer: Any) -> int:
     raise AttributeError(f"Cannot determine vocab_size for {type(tokenizer)}")
 
 
-def get_special_token_ids(tokenizer: Any) -> Dict[str, int]:
+def get_special_token_ids(tokenizer: Any) -> dict[str, int]:
     """
     Get special token IDs from any tokenizer.
     
@@ -366,17 +366,17 @@ class SimpleTokenizer:
 
     def _load_vocab(self, vocab_file: Path):
         """Load vocabulary from JSON file."""
-        with open(vocab_file, 'r', encoding='utf-8') as f:
+        with open(vocab_file, encoding='utf-8') as f:
             self.token_to_id = json.load(f)
         self.id_to_token = {v: k for k, v in self.token_to_id.items()}
 
-    def save_vocab(self, vocab_file: Path):
+    def save_vocab(self, vocab_file: Path) -> None:
         """Save vocabulary to JSON file."""
         Path(vocab_file).parent.mkdir(parents=True, exist_ok=True)
         with open(vocab_file, 'w', encoding='utf-8') as f:
             json.dump(self.token_to_id, f, ensure_ascii=False, indent=2)
 
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """
         Encode text to token IDs.
         
@@ -429,7 +429,7 @@ class SimpleTokenizer:
 
         return ids
 
-    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """
         Decode token IDs to text.
         
@@ -482,7 +482,7 @@ class SimpleTokenizer:
         truncation: bool = False,
         max_length: Optional[int] = None,
         add_special_tokens: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Tokenize text (HuggingFace-compatible interface).
         
@@ -523,7 +523,7 @@ class SimpleTokenizer:
         """Return vocabulary size."""
         return self.vocab_size
 
-    def get_vocab(self) -> Dict[str, int]:
+    def get_vocab(self) -> dict[str, int]:
         """Return copy of vocabulary dictionary."""
         return self.token_to_id.copy()
 
@@ -546,14 +546,14 @@ class TiktokenWrapper:
         self.eos_token_id = 2
         self.unk_token_id = 3
     
-    def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Encode text to token IDs."""
         ids = self.enc.encode(text)
         if add_special_tokens:
             ids = [self.bos_token_id] + ids + [self.eos_token_id]
         return ids
     
-    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """Decode token IDs to text."""
         if skip_special_tokens:
             # Filter out special tokens
@@ -569,7 +569,7 @@ class TiktokenWrapper:
         truncation: bool = False,
         max_length: Optional[int] = None,
         add_special_tokens: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Tokenize text (HuggingFace-compatible interface)."""
         ids = self.encode(text, add_special_tokens=add_special_tokens)
         
@@ -699,7 +699,7 @@ def load_tokenizer(tokenizer_type: str = "auto") -> Any:
 
 
 def train_tokenizer(
-    data_paths: List[str],
+    data_paths: list[str],
     vocab_size: int = 8000,
     output_path: Optional[str] = None,
     tokenizer_type: str = "bpe"
@@ -721,7 +721,7 @@ def train_tokenizer(
     for path in data_paths:
         p = Path(path)
         if p.exists():
-            with open(p, 'r', encoding='utf-8') as f:
+            with open(p, encoding='utf-8') as f:
                 texts.append(f.read())
             logger.info(f"Loaded training data from {path}")
 

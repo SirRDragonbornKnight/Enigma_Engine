@@ -39,8 +39,8 @@ USAGE:
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,8 @@ class CollaborationRequest:
     target_capability: str                    # Capability needed
     target_model: Optional[str] = None        # Specific model (or None for auto)
     task: str = ""                            # Task description
-    context: Dict[str, Any] = field(default_factory=dict)  # Shared context
-    parameters: Dict[str, Any] = field(default_factory=dict)  # Task parameters
+    context: dict[str, Any] = field(default_factory=dict)  # Shared context
+    parameters: dict[str, Any] = field(default_factory=dict)  # Task parameters
     collaboration_type: CollaborationType = CollaborationType.REQUEST_RESPONSE
     timeout_seconds: float = 30.0
     require_sync: bool = True                 # Wait for response vs async
@@ -86,7 +86,7 @@ class CollaborationResponse:
     result: Any
     confidence: float = 0.0
     processing_time: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
 
@@ -109,7 +109,7 @@ class ModelCollaboration:
     def __init__(self):
         """Initialize the collaboration manager."""
         self._orchestrator = None  # Set by orchestrator
-        self._collaboration_history: List[Dict[str, Any]] = []
+        self._collaboration_history: list[dict[str, Any]] = []
         self._max_history = 1000
     
     def set_orchestrator(self, orchestrator: Any) -> None:
@@ -130,9 +130,9 @@ class ModelCollaboration:
         requesting_model: str,
         target_capability: str,
         task: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
         target_model: Optional[str] = None,
-        parameters: Optional[Dict[str, Any]] = None,
+        parameters: Optional[dict[str, Any]] = None,
     ) -> CollaborationResponse:
         """
         Request assistance from another model.
@@ -239,6 +239,7 @@ class ModelCollaboration:
             # Try logprobs-based confidence
             if 'logprobs' in result and result['logprobs']:
                 import math
+
                 # Average probability of tokens
                 probs = [math.exp(lp) for lp in result['logprobs'] if lp is not None]
                 if probs:
@@ -266,7 +267,7 @@ class ModelCollaboration:
         capability: str,
         task: str,
         confidence_threshold: float = 0.7,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
         max_handoffs: int = 2,
     ) -> CollaborationResponse:
         """
@@ -379,9 +380,9 @@ class ModelCollaboration:
     
     def execute_pipeline(
         self,
-        stages: List[Dict[str, Any]],
+        stages: list[dict[str, Any]],
         initial_input: Any,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> CollaborationResponse:
         """
         Execute a multi-stage pipeline where output of one model
@@ -477,7 +478,7 @@ class ModelCollaboration:
         capability: str,
         task: str,
         num_models: int = 3,
-        context: Optional[Dict[str, Any]] = None,
+        context: Optional[dict[str, Any]] = None,
         voting_strategy: str = "majority",
     ) -> CollaborationResponse:
         """
@@ -630,7 +631,7 @@ class ModelCollaboration:
     # ANALYTICS
     # -------------------------------------------------------------------------
     
-    def get_collaboration_stats(self) -> Dict[str, Any]:
+    def get_collaboration_stats(self) -> dict[str, Any]:
         """Get statistics about model collaborations."""
         if not self._collaboration_history:
             return {"total_collaborations": 0}

@@ -149,8 +149,8 @@ class LanguageConfig:
     code: str                           # ISO 639-1 code
     name: str                           # Full name
     native_name: str                    # Name in the language itself
-    default_voice: Optional[str] = None # Preferred voice ID
-    fallback_language: Optional[str] = None  # Fallback if voice unavailable
+    default_voice: str | None = None # Preferred voice ID
+    fallback_language: str | None = None  # Fallback if voice unavailable
     
     # Script/writing system
     script: str = "Latin"               # Latin, Cyrillic, Arabic, etc.
@@ -161,7 +161,7 @@ class LanguageConfig:
 
 
 # Language configurations
-LANGUAGE_CONFIGS: Dict[Language, LanguageConfig] = {
+LANGUAGE_CONFIGS: dict[Language, LanguageConfig] = {
     Language.ENGLISH: LanguageConfig("en", "English", "English"),
     Language.ENGLISH_US: LanguageConfig("en-US", "English (US)", "English"),
     Language.ENGLISH_UK: LanguageConfig("en-GB", "English (UK)", "English"),
@@ -272,7 +272,7 @@ class LanguageDetector:
             for lang, patterns in self.WORD_PATTERNS.items()
         }
     
-    def detect(self, text: str) -> Tuple[Language, float]:
+    def detect(self, text: str) -> tuple[Language, float]:
         """
         Detect the primary language of text.
         
@@ -320,7 +320,7 @@ class LanguageDetector:
             return Language.GREEK, 0.9
         
         # Latin script - use word patterns
-        scores: Dict[Language, float] = {}
+        scores: dict[Language, float] = {}
         
         for lang, patterns in self._word_re.items():
             score = 0.0
@@ -356,7 +356,7 @@ class LanguageDetector:
         pattern = self._script_re.get(script)
         return pattern and bool(pattern.search(text))
     
-    def detect_segments(self, text: str) -> List[Tuple[str, Language, float]]:
+    def detect_segments(self, text: str) -> list[tuple[str, Language, float]]:
         """
         Detect language for each segment of text (for code-switching).
         
@@ -393,8 +393,8 @@ class MultilingualTTS:
         self.detector = LanguageDetector()
         
         # Voice cache per language
-        self._voices: Dict[str, List[VoiceInfo]] = {}
-        self._current_voice: Optional[VoiceInfo] = None
+        self._voices: dict[str, list[VoiceInfo]] = {}
+        self._current_voice: VoiceInfo | None = None
         
         # Discover available voices
         self._discover_voices()
@@ -495,7 +495,7 @@ class MultilingualTTS:
         self,
         text: str,
         language: Language = Language.AUTO,
-        voice_id: Optional[str] = None,
+        voice_id: str | None = None,
         blocking: bool = True
     ):
         """
@@ -544,8 +544,8 @@ class MultilingualTTS:
     def _select_voice(
         self,
         language: Language,
-        voice_id: Optional[str] = None
-    ) -> Optional[VoiceInfo]:
+        voice_id: str | None = None
+    ) -> VoiceInfo | None:
         """Select appropriate voice for language."""
         if voice_id:
             # Find specific voice
@@ -605,7 +605,7 @@ class MultilingualTTS:
         except Exception as e:
             logger.error(f"TTS speak error: {e}")
     
-    def get_voices(self, language: Language = None) -> List[VoiceInfo]:
+    def get_voices(self, language: Language = None) -> list[VoiceInfo]:
         """
         Get available voices, optionally filtered by language.
         
@@ -631,7 +631,7 @@ class MultilingualTTS:
         
         return voices
     
-    def get_supported_languages(self) -> List[Language]:
+    def get_supported_languages(self) -> list[Language]:
         """Get list of languages with available voices."""
         languages = set()
         
@@ -641,12 +641,12 @@ class MultilingualTTS:
         
         return sorted(languages, key=lambda x: x.name)
     
-    def get_current_voice(self) -> Optional[VoiceInfo]:
+    def get_current_voice(self) -> VoiceInfo | None:
         """Get the currently selected voice."""
         return self._current_voice
 
 
-def detect_language(text: str) -> Tuple[Language, float]:
+def detect_language(text: str) -> tuple[Language, float]:
     """
     Convenience function to detect language.
     

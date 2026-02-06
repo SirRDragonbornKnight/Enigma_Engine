@@ -7,9 +7,9 @@ Generates basic motion graphics and transitions.
 
 import math
 import struct
-import zlib
 import time
-from typing import Dict, Any, List, Tuple, Optional
+import zlib
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class BuiltinVideoGen:
@@ -52,7 +52,7 @@ class BuiltinVideoGen:
         x = (seed * 1103515245 + index * 12345 + 1) & 0xFFFFFFFF
         return (x & 0x7FFFFFFF) / 0x7FFFFFFF
     
-    def _hsv_to_rgb(self, h: float, s: float, v: float) -> Tuple[int, int, int]:
+    def _hsv_to_rgb(self, h: float, s: float, v: float) -> tuple[int, int, int]:
         """Convert HSV to RGB."""
         h = h % 1.0
         if s == 0:
@@ -80,7 +80,7 @@ class BuiltinVideoGen:
         
         return (int(r * 255), int(g * 255), int(b * 255))
     
-    def _color_from_prompt(self, prompt: str) -> Tuple[float, float, float]:
+    def _color_from_prompt(self, prompt: str) -> tuple[float, float, float]:
         """Extract color hints from prompt."""
         prompt_lower = prompt.lower()
         
@@ -118,7 +118,7 @@ class BuiltinVideoGen:
             return "pulse"
     
     def _generate_frame(self, frame_num: int, total_frames: int, style: str,
-                        hue: float, seed: int) -> List[List[Tuple[int, int, int]]]:
+                        hue: float, seed: int) -> list[list[tuple[int, int, int]]]:
         """Generate a single frame."""
         t = frame_num / total_frames  # 0 to 1
         pixels = []
@@ -243,7 +243,7 @@ class BuiltinVideoGen:
         
         return pixels
     
-    def _frames_to_gif(self, frames: List[List[List[Tuple[int, int, int]]]], 
+    def _frames_to_gif(self, frames: list[list[list[tuple[int, int, int]]]], 
                        delay: int = 10) -> bytes:
         """Convert frames to GIF format."""
         # Build color table from all frames
@@ -324,7 +324,7 @@ class BuiltinVideoGen:
     
     def generate(self, prompt: str, frames: int = 20, duration: float = 2.0,
                  width: Optional[int] = None, height: Optional[int] = None,
-                 **kwargs) -> Dict[str, Any]:
+                 **kwargs) -> dict[str, Any]:
         """Generate an animated GIF from a text prompt."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}
@@ -368,7 +368,7 @@ class BuiltinVideoGen:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def generate_to_file(self, prompt: str, output_path: str, **kwargs) -> Dict[str, Any]:
+    def generate_to_file(self, prompt: str, output_path: str, **kwargs) -> dict[str, Any]:
         """Generate video and save to file."""
         result = self.generate(prompt, **kwargs)
         

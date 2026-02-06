@@ -32,7 +32,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 
 from ..config import CONFIG
@@ -64,13 +65,13 @@ class ModelUpdate:
     """
     device_id: str
     round_number: int
-    weight_deltas: Dict[str, np.ndarray]  # Only changes, not full weights
+    weight_deltas: dict[str, np.ndarray]  # Only changes, not full weights
     num_samples: int                      # How much data used
     loss: float                           # Training loss
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
             'device_id': self.device_id,
@@ -83,7 +84,7 @@ class ModelUpdate:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'ModelUpdate':
+    def from_dict(cls, data: dict) -> 'ModelUpdate':
         """Deserialize from dictionary."""
         return cls(
             device_id=data['device_id'],
@@ -109,7 +110,7 @@ class FederationInfo:
     description: str = ""
     created_at: datetime = field(default_factory=datetime.now)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
             'id': self.id,
@@ -124,7 +125,7 @@ class FederationInfo:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'FederationInfo':
+    def from_dict(cls, data: dict) -> 'FederationInfo':
         """Deserialize from dictionary."""
         return cls(
             id=data['id'],
@@ -162,7 +163,7 @@ class FederatedLearning:
         self.device_id = self._get_device_id()
         self.current_federation: Optional[str] = None
         self.current_round = 0
-        self.federations: Dict[str, FederationInfo] = {}
+        self.federations: dict[str, FederationInfo] = {}
         
         # Lazy imports to avoid circular dependencies
         self._coordinator = None
@@ -303,7 +304,7 @@ class FederatedLearning:
         """
         return self.federations.get(federation_id)
     
-    def list_federations(self) -> List[FederationInfo]:
+    def list_federations(self) -> list[FederationInfo]:
         """
         List all available federations.
         
@@ -325,7 +326,7 @@ class FederatedLearning:
             ModelUpdate with weight deltas (not full weights for privacy)
         """
         import torch
-        
+
         # Store initial weights
         initial_weights = {
             name: param.detach().cpu().numpy().copy()
@@ -440,7 +441,7 @@ class FederatedLearning:
         # In real implementation, send over network
         logger.info(f"Sending update for round {update.round_number}")
     
-    def receive_aggregated_model(self, model_weights: Dict[str, np.ndarray]):
+    def receive_aggregated_model(self, model_weights: dict[str, np.ndarray]):
         """
         Receive improved model from coordinator.
         
@@ -465,8 +466,8 @@ class FederationManager:
     
     def __init__(self):
         """Initialize federation manager."""
-        self.federations: Dict[str, FederationInfo] = {}
-        self.invites: Dict[str, str] = {}  # invite_code -> federation_id
+        self.federations: dict[str, FederationInfo] = {}
+        self.invites: dict[str, str] = {}  # invite_code -> federation_id
         
     def create_federation(
         self,

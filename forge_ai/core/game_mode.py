@@ -4,15 +4,15 @@ Game Mode - Zero Lag Gaming with AI Companion
 Automatically detects games and reduces AI resource usage to prevent frame drops.
 """
 
+import json
 import logging
 import threading
 import time
-from typing import Optional, Callable, List, Dict, Any
 from pathlib import Path
-import json
+from typing import Any, Callable, Dict, List, Optional
 
 from .process_monitor import ProcessMonitor, get_process_monitor
-from .resource_limiter import ResourceLimits, ResourceLimiter
+from .resource_limiter import ResourceLimiter, ResourceLimits
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +77,9 @@ class GameMode:
         self._watcher: Optional['GameModeWatcher'] = None
         
         # Callbacks
-        self._on_game_detected: List[Callable[[str], None]] = []
-        self._on_game_ended: List[Callable[[], None]] = []
-        self._on_limits_changed: List[Callable[[ResourceLimits], None]] = []
+        self._on_game_detected: list[Callable[[str], None]] = []
+        self._on_game_ended: list[Callable[[], None]] = []
+        self._on_limits_changed: list[Callable[[ResourceLimits], None]] = []
         
         # Load config
         self._load_config()
@@ -231,7 +231,7 @@ class GameMode:
         """Check if game mode is currently active (game detected)."""
         return self._active
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current game mode status."""
         return {
             "enabled": self._enabled,

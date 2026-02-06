@@ -4,10 +4,10 @@ Windows Hotkey Backend - Global hotkey implementation for Windows.
 Uses the Windows API (via ctypes) to register global hotkeys using RegisterHotKey.
 """
 
-import sys
 import logging
+import sys
 import threading
-from typing import Callable, Dict, Optional, Any
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 if sys.platform == 'win32':
     import ctypes
     from ctypes import wintypes
-    
+
     # Windows API constants
     MOD_ALT = 0x0001
     MOD_CONTROL = 0x0002
@@ -38,7 +38,7 @@ class WindowsHotkeyBackend:
     
     def __init__(self):
         """Initialize Windows hotkey backend."""
-        self._hotkeys: Dict[str, Dict[str, Any]] = {}
+        self._hotkeys: dict[str, dict[str, Any]] = {}
         self._next_id = 1
         self._running = False
         self._thread: Optional[threading.Thread] = None

@@ -11,17 +11,16 @@ Provides data generation for testing:
 Part of the ForgeAI testing utilities.
 """
 
+import hashlib
+import json
 import random
 import string
-import json
 import uuid
-import hashlib
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, TypeVar, Generic, Union
 from datetime import datetime, timedelta
-from pathlib import Path
 from enum import Enum
-
+from pathlib import Path
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 T = TypeVar('T')
 
@@ -325,19 +324,19 @@ class Generator:
     
     # === Collections ===
     
-    def choice(self, options: List[T]) -> T:
+    def choice(self, options: list[T]) -> T:
         """Choose a random item from a list."""
         return self._rng.choice(options)
     
-    def choices(self, options: List[T], count: int = 3) -> List[T]:
+    def choices(self, options: list[T], count: int = 3) -> list[T]:
         """Choose multiple random items."""
         return self._rng.choices(options, k=count)
     
-    def sample(self, options: List[T], count: int = 3) -> List[T]:
+    def sample(self, options: list[T], count: int = 3) -> list[T]:
         """Choose unique random items."""
         return self._rng.sample(options, min(count, len(options)))
     
-    def shuffle(self, items: List[T]) -> List[T]:
+    def shuffle(self, items: list[T]) -> list[T]:
         """Shuffle a list."""
         result = items.copy()
         self._rng.shuffle(result)
@@ -347,7 +346,7 @@ class Generator:
         self,
         generator: Callable[[], T],
         count: int = 5
-    ) -> List[T]:
+    ) -> list[T]:
         """Generate a list using a generator function."""
         return [generator() for _ in range(count)]
     
@@ -356,13 +355,13 @@ class Generator:
         key_gen: Callable[[], str],
         value_gen: Callable[[], Any],
         count: int = 5
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a dictionary."""
         return {key_gen(): value_gen() for _ in range(count)}
     
     # === JSON ===
     
-    def json_object(self, depth: int = 2) -> Dict[str, Any]:
+    def json_object(self, depth: int = 2) -> dict[str, Any]:
         """Generate a random JSON-like object."""
         obj = {}
         for _ in range(self._rng.randint(2, 5)):
@@ -386,7 +385,7 @@ class FieldSpec:
     name: str
     generator: str  # Generator method name
     args: tuple = field(default_factory=tuple)
-    kwargs: Dict[str, Any] = field(default_factory=dict)
+    kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 class SchemaGenerator:
@@ -414,13 +413,13 @@ class SchemaGenerator:
     def __init__(self, seed: Optional[int] = None):
         """Initialize schema generator."""
         self._generator = Generator(seed)
-        self._schemas: Dict[str, List[FieldSpec]] = {}
+        self._schemas: dict[str, list[FieldSpec]] = {}
     
-    def define(self, name: str, fields: List[FieldSpec]):
+    def define(self, name: str, fields: list[FieldSpec]):
         """Define a schema."""
         self._schemas[name] = fields
     
-    def generate(self, schema_name: str) -> Dict[str, Any]:
+    def generate(self, schema_name: str) -> dict[str, Any]:
         """Generate a single object from schema."""
         if schema_name not in self._schemas:
             raise ValueError(f"Unknown schema: {schema_name}")
@@ -436,7 +435,7 @@ class SchemaGenerator:
         self,
         schema_name: str,
         count: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate multiple objects from schema."""
         return [self.generate(schema_name) for _ in range(count)]
     
@@ -483,7 +482,7 @@ class FixtureFactory:
     def __init__(self, seed: Optional[int] = None):
         """Initialize fixture factory."""
         self._generator = Generator(seed)
-        self._builders: Dict[str, Callable] = {}
+        self._builders: dict[str, Callable] = {}
     
     def register(self, name: str):
         """Decorator to register a builder."""
@@ -492,7 +491,7 @@ class FixtureFactory:
             return func
         return decorator
     
-    def create(self, name: str, **overrides) -> Dict[str, Any]:
+    def create(self, name: str, **overrides) -> dict[str, Any]:
         """Create a fixture."""
         if name not in self._builders:
             raise ValueError(f"Unknown fixture: {name}")
@@ -503,7 +502,7 @@ class FixtureFactory:
         name: str,
         count: int = 5,
         **overrides
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Create multiple fixtures."""
         return [self.create(name, **overrides) for _ in range(count)]
 

@@ -69,118 +69,78 @@ USAGE:
     avatar.disable()
 """
 
-from .controller import (
-    AvatarController,
-    AvatarConfig,
-    AvatarState,
-    AvatarPosition,
-    ControlPriority,
-    get_avatar,
-    enable_avatar,
-    disable_avatar,
-    toggle_avatar,
-    execute_action,
-)
-
-from .avatar_identity import (
-    AIAvatarIdentity,
-    AvatarAppearance,
-    PERSONALITY_TO_APPEARANCE,
-)
-
-from .emotion_sync import EmotionExpressionSync
-from .lip_sync import LipSync
-from .customizer import AvatarCustomizer
-
 # Adaptive animation system (works with ANY model)
 from .adaptive_animator import (
     AdaptiveAnimator,
-    ModelCapabilities,
-    AnimationStrategy,
     AnimationState,
-)
-
-# AI-controlled animation systems (Cortana/JARVIS style)
-# 2D Animation (GIF, sprite sheets, image sequences)
-from .animation_system import (
-    AvatarAnimator,
-    AIAvatarController,
-    AnimationState as AnimationState2D,
-    Animation,
+    AnimationStrategy,
+    ModelCapabilities,
 )
 
 # 3D Animation (real-time skeletal animation - NO EXTERNAL DEPENDENCIES)
 # Uses only PyQt5's built-in OpenGL support
 from .animation_3d_native import (
-    NativeAvatar3D,
     AI3DController,
     Animation3DState,
     Avatar3DWidget,
     GLTFLoader,
+    NativeAvatar3D,
 )
+
+# AI-controlled animation systems (Cortana/JARVIS style)
+# 2D Animation (GIF, sprite sheets, image sequences)
+from .animation_system import (
+    AIAvatarController,
+    Animation,
+)
+from .animation_system import AnimationState as AnimationState2D
+from .animation_system import (
+    AvatarAnimator,
+)
+from .avatar_identity import (
+    PERSONALITY_TO_APPEARANCE,
+    AIAvatarIdentity,
+    AvatarAppearance,
+)
+from .controller import (
+    AvatarConfig,
+    AvatarController,
+    AvatarPosition,
+    AvatarState,
+    ControlPriority,
+    disable_avatar,
+    enable_avatar,
+    execute_action,
+    get_avatar,
+    toggle_avatar,
+)
+from .customizer import AvatarCustomizer
+from .emotion_sync import EmotionExpressionSync
+from .lip_sync import LipSync
+
 # Aliases for compatibility
 Avatar3DAnimator = NativeAvatar3D
 AI3DAvatarController = AI3DController
 HAS_3D_ANIMATION = True
 
-# Unified Avatar System (combines all modes)
-# - PNG_BOUNCE: DougDoug style simple PNG with bounce
-# - ANIMATED_2D: Desktop Mate style GIF/sprite animations
-# - SKELETAL_3D: Cortana style 3D skeletal animation
-from .unified_avatar import (
-    UnifiedAvatar,
-    AvatarMode,
-    AvatarType,
-    AvatarConfig,
-    EmotionMapping,
-    PNGBounceWidget,
-    # Convenience functions
-    create_png_avatar,
-    create_2d_avatar,
-    create_3d_avatar,
-    create_animal_avatar,
-    create_robot_avatar,
-)
-
 # AI-Avatar Bridge (AI controls avatar during chat)
 # Two control modes:
 # 1. AUTOMATIC: Detects emotions from text via keyword matching
 # 2. EXPLICIT: AI uses [emotion:happy], [gesture:wave], etc. commands
-from .ai_bridge import (
+from .ai_bridge import (  # Explicit command system; Convenience functions
     AIAvatarBridge,
     AvatarChatIntegration,
-    EmotionKeywords,
-    GestureKeywords,
-    # Explicit command system
     AvatarCommand,
+    EmotionKeywords,
     ExplicitCommands,
-    parse_explicit_commands,
-    get_command_reference,
-    # Convenience functions
+    GestureKeywords,
     create_avatar_bridge,
-    integrate_avatar_with_chat,
     get_avatar_command_prompt,
-    process_ai_response,
+    get_command_reference,
+    integrate_avatar_with_chat,
     list_avatar_commands,
-)
-
-# Speech synchronization (voice + lip sync)
-from .speech_sync import (
-    SpeechSync,
-    SpeechSyncConfig,
-    get_speech_sync,
-    sync_speak,
-    set_avatar_for_sync,
-    create_voice_avatar_bridge,
-)
-
-# Autonomous avatar system
-from .autonomous import (
-    AutonomousAvatar,
-    AvatarMood,
-    AutonomousConfig,
-    ScreenRegion,
-    get_autonomous_avatar,
+    parse_explicit_commands,
+    process_ai_response,
 )
 
 # AI Control System
@@ -192,29 +152,22 @@ from .ai_control import (
     process_ai_response,
 )
 
-# Preset system
-from .presets import (
-    AvatarPreset,
-    PresetManager,
-    get_preset_manager,
+# Autonomous avatar system
+from .autonomous import (
+    AutonomousAvatar,
+    AutonomousConfig,
+    AvatarMood,
+    ScreenRegion,
+    get_autonomous_avatar,
 )
 
-# Desktop pet (DesktopMate-style)
-from .desktop_pet import (
-    DesktopPet,
-    PetState,
-    PetConfig,
-    get_desktop_pet,
-)
-
-# Spawnable objects system (avatar can spawn items on screen)
-from .spawnable_objects import (
-    ObjectSpawner,
-    SpawnedObject,
-    ObjectType,
-    AttachPoint,
-    ObjectWindow,
-    get_spawner,
+# Avatar Bundle System
+from .avatar_bundle import (
+    AvatarBundle,
+    AvatarBundleCreator,
+    AvatarManifest,
+    install_avatar_bundle,
+    list_installed_avatars,
 )
 
 # Blender integration
@@ -226,13 +179,30 @@ from .blender_bridge import (
     save_blender_addon,
 )
 
-# Avatar Bundle System
-from .avatar_bundle import (
-    AvatarBundle,
-    AvatarManifest,
-    AvatarBundleCreator,
-    install_avatar_bundle,
-    list_installed_avatars,
+# Desktop pet (DesktopMate-style)
+from .desktop_pet import (
+    DesktopPet,
+    PetConfig,
+    PetState,
+    get_desktop_pet,
+)
+
+# Persistence
+from .persistence import (
+    AvatarPersistence,
+    AvatarSettings,
+    get_persistence,
+    load_avatar_settings,
+    load_position,
+    save_avatar_settings,
+    save_position,
+)
+
+# Preset system
+from .presets import (
+    AvatarPreset,
+    PresetManager,
+    get_preset_manager,
 )
 
 # Sample Avatars
@@ -241,24 +211,51 @@ from .sample_avatars import (
     generate_sample_avatars,
 )
 
-# Persistence
-from .persistence import (
-    AvatarSettings,
-    AvatarPersistence,
-    get_persistence,
-    save_position,
-    load_position,
-    save_avatar_settings,
-    load_avatar_settings,
+# Spawnable objects system (avatar can spawn items on screen)
+from .spawnable_objects import (
+    AttachPoint,
+    ObjectSpawner,
+    ObjectType,
+    ObjectWindow,
+    SpawnedObject,
+    get_spawner,
+)
+
+# Speech synchronization (voice + lip sync)
+from .speech_sync import (
+    SpeechSync,
+    SpeechSyncConfig,
+    create_voice_avatar_bridge,
+    get_speech_sync,
+    set_avatar_for_sync,
+    sync_speak,
 )
 
 # Template Generator
 from .template_generator import (
+    EXTENDED_EMOTIONS,
+    STANDARD_EMOTIONS,
     SpriteTemplateGenerator,
     TemplateConfig,
     generate_template,
-    STANDARD_EMOTIONS,
-    EXTENDED_EMOTIONS,
+)
+
+# Unified Avatar System (combines all modes)
+# - PNG_BOUNCE: DougDoug style simple PNG with bounce
+# - ANIMATED_2D: Desktop Mate style GIF/sprite animations
+# - SKELETAL_3D: Cortana style 3D skeletal animation
+from .unified_avatar import (  # Convenience functions
+    AvatarConfig,
+    AvatarMode,
+    AvatarType,
+    EmotionMapping,
+    PNGBounceWidget,
+    UnifiedAvatar,
+    create_2d_avatar,
+    create_3d_avatar,
+    create_animal_avatar,
+    create_png_avatar,
+    create_robot_avatar,
 )
 
 __all__ = [

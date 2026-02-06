@@ -4,12 +4,13 @@ Resource Limiter - Enforce resource usage limits for game mode
 Ensures AI stays within specified CPU, RAM, and GPU limits.
 """
 
-import psutil
+import logging
 import threading
 import time
-import logging
 from dataclasses import dataclass
-from typing import Optional, Callable
+from typing import Callable, Optional
+
+import psutil
 
 logger = logging.getLogger(__name__)
 

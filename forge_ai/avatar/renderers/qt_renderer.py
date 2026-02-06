@@ -4,18 +4,18 @@ PyQt5 Avatar Renderer
 Renders avatar as a transparent, always-on-top overlay window.
 """
 
-from typing import Optional, Dict
 import sys
+from typing import Dict, Optional
 
+from ..avatar_identity import AvatarAppearance
 from .base import BaseRenderer
 from .default_sprites import generate_sprite, get_sprite_data_url
-from ..avatar_identity import AvatarAppearance
 
 try:
-    from PyQt5.QtWidgets import QApplication, QLabel, QWidget
-    from PyQt5.QtCore import Qt, QTimer, QPoint
-    from PyQt5.QtGui import QPixmap, QCursor
+    from PyQt5.QtCore import QPoint, Qt, QTimer
+    from PyQt5.QtGui import QCursor, QPixmap
     from PyQt5.QtSvg import QSvgWidget
+    from PyQt5.QtWidgets import QApplication, QLabel, QWidget
     PYQT5_AVAILABLE = True
 except ImportError:
     PYQT5_AVAILABLE = False
@@ -151,7 +151,7 @@ class QtAvatarRenderer(BaseRenderer):
         if self._window:
             self._window.move(x, y)
     
-    def render_frame(self, animation_data: Optional[Dict] = None) -> None:
+    def render_frame(self, animation_data: Optional[dict] = None) -> None:
         """
         Render a single frame.
         

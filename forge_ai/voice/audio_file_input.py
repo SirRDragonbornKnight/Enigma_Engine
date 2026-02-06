@@ -35,10 +35,11 @@ import os
 import subprocess
 import tempfile
 import wave
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -105,8 +106,8 @@ class TranscriptionSegment:
     start: float                  # Start time in seconds
     end: float                    # End time in seconds
     confidence: float = 1.0       # Confidence score
-    speaker: Optional[str] = None # Speaker ID (if diarization enabled)
-    words: List[Dict] = field(default_factory=list)  # Word-level timestamps
+    speaker: str | None = None # Speaker ID (if diarization enabled)
+    words: list[dict] = field(default_factory=list)  # Word-level timestamps
 
 
 @dataclass
@@ -114,7 +115,7 @@ class TranscriptionResult:
     """Result of audio file transcription."""
     
     text: str                     # Full transcription text
-    segments: List[TranscriptionSegment] = field(default_factory=list)
+    segments: list[TranscriptionSegment] = field(default_factory=list)
     duration: float = 0.0         # Audio duration in seconds
     language: str = "en"          # Detected/specified language
     confidence: float = 1.0       # Overall confidence
@@ -183,8 +184,8 @@ class AudioFileTranscriber:
     def _init_vosk(self) -> bool:
         """Initialize Vosk backend."""
         try:
-            from vosk import Model, KaldiRecognizer
-            
+            from vosk import KaldiRecognizer, Model
+
             # Find model path
             model_paths = [
                 Path.home() / ".cache/vosk/model",
@@ -232,7 +233,7 @@ class AudioFileTranscriber:
     
     def transcribe(
         self,
-        file_path: Union[str, Path],
+        file_path: str | Path,
         timestamps: bool = None,
         language: str = None
     ) -> TranscriptionResult:
@@ -299,9 +300,9 @@ class AudioFileTranscriber:
     
     def transcribe_batch(
         self,
-        file_paths: List[Union[str, Path]],
+        file_paths: list[str | Path],
         progress_callback: Callable[[int, int, str], None] = None
-    ) -> List[TranscriptionResult]:
+    ) -> list[TranscriptionResult]:
         """
         Transcribe multiple audio files.
         
@@ -333,9 +334,9 @@ class AudioFileTranscriber:
     
     def transcribe_stream(
         self,
-        file_path: Union[str, Path],
+        file_path: str | Path,
         chunk_seconds: float = 30.0
-    ) -> Generator[TranscriptionSegment, None, None]:
+    ) -> Generator[TranscriptionSegment]:
         """
         Stream transcription for long audio files.
         
@@ -453,7 +454,7 @@ class AudioFileTranscriber:
         # Return original and hope for the best
         return file_path
     
-    def _load_audio(self, wav_path: Path) -> Tuple[np.ndarray, float]:
+    def _load_audio(self, wav_path: Path) -> tuple[np.ndarray, float]:
         """Load audio file as numpy array."""
         # Try soundfile first
         try:
@@ -642,7 +643,7 @@ class AudioFileTranscriber:
             except Exception:
                 pass
     
-    def get_supported_formats(self) -> List[str]:
+    def get_supported_formats(self) -> list[str]:
         """Get list of supported audio formats."""
         return list(self._supported_formats)
     
@@ -654,7 +655,7 @@ class AudioFileTranscriber:
 
 # Convenience functions
 
-_transcriber: Optional[AudioFileTranscriber] = None
+_transcriber: AudioFileTranscriber | None = None
 
 
 def get_transcriber(config: TranscriptionConfig = None) -> AudioFileTranscriber:
@@ -666,7 +667,7 @@ def get_transcriber(config: TranscriptionConfig = None) -> AudioFileTranscriber:
 
 
 def transcribe_file(
-    file_path: Union[str, Path],
+    file_path: str | Path,
     language: str = "en"
 ) -> str:
     """
@@ -685,9 +686,9 @@ def transcribe_file(
 
 
 def transcribe_with_timestamps(
-    file_path: Union[str, Path],
+    file_path: str | Path,
     language: str = "en"
-) -> List[Tuple[float, float, str]]:
+) -> list[tuple[float, float, str]]:
     """
     Transcribe with timestamps.
     

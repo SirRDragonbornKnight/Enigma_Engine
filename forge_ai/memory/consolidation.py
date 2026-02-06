@@ -3,12 +3,12 @@ Memory Consolidation System for ForgeAI
 Periodically summarizes and merges old memories to reduce storage and improve retrieval.
 """
 import logging
-import time
 import threading
-from typing import List, Optional, Callable, Dict, Any
+import time
 from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, List, Optional
 
-from .categorization import Memory, MemoryType, MemoryCategorization
+from .categorization import Memory, MemoryCategorization, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class MemoryConsolidator:
     def __init__(
         self,
         memory_system: MemoryCategorization,
-        summarizer: Optional[Callable[[List[Memory]], str]] = None
+        summarizer: Optional[Callable[[list[Memory]], str]] = None
     ):
         """
         Initialize memory consolidator.
@@ -33,7 +33,7 @@ class MemoryConsolidator:
         self._scheduler_thread = None
         self._running = False
     
-    def _default_summarizer(self, memories: List[Memory]) -> str:
+    def _default_summarizer(self, memories: list[Memory]) -> str:
         """
         Default summarizer: concatenates and truncates.
         
@@ -197,7 +197,7 @@ class MemoryConsolidator:
         
         return intersection / union if union > 0 else 0.0
     
-    def _merge_memory_group(self, memories: List[Memory]) -> Memory:
+    def _merge_memory_group(self, memories: list[Memory]) -> Memory:
         """Merge a group of similar memories."""
         if not memories:
             return None

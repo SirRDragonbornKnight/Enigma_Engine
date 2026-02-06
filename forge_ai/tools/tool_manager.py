@@ -41,9 +41,9 @@ USAGE:
 
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -302,7 +302,7 @@ class ToolManager:
         """Load tool configuration from file."""
         if TOOL_CONFIG_FILE.exists():
             try:
-                with open(TOOL_CONFIG_FILE, 'r') as f:
+                with open(TOOL_CONFIG_FILE) as f:
                     config = json.load(f)
                     self.enabled_tools = set(config.get("enabled", []))
                     self.disabled_tools = set(config.get("disabled", []))
@@ -617,7 +617,7 @@ class ToolManager:
             return {"success": False, "error": f"Profile '{profile_name}' not found"}
         
         try:
-            with open(profile_file, 'r') as f:
+            with open(profile_file) as f:
                 profile = json.load(f)
             
             self.enabled_tools = set(profile.get("enabled_tools", []))
@@ -642,7 +642,7 @@ class ToolManager:
         
         for file in PROFILES_DIR.glob("*.json"):
             try:
-                with open(file, 'r') as f:
+                with open(file) as f:
                     profile = json.load(f)
                     profiles.append({
                         "name": profile.get("name", file.stem),
@@ -650,7 +650,7 @@ class ToolManager:
                         "tool_count": len(profile.get("enabled_tools", [])),
                         "created": profile.get("created", ""),
                     })
-            except (json.JSONDecodeError, IOError, KeyError) as e:
+            except (json.JSONDecodeError, OSError, KeyError) as e:
                 logger.warning(f"Could not load profile {file}: {e}")
         
         return {

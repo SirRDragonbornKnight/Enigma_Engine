@@ -10,25 +10,35 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-        QDoubleSpinBox, QLineEdit, QCheckBox
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QDoubleSpinBox,
+        QFileDialog,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QSpinBox,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
-from .output_helpers import open_file_in_explorer, open_in_default_viewer, open_folder
+from .output_helpers import open_file_in_explorer, open_folder, open_in_default_viewer
 from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 
 # Output directory
@@ -53,8 +63,8 @@ class LocalVideo:
     def load(self) -> bool:
         # Try AnimateDiff first
         try:
-            from diffusers import AnimateDiffPipeline, MotionAdapter, DDIMScheduler
             import torch
+            from diffusers import AnimateDiffPipeline, DDIMScheduler, MotionAdapter
             
             adapter = MotionAdapter.from_pretrained(self.model_id)
             model_id = "SG161222/Realistic_Vision_V5.1_noVAE"
@@ -111,7 +121,7 @@ class LocalVideo:
         self._using_builtin = False
     
     def generate(self, prompt: str, duration: float = 2.0, fps: int = 8,
-                 **kwargs) -> Dict[str, Any]:
+                 **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
         
@@ -195,7 +205,7 @@ class ReplicateVideo:
         self.is_loaded = False
     
     def generate(self, prompt: str, duration: float = 4.0, fps: int = 24,
-                 **kwargs) -> Dict[str, Any]:
+                 **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -504,7 +514,7 @@ class VideoTab(QWidget):
             import threading
             def do_load():
                 success = provider.load()
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 if success:
                     QMetaObject.invokeMethod(
                         self.status_label, "setText",

@@ -15,9 +15,9 @@ Supports automatic mode selection based on hardware detection.
 
 import os
 import threading
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
-from dataclasses import dataclass
 
 
 class PowerLevel(Enum):
@@ -147,7 +147,7 @@ class PowerManager:
     def _detect_optimal_level(self) -> PowerLevel:
         """Detect optimal power level based on hardware."""
         try:
-            from .device_profiles import get_device_profiler, DeviceClass
+            from .device_profiles import DeviceClass, get_device_profiler
             profiler = get_device_profiler()
             device_class = profiler.classify()
             
@@ -203,6 +203,7 @@ class PowerManager:
             if self._settings.max_memory_mb > 0:
                 try:
                     import resource
+
                     # Set soft limit (Unix only)
                     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
                     new_limit = self._settings.max_memory_mb * 1024 * 1024

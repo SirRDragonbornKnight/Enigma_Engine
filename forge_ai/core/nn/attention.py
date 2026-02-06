@@ -6,10 +6,11 @@ Contains:
 - GroupedQueryAttention: GQA for memory efficiency  
 - SlidingWindowAttention: For long sequences
 """
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple
 
 from .embeddings import RotaryEmbedding, apply_rotary_pos_emb
 
@@ -53,9 +54,9 @@ class MultiHeadAttention(nn.Module):
         self,
         x: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        kv_cache: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        kv_cache: Optional[tuple[torch.Tensor, torch.Tensor]] = None,
         use_cache: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+    ) -> tuple[torch.Tensor, Optional[tuple[torch.Tensor, torch.Tensor]]]:
         """
         Forward pass.
         
@@ -163,9 +164,9 @@ class GroupedQueryAttention(nn.Module):
         self,
         x: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        kv_cache: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        kv_cache: Optional[tuple[torch.Tensor, torch.Tensor]] = None,
         use_cache: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+    ) -> tuple[torch.Tensor, Optional[tuple[torch.Tensor, torch.Tensor]]]:
         batch_size, seq_len, _ = x.shape
         
         q = self.q_proj(x).view(batch_size, seq_len, self.n_heads, self.head_dim).transpose(1, 2)
@@ -246,9 +247,9 @@ class SlidingWindowAttention(nn.Module):
         self,
         x: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        kv_cache: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        kv_cache: Optional[tuple[torch.Tensor, torch.Tensor]] = None,
         use_cache: bool = False,
-    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+    ) -> tuple[torch.Tensor, Optional[tuple[torch.Tensor, torch.Tensor]]]:
         batch_size, seq_len, _ = x.shape
         
         q = self.q_proj(x).view(batch_size, seq_len, self.n_heads, self.head_dim).transpose(1, 2)

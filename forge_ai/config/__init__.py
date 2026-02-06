@@ -8,6 +8,6 @@ This package provides:
 - Config persistence
 """
 
-from .defaults import CONFIG, get_config, update_config, save_config
+from .defaults import CONFIG, get_config, save_config, update_config
 
 __all__ = ["CONFIG", "get_config", "update_config", "save_config"]

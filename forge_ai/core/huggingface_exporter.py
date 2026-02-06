@@ -26,9 +26,9 @@ import json
 import logging
 import os
 import shutil
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import torch
 
@@ -76,7 +76,7 @@ class HuggingFaceExporter:
             raise ValueError(f"Model '{model_name}' not found at {model_path}")
         return model_path
     
-    def _load_forge_config(self, model_path: Path) -> Dict[str, Any]:
+    def _load_forge_config(self, model_path: Path) -> dict[str, Any]:
         """Load Forge model configuration."""
         config_path = model_path / "config.json"
         if not config_path.exists():
@@ -85,7 +85,7 @@ class HuggingFaceExporter:
         with open(config_path) as f:
             return json.load(f)
     
-    def _load_forge_metadata(self, model_path: Path) -> Dict[str, Any]:
+    def _load_forge_metadata(self, model_path: Path) -> dict[str, Any]:
         """Load Forge model metadata."""
         metadata_path = model_path / "metadata.json"
         if metadata_path.exists():
@@ -93,7 +93,7 @@ class HuggingFaceExporter:
                 return json.load(f)
         return {}
     
-    def _convert_config_to_hf(self, forge_config: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_config_to_hf(self, forge_config: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
         """
         Convert Forge config to HuggingFace-compatible config.
         
@@ -138,7 +138,7 @@ class HuggingFaceExporter:
         
         return hf_config
     
-    def _convert_weights_to_hf(self, state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def _convert_weights_to_hf(self, state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """
         Convert Forge weight names to HuggingFace-style names.
         
@@ -232,7 +232,7 @@ class HuggingFaceExporter:
     def _export_tokenizer(self, model_path: Path, output_path: Path):
         """Export tokenizer files if available."""
         from ..config import CONFIG
-        
+
         # Check for tokenizer in model directory
         tokenizer_files = ["tokenizer.json", "vocab.json", "merges.txt", "tokenizer_config.json"]
         vocab_model_dir = Path(CONFIG.get("vocab_model_dir", "forge_ai/vocab_model"))
@@ -264,8 +264,8 @@ class HuggingFaceExporter:
         self,
         output_path: Path,
         model_name: str,
-        config: Dict[str, Any],
-        metadata: Dict[str, Any]
+        config: dict[str, Any],
+        metadata: dict[str, Any]
     ):
         """Create a HuggingFace model card (README.md)."""
         params = metadata.get("estimated_parameters", 0)
@@ -421,7 +421,7 @@ MIT License
             logger.info(f"Upload complete! Model available at: https://huggingface.co/{repo_id}")
             return f"https://huggingface.co/{repo_id}"
     
-    def list_exportable_models(self) -> Dict[str, Dict[str, Any]]:
+    def list_exportable_models(self) -> dict[str, dict[str, Any]]:
         """List all ForgeAI models that can be exported."""
         from .model_registry import ModelRegistry
         

@@ -3,12 +3,12 @@ URL Safety - Block malicious websites and filter content.
 Enhanced with dynamic blocklist loading and periodic updates.
 """
 
-import re
-import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 import json
+import logging
+import re
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class URLSafety:
     def _load_config(self, path: Path):
         """Load configuration from JSON file."""
         try:
-            with open(path, 'r') as f:
+            with open(path) as f:
                 config = json.load(f)
             
             # Load blocked domains
@@ -140,7 +140,7 @@ class URLSafety:
             return
         
         try:
-            with open(self.blocklist_cache_path, 'r') as f:
+            with open(self.blocklist_cache_path) as f:
                 data = json.load(f)
             
             self.blocked_domains.update(data.get('blocked_domains', []))
@@ -178,7 +178,7 @@ class URLSafety:
             logger.info("Blocklist update interval reached, updating...")
             self.update_blocklist_from_sources()
     
-    def update_blocklist_from_sources(self, sources: Optional[List[str]] = None) -> Dict[str, Any]:
+    def update_blocklist_from_sources(self, sources: Optional[list[str]] = None) -> dict[str, Any]:
         """
         Update blocklist from external sources.
         
@@ -290,7 +290,7 @@ class URLSafety:
                 return True
         return False
     
-    def filter_urls(self, urls: List[str]) -> List[str]:
+    def filter_urls(self, urls: list[str]) -> list[str]:
         """Filter list of URLs, keeping only safe ones."""
         return [url for url in urls if self.is_safe(url)]
     
@@ -302,7 +302,7 @@ class URLSafety:
         except (ValueError, AttributeError):
             return ""
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get blocklist statistics."""
         return {
             'total_blocked_domains': len(self.blocked_domains),

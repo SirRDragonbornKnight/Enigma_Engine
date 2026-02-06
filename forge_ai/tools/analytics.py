@@ -6,10 +6,10 @@ Track and analyze tool usage patterns for insights and optimization.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class ToolAnalytics:
             max_records: Maximum records to keep in memory
         """
         self.max_records = max_records
-        self.records: List[UsageRecord] = []
+        self.records: list[UsageRecord] = []
         
         logger.info(f"ToolAnalytics initialized (max_records={max_records})")
     
@@ -83,7 +83,7 @@ class ToolAnalytics:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         tool_name: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Generate usage report.
         
@@ -157,7 +157,7 @@ class ToolAnalytics:
         start_time: Optional[datetime],
         end_time: Optional[datetime],
         tool_name: Optional[str]
-    ) -> List[UsageRecord]:
+    ) -> list[UsageRecord]:
         """Filter records by criteria."""
         filtered = []
         
@@ -173,7 +173,7 @@ class ToolAnalytics:
         
         return filtered
     
-    def _calculate_tool_stats(self, records: List[UsageRecord]) -> Dict[str, Any]:
+    def _calculate_tool_stats(self, records: list[UsageRecord]) -> dict[str, Any]:
         """Calculate per-tool statistics."""
         tool_data = defaultdict(lambda: {
             "count": 0,
@@ -207,7 +207,7 @@ class ToolAnalytics:
         
         return stats
     
-    def _calculate_peak_hours(self, records: List[UsageRecord]) -> List[Dict[str, Any]]:
+    def _calculate_peak_hours(self, records: list[UsageRecord]) -> list[dict[str, Any]]:
         """Calculate peak usage hours."""
         hour_counts = defaultdict(int)
         
@@ -223,7 +223,7 @@ class ToolAnalytics:
             for hour, count in sorted_hours[:5]
         ]
     
-    def get_trends(self, period: timedelta = timedelta(days=7)) -> Dict[str, Any]:
+    def get_trends(self, period: timedelta = timedelta(days=7)) -> dict[str, Any]:
         """
         Analyze usage trends over a period.
         
@@ -273,7 +273,7 @@ class ToolAnalytics:
             "daily_counts": {str(date): count for date, count in daily_counts.items()},
         }
     
-    def get_tool_comparison(self, tool_names: List[str]) -> Dict[str, Any]:
+    def get_tool_comparison(self, tool_names: list[str]) -> dict[str, Any]:
         """
         Compare usage statistics between tools.
         
@@ -312,7 +312,7 @@ class ToolAnalytics:
         self.records.clear()
         logger.info("Cleared all analytics data")
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get analytics statistics."""
         return {
             "total_records": len(self.records),

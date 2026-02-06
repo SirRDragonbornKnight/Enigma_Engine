@@ -18,15 +18,16 @@ References:
 - "QLoRA: Efficient Finetuning of Quantized LLMs" (Dettmers et al.)
 """
 
+import json
+import logging
+import math
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, List, Optional, Any, Set, Tuple, Union
-from dataclasses import dataclass, field
-import logging
-import math
-from pathlib import Path
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,9 @@ class LoRAConfig:
     r: int = 8  # Rank of decomposition
     alpha: int = 16  # Scaling factor (effective lr = alpha/r * lr)
     dropout: float = 0.05  # Dropout on LoRA layers
-    target_modules: List[str] = field(default_factory=lambda: ["q_proj", "v_proj"])
+    target_modules: list[str] = field(default_factory=lambda: ["q_proj", "v_proj"])
     bias: str = "none"  # "none", "all", or "lora_only"
-    modules_to_save: List[str] = field(default_factory=list)  # Additional modules to train
+    modules_to_save: list[str] = field(default_factory=list)  # Additional modules to train
     
     # QLoRA specific
     use_qlora: bool = False
@@ -142,7 +143,7 @@ class LoRALinear(nn.Module):
             self.weight.data -= (self.lora_B @ self.lora_A) * self.scaling
             self._merged = False
     
-    def get_lora_state_dict(self) -> Dict[str, torch.Tensor]:
+    def get_lora_state_dict(self) -> dict[str, torch.Tensor]:
         """Get only the LoRA parameters."""
         state = {
             'lora_A': self.lora_A.data,
@@ -152,7 +153,7 @@ class LoRALinear(nn.Module):
             state['bias'] = self.bias.data
         return state
     
-    def load_lora_state_dict(self, state_dict: Dict[str, torch.Tensor]):
+    def load_lora_state_dict(self, state_dict: dict[str, torch.Tensor]):
         """Load LoRA parameters."""
         self.lora_A.data.copy_(state_dict['lora_A'])
         self.lora_B.data.copy_(state_dict['lora_B'])
@@ -300,7 +301,7 @@ class LoRAModel(nn.Module):
         super().__init__()
         self.config = config or LoRAConfig()
         self.base_model = base_model
-        self._lora_layers: Dict[str, Union[LoRALinear, QLoRALinear]] = {}
+        self._lora_layers: dict[str, Union[LoRALinear, QLoRALinear]] = {}
         
         # Freeze base model
         for param in base_model.parameters():
@@ -475,12 +476,12 @@ class LoRATrainer:
     
     def train(
         self,
-        dataset: List[str],
+        dataset: list[str],
         epochs: int = 3,
         batch_size: int = 4,
         max_length: int = 512,
         log_interval: int = 10
-    ) -> Dict[str, List[float]]:
+    ) -> dict[str, list[float]]:
         """Train with LoRA."""
         device = next(self.model.parameters()).device
         self.model.train()
@@ -554,7 +555,7 @@ def create_lora_model(
     base_model: nn.Module,
     r: int = 8,
     alpha: int = 16,
-    target_modules: Optional[List[str]] = None,
+    target_modules: Optional[list[str]] = None,
     use_qlora: bool = False,
     bits: int = 4
 ) -> LoRAModel:

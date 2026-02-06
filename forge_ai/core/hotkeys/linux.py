@@ -4,10 +4,10 @@ Linux Hotkey Backend - Global hotkey implementation for Linux.
 Uses python-xlib for X11 or fallback to keyboard library for Wayland.
 """
 
-import sys
 import logging
+import sys
 import threading
-from typing import Callable, Dict, Optional, Any
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 HAS_XLIB = False
 if sys.platform.startswith('linux'):
     try:
-        from Xlib import X, XK, display
+        from Xlib import XK, X, display
         from Xlib.ext import record
         from Xlib.protocol import rq
         HAS_XLIB = True
@@ -43,7 +43,7 @@ class LinuxHotkeyBackend:
     
     def __init__(self):
         """Initialize Linux hotkey backend."""
-        self._hotkeys: Dict[str, Dict[str, Any]] = {}
+        self._hotkeys: dict[str, dict[str, Any]] = {}
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()

@@ -53,12 +53,12 @@ that tells ModuleManager what modules exist and how to load them.
 
 from __future__ import annotations
 
-from functools import lru_cache
 import logging
 import os
-from typing import Any, TYPE_CHECKING
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any
 
-from .manager import Module, ModuleInfo, ModuleCategory, ModuleManager
+from .manager import Module, ModuleCategory, ModuleInfo, ModuleManager
 
 if TYPE_CHECKING:
     pass  # Type-only imports if needed
@@ -153,11 +153,36 @@ class ModelModule(Module):
         """
         from forge_ai.core.model import create_model
 
+        # Try to use progress tracking
+        try:
+            from forge_ai.utils.progress import ProgressTracker, model_loading_stages
+            progress = ProgressTracker("Loading model", total=100)
+            stages = model_loading_stages()
+            progress.start()
+            progress.update(current=stages["init"][0], status=stages["init"][1])
+        except ImportError:
+            progress = None
+            stages = None
+
         size = self.config.get('size', 'small')
         vocab_size = self.config.get('vocab_size', 8000)
+        
+        if progress:
+            progress.update(current=stages["config"][0], status=stages["config"][1])
 
         # Create the model - this allocates the neural network weights
+        if progress:
+            progress.update(current=stages["weights"][0], status=f"Creating {size} model")
+        
         self._instance = create_model(size, vocab_size=vocab_size)
+        
+        if progress:
+            if self._instance is not None:
+                progress.update(current=stages["ready"][0], status=stages["ready"][1])
+                progress.finish("Model loaded successfully")
+            else:
+                progress.finish("Model loading failed")
+        
         return self._instance is not None
 
     def unload(self) -> bool:
@@ -450,7 +475,7 @@ class ChatAPIModule(Module):
         },
     )
 
-    def __init__(self, manager: 'ModuleManager' = None, config: Dict[str, Any] = None):
+    def __init__(self, manager: ModuleManager = None, config: Dict[str, Any] = None):
         super().__init__(manager, config)
         self._client = None
         self._provider = None
@@ -785,8 +810,11 @@ class VoiceInputModule(Module):
         Wraps the STT functions in a simple class that has a listen() method.
         """
         try:
-            from forge_ai.voice.stt_simple import transcribe_from_mic, transcribe_from_file
-            
+            from forge_ai.voice.stt_simple import (
+                transcribe_from_file,
+                transcribe_from_mic,
+            )
+
             # Wrap functions in a simple class for consistency
             class STTWrapper:
                 def __init__(self):
@@ -855,6 +883,7 @@ class VoiceOutputModule(Module):
     def load(self) -> bool:
         try:
             from forge_ai.voice.tts_simple import speak
+
             # Wrap function in a simple class for consistency
             class TTSWrapper:
                 def __init__(self):
@@ -2432,7 +2461,7 @@ class NotesModule(Module):
     def load(self) -> bool:
         """Load notes module - initializes notes manager."""
         try:
-            from forge_ai.gui.tabs.notes_tab import NotesManager, NOTES_DIR
+            from forge_ai.gui.tabs.notes_tab import NOTES_DIR, NotesManager
             NOTES_DIR.mkdir(parents=True, exist_ok=True)
             self._manager = NotesManager()
             return True

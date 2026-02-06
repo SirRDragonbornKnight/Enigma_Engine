@@ -4,8 +4,8 @@ Minimal remote client to call the local API server.
 Uses urllib (built-in) to avoid requiring external dependencies.
 """
 import json
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 class RemoteClient:

@@ -33,15 +33,15 @@ Usage:
 """
 
 import os
+import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, List, Dict, Callable, Any
-import time
+from typing import Any, Callable, Dict, List, Optional
 
 try:
-    from PyQt5.QtCore import QObject, QTimer, pyqtSignal, QByteArray
-    from PyQt5.QtGui import QPixmap, QImage, QPainter, QColor
+    from PyQt5.QtCore import QByteArray, QObject, QTimer, pyqtSignal
+    from PyQt5.QtGui import QColor, QImage, QPainter, QPixmap
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -79,8 +79,8 @@ class AnimationState(Enum):
 class Animation:
     """A single animation (sequence of frames)."""
     name: str
-    frames: List[QPixmap] = field(default_factory=list)
-    frame_durations: List[int] = field(default_factory=list)  # ms per frame
+    frames: list[QPixmap] = field(default_factory=list)
+    frame_durations: list[int] = field(default_factory=list)  # ms per frame
     loop: bool = True
     default_fps: int = 12
     
@@ -116,14 +116,14 @@ class AvatarAnimator(QObject):
         super().__init__(parent)
         
         # Animation storage
-        self._animations: Dict[str, Animation] = {}
-        self._state_animations: Dict[AnimationState, str] = {}  # State -> animation name
+        self._animations: dict[str, Animation] = {}
+        self._state_animations: dict[AnimationState, str] = {}  # State -> animation name
         
         # Current state
         self._current_state = AnimationState.IDLE
         self._current_animation: Optional[Animation] = None
         self._current_frame = 0
-        self._gesture_queue: List[str] = []
+        self._gesture_queue: list[str] = []
         self._return_state = AnimationState.IDLE  # State to return to after gesture
         
         # Playback
@@ -473,11 +473,11 @@ class AvatarAnimator(QObject):
         """Get current animation state."""
         return self._current_state
     
-    def get_available_animations(self) -> List[str]:
+    def get_available_animations(self) -> list[str]:
         """Get list of loaded animation names."""
         return list(self._animations.keys())
     
-    def get_available_gestures(self) -> List[str]:
+    def get_available_gestures(self) -> list[str]:
         """Get list of animations that can be used as gestures."""
         # All non-looping animations or specifically marked ones
         return [name for name, anim in self._animations.items() if not anim.loop]

@@ -13,28 +13,38 @@ All generation tabs (Image, Code, Video, Audio, Embeddings, 3D) should inherit f
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QProgressBar, QGroupBox, QFrame,
-        QMessageBox, QSizePolicy
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QFrame,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QSizePolicy,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
+from .output_helpers import open_file_in_explorer, open_folder, open_in_default_viewer
 from .shared_components import NoScrollComboBox, disable_scroll_on_combos
-from .output_helpers import open_file_in_explorer, open_in_default_viewer, open_folder
 
 # Import unified patterns for device-aware styling
 try:
     from .unified_patterns import (
-        get_style_config, get_button_style, get_progress_style,
-        get_group_style, Colors
+        Colors,
+        get_button_style,
+        get_group_style,
+        get_progress_style,
+        get_style_config,
     )
     HAS_UNIFIED = True
 except ImportError:
@@ -594,7 +604,7 @@ class BaseGenerationTab(QWidget):
         """Open the output folder in file explorer."""
         open_folder(self.output_dir)
     
-    def create_provider_combo(self, providers: List[tuple]) -> 'NoScrollComboBox':
+    def create_provider_combo(self, providers: list[tuple]) -> 'NoScrollComboBox':
         """
         Create a standard provider combo box.
         

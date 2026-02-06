@@ -39,14 +39,26 @@ USAGE:
     tabs.addTab(chat_widget, "Chat")
 """
 
+from PyQt5.QtCore import QMimeData, Qt, QUrl
+from PyQt5.QtGui import QClipboard, QImage, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTextEdit, QTextBrowser, QLineEdit, QLabel, QFrame, QSplitter,
-    QGroupBox, QSizePolicy, QShortcut
+    QApplication,
+    QFileDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QShortcut,
+    QSizePolicy,
+    QSplitter,
+    QTextBrowser,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QKeySequence
-
 
 # =============================================================================
 # STYLE CONSTANTS
@@ -231,6 +243,40 @@ BUTTON_HEIGHT = 36
 VOICE_TOGGLE_SIZE = (50, 28)
 TTS_BTN_SIZE = (55, 36)
 REC_BTN_SIZE = (60, 36)
+ATTACH_BTN_SIZE = (36, 36)
+
+# Attachment styles
+STYLE_ATTACH_BTN = """
+    QPushButton {
+        background-color: #45475a;
+        border: 1px solid #585b70;
+        border-radius: 6px;
+        color: #cdd6f4;
+        font-size: 14px;
+    }
+    QPushButton:hover {
+        background-color: #585b70;
+        border-color: #89b4fa;
+    }
+"""
+
+STYLE_ATTACHMENT_PREVIEW = """
+    QFrame {
+        background: rgba(69, 71, 90, 0.5);
+        border: 1px dashed #585b70;
+        border-radius: 6px;
+        padding: 4px;
+    }
+"""
+
+STYLE_ATTACHMENT_ITEM = """
+    QFrame {
+        background: #313244;
+        border: 1px solid #45475a;
+        border-radius: 4px;
+        padding: 2px;
+    }
+"""
 
 # TTS state tracking to prevent multiple runs
 _tts_is_speaking = False
@@ -404,14 +450,14 @@ def _create_chat_display(parent, layout):
         Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard | Qt.LinksAccessibleByMouse
     )
     parent.chat_display.setOpenExternalLinks(False)
-    parent.chat_display.anchorClicked.connect(lambda url: _handle_feedback_link(parent, url))
+    parent.chat_display.anchorClicked.connect(lambda url: _handle_chat_link(parent, url))
     parent.chat_display.setPlaceholderText(
         "Start chatting with your AI...\n\n"
         "Tips:\n"
         "- Just ask naturally - 'Generate an image of a sunset'\n"
         "- The AI auto-detects what you want to create\n"
         "- Rate responses to help the AI learn\n"
-        "- Click Critique to give detailed feedback\n"
+        "- Click 'Regenerate' on AI responses to get alternate versions\n"
         "- Press Ctrl+F to search"
     )
     parent.chat_display.setStyleSheet("""
@@ -442,17 +488,73 @@ def _create_thinking_panel(parent, layout):
 
 
 def _create_input_section(parent, layout):
-    """Build the message input area with all buttons."""
+    """Build the message input area with all buttons and attachment support."""
+    # Initialize attachment tracking
+    parent._attachments = []  # List of file paths or image data
+    
+    # Attachment preview area (hidden by default)
+    parent.attachment_frame = QFrame()
+    parent.attachment_frame.setStyleSheet(STYLE_ATTACHMENT_PREVIEW)
+    parent.attachment_frame.setMaximumHeight(60)
+    attachment_layout = QHBoxLayout(parent.attachment_frame)
+    attachment_layout.setContentsMargins(6, 4, 6, 4)
+    attachment_layout.setSpacing(6)
+    
+    parent.attachment_label = QLabel("Attachments:")
+    parent.attachment_label.setStyleSheet("color: #6c7086; font-size: 10px;")
+    attachment_layout.addWidget(parent.attachment_label)
+    
+    # Container for attachment previews
+    parent.attachment_container = QWidget()
+    parent.attachment_container_layout = QHBoxLayout(parent.attachment_container)
+    parent.attachment_container_layout.setContentsMargins(0, 0, 0, 0)
+    parent.attachment_container_layout.setSpacing(4)
+    attachment_layout.addWidget(parent.attachment_container, stretch=1)
+    
+    # Clear attachments button
+    clear_attach_btn = QPushButton("X")
+    clear_attach_btn.setFixedSize(20, 20)
+    clear_attach_btn.setToolTip("Clear all attachments")
+    clear_attach_btn.setStyleSheet("""
+        QPushButton {
+            background: transparent;
+            border: none;
+            color: #f38ba8;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        QPushButton:hover { color: #eba0ac; }
+    """)
+    clear_attach_btn.clicked.connect(lambda: _clear_attachments(parent))
+    attachment_layout.addWidget(clear_attach_btn)
+    
+    parent.attachment_frame.hide()
+    layout.addWidget(parent.attachment_frame)
+    
+    # Main input frame
     input_frame = QFrame()
     input_frame.setStyleSheet(STYLE_INPUT_FRAME)
+    input_frame.setAcceptDrops(True)
+    
+    # Override drag events for drop support
+    input_frame.dragEnterEvent = lambda e: _drag_enter(parent, e)
+    input_frame.dropEvent = lambda e: _drop_event(parent, e)
     
     input_layout = QHBoxLayout(input_frame)
     input_layout.setContentsMargins(8, 8, 8, 8)
     input_layout.setSpacing(8)
     
+    # Attach button (before input)
+    parent.attach_btn = QPushButton("+")
+    parent.attach_btn.setFixedSize(*ATTACH_BTN_SIZE)
+    parent.attach_btn.setToolTip("Attach file or image (Ctrl+Shift+V to paste)")
+    parent.attach_btn.setStyleSheet(STYLE_ATTACH_BTN)
+    parent.attach_btn.clicked.connect(lambda: _attach_file(parent))
+    input_layout.addWidget(parent.attach_btn)
+    
     # Text input
     parent.chat_input = QLineEdit()
-    parent.chat_input.setPlaceholderText("Chat here...")
+    parent.chat_input.setPlaceholderText("Chat here... (drag files or Ctrl+V to paste images)")
     parent.chat_input.returnPressed.connect(parent._on_send)
     parent.chat_input.setToolTip("Type your message and press Enter or click Send")
     parent.chat_input.setStyleSheet(STYLE_CHAT_INPUT)
@@ -485,7 +587,7 @@ def _create_input_section(parent, layout):
     # Voice record button
     parent.rec_btn = QPushButton("REC")
     parent.rec_btn.setFixedSize(*REC_BTN_SIZE)
-    parent.rec_btn.setToolTip("Record - Click to speak")
+    parent.rec_btn.setToolTip("Record - Click to speak (Shift+Click to save as voice message)")
     parent.rec_btn.setCheckable(True)
     parent.rec_btn.setStyleSheet(STYLE_REC_BTN)
     parent.rec_btn.clicked.connect(lambda: _toggle_voice_input(parent))
@@ -510,6 +612,8 @@ def _create_input_section(parent, layout):
     input_layout.addWidget(parent.btn_stop_tts)
     
     layout.addWidget(input_frame)
+    
+    # Setup Ctrl+V paste shortcut for images
 
 
 def _create_status_bar(parent, layout):
@@ -549,6 +653,169 @@ def _create_status_bar(parent, layout):
     bottom_layout.addWidget(parent.voice_toggle_btn)
     
     layout.addLayout(bottom_layout)
+
+
+# =============================================================================
+# ATTACHMENT HANDLING FUNCTIONS
+# =============================================================================
+
+def _attach_file(parent):
+    """Open file dialog to attach files."""
+    from pathlib import Path
+    
+    file_filter = "All Files (*);;Images (*.png *.jpg *.jpeg *.gif *.bmp);;Documents (*.txt *.pdf *.md)"
+    files, _ = QFileDialog.getOpenFileNames(
+        parent, "Attach Files", "", file_filter
+    )
+    
+    for file_path in files:
+        _add_attachment(parent, file_path)
+
+
+def _add_attachment(parent, source):
+    """
+    Add an attachment to the list.
+    
+    Args:
+        parent: The parent widget
+        source: File path (str) or QImage for clipboard pastes
+    """
+    import os
+    import tempfile
+    from pathlib import Path
+
+    # If source is a QImage (from clipboard), save it temporarily
+    if isinstance(source, QImage):
+        temp_dir = Path(tempfile.gettempdir()) / "forge_ai_attachments"
+        temp_dir.mkdir(exist_ok=True)
+        temp_path = temp_dir / f"paste_{len(parent._attachments)}.png"
+        source.save(str(temp_path))
+        source = str(temp_path)
+    
+    # Check if already attached
+    if source in parent._attachments:
+        return
+    
+    parent._attachments.append(source)
+    _update_attachment_preview(parent)
+
+
+def _update_attachment_preview(parent):
+    """Update the attachment preview area."""
+    from pathlib import Path
+
+    # Clear existing previews
+    while parent.attachment_container_layout.count() > 0:
+        item = parent.attachment_container_layout.takeAt(0)
+        if item.widget():
+            item.widget().deleteLater()
+    
+    if not parent._attachments:
+        parent.attachment_frame.hide()
+        return
+    
+    parent.attachment_frame.show()
+    
+    for i, path in enumerate(parent._attachments):
+        item_frame = QFrame()
+        item_frame.setStyleSheet(STYLE_ATTACHMENT_ITEM)
+        item_layout = QHBoxLayout(item_frame)
+        item_layout.setContentsMargins(4, 2, 4, 2)
+        item_layout.setSpacing(4)
+        
+        # Check if it's an image
+        path_obj = Path(path)
+        is_image = path_obj.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']
+        
+        if is_image:
+            # Show thumbnail
+            pixmap = QPixmap(path)
+            if not pixmap.isNull():
+                pixmap = pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                thumb_label = QLabel()
+                thumb_label.setPixmap(pixmap)
+                item_layout.addWidget(thumb_label)
+        
+        # Show filename
+        name_label = QLabel(path_obj.name[:15] + "..." if len(path_obj.name) > 15 else path_obj.name)
+        name_label.setStyleSheet("color: #cdd6f4; font-size: 9px;")
+        name_label.setToolTip(str(path))
+        item_layout.addWidget(name_label)
+        
+        # Remove button
+        remove_btn = QPushButton("x")
+        remove_btn.setFixedSize(16, 16)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #6c7086;
+                font-size: 10px;
+            }
+            QPushButton:hover { color: #f38ba8; }
+        """)
+        remove_btn.clicked.connect(lambda checked, idx=i: _remove_attachment(parent, idx))
+        item_layout.addWidget(remove_btn)
+        
+        parent.attachment_container_layout.addWidget(item_frame)
+    
+    parent.attachment_container_layout.addStretch()
+
+
+def _remove_attachment(parent, index: int):
+    """Remove an attachment by index."""
+    if 0 <= index < len(parent._attachments):
+        parent._attachments.pop(index)
+        _update_attachment_preview(parent)
+
+
+def _clear_attachments(parent):
+    """Clear all attachments."""
+    parent._attachments.clear()
+    _update_attachment_preview(parent)
+
+
+def _drag_enter(parent, event):
+    """Handle drag enter event for file drops."""
+    if event.mimeData().hasUrls() or event.mimeData().hasImage():
+        event.acceptProposedAction()
+    else:
+        event.ignore()
+
+
+def _drop_event(parent, event):
+    """Handle drop event for files and images."""
+    mime = event.mimeData()
+    
+    if mime.hasUrls():
+        for url in mime.urls():
+            if url.isLocalFile():
+                _add_attachment(parent, url.toLocalFile())
+    elif mime.hasImage():
+        image = QImage(mime.imageData())
+        if not image.isNull():
+            _add_attachment(parent, image)
+    
+    event.acceptProposedAction()
+
+
+def _check_clipboard_for_image(parent):
+    """Check clipboard for image and add if found."""
+    clipboard = QApplication.clipboard()
+    mime = clipboard.mimeData()
+    
+    if mime.hasImage():
+        image = clipboard.image()
+        if not image.isNull():
+            _add_attachment(parent, image)
+            parent.chat_status.setText("Image pasted from clipboard")
+            return True
+    return False
+
+
+def get_attachments(parent):
+    """Get list of current attachments (for use when sending message)."""
+    return list(getattr(parent, '_attachments', []))
 
 
 # =============================================================================
@@ -741,23 +1008,41 @@ def _toggle_voice_input(parent):
                 return
             
             import threading
-            parent._voice_thread = threading.Thread(target=lambda: _do_voice_input(parent), daemon=True)
+
+            # Check if voice message mode is enabled (hold Shift while clicking)
+            from PyQt5.QtWidgets import QApplication
+            modifiers = QApplication.keyboardModifiers()
+            save_recording = bool(modifiers & Qt.ShiftModifier)
+            
+            parent._voice_thread = threading.Thread(
+                target=lambda: _do_voice_input(parent, save_recording=save_recording), 
+                daemon=True
+            )
             parent._voice_thread.start()
         except Exception as e:
             parent.rec_btn.setChecked(False)
             parent.chat_status.setText(f"Voice error: {e}")
     else:
-        parent.rec_btn.setToolTip("Record - Click to speak")
+        parent.rec_btn.setToolTip("Record - Click to speak (Shift+Click to save recording)")
         parent.chat_status.setText("Ready")
         parent._voice_thread = None
 
 
-def _do_voice_input(parent):
-    """Background voice recognition - automatically sends message after capture."""
+def _do_voice_input(parent, save_recording: bool = False):
+    """
+    Background voice recognition - automatically sends message after capture.
+    
+    Args:
+        parent: Parent widget
+        save_recording: If True, save audio file and attach instead of transcribing
+    """
     try:
-        import speech_recognition as sr
-        import sys
         import os
+        import sys
+        from datetime import datetime
+        from pathlib import Path
+
+        import speech_recognition as sr
         
         recognizer = sr.Recognizer()
         
@@ -775,17 +1060,49 @@ def _do_voice_input(parent):
         
         with mic as source:
             recognizer.adjust_for_ambient_noise(source, duration=0.3)
-            audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
+            audio = recognizer.listen(source, timeout=10, phrase_time_limit=30)
         
-        text = recognizer.recognize_google(audio)
-        
-        # Auto-send the voice input (more alive, don't put in chat box)
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(0, lambda: _voice_input_and_send(parent, text))
+        if save_recording:
+            # Save as audio file and attach
+            voice_dir = Path.home() / ".forge_ai" / "voice_messages"
+            voice_dir.mkdir(parents=True, exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            audio_path = voice_dir / f"voice_{timestamp}.wav"
+            
+            # Save raw audio data as WAV
+            with open(audio_path, "wb") as f:
+                f.write(audio.get_wav_data())
+            
+            # Attach the voice message
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, lambda: _voice_message_saved(parent, str(audio_path)))
+        else:
+            # Regular transcription
+            text = recognizer.recognize_google(audio)
+            
+            # Auto-send the voice input (more alive, don't put in chat box)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, lambda: _voice_input_and_send(parent, text))
         
     except Exception as e:
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(0, lambda: _voice_input_error(parent, str(e)))
+
+
+def _voice_message_saved(parent, audio_path: str):
+    """Handle saved voice message."""
+    parent.rec_btn.setChecked(False)
+    parent.rec_btn.setToolTip("Record - Click to speak (Shift+Click to save recording)")
+    parent._voice_thread = None
+    
+    # Add as attachment
+    if hasattr(parent, '_attachments'):
+        parent._attachments.append(audio_path)
+        _update_attachment_preview(parent)
+        parent.chat_status.setText(f"Voice message saved and attached")
+    else:
+        parent.chat_status.setText(f"Voice saved: {audio_path}")
 
 
 def _voice_input_and_send(parent, text: str):
@@ -863,6 +1180,7 @@ def _do_tts(parent, text: str):
     
     try:
         import re
+
         # Clean text for TTS
         clean_text = re.sub(r'<[^>]+>', '', text)  # Remove HTML
         clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)
@@ -909,6 +1227,229 @@ def _tts_finished(parent):
     parent.btn_speak.setText("TTS")
     parent.btn_stop_tts.hide()
     parent.chat_status.setText("Ready")
+
+
+# =============================================================================
+# MESSAGE BRANCHING SYSTEM
+# =============================================================================
+
+def _init_branching(parent):
+    """Initialize the message branching system."""
+    if not hasattr(parent, '_message_branches'):
+        # Maps message index -> list of alternate responses
+        parent._message_branches = {}
+        # Maps message index -> current branch index (0 = original)
+        parent._current_branch = {}
+
+
+def _add_branch(parent, message_idx: int, response: str):
+    """
+    Add an alternate response branch for a message.
+    
+    Args:
+        parent: Parent widget
+        message_idx: Index of the AI message to branch
+        response: The alternate response text
+    """
+    _init_branching(parent)
+    
+    if message_idx not in parent._message_branches:
+        # First branch - save original response
+        if hasattr(parent, 'chat_messages') and message_idx < len(parent.chat_messages):
+            original = parent.chat_messages[message_idx].get('content', '')
+            parent._message_branches[message_idx] = [original]
+            parent._current_branch[message_idx] = 0
+    
+    parent._message_branches[message_idx].append(response)
+    # Auto-switch to new branch
+    parent._current_branch[message_idx] = len(parent._message_branches[message_idx]) - 1
+    
+    return parent._current_branch[message_idx]
+
+
+def _get_branch_count(parent, message_idx: int) -> int:
+    """Get the number of branches for a message."""
+    _init_branching(parent)
+    return len(parent._message_branches.get(message_idx, []))
+
+
+def _switch_branch(parent, message_idx: int, direction: int):
+    """
+    Switch to a different branch for a message.
+    
+    Args:
+        parent: Parent widget
+        message_idx: Index of the message
+        direction: 1 for next, -1 for previous
+    """
+    _init_branching(parent)
+    
+    if message_idx not in parent._message_branches:
+        return
+    
+    branches = parent._message_branches[message_idx]
+    current = parent._current_branch.get(message_idx, 0)
+    new_idx = (current + direction) % len(branches)
+    parent._current_branch[message_idx] = new_idx
+    
+    # Update the message in chat_messages
+    if hasattr(parent, 'chat_messages') and message_idx < len(parent.chat_messages):
+        parent.chat_messages[message_idx]['content'] = branches[new_idx]
+        _refresh_chat_display(parent)
+
+
+def _regenerate_response(parent, message_idx: int = None):
+    """
+    Regenerate the AI response for a message, creating a new branch.
+    
+    Args:
+        parent: Parent widget
+        message_idx: Index of AI message to regenerate (None = last AI message)
+    """
+    _init_branching(parent)
+    
+    if not hasattr(parent, 'chat_messages') or not parent.chat_messages:
+        parent.chat_status.setText("No messages to regenerate")
+        return
+    
+    # Find the last AI message if no index provided
+    if message_idx is None:
+        for i in range(len(parent.chat_messages) - 1, -1, -1):
+            if parent.chat_messages[i].get('role') == 'assistant':
+                message_idx = i
+                break
+    
+    if message_idx is None:
+        parent.chat_status.setText("No AI response to regenerate")
+        return
+    
+    # Find the user message before this AI response
+    user_msg_idx = None
+    for i in range(message_idx - 1, -1, -1):
+        if parent.chat_messages[i].get('role') == 'user':
+            user_msg_idx = i
+            break
+    
+    if user_msg_idx is None:
+        parent.chat_status.setText("Could not find original prompt")
+        return
+    
+    user_prompt = parent.chat_messages[user_msg_idx].get('content', '')
+    
+    # Generate new response
+    parent.chat_status.setText("Regenerating response...")
+    
+    import threading
+    def generate_branch():
+        try:
+            # Use the brain/inference engine to generate
+            if hasattr(parent, 'brain') and parent.brain:
+                response = parent.brain.chat(user_prompt)
+            elif hasattr(parent, '_inference_engine') and parent._inference_engine:
+                response = parent._inference_engine.generate(user_prompt)
+            else:
+                response = "[Could not generate - no inference engine available]"
+            
+            # Add as branch
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, lambda: _on_regenerate_complete(parent, message_idx, response))
+        except Exception as e:
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(0, lambda: parent.chat_status.setText(f"Regenerate failed: {e}"))
+    
+    thread = threading.Thread(target=generate_branch, daemon=True)
+    thread.start()
+
+
+def _on_regenerate_complete(parent, message_idx: int, response: str):
+    """Handle completed regeneration."""
+    branch_idx = _add_branch(parent, message_idx, response)
+    branch_count = _get_branch_count(parent, message_idx)
+    
+    parent.chat_status.setText(f"Generated branch {branch_idx + 1}/{branch_count}")
+    _refresh_chat_display(parent)
+
+
+def _refresh_chat_display(parent):
+    """Refresh the chat display with current branch selections."""
+    if not hasattr(parent, 'chat_display') or not hasattr(parent, 'chat_messages'):
+        return
+    
+    _init_branching(parent)
+    
+    # Rebuild the display with branch navigation
+    html_parts = []
+    
+    for i, msg in enumerate(parent.chat_messages):
+        role = msg.get('role', 'user')
+        content = msg.get('content', '')
+        
+        if role == 'assistant':
+            # Check for branches
+            branch_count = _get_branch_count(parent, i)
+            current_branch = parent._current_branch.get(i, 0)
+            
+            # Add branch navigation if multiple branches exist
+            if branch_count > 1:
+                nav_html = f'''
+                <div style="color: #6c7086; font-size: 10px; margin-bottom: 4px;">
+                    <a href="branch_prev_{i}" style="color: #89b4fa; text-decoration: none;">&lt;</a>
+                    Branch {current_branch + 1}/{branch_count}
+                    <a href="branch_next_{i}" style="color: #89b4fa; text-decoration: none;">&gt;</a>
+                    <a href="regenerate_{i}" style="color: #a6e3a1; text-decoration: none; margin-left: 8px;">Regenerate</a>
+                </div>
+                '''
+            else:
+                nav_html = f'''
+                <div style="color: #6c7086; font-size: 10px; margin-bottom: 4px;">
+                    <a href="regenerate_{i}" style="color: #a6e3a1; text-decoration: none;">Regenerate</a>
+                </div>
+                '''
+            
+            html_parts.append(f'''
+            <div style="background: #313244; padding: 10px; margin: 5px 0; border-radius: 8px;">
+                <b style="color: #89b4fa;">AI:</b>
+                {nav_html}
+                <div style="color: #cdd6f4;">{content}</div>
+            </div>
+            ''')
+        else:
+            html_parts.append(f'''
+            <div style="background: #45475a; padding: 10px; margin: 5px 0; border-radius: 8px;">
+                <b style="color: #f9e2af;">You:</b>
+                <div style="color: #cdd6f4;">{content}</div>
+            </div>
+            ''')
+    
+    parent.chat_display.setHtml(''.join(html_parts))
+    
+    # Scroll to bottom
+    scrollbar = parent.chat_display.verticalScrollBar()
+    scrollbar.setValue(scrollbar.maximum())
+
+
+def _handle_branch_link(parent, url):
+    """Handle clicks on branch navigation links."""
+    url_str = url.toString() if hasattr(url, 'toString') else str(url)
+    
+    if url_str.startswith('branch_prev_'):
+        try:
+            idx = int(url_str.replace('branch_prev_', ''))
+            _switch_branch(parent, idx, -1)
+        except ValueError:
+            pass
+    elif url_str.startswith('branch_next_'):
+        try:
+            idx = int(url_str.replace('branch_next_', ''))
+            _switch_branch(parent, idx, 1)
+        except ValueError:
+            pass
+    elif url_str.startswith('regenerate_'):
+        try:
+            idx = int(url_str.replace('regenerate_', ''))
+            _regenerate_response(parent, idx)
+        except ValueError:
+            pass
 
 
 def _stop_tts(parent):
@@ -1043,7 +1584,15 @@ def _summarize_chat(parent):
     - Handed off to another AI for context
     - Copied for sharing or documentation
     """
-    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout, QLabel, QApplication
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QDialog,
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QTextEdit,
+        QVBoxLayout,
+    )
     
     if not hasattr(parent, 'chat_messages') or not parent.chat_messages:
         parent.chat_status.setText("No conversation to summarize")
@@ -1056,8 +1605,11 @@ def _summarize_chat(parent):
     parent.chat_status.setText("Generating summary...")
     
     try:
-        from ...memory.conversation_summary import summarize_conversation, export_for_handoff
-        
+        from ...memory.conversation_summary import (
+            export_for_handoff,
+            summarize_conversation,
+        )
+
         # Generate summary
         summary = summarize_conversation(parent.chat_messages, use_ai=False)
         
@@ -1146,9 +1698,25 @@ def _stop_generation(parent):
         parent.chat_status.setText("Nothing to stop")
 
 
+def _handle_chat_link(parent, url):
+    """
+    Universal handler for all links clicked in chat display.
+    Routes to appropriate handler based on link type.
+    """
+    url_str = url.toString() if hasattr(url, 'toString') else str(url)
+    
+    # Branch navigation links
+    if url_str.startswith('branch_') or url_str.startswith('regenerate_'):
+        _handle_branch_link(parent, url)
+        return
+    
+    # Feedback and code copy links
+    _handle_feedback_link(parent, url)
+
+
 def _handle_feedback_link(parent, url):
     """Handle feedback links clicked in chat."""
-    from PyQt5.QtWidgets import QInputDialog, QMessageBox, QApplication
+    from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
     
     url_str = url.toString() if hasattr(url, 'toString') else str(url)
     
@@ -1236,9 +1804,9 @@ def _copy_code_block(parent, code_hash: str):
         parent: Parent window
         code_hash: MD5 hash of the code content
     """
-    from PyQt5.QtWidgets import QApplication
     from PyQt5.QtGui import QGuiApplication
-    
+    from PyQt5.QtWidgets import QApplication
+
     # Try to find the code in the chat display HTML
     html = parent.chat_display.toHtml() if hasattr(parent, 'chat_display') else ""
     
@@ -1349,7 +1917,7 @@ def _go_to_search_position(parent, index):
     if not parent._search_positions or index >= len(parent._search_positions):
         return
     
-    from PyQt5.QtGui import QTextCursor, QColor, QTextCharFormat
+    from PyQt5.QtGui import QColor, QTextCharFormat, QTextCursor
     
     pos = parent._search_positions[index]
     search_len = len(parent.search_input.text())
@@ -1431,7 +1999,15 @@ def _record_negative_feedback(parent, response_data, reason):
 
 def _show_critique_dialog(parent, response_id, response_data):
     """Show a dialog for detailed critique of a response."""
-    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton
+    from PyQt5.QtWidgets import (
+        QDialog,
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QTextEdit,
+        QVBoxLayout,
+    )
+
     from .shared_components import NoScrollComboBox
     
     dialog = QDialog(parent)
@@ -1494,7 +2070,12 @@ def _show_critique_dialog(parent, response_id, response_data):
         if correction and response_data:
             # Save corrected example using learning engine
             try:
-                from forge_ai.core.self_improvement import get_learning_engine, LearningExample, LearningSource, Priority
+                from forge_ai.core.self_improvement import (
+                    LearningExample,
+                    LearningSource,
+                    Priority,
+                    get_learning_engine,
+                )
                 
                 model_name = getattr(parent, 'current_model_name', None)
                 if model_name:

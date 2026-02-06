@@ -54,9 +54,9 @@ navigate - all without tight coupling to the window implementation.
 import json
 import logging
 import threading
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class HelpTopic:
     """Help content for a specific topic."""
     title: str
     content: str
-    related: List[str] = field(default_factory=list)
+    related: list[str] = field(default_factory=list)
 
 
 class GUIStateManager:
@@ -103,7 +103,7 @@ class GUIStateManager:
         self._lock = threading.RLock()
         self._window = None  # Reference to EnhancedMainWindow
         self._settings_path: Optional[Path] = None
-        self._callbacks: Dict[str, List[Callable]] = {}
+        self._callbacks: dict[str, list[Callable]] = {}
         self._help_topics = self._init_help_topics()
         
         # Try to determine settings path
@@ -136,7 +136,7 @@ class GUIStateManager:
     # Tab Navigation
     # =========================================================================
     
-    def switch_tab(self, tab_name: str) -> Dict[str, Any]:
+    def switch_tab(self, tab_name: str) -> dict[str, Any]:
         """
         Switch to a specific tab.
         
@@ -178,7 +178,7 @@ class GUIStateManager:
             except Exception:
                 return "unknown"
     
-    def get_available_tabs(self) -> List[str]:
+    def get_available_tabs(self) -> list[str]:
         """Get list of available tab names."""
         return [
             "chat", "train", "history", "scale", "modules",
@@ -206,7 +206,7 @@ class GUIStateManager:
             settings = self._load_settings()
             return settings.get(key, default)
     
-    def set_setting(self, key: str, value: Any) -> Dict[str, Any]:
+    def set_setting(self, key: str, value: Any) -> dict[str, Any]:
         """
         Set a GUI setting value.
         
@@ -275,12 +275,12 @@ class GUIStateManager:
                 "new_value": value
             }
     
-    def get_all_settings(self) -> Dict[str, Any]:
+    def get_all_settings(self) -> dict[str, Any]:
         """Get all current settings."""
         with self._lock:
             return self._load_settings()
     
-    def _load_settings(self) -> Dict[str, Any]:
+    def _load_settings(self) -> dict[str, Any]:
         """Load settings from JSON file."""
         if self._settings_path and self._settings_path.exists():
             try:
@@ -289,7 +289,7 @@ class GUIStateManager:
                 logger.warning(f"Failed to load settings: {e}")
         return {}
     
-    def _save_settings(self, settings: Dict[str, Any]) -> None:
+    def _save_settings(self, settings: dict[str, Any]) -> None:
         """Save settings to JSON file."""
         if self._settings_path:
             try:
@@ -338,7 +338,7 @@ class GUIStateManager:
     # =========================================================================
     
     def manage_conversation(self, action: str, name: Optional[str] = None, 
-                           new_name: Optional[str] = None) -> Dict[str, Any]:
+                           new_name: Optional[str] = None) -> dict[str, Any]:
         """
         Manage chat conversations.
         
@@ -370,7 +370,7 @@ class GUIStateManager:
                 logger.error(f"Conversation management error: {e}")
                 return {"success": False, "error": str(e)}
     
-    def _list_conversations(self) -> Dict[str, Any]:
+    def _list_conversations(self) -> dict[str, Any]:
         """List all saved conversations."""
         try:
             from ..config import CONFIG
@@ -403,7 +403,7 @@ class GUIStateManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _save_conversation(self, name: Optional[str]) -> Dict[str, Any]:
+    def _save_conversation(self, name: Optional[str]) -> dict[str, Any]:
         """Save current conversation."""
         if self._window is None:
             return {"success": False, "error": "GUI not available"}
@@ -414,7 +414,7 @@ class GUIStateManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _load_conversation(self, name: Optional[str]) -> Dict[str, Any]:
+    def _load_conversation(self, name: Optional[str]) -> dict[str, Any]:
         """Load a saved conversation."""
         if not name:
             return {"success": False, "error": "Conversation name required"}
@@ -439,7 +439,7 @@ class GUIStateManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _new_conversation(self) -> Dict[str, Any]:
+    def _new_conversation(self) -> dict[str, Any]:
         """Start a new conversation."""
         if self._window is None:
             return {"success": False, "error": "GUI not available"}
@@ -452,7 +452,7 @@ class GUIStateManager:
             return {"success": False, "error": str(e)}
     
     def _rename_conversation(self, old_name: Optional[str], 
-                            new_name: Optional[str]) -> Dict[str, Any]:
+                            new_name: Optional[str]) -> dict[str, Any]:
         """Rename a conversation."""
         if not old_name or not new_name:
             return {"success": False, "error": "Both old and new names required"}
@@ -474,7 +474,7 @@ class GUIStateManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _delete_conversation(self, name: Optional[str]) -> Dict[str, Any]:
+    def _delete_conversation(self, name: Optional[str]) -> dict[str, Any]:
         """Delete a conversation."""
         if not name:
             return {"success": False, "error": "Conversation name required"}
@@ -495,7 +495,7 @@ class GUIStateManager:
     # Help System
     # =========================================================================
     
-    def get_help(self, topic: str = "getting_started") -> Dict[str, Any]:
+    def get_help(self, topic: str = "getting_started") -> dict[str, Any]:
         """
         Get help content for a topic.
         
@@ -524,7 +524,7 @@ class GUIStateManager:
             "available_topics": list(self._help_topics.keys()),
         }
     
-    def _init_help_topics(self) -> Dict[str, HelpTopic]:
+    def _init_help_topics(self) -> dict[str, HelpTopic]:
         """Initialize help topic content."""
         return {
             "getting_started": HelpTopic(
@@ -769,7 +769,7 @@ Python, JavaScript, TypeScript, HTML/CSS, SQL, and more!
     # Hardware Optimization
     # =========================================================================
     
-    def optimize_for_hardware(self, mode: str = "auto") -> Dict[str, Any]:
+    def optimize_for_hardware(self, mode: str = "auto") -> dict[str, Any]:
         """
         Optimize settings based on hardware capabilities.
         
@@ -813,7 +813,7 @@ Python, JavaScript, TypeScript, HTML/CSS, SQL, and more!
                 logger.error(f"Hardware optimization failed: {e}")
                 return {"success": False, "error": str(e)}
     
-    def _detect_hardware(self) -> Dict[str, Any]:
+    def _detect_hardware(self) -> dict[str, Any]:
         """Detect available hardware."""
         hardware = {
             "gpu_available": False,
@@ -841,7 +841,7 @@ Python, JavaScript, TypeScript, HTML/CSS, SQL, and more!
         
         return hardware
     
-    def _get_mode_settings(self, mode: str, hardware: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_mode_settings(self, mode: str, hardware: dict[str, Any]) -> dict[str, Any]:
         """Get settings for optimization mode."""
         modes = {
             "performance": {

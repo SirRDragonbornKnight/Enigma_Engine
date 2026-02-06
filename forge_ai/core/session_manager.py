@@ -11,16 +11,16 @@ Features:
 Part of the ForgeAI core infrastructure.
 """
 
-import json
-import time
-import threading
 import hashlib
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable
-from pathlib import Path
-from enum import Enum
-from datetime import datetime, timedelta
+import json
 import logging
+import threading
+import time
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class SessionData:
     last_activity: str = field(default_factory=lambda: datetime.now().isoformat())
     state: SessionState = SessionState.INACTIVE
     connection: ConnectionState = ConnectionState.UNKNOWN
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     activity_count: int = 0
     messages_sent: int = 0
     messages_received: int = 0
@@ -97,7 +97,7 @@ class SessionData:
         self.last_activity = datetime.now().isoformat()
         self.activity_count += 1
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "session_id": self.session_id,
@@ -113,7 +113,7 @@ class SessionData:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SessionData":
+    def from_dict(cls, data: dict[str, Any]) -> "SessionData":
         """Create from dictionary."""
         return cls(
             session_id=data["session_id"],
@@ -138,7 +138,7 @@ class QueuedAction:
     """An action queued for when online."""
     id: str
     action_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     retries: int = 0
     max_retries: int = 3
@@ -160,17 +160,17 @@ class OfflineQueue:
         self.storage_path = storage_path or Path("data/offline_queue.json")
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         
-        self._queue: List[QueuedAction] = []
+        self._queue: list[QueuedAction] = []
         self._processing = False
         self._lock = threading.Lock()
-        self._callbacks: Dict[str, Callable[[Dict], Any]] = {}
+        self._callbacks: dict[str, Callable[[dict], Any]] = {}
         
         self._load()
     
     def add(
         self,
         action_type: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         priority: bool = False
     ) -> str:
         """
@@ -201,7 +201,7 @@ class OfflineQueue:
         
         return action_id
     
-    def register_handler(self, action_type: str, handler: Callable[[Dict], Any]):
+    def register_handler(self, action_type: str, handler: Callable[[dict], Any]):
         """Register handler for action type."""
         self._callbacks[action_type] = handler
     
@@ -341,7 +341,7 @@ class SessionManager:
         self._current_session: Optional[SessionData] = None
         self._offline_queue = OfflineQueue()
         self._lock = threading.Lock()
-        self._callbacks: Dict[str, List[Callable]] = {
+        self._callbacks: dict[str, list[Callable]] = {
             "state_change": [],
             "connection_change": [],
             "idle": [],
@@ -458,7 +458,7 @@ class SessionManager:
         if processed > 0:
             logger.info(f"Processed {processed} queued actions")
     
-    def queue_action(self, action_type: str, payload: Dict[str, Any]) -> str:
+    def queue_action(self, action_type: str, payload: dict[str, Any]) -> str:
         """Queue action for offline processing."""
         return self._offline_queue.add(action_type, payload)
     
@@ -510,7 +510,7 @@ class SessionManager:
             logger.error(f"Failed to restore session: {e}")
             return None
     
-    def list_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_sessions(self, user_id: Optional[str] = None) -> list[dict[str, Any]]:
         """
         List saved sessions.
         

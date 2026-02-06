@@ -11,11 +11,11 @@ Each protocol config is a JSON file with connection settings.
 """
 
 import json
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from ..config import CONFIG
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+from ..config import CONFIG
 
 # Protocol types and their default settings
 PROTOCOL_DEFAULTS = {
@@ -42,9 +42,9 @@ class ProtocolConfig:
     endpoint: str = "/"
     baud: int = 115200
     description: str = ""
-    commands: Dict[str, str] = None
-    headers: Dict[str, str] = None
-    extra: Dict[str, Any] = None
+    commands: dict[str, str] = None
+    headers: dict[str, str] = None
+    extra: dict[str, Any] = None
     file_path: str = ""
     
     def __post_init__(self):
@@ -55,7 +55,7 @@ class ProtocolConfig:
         if self.extra is None:
             self.extra = {}
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert to dictionary for saving."""
         return {
             "name": self.name,
@@ -72,7 +72,7 @@ class ProtocolConfig:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict, file_path: str = "") -> "ProtocolConfig":
+    def from_dict(cls, data: dict, file_path: str = "") -> "ProtocolConfig":
         """Create from dictionary."""
         # Extract known fields
         known = ["name", "description", "protocol", "enabled", "host", 
@@ -119,7 +119,7 @@ class ProtocolManager:
         
         self.base_dir = Path(base_dir)
         self._ensure_dirs()
-        self._protocols: Dict[str, List[ProtocolConfig]] = {
+        self._protocols: dict[str, list[ProtocolConfig]] = {
             "game": [],
             "robot": [],
             "api": []
@@ -147,11 +147,11 @@ class ProtocolManager:
                     except Exception as e:
                         print(f"[!] Failed to load {config_file}: {e}")
     
-    def get_protocols(self, category: str) -> List[ProtocolConfig]:
+    def get_protocols(self, category: str) -> list[ProtocolConfig]:
         """Get all protocols in a category."""
         return self._protocols.get(category, [])
     
-    def get_enabled_protocols(self, category: str = None) -> List[ProtocolConfig]:
+    def get_enabled_protocols(self, category: str = None) -> list[ProtocolConfig]:
         """Get enabled protocols, optionally filtered by category."""
         enabled = []
         categories = [category] if category else self._protocols.keys()
@@ -205,11 +205,11 @@ class ProtocolManager:
             return True
         return False
     
-    def list_available_protocols(self) -> List[str]:
+    def list_available_protocols(self) -> list[str]:
         """List all available protocol types."""
         return list(PROTOCOL_DEFAULTS.keys())
     
-    def get_protocol_defaults(self, protocol: str) -> Dict:
+    def get_protocol_defaults(self, protocol: str) -> dict:
         """Get default settings for a protocol type."""
         return PROTOCOL_DEFAULTS.get(protocol, {})
 

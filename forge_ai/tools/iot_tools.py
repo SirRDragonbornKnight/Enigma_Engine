@@ -13,12 +13,13 @@ Tools:
   - camera_stream: Get camera stream URL
 """
 
-import os
 import json
+import os
 import time
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from .tool_registry import Tool
 
 # Configuration
@@ -39,14 +40,14 @@ class HomeAssistantConfig:
     CONFIG_FILE = IOT_CONFIG_DIR / "homeassistant.json"
     
     @classmethod
-    def load(cls) -> Dict:
+    def load(cls) -> dict:
         if cls.CONFIG_FILE.exists():
-            with open(cls.CONFIG_FILE, 'r') as f:
+            with open(cls.CONFIG_FILE) as f:
                 return json.load(f)
         return {}
     
     @classmethod
-    def save(cls, config: Dict):
+    def save(cls, config: dict):
         with open(cls.CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
     
@@ -71,7 +72,7 @@ class HomeAssistantSetupTool(Tool):
         "token": "Long-lived access token from Home Assistant",
     }
     
-    def execute(self, url: str, token: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, url: str, token: str, **kwargs) -> dict[str, Any]:
         try:
             # Validate URL format
             if not url.startswith(('http://', 'https://')):
@@ -120,7 +121,7 @@ class HomeAssistantControlTool(Tool):
         "data": "Optional JSON data for the service call (e.g., '{\"brightness\": 255}')",
     }
     
-    def execute(self, entity_id: str, action: str, data: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, entity_id: str, action: str, data: str = None, **kwargs) -> dict[str, Any]:
         try:
             import urllib.request
             
@@ -180,7 +181,7 @@ class HomeAssistantStatusTool(Tool):
         "domain": "Filter by domain (e.g., 'light', 'switch', 'sensor')",
     }
     
-    def execute(self, entity_id: str = "all", domain: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, entity_id: str = "all", domain: str = None, **kwargs) -> dict[str, Any]:
         try:
             import urllib.request
             
@@ -247,7 +248,7 @@ class GPIOReadTool(Tool):
         "pull": "Pull-up/down resistor: 'up', 'down', 'none' (default: none)",
     }
     
-    def execute(self, pin: int, pull: str = "none", **kwargs) -> Dict[str, Any]:
+    def execute(self, pin: int, pull: str = "none", **kwargs) -> dict[str, Any]:
         try:
             pin = int(pin)
             
@@ -301,7 +302,7 @@ class GPIOReadTool(Tool):
                 # Export pin
                 with open('/sys/class/gpio/export', 'w') as f:
                     f.write(str(pin))
-            except IOError:
+            except OSError:
                 pass  # Pin may already be exported
             
             try:
@@ -310,7 +311,7 @@ class GPIOReadTool(Tool):
                     f.write('in')
                 
                 # Read value
-                with open(f'/sys/class/gpio/gpio{pin}/value', 'r') as f:
+                with open(f'/sys/class/gpio/gpio{pin}/value') as f:
                     value = int(f.read().strip())
                 
                 return {
@@ -320,7 +321,7 @@ class GPIOReadTool(Tool):
                     "state": "HIGH" if value else "LOW",
                     "method": "sysfs",
                 }
-            except IOError:
+            except OSError:
                 pass  # sysfs not available
             
             return {
@@ -342,7 +343,7 @@ class GPIOWriteTool(Tool):
         "value": "Value: 1/HIGH or 0/LOW",
     }
     
-    def execute(self, pin: int, value: Any, **kwargs) -> Dict[str, Any]:
+    def execute(self, pin: int, value: Any, **kwargs) -> dict[str, Any]:
         try:
             pin = int(pin)
             
@@ -415,7 +416,7 @@ class GPIOPWMTool(Tool):
     # Store active PWM instances
     _pwm_instances = {}
     
-    def execute(self, pin: int, duty_cycle: float, frequency: int = 1000, **kwargs) -> Dict[str, Any]:
+    def execute(self, pin: int, duty_cycle: float, frequency: int = 1000, **kwargs) -> dict[str, Any]:
         try:
             pin = int(pin)
             duty_cycle = float(duty_cycle)
@@ -498,7 +499,7 @@ class MQTTPublishTool(Tool):
     }
     
     def execute(self, topic: str, message: str, broker: str = "localhost",
-                port: int = 1883, retain: bool = False, **kwargs) -> Dict[str, Any]:
+                port: int = 1883, retain: bool = False, **kwargs) -> dict[str, Any]:
         try:
             # Try paho-mqtt
             try:
@@ -568,7 +569,7 @@ class MQTTSubscribeTool(Tool):
     }
     
     def execute(self, topic: str, broker: str = "localhost",
-                port: int = 1883, timeout: int = 5, **kwargs) -> Dict[str, Any]:
+                port: int = 1883, timeout: int = 5, **kwargs) -> dict[str, Any]:
         try:
             # Try paho-mqtt
             try:
@@ -638,7 +639,7 @@ class CameraCaptureTool(Tool):
     }
     
     def execute(self, output_path: str = None, camera_id: int = 0,
-                resolution: str = None, **kwargs) -> Dict[str, Any]:
+                resolution: str = None, **kwargs) -> dict[str, Any]:
         try:
             if not output_path:
                 output_path = CAMERA_OUTPUT_DIR / f"capture_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
@@ -757,14 +758,14 @@ class CameraListTool(Tool):
     description = "List available cameras on the system."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             cameras = []
             
             # Try OpenCV
             try:
                 import cv2
-                
+
                 # Check first 10 camera indices
                 for i in range(10):
                     cap = cv2.VideoCapture(i)
@@ -809,10 +810,10 @@ class CameraStreamTool(Tool):
         "camera_id": "Camera ID (default: 0)",
     }
     
-    def execute(self, port: int = 8081, camera_id: int = 0, **kwargs) -> Dict[str, Any]:
+    def execute(self, port: int = 8081, camera_id: int = 0, **kwargs) -> dict[str, Any]:
         try:
             import socket
-            
+
             # Get local IP
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             try:
@@ -824,7 +825,7 @@ class CameraStreamTool(Tool):
             # Try to start motion (if installed)
             try:
                 import subprocess
-                
+
                 # Check if motion is installed
                 result = subprocess.run(['which', 'motion'], capture_output=True)
                 

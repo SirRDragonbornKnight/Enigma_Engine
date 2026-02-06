@@ -19,8 +19,8 @@ Usage:
 
 import logging
 import re
-from typing import List, Dict, Tuple, Optional
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class BoneCommand:
         return f"BoneCommand({self.bone_name}, pitch={self.pitch}, yaw={self.yaw}, roll={self.roll})"
 
 
-def parse_bone_commands(text: str) -> Tuple[str, List[BoneCommand]]:
+def parse_bone_commands(text: str) -> tuple[str, list[BoneCommand]]:
     """Parse bone control commands from AI response.
     
     Format: <bone_control>bone_name|pitch=value,yaw=value,roll=value</bone_control>
@@ -115,8 +115,8 @@ class AIAvatarControl:
     def _init_controllers(self):
         """Initialize bone and avatar controllers."""
         try:
-            from .bone_control import get_bone_controller
             from . import get_avatar
+            from .bone_control import get_bone_controller
             
             self._avatar_controller = get_avatar()
             self._bone_controller = get_bone_controller(avatar_controller=self._avatar_controller)
@@ -147,7 +147,7 @@ class AIAvatarControl:
         
         return clean_text
     
-    def execute_commands(self, commands: List[BoneCommand], delay: float = 0.1):
+    def execute_commands(self, commands: list[BoneCommand], delay: float = 0.1):
         """Execute a sequence of bone commands.
         
         Args:

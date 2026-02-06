@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 class SuggestionRule:
     """A rule for generating suggestions."""
     name: str
-    triggers: List[str]  # Keywords/patterns that activate this rule
-    suggestions: List[str]  # Suggestions to show
+    triggers: list[str]  # Keywords/patterns that activate this rule
+    suggestions: list[str]  # Suggestions to show
     priority: int = 0  # Higher = shown first
     category: str = ""
     is_regex: bool = False  # If True, triggers are regex patterns
@@ -62,7 +62,7 @@ class QuickReplyConfig:
 
 
 # Built-in suggestion rules
-SUGGESTION_RULES: List[SuggestionRule] = [
+SUGGESTION_RULES: list[SuggestionRule] = [
     # ===== Coding Topics =====
     SuggestionRule(
         name="python_basics",
@@ -241,8 +241,8 @@ class QuickReplyGenerator:
     
     def __init__(
         self,
-        config: Optional[QuickReplyConfig] = None,
-        data_path: Optional[Path] = None
+        config: QuickReplyConfig | None = None,
+        data_path: Path | None = None
     ):
         """
         Initialize the quick reply generator.
@@ -255,12 +255,12 @@ class QuickReplyGenerator:
         self._data_path = data_path or Path("data/quick_replies")
         self._data_path.mkdir(parents=True, exist_ok=True)
         
-        self._rules: List[SuggestionRule] = list(SUGGESTION_RULES)
+        self._rules: list[SuggestionRule] = list(SUGGESTION_RULES)
         self._custom_rules_file = self._data_path / "custom_rules.json"
         self._selection_history_file = self._data_path / "selection_history.json"
         
         self._selection_history: Counter = Counter()
-        self._context_selections: Dict[str, Counter] = {}
+        self._context_selections: dict[str, Counter] = {}
         
         self._load_data()
     
@@ -269,7 +269,7 @@ class QuickReplyGenerator:
         # Load custom rules
         if self._custom_rules_file.exists():
             try:
-                with open(self._custom_rules_file, 'r', encoding='utf-8') as f:
+                with open(self._custom_rules_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for item in data.get("rules", []):
                         rule = SuggestionRule(**item)
@@ -280,7 +280,7 @@ class QuickReplyGenerator:
         # Load selection history
         if self._selection_history_file.exists():
             try:
-                with open(self._selection_history_file, 'r', encoding='utf-8') as f:
+                with open(self._selection_history_file, encoding='utf-8') as f:
                     data = json.load(f)
                     self._selection_history = Counter(data.get("global", {}))
                     self._context_selections = {
@@ -303,9 +303,9 @@ class QuickReplyGenerator:
     
     def get_suggestions(
         self,
-        messages: List[Dict[str, str]],
-        max_suggestions: Optional[int] = None
-    ) -> List[str]:
+        messages: list[dict[str, str]],
+        max_suggestions: int | None = None
+    ) -> list[str]:
         """
         Generate follow-up suggestions based on conversation.
         
@@ -334,8 +334,8 @@ class QuickReplyGenerator:
         combined_text = f"{last_user_msg} {last_assistant_msg}"
         
         # Score and collect suggestions
-        scored_suggestions: List[Tuple[float, str]] = []
-        seen_suggestions: Set[str] = set()
+        scored_suggestions: list[tuple[float, str]] = []
+        seen_suggestions: set[str] = set()
         
         for rule in self._rules:
             if self._rule_matches(rule, combined_text):
@@ -409,7 +409,7 @@ class QuickReplyGenerator:
         keywords = [w for w in words if w not in common and len(w) > 2]
         return '_'.join(sorted(set(keywords[:5])))
     
-    def _get_generic_suggestions(self, max_suggestions: Optional[int] = None) -> List[str]:
+    def _get_generic_suggestions(self, max_suggestions: int | None = None) -> list[str]:
         """Get generic suggestions when no context."""
         if not self.config.include_generic:
             return []
@@ -449,8 +449,8 @@ class QuickReplyGenerator:
     def add_rule(
         self,
         name: str,
-        triggers: List[str],
-        suggestions: List[str],
+        triggers: list[str],
+        suggestions: list[str],
         priority: int = 5,
         category: str = "custom",
         is_regex: bool = False
@@ -505,7 +505,7 @@ class QuickReplyGenerator:
         except Exception as e:
             logger.error(f"Failed to save custom rules: {e}")
     
-    def get_coding_follow_ups(self, language: str = "") -> List[str]:
+    def get_coding_follow_ups(self, language: str = "") -> list[str]:
         """Get coding-specific follow-ups."""
         suggestions = [
             f"Show me best practices for {language}" if language else "What are best practices?",
@@ -516,7 +516,7 @@ class QuickReplyGenerator:
         ]
         return suggestions[:self.config.max_suggestions]
     
-    def get_clarifying_questions(self) -> List[str]:
+    def get_clarifying_questions(self) -> list[str]:
         """Get questions to clarify requirements."""
         return [
             "What's the expected input/output?",
@@ -528,11 +528,11 @@ class QuickReplyGenerator:
 
 
 # Singleton instance
-_quick_reply_instance: Optional[QuickReplyGenerator] = None
+_quick_reply_instance: QuickReplyGenerator | None = None
 
 
 def get_quick_reply_generator(
-    config: Optional[QuickReplyConfig] = None
+    config: QuickReplyConfig | None = None
 ) -> QuickReplyGenerator:
     """Get or create the singleton generator instance."""
     global _quick_reply_instance
@@ -542,7 +542,7 @@ def get_quick_reply_generator(
 
 
 # Convenience functions
-def get_quick_suggestions(messages: List[Dict[str, str]], max_results: int = 5) -> List[str]:
+def get_quick_suggestions(messages: list[dict[str, str]], max_results: int = 5) -> list[str]:
     """Quick access to get suggestions."""
     return get_quick_reply_generator().get_suggestions(messages, max_results)
 

@@ -33,9 +33,10 @@ import queue
 import re
 import threading
 import time
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Generator, Iterator, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
@@ -102,7 +103,7 @@ class TextChunker:
     def __init__(self, config: StreamingConfig):
         self.config = config
     
-    def chunk(self, text: str) -> List[str]:
+    def chunk(self, text: str) -> list[str]:
         """Split text into chunks."""
         if self.config.chunk_by == "sentence":
             return self._chunk_sentences(text)
@@ -115,22 +116,22 @@ class TextChunker:
         else:
             return [text]  # No chunking
     
-    def _chunk_sentences(self, text: str) -> List[str]:
+    def _chunk_sentences(self, text: str) -> list[str]:
         """Split by sentence boundaries."""
         sentences = self.SENTENCE_END.split(text)
         return [s.strip() for s in sentences if len(s.strip()) >= self.config.min_chunk_length]
     
-    def _chunk_clauses(self, text: str) -> List[str]:
+    def _chunk_clauses(self, text: str) -> list[str]:
         """Split by clause boundaries (more granular)."""
         clauses = self.CLAUSE_END.split(text)
         return [c.strip() for c in clauses if len(c.strip()) >= self.config.min_chunk_length]
     
-    def _chunk_words(self, text: str) -> List[str]:
+    def _chunk_words(self, text: str) -> list[str]:
         """Split into individual words."""
         words = text.split()
         return [w for w in words if len(w) >= self.config.min_chunk_length]
     
-    def _chunk_fixed(self, text: str) -> List[str]:
+    def _chunk_fixed(self, text: str) -> list[str]:
         """Split into fixed-size chunks."""
         chunks = []
         size = self.config.fixed_chunk_size
@@ -173,7 +174,7 @@ class StreamingTTS:
         self._audio_queue: queue.Queue = queue.Queue()
         
         # Playback thread
-        self._playback_thread: Optional[threading.Thread] = None
+        self._playback_thread: threading.Thread | None = None
         
         # Stats
         self._first_chunk_time: float = 0.0
@@ -226,7 +227,7 @@ class StreamingTTS:
         """Initialize espeak backend."""
         try:
             import subprocess
-            
+
             # Check if espeak is available
             result = subprocess.run(
                 ["espeak", "--version"],
@@ -277,7 +278,7 @@ class StreamingTTS:
         text: str,
         on_chunk: Callable[[AudioChunk], None] = None,
         on_complete: Callable[[], None] = None
-    ) -> Generator[AudioChunk, None, None]:
+    ) -> Generator[AudioChunk]:
         """
         Stream TTS audio chunk by chunk.
         
@@ -386,7 +387,7 @@ class StreamingTTS:
             self._playback_thread = threading.Thread(target=play_chunks, daemon=True)
             self._playback_thread.start()
     
-    def _generate_chunk(self, text: str) -> Optional[np.ndarray]:
+    def _generate_chunk(self, text: str) -> np.ndarray | None:
         """Generate audio for a text chunk."""
         if not self._engine:
             return None
@@ -404,7 +405,7 @@ class StreamingTTS:
         else:
             return None
     
-    def _generate_pyttsx3(self, text: str) -> Optional[np.ndarray]:
+    def _generate_pyttsx3(self, text: str) -> np.ndarray | None:
         """Generate audio using pyttsx3."""
         try:
             import tempfile
@@ -450,7 +451,7 @@ class StreamingTTS:
             logger.error(f"pyttsx3 generation error: {e}")
             return None
     
-    def _generate_espeak(self, text: str) -> Optional[np.ndarray]:
+    def _generate_espeak(self, text: str) -> np.ndarray | None:
         """Generate audio using espeak."""
         try:
             import subprocess
@@ -490,7 +491,7 @@ class StreamingTTS:
             logger.error(f"espeak generation error: {e}")
             return None
     
-    def _generate_edge_tts(self, text: str) -> Optional[np.ndarray]:
+    def _generate_edge_tts(self, text: str) -> np.ndarray | None:
         """Generate audio using edge-tts (sync wrapper)."""
         try:
             import asyncio
@@ -530,7 +531,7 @@ class StreamingTTS:
             logger.error(f"edge-tts generation error: {e}")
             return None
     
-    def _generate_coqui(self, text: str) -> Optional[np.ndarray]:
+    def _generate_coqui(self, text: str) -> np.ndarray | None:
         """Generate audio using Coqui TTS."""
         try:
             tts = self._engine["tts"]
@@ -547,7 +548,7 @@ class StreamingTTS:
             logger.error(f"Coqui generation error: {e}")
             return None
     
-    def _load_audio_file(self, path: str) -> Optional[np.ndarray]:
+    def _load_audio_file(self, path: str) -> np.ndarray | None:
         """Load audio file to numpy array."""
         try:
             # Try soundfile first
@@ -610,7 +611,7 @@ class StreamingTTS:
 
 
 # Global streaming TTS instance
-_streaming_tts: Optional[StreamingTTS] = None
+_streaming_tts: StreamingTTS | None = None
 
 
 def get_streaming_tts(config: StreamingConfig = None) -> StreamingTTS:
@@ -633,7 +634,7 @@ def stream_speak(text: str, blocking: bool = True):
     tts.stream_and_play(text, blocking=blocking)
 
 
-def stream_chunks(text: str) -> Generator[AudioChunk, None, None]:
+def stream_chunks(text: str) -> Generator[AudioChunk]:
     """
     Convenience generator for streaming audio chunks.
     

@@ -8,32 +8,47 @@ Features:
 - Real-time preview
 """
 
-import os
 import json
+import os
 import shutil
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit, 
-        QCheckBox, QListWidget, QListWidgetItem, QTabWidget,
-        QFrame, QSpinBox, QDoubleSpinBox, QGridLayout, QScrollArea
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont, QIcon
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QDoubleSpinBox,
+        QFileDialog,
+        QFrame,
+        QGridLayout,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QListWidgetItem,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QScrollArea,
+        QSlider,
+        QSpinBox,
+        QTabWidget,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
-from .shared_components import NoScrollComboBox
-
 from ...config import CONFIG
-from ...voice.voice_profile import VoiceProfile, VoiceEngine, PROFILES_DIR, get_engine
-from ...voice.voice_generator import AIVoiceGenerator, create_voice_from_samples
 from ...voice.audio_analyzer import AudioAnalyzer
+from ...voice.voice_generator import AIVoiceGenerator, create_voice_from_samples
+from ...voice.voice_profile import PROFILES_DIR, VoiceEngine, VoiceProfile, get_engine
+from .shared_components import NoScrollComboBox
 
 # Voice samples directory
 SAMPLES_DIR = Path(CONFIG.get("data_dir", "data")) / "voice_profiles" / "samples"
@@ -276,7 +291,7 @@ class VoiceCloneTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = parent
-        self.audio_samples: List[str] = []
+        self.audio_samples: list[str] = []
         self.current_profile: Optional[VoiceProfile] = None
         self.worker: Optional[VoiceGenerationWorker] = None
         
@@ -827,14 +842,14 @@ class VoiceCloneTab(QWidget):
                 engine.set_profile(self.current_profile)
                 engine.speak(text)
                 # Update status on main thread
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     self.status_label, "setText",
                     Qt.QueuedConnection,
                     Q_ARG(str, "Preview complete!")
                 )
             except Exception as e:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     self.status_label, "setText",
                     Qt.QueuedConnection,
@@ -909,8 +924,9 @@ class VoiceCloneTab(QWidget):
 
 # For standalone testing
 if __name__ == "__main__" and HAS_PYQT:
-    from PyQt5.QtWidgets import QApplication
     import sys
+
+    from PyQt5.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
     tab = VoiceCloneTab()

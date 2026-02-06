@@ -29,17 +29,17 @@ USAGE:
     ])
 """
 
+import hashlib
 import json
 import logging
+import queue
 import threading
 import time
 import zlib
-import queue
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Callable, Tuple
-from urllib import request, error
 from collections import deque
-import hashlib
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib import error, request
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class RequestStats:
     total_latency_ms: float = 0.0
     min_latency_ms: float = float('inf')
     max_latency_ms: float = 0.0
-    last_10_latencies: List[float] = field(default_factory=list)
+    last_10_latencies: list[float] = field(default_factory=list)
     
     @property
     def avg_latency_ms(self) -> float:
@@ -79,7 +79,7 @@ class RequestStats:
 class OptimizedRequest:
     """A request with optimization metadata."""
     url: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
     method: str = "POST"
     priority: str = "normal"  # low, normal, high, critical
     timeout: float = 30.0
@@ -94,7 +94,7 @@ class ResponseCache:
     def __init__(self, max_size: int = 100, ttl_seconds: float = 60.0):
         self.max_size = max_size
         self.ttl = ttl_seconds
-        self._cache: Dict[str, Tuple[Any, float]] = {}
+        self._cache: dict[str, tuple[Any, float]] = {}
         self._access_order: deque = deque()
         self._lock = threading.Lock()
     
@@ -155,7 +155,7 @@ class NetworkOptimizer:
         self.enable_compression = enable_compression
         
         # Stats per endpoint
-        self._stats: Dict[str, RequestStats] = {}
+        self._stats: dict[str, RequestStats] = {}
         self._stats_lock = threading.Lock()
         
         # Response cache
@@ -167,18 +167,18 @@ class NetworkOptimizer:
         self._running = False
         
         # Connection health
-        self._endpoint_health: Dict[str, bool] = {}
+        self._endpoint_health: dict[str, bool] = {}
     
     def request(
         self,
         url: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         method: str = "POST",
         priority: str = "normal",
         timeout: Optional[float] = None,
         use_cache: bool = True,
         compress: bool = None,
-    ) -> Tuple[Optional[Any], Optional[Exception]]:
+    ) -> tuple[Optional[Any], Optional[Exception]]:
         """
         Make an optimized request.
         
@@ -241,7 +241,7 @@ class NetworkOptimizer:
     def _make_request(
         self,
         url: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         method: str,
         timeout: float,
         compress: bool,
@@ -269,7 +269,7 @@ class NetworkOptimizer:
             
             return json.loads(response_data.decode('utf-8'))
     
-    def _make_cache_key(self, url: str, data: Dict[str, Any]) -> str:
+    def _make_cache_key(self, url: str, data: dict[str, Any]) -> str:
         """Create a cache key from URL and data."""
         content = f"{url}:{json.dumps(data, sort_keys=True)}"
         return hashlib.md5(content.encode()).hexdigest()
@@ -323,9 +323,9 @@ class NetworkOptimizer:
     
     def batch_request(
         self,
-        requests: List[Dict[str, Any]],
+        requests: list[dict[str, Any]],
         parallel: int = 4,
-    ) -> List[Tuple[Optional[Any], Optional[Exception]]]:
+    ) -> list[tuple[Optional[Any], Optional[Exception]]]:
         """
         Execute multiple requests in parallel.
         
@@ -340,7 +340,7 @@ class NetworkOptimizer:
         
         results = [None] * len(requests)
         
-        def execute_request(index: int, req: Dict[str, Any]):
+        def execute_request(index: int, req: dict[str, Any]):
             response, err = self.request(
                 url=req.get("url", ""),
                 data=req.get("data", {}),
@@ -368,7 +368,7 @@ class NetworkOptimizer:
     def async_request(
         self,
         url: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         callback: Callable[[Any, Optional[Exception]], None],
         priority: str = "normal",
     ):
@@ -392,7 +392,7 @@ class NetworkOptimizer:
         """Check if an endpoint is healthy."""
         return self._endpoint_health.get(url, True)
     
-    def get_stats(self, url: str = None) -> Dict[str, Any]:
+    def get_stats(self, url: str = None) -> dict[str, Any]:
         """Get statistics for endpoint(s)."""
         with self._stats_lock:
             if url:

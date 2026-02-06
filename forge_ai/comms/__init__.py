@@ -5,12 +5,18 @@ from .discovery import DeviceDiscovery, discover_forge_ai_nodes
 
 # Other imports that may require torch - use lazy loading
 try:
-    from .network import ForgeNode, Message, ModelExporter, create_server_node, create_client_node
+    from .api_server import create_api_server
     from .memory_sync import MemorySync, OfflineSync, add_sync_routes
     from .multi_ai import AIConversation, AIParticipant, quick_ai_chat
-    from .protocol_manager import ProtocolManager, ProtocolConfig, get_protocol_manager
+    from .network import (
+        ForgeNode,
+        Message,
+        ModelExporter,
+        create_client_node,
+        create_server_node,
+    )
+    from .protocol_manager import ProtocolConfig, ProtocolManager, get_protocol_manager
     from .remote_client import RemoteClient
-    from .api_server import create_api_server
     HAS_CORE = True
 except ImportError as e:
     HAS_CORE = False
@@ -35,7 +41,10 @@ except ImportError as e:
 # Network optimizer for low-latency distributed AI
 try:
     from .network_optimizer import (
-        NetworkOptimizer, OptimizedRequest, RequestStats, ResponseCache,
+        NetworkOptimizer,
+        OptimizedRequest,
+        RequestStats,
+        ResponseCache,
         get_network_optimizer,
     )
     HAS_NETWORK_OPTIMIZER = True
@@ -50,7 +59,11 @@ except ImportError:
 # Device sync for real-time state synchronization
 try:
     from .device_sync import (
-        DeviceSync, DeviceType, SyncPriority, SyncState, ConnectedDevice,
+        ConnectedDevice,
+        DeviceSync,
+        DeviceType,
+        SyncPriority,
+        SyncState,
         get_device_sync,
     )
     HAS_DEVICE_SYNC = True
@@ -66,8 +79,13 @@ except ImportError:
 # Distributed protocol (hardware-aware)
 try:
     from .distributed import (
-        DistributedNode, NodeRole, MessageType, ProtocolMessage, NodeInfo,
-        create_server, create_client,
+        DistributedNode,
+        MessageType,
+        NodeInfo,
+        NodeRole,
+        ProtocolMessage,
+        create_client,
+        create_server,
     )
     HAS_DISTRIBUTED = True
 except ImportError:
@@ -76,11 +94,11 @@ except ImportError:
 # AI Collaboration Protocol (AI-to-AI communication)
 try:
     from .ai_collaboration import (
-        AICollaborationProtocol,
         AICapability,
+        AICollaborationProtocol,
+        RoutingPreference,
         TaskRequest,
         TaskStatus,
-        RoutingPreference,
         get_collaboration_protocol,
         reset_protocol,
     )

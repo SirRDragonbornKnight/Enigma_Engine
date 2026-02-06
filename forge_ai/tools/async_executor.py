@@ -8,9 +8,10 @@ Enables non-blocking tool execution and concurrent operations.
 
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional, Callable
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,9 @@ class AsyncToolExecutor:
     async def execute_tool(
         self,
         tool_name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a single tool asynchronously.
         
@@ -61,7 +62,7 @@ class AsyncToolExecutor:
         Returns:
             Result dictionary from tool execution
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         executor_instance = self._get_tool_executor()
         
         try:
@@ -97,9 +98,9 @@ class AsyncToolExecutor:
     
     async def execute_multiple(
         self,
-        tool_calls: List[tuple],
+        tool_calls: list[tuple],
         timeout: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute multiple tools concurrently.
         
@@ -135,9 +136,9 @@ class AsyncToolExecutor:
     async def execute_with_timeout(
         self,
         tool_name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         timeout: float
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a tool with a strict timeout.
         
@@ -156,10 +157,10 @@ class AsyncToolExecutor:
     async def execute_with_callback(
         self,
         tool_name: str,
-        params: Dict[str, Any],
-        callback: Callable[[Dict[str, Any]], None],
+        params: dict[str, Any],
+        callback: Callable[[dict[str, Any]], None],
         timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a tool and call a callback function when done.
         
@@ -184,9 +185,9 @@ class AsyncToolExecutor:
     def execute_tool_sync(
         self,
         tool_name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a tool asynchronously but wait for the result (blocking).
         
@@ -201,31 +202,25 @@ class AsyncToolExecutor:
             Result dictionary from tool execution
         """
         try:
-            # Try to get existing event loop
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If loop is already running, create a new one in a thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        self.execute_tool(tool_name, params, timeout)
-                    )
-                    return future.result()
-            else:
-                # Run in existing loop
-                return loop.run_until_complete(
+            # Check if there's a running event loop
+            loop = asyncio.get_running_loop()
+            # If we get here, loop is running - run in separate thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run,
                     self.execute_tool(tool_name, params, timeout)
                 )
+                return future.result()
         except RuntimeError:
-            # No event loop, create one
+            # No running event loop - use asyncio.run()
             return asyncio.run(self.execute_tool(tool_name, params, timeout))
     
     def execute_multiple_sync(
         self,
-        tool_calls: List[tuple],
+        tool_calls: list[tuple],
         timeout: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute multiple tools concurrently but wait for all results (blocking).
         
@@ -237,24 +232,18 @@ class AsyncToolExecutor:
             List of result dictionaries in same order as input
         """
         try:
-            # Try to get existing event loop
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If loop is already running, create a new one in a thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        self.execute_multiple(tool_calls, timeout)
-                    )
-                    return future.result()
-            else:
-                # Run in existing loop
-                return loop.run_until_complete(
+            # Check if there's a running event loop
+            loop = asyncio.get_running_loop()
+            # If we get here, loop is running - run in separate thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run,
                     self.execute_multiple(tool_calls, timeout)
                 )
+                return future.result()
         except RuntimeError:
-            # No event loop, create one
+            # No running event loop - use asyncio.run()
             return asyncio.run(self.execute_multiple(tool_calls, timeout))
     
     def shutdown(self, wait: bool = True):

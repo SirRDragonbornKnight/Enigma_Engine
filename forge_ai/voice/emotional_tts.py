@@ -114,7 +114,7 @@ class EmotionProfile:
     sentence_pause_ms: int = 0       # Extra pause at sentence end
     
     # Emphasis patterns
-    emphasis_words: List[str] = field(default_factory=list)  # Words to emphasize
+    emphasis_words: list[str] = field(default_factory=list)  # Words to emphasize
     emphasis_pattern: str = "none"   # none, first, last, alternating
     
     # Voice quality hints (for advanced TTS)
@@ -127,7 +127,7 @@ class EmotionProfile:
 
 
 # Emotion profiles with prosody settings
-EMOTION_PROFILES: Dict[Emotion, EmotionProfile] = {
+EMOTION_PROFILES: dict[Emotion, EmotionProfile] = {
     # Neutral
     Emotion.NEUTRAL: EmotionProfile(),
     
@@ -387,7 +387,7 @@ EMOTION_PROFILES: Dict[Emotion, EmotionProfile] = {
 
 
 # Emotion detection patterns
-EMOTION_PATTERNS: Dict[Emotion, List[str]] = {
+EMOTION_PATTERNS: dict[Emotion, list[str]] = {
     Emotion.HAPPY: [
         r'\b(happy|glad|pleased|delighted|wonderful|great|awesome|fantastic|yay)\b',
         r'[!]{2,}',
@@ -453,13 +453,13 @@ class EmotionDetector:
     
     def __init__(self):
         # Compile patterns
-        self._patterns: Dict[Emotion, List[re.Pattern]] = {}
+        self._patterns: dict[Emotion, list[re.Pattern]] = {}
         for emotion, patterns in EMOTION_PATTERNS.items():
             self._patterns[emotion] = [
                 re.compile(p, re.IGNORECASE) for p in patterns
             ]
     
-    def detect(self, text: str) -> Tuple[Emotion, float]:
+    def detect(self, text: str) -> tuple[Emotion, float]:
         """
         Detect the primary emotion in text.
         
@@ -469,7 +469,7 @@ class EmotionDetector:
         Returns:
             Tuple of (emotion, confidence 0-1)
         """
-        scores: Dict[Emotion, float] = {}
+        scores: dict[Emotion, float] = {}
         
         for emotion, patterns in self._patterns.items():
             score = 0.0
@@ -487,14 +487,14 @@ class EmotionDetector:
         best_emotion = max(scores, key=scores.get)
         return best_emotion, scores[best_emotion]
     
-    def detect_multiple(self, text: str) -> List[Tuple[Emotion, float]]:
+    def detect_multiple(self, text: str) -> list[tuple[Emotion, float]]:
         """
         Detect all emotions present in text.
         
         Returns:
             List of (emotion, confidence) tuples, sorted by confidence
         """
-        scores: Dict[Emotion, float] = {}
+        scores: dict[Emotion, float] = {}
         
         for emotion, patterns in self._patterns.items():
             score = 0.0
@@ -753,7 +753,7 @@ class EmotionalTTS:
         EMOTION_PROFILES[emotion] = profile
 
 
-def detect_emotion(text: str) -> Tuple[Emotion, float]:
+def detect_emotion(text: str) -> tuple[Emotion, float]:
     """
     Convenience function to detect emotion in text.
     

@@ -14,12 +14,13 @@ A production-grade training system with:
 """
 import math
 import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
 import torch
 from torch.amp import GradScaler, autocast
-from torch.utils.data import Dataset, DataLoader
-from typing import Optional, List, Dict, Any, Callable
-from pathlib import Path
-from dataclasses import dataclass, asdict
+from torch.utils.data import DataLoader, Dataset
 
 from .advanced_model import ForgeModel
 
@@ -69,7 +70,7 @@ class TextDataset(Dataset):
 
     def __init__(
         self,
-        texts: List[str],
+        texts: list[str],
         tokenizer: Any,
         max_length: int = 512,
         stride: int = 256,
@@ -99,7 +100,7 @@ class TextDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         tokens = self.samples[idx]
 
         # Pad if necessary
@@ -123,7 +124,7 @@ class QADataset(Dataset):
 
     def __init__(
         self,
-        qa_pairs: List[Dict[str, str]],
+        qa_pairs: list[dict[str, str]],
         tokenizer: Any,
         max_length: int = 512,
     ):
@@ -147,7 +148,7 @@ class QADataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         tokens = self.samples[idx]
 
         # Pad if necessary
@@ -281,7 +282,7 @@ class Trainer:
         val_dataset: Optional[Dataset] = None,
         checkpoint_dir: Optional[Path] = None,
         callback: Optional[Callable] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Train the model.
 
@@ -522,7 +523,7 @@ class Trainer:
         print(f"Loaded checkpoint from {path}")
         print(f"Resuming from step {self.global_step}, epoch {self.epoch}")
 
-    def _get_history(self) -> Dict[str, Any]:
+    def _get_history(self) -> dict[str, Any]:
         """Get training history."""
         return {
             'steps': [h['step'] for h in self.train_history],
@@ -535,7 +536,7 @@ class Trainer:
         }
 
 
-def load_training_data(data_path: Path) -> List[str]:
+def load_training_data(data_path: Path) -> list[str]:
     """Load training data from file."""
     texts = []
 
@@ -550,7 +551,7 @@ def load_training_data(data_path: Path) -> List[str]:
     return texts
 
 
-def load_qa_data(data_path: Path) -> List[Dict[str, str]]:
+def load_qa_data(data_path: Path) -> list[dict[str, str]]:
     """Load Q&A formatted data."""
     qa_pairs = []
 

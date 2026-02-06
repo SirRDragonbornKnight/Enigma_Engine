@@ -47,28 +47,50 @@ CONNECTED PATHS:
     → Output: outputs/images/ (where images are saved)
 """
 
-import os
-import io
-import time
 import base64
+import io
+import logging
+import os
 import subprocess
 import sys
-import logging
+import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-        QDoubleSpinBox, QLineEdit, QCheckBox, QFrame,
-        QRubberBand, QSizeGrip, QApplication
+    from PyQt5.QtCore import QPoint, QRect, QSize, Qt, QThread, pyqtSignal
+    from PyQt5.QtGui import (
+        QBrush,
+        QColor,
+        QCursor,
+        QFont,
+        QImage,
+        QPainter,
+        QPen,
+        QPixmap,
     )
-    from PyQt5.QtCore import Qt, QThread, pyqtSignal, QRect, QPoint, QSize
-    from PyQt5.QtGui import QFont, QPixmap, QImage, QPainter, QColor, QPen, QBrush, QCursor
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QCheckBox,
+        QDoubleSpinBox,
+        QFileDialog,
+        QFrame,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QRubberBand,
+        QSizeGrip,
+        QSpinBox,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -414,7 +436,7 @@ class PlaceholderImage:
         self.is_loaded = False
     
     def generate(self, prompt: str, width: int = 512, height: int = 512,
-                 **kwargs) -> Dict[str, Any]:
+                 **kwargs) -> dict[str, Any]:
         """Generate a procedural image based on the prompt."""
         try:
             start = time.time()
@@ -439,7 +461,7 @@ class PlaceholderImage:
             # Fallback: create using Qt or PIL
             try:
                 from PIL import Image, ImageDraw, ImageFont
-                
+
                 # Create gradient background
                 img = Image.new('RGB', (width, height))
                 for y in range(height):
@@ -530,9 +552,9 @@ class StableDiffusionLocal:
     
     def load(self) -> bool:
         try:
-            from diffusers import StableDiffusionPipeline
             import torch
-            
+            from diffusers import StableDiffusionPipeline
+
             # Clear GPU cache first
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -590,8 +612,8 @@ class StableDiffusionLocal:
             if "cuda" in error_str and ("memory" in error_str or "oom" in error_str):
                 print("GPU out of memory, trying CPU...")
                 try:
-                    from diffusers import StableDiffusionPipeline
                     import torch
+                    from diffusers import StableDiffusionPipeline
                     torch.cuda.empty_cache()
                     
                     self.pipe = StableDiffusionPipeline.from_pretrained(
@@ -623,7 +645,7 @@ class StableDiffusionLocal:
     
     def generate(self, prompt: str, width: int = 512, height: int = 512,
                  steps: int = 30, guidance: float = 7.5, 
-                 negative_prompt: str = "", **kwargs) -> Dict[str, Any]:
+                 negative_prompt: str = "", **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
         
@@ -692,7 +714,7 @@ class OpenAIImage:
         self.is_loaded = False
     
     def generate(self, prompt: str, width: int = 1024, height: int = 1024,
-                 **kwargs) -> Dict[str, Any]:
+                 **kwargs) -> dict[str, Any]:
         if not self.is_loaded or not self.client:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -755,7 +777,7 @@ class ReplicateImage:
         self.is_loaded = False
     
     def generate(self, prompt: str, width: int = 1024, height: int = 1024,
-                 **kwargs) -> Dict[str, Any]:
+                 **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -1104,7 +1126,7 @@ class ImageTab(QWidget):
         
         # Style Presets (from shared components)
         try:
-            from .shared_components import PresetSelector, STYLE_PRESETS
+            from .shared_components import STYLE_PRESETS, PresetSelector
             
             preset_row = QHBoxLayout()
             self.style_preset = PresetSelector("image", self)
@@ -1215,7 +1237,7 @@ class ImageTab(QWidget):
                 provider = get_provider('local')
                 if provider:
                     success = provider.load()
-                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                     if success:
                         QMetaObject.invokeMethod(
                             self.status_label, "setText",
@@ -1244,7 +1266,7 @@ class ImageTab(QWidget):
                         Q_ARG(bool, True)
                     )
             except Exception as e:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     self.status_label, "setText",
                     Qt.QueuedConnection,

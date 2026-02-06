@@ -20,11 +20,11 @@ Example training data format:
 
 import json
 import logging
-from dataclasses import dataclass, asdict
+from collections import defaultdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from collections import defaultdict
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class Goal:
     description: str
     progress: float = 0.0       # 0.0 to 1.0
     priority: int = 1           # 1-10
-    steps: List[str] = None
+    steps: list[str] = None
     completed: bool = False
     created_at: str = ""
     
@@ -81,17 +81,17 @@ class AIWantsSystem:
         self.config_dir = Path(config_dir)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         
-        self.wants: Dict[str, Want] = {}
-        self.goals: Dict[str, Goal] = {}
-        self.motivations: Dict[str, float] = defaultdict(float)
+        self.wants: dict[str, Want] = {}
+        self.goals: dict[str, Goal] = {}
+        self.motivations: dict[str, float] = defaultdict(float)
         
         # Learning from experience
-        self.interaction_patterns: Dict[str, int] = defaultdict(int)
-        self.satisfaction_history: List[Dict[str, Any]] = []
+        self.interaction_patterns: dict[str, int] = defaultdict(int)
+        self.satisfaction_history: list[dict[str, Any]] = []
         
         # Current state
         self.dominant_want: Optional[str] = None
-        self.active_goals: List[str] = []
+        self.active_goals: list[str] = []
         
         self.load()
     
@@ -116,7 +116,7 @@ class AIWantsSystem:
         logger.info(f"AI developed want: {name} ({intensity:.2f} intensity)")
     
     def add_goal(self, name: str, description: str, priority: int = 5, 
-                 steps: Optional[List[str]] = None):
+                 steps: Optional[list[str]] = None):
         """
         AI sets a goal to work toward.
         
@@ -176,7 +176,7 @@ class AIWantsSystem:
                 logger.info(f"AI completed goal: {goal_name}")
     
     def learn_want_from_interaction(self, user_input: str, ai_response: str,
-                                    context: Optional[Dict[str, Any]] = None):
+                                    context: Optional[dict[str, Any]] = None):
         """
         AI learns what it wants based on interaction patterns.
         
@@ -236,7 +236,7 @@ class AIWantsSystem:
         self.dominant_want = dominant.name
         return dominant
     
-    def get_active_goals(self) -> List[Goal]:
+    def get_active_goals(self) -> list[Goal]:
         """Get list of active (incomplete) goals."""
         return [
             self.goals[name] for name in self.active_goals
@@ -278,7 +278,7 @@ class AIWantsSystem:
         
         return "\n".join(parts)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Export to dictionary."""
         return {
             "wants": {k: asdict(v) for k, v in self.wants.items()},
@@ -290,7 +290,7 @@ class AIWantsSystem:
             "active_goals": self.active_goals
         }
     
-    def from_dict(self, data: Dict[str, Any]):
+    def from_dict(self, data: dict[str, Any]):
         """Import from dictionary."""
         self.wants = {
             k: Want(**v) for k, v in data.get("wants", {}).items()

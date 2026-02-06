@@ -5,14 +5,24 @@ Allows users to control CPU/RAM usage so the AI doesn't hog resources
 while gaming or doing other tasks.
 """
 
-import os
 import logging
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
-    QPushButton, QSpinBox, QSlider, QCheckBox,
-    QTextEdit, QMessageBox, QLineEdit
-)
+import os
+
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +90,9 @@ def _save_api_keys(parent):
     
     # Try to save to .env file for persistence
     try:
-        from ...config import CONFIG
         from pathlib import Path
+
+        from ...config import CONFIG
         
         env_file = Path(CONFIG.get("project_root", ".")) / ".env"
         
@@ -198,8 +209,9 @@ def _toggle_web_server(parent, state):
         if enabled:
             # Start web server in background thread
             import threading
-            from ...web.server import create_web_server
+
             from ...config import CONFIG
+            from ...web.server import create_web_server
             
             web_config = CONFIG.get("web_interface", {})
             port = parent.web_port_spin.value()
@@ -249,6 +261,7 @@ def _open_web_qr(parent):
     """Open QR code for web connection in browser."""
     try:
         import webbrowser
+
         from ...web.discovery import get_local_ip
         
         port = parent.web_port_spin.value()
@@ -266,7 +279,7 @@ def _change_robot_mode(parent):
     mode = parent.robot_mode_combo.currentData()
     
     try:
-        from forge_ai.tools.robot_modes import get_mode_controller, RobotMode
+        from forge_ai.tools.robot_modes import RobotMode, get_mode_controller
         
         controller = get_mode_controller()
         
@@ -327,7 +340,7 @@ def _toggle_robot_camera(parent, state):
     enabled = state == 2
     
     try:
-        from forge_ai.tools.robot_modes import get_mode_controller, CameraConfig
+        from forge_ai.tools.robot_modes import CameraConfig, get_mode_controller
         
         controller = get_mode_controller()
         
@@ -548,9 +561,10 @@ def _toggle_overlay(parent):
 def _configure_overlay(parent):
     """Open overlay configuration dialog."""
     try:
+        from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout
+
         from ..overlay.overlay_settings import OverlaySettingsWidget
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton
-        
+
         # Check if overlay exists
         if not hasattr(parent, '_overlay') or not parent._overlay:
             QMessageBox.information(
@@ -597,7 +611,11 @@ def _change_active_game(parent):
             if dialog.exec_():
                 config = dialog.get_config()
                 try:
-                    from forge_ai.tools.game_router import get_game_router, GameConfig, GameType
+                    from forge_ai.tools.game_router import (
+                        GameConfig,
+                        GameType,
+                        get_game_router,
+                    )
                     router = get_game_router()
                     
                     # Create and register game
@@ -758,9 +776,9 @@ def _get_lockable_widgets(parent):
 
 def _populate_monitors(parent, preserve_selection=False):
     """Populate the monitor dropdown with available displays."""
-    from PyQt5.QtWidgets import QApplication
     from PyQt5.QtGui import QGuiApplication
-    
+    from PyQt5.QtWidgets import QApplication
+
     # Remember current selection by screen identifier (more robust than index)
     previous_screen_name = None
     previous_index = -1
@@ -831,12 +849,12 @@ def _move_to_monitor(parent, monitor_index):
         main_window._gui_settings["monitor_index"] = monitor_index
         # Save immediately so it persists
         try:
-            from pathlib import Path
             import json
+            from pathlib import Path
             settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
             with open(settings_path, 'w') as f:
                 json.dump(main_window._gui_settings, f, indent=2)
-        except (IOError, OSError) as e:
+        except OSError as e:
             logger.debug(f"Failed to save monitor settings: {e}")
     
     _update_display_info(parent)
@@ -851,12 +869,12 @@ def _save_startup_position_mode(parent):
         main_window._gui_settings["startup_position_mode"] = mode
         # Save immediately
         try:
-            from pathlib import Path
             import json
+            from pathlib import Path
             settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
             with open(settings_path, 'w') as f:
                 json.dump(main_window._gui_settings, f, indent=2)
-        except (IOError, OSError) as e:
+        except OSError as e:
             logger.debug(f"Failed to save startup position mode: {e}")
 
 
@@ -1010,6 +1028,7 @@ def _toggle_always_on_top(parent, state):
     # Ensure Quick Chat has priority when visible (raise it above main window)
     if hasattr(main_window, 'mini_chat') and main_window.mini_chat and main_window.mini_chat.isVisible():
         from PyQt5.QtCore import QTimer
+
         # Brief delay to ensure main window is positioned first, then raise Quick Chat
         QTimer.singleShot(50, lambda: _raise_mini_chat(main_window))
 
@@ -1042,8 +1061,8 @@ def _disable_always_on_top(parent):
 
 def _reset_window_position(parent):
     """Reset main window to center of primary screen."""
-    from PyQt5.QtWidgets import QApplication
     from PyQt5.QtGui import QGuiApplication
+    from PyQt5.QtWidgets import QApplication
     
     main_window = parent.window()
     if not main_window:
@@ -1063,7 +1082,9 @@ def _reset_all_settings(parent):
     """Reset all GUI settings to defaults."""
     import json
     from pathlib import Path
+
     from PyQt5.QtWidgets import QMessageBox
+
     from ...config import CONFIG
     
     reply = QMessageBox.question(
@@ -1107,6 +1128,7 @@ def _toggle_mini_chat_on_top(parent, state):
     """Toggle Quick Chat always on top and save setting."""
     import json
     from pathlib import Path
+
     from ...config import CONFIG
     
     on_top = state == Checked
@@ -1116,7 +1138,7 @@ def _toggle_mini_chat_on_top(parent, state):
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         settings = {}
         if settings_path.exists():
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
         settings["mini_chat_always_on_top"] = on_top
         with open(settings_path, 'w') as f:
@@ -1134,13 +1156,14 @@ def _save_chat_names(parent):
     """Save chat display names to settings."""
     import json
     from pathlib import Path
+
     from ...config import CONFIG
     
     try:
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         settings = {}
         if settings_path.exists():
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
         
         user_name = parent.user_display_name_input.text().strip()
@@ -1162,13 +1185,14 @@ def _save_system_prompt(parent):
     """Save the custom system prompt to settings."""
     import json
     from pathlib import Path
+
     from ...config import CONFIG
     
     try:
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         settings = {}
         if settings_path.exists():
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
         
         preset = parent.system_prompt_preset.currentData()
@@ -1197,12 +1221,13 @@ def _load_system_prompt(parent):
     """Load the system prompt settings."""
     import json
     from pathlib import Path
+
     from ...config import CONFIG
     
     try:
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
             
             preset = settings.get("system_prompt_preset", "simple")
@@ -1408,6 +1433,7 @@ def _reset_system_prompt(parent):
 def _get_user_presets_path():
     """Get the path to the user presets file."""
     from pathlib import Path
+
     from ...config import CONFIG
     return Path(CONFIG.get("data_dir", "data")) / "user_prompts.json"
 
@@ -1418,7 +1444,7 @@ def _load_user_presets_data():
     presets_path = _get_user_presets_path()
     if presets_path.exists():
         try:
-            with open(presets_path, 'r', encoding='utf-8') as f:
+            with open(presets_path, encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -1535,12 +1561,13 @@ def _load_chat_names(parent):
     """Load chat display names from settings."""
     import json
     from pathlib import Path
+
     from ...config import CONFIG
     
     try:
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
             
             user_name = settings.get("user_display_name", "You")
@@ -2829,13 +2856,14 @@ def _load_mini_chat_on_top_setting(parent):
     try:
         import json
         from pathlib import Path
+
         from ...config import CONFIG
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
             settings = json.loads(settings_path.read_text())
             on_top = settings.get("mini_chat_always_on_top", True)  # Default to True
             parent.mini_chat_on_top_check.setChecked(on_top)
-    except (IOError, OSError, json.JSONDecodeError, KeyError) as e:
+    except (OSError, json.JSONDecodeError, KeyError) as e:
         logger.debug(f"Could not load mini chat setting, using default: {e}")
 
 
@@ -3004,7 +3032,7 @@ def _get_cache_path():
     """Get the HuggingFace cache path."""
     import os
     from pathlib import Path
-    
+
     # Check environment variable first
     hf_home = os.environ.get("HF_HOME")
     if hf_home:
@@ -3123,7 +3151,7 @@ def _clear_cache(parent):
 def _load_saved_settings(parent):
     """Load saved settings from CONFIG into the UI."""
     from ...config import CONFIG
-    
+
     # Load resource mode
     saved_mode = CONFIG.get("resource_mode", "balanced")
     mode_map = {"minimal": 0, "gaming": 1, "balanced": 2, "performance": 3, "max": 4}
@@ -3303,8 +3331,8 @@ def _apply_custom_resources(parent):
         
         # Save settings
         try:
-            from pathlib import Path
             import json
+            from pathlib import Path
             settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             
             settings = {}
@@ -3344,9 +3372,9 @@ def _apply_nn_backend(parent):
     backend = parent.nn_backend_combo.currentData()
     
     try:
-        from ...config import CONFIG
         from ...builtin.neural_network import set_backend
-        
+        from ...config import CONFIG
+
         # Update config
         CONFIG["nn_backend"] = backend
         
@@ -3368,7 +3396,7 @@ def _update_nn_backend_status(parent):
     """Update the neural network backend status label."""
     try:
         backend = parent.nn_backend_combo.currentData()
-        from ...builtin.neural_network import is_pypy, get_python_info
+        from ...builtin.neural_network import get_python_info, is_pypy
         
         info = get_python_info()
         
@@ -3400,8 +3428,8 @@ def _update_nn_backend_status(parent):
 def _save_nn_backend_setting(backend: str):
     """Save the neural network backend setting to GUI settings."""
     try:
-        from pathlib import Path
         import json
+        from pathlib import Path
         
         settings_path = Path(__file__).parent.parent.parent.parent / "data" / "gui_settings.json"
         
@@ -3525,7 +3553,7 @@ def _auto_detect_profile(parent):
     """Auto-detect the best profile for this hardware using device_profiles module."""
     try:
         # Try the new device_profiles module first (more accurate)
-        from ...core.device_profiles import get_device_profiler, DeviceClass
+        from ...core.device_profiles import DeviceClass, get_device_profiler
         
         profiler = get_device_profiler()
         device_class = profiler.classify()
@@ -3635,8 +3663,9 @@ def _auto_detect_profile_fallback(parent):
 def _save_device_profile(parent, profile_id):
     """Save the selected device profile to settings."""
     try:
-        from pathlib import Path
         import json
+        from pathlib import Path
+
         from ...config import CONFIG
         
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
@@ -3655,8 +3684,9 @@ def _save_device_profile(parent, profile_id):
 def _load_device_profile(parent):
     """Load saved device profile."""
     try:
-        from pathlib import Path
         import json
+        from pathlib import Path
+
         from ...config import CONFIG
         
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
@@ -3725,7 +3755,7 @@ def _update_priority(parent, state):
 def _apply_all_settings(parent):
     """Apply all resource settings."""
     try:
-        from ...core.power_mode import get_power_manager, PowerLevel
+        from ...core.power_mode import PowerLevel, get_power_manager
         
         mode = parent.resource_mode_combo.currentData()
         power_mgr = get_power_manager()
@@ -3763,7 +3793,7 @@ def _toggle_autonomous(parent, state):
     """Toggle autonomous mode on/off."""
     try:
         from ...core.autonomous import AutonomousManager
-        
+
         # Get current model name
         model_name = getattr(parent, 'current_model_name', 'forge_ai')
         
@@ -3855,8 +3885,9 @@ def _sync_game_mode_toggles(parent, state):
 def _refresh_power_status(parent):
     """Refresh power status display."""
     try:
-        from ...core.power_mode import get_power_manager
         import torch
+
+        from ...core.power_mode import get_power_manager
         
         power_mgr = get_power_manager()
         
@@ -3895,9 +3926,10 @@ System:
 def _apply_zoom(parent, value: int):
     """Apply zoom level to the application."""
     try:
-        from PyQt5.QtWidgets import QApplication, QWidget
-        from PyQt5.QtGui import QFont
         from typing import cast
+
+        from PyQt5.QtGui import QFont
+        from PyQt5.QtWidgets import QApplication, QWidget
         
         app = QApplication.instance()
         if app is None:
@@ -4030,10 +4062,11 @@ def _get_audio_devices():
     output_devices = [("Default", -1)]
     
     try:
-        import pyaudio
-        import sys
         import os
-        
+        import sys
+
+        import pyaudio
+
         # Suppress PyAudio/PortAudio stderr spam during initialization
         # This is especially needed on Linux where ctypes callbacks print errors
         old_stderr = sys.stderr
@@ -4060,7 +4093,7 @@ def _get_audio_devices():
                     input_devices.append((name, i))
                 if info.get('maxOutputChannels', 0) > 0:
                     output_devices.append((name, i))
-            except (OSError, IOError):
+            except OSError:
                 # Some devices fail enumeration - skip them
                 continue
         
@@ -4108,7 +4141,7 @@ def _refresh_audio_devices(parent):
 def _test_microphone(parent):
     """Test the selected microphone and show audio levels."""
     import threading
-    
+
     # If already testing, stop the test
     if hasattr(parent, '_mic_test_running') and parent._mic_test_running:
         parent._mic_test_stop_requested = True
@@ -4128,9 +4161,10 @@ def _test_microphone(parent):
     
     def run_test():
         try:
-            import pyaudio
-            import struct
             import math
+            import struct
+
+            import pyaudio
             
             CHUNK = 1024
             FORMAT = pyaudio.paInt16
@@ -4171,7 +4205,7 @@ def _test_microphone(parent):
                     max_level = max(max_level, level)
                     
                     # Update UI from main thread
-                    from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                    from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                     QMetaObject.invokeMethod(
                         parent.mic_level_bar, "setValue",
                         Qt.ConnectionType.QueuedConnection,

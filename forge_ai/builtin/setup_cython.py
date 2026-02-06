@@ -10,8 +10,8 @@ Or for development:
     cythonize -i cython_kernels.pyx
 """
 
-from setuptools import setup, Extension
 import numpy as np
+from setuptools import Extension, setup
 
 try:
     from Cython.Build import cythonize

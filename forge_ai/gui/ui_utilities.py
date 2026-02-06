@@ -10,14 +10,14 @@ User interface enhancements:
 Part of the ForgeAI GUI enhancement suite.
 """
 
-import time
 import json
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Tuple
-from pathlib import Path
-from enum import Enum, auto
 import logging
+import time
+from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,9 @@ class ClipboardHistory:
         self.max_age_seconds = max_age_days * 86400
         self.persist_path = persist_path
         
-        self._entries: List[ClipboardEntry] = []
+        self._entries: list[ClipboardEntry] = []
         self._last_content: str = ""
-        self._callbacks: List[Callable[[ClipboardEntry], None]] = []
+        self._callbacks: list[Callable[[ClipboardEntry], None]] = []
         
         if persist_path and persist_path.exists():
             self._load()
@@ -115,11 +115,11 @@ class ClipboardHistory:
         
         self._save()
     
-    def get_history(self, limit: int = 50) -> List[ClipboardEntry]:
+    def get_history(self, limit: int = 50) -> list[ClipboardEntry]:
         """Get recent history."""
         return self._entries[:limit]
     
-    def get_pinned(self) -> List[ClipboardEntry]:
+    def get_pinned(self) -> list[ClipboardEntry]:
         """Get pinned entries."""
         return [e for e in self._entries if e.pinned]
     
@@ -143,7 +143,7 @@ class ClipboardHistory:
             self._entries = []
         self._save()
     
-    def search(self, query: str) -> List[ClipboardEntry]:
+    def search(self, query: str) -> list[ClipboardEntry]:
         """Search history."""
         query_lower = query.lower()
         return [e for e in self._entries if query_lower in e.content.lower()]
@@ -226,7 +226,7 @@ class Emoji:
     """An emoji with metadata."""
     char: str
     name: str
-    keywords: List[str] = field(default_factory=list)
+    keywords: list[str] = field(default_factory=list)
     category: EmojiCategory = EmojiCategory.SMILEYS
     
     def matches(self, query: str) -> bool:
@@ -316,27 +316,27 @@ class EmojiPicker:
             recent_limit: Max recent emojis to store
         """
         self.recent_limit = recent_limit
-        self._recent: List[Emoji] = []
-        self._favorites: List[Emoji] = []
+        self._recent: list[Emoji] = []
+        self._favorites: list[Emoji] = []
         self._emojis = self.DEFAULT_EMOJIS.copy()
     
-    def get_by_category(self, category: EmojiCategory) -> List[Emoji]:
+    def get_by_category(self, category: EmojiCategory) -> list[Emoji]:
         """Get emojis by category."""
         return self._emojis.get(category, [])
     
-    def get_categories(self) -> List[EmojiCategory]:
+    def get_categories(self) -> list[EmojiCategory]:
         """Get all available categories."""
         return list(self._emojis.keys())
     
-    def get_recent(self) -> List[Emoji]:
+    def get_recent(self) -> list[Emoji]:
         """Get recently used emojis."""
         return self._recent.copy()
     
-    def get_favorites(self) -> List[Emoji]:
+    def get_favorites(self) -> list[Emoji]:
         """Get favorited emojis."""
         return self._favorites.copy()
     
-    def search(self, query: str) -> List[Emoji]:
+    def search(self, query: str) -> list[Emoji]:
         """Search emojis by name/keywords."""
         if not query:
             return []
@@ -390,7 +390,7 @@ class Bookmark:
     content_preview: str
     note: str = ""
     created_at: float = field(default_factory=time.time)
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     color: str = "#FFD700"  # Gold default
     
     def created_formatted(self) -> str:
@@ -429,8 +429,8 @@ class BookmarkManager:
             persist_path: Path to save bookmarks
         """
         self.persist_path = persist_path
-        self._bookmarks: Dict[str, Bookmark] = {}  # message_id -> Bookmark
-        self._callbacks: List[Callable[[str, Optional[Bookmark]], None]] = []
+        self._bookmarks: dict[str, Bookmark] = {}  # message_id -> Bookmark
+        self._callbacks: list[Callable[[str, Optional[Bookmark]], None]] = []
         
         if persist_path and persist_path.exists():
             self._load()
@@ -441,7 +441,7 @@ class BookmarkManager:
         conversation_id: str,
         content: str,
         note: str = "",
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         color: Optional[str] = None
     ) -> Bookmark:
         """Add a bookmark."""
@@ -475,7 +475,7 @@ class BookmarkManager:
         """Check if message is bookmarked."""
         return message_id in self._bookmarks
     
-    def get_all(self) -> List[Bookmark]:
+    def get_all(self) -> list[Bookmark]:
         """Get all bookmarks sorted by date."""
         return sorted(
             self._bookmarks.values(),
@@ -483,21 +483,21 @@ class BookmarkManager:
             reverse=True
         )
     
-    def get_by_conversation(self, conversation_id: str) -> List[Bookmark]:
+    def get_by_conversation(self, conversation_id: str) -> list[Bookmark]:
         """Get bookmarks for a conversation."""
         return [
             b for b in self._bookmarks.values()
             if b.conversation_id == conversation_id
         ]
     
-    def get_by_tag(self, tag: str) -> List[Bookmark]:
+    def get_by_tag(self, tag: str) -> list[Bookmark]:
         """Get bookmarks with a specific tag."""
         return [
             b for b in self._bookmarks.values()
             if tag in b.tags
         ]
     
-    def search(self, query: str) -> List[Bookmark]:
+    def search(self, query: str) -> list[Bookmark]:
         """Search bookmarks by content or note."""
         query_lower = query.lower()
         return [
@@ -513,7 +513,7 @@ class BookmarkManager:
             self._notify(message_id, self._bookmarks[message_id])
             self._save()
     
-    def update_tags(self, message_id: str, tags: List[str]):
+    def update_tags(self, message_id: str, tags: list[str]):
         """Update bookmark tags."""
         if message_id in self._bookmarks:
             self._bookmarks[message_id].tags = tags
@@ -525,7 +525,7 @@ class BookmarkManager:
             self._bookmarks[message_id].color = color
             self._save()
     
-    def get_all_tags(self) -> List[str]:
+    def get_all_tags(self) -> list[str]:
         """Get all unique tags."""
         tags = set()
         for bookmark in self._bookmarks.values():
@@ -622,7 +622,7 @@ class TabInfo:
     color: Optional[str] = None
     icon: Optional[str] = None
     pinned: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class TabHistory:
@@ -643,15 +643,15 @@ class TabHistory:
             max_history: Max closed tabs to remember
         """
         self.max_history = max_history
-        self._closed_tabs: List[TabInfo] = []
-        self._access_history: List[str] = []  # Tab IDs
+        self._closed_tabs: list[TabInfo] = []
+        self._access_history: list[str] = []  # Tab IDs
     
     def record_close(self, tab: TabInfo):
         """Record a tab being closed."""
         self._closed_tabs.insert(0, tab)
         self._closed_tabs = self._closed_tabs[:self.max_history]
     
-    def get_closed_tabs(self) -> List[TabInfo]:
+    def get_closed_tabs(self) -> list[TabInfo]:
         """Get recently closed tabs."""
         return self._closed_tabs.copy()
     
@@ -674,7 +674,7 @@ class TabHistory:
         # Limit size
         self._access_history = self._access_history[:50]
     
-    def get_access_history(self) -> List[str]:
+    def get_access_history(self) -> list[str]:
         """Get tab access history (most recent first)."""
         return self._access_history.copy()
 
@@ -715,7 +715,7 @@ class TabColorManager:
     
     def __init__(self):
         """Initialize tab color manager."""
-        self._tab_colors: Dict[str, str] = {}
+        self._tab_colors: dict[str, str] = {}
     
     def set_color(self, tab_id: str, color: str):
         """Set custom color for a tab."""
@@ -733,7 +733,7 @@ class TabColorManager:
         """Remove custom color."""
         self._tab_colors.pop(tab_id, None)
     
-    def get_presets(self) -> List[str]:
+    def get_presets(self) -> list[str]:
         """Get preset colors."""
         return self.PRESET_COLORS.copy()
 
@@ -758,8 +758,8 @@ class TabManager:
         """
         self.history = TabHistory(max_history)
         self.colors = TabColorManager()
-        self._tabs: Dict[str, TabInfo] = {}
-        self._callbacks: List[Callable[[str, str], None]] = []  # (tab_id, event)
+        self._tabs: dict[str, TabInfo] = {}
+        self._callbacks: list[Callable[[str, str], None]] = []  # (tab_id, event)
     
     def register_tab(self, tab: TabInfo):
         """Register a tab."""
@@ -777,7 +777,7 @@ class TabManager:
         """Get tab by ID."""
         return self._tabs.get(tab_id)
     
-    def get_all_tabs(self) -> List[TabInfo]:
+    def get_all_tabs(self) -> list[TabInfo]:
         """Get all registered tabs."""
         return list(self._tabs.values())
     

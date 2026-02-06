@@ -13,12 +13,12 @@ Main Components:
 
 # Import base classes that don't require PyQt5
 from .overlay_modes import OverlayMode, OverlayPosition
-from .overlay_themes import OverlayTheme, OVERLAY_THEMES
+from .overlay_themes import OVERLAY_THEMES, OverlayTheme
 
 # Try to import PyQt5-dependent classes
 try:
-    from .overlay_window import AIOverlay
     from .overlay_chat import OverlayChatBridge
+    from .overlay_window import AIOverlay
     HAS_PYQT = True
 except ImportError:
     AIOverlay = None

@@ -55,8 +55,8 @@ class ResponseTemplate:
     template: str
     description: str = ""
     category: str = "general"
-    variables: List[str] = field(default_factory=list)
-    required_vars: List[str] = field(default_factory=list)
+    variables: list[str] = field(default_factory=list)
+    required_vars: list[str] = field(default_factory=list)
     output_format: OutputFormat = OutputFormat.MARKDOWN
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
@@ -65,7 +65,7 @@ class ResponseTemplate:
             # Auto-detect variables from template
             self.variables = list(set(re.findall(r'\{(\w+)\}', self.template)))
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "name": self.name,
@@ -79,7 +79,7 @@ class ResponseTemplate:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ResponseTemplate':
+    def from_dict(cls, data: dict[str, Any]) -> ResponseTemplate:
         if "output_format" in data:
             data["output_format"] = OutputFormat(data["output_format"])
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
@@ -401,7 +401,7 @@ class ResponseTemplates:
     Manage and apply response templates.
     """
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Initialize response templates.
         
@@ -412,8 +412,8 @@ class ResponseTemplates:
         self._data_path.mkdir(parents=True, exist_ok=True)
         self._templates_file = self._data_path / "response_templates.json"
         
-        self._templates: Dict[str, ResponseTemplate] = {}
-        self._custom_formatters: Dict[str, Callable[[str], str]] = {}
+        self._templates: dict[str, ResponseTemplate] = {}
+        self._custom_formatters: dict[str, Callable[[str], str]] = {}
         
         # Load built-in templates
         for tmpl in BUILTIN_TEMPLATES:
@@ -426,7 +426,7 @@ class ResponseTemplates:
         """Load custom templates from disk."""
         if self._templates_file.exists():
             try:
-                with open(self._templates_file, 'r', encoding='utf-8') as f:
+                with open(self._templates_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for tmpl_data in data.get("templates", []):
                         tmpl = ResponseTemplate.from_dict(tmpl_data)
@@ -450,32 +450,32 @@ class ResponseTemplates:
         except Exception as e:
             logger.error(f"Failed to save custom templates: {e}")
     
-    def get(self, template_id: str) -> Optional[ResponseTemplate]:
+    def get(self, template_id: str) -> ResponseTemplate | None:
         """Get a template by ID."""
         return self._templates.get(template_id)
     
     def list_templates(
         self,
-        category: Optional[str] = None
-    ) -> List[ResponseTemplate]:
+        category: str | None = None
+    ) -> list[ResponseTemplate]:
         """List all templates, optionally filtered by category."""
         templates = list(self._templates.values())
         if category:
             templates = [t for t in templates if t.category == category]
         return sorted(templates, key=lambda t: t.name)
     
-    def get_categories(self) -> List[str]:
+    def get_categories(self) -> list[str]:
         """Get all template categories."""
-        return sorted(set(t.category for t in self._templates.values()))
+        return sorted({t.category for t in self._templates.values()})
     
     def add(
         self,
         template_id: str,
         template: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         description: str = "",
         category: str = "custom",
-        required_vars: Optional[List[str]] = None,
+        required_vars: list[str] | None = None,
         output_format: OutputFormat = OutputFormat.MARKDOWN
     ) -> ResponseTemplate:
         """
@@ -524,8 +524,8 @@ class ResponseTemplates:
     def apply(
         self,
         template_id: str,
-        variables: Dict[str, Any],
-        output_format: Optional[OutputFormat] = None,
+        variables: dict[str, Any],
+        output_format: OutputFormat | None = None,
         strict: bool = False
     ) -> str:
         """
@@ -718,10 +718,10 @@ class ResponseTemplates:
 
 
 # Singleton instance
-_templates_instance: Optional[ResponseTemplates] = None
+_templates_instance: ResponseTemplates | None = None
 
 
-def get_response_templates(data_path: Optional[Path] = None) -> ResponseTemplates:
+def get_response_templates(data_path: Path | None = None) -> ResponseTemplates:
     """Get or create the singleton response templates."""
     global _templates_instance
     if _templates_instance is None:
@@ -730,11 +730,11 @@ def get_response_templates(data_path: Optional[Path] = None) -> ResponseTemplate
 
 
 # Convenience functions
-def apply_template(template_id: str, variables: Dict[str, Any]) -> str:
+def apply_template(template_id: str, variables: dict[str, Any]) -> str:
     """Apply a response template."""
     return get_response_templates().apply(template_id, variables)
 
 
-def list_templates(category: Optional[str] = None) -> List[ResponseTemplate]:
+def list_templates(category: str | None = None) -> list[ResponseTemplate]:
     """List available templates."""
     return get_response_templates().list_templates(category)

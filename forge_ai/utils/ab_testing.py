@@ -11,16 +11,16 @@ Provides experiment infrastructure for:
 Part of the ForgeAI testing utilities.
 """
 
+import hashlib
 import json
 import random
-import hashlib
+import threading
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
-from pathlib import Path
 from enum import Enum
-import threading
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 
 class ExperimentStatus(Enum):
@@ -46,7 +46,7 @@ class Variant:
     id: str
     name: str
     weight: float = 1.0
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
     
     # Metrics
     impressions: int = 0
@@ -63,7 +63,7 @@ class Variant:
         """Calculate average conversion value."""
         return self.total_value / self.conversions if self.conversions > 0 else 0.0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -84,7 +84,7 @@ class Experiment:
     id: str
     name: str
     description: str = ""
-    variants: List[Variant] = field(default_factory=list)
+    variants: list[Variant] = field(default_factory=list)
     status: ExperimentStatus = ExperimentStatus.DRAFT
     allocation: AllocationStrategy = AllocationStrategy.HASH
     
@@ -97,7 +97,7 @@ class Experiment:
     completed_at: Optional[datetime] = None
     
     # Assignment tracking
-    _assignments: Dict[str, str] = field(default_factory=dict)
+    _assignments: dict[str, str] = field(default_factory=dict)
     _sequential_index: int = 0
     
     def add_variant(
@@ -105,7 +105,7 @@ class Experiment:
         id: str,
         name: str,
         weight: float = 1.0,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[dict[str, Any]] = None
     ) -> Variant:
         """Add a variant to the experiment."""
         variant = Variant(
@@ -269,7 +269,7 @@ class Experiment:
             key=lambda v: getattr(v, metric, 0.0)
         )
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get experiment statistics."""
         total_impressions = sum(v.impressions for v in self.variants)
         total_conversions = sum(v.conversions for v in self.variants)
@@ -287,7 +287,7 @@ class Experiment:
             "completed_at": self.completed_at.isoformat() if self.completed_at else None
         }
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert experiment to dictionary."""
         return {
             "id": self.id,
@@ -305,7 +305,7 @@ class Experiment:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Experiment':
+    def from_dict(cls, data: dict[str, Any]) -> 'Experiment':
         """Create experiment from dictionary."""
         exp = cls(
             id=data["id"],
@@ -381,7 +381,7 @@ class ABTestingManager:
         Args:
             persistence_file: Path to persist experiments
         """
-        self._experiments: Dict[str, Experiment] = {}
+        self._experiments: dict[str, Experiment] = {}
         self._persistence_file = Path(persistence_file) if persistence_file else None
         self._lock = threading.Lock()
         
@@ -398,7 +398,7 @@ class ABTestingManager:
         id: str,
         name: str,
         description: str = "",
-        variants: Optional[List[Dict[str, Any]]] = None,
+        variants: Optional[list[dict[str, Any]]] = None,
         allocation: AllocationStrategy = AllocationStrategy.HASH,
         target_percentage: float = 100.0
     ) -> Experiment:
@@ -446,7 +446,7 @@ class ABTestingManager:
     def list_experiments(
         self,
         status: Optional[ExperimentStatus] = None
-    ) -> List[Experiment]:
+    ) -> list[Experiment]:
         """List all experiments, optionally filtered by status."""
         exps = list(self._experiments.values())
         if status:
@@ -546,12 +546,12 @@ class ABTestingManager:
             return True
         return False
     
-    def get_stats(self, experiment_id: str) -> Optional[Dict[str, Any]]:
+    def get_stats(self, experiment_id: str) -> Optional[dict[str, Any]]:
         """Get experiment statistics."""
         exp = self._experiments.get(experiment_id)
         return exp.get_stats() if exp else None
     
-    def get_user_variants(self, user_id: str) -> Dict[str, str]:
+    def get_user_variants(self, user_id: str) -> dict[str, str]:
         """
         Get all variants assigned to a user.
         
@@ -657,12 +657,12 @@ class FeatureFlag:
         self._enabled_globally = False
         return self
     
-    def enable_for_users(self, user_ids: List[str]) -> 'FeatureFlag':
+    def enable_for_users(self, user_ids: list[str]) -> 'FeatureFlag':
         """Enable for specific users."""
         self._enabled_users.update(user_ids)
         return self
     
-    def disable_for_users(self, user_ids: List[str]) -> 'FeatureFlag':
+    def disable_for_users(self, user_ids: list[str]) -> 'FeatureFlag':
         """Disable for specific users."""
         self._disabled_users.update(user_ids)
         return self
@@ -703,7 +703,7 @@ class FeatureFlag:
         
         return self.default
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -732,7 +732,7 @@ def get_ab_manager() -> ABTestingManager:
 def create_experiment(
     id: str,
     name: str,
-    variants: List[Dict[str, Any]],
+    variants: list[dict[str, Any]],
     **kwargs
 ) -> Experiment:
     """Create experiment via global manager."""

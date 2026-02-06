@@ -64,7 +64,7 @@ class DownloadProgress:
     state: DownloadState = DownloadState.PENDING
     speed: float = 0.0           # bytes per second
     eta: float = 0.0             # estimated time remaining in seconds
-    error: Optional[str] = None
+    error: str | None = None
     
     # Multi-file tracking
     current_file: int = 0
@@ -118,7 +118,7 @@ class ProgressCallback:
     
     def __init__(
         self,
-        callback: Optional[Callable[[DownloadProgress], None]] = None,
+        callback: Callable[[DownloadProgress], None] | None = None,
         show_cli: bool = True
     ):
         """
@@ -135,7 +135,7 @@ class ProgressCallback:
         self._start_time = 0.0
         self._last_update = 0.0
         self._last_downloaded = 0
-        self._pbar: Optional[Any] = None
+        self._pbar: Any | None = None
         self._tqdm_available = False
         self._rich_available = False
         
@@ -249,10 +249,10 @@ class DownloadTracker:
     
     def __init__(
         self,
-        callback: Optional[Callable[[DownloadProgress], None]] = None,
+        callback: Callable[[DownloadProgress], None] | None = None,
         show_cli: bool = True,
         gui_mode: bool = False,
-        cache_dir: Optional[Path] = None
+        cache_dir: Path | None = None
     ):
         """
         Initialize download tracker.
@@ -268,9 +268,9 @@ class DownloadTracker:
         self.gui_mode = gui_mode
         self.cache_dir = cache_dir
         
-        self._progress_callback: Optional[ProgressCallback] = None
+        self._progress_callback: ProgressCallback | None = None
         self._cancelled = False
-        self._qt_signal: Optional[Any] = None
+        self._qt_signal: Any | None = None
     
     def set_progress_signal(self, signal: Any) -> None:
         """
@@ -292,10 +292,10 @@ class DownloadTracker:
     def download_model(
         self,
         model_id: str,
-        revision: Optional[str] = None,
-        token: Optional[str] = None,
+        revision: str | None = None,
+        token: str | None = None,
         resume: bool = True
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """
         Download a HuggingFace model with progress tracking.
         
@@ -309,9 +309,12 @@ class DownloadTracker:
             Path to downloaded model, or None if failed
         """
         try:
-            from huggingface_hub import snapshot_download, hf_hub_download
-            from huggingface_hub.utils import disable_progress_bars, enable_progress_bars
-            
+            from huggingface_hub import hf_hub_download, snapshot_download
+            from huggingface_hub.utils import (
+                disable_progress_bars,
+                enable_progress_bars,
+            )
+
             # Disable default progress bars if we're handling it
             if not self.show_cli:
                 disable_progress_bars()
@@ -325,7 +328,7 @@ class DownloadTracker:
             logger.info(f"Downloading model: {model_id}")
             
             # Set up download kwargs
-            download_kwargs: Dict[str, Any] = {
+            download_kwargs: dict[str, Any] = {
                 "repo_id": model_id,
                 "resume_download": resume,
             }
@@ -363,9 +366,9 @@ class DownloadTracker:
         self,
         repo_id: str,
         filename: str,
-        revision: Optional[str] = None,
-        token: Optional[str] = None
-    ) -> Optional[Path]:
+        revision: str | None = None,
+        token: str | None = None
+    ) -> Path | None:
         """
         Download a specific file from HuggingFace.
         
@@ -387,7 +390,7 @@ class DownloadTracker:
             )
             self._progress_callback.set_file_name(filename)
             
-            download_kwargs: Dict[str, Any] = {
+            download_kwargs: dict[str, Any] = {
                 "repo_id": repo_id,
                 "filename": filename,
             }
@@ -417,8 +420,8 @@ class DownloadTracker:
     def is_model_cached(self, model_id: str ) -> bool:
         """Check if a model is already downloaded."""
         try:
-            from huggingface_hub import try_to_load_from_cache, scan_cache_dir
-            
+            from huggingface_hub import scan_cache_dir, try_to_load_from_cache
+
             # Check cache
             cache_info = scan_cache_dir(self.cache_dir)
             for repo in cache_info.repos:
@@ -442,7 +445,7 @@ class DownloadTracker:
         except Exception:
             return 0
     
-    def clear_cache(self, model_id: Optional[str] = None) -> bool:
+    def clear_cache(self, model_id: str | None = None) -> bool:
         """
         Clear download cache.
         
@@ -453,7 +456,7 @@ class DownloadTracker:
             True if successful
         """
         try:
-            from huggingface_hub import scan_cache_dir, delete_revisions
+            from huggingface_hub import delete_revisions, scan_cache_dir
             
             cache_info = scan_cache_dir(self.cache_dir)
             
@@ -472,8 +475,8 @@ class DownloadTracker:
 def download_with_progress(
     model_id: str,
     show_progress: bool = True,
-    callback: Optional[Callable[[DownloadProgress], None]] = None
-) -> Optional[Path]:
+    callback: Callable[[DownloadProgress], None] | None = None
+) -> Path | None:
     """
     Convenience function to download a model with progress.
     
@@ -522,7 +525,7 @@ def get_download_size(model_id: str) -> int:
         return 0
 
 
-def list_model_files(model_id: str) -> List[Dict[str, Any]]:
+def list_model_files(model_id: str) -> list[dict[str, Any]]:
     """
     List files in a model repository.
     
@@ -563,11 +566,15 @@ def create_download_widget():
         QWidget subclass or None if PyQt5 not available
     """
     try:
+        from PyQt5.QtCore import QObject, pyqtSignal
         from PyQt5.QtWidgets import (
-            QWidget, QVBoxLayout, QHBoxLayout,
-            QProgressBar, QLabel, QPushButton
+            QHBoxLayout,
+            QLabel,
+            QProgressBar,
+            QPushButton,
+            QVBoxLayout,
+            QWidget,
         )
-        from PyQt5.QtCore import pyqtSignal, QObject
         
         class DownloadWidget(QWidget):
             """Widget showing download progress."""

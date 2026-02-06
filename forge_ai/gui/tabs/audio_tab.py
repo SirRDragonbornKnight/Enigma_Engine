@@ -7,28 +7,38 @@ Providers:
   - REPLICATE: Cloud audio generation (requires API key)
 """
 
+import logging
 import os
 import time
-import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QGroupBox, QSlider, QFileDialog, QLineEdit, QCheckBox
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QFileDialog,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QSlider,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 from ...config import CONFIG
-from .output_helpers import open_file_in_explorer, open_in_default_viewer, open_folder
+from .output_helpers import open_file_in_explorer, open_folder, open_in_default_viewer
 from .shared_components import NoScrollComboBox, disable_scroll_on_combos
 
 # Output directory
@@ -131,7 +141,7 @@ class LocalTTS:
         else:
             self.engine.setProperty('volume', volume)
     
-    def speak(self, text: str) -> Dict[str, Any]:
+    def speak(self, text: str) -> dict[str, Any]:
         """Speak text directly (no file)."""
         if not self.is_loaded:
             return {"success": False, "error": "TTS not loaded"}
@@ -146,7 +156,7 @@ class LocalTTS:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, text: str, **kwargs) -> dict[str, Any]:
         """Generate audio file from text."""
         if not self.is_loaded:
             return {"success": False, "error": "TTS not loaded"}
@@ -221,7 +231,7 @@ class ElevenLabsTTS:
         if 0 <= index < len(self.voices):
             self.current_voice_id = self.voices[index][0]
     
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, text: str, **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "ElevenLabs not loaded"}
         
@@ -276,7 +286,7 @@ class ReplicateAudio:
         self.client = None
         self.is_loaded = False
     
-    def generate(self, text: str, **kwargs) -> Dict[str, Any]:
+    def generate(self, text: str, **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -486,7 +496,7 @@ class AudioTab(QWidget):
         
         # Voice Preset selector (from shared components)
         try:
-            from .shared_components import PresetSelector, STYLE_PRESETS
+            from .shared_components import STYLE_PRESETS, PresetSelector
             
             preset_row = QHBoxLayout()
             self.voice_preset = PresetSelector("audio", self)

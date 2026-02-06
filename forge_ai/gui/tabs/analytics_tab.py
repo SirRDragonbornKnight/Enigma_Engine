@@ -9,21 +9,34 @@ Features:
   - Visual charts and graphs
 """
 
-import os
 import json
 import logging
-from pathlib import Path
-from datetime import datetime, timedelta
+import os
 from collections import defaultdict
-from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from PyQt5.QtCore import QDate, Qt, QTimer
+from PyQt5.QtGui import QColor, QFont, QPainter, QPen
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QGroupBox, QHeaderView,
-    QTabWidget, QDateEdit, QProgressBar, QFrame,
-    QScrollArea, QGridLayout, QSizePolicy
+    QDateEdit,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, QDate, QTimer
-from PyQt5.QtGui import QFont, QPainter, QColor, QPen
 
 from .shared_components import NoScrollComboBox
 
@@ -70,7 +83,7 @@ class AnalyticsRecorder:
                 try:
                     data = json.loads(TOOL_USAGE_FILE.read_text())
                     entries = data.get("entries", [])
-                except:
+                except json.JSONDecodeError:
                     pass
             
             entries.append({
@@ -96,7 +109,7 @@ class AnalyticsRecorder:
                 try:
                     data = json.loads(RESPONSE_TIMES_FILE.read_text())
                     entries = data.get("entries", [])
-                except:
+                except json.JSONDecodeError:
                     pass
             
             entries.append({
@@ -121,7 +134,7 @@ class AnalyticsRecorder:
             if SESSION_STATS_FILE.exists():
                 try:
                     stats = json.loads(SESSION_STATS_FILE.read_text())
-                except:
+                except json.JSONDecodeError:
                     pass
             
             stats["total_messages"] = stats.get("total_messages", 0) + 1
@@ -144,7 +157,7 @@ class AnalyticsRecorder:
             if SESSION_STATS_FILE.exists():
                 try:
                     stats = json.loads(SESSION_STATS_FILE.read_text())
-                except:
+                except json.JSONDecodeError:
                     pass
             
             stats["models_trained"] = stats.get("models_trained", 0) + 1
@@ -173,7 +186,7 @@ class AnalyticsRecorder:
                 if entries:
                     times = [e.get("response_time_ms", 0) for e in entries[-100:]]
                     return sum(times) / len(times) if times else 0
-        except:
+        except (json.JSONDecodeError, KeyError, TypeError):
             pass
         return 0
 
@@ -518,7 +531,7 @@ class AnalyticsTab(QWidget):
         
         if TOOL_USAGE_FILE.exists():
             try:
-                with open(TOOL_USAGE_FILE, 'r') as f:
+                with open(TOOL_USAGE_FILE) as f:
                     data = json.load(f)
                     for entry in data.get("entries", []):
                         entry_date = datetime.fromisoformat(entry.get("timestamp", "2000-01-01"))
@@ -557,7 +570,7 @@ class AnalyticsTab(QWidget):
         
         if SESSION_STATS_FILE.exists():
             try:
-                with open(SESSION_STATS_FILE, 'r') as f:
+                with open(SESSION_STATS_FILE) as f:
                     loaded = json.load(f)
                     stats.update(loaded)
             except Exception as e:
@@ -616,7 +629,7 @@ class AnalyticsTab(QWidget):
                             last_used_str = f"{delta.seconds // 60}m ago"
                         else:
                             last_used_str = "Just now"
-                    except:
+                    except ValueError:
                         last_used_str = ts[:16]
             
             self.tool_table.setItem(row, 0, QTableWidgetItem(tool))
@@ -639,7 +652,7 @@ class AnalyticsTab(QWidget):
                 try:
                     dt = datetime.fromisoformat(ts)
                     date_str = dt.strftime("%Y-%m-%d %H:%M")
-                except:
+                except ValueError:
                     date_str = ts[:16]
             else:
                 date_str = "Unknown"

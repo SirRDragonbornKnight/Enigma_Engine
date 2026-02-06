@@ -102,7 +102,7 @@ class EventBus:
     communicate through events without direct dependencies.
     """
     
-    _instance: Optional['EventBus'] = None
+    _instance: EventBus | None = None
     _initialized: bool = False
     
     def __new__(cls):
@@ -118,22 +118,22 @@ class EventBus:
         EventBus._initialized = True
         
         # Subscriptions by exact topic
-        self._subscriptions: Dict[str, List[Subscription]] = defaultdict(list)
+        self._subscriptions: dict[str, list[Subscription]] = defaultdict(list)
         
         # Pattern subscriptions (wildcards)
-        self._pattern_subscriptions: List[Subscription] = []
+        self._pattern_subscriptions: list[Subscription] = []
         
         # Thread safety
         self._lock = threading.RLock()
         
         # Event history for debugging
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
         self._history_size = 100
         self._record_history = False
         
         # Async event loop for async handlers
-        self._async_loop: Optional[asyncio.AbstractEventLoop] = None
-        self._async_thread: Optional[threading.Thread] = None
+        self._async_loop: asyncio.AbstractEventLoop | None = None
+        self._async_thread: threading.Thread | None = None
         
         logger.debug("EventBus initialized")
     
@@ -201,7 +201,7 @@ class EventBus:
     def publish(
         self,
         event_type: str,
-        event: Union[Event, Dict[str, Any], None] = None,
+        event: Event | dict[str, Any] | None = None,
         **kwargs
     ) -> int:
         """
@@ -308,7 +308,7 @@ class EventBus:
         event_type: str = None,
         since: float = None,
         limit: int = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get event history.
         
@@ -354,7 +354,7 @@ class EventBus:
         
         return False
     
-    def list_subscriptions(self) -> Dict[str, int]:
+    def list_subscriptions(self) -> dict[str, int]:
         """List all subscribed event patterns and their handler counts."""
         with self._lock:
             result = {}
@@ -378,7 +378,7 @@ class EventBus:
 # Global access and decorators
 # =============================================================================
 
-_bus: Optional[EventBus] = None
+_bus: EventBus | None = None
 
 
 def get_event_bus() -> EventBus:
@@ -389,7 +389,7 @@ def get_event_bus() -> EventBus:
     return _bus
 
 
-def publish(event_type: str, event: Union[Event, Dict, None] = None, **kwargs) -> int:
+def publish(event_type: str, event: Event | dict | None = None, **kwargs) -> int:
     """Convenience function to publish an event."""
     return get_event_bus().publish(event_type, event, **kwargs)
 
@@ -450,7 +450,7 @@ class ModelEvent(Event):
     """Event related to AI models."""
     model_name: str = ""
     action: str = ""  # "loaded", "unloaded", "generated"
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -472,7 +472,7 @@ class VoiceEvent(Event):
 class SystemEvent(Event):
     """System-level events."""
     action: str = ""  # "startup", "shutdown", "error"
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================

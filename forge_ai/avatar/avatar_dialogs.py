@@ -9,26 +9,51 @@ Provides easy-to-use dialogs for:
 
 import os
 from pathlib import Path
-from typing import Optional, List, Dict, Callable, Any
+from typing import Any, Callable, Dict, List, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-        QLabel, QPushButton, QFileDialog, QLineEdit,
-        QGroupBox, QScrollArea, QWidget,
-        QFrame, QTextEdit, QProgressBar, QMessageBox,
-        QTabWidget, QListWidget, QListWidgetItem, QStackedWidget
+    from PyQt5.QtCore import QMimeData, QSize, Qt, QTimer, pyqtSignal
+    from PyQt5.QtGui import (
+        QColor,
+        QDragEnterEvent,
+        QDropEvent,
+        QIcon,
+        QPainter,
+        QPixmap,
     )
-    from PyQt5.QtCore import Qt, pyqtSignal, QMimeData, QSize, QTimer
-    from PyQt5.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QIcon, QPainter, QColor
+    from PyQt5.QtWidgets import (
+        QDialog,
+        QFileDialog,
+        QFrame,
+        QGridLayout,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QListWidgetItem,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QScrollArea,
+        QStackedWidget,
+        QTabWidget,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
+
     from ..gui.tabs.shared_components import NoScrollComboBox
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
 
 from .avatar_bundle import (
-    AvatarBundle, AvatarManifest, AvatarBundleCreator,
-    install_avatar_bundle, list_installed_avatars
+    AvatarBundle,
+    AvatarBundleCreator,
+    AvatarManifest,
+    install_avatar_bundle,
+    list_installed_avatars,
 )
 
 
@@ -448,7 +473,7 @@ class AvatarCard(QFrame):
     
     clicked = pyqtSignal(dict)  # Emits avatar info dict
     
-    def __init__(self, avatar_info: Dict[str, Any], parent=None):
+    def __init__(self, avatar_info: dict[str, Any], parent=None):
         super().__init__(parent)
         self.avatar_info = avatar_info
         self._setup_ui()
@@ -539,7 +564,7 @@ class AvatarPickerDialog(QDialog):
         self.setWindowTitle("Select Avatar")
         self.setMinimumSize(700, 500)
         self._avatars_dir = avatars_dir
-        self._selected_avatar: Optional[Dict] = None
+        self._selected_avatar: Optional[dict] = None
         self._setup_ui()
         self._load_avatars()
     
@@ -665,7 +690,7 @@ class AvatarPickerDialog(QDialog):
         # Populate grid
         self._populate_grid(avatars)
     
-    def _populate_grid(self, avatars: List[Dict], layout: Optional[QGridLayout] = None):
+    def _populate_grid(self, avatars: list[dict], layout: Optional[QGridLayout] = None):
         """Populate a grid with avatar cards."""
         if layout is None:
             layout = self.grid_layout
@@ -708,7 +733,7 @@ class AvatarPickerDialog(QDialog):
         
         self._populate_grid(filtered)
     
-    def _on_avatar_clicked(self, avatar_info: Dict):
+    def _on_avatar_clicked(self, avatar_info: dict):
         """Handle avatar card click."""
         self._selected_avatar = avatar_info
         
@@ -736,8 +761,8 @@ class AvatarPickerDialog(QDialog):
     def _generate_samples(self):
         """Generate sample avatars."""
         try:
-            from .sample_avatars import generate_sample_avatars
             from ..config import CONFIG
+            from .sample_avatars import generate_sample_avatars
             
             output_dir = Path(CONFIG["data_dir"]) / "avatar" / "samples"
             avatars = generate_sample_avatars(str(output_dir))
@@ -769,7 +794,7 @@ class AvatarPickerDialog(QDialog):
             self.avatar_selected.emit(self._selected_avatar)
             self.accept()
     
-    def get_selected_avatar(self) -> Optional[Dict]:
+    def get_selected_avatar(self) -> Optional[dict]:
         """Get the selected avatar info."""
         return self._selected_avatar
 
@@ -790,7 +815,7 @@ def show_avatar_import_wizard(parent=None) -> Optional[str]:
     return None
 
 
-def show_avatar_picker(parent=None) -> Optional[Dict]:
+def show_avatar_picker(parent=None) -> Optional[dict]:
     """
     Show the avatar picker dialog and return selected avatar.
     

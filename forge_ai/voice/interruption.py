@@ -99,7 +99,7 @@ class InterruptionEvent:
     """Details of an interruption event."""
     
     timestamp: float                          # When interruption was detected
-    audio: Optional[np.ndarray] = None        # Captured audio (if enabled)
+    audio: np.ndarray | None = None        # Captured audio (if enabled)
     duration_ms: float = 0.0                  # Duration of speech so far
     energy: float = 0.0                       # RMS energy of interruption
     confirmed: bool = False                   # Whether speech was confirmed
@@ -122,12 +122,12 @@ class InterruptionHandler:
         self._last_interrupt_time = 0.0
         
         # Audio capture
-        self._captured_audio: List[np.ndarray] = []
+        self._captured_audio: list[np.ndarray] = []
         self._capture_lock = threading.Lock()
         
         # Ambient noise level (for auto-threshold)
         self._ambient_energy = 0.0
-        self._energy_samples: List[float] = []
+        self._energy_samples: list[float] = []
         
         # Speech detection state
         self._speech_start_time = 0.0
@@ -135,11 +135,11 @@ class InterruptionHandler:
         self._speech_sample_count = 0
         
         # Callbacks
-        self._interrupt_callbacks: List[Callable[[], None]] = []
-        self._speech_start_callbacks: List[Callable[[], None]] = []
+        self._interrupt_callbacks: list[Callable[[], None]] = []
+        self._speech_start_callbacks: list[Callable[[], None]] = []
         
         # TTS control reference (set externally)
-        self._tts_stop_func: Optional[Callable[[], None]] = None
+        self._tts_stop_func: Callable[[], None] | None = None
         
         # Thread safety
         self._lock = threading.Lock()
@@ -388,14 +388,14 @@ class InterruptionHandler:
         
         return True
     
-    def get_captured_audio(self) -> Optional[np.ndarray]:
+    def get_captured_audio(self) -> np.ndarray | None:
         """Get audio captured during interruption."""
         with self._capture_lock:
             if not self._captured_audio:
                 return None
             return np.concatenate(self._captured_audio)
     
-    def get_last_event(self) -> Optional[InterruptionEvent]:
+    def get_last_event(self) -> InterruptionEvent | None:
         """Get details of the last interruption."""
         with self._lock:
             if not self._interrupted:
@@ -438,7 +438,7 @@ class InterruptionHandler:
 
 
 # Global handler instance
-_handler: Optional[InterruptionHandler] = None
+_handler: InterruptionHandler | None = None
 
 
 def get_interruption_handler(config: InterruptionConfig = None) -> InterruptionHandler:
@@ -479,7 +479,7 @@ def was_interrupted() -> bool:
     return False
 
 
-def get_interrupted_audio() -> Optional[np.ndarray]:
+def get_interrupted_audio() -> np.ndarray | None:
     """Get audio captured during interruption."""
     if _handler:
         return _handler.get_captured_audio()

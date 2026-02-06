@@ -8,7 +8,7 @@ Prevents unauthorized or accidental execution of destructive operations.
 
 import logging
 from enum import Enum
-from typing import Dict, Set, Optional, Callable, Tuple
+from typing import Callable, Dict, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class ToolPermissionManager:
     def __init__(
         self,
         user_permission_level: PermissionLevel = PermissionLevel.WRITE,
-        confirmation_callback: Optional[Callable[[str, Dict], bool]] = None,
+        confirmation_callback: Optional[Callable[[str, dict], bool]] = None,
         auto_approve: bool = False
     ):
         """
@@ -100,17 +100,17 @@ class ToolPermissionManager:
         self.auto_approve = auto_approve
         
         # Custom permission overrides
-        self.permission_overrides: Dict[str, PermissionLevel] = {}
+        self.permission_overrides: dict[str, PermissionLevel] = {}
         
         # Tools that are explicitly blocked
-        self.blocked_tools: Set[str] = set()
+        self.blocked_tools: set[str] = set()
         
         # Audit log
         self.denied_attempts: list = []
         
         logger.info(f"ToolPermissionManager initialized (level={user_permission_level.name})")
     
-    def can_execute(self, tool_name: str, params: Optional[Dict] = None) -> Tuple[bool, Optional[str]]:
+    def can_execute(self, tool_name: str, params: Optional[dict] = None) -> tuple[bool, Optional[str]]:
         """
         Check if user can execute a tool.
         
@@ -162,7 +162,7 @@ class ToolPermissionManager:
     def request_confirmation(
         self,
         tool_name: str,
-        params: Dict
+        params: dict
     ) -> bool:
         """
         Request user confirmation for tool execution.
@@ -193,7 +193,7 @@ class ToolPermissionManager:
         logger.warning(f"Confirmation required for {tool_name} but no callback provided - denied")
         return False
     
-    def _log_denial(self, tool_name: str, params: Optional[Dict], reason: str):
+    def _log_denial(self, tool_name: str, params: Optional[dict], reason: str):
         """Log a denied tool execution attempt."""
         from datetime import datetime
         
@@ -237,7 +237,7 @@ class ToolPermissionManager:
         self.permission_overrides[tool_name] = level
         logger.info(f"Set permission for {tool_name}: {level.name}")
     
-    def get_available_tools(self) -> Dict[str, PermissionLevel]:
+    def get_available_tools(self) -> dict[str, PermissionLevel]:
         """
         Get all tools available at current permission level.
         
@@ -257,7 +257,7 @@ class ToolPermissionManager:
         
         return available
     
-    def get_statistics(self) -> Dict:
+    def get_statistics(self) -> dict:
         """Get permission system statistics."""
         all_tools = {**DEFAULT_TOOL_PERMISSIONS, **self.permission_overrides}
         
@@ -274,7 +274,7 @@ class ToolPermissionManager:
 
 
 # Default confirmation callback (console-based)
-def default_confirmation_callback(tool_name: str, params: Dict) -> bool:
+def default_confirmation_callback(tool_name: str, params: dict) -> bool:
     """
     Default confirmation callback using console input.
     

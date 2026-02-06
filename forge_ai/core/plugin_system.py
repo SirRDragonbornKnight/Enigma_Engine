@@ -17,13 +17,13 @@ Plugins are discovered from:
 import importlib
 import importlib.util
 import inspect
+import json
 import logging
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union
-import sys
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class PluginMetadata:
     description: str = ""
     author: str = ""
     homepage: str = ""
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     forge_version: str = ">=0.1.0"  # Minimum Forge_AI version
     enabled: bool = True
     priority: int = 100  # Lower = higher priority
@@ -91,7 +91,7 @@ class ForgePlugin(ABC):
     
     def __init__(self):
         self._initialized = False
-        self._context: Dict[str, Any] = {}
+        self._context: dict[str, Any] = {}
     
     @abstractmethod
     def initialize(self) -> None:
@@ -102,11 +102,11 @@ class ForgePlugin(ABC):
         """Cleanup the plugin. Called when plugin is unloaded."""
         pass
     
-    def configure(self, config: Dict[str, Any]) -> None:
+    def configure(self, config: dict[str, Any]) -> None:
         """Configure the plugin with runtime settings."""
         self._context.update(config)
     
-    def get_capabilities(self) -> List[str]:
+    def get_capabilities(self) -> list[str]:
         """Return list of capabilities this plugin provides."""
         return []
     
@@ -151,8 +151,8 @@ class TrainerPlugin(ForgePlugin):
         self,
         model: Any,
         dataset: Any,
-        config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        config: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Train a model.
         
@@ -161,7 +161,7 @@ class TrainerPlugin(ForgePlugin):
         """
         pass
     
-    def validate(self, model: Any, dataset: Any) -> Dict[str, Any]:
+    def validate(self, model: Any, dataset: Any) -> dict[str, Any]:
         """Validate model on dataset."""
         return {}
 
@@ -172,7 +172,7 @@ class ModelPlugin(ForgePlugin):
     plugin_type = PluginType.MODEL
     
     @abstractmethod
-    def create_model(self, config: Dict[str, Any]) -> Any:
+    def create_model(self, config: dict[str, Any]) -> Any:
         """Create a model instance."""
         pass
     
@@ -192,7 +192,7 @@ class ToolPlugin(ForgePlugin):
     plugin_type = PluginType.TOOL
     
     @abstractmethod
-    def get_tool_definition(self) -> Dict[str, Any]:
+    def get_tool_definition(self) -> dict[str, Any]:
         """
         Return tool definition in OpenAI function format.
         
@@ -221,7 +221,7 @@ class HookPlugin(ForgePlugin):
     
     plugin_type = PluginType.HOOK
     
-    hook_points: List[str] = []  # e.g., ["pre_inference", "post_inference"]
+    hook_points: list[str] = []  # e.g., ["pre_inference", "post_inference"]
     
     def pre_inference(self, inputs: Any) -> Any:
         """Called before inference."""
@@ -256,10 +256,10 @@ class PluginManager:
         backends = manager.get_plugins_by_type(PluginType.BACKEND)
     """
     
-    def __init__(self, plugin_dirs: Optional[List[Path]] = None):
-        self._plugins: Dict[str, ForgePlugin] = {}
-        self._plugin_classes: Dict[str, Type[ForgePlugin]] = {}
-        self._hooks: Dict[str, List[HookPlugin]] = {}
+    def __init__(self, plugin_dirs: Optional[list[Path]] = None):
+        self._plugins: dict[str, ForgePlugin] = {}
+        self._plugin_classes: dict[str, type[ForgePlugin]] = {}
+        self._hooks: dict[str, list[HookPlugin]] = {}
         
         # Default plugin directories
         self._plugin_dirs = plugin_dirs or [
@@ -271,7 +271,7 @@ class PluginManager:
         for d in self._plugin_dirs:
             d.mkdir(parents=True, exist_ok=True)
     
-    def discover_plugins(self) -> List[str]:
+    def discover_plugins(self) -> list[str]:
         """
         Discover all available plugins.
         
@@ -290,7 +290,7 @@ class PluginManager:
         logger.info(f"Discovered {len(discovered)} plugins: {discovered}")
         return discovered
     
-    def _discover_from_directory(self, directory: Path) -> List[str]:
+    def _discover_from_directory(self, directory: Path) -> list[str]:
         """Discover plugins from a directory."""
         discovered = []
         
@@ -341,7 +341,7 @@ class PluginManager:
                 self._plugin_classes[plugin_name] = attr
                 logger.debug(f"Registered plugin class: {plugin_name}")
     
-    def _discover_from_entry_points(self) -> List[str]:
+    def _discover_from_entry_points(self) -> list[str]:
         """Discover plugins from installed packages."""
         discovered = []
         
@@ -371,7 +371,7 @@ class PluginManager:
     def load_plugin(
         self,
         name: str,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[dict[str, Any]] = None
     ) -> ForgePlugin:
         """
         Load and initialize a plugin.
@@ -435,21 +435,21 @@ class PluginManager:
         """Get a loaded plugin by name."""
         return self._plugins.get(name)
     
-    def get_plugins_by_type(self, plugin_type: str) -> List[ForgePlugin]:
+    def get_plugins_by_type(self, plugin_type: str) -> list[ForgePlugin]:
         """Get all loaded plugins of a specific type."""
         return [
             p for p in self._plugins.values()
             if p.plugin_type == plugin_type
         ]
     
-    def list_plugins(self) -> Dict[str, PluginMetadata]:
+    def list_plugins(self) -> dict[str, PluginMetadata]:
         """List all discovered plugins and their metadata."""
         return {
             name: cls.metadata
             for name, cls in self._plugin_classes.items()
         }
     
-    def list_loaded(self) -> List[str]:
+    def list_loaded(self) -> list[str]:
         """List currently loaded plugins."""
         return list(self._plugins.keys())
     
@@ -491,7 +491,7 @@ class PluginManager:
         if not path.exists():
             return
         
-        with open(path, 'r') as f:
+        with open(path) as f:
             state = json.load(f)
         
         for name in state.get('loaded', []):
@@ -514,7 +514,7 @@ def get_plugin_manager() -> PluginManager:
     return _plugin_manager
 
 
-def register_plugin(plugin_class: Type[ForgePlugin]) -> Type[ForgePlugin]:
+def register_plugin(plugin_class: type[ForgePlugin]) -> type[ForgePlugin]:
     """
     Decorator to register a plugin class.
     

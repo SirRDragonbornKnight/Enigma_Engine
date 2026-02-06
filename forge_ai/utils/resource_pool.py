@@ -31,16 +31,14 @@ Usage:
     )
 """
 
-import time
-import threading
 import logging
 import queue
+import threading
+import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from contextlib import contextmanager
-from typing import (
-    Any, Callable, Dict, List, Optional, TypeVar, Generic
-)
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +218,7 @@ class ResourcePool(Generic[T]):
             raise ValueError("Must provide factory or resource_factory")
         
         self._pool: queue.Queue[PooledResource[T]] = queue.Queue()
-        self._in_use: Dict[int, PooledResource[T]] = {}
+        self._in_use: dict[int, PooledResource[T]] = {}
         self._lock = threading.RLock()
         self._stats = PoolStats(name=self.config.name)
         
@@ -570,7 +568,7 @@ class ResourcePool(Generic[T]):
 
 
 # Global pool registry
-_pools: Dict[str, ResourcePool] = {}
+_pools: dict[str, ResourcePool] = {}
 _pools_lock = threading.Lock()
 
 
@@ -597,7 +595,7 @@ def unregister_pool(name: str) -> bool:
         return False
 
 
-def list_pools() -> Dict[str, dict]:
+def list_pools() -> dict[str, dict]:
     """List all pools and their stats."""
     with _pools_lock:
         return {

@@ -32,12 +32,12 @@ USAGE:
     print(answer.sources)
 """
 
-import logging
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Union, Tuple
-from dataclasses import dataclass, field
 import hashlib
 import json
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class Document:
     """A document in the RAG system."""
     id: str
     content: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     
     @property
     def source(self) -> str:
@@ -77,8 +77,8 @@ class Chunk:
     id: str
     document_id: str
     content: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    embedding: Optional[List[float]] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    embedding: Optional[list[float]] = None
     
     @property
     def source(self) -> str:
@@ -96,7 +96,7 @@ class SearchResult:
 class RAGResponse:
     """Response from RAG query."""
     text: str
-    sources: List[Chunk]
+    sources: list[Chunk]
     context: str
     query: str
 
@@ -137,7 +137,7 @@ class DocumentLoader:
         encodings = ['utf-8', 'latin-1', 'cp1252']
         for encoding in encodings:
             try:
-                with open(path, 'r', encoding=encoding) as f:
+                with open(path, encoding=encoding) as f:
                     return f.read()
             except UnicodeDecodeError:
                 continue
@@ -189,7 +189,7 @@ class TextChunker:
         self,
         chunk_size: int = 500,
         chunk_overlap: int = 50,
-        separators: Optional[List[str]] = None
+        separators: Optional[list[str]] = None
     ):
         """
         Initialize chunker.
@@ -203,12 +203,12 @@ class TextChunker:
         self.chunk_overlap = chunk_overlap
         self.separators = separators or ["\n\n", "\n", ". ", " ", ""]
     
-    def chunk(self, text: str) -> List[str]:
+    def chunk(self, text: str) -> list[str]:
         """Split text into chunks."""
         chunks = []
         
         # Recursive splitting
-        def split_recursive(text: str, separators: List[str]) -> List[str]:
+        def split_recursive(text: str, separators: list[str]) -> list[str]:
             if len(text) <= self.chunk_size:
                 return [text] if text.strip() else []
             
@@ -274,10 +274,10 @@ class SimpleEmbedder:
     
     def __init__(self, dim: int = 384):
         self.dim = dim
-        self.vocab: Dict[str, int] = {}
-        self._idf: Dict[str, float] = {}
+        self.vocab: dict[str, int] = {}
+        self._idf: dict[str, float] = {}
     
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """Simple tokenization."""
         import re
         text = text.lower()
@@ -288,7 +288,7 @@ class SimpleEmbedder:
         """Get consistent hash for word."""
         return int(hashlib.md5(word.encode()).hexdigest()[:8], 16)
     
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         """Generate embedding for text."""
         tokens = self._tokenize(text)
         
@@ -309,7 +309,7 @@ class SimpleEmbedder:
         
         return embedding
     
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts."""
         return [self.embed(text) for text in texts]
 
@@ -328,11 +328,11 @@ class SentenceTransformerEmbedder:
                 "Install with: pip install sentence-transformers"
             )
     
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         """Generate embedding."""
         return self.model.encode(text, convert_to_numpy=True).tolist()
     
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed multiple texts."""
         embeddings = self.model.encode(texts, convert_to_numpy=True)
         return embeddings.tolist()
@@ -350,15 +350,15 @@ class SimpleVectorStore:
     """
     
     def __init__(self):
-        self.chunks: Dict[str, Chunk] = {}
-        self.embeddings: Dict[str, List[float]] = {}
+        self.chunks: dict[str, Chunk] = {}
+        self.embeddings: dict[str, list[float]] = {}
     
-    def add(self, chunk: Chunk, embedding: List[float]):
+    def add(self, chunk: Chunk, embedding: list[float]):
         """Add a chunk with its embedding."""
         self.chunks[chunk.id] = chunk
         self.embeddings[chunk.id] = embedding
     
-    def search(self, query_embedding: List[float], top_k: int = 5) -> List[SearchResult]:
+    def search(self, query_embedding: list[float], top_k: int = 5) -> list[SearchResult]:
         """Search for similar chunks."""
         if not self.chunks:
             return []
@@ -377,7 +377,7 @@ class SimpleVectorStore:
         
         return results[:top_k]
     
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         """Compute cosine similarity."""
         dot = sum(x * y for x, y in zip(a, b))
         norm_a = sum(x * x for x in a) ** 0.5
@@ -412,7 +412,7 @@ class SimpleVectorStore:
         """Load from file."""
         path = Path(path)
         
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         
         self.chunks = {
@@ -476,7 +476,7 @@ class RAGPipeline:
         self.top_k = top_k
         
         # Track documents
-        self.documents: Dict[str, Document] = {}
+        self.documents: dict[str, Document] = {}
         
         # LLM for answer generation (lazy loaded)
         self._llm = None
@@ -495,7 +495,7 @@ class RAGPipeline:
     def add_document(
         self,
         path: Union[str, Path],
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ) -> Document:
         """
         Add a document to the RAG system.
@@ -552,9 +552,9 @@ class RAGPipeline:
     
     def add_documents(
         self,
-        paths: List[Union[str, Path]],
+        paths: list[Union[str, Path]],
         show_progress: bool = True
-    ) -> List[Document]:
+    ) -> list[Document]:
         """Add multiple documents."""
         documents = []
         
@@ -574,7 +574,7 @@ class RAGPipeline:
         self,
         text: str,
         source: str = "manual",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ) -> Document:
         """
         Add raw text to the RAG system.
@@ -619,7 +619,7 @@ class RAGPipeline:
         logger.info(f"Added text: {source} ({len(chunks)} chunks)")
         return doc
     
-    def retrieve(self, query: str, top_k: Optional[int] = None) -> List[SearchResult]:
+    def retrieve(self, query: str, top_k: Optional[int] = None) -> list[SearchResult]:
         """
         Retrieve relevant chunks for a query.
         
@@ -739,7 +739,7 @@ Answer:"""
         self.vector_store.load(path / "vectors.json")
         
         # Load documents
-        with open(path / "documents.json", 'r') as f:
+        with open(path / "documents.json") as f:
             docs_data = json.load(f)
         
         self.documents = {
@@ -753,7 +753,7 @@ Answer:"""
         
         logger.info(f"RAG index loaded from {path} ({len(self.documents)} documents)")
     
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get RAG system statistics."""
         return {
             "documents": len(self.documents),
@@ -767,7 +767,7 @@ Answer:"""
 # =============================================================================
 
 def create_rag_pipeline(
-    documents: Optional[List[Union[str, Path]]] = None,
+    documents: Optional[list[Union[str, Path]]] = None,
     use_gpu: bool = True,
     **kwargs
 ) -> RAGPipeline:

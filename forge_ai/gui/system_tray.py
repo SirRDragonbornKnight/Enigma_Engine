@@ -13,28 +13,56 @@ Features:
 """
 
 import logging
-import sys
 import os
-import time
 import subprocess
+import sys
 import threading
+import time
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from PyQt5.QtWidgets import QWidget
     from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import QWidget
 
 try:
-    from PyQt5.QtWidgets import (  # type: ignore[import]
-        QApplication, QSystemTrayIcon, QMenu, QAction, QWidget,
-        QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel,
-        QTextEdit, QFrame, QShortcut, QWidgetAction, QMessageBox
+    from PyQt5.QtCore import (  # type: ignore[import]
+        QObject,
+        QPoint,
+        Qt,
+        QThread,
+        QTimer,
+        pyqtSignal,
+        pyqtSlot,
     )
-    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot, QObject, QThread, QPoint  # type: ignore[import]
-    from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QKeySequence, QFont, QCursor  # type: ignore[import]
+    from PyQt5.QtGui import (  # type: ignore[import]
+        QColor,
+        QCursor,
+        QFont,
+        QIcon,
+        QKeySequence,
+        QPainter,
+        QPixmap,
+    )
+    from PyQt5.QtWidgets import (  # type: ignore[import]
+        QAction,
+        QApplication,
+        QFrame,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QMenu,
+        QMessageBox,
+        QPushButton,
+        QShortcut,
+        QSystemTrayIcon,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+        QWidgetAction,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -49,12 +77,13 @@ from ..config import CONFIG
 def get_current_model_name() -> str:
     """Get the name of the currently loaded AI model."""
     try:
-        from ..config import CONFIG
         # Try to get from gui_settings.json first (most accurate)
         import json
+
+        from ..config import CONFIG
         settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
         if settings_path.exists():
-            with open(settings_path, 'r') as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
                 if settings.get("last_model"):
                     return settings["last_model"]
@@ -183,7 +212,7 @@ class CommandProcessor(QObject):
         except Exception:
             pass
     
-    def process_command(self, command: str) -> Dict[str, Any]:
+    def process_command(self, command: str) -> dict[str, Any]:
         """
         Process a natural language command and determine action.
         
@@ -235,7 +264,7 @@ Response:"""
             "response": "I heard you, but my brain isn't loaded yet. Try again in a moment."
         }
     
-    def _detect_quick_action(self, command: str) -> Optional[Dict[str, Any]]:
+    def _detect_quick_action(self, command: str) -> Optional[dict[str, Any]]:
         """Detect quick actions from keywords."""
         
         # Open GUI
@@ -835,7 +864,7 @@ class QuickCommandOverlay(QWidget):
             settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             settings = {}
             if settings_path.exists():
-                with open(settings_path, 'r') as f:
+                with open(settings_path) as f:
                     settings = json.load(f)
             settings["mini_chat_always_on_top"] = new_on_top
             with open(settings_path, 'w') as f:
@@ -911,7 +940,7 @@ class QuickCommandOverlay(QWidget):
             from pathlib import Path
             settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             if settings_path.exists():
-                with open(settings_path, 'r') as f:
+                with open(settings_path) as f:
                     settings = json.load(f)
                     # Load user display name
                     self.user_display_name = settings.get("user_display_name", "You")
@@ -1050,7 +1079,13 @@ class QuickCommandOverlay(QWidget):
     
     def _show_close_dialog(self):
         """Show styled dialog with close options."""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QVBoxLayout,
+        )
         
         dialog = QDialog(self)
         dialog.setWindowTitle("Close Forge")
@@ -1264,9 +1299,10 @@ class QuickCommandOverlay(QWidget):
         """Speak the last AI response."""
         if hasattr(self, '_last_response') and self._last_response:
             try:
-                from forge_ai.voice import speak
                 # Clean the text for speaking
                 import re
+
+                from forge_ai.voice import speak
                 clean_text = re.sub(r'<[^>]+>', '', self._last_response)
                 clean_text = clean_text.strip()[:500]
                 if clean_text:
@@ -1296,8 +1332,8 @@ class QuickCommandOverlay(QWidget):
     def _open_avatar_controls(self):
         """Open avatar control menu with quick gestures."""
         try:
-            from PyQt5.QtWidgets import QMenu
             from PyQt5.QtCore import QPoint
+            from PyQt5.QtWidgets import QMenu
             
             menu = QMenu(self)
             menu.setStyleSheet("""
@@ -1510,7 +1546,7 @@ class QuickCommandOverlay(QWidget):
         """Reset avatar overlay position to center of primary screen."""
         try:
             from PyQt5.QtWidgets import QApplication
-            
+
             # Get primary screen geometry
             screen = QApplication.primaryScreen()
             if screen:
@@ -1542,7 +1578,7 @@ class QuickCommandOverlay(QWidget):
             
             # Save the new position
             try:
-                from ..avatar.persistence import save_position, get_persistence
+                from ..avatar.persistence import get_persistence, save_position
                 save_position(center_x, center_y)
                 
                 # Clear per-avatar positions
@@ -1568,9 +1604,10 @@ class QuickCommandOverlay(QWidget):
     def _do_voice_input(self):
         """Background voice recognition."""
         try:
-            import speech_recognition as sr
-            import sys
             import os
+            import sys
+
+            import speech_recognition as sr
             
             recognizer = sr.Recognizer()
             
@@ -1593,7 +1630,7 @@ class QuickCommandOverlay(QWidget):
             text = recognizer.recognize_google(audio)
             
             # Update UI from main thread
-            from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+            from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
             QMetaObject.invokeMethod(
                 self.command_input, "setText",
                 Qt.QueuedConnection, Q_ARG(str, text)
@@ -1604,7 +1641,7 @@ class QuickCommandOverlay(QWidget):
             )
             
         except Exception as e:
-            from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+            from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
             QMetaObject.invokeMethod(
                 self, "_voice_error",
                 Qt.QueuedConnection, Q_ARG(str, str(e))
@@ -1650,6 +1687,7 @@ class QuickCommandOverlay(QWidget):
         """Speak a response using TTS."""
         try:
             import re
+
             # Clean the text for speaking
             clean_text = re.sub(r'<[^>]+>', '', text)
             clean_text = re.sub(r'```[\s\S]*?```', '', clean_text)  # Remove code blocks
@@ -1806,7 +1844,7 @@ class QuickCommandOverlay(QWidget):
     def _start_native_resize(self, edge):
         """Start native OS window resize operation."""
         from PyQt5.QtCore import Qt as QtCore
-        
+
         # Map edge string to Qt edge flags
         edge_map = {
             'left': QtCore.LeftEdge,
@@ -1976,7 +2014,7 @@ class ForgeSystemTray(QObject):
         
         try:
             from pynput import keyboard
-            
+
             # Load hotkey settings
             hotkeys = self._load_hotkey_settings()
             
@@ -2419,7 +2457,7 @@ class ForgeSystemTray(QObject):
         chat_sync = ChatSync.instance()
         chat_sync.stop_generation()
     
-    def _execute_action(self, action: str, params: Dict[str, Any] = None):
+    def _execute_action(self, action: str, params: dict[str, Any] = None):
         """Execute an action."""
         params = params or {}
         
@@ -2480,6 +2518,7 @@ class ForgeSystemTray(QObject):
             # Position main window on the same monitor as Quick Chat
             if hasattr(self, 'overlay') and self.overlay and self.overlay.isVisible():
                 from PyQt5.QtGui import QGuiApplication
+
                 # Get the screen where Quick Chat is
                 overlay_center = self.overlay.frameGeometry().center()
                 screen = QGuiApplication.screenAt(overlay_center)
@@ -2601,7 +2640,7 @@ class ForgeSystemTray(QObject):
         # Try local SD first, fall back to placeholder with warning
         try:
             from .tabs.image_tab import get_provider
-            
+
             # Try local Stable Diffusion first
             provider = get_provider('local')
             if provider:
@@ -2648,7 +2687,7 @@ class ForgeSystemTray(QObject):
         self.tray_icon.showMessage("Video Generation", "Video generation requires the full GUI.", QSystemTrayIcon.Information, 2000)
         self._show_main_window()
     
-    def _handle_training(self, params: Dict):
+    def _handle_training(self, params: dict):
         """Handle training requests."""
         data = params.get("data", "")
         if params.get("start"):
@@ -2667,7 +2706,7 @@ class ForgeSystemTray(QObject):
             except Exception as e:
                 self.tray_icon.showMessage("Error", f"Failed to save: {e}", QSystemTrayIcon.Warning, 3000)
     
-    def _handle_file(self, params: Dict):
+    def _handle_file(self, params: dict):
         """Handle file operations."""
         path = params.get("path", "")
         operation = params.get("operation", "open")
@@ -2676,7 +2715,7 @@ class ForgeSystemTray(QObject):
             from .tabs.output_helpers import open_in_default_viewer
             open_in_default_viewer(path)
     
-    def _handle_avatar(self, params: Dict):
+    def _handle_avatar(self, params: dict):
         """Handle avatar commands."""
         show = params.get("show", True)
         try:
@@ -2714,7 +2753,7 @@ class ForgeSystemTray(QObject):
         )
         try:
             from ..tools.vision import capture_screen, get_screen_vision
-            
+
             # Capture screenshot
             result = capture_screen()
             if result.get("success"):
@@ -2778,7 +2817,7 @@ class ForgeSystemTray(QObject):
         """Start the voice listener."""
         try:
             from ..voice.listener import VoiceCommander, check_voice_available
-            
+
             # Check if voice is available
             status = check_voice_available()
             if not status["available"]:
@@ -2974,7 +3013,7 @@ class ForgeSystemTray(QObject):
             import json
             settings_path = Path(CONFIG.get("data_dir", "data")) / "gui_settings.json"
             if settings_path.exists():
-                with open(settings_path, 'r') as f:
+                with open(settings_path) as f:
                     settings = json.load(f)
                     return {
                         "command": settings.get("hotkey_command", defaults["command"]),
@@ -2996,7 +3035,7 @@ class ForgeSystemTray(QObject):
         # Load help content
         if help_path.exists():
             try:
-                with open(help_path, 'r', encoding='utf-8') as f:
+                with open(help_path, encoding='utf-8') as f:
                     content = f.read()
                 self.help_window.set_content(content)
             except Exception as e:

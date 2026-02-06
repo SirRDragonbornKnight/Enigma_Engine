@@ -12,10 +12,11 @@ Usage:
 """
 
 import logging
-import numpy as np
 from dataclasses import dataclass
-from typing import Optional, List
 from enum import Enum
+from typing import List, Optional
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ class VAD:
         threshold = max(self._noise_floor * 2, self.config.energy_threshold)
         return energy > threshold
     
-    def process_stream(self, audio: np.ndarray) -> List[tuple]:
+    def process_stream(self, audio: np.ndarray) -> list[tuple]:
         """
         Process audio stream and return speech segments.
         

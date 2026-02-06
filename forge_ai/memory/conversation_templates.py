@@ -61,22 +61,22 @@ class ConversationTemplate:
     name: str
     description: str
     category: str
-    messages: List[Dict[str, str]]  # List of {role, content} dicts
-    variables: List[str] = field(default_factory=list)  # {{variable}} placeholders
+    messages: list[dict[str, str]]  # List of {role, content} dicts
+    variables: list[str] = field(default_factory=list)  # {{variable}} placeholders
     
     # Optional system prompt
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
     
     # Metadata
     icon: str = ""  # Emoji or icon code
     author: str = ""
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     created_at: str = ""
     usage_count: int = 0
     
     # Configuration hints
-    suggested_temperature: Optional[float] = None
-    follow_up_suggestions: List[str] = field(default_factory=list)
+    suggested_temperature: float | None = None
+    follow_up_suggestions: list[str] = field(default_factory=list)
     
     def __post_init__(self):
         if not self.created_at:
@@ -86,9 +86,9 @@ class ConversationTemplate:
         if not self.variables:
             self.variables = self._extract_variables()
     
-    def _extract_variables(self) -> List[str]:
+    def _extract_variables(self) -> list[str]:
         """Extract {{variable}} placeholders from messages."""
-        variables: Set[str] = set()
+        variables: set[str] = set()
         pattern = r'\{\{(\w+)\}\}'
         
         for msg in self.messages:
@@ -101,7 +101,7 @@ class ConversationTemplate:
         
         return list(variables)
     
-    def fill_variables(self, **kwargs) -> List[Dict[str, str]]:
+    def fill_variables(self, **kwargs) -> list[dict[str, str]]:
         """
         Fill template variables and return messages.
         
@@ -130,7 +130,7 @@ class ConversationTemplate:
         
         return filled_messages
     
-    def get_system_prompt(self, **kwargs) -> Optional[str]:
+    def get_system_prompt(self, **kwargs) -> str | None:
         """Get system prompt with variables filled."""
         if not self.system_prompt:
             return None
@@ -141,18 +141,18 @@ class ConversationTemplate:
         
         return re.sub(r'\{\{\w+\}\}', '', result)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ConversationTemplate':
+    def from_dict(cls, data: dict[str, Any]) -> ConversationTemplate:
         """Create from dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 # Built-in templates
-BUILTIN_TEMPLATES: List[ConversationTemplate] = [
+BUILTIN_TEMPLATES: list[ConversationTemplate] = [
     # ===== Coding =====
     ConversationTemplate(
         name="Code Review",
@@ -476,7 +476,7 @@ class TemplateLibrary:
     Library for managing conversation templates.
     """
     
-    def __init__(self, library_path: Optional[Path] = None):
+    def __init__(self, library_path: Path | None = None):
         """
         Initialize the template library.
         
@@ -487,7 +487,7 @@ class TemplateLibrary:
         self._library_path.mkdir(parents=True, exist_ok=True)
         
         self._templates_file = self._library_path / "templates.json"
-        self._templates: Dict[str, ConversationTemplate] = {}
+        self._templates: dict[str, ConversationTemplate] = {}
         
         self._load_library()
     
@@ -501,7 +501,7 @@ class TemplateLibrary:
         # Load custom templates
         if self._templates_file.exists():
             try:
-                with open(self._templates_file, 'r', encoding='utf-8') as f:
+                with open(self._templates_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for item in data.get("templates", []):
                         template = ConversationTemplate.from_dict(item)
@@ -538,7 +538,7 @@ class TemplateLibrary:
     def save_template(
         self,
         name: str,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         description: str = "",
         category: str = "custom",
         **kwargs
@@ -571,7 +571,7 @@ class TemplateLibrary:
         logger.info(f"Saved template: {name}")
         return template
     
-    def get_template(self, name: str) -> Optional[ConversationTemplate]:
+    def get_template(self, name: str) -> ConversationTemplate | None:
         """Get a template by name."""
         key = self._normalize_name(name)
         template = self._templates.get(key)
@@ -581,7 +581,7 @@ class TemplateLibrary:
         
         return template
     
-    def get_starter(self, name: str, **variables) -> Optional[List[Dict[str, str]]]:
+    def get_starter(self, name: str, **variables) -> list[dict[str, str]] | None:
         """
         Get filled-in starter messages.
         
@@ -613,19 +613,19 @@ class TemplateLibrary:
         
         return False
     
-    def list_templates(self) -> List[ConversationTemplate]:
+    def list_templates(self) -> list[ConversationTemplate]:
         """Get all templates."""
         return list(self._templates.values())
     
-    def list_by_category(self, category: str) -> List[ConversationTemplate]:
+    def list_by_category(self, category: str) -> list[ConversationTemplate]:
         """Get templates in a category."""
         return [t for t in self._templates.values() if t.category == category]
     
-    def list_categories(self) -> List[str]:
+    def list_categories(self) -> list[str]:
         """Get all categories in use."""
-        return list(set(t.category for t in self._templates.values()))
+        return list({t.category for t in self._templates.values()})
     
-    def search(self, query: str) -> List[ConversationTemplate]:
+    def search(self, query: str) -> list[ConversationTemplate]:
         """Search templates by keyword."""
         if not query:
             return self.list_templates()
@@ -640,19 +640,19 @@ class TemplateLibrary:
         
         return results
     
-    def get_required_variables(self, name: str) -> List[str]:
+    def get_required_variables(self, name: str) -> list[str]:
         """Get the variables required by a template."""
         template = self.get_template(name)
         return template.variables if template else []
     
-    def export_template(self, name: str) -> Optional[str]:
+    def export_template(self, name: str) -> str | None:
         """Export a template as JSON."""
         template = self._templates.get(self._normalize_name(name))
         if template:
             return json.dumps(template.to_dict(), indent=2)
         return None
     
-    def import_template(self, json_data: str) -> Optional[ConversationTemplate]:
+    def import_template(self, json_data: str) -> ConversationTemplate | None:
         """Import a template from JSON."""
         try:
             data = json.loads(json_data)
@@ -667,10 +667,10 @@ class TemplateLibrary:
 
 
 # Singleton instance
-_template_library_instance: Optional[TemplateLibrary] = None
+_template_library_instance: TemplateLibrary | None = None
 
 
-def get_template_library(path: Optional[Path] = None) -> TemplateLibrary:
+def get_template_library(path: Path | None = None) -> TemplateLibrary:
     """Get or create the singleton library instance."""
     global _template_library_instance
     if _template_library_instance is None:
@@ -679,16 +679,16 @@ def get_template_library(path: Optional[Path] = None) -> TemplateLibrary:
 
 
 # Convenience functions
-def get_conversation_starter(name: str, **variables) -> Optional[List[Dict[str, str]]]:
+def get_conversation_starter(name: str, **variables) -> list[dict[str, str]] | None:
     """Quick access to a conversation starter."""
     return get_template_library().get_starter(name, **variables)
 
 
-def list_conversation_templates() -> List[str]:
+def list_conversation_templates() -> list[str]:
     """List all available template names."""
     return [t.name for t in get_template_library().list_templates()]
 
 
-def list_template_categories() -> List[str]:
+def list_template_categories() -> list[str]:
     """List all template categories."""
     return get_template_library().list_categories()

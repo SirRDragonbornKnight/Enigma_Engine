@@ -11,13 +11,14 @@ Removed (AI can generate these):
   - summarize_text → AI can summarize natively
 """
 
+import json
 import os
 import re
-import json
-import urllib.request
 import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 
@@ -38,7 +39,7 @@ class TranslateTextTool(Tool):
         'ko': 'Korean', 'zh': 'Chinese', 'ar': 'Arabic', 'hi': 'Hindi',
     }
     
-    def execute(self, text: str, target_language: str, source_language: str = "auto", **kwargs) -> Dict[str, Any]:
+    def execute(self, text: str, target_language: str, source_language: str = "auto", **kwargs) -> dict[str, Any]:
         try:
             # Use MyMemory API (free, no key)
             langpair = f"{source_language}|{target_language}"
@@ -68,7 +69,7 @@ class DetectLanguageTool(Tool):
     description = "Detect what language text is written in."
     parameters = {"text": "Text to analyze"}
     
-    def execute(self, text: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, text: str, **kwargs) -> dict[str, Any]:
         try:
             # Try langdetect library
             try:
@@ -105,7 +106,7 @@ class OCRImageTool(Tool):
         "language": "OCR language (default: eng)",
     }
     
-    def execute(self, path: str, language: str = "eng", **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, language: str = "eng", **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             if not path.exists():

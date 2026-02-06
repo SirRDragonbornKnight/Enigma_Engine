@@ -10,12 +10,12 @@ Provides:
 Run with: python -m forge_ai.comms.web_server
 """
 
-from datetime import datetime
-from typing import Dict, Optional, List, Callable
 import socket
+from datetime import datetime
+from typing import Callable, Dict, List, Optional
 
 try:
-    from flask import Flask, render_template_string, request, jsonify
+    from flask import Flask, jsonify, render_template_string, request
     from flask_cors import CORS
     FLASK_AVAILABLE = True
 except ImportError:
@@ -28,7 +28,6 @@ except ImportError:
     SOCKETIO_AVAILABLE = False
 
 from ..config import CONFIG
-
 
 # HTML template for web interface
 WEB_INTERFACE_HTML = '''
@@ -343,7 +342,7 @@ class WebServer:
         self._generate_func: Optional[Callable] = None
         
         # Message history
-        self.messages: List[Dict] = []
+        self.messages: list[dict] = []
         
         # Set up routes
         self._setup_routes()
@@ -414,9 +413,10 @@ class WebServer:
             url = f"http://{self._get_local_ip()}:{self.port}"
             
             try:
-                import qrcode
-                import io
                 import base64
+                import io
+
+                import qrcode
                 
                 qr = qrcode.QRCode(version=1, box_size=10, border=5)
                 qr.add_data(url)
@@ -503,7 +503,7 @@ class WebServer:
             ip = s.getsockname()[0]
             s.close()
             return ip
-        except (OSError, socket.error):
+        except OSError:
             return "localhost"
     
     def run(self, debug: bool = False):

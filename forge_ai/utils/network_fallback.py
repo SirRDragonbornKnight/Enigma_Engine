@@ -65,9 +65,9 @@ class QueuedRequest:
     id: str
     method: str
     url: str
-    headers: Dict[str, str] = field(default_factory=dict)
-    data: Optional[Any] = None
-    json_data: Optional[Dict] = None
+    headers: dict[str, str] = field(default_factory=dict)
+    data: Any | None = None
+    json_data: dict | None = None
     created_at: str = ""
     priority: int = 0  # Higher = more important
     max_retries: int = 3
@@ -89,7 +89,7 @@ class NetworkConfig:
     retry_backoff: float = 2.0  # Exponential backoff multiplier
     max_retry_delay: float = 300.0  # Max delay between retries (5 min)
     queue_persist: bool = True  # Persist queue to disk
-    test_hosts: List[str] = field(default_factory=lambda: [
+    test_hosts: list[str] = field(default_factory=lambda: [
         "8.8.8.8",  # Google DNS
         "1.1.1.1",  # Cloudflare DNS
         "www.google.com",
@@ -103,8 +103,8 @@ class NetworkManager:
     
     def __init__(
         self,
-        config: Optional[NetworkConfig] = None,
-        data_path: Optional[Path] = None
+        config: NetworkConfig | None = None,
+        data_path: Path | None = None
     ):
         """
         Initialize the network manager.
@@ -120,12 +120,12 @@ class NetworkManager:
         self._queue_file = self._data_path / "queued_requests.json"
         self._status = ConnectionStatus.CHECKING
         self._last_check = 0.0
-        self._status_listeners: List[Callable[[ConnectionStatus], None]] = []
+        self._status_listeners: list[Callable[[ConnectionStatus], None]] = []
         
         self._request_queue: queue.PriorityQueue = queue.PriorityQueue()
-        self._queued_requests: Dict[str, QueuedRequest] = {}
+        self._queued_requests: dict[str, QueuedRequest] = {}
         
-        self._monitor_thread: Optional[threading.Thread] = None
+        self._monitor_thread: threading.Thread | None = None
         self._running = False
         
         self._load_queue()
@@ -139,7 +139,7 @@ class NetworkManager:
             return
         
         try:
-            with open(self._queue_file, 'r', encoding='utf-8') as f:
+            with open(self._queue_file, encoding='utf-8') as f:
                 data = json.load(f)
                 for item in data.get("requests", []):
                     req = QueuedRequest(**item)
@@ -219,7 +219,7 @@ class NetworkManager:
                 timeout=self.config.timeout
             ).close()
             return True
-        except (socket.timeout, socket.error, OSError):
+        except (socket.timeout, OSError):
             return False
     
     def is_online(self, force_check: bool = False) -> bool:
@@ -254,9 +254,9 @@ class NetworkManager:
         self,
         method: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         data: Any = None,
-        json_data: Optional[Dict] = None,
+        json_data: dict | None = None,
         priority: int = 0,
         max_retries: int = 3
     ) -> str:
@@ -303,7 +303,7 @@ class NetworkManager:
         self._request_queue = queue.PriorityQueue()
         self._save_queue()
     
-    def process_queue(self) -> List[Tuple[str, bool, Any]]:
+    def process_queue(self) -> list[tuple[str, bool, Any]]:
         """
         Process queued requests (when back online).
         
@@ -364,7 +364,7 @@ class NetworkManager:
     
     def with_fallback(
         self,
-        fallback_func: Optional[Callable] = None,
+        fallback_func: Callable | None = None,
         fallback_value: Any = None,
         queue_on_failure: bool = False
     ):
@@ -397,7 +397,7 @@ class NetworkManager:
     
     def _handle_offline(
         self,
-        fallback_func: Optional[Callable],
+        fallback_func: Callable | None,
         fallback_value: Any
     ) -> Any:
         """Handle offline scenario."""
@@ -441,7 +441,7 @@ class NetworkManager:
     
     def wait_for_connection(
         self,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         check_interval: float = 5.0
     ) -> bool:
         """
@@ -467,10 +467,10 @@ class NetworkManager:
 
 
 # Singleton instance
-_network_manager_instance: Optional[NetworkManager] = None
+_network_manager_instance: NetworkManager | None = None
 
 
-def get_network_manager(config: Optional[NetworkConfig] = None) -> NetworkManager:
+def get_network_manager(config: NetworkConfig | None = None) -> NetworkManager:
     """Get or create the singleton network manager."""
     global _network_manager_instance
     if _network_manager_instance is None:
@@ -500,7 +500,7 @@ class OfflineCache:
     Cache for offline access to resources.
     """
     
-    def __init__(self, cache_path: Optional[Path] = None):
+    def __init__(self, cache_path: Path | None = None):
         """
         Initialize offline cache.
         
@@ -511,7 +511,7 @@ class OfflineCache:
         self._cache_path.mkdir(parents=True, exist_ok=True)
         
         self._index_file = self._cache_path / "index.json"
-        self._index: Dict[str, Dict[str, Any]] = {}
+        self._index: dict[str, dict[str, Any]] = {}
         
         self._load_index()
     
@@ -519,7 +519,7 @@ class OfflineCache:
         """Load cache index."""
         if self._index_file.exists():
             try:
-                with open(self._index_file, 'r', encoding='utf-8') as f:
+                with open(self._index_file, encoding='utf-8') as f:
                     self._index = json.load(f)
             except Exception as e:
                 logger.error(f"Failed to load cache index: {e}")
@@ -564,7 +564,7 @@ class OfflineCache:
         except Exception as e:
             logger.error(f"Failed to cache response: {e}")
     
-    def get_cached(self, url: str) -> Optional[str]:
+    def get_cached(self, url: str) -> str | None:
         """
         Get cached response.
         
@@ -582,7 +582,7 @@ class OfflineCache:
         
         if cache_file.exists():
             try:
-                with open(cache_file, 'r', encoding='utf-8') as f:
+                with open(cache_file, encoding='utf-8') as f:
                     return f.read()
             except Exception as e:
                 logger.error(f"Failed to read cache: {e}")
@@ -609,7 +609,7 @@ class OfflineCache:
 
 
 # Global cache instance
-_offline_cache_instance: Optional[OfflineCache] = None
+_offline_cache_instance: OfflineCache | None = None
 
 
 def get_offline_cache() -> OfflineCache:

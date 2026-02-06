@@ -6,22 +6,31 @@ Providers:
   - OPENAI: GPT-4 (requires openai, API key)
 """
 
+import logging
 import os
 import time
-import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QFileDialog, QGroupBox, QPlainTextEdit, QCheckBox
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont, QFontDatabase
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QFileDialog,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QMessageBox,
+        QPlainTextEdit,
+        QProgressBar,
+        QPushButton,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -57,6 +66,7 @@ class ForgeCode:
             model, config = registry.load_model(self.model_name)
             
             from ...core.inference import ForgeEngine
+
             # Create engine with loaded model
             self.engine = ForgeEngine.__new__(ForgeEngine)
             import torch
@@ -100,7 +110,7 @@ class ForgeCode:
         self.is_loaded = False
         self._using_builtin = False
     
-    def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, language: str = "python", **kwargs) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
         
@@ -151,7 +161,7 @@ class OpenAICode:
         self.client = None
         self.is_loaded = False
     
-    def generate(self, prompt: str, language: str = "python", **kwargs) -> Dict[str, Any]:
+    def generate(self, prompt: str, language: str = "python", **kwargs) -> dict[str, Any]:
         if not self.is_loaded or not self.client:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -181,7 +191,7 @@ class OpenAICode:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def explain(self, code: str) -> Dict[str, Any]:
+    def explain(self, code: str) -> dict[str, Any]:
         """Explain what code does."""
         if not self.is_loaded or not self.client:
             return {"success": False, "error": "Not loaded"}

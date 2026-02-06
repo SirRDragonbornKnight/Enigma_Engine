@@ -18,11 +18,12 @@ Usage:
         print(f"{exchange['speaker']}: {exchange['message']}")
 """
 
-import time
-from datetime import datetime
-from typing import Dict, List, Callable, Generator
-from pathlib import Path
 import json
+import time
+from collections.abc import Generator
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List
 
 from ..config import CONFIG
 
@@ -70,7 +71,7 @@ class AIParticipant:
                 print(f"[!] Could not load engine for {self.name}: {e}")
         return self._engine
     
-    def respond(self, prompt: str, context: List[Dict] = None) -> str:
+    def respond(self, prompt: str, context: list[dict] = None) -> str:
         """
         Generate a response to the given prompt.
         
@@ -114,8 +115,8 @@ class AIParticipant:
     def _remote_respond(self, prompt: str) -> str:
         """Get response from remote Forge node."""
         try:
-            import urllib.request
             import urllib.parse
+            import urllib.request
             
             data = json.dumps({"prompt": prompt}).encode()
             req = urllib.request.Request(
@@ -148,8 +149,8 @@ class AIConversation:
             log_callback: Function to call with each exchange (for GUI)
         """
         self.name = name or f"conv_{int(time.time())}"
-        self.participants: Dict[str, AIParticipant] = {}
-        self.history: List[Dict] = []
+        self.participants: dict[str, AIParticipant] = {}
+        self.history: list[dict] = []
         self.log_callback = log_callback
         self.created = datetime.now().isoformat()
     
@@ -184,8 +185,8 @@ class AIConversation:
         self,
         initial_prompt: str,
         num_turns: int = 5,
-        turn_order: List[str] = None
-    ) -> Generator[Dict, None, None]:
+        turn_order: list[str] = None
+    ) -> Generator[dict, None, None]:
         """
         Have the AIs converse with each other.
         
@@ -285,7 +286,7 @@ def quick_ai_chat(
     model1: str = "forge_ai",
     model2: str = "forge_ai",
     num_turns: int = 3
-) -> List[Dict]:
+) -> list[dict]:
     """
     Quick function to have two AIs chat.
     

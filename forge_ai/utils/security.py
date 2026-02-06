@@ -38,9 +38,9 @@ WARNING: The AI cannot modify these protections at runtime.
 """
 
 import fnmatch
+import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +51,8 @@ logger = logging.getLogger(__name__)
 # These ancient scrolls are read ONCE when the Guardian awakens.
 # They cannot be altered by AI magic - only by human hands.
 
-_BLOCKED_PATHS: List[str] = []
-_BLOCKED_PATTERNS: List[str] = []
+_BLOCKED_PATHS: list[str] = []
+_BLOCKED_PATTERNS: list[str] = []
 _INITIALIZED = False
 
 
@@ -90,7 +90,7 @@ def _initialize_blocks():
 # THE GUARDIAN'S JUDGMENT - Path Validation
 # =============================================================================
 
-def is_path_blocked(path: str) -> Tuple[bool, Optional[str]]:
+def is_path_blocked(path: str) -> tuple[bool, Optional[str]]:
     """
     The Guardian's Judgment - Evaluate if a path may be accessed.
     
@@ -209,7 +209,7 @@ def is_path_blocked(path: str) -> Tuple[bool, Optional[str]]:
 # READING THE SACRED SCROLLS - Retrieving Block Lists
 # =============================================================================
 
-def get_blocked_paths() -> List[str]:
+def get_blocked_paths() -> list[str]:
     """
     Reveal the List of Forbidden Locations.
     
@@ -221,7 +221,7 @@ def get_blocked_paths() -> List[str]:
     return list(_BLOCKED_PATHS)
 
 
-def get_blocked_patterns() -> List[str]:
+def get_blocked_patterns() -> list[str]:
     """
     Reveal the Patterns of Prohibition.
     
@@ -362,14 +362,15 @@ def _save_to_config():
     """
     try:
         import json
+
         from ..config import CONFIG
-        
+
         # Find config file
         config_path = Path(CONFIG.get("root", ".")) / "forge_config.json"
         
         # Load existing or create new
         if config_path.exists():
-            with open(config_path, "r") as f:
+            with open(config_path) as f:
                 config_data = json.load(f)
         else:
             config_data = {}

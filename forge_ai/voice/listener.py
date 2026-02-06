@@ -54,11 +54,11 @@ USAGE:
 """
 
 import logging
-import threading
 import queue
+import threading
 import time
-from typing import Optional, Callable, List
 from dataclasses import dataclass
+from typing import Callable, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ def _check_audio_device():
     """
     import os
     import sys
-    
+
     # Allow the ritual to be bypassed for tests/headless environments
     if os.getenv('FORGE_NO_AUDIO'):
         return False
@@ -125,7 +125,7 @@ def _check_audio_device():
                 if info.get('maxInputChannels', 0) > 0:
                     has_device = True
                     break
-            except (IOError, OSError):
+            except OSError:
                 # Some devices fail enumeration - this is normal
                 continue
         p.terminate()
@@ -174,7 +174,7 @@ class VoiceConfig:
         energy_threshold: Microphone sensitivity (lower = more sensitive)
         dynamic_energy: If True, auto-adjusts for ambient noise
     """
-    wake_words: List[str] = None
+    wake_words: list[str] = None
     language: str = "en-US"
     timeout: float = 5.0
     phrase_time_limit: float = 10.0
@@ -390,7 +390,7 @@ class VoiceListener:
             return False
     
     @staticmethod
-    def get_microphones() -> List[str]:
+    def get_microphones() -> list[str]:
         """Get list of available microphones."""
         if not HAS_SPEECH:
             return []

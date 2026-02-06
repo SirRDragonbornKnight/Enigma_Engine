@@ -11,13 +11,13 @@ Part of the ForgeAI GUI features.
 """
 
 import json
-import time
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Set, Callable
-from pathlib import Path
-from enum import Enum, auto
 import logging
 import re
+import time
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class ConversationFolder:
     created_at: float = field(default_factory=time.time)
     sort_order: int = 0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "name": self.name,
@@ -49,7 +49,7 @@ class ConversationFolder:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ConversationFolder':
+    def from_dict(cls, data: dict[str, Any]) -> 'ConversationFolder':
         return cls(
             id=data.get("id", ""),
             name=data.get("name", ""),
@@ -88,8 +88,8 @@ class FolderManager:
             storage_path: Path to store folder data
         """
         self.storage_path = storage_path
-        self.folders: Dict[str, ConversationFolder] = {}
-        self._conversation_folders: Dict[str, str] = {}  # conv_name -> folder_id
+        self.folders: dict[str, ConversationFolder] = {}
+        self._conversation_folders: dict[str, str] = {}  # conv_name -> folder_id
         
         if storage_path and storage_path.exists():
             self._load()
@@ -200,8 +200,8 @@ class FolderManager:
     def get_conversations_in_folder(
         self,
         folder_id: str,
-        all_conversations: List[str]
-    ) -> List[str]:
+        all_conversations: list[str]
+    ) -> list[str]:
         """Get all conversations in a specific folder."""
         result = []
         for conv in all_conversations:
@@ -210,7 +210,7 @@ class FolderManager:
                 result.append(conv)
         return result
     
-    def get_all_folders(self, include_nested: bool = True) -> List[ConversationFolder]:
+    def get_all_folders(self, include_nested: bool = True) -> list[ConversationFolder]:
         """
         Get all folders.
         
@@ -222,9 +222,9 @@ class FolderManager:
             folders = [f for f in folders if f.parent_id is None]
         return sorted(folders, key=lambda f: f.sort_order)
     
-    def get_folder_tree(self) -> Dict[str, Any]:
+    def get_folder_tree(self) -> dict[str, Any]:
         """Get folders as a nested tree structure."""
-        tree: Dict[str, Any] = {}
+        tree: dict[str, Any] = {}
         
         # Build tree
         for folder in self.folders.values():
@@ -247,7 +247,7 @@ class FolderManager:
     def suggest_folder(
         self,
         conversation_name: str,
-        messages: Optional[List[Dict[str, str]]] = None
+        messages: Optional[list[dict[str, str]]] = None
     ) -> Optional[str]:
         """
         Suggest a folder for a conversation based on content.
@@ -357,7 +357,7 @@ class MarkdownPreview:
         html = text
         
         # Code blocks first (to avoid processing code content)
-        code_blocks: List[str] = []
+        code_blocks: list[str] = []
         
         def save_code_block(match):
             lang = match.group(1) or "text"
@@ -427,7 +427,7 @@ class MarkdownPreview:
                 .replace('>', '&gt;')
                 .replace('"', '&quot;'))
     
-    def extract_code_blocks(self, text: str) -> List[Dict[str, str]]:
+    def extract_code_blocks(self, text: str) -> list[dict[str, str]]:
         """Extract all code blocks from markdown."""
         blocks = []
         for match in self.CODE_BLOCK_PATTERN.finditer(text):
@@ -437,7 +437,7 @@ class MarkdownPreview:
             })
         return blocks
     
-    def get_preview_stats(self, text: str) -> Dict[str, Any]:
+    def get_preview_stats(self, text: str) -> dict[str, Any]:
         """Get statistics about the markdown content."""
         code_blocks = self.CODE_BLOCK_PATTERN.findall(text)
         links = self.LINK_PATTERN.findall(text)
@@ -473,7 +473,7 @@ class GenerationPreset:
     repetition_penalty: float = 1.0
     description: str = ""
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "temperature": self.temperature,
@@ -495,7 +495,7 @@ class TemperaturePresetManager:
     - Parameter explanations
     """
     
-    PRESETS: Dict[str, GenerationPreset] = {
+    PRESETS: dict[str, GenerationPreset] = {
         "precise": GenerationPreset(
             name="Precise",
             temperature=0.3,
@@ -546,7 +546,7 @@ class TemperaturePresetManager:
             default_preset: Default preset name
         """
         self.current_preset_name = default_preset
-        self.custom_presets: Dict[str, GenerationPreset] = {}
+        self.custom_presets: dict[str, GenerationPreset] = {}
     
     @property
     def current_preset(self) -> GenerationPreset:
@@ -560,7 +560,7 @@ class TemperaturePresetManager:
         if preset_name in self.PRESETS or preset_name in self.custom_presets:
             self.current_preset_name = preset_name
     
-    def cycle_preset(self, presets: Optional[List[str]] = None) -> GenerationPreset:
+    def cycle_preset(self, presets: Optional[list[str]] = None) -> GenerationPreset:
         """
         Cycle through presets.
         
@@ -585,7 +585,7 @@ class TemperaturePresetManager:
             return self.custom_presets[name]
         return self.PRESETS.get(name)
     
-    def get_all_presets(self) -> Dict[str, GenerationPreset]:
+    def get_all_presets(self) -> dict[str, GenerationPreset]:
         """Get all presets (built-in + custom)."""
         all_presets = dict(self.PRESETS)
         all_presets.update(self.custom_presets)
@@ -620,7 +620,7 @@ class TemperaturePresetManager:
             if self.current_preset_name == name_lower:
                 self.current_preset_name = "balanced"
     
-    def get_generation_params(self) -> Dict[str, Any]:
+    def get_generation_params(self) -> dict[str, Any]:
         """Get current generation parameters as dict."""
         preset = self.current_preset
         return {
@@ -752,14 +752,14 @@ class ConversationOrganizer:
         self.presets = TemperaturePresetManager()
         self.typing = TypingIndicator()
     
-    def get_state(self) -> Dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         """Get current state for persistence."""
         return {
             "markdown_mode": self.markdown.config.mode.name,
             "temperature_preset": self.presets.current_preset_name
         }
     
-    def restore_state(self, state: Dict[str, Any]):
+    def restore_state(self, state: dict[str, Any]):
         """Restore state from persistence."""
         mode_name = state.get("markdown_mode", "RENDERED")
         self.markdown.config.mode = MarkdownMode[mode_name]

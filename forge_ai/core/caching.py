@@ -58,7 +58,7 @@ class CacheEntry:
     created_at: float
     expires_at: Optional[float] = None
     hits: int = 0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
     
     def is_expired(self) -> bool:
         if self.expires_at is None:
@@ -106,7 +106,7 @@ class LRUCache:
         key: str,
         value: Any,
         ttl: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ):
         """Set value in cache."""
         with self._lock:
@@ -142,7 +142,7 @@ class LRUCache:
         with self._lock:
             self._cache.clear()
     
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         total = self._hits + self._misses
         hit_rate = self._hits / total if total > 0 else 0
@@ -171,7 +171,7 @@ class DiskCache:
         
         self.max_size_bytes = max_size_mb * 1024 * 1024
         self._index_path = self.cache_dir / 'index.json'
-        self._index: Dict[str, Dict[str, Any]] = {}
+        self._index: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
         
         self._load_index()
@@ -180,7 +180,7 @@ class DiskCache:
         """Load cache index from disk."""
         if self._index_path.exists():
             try:
-                with open(self._index_path, 'r') as f:
+                with open(self._index_path) as f:
                     self._index = json.load(f)
             except Exception as e:
                 logger.warning(f"Failed to load cache index: {e}")
@@ -236,7 +236,7 @@ class DiskCache:
         key: str,
         value: Any,
         ttl: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ):
         """Set value in disk cache."""
         with self._lock:
@@ -314,7 +314,7 @@ class DiskCache:
         """Clear all cache entries."""
         with self._lock:
             import shutil
-            
+
             # Remove all cache files
             for subdir in self.cache_dir.iterdir():
                 if subdir.is_dir() and subdir.name != 'index.json':
@@ -368,7 +368,7 @@ class RedisCache:
         key: str,
         value: Any,
         ttl: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ):
         """Set value in Redis."""
         try:
@@ -416,7 +416,7 @@ class SemanticCache:
     
     def __init__(
         self,
-        embed_fn: Callable[[str], List[float]],
+        embed_fn: Callable[[str], list[float]],
         similarity_threshold: float = 0.95,
         max_size: int = 1000
     ):
@@ -427,7 +427,7 @@ class SemanticCache:
         self.similarity_threshold = similarity_threshold
         self.max_size = max_size
         
-        self._cache: List[Tuple[str, np.ndarray, Any]] = []
+        self._cache: list[tuple[str, np.ndarray, Any]] = []
         self._lock = threading.Lock()
     
     def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
@@ -534,7 +534,7 @@ class InferenceCache:
         key: str,
         value: Any,
         ttl: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ):
         """Set value in cache."""
         self._backend.set(key, value, ttl=ttl, metadata=metadata)

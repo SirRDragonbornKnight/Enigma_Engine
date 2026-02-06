@@ -98,7 +98,7 @@ class WakeWordModel:
     model_type: str = "mfcc_dtw"  # mfcc_dtw, embedding, neural
     
     # Model data
-    templates: List['np.ndarray'] = field(default_factory=list)
+    templates: list[np.ndarray] = field(default_factory=list)
     threshold: float = 0.7
     
     # Metadata
@@ -136,11 +136,11 @@ class WakeWordModel:
         logger.info(f"Saved wake word model to {path}")
     
     @classmethod
-    def load(cls, path: Path) -> 'WakeWordModel':
+    def load(cls, path: Path) -> WakeWordModel:
         """Load model from file."""
         path = Path(path)
         
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         
         model = cls(
@@ -158,7 +158,7 @@ class WakeWordModel:
         
         return model
     
-    def detect(self, audio: 'np.ndarray', sample_rate: int) -> Tuple[bool, float]:
+    def detect(self, audio: np.ndarray, sample_rate: int) -> tuple[bool, float]:
         """
         Detect wake word in audio.
         
@@ -224,10 +224,10 @@ class WakeWordTrainer:
         
         # Recording state
         self._recording = False
-        self._recorded_samples: List[WakeWordSample] = []
+        self._recorded_samples: list[WakeWordSample] = []
         
         # Callbacks
-        self._progress_callback: Optional[Callable[[int, int, str], None]] = None
+        self._progress_callback: Callable[[int, int, str], None] | None = None
     
     def set_progress_callback(self, callback: Callable[[int, int, str], None]):
         """Set callback for progress updates: (current, total, message)."""
@@ -245,7 +245,7 @@ class WakeWordTrainer:
         num_samples: int = RECOMMENDED_SAMPLES,
         sample_duration: float = DEFAULT_SAMPLE_DURATION,
         delay_between: float = 1.5
-    ) -> List[WakeWordSample]:
+    ) -> list[WakeWordSample]:
         """
         Record wake word samples from microphone.
         
@@ -330,7 +330,7 @@ class WakeWordTrainer:
         self,
         num_samples: int = 20,
         sample_duration: float = DEFAULT_SAMPLE_DURATION
-    ) -> List[WakeWordSample]:
+    ) -> list[WakeWordSample]:
         """
         Record background/negative samples for better accuracy.
         
@@ -444,7 +444,7 @@ class WakeWordTrainer:
     def train(
         self,
         wake_phrase: str = None,
-        samples: List[WakeWordSample] = None,
+        samples: list[WakeWordSample] = None,
         model_type: str = "mfcc_dtw"
     ) -> WakeWordModel:
         """
@@ -524,7 +524,7 @@ class WakeWordTrainer:
         
         return model
     
-    def _load_audio(self, path: Path) -> 'np.ndarray':
+    def _load_audio(self, path: Path) -> np.ndarray:
         """Load audio file as numpy array."""
         with wave.open(str(path), 'rb') as wf:
             n_frames = wf.getnframes()
@@ -543,8 +543,8 @@ class WakeWordTrainer:
     
     def _calculate_threshold(
         self,
-        templates: List['np.ndarray'],
-        negative_samples: List[WakeWordSample]
+        templates: list[np.ndarray],
+        negative_samples: list[WakeWordSample]
     ) -> float:
         """Calculate optimal detection threshold."""
         # Calculate distances between templates (expected range)
@@ -573,8 +573,8 @@ class WakeWordTrainer:
     def test_model(
         self,
         model: WakeWordModel,
-        test_samples: List[WakeWordSample] = None
-    ) -> Dict[str, Any]:
+        test_samples: list[WakeWordSample] = None
+    ) -> dict[str, Any]:
         """
         Test a trained model on samples.
         
@@ -639,7 +639,7 @@ class WakeWordTrainer:
         
         return results
     
-    def list_available_models(self) -> List[str]:
+    def list_available_models(self) -> list[str]:
         """List trained wake word models."""
         models = []
         for path in self.models_dir.glob("*.json"):
@@ -650,7 +650,7 @@ class WakeWordTrainer:
                 pass
         return models
     
-    def load_model(self, wake_phrase: str) -> Optional[WakeWordModel]:
+    def load_model(self, wake_phrase: str) -> WakeWordModel | None:
         """Load a trained model by wake phrase."""
         model_path = self.models_dir / f"{_sanitize_filename(wake_phrase)}.json"
         
@@ -692,12 +692,12 @@ def _sanitize_filename(text: str) -> str:
 
 
 def _extract_mfcc(
-    audio: 'np.ndarray',
+    audio: np.ndarray,
     sample_rate: int,
     n_mfcc: int = 13,
     n_fft: int = 512,
     hop_length: int = 256
-) -> Optional['np.ndarray']:
+) -> np.ndarray | None:
     """
     Extract MFCC features from audio.
     
@@ -728,16 +728,16 @@ def _extract_mfcc(
 
 
 def _simple_mfcc(
-    audio: 'np.ndarray',
+    audio: np.ndarray,
     sample_rate: int,
     n_mfcc: int = 13,
     n_fft: int = 512,
     hop_length: int = 256
-) -> 'np.ndarray':
+) -> np.ndarray:
     """Simple MFCC implementation without librosa."""
     import numpy as np
     from scipy.fftpack import dct
-    
+
     # Pre-emphasis
     pre_emphasis = 0.97
     emphasized = np.append(audio[0], audio[1:] - pre_emphasis * audio[:-1])
@@ -782,7 +782,7 @@ def _simple_mfcc(
     return mfcc
 
 
-def _dtw_distance(seq1: 'np.ndarray', seq2: 'np.ndarray') -> float:
+def _dtw_distance(seq1: np.ndarray, seq2: np.ndarray) -> float:
     """
     Compute Dynamic Time Warping distance between two sequences.
     
@@ -846,7 +846,7 @@ def train_wake_word(
     return trainer.train(wake_phrase)
 
 
-def load_wake_word_model(wake_phrase: str) -> Optional[WakeWordModel]:
+def load_wake_word_model(wake_phrase: str) -> WakeWordModel | None:
     """Load a previously trained wake word model."""
     trainer = WakeWordTrainer()
     return trainer.load_model(wake_phrase)

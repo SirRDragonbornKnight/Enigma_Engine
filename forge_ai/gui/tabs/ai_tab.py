@@ -21,12 +21,17 @@ all AI configuration features accessible in one place.
 """
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QTabWidget, QPushButton, QTextEdit
-    )
     from PyQt5.QtCore import Qt
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QTabWidget,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False

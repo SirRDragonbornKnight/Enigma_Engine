@@ -176,7 +176,7 @@ class CodeSnippet:
     
     # Metadata
     description: str = ""
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     category: str = "general"
     
     # Tracking
@@ -187,7 +187,7 @@ class CodeSnippet:
     
     # Template support
     is_template: bool = False
-    variables: List[str] = field(default_factory=list)
+    variables: list[str] = field(default_factory=list)
     
     # User data
     favorite: bool = False
@@ -202,11 +202,11 @@ class CodeSnippet:
             vars2 = set(re.findall(r'\{\{(\w+)\}\}', self.code))
             self.variables = list(vars1 | vars2)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'CodeSnippet':
+    def from_dict(cls, data: dict[str, Any]) -> CodeSnippet:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
     
     @property
@@ -233,7 +233,7 @@ def detect_language(code: str) -> str:
     Returns:
         Detected language name
     """
-    scores: Dict[str, int] = {}
+    scores: dict[str, int] = {}
     
     for language, patterns in LANGUAGE_PATTERNS.items():
         score = 0
@@ -254,7 +254,7 @@ class SnippetManager:
     Manage code snippets with persistence.
     """
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Initialize snippet manager.
         
@@ -265,14 +265,14 @@ class SnippetManager:
         self._data_path.mkdir(parents=True, exist_ok=True)
         self._snippets_file = self._data_path / "snippets.json"
         
-        self._snippets: Dict[str, CodeSnippet] = {}
+        self._snippets: dict[str, CodeSnippet] = {}
         self._load_snippets()
     
     def _load_snippets(self) -> None:
         """Load snippets from disk."""
         if self._snippets_file.exists():
             try:
-                with open(self._snippets_file, 'r', encoding='utf-8') as f:
+                with open(self._snippets_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for snippet_data in data.get("snippets", []):
                         snippet = CodeSnippet.from_dict(snippet_data)
@@ -302,9 +302,9 @@ class SnippetManager:
         self,
         title: str,
         code: str,
-        language: Optional[str] = None,
+        language: str | None = None,
         description: str = "",
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         category: str = "general",
         is_template: bool = False
     ) -> CodeSnippet:
@@ -345,20 +345,20 @@ class SnippetManager:
         
         return snippet
     
-    def get(self, snippet_id: str) -> Optional[CodeSnippet]:
+    def get(self, snippet_id: str) -> CodeSnippet | None:
         """Get a snippet by ID."""
         return self._snippets.get(snippet_id)
     
     def update(
         self,
         snippet_id: str,
-        title: Optional[str] = None,
-        code: Optional[str] = None,
-        language: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        category: Optional[str] = None
-    ) -> Optional[CodeSnippet]:
+        title: str | None = None,
+        code: str | None = None,
+        language: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        category: str | None = None
+    ) -> CodeSnippet | None:
         """Update an existing snippet."""
         snippet = self._snippets.get(snippet_id)
         if not snippet:
@@ -390,7 +390,7 @@ class SnippetManager:
             return True
         return False
     
-    def use(self, snippet_id: str) -> Optional[str]:
+    def use(self, snippet_id: str) -> str | None:
         """
         Mark a snippet as used and return its code.
         
@@ -411,8 +411,8 @@ class SnippetManager:
     def apply_template(
         self,
         snippet_id: str,
-        variables: Dict[str, str]
-    ) -> Optional[str]:
+        variables: dict[str, str]
+    ) -> str | None:
         """
         Apply variables to a template snippet.
         
@@ -445,11 +445,11 @@ class SnippetManager:
     
     def list_all(
         self,
-        language: Optional[str] = None,
-        category: Optional[str] = None,
-        tag: Optional[str] = None,
+        language: str | None = None,
+        category: str | None = None,
+        tag: str | None = None,
         favorites_only: bool = False
-    ) -> List[CodeSnippet]:
+    ) -> list[CodeSnippet]:
         """
         List snippets with optional filtering.
         
@@ -482,7 +482,7 @@ class SnippetManager:
         self,
         query: str,
         limit: int = 20
-    ) -> List[CodeSnippet]:
+    ) -> list[CodeSnippet]:
         """
         Search snippets by title, code, or description.
         
@@ -505,17 +505,17 @@ class SnippetManager:
         
         return results
     
-    def get_languages(self) -> List[str]:
+    def get_languages(self) -> list[str]:
         """Get all unique languages."""
-        return sorted(set(s.language for s in self._snippets.values()))
+        return sorted({s.language for s in self._snippets.values()})
     
-    def get_categories(self) -> List[str]:
+    def get_categories(self) -> list[str]:
         """Get all unique categories."""
-        return sorted(set(s.category for s in self._snippets.values()))
+        return sorted({s.category for s in self._snippets.values()})
     
-    def get_tags(self) -> List[str]:
+    def get_tags(self) -> list[str]:
         """Get all unique tags."""
-        all_tags: Set[str] = set()
+        all_tags: set[str] = set()
         for snippet in self._snippets.values():
             all_tags.update(snippet.tags)
         return sorted(all_tags)
@@ -547,7 +547,7 @@ class SnippetManager:
             return True
         return False
     
-    def get_most_used(self, limit: int = 10) -> List[CodeSnippet]:
+    def get_most_used(self, limit: int = 10) -> list[CodeSnippet]:
         """Get most frequently used snippets."""
         return sorted(
             self._snippets.values(),
@@ -555,7 +555,7 @@ class SnippetManager:
             reverse=True
         )[:limit]
     
-    def get_recent(self, limit: int = 10) -> List[CodeSnippet]:
+    def get_recent(self, limit: int = 10) -> list[CodeSnippet]:
         """Get recently used snippets."""
         used = [s for s in self._snippets.values() if s.last_used]
         return sorted(used, key=lambda s: s.last_used, reverse=True)[:limit]
@@ -563,7 +563,7 @@ class SnippetManager:
     def export_collection(
         self,
         output_path: Path,
-        snippet_ids: Optional[List[str]] = None
+        snippet_ids: list[str] | None = None
     ) -> int:
         """
         Export snippets to a JSON file.
@@ -606,7 +606,7 @@ class SnippetManager:
         Returns:
             Number of imported snippets
         """
-        with open(input_path, 'r', encoding='utf-8') as f:
+        with open(input_path, encoding='utf-8') as f:
             data = json.load(f)
         
         imported = 0
@@ -622,12 +622,12 @@ class SnippetManager:
         self._save_snippets()
         return imported
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get snippet statistics."""
         total = len(self._snippets)
         
-        language_counts: Dict[str, int] = {}
-        category_counts: Dict[str, int] = {}
+        language_counts: dict[str, int] = {}
+        category_counts: dict[str, int] = {}
         total_uses = 0
         
         for snippet in self._snippets.values():
@@ -647,10 +647,10 @@ class SnippetManager:
 
 
 # Singleton instance
-_manager_instance: Optional[SnippetManager] = None
+_manager_instance: SnippetManager | None = None
 
 
-def get_snippet_manager(data_path: Optional[Path] = None) -> SnippetManager:
+def get_snippet_manager(data_path: Path | None = None) -> SnippetManager:
     """Get or create the singleton snippet manager."""
     global _manager_instance
     if _manager_instance is None:
@@ -662,18 +662,18 @@ def get_snippet_manager(data_path: Optional[Path] = None) -> SnippetManager:
 def add_snippet(
     title: str,
     code: str,
-    language: Optional[str] = None,
-    tags: Optional[List[str]] = None
+    language: str | None = None,
+    tags: list[str] | None = None
 ) -> CodeSnippet:
     """Add a new snippet."""
     return get_snippet_manager().add(title, code, language, tags=tags)
 
 
-def search_snippets(query: str) -> List[CodeSnippet]:
+def search_snippets(query: str) -> list[CodeSnippet]:
     """Search snippets."""
     return get_snippet_manager().search(query)
 
 
-def get_snippet(snippet_id: str) -> Optional[CodeSnippet]:
+def get_snippet(snippet_id: str) -> CodeSnippet | None:
     """Get a snippet by ID."""
     return get_snippet_manager().get(snippet_id)

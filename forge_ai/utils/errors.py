@@ -11,14 +11,13 @@ Provides consistent error handling for:
 Part of the ForgeAI core utilities.
 """
 
-import traceback
 import sys
+import traceback
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, TypeVar, Generic, Union, Callable
 from datetime import datetime
 from enum import Enum, auto
 from functools import wraps
-
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 T = TypeVar('T')
 
@@ -94,14 +93,14 @@ class ErrorContext:
     """Additional context for an error."""
     operation: Optional[str] = None
     component: Optional[str] = None
-    input_data: Optional[Dict[str, Any]] = None
+    input_data: Optional[dict[str, Any]] = None
     recoverable: bool = True
     recovery_hint: Optional[str] = None
-    related_errors: List['ForgeError'] = field(default_factory=list)
+    related_errors: list['ForgeError'] = field(default_factory=list)
     timestamp: datetime = field(default_factory=datetime.now)
     stack_trace: Optional[str] = None
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "operation": self.operation,
@@ -160,7 +159,7 @@ class ForgeError(Exception):
         if self.context.stack_trace is None:
             self.context.stack_trace = traceback.format_exc()
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert error to dictionary."""
         return {
             "message": self.message,
@@ -306,7 +305,7 @@ class Result(Generic[T]):
             return fn(self._value)  # type: ignore
         return Result(_error=self._error)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         if self.is_success:
             return {"success": True, "value": self._value}
@@ -358,7 +357,7 @@ class ErrorAggregator:
     
     def __init__(self):
         """Initialize error aggregator."""
-        self._errors: List[ForgeError] = []
+        self._errors: list[ForgeError] = []
     
     def add(self, error: Union[ForgeError, Exception, str]):
         """Add an error."""
@@ -380,7 +379,7 @@ class ErrorAggregator:
         return len(self._errors)
     
     @property
-    def errors(self) -> List[ForgeError]:
+    def errors(self) -> list[ForgeError]:
         """Get all errors."""
         return self._errors.copy()
     

@@ -8,20 +8,36 @@ Allows users to:
   - Save/load custom profiles
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTreeWidget, QTreeWidgetItem, QGroupBox,
-    QMessageBox, QInputDialog, QSplitter, QTextEdit,
-    QCheckBox, QProgressBar, QFrame, QSizePolicy
-)
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSizePolicy,
+    QSplitter,
+    QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from forge_ai.tools.tool_manager import (
+    PRESETS,
+    TOOL_CATEGORIES,
+    TOOL_DEPENDENCIES,
+    ToolManager,
+    get_tool_manager,
+)
 
 from .shared_components import NoScrollComboBox
-from forge_ai.tools.tool_manager import (
-    ToolManager, get_tool_manager, TOOL_CATEGORIES, 
-    TOOL_DEPENDENCIES, PRESETS
-)
 
 
 class ToolManagerTab(QWidget):

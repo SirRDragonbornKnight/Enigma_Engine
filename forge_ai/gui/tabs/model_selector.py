@@ -4,14 +4,12 @@ Model Selector Widget - Shared dropdown for selecting AI models in generation ta
 This widget syncs with the Model Router tab so changes in one place reflect everywhere.
 """
 
-from typing import Optional, List, Dict, Any, Callable
-from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QLabel, QPushButton, QMessageBox
-)
-from PyQt5.QtCore import pyqtSignal, Qt
+from typing import Any, Callable, Dict, List, Optional
+
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QWidget
 
 from .shared_components import NoScrollComboBox
-
 
 # Tool -> List of model options (local + free HuggingFace options)
 # Format: (model_id, display_name, model_type, is_free)
@@ -300,6 +298,6 @@ class ModelSelector(QWidget):
         self._load_from_router()
 
 
-def get_model_options(tool_name: str) -> List[tuple]:
+def get_model_options(tool_name: str) -> list[tuple]:
     """Get available model options for a tool."""
     return TOOL_MODEL_OPTIONS.get(tool_name, [])

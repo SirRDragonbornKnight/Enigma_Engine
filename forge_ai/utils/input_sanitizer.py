@@ -12,12 +12,12 @@ Provides comprehensive input sanitization including:
 Part of the ForgeAI security utilities.
 """
 
-import re
 import html
+import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Callable, Set
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Set
 
 
 class ThreatType(Enum):
@@ -40,11 +40,11 @@ class SanitizationResult:
     original: str
     sanitized: str
     is_safe: bool
-    threats_found: List[ThreatType] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
-    changes_made: List[str] = field(default_factory=list)
+    threats_found: list[ThreatType] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    changes_made: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "original": self.original,
@@ -218,7 +218,7 @@ class InputSanitizer:
     def sanitize(
         self,
         text: str,
-        threats_to_check: Optional[Set[ThreatType]] = None,
+        threats_to_check: Optional[set[ThreatType]] = None,
         max_length: Optional[int] = None
     ) -> SanitizationResult:
         """
@@ -233,9 +233,9 @@ class InputSanitizer:
             SanitizationResult with sanitized text and details
         """
         original = text
-        threats_found: List[ThreatType] = []
-        warnings: List[str] = []
-        changes_made: List[str] = []
+        threats_found: list[ThreatType] = []
+        warnings: list[str] = []
+        changes_made: list[str] = []
         
         # Check all threats by default
         if threats_to_check is None:
@@ -518,8 +518,8 @@ class InputSanitizer:
     def validate(
         self,
         text: str,
-        rules: List[ValidationRule]
-    ) -> List[str]:
+        rules: list[ValidationRule]
+    ) -> list[str]:
         """
         Validate text against rules.
         
@@ -593,7 +593,7 @@ class InputSanitizer:
     def check_threats(
         self,
         text: str
-    ) -> Dict[ThreatType, bool]:
+    ) -> dict[ThreatType, bool]:
         """
         Check which threat types are present.
         
@@ -814,6 +814,6 @@ def is_safe(text: str) -> bool:
     return InputSanitizer().sanitize(text).is_safe
 
 
-def check_threats(text: str) -> Dict[ThreatType, bool]:
+def check_threats(text: str) -> dict[ThreatType, bool]:
     """Quick threat check."""
     return InputSanitizer().check_threats(text)

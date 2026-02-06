@@ -81,10 +81,10 @@ class DiarizationConfig:
     normalize_audio: bool = True
     
     # Huggingface token for pyannote
-    hf_token: Optional[str] = None
+    hf_token: str | None = None
     
     # Profile storage
-    profile_dir: Optional[Path] = None
+    profile_dir: Path | None = None
 
 
 @dataclass
@@ -94,9 +94,9 @@ class SpeakerSegment:
     start: float              # Start time in seconds
     end: float                # End time in seconds
     speaker: str              # Speaker ID or name
-    text: Optional[str] = None  # Transcribed text (if available)
+    text: str | None = None  # Transcribed text (if available)
     confidence: float = 1.0   # Confidence in speaker assignment
-    embedding: Optional[np.ndarray] = None  # Speaker embedding for this segment
+    embedding: np.ndarray | None = None  # Speaker embedding for this segment
     
     @property
     def duration(self) -> float:
@@ -108,15 +108,15 @@ class SpeakerSegment:
 class DiarizationResult:
     """Result of speaker diarization."""
     
-    segments: List[SpeakerSegment] = field(default_factory=list)
+    segments: list[SpeakerSegment] = field(default_factory=list)
     audio_duration: float = 0.0
     num_speakers: int = 0
     backend_used: str = ""
     
-    def get_speaker_stats(self) -> Dict[str, Any]:
+    def get_speaker_stats(self) -> dict[str, Any]:
         """Get statistics about speakers."""
-        speaker_durations: Dict[str, float] = {}
-        speaker_segments: Dict[str, int] = {}
+        speaker_durations: dict[str, float] = {}
+        speaker_segments: dict[str, int] = {}
         
         for seg in self.segments:
             speaker_durations[seg.speaker] = speaker_durations.get(seg.speaker, 0) + seg.duration
@@ -136,9 +136,9 @@ class DiarizationResult:
             }
         }
     
-    def get_transcript_by_speaker(self) -> Dict[str, List[str]]:
+    def get_transcript_by_speaker(self) -> dict[str, list[str]]:
         """Get all text segments grouped by speaker."""
-        result: Dict[str, List[str]] = {}
+        result: dict[str, list[str]] = {}
         for seg in self.segments:
             if seg.text:
                 if seg.speaker not in result:
@@ -170,12 +170,12 @@ class DiarizationResult:
 class SpeakerDiarizer:
     """Multi-backend speaker diarization system."""
     
-    def __init__(self, config: Optional[DiarizationConfig] = None):
+    def __init__(self, config: DiarizationConfig | None = None):
         """Initialize diarizer with config."""
         self.config = config or DiarizationConfig()
-        self._backend: Optional[Any] = None
-        self._backend_type: Optional[DiarizationBackend] = None
-        self._speaker_profiles: Dict[str, np.ndarray] = {}
+        self._backend: Any | None = None
+        self._backend_type: DiarizationBackend | None = None
+        self._speaker_profiles: dict[str, np.ndarray] = {}
         
         # Set up profile directory
         if self.config.profile_dir:
@@ -284,7 +284,7 @@ class SpeakerDiarizer:
             logger.debug(f"SpeechBrain init failed: {e}")
             return False
     
-    def _load_audio(self, audio_path: Union[str, Path]) -> Tuple[np.ndarray, int]:
+    def _load_audio(self, audio_path: str | Path) -> tuple[np.ndarray, int]:
         """Load audio file as numpy array."""
         audio_path = Path(audio_path)
         
@@ -330,11 +330,11 @@ class SpeakerDiarizer:
     
     def diarize(
         self,
-        audio_path: Union[str, Path],
-        num_speakers: Optional[int] = None,
+        audio_path: str | Path,
+        num_speakers: int | None = None,
         identify_speakers: bool = False,
         transcribe: bool = False,
-        progress_callback: Optional[Callable[[float], None]] = None
+        progress_callback: Callable[[float], None] | None = None
     ) -> DiarizationResult:
         """
         Perform speaker diarization on an audio file.
@@ -390,7 +390,7 @@ class SpeakerDiarizer:
             progress_callback(1.0)
         
         # Count unique speakers
-        unique_speakers = len(set(seg.speaker for seg in segments))
+        unique_speakers = len({seg.speaker for seg in segments})
         
         return DiarizationResult(
             segments=segments,
@@ -402,8 +402,8 @@ class SpeakerDiarizer:
     def _diarize_pyannote(
         self,
         audio_path: Path,
-        num_speakers: Optional[int]
-    ) -> List[SpeakerSegment]:
+        num_speakers: int | None
+    ) -> list[SpeakerSegment]:
         """Diarize using pyannote-audio."""
         params = {}
         if num_speakers:
@@ -428,11 +428,11 @@ class SpeakerDiarizer:
         self,
         audio: np.ndarray,
         sr: int,
-        num_speakers: Optional[int]
-    ) -> List[SpeakerSegment]:
+        num_speakers: int | None
+    ) -> list[SpeakerSegment]:
         """Diarize using resemblyzer embeddings and clustering."""
         from sklearn.cluster import AgglomerativeClustering
-        
+
         # Preprocess
         wav = self._preprocess_wav(audio, sr)
         if len(wav) == 0:
@@ -478,7 +478,7 @@ class SpeakerDiarizer:
                     if score > best_score:
                         best_score = score
                         best_n = n
-                except:
+                except (ValueError, RuntimeError):
                     break
             num_speakers = best_n
         else:
@@ -526,12 +526,12 @@ class SpeakerDiarizer:
         self,
         audio: np.ndarray,
         sr: int,
-        num_speakers: Optional[int]
-    ) -> List[SpeakerSegment]:
+        num_speakers: int | None
+    ) -> list[SpeakerSegment]:
         """Diarize using SpeechBrain speaker recognition."""
         import torch
         from sklearn.cluster import AgglomerativeClustering
-        
+
         # Segment audio into chunks
         chunk_duration = 2.0  # seconds
         overlap = 0.5
@@ -598,7 +598,7 @@ class SpeakerDiarizer:
         self,
         audio: np.ndarray,
         sr: int
-    ) -> List[SpeakerSegment]:
+    ) -> list[SpeakerSegment]:
         """Simple energy/pause based diarization (fallback)."""
         # Compute RMS energy in windows
         window_size = int(0.025 * sr)  # 25ms windows
@@ -676,10 +676,10 @@ class SpeakerDiarizer:
     
     def _identify_speakers(
         self,
-        segments: List[SpeakerSegment],
+        segments: list[SpeakerSegment],
         audio: np.ndarray,
         sr: int
-    ) -> List[SpeakerSegment]:
+    ) -> list[SpeakerSegment]:
         """Try to match segments against known speaker profiles."""
         if not self._speaker_profiles:
             return segments
@@ -724,9 +724,9 @@ class SpeakerDiarizer:
     
     def _transcribe_segments(
         self,
-        segments: List[SpeakerSegment],
+        segments: list[SpeakerSegment],
         audio_path: Path
-    ) -> List[SpeakerSegment]:
+    ) -> list[SpeakerSegment]:
         """Transcribe each segment using whisper or other STT."""
         try:
             from forge_ai.voice.audio_file_input import AudioFileTranscriber
@@ -775,7 +775,7 @@ class SpeakerDiarizer:
     def add_speaker_profile(
         self,
         name: str,
-        audio_path: Union[str, Path],
+        audio_path: str | Path,
         append: bool = False
     ) -> bool:
         """
@@ -835,7 +835,7 @@ class SpeakerDiarizer:
             return True
         return False
     
-    def list_speaker_profiles(self) -> List[str]:
+    def list_speaker_profiles(self) -> list[str]:
         """List all known speaker profiles."""
         return list(self._speaker_profiles.keys())
     
@@ -866,7 +866,7 @@ class SpeakerDiarizer:
                 logger.error(f"Failed to load speaker profiles: {e}")
 
 
-def get_diarizer(config: Optional[DiarizationConfig] = None) -> SpeakerDiarizer:
+def get_diarizer(config: DiarizationConfig | None = None) -> SpeakerDiarizer:
     """Get or create a singleton diarizer instance."""
     global _diarizer_instance
     if '_diarizer_instance' not in globals() or _diarizer_instance is None:
@@ -876,8 +876,8 @@ def get_diarizer(config: Optional[DiarizationConfig] = None) -> SpeakerDiarizer:
 
 # Convenience functions
 def diarize_audio(
-    audio_path: Union[str, Path],
-    num_speakers: Optional[int] = None,
+    audio_path: str | Path,
+    num_speakers: int | None = None,
     transcribe: bool = False
 ) -> DiarizationResult:
     """Quick diarization of an audio file."""
@@ -886,9 +886,9 @@ def diarize_audio(
 
 
 def identify_speaker(
-    audio_path: Union[str, Path],
-    profiles_dir: Union[str, Path]
-) -> Optional[str]:
+    audio_path: str | Path,
+    profiles_dir: str | Path
+) -> str | None:
     """Identify who is speaking in an audio file."""
     config = DiarizationConfig(profile_dir=Path(profiles_dir))
     diarizer = SpeakerDiarizer(config)

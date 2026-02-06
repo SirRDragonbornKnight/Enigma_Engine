@@ -8,7 +8,7 @@ Creates simple procedural images without needing Stable Diffusion or any ML mode
 import math
 import struct
 import zlib
-from typing import List, Tuple, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class BuiltinImageGen:
@@ -58,7 +58,7 @@ class BuiltinImageGen:
         """Smooth step function."""
         return t * t * (3 - 2 * t)
     
-    def _hsv_to_rgb(self, h: float, s: float, v: float) -> Tuple[int, int, int]:
+    def _hsv_to_rgb(self, h: float, s: float, v: float) -> tuple[int, int, int]:
         """Convert HSV to RGB."""
         h = h % 1.0
         if s == 0:
@@ -86,7 +86,7 @@ class BuiltinImageGen:
         
         return (int(r * 255), int(g * 255), int(b * 255))
     
-    def _color_from_prompt(self, prompt: str) -> Tuple[float, float, float]:
+    def _color_from_prompt(self, prompt: str) -> tuple[float, float, float]:
         """Extract dominant hue from prompt words."""
         prompt_lower = prompt.lower()
         
@@ -148,7 +148,7 @@ class BuiltinImageGen:
         else:
             return "abstract"
     
-    def _generate_gradient(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_gradient(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate a gradient image."""
         pixels = []
         hue2 = (hue + self._pseudo_random(seed, 0) * 0.3) % 1.0
@@ -168,7 +168,7 @@ class BuiltinImageGen:
             pixels.append(row)
         return pixels
     
-    def _generate_pattern(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_pattern(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate a geometric pattern."""
         pixels = []
         scale = 8 + int(self._pseudo_random(seed, 0) * 24)
@@ -192,7 +192,7 @@ class BuiltinImageGen:
             pixels.append(row)
         return pixels
     
-    def _generate_noise(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_noise(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate noise texture."""
         pixels = []
         
@@ -213,7 +213,7 @@ class BuiltinImageGen:
             pixels.append(row)
         return pixels
     
-    def _generate_circles(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_circles(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate circles/bubbles."""
         # Create background
         pixels = [[self._hsv_to_rgb(hue, sat * 0.3, val * 0.2) for _ in range(self.width)] for _ in range(self.height)]
@@ -244,7 +244,7 @@ class BuiltinImageGen:
         
         return pixels
     
-    def _generate_stars(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_stars(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate starfield."""
         # Dark background
         pixels = [[self._hsv_to_rgb(hue, sat * 0.5, 0.05) for _ in range(self.width)] for _ in range(self.height)]
@@ -276,7 +276,7 @@ class BuiltinImageGen:
         
         return pixels
     
-    def _generate_waves(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_waves(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate wave pattern."""
         pixels = []
         freq = 0.02 + self._pseudo_random(seed, 0) * 0.03
@@ -295,7 +295,7 @@ class BuiltinImageGen:
             pixels.append(row)
         return pixels
     
-    def _generate_terrain(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_terrain(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate simple terrain/landscape."""
         pixels = []
         
@@ -346,7 +346,7 @@ class BuiltinImageGen:
             pixels.append(row)
         return pixels
     
-    def _generate_abstract(self, seed: int, hue: float, sat: float, val: float) -> List[List[Tuple[int, int, int]]]:
+    def _generate_abstract(self, seed: int, hue: float, sat: float, val: float) -> list[list[tuple[int, int, int]]]:
         """Generate abstract art combining multiple techniques."""
         # Start with gradient
         pixels = self._generate_gradient(seed, hue, sat, val)
@@ -376,7 +376,7 @@ class BuiltinImageGen:
         
         return pixels
     
-    def _pixels_to_png(self, pixels: List[List[Tuple[int, int, int]]]) -> bytes:
+    def _pixels_to_png(self, pixels: list[list[tuple[int, int, int]]]) -> bytes:
         """Convert pixel data to PNG format (pure Python implementation)."""
         height = len(pixels)
         width = len(pixels[0]) if pixels else 0
@@ -412,7 +412,7 @@ class BuiltinImageGen:
         return png_data
     
     def generate(self, prompt: str, width: Optional[int] = None, height: Optional[int] = None,
-                 seed: Optional[int] = None, **kwargs) -> Dict[str, Any]:
+                 seed: Optional[int] = None, **kwargs) -> dict[str, Any]:
         """Generate an image from a text prompt."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}
@@ -468,7 +468,7 @@ class BuiltinImageGen:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def generate_to_file(self, prompt: str, output_path: str, **kwargs) -> Dict[str, Any]:
+    def generate_to_file(self, prompt: str, output_path: str, **kwargs) -> dict[str, Any]:
         """Generate image and save to file."""
         result = self.generate(prompt, **kwargs)
         

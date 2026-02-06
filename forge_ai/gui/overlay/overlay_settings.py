@@ -7,12 +7,20 @@ Provides a settings panel for configuring overlay appearance and behavior.
 import logging
 from typing import Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
-    QSlider, QComboBox, QCheckBox, QPushButton, QLineEdit,
-    QSpinBox
-)
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .overlay_modes import OverlayMode, OverlayPosition
 from .overlay_themes import OVERLAY_THEMES

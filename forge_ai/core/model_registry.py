@@ -27,13 +27,14 @@ USAGE:
 """
 
 import json
-import torch
-from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Tuple, Any
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
-from .model import Forge, ForgeConfig, MODEL_PRESETS
+import torch
+
 from ..config import CONFIG
+from .model import MODEL_PRESETS, Forge, ForgeConfig
 
 
 def safe_load_weights(path, map_location=None):
@@ -126,7 +127,7 @@ class ModelRegistry:
     def _load_registry(self):
         """Load or create the model registry."""
         if self.registry_file.exists():
-            with open(self.registry_file, "r") as f:
+            with open(self.registry_file) as f:
                 self.registry = json.load(f)
             
             # Clean up orphaned entries (registered but folder doesn't exist)
@@ -164,7 +165,7 @@ class ModelRegistry:
         size: str = "tiny",
         vocab_size: int = 32000,
         description: str = "",
-        custom_config: Optional[Dict] = None,
+        custom_config: Optional[dict] = None,
         base_model: Optional[str] = None
     ) -> Forge:
         """
@@ -182,7 +183,7 @@ class ModelRegistry:
             Initialized (untrained) model
         """
         import shutil
-        
+
         # Validate name
         name = name.lower().strip().replace(" ", "_")
         if name in self.registry["models"]:
@@ -391,7 +392,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         device: Optional[str] = None,
         checkpoint: Optional[str] = None,
         progress_callback: Optional[callable] = None
-    ) -> Tuple[Forge, Dict]:
+    ) -> tuple[Forge, dict]:
         """
         Load a model by name.
 
@@ -451,7 +452,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
                 f"Try creating a new model or check if files were deleted."
             )
         
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         # Determine device using device profiles for smarter selection
@@ -549,7 +550,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         name = name.lower().strip()
         model_dir = Path(self.registry["models"][name]["path"])
 
-        with open(model_dir / "metadata.json", "r") as f:
+        with open(model_dir / "metadata.json") as f:
             metadata = json.load(f)
 
         metadata.update(kwargs)
@@ -558,7 +559,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         with open(model_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
-    def list_models(self) -> Dict[str, Any]:
+    def list_models(self) -> dict[str, Any]:
         """List all registered models. Returns dict, prints summary."""
         # Return data - GUI will display it
         return self.registry["models"]
@@ -588,7 +589,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         del self.registry["models"][name]
         self._save_registry()
 
-    def get_model_info(self, name: str) -> Dict:
+    def get_model_info(self, name: str) -> dict:
         """Get detailed info about a model."""
         # Find the actual key in the registry (case-insensitive match)
         name_lower = name.lower().strip()
@@ -609,7 +610,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         config_path = model_dir / "config.json"
         if config_path.exists():
             try:
-                with open(config_path, "r") as f:
+                with open(config_path) as f:
                     config = json.load(f)
             except Exception:
                 pass
@@ -619,7 +620,7 @@ AI: I'm {name}, an AI assistant. I'm here to help with questions, have conversat
         metadata_path = model_dir / "metadata.json"
         if metadata_path.exists():
             try:
-                with open(metadata_path, "r") as f:
+                with open(metadata_path) as f:
                     metadata = json.load(f)
             except Exception:
                 pass
@@ -748,7 +749,7 @@ def set_model_capabilities(model_name: str, capabilities: list, models_dir: Opti
     model_dir = Path(registry.registry["models"][name]["path"])
     metadata_path = model_dir / "metadata.json"
     if metadata_path.exists():
-        with open(metadata_path, "r") as f:
+        with open(metadata_path) as f:
             metadata = json.load(f)
         metadata["capabilities"] = capabilities
         with open(metadata_path, "w") as f:

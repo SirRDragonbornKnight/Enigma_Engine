@@ -42,12 +42,13 @@ INTEGRATION:
 """
 
 import logging
-import time
 import threading
+import time
+from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional, Dict, Any, Generator, List
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +227,7 @@ class AdaptiveEngine:
             return False
         
         try:
-            from .device_profiles import get_device_profiler, DeviceClass
+            from .device_profiles import DeviceClass, get_device_profiler
             profiler = get_device_profiler()
             device_class = profiler.classify()
             
@@ -254,7 +255,7 @@ class AdaptiveEngine:
         
         return AdaptiveMode.FULL
     
-    def _get_adjusted_params(self, mode: AdaptiveMode, **kwargs) -> Dict[str, Any]:
+    def _get_adjusted_params(self, mode: AdaptiveMode, **kwargs) -> dict[str, Any]:
         """Adjust generation parameters based on mode."""
         params = kwargs.copy()
         
@@ -321,7 +322,7 @@ class AdaptiveEngine:
                 logger.error(f"Generation failed: {e}")
                 return self._generate_fallback(prompt, params)
     
-    def _generate_local(self, prompt: str, params: Dict[str, Any]) -> str:
+    def _generate_local(self, prompt: str, params: dict[str, Any]) -> str:
         """Generate using local ForgeEngine."""
         self._stats["local_generations"] += 1
         
@@ -331,7 +332,7 @@ class AdaptiveEngine:
         
         return engine.generate(prompt, **params)
     
-    def _generate_distributed(self, prompt: str, params: Dict[str, Any]) -> str:
+    def _generate_distributed(self, prompt: str, params: dict[str, Any]) -> str:
         """Generate using distributed server."""
         self._stats["distributed_generations"] += 1
         
@@ -346,7 +347,7 @@ class AdaptiveEngine:
             logger.warning(f"Distributed generation failed: {e}, falling back to local")
             return self._generate_local(prompt, params)
     
-    def _generate_low_power(self, prompt: str, params: Dict[str, Any]) -> str:
+    def _generate_low_power(self, prompt: str, params: dict[str, Any]) -> str:
         """Generate using low-power engine."""
         engine = self.low_power_engine
         if engine:
@@ -355,7 +356,7 @@ class AdaptiveEngine:
         # Fall back to local with adjusted params
         return self._generate_local(prompt, params)
     
-    def _generate_gaming(self, prompt: str, params: Dict[str, Any]) -> str:
+    def _generate_gaming(self, prompt: str, params: dict[str, Any]) -> str:
         """Generate in gaming mode (minimal resources)."""
         # Check if we can offload
         if self._should_use_distributed():
@@ -368,7 +369,7 @@ class AdaptiveEngine:
         # Use local with gaming params
         return self._generate_local(prompt, params)
     
-    def _generate_fallback(self, prompt: str, params: Dict[str, Any]) -> str:
+    def _generate_fallback(self, prompt: str, params: dict[str, Any]) -> str:
         """Generate using builtin fallback."""
         self._stats["fallback_generations"] += 1
         
@@ -428,7 +429,7 @@ class AdaptiveEngine:
         # Fall back to basic generation
         return self.generate(f"User: {message}\nAssistant:", **kwargs)
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current engine status."""
         return {
             "mode": self._current_mode.name,

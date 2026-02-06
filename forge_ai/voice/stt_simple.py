@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 # Try VOSK first (offline)
 try:
-    import vosk
     import sounddevice as sd
+    import vosk
     HAVE_VOSK = True
 except ImportError:
     HAVE_VOSK = False
@@ -72,7 +72,8 @@ VOSK_MODEL_PATH = "model"  # Default path for VOSK model
 def _transcribe_vosk_file(path):
     try:
         # simple file transcription using wav file path and vosk
-        import wave, json
+        import json
+        import wave
         with wave.open(path, "rb") as wf:
             model = vosk.Model(VOSK_MODEL_PATH)
             rec = vosk.KaldiRecognizer(model, wf.getframerate())
@@ -100,8 +101,8 @@ def _transcribe_vosk_file(path):
 # SpeechRecognition fallback (online by default)
 def _transcribe_sr_from_mic(timeout):
     try:
-        import sys
         import os
+        import sys
         
         r = sr.Recognizer()
         

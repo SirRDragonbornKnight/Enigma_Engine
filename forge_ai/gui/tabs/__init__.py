@@ -9,48 +9,48 @@ from typing import TYPE_CHECKING
 
 # Only import for type checking (not at runtime)
 if TYPE_CHECKING:
-    from .chat_tab import create_chat_tab
-    from .training_tab import create_training_tab
-    from .workspace_tab import create_workspace_tab
-    from .avatar_tab import create_avatar_tab
-    from .avatar.avatar_display import create_avatar_subtab
-    from .game.game_connection import create_game_subtab
-    from .robot.robot_control import create_robot_subtab
-    from .vision_tab import create_vision_tab
-    from .camera_tab import CameraTab, create_camera_tab
-    from .sessions_tab import create_sessions_tab
-    from .instructions_tab import create_instructions_tab
-    from .terminal_tab import create_terminal_tab, log_to_terminal
-    from .modules_tab import ModulesTab
-    from .scaling_tab import ScalingTab, create_scaling_tab
-    from .examples_tab import ExamplesTab, create_examples_tab
-    from .image_tab import ImageTab, create_image_tab
-    from .code_tab import CodeTab, create_code_tab
-    from .video_tab import VideoTab, create_video_tab
+    from .analytics_tab import AnalyticsTab, create_analytics_tab
     from .audio_tab import AudioTab, create_audio_tab
+    from .avatar.avatar_display import create_avatar_subtab
+    from .avatar_tab import create_avatar_tab
+    from .camera_tab import CameraTab, create_camera_tab
+    from .chat_tab import create_chat_tab
+    from .code_tab import CodeTab, create_code_tab
     from .embeddings_tab import EmbeddingsTab, create_embeddings_tab
+    from .examples_tab import ExamplesTab, create_examples_tab
+    from .game.game_connection import create_game_subtab
+    from .gif_tab import GIFTab, create_gif_tab
+    from .image_tab import ImageTab, create_image_tab
+    from .instructions_tab import create_instructions_tab
+    from .logs_tab import LogsTab, create_logs_tab
+    from .model_router_tab import ModelRouterTab
+    from .modules_tab import ModulesTab
+    from .network_tab import NetworkTab, create_network_tab
+    from .notes_tab import NotesTab, create_notes_tab
+    from .robot.robot_control import create_robot_subtab
+    from .scaling_tab import ScalingTab, create_scaling_tab
+    from .scheduler_tab import SchedulerTab, create_scheduler_tab
+    from .sessions_tab import create_sessions_tab
+    from .settings_tab import create_settings_tab
+    from .shared_components import (
+        COLOR_PRESETS,
+        STYLE_PRESETS,
+        ColorCustomizer,
+        DirectoryWatcher,
+        ModuleStateChecker,
+        PresetSelector,
+        SettingsPersistence,
+        create_action_button,
+        create_settings_group,
+    )
+    from .terminal_tab import create_terminal_tab, log_to_terminal
     from .threed_tab import ThreeDTab, create_threed_tab
     from .tool_manager_tab import ToolManagerTab
-    from .logs_tab import LogsTab, create_logs_tab
-    from .notes_tab import NotesTab, create_notes_tab
-    from .network_tab import NetworkTab, create_network_tab
-    from .analytics_tab import AnalyticsTab, create_analytics_tab
-    from .scheduler_tab import SchedulerTab, create_scheduler_tab
-    from .gif_tab import GIFTab, create_gif_tab
-    from .settings_tab import create_settings_tab
-    from .model_router_tab import ModelRouterTab
+    from .training_tab import create_training_tab
+    from .video_tab import VideoTab, create_video_tab
+    from .vision_tab import create_vision_tab
     from .voice_clone_tab import VoiceCloneTab
-    from .shared_components import (
-        STYLE_PRESETS,
-        COLOR_PRESETS,
-        PresetSelector,
-        ColorCustomizer,
-        ModuleStateChecker,
-        SettingsPersistence,
-        create_settings_group,
-        create_action_button,
-        DirectoryWatcher,
-    )
+    from .workspace_tab import create_workspace_tab
 
 # Lazy loading cache
 _cache = {}
@@ -123,6 +123,7 @@ def __getattr__(name: str):
         'create_scheduler_tab': ('.scheduler_tab', 'create_scheduler_tab'),
         'DevicesTab': ('.devices_tab', 'DevicesTab'),
         'create_devices_tab': ('.devices_tab', 'create_devices_tab'),
+        'create_model_comparison_tab': ('.model_comparison_tab', 'create_model_comparison_tab'),
         
         # Shared components
         'STYLE_PRESETS': ('.shared_components', 'STYLE_PRESETS'),
@@ -228,6 +229,7 @@ __all__ = [
     'create_analytics_tab',
     'SchedulerTab',
     'create_scheduler_tab',
+    'create_model_comparison_tab',
     'GIFTab',
     'create_gif_tab',
     'create_settings_tab',

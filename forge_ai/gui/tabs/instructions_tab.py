@@ -1,15 +1,25 @@
 """Files tab for ForgeAI GUI - edit model data files."""
 
 from pathlib import Path
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QPlainTextEdit, QMessageBox, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QSplitter, QGroupBox
-)
-from PyQt5.QtCore import Qt
 
-from .shared_components import NoScrollComboBox
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QSplitter,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 from ...config import CONFIG
+from .shared_components import NoScrollComboBox
 
 # Default instructions content
 DEFAULT_INSTRUCTIONS = """# ForgeAI - Quick Start Guide

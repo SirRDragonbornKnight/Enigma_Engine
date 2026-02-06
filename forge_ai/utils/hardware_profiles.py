@@ -93,7 +93,7 @@ class HardwareProfile:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'HardwareProfile':
+    def from_dict(cls, data: Dict[str, Any]) -> HardwareProfile:
         """Create from dictionary."""
         return cls(**data)
 
@@ -294,7 +294,7 @@ class HardwareProfileManager:
         """Load saved profiles and active profile."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     data = json.load(f)
                 
                 self.active_profile_name = data.get("active_profile", "balanced")
@@ -303,7 +303,7 @@ class HardwareProfileManager:
                 for name, profile_data in data.get("custom_profiles", {}).items():
                     self.custom_profiles[name] = HardwareProfile.from_dict(profile_data)
                     
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 print(f"Warning: Could not load hardware profiles: {e}")
     
     def _save(self):
@@ -496,7 +496,7 @@ class HardwareProfileManager:
             Name of recommended profile
         """
         import psutil
-        
+
         # Get system info
         cpu_count = psutil.cpu_count()
         memory_gb = psutil.virtual_memory().total / (1024**3)

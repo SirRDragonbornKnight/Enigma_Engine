@@ -11,16 +11,16 @@ Features:
 Part of the ForgeAI GUI enhancement suite.
 """
 
-import time
-import threading
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Tuple, Union
-from pathlib import Path
-from enum import Enum
-import logging
 import base64
-import mimetypes
 import io
+import logging
+import mimetypes
+import threading
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class CaptureRegion:
     width: int
     height: int
     
-    def to_tuple(self) -> Tuple[int, int, int, int]:
+    def to_tuple(self) -> tuple[int, int, int, int]:
         return (self.x, self.y, self.width, self.height)
     
     @property
@@ -158,15 +158,17 @@ class ScreenCapture:
             return False
         
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
             
             img = Image.open(io.BytesIO(image_data))
             
             # Platform-specific clipboard
             try:
-                import win32clipboard
                 from io import BytesIO
+
+                import win32clipboard
                 
                 output = BytesIO()
                 img.convert("RGB").save(output, "BMP")
@@ -190,7 +192,7 @@ class ScreenCapture:
         """Get last captured image."""
         return self._last_capture
     
-    def get_monitors(self) -> List[Dict[str, int]]:
+    def get_monitors(self) -> list[dict[str, int]]:
         """Get available monitors."""
         try:
             from mss import mss
@@ -296,7 +298,7 @@ class FileDropHandler:
         self,
         max_file_size: int = 50 * 1024 * 1024,  # 50MB
         max_files: int = 10,
-        allowed_types: Optional[List[FileType]] = None
+        allowed_types: Optional[list[FileType]] = None
     ):
         """
         Initialize file drop handler.
@@ -309,10 +311,10 @@ class FileDropHandler:
         self.max_file_size = max_file_size
         self.max_files = max_files
         self.allowed_types = allowed_types
-        self._files: List[DroppedFile] = []
-        self._callbacks: List[Callable[[List[DroppedFile]], None]] = []
+        self._files: list[DroppedFile] = []
+        self._callbacks: list[Callable[[list[DroppedFile]], None]] = []
     
-    def handle_drop(self, paths: List[str]) -> List[DroppedFile]:
+    def handle_drop(self, paths: list[str]) -> list[DroppedFile]:
         """
         Handle dropped files.
         
@@ -374,7 +376,7 @@ class FileDropHandler:
         
         return files
     
-    def get_files(self) -> List[DroppedFile]:
+    def get_files(self) -> list[DroppedFile]:
         """Get all dropped files."""
         return self._files.copy()
     
@@ -387,7 +389,7 @@ class FileDropHandler:
         if 0 <= index < len(self._files):
             del self._files[index]
     
-    def on_drop(self, callback: Callable[[List[DroppedFile]], None]):
+    def on_drop(self, callback: Callable[[list[DroppedFile]], None]):
         """Register drop callback."""
         self._callbacks.append(callback)
     
@@ -399,8 +401,9 @@ class FileDropHandler:
     def _generate_preview(self, path: Path, max_size: int = 200) -> Optional[bytes]:
         """Generate image preview thumbnail."""
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
             
             img = Image.open(path)
             img.thumbnail((max_size, max_size))
@@ -431,7 +434,7 @@ class Suggestion:
     description: str = ""
     category: str = "general"
     score: float = 1.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class InputSuggestions:
@@ -478,11 +481,11 @@ class InputSuggestions:
         self.max_suggestions = max_suggestions
         self.history_weight = history_weight
         
-        self._history: List[str] = []
-        self._custom_suggestions: List[Suggestion] = []
-        self._providers: List[Callable[[str], List[Suggestion]]] = []
+        self._history: list[str] = []
+        self._custom_suggestions: list[Suggestion] = []
+        self._providers: list[Callable[[str], list[Suggestion]]] = []
     
-    def get_suggestions(self, input_text: str) -> List[Suggestion]:
+    def get_suggestions(self, input_text: str) -> list[Suggestion]:
         """
         Get suggestions for input text.
         
@@ -551,7 +554,7 @@ class InputSuggestions:
         """Add custom suggestion."""
         self._custom_suggestions.append(suggestion)
     
-    def add_provider(self, provider: Callable[[str], List[Suggestion]]):
+    def add_provider(self, provider: Callable[[str], list[Suggestion]]):
         """Add suggestion provider function."""
         self._providers.append(provider)
     
@@ -603,18 +606,18 @@ class MultiFileUploader:
             max_concurrent: Max concurrent uploads
         """
         self.max_concurrent = max_concurrent
-        self._queue: List[UploadItem] = []
-        self._active: List[UploadItem] = []
-        self._completed: List[UploadItem] = []
+        self._queue: list[UploadItem] = []
+        self._active: list[UploadItem] = []
+        self._completed: list[UploadItem] = []
         self._lock = threading.Lock()
-        self._callbacks: Dict[str, List[Callable[[UploadItem], None]]] = {
+        self._callbacks: dict[str, list[Callable[[UploadItem], None]]] = {
             "progress": [],
             "complete": [],
             "error": []
         }
         self._id_counter = 0
     
-    def add_files(self, files: List[DroppedFile]) -> List[str]:
+    def add_files(self, files: list[DroppedFile]) -> list[str]:
         """
         Add files to upload queue.
         
@@ -688,7 +691,7 @@ class MultiFileUploader:
                 self._active.remove(item)
                 self._completed.append(item)
     
-    def get_status(self) -> Dict[str, List[UploadItem]]:
+    def get_status(self) -> dict[str, list[UploadItem]]:
         """Get upload status."""
         return {
             "pending": self._queue.copy(),
@@ -740,9 +743,9 @@ class VoiceInputVisualizer:
             buffer_size: Number of levels to keep
         """
         self.buffer_size = buffer_size
-        self._levels: List[AudioLevel] = []
+        self._levels: list[AudioLevel] = []
         self._is_recording = False
-        self._callbacks: List[Callable[[AudioLevel], None]] = []
+        self._callbacks: list[Callable[[AudioLevel], None]] = []
     
     def add_level(self, level: float, is_speech: bool = False):
         """Add audio level reading."""
@@ -761,11 +764,11 @@ class VoiceInputVisualizer:
             except Exception as e:
                 logger.warning(f"Visualizer callback error: {e}")
     
-    def get_levels(self) -> List[AudioLevel]:
+    def get_levels(self) -> list[AudioLevel]:
         """Get recent audio levels."""
         return self._levels.copy()
     
-    def get_waveform_data(self) -> List[float]:
+    def get_waveform_data(self) -> list[float]:
         """Get waveform data for display."""
         return [l.level for l in self._levels]
     

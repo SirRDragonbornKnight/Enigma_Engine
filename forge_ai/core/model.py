@@ -110,16 +110,18 @@ CHOOSE YOUR FIGHTER (Model Sizes):
     • forge_ai/core/tokenizer.py - Converts text ↔ numbers
     • UNIVERSAL_MODEL_GUIDE.md   - Comprehensive feature guide
 """
-import math
 import json
 import logging
+import math
 import os
+from collections.abc import Generator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, Dict, Any, List, Union, Generator, Literal
-from dataclasses import dataclass
-from pathlib import Path
 
 from ..config import CONFIG
 
@@ -147,11 +149,11 @@ MAX_LEN = CONFIG.get("max_len", 1024)
 # when multiple threads access models concurrently (e.g., GUI + API server).
 import threading
 
-_LOADED_MODELS: Dict[str, 'Forge'] = {}
+_LOADED_MODELS: dict[str, 'Forge'] = {}
 _MODELS_LOCK = threading.RLock()  # RLock allows re-entrant locking
 
 
-def get_running_models() -> Dict[str, 'Forge']:
+def get_running_models() -> dict[str, 'Forge']:
     """Get a copy of all loaded model instances (thread-safe)."""
     with _MODELS_LOCK:
         return _LOADED_MODELS.copy()
@@ -456,7 +458,7 @@ class ForgeConfig:
             )
         object.__setattr__(self, name, value)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'vocab_size': self.vocab_size,
             'dim': self.dim,
@@ -487,7 +489,7 @@ class ForgeConfig:
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> 'ForgeConfig':
+    def from_dict(cls, d: dict[str, Any]) -> 'ForgeConfig':
         known = {
             'vocab_size', 'dim', 'n_layers', 'n_heads', 'n_kv_heads',
             'hidden_dim', 'max_seq_len', 'dropout', 'use_rope', 'use_rms_norm',
@@ -538,7 +540,7 @@ class QuantizationConfig:
     mode: str = "none"  # "none", "dynamic", "int8", "int4"
     
     # Static quantization options
-    calibration_data: Optional[List[torch.Tensor]] = None
+    calibration_data: Optional[list[torch.Tensor]] = None
     num_calibration_batches: int = 100
     
     # Dynamic quantization options
@@ -1699,7 +1701,7 @@ class Forge(nn.Module):
     def forward(
         self, input_ids: torch.Tensor, targets: Optional[torch.Tensor] = None,
         use_cache: bool = False, start_pos: int = 0, return_loss: bool = False
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, Optional[torch.Tensor]]]:
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, Optional[torch.Tensor]]]:
         """
         Forward pass.
 
@@ -1866,11 +1868,11 @@ class Forge(nn.Module):
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
-        stop_tokens: Optional[List[int]] = None,
+        stop_tokens: Optional[list[int]] = None,
         *,  # Force keyword-only args after this
         return_logits: bool = False,
         stream: bool = False,
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Generate tokens autoregressively.
         
@@ -1965,7 +1967,7 @@ class Forge(nn.Module):
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
-        stop_tokens: Optional[List[int]] = None
+        stop_tokens: Optional[list[int]] = None
     ) -> Generator[torch.Tensor, None, None]:
         """
         Streaming token generation - yields tokens as they're generated.
@@ -2069,11 +2071,11 @@ class Forge(nn.Module):
     def num_parameters(self) -> int:
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def get_config(self) -> Dict[str, Any]:
+    def get_config(self) -> dict[str, Any]:
         return self.config.to_dict()
 
     @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> 'Forge':
+    def from_config(cls, config: dict[str, Any]) -> 'Forge':
         return cls(config=ForgeConfig.from_dict(config))
 
     @classmethod
@@ -2330,7 +2332,7 @@ class Forge(nn.Module):
         try:
             # Try using bitsandbytes if available
             import bitsandbytes as bnb
-            
+
             # Convert Linear layers to 4-bit
             for name, module in self.named_modules():
                 if isinstance(module, nn.Linear):
@@ -2639,7 +2641,7 @@ class Forge(nn.Module):
             model.load_lora("lora_adapters/creative.pth", "creative")
         """
         try:
-            from .lora_utils import load_lora_weights, apply_lora
+            from .lora_utils import apply_lora, load_lora_weights
         except ImportError:
             logger.error("LoRA support requires lora_utils module")
             raise
@@ -2746,9 +2748,9 @@ class Forge(nn.Module):
         self, 
         path: Union[str, Path], 
         opset_version: int = 14,
-        input_names: Optional[List[str]] = None,
-        output_names: Optional[List[str]] = None,
-        dynamic_axes: Optional[Dict[str, Dict[int, str]]] = None
+        input_names: Optional[list[str]] = None,
+        output_names: Optional[list[str]] = None,
+        dynamic_axes: Optional[dict[str, dict[int, str]]] = None
     ) -> None:
         """
         Export model to ONNX format for deployment.
@@ -2962,7 +2964,7 @@ class Forge(nn.Module):
 # 🔧 HARDWARE DETECTION HELPERS
 # =============================================================================
 
-def detect_hardware() -> Dict[str, Any]:
+def detect_hardware() -> dict[str, Any]:
     """
     Detect hardware capabilities for model configuration.
     
@@ -2984,7 +2986,7 @@ def detect_hardware() -> Dict[str, Any]:
         }
 
 
-def recommend_model_size(hardware: Optional[Dict[str, Any]] = None) -> str:
+def recommend_model_size(hardware: Optional[dict[str, Any]] = None) -> str:
     """
     Recommend optimal model size based on hardware.
     
@@ -3001,7 +3003,7 @@ def recommend_model_size(hardware: Optional[Dict[str, Any]] = None) -> str:
 
 
 @staticmethod
-def estimate_memory_usage(size: str, quantization: str = "none") -> Dict[str, float]:
+def estimate_memory_usage(size: str, quantization: str = "none") -> dict[str, float]:
     """
     Estimate RAM/VRAM requirements for a model configuration.
     
@@ -3135,7 +3137,7 @@ def create_model_auto(size: str = 'small', vocab_size: Optional[int] = None, **k
         Model instance (Forge for PyTorch, PureTransformer for pure Python)
     """
     from ..config import CONFIG
-    
+
     # Get backend preference from config
     backend = CONFIG.get("nn_backend", "auto")
     threshold = CONFIG.get("nn_backend_threshold", 5_000_000)

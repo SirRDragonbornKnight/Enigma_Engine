@@ -14,9 +14,9 @@ Best for: UI text, buttons, labels, menus
 Limited for: Handwriting, unusual fonts, rotated text
 """
 
-import io
 import base64
-from typing import List, Dict
+import io
+from typing import Dict, List
 
 
 class SimpleOCR:
@@ -46,7 +46,7 @@ class SimpleOCR:
         """
         try:
             import numpy as np
-            
+
             # Convert to grayscale
             if image.mode != 'L':
                 gray = image.convert('L')
@@ -92,7 +92,7 @@ class SimpleOCR:
         except Exception as e:
             return f"[Error decoding image: {e}]"
     
-    def _find_text_regions(self, gray_arr) -> List[Dict]:
+    def _find_text_regions(self, gray_arr) -> list[dict]:
         """
         Find regions likely to contain text.
         
@@ -168,7 +168,7 @@ class SimpleOCR:
         
         return regions
     
-    def _extract_text_from_region(self, gray_arr, region: Dict) -> str:
+    def _extract_text_from_region(self, gray_arr, region: dict) -> str:
         """
         Extract text from a specific region.
         
@@ -289,7 +289,7 @@ class SimpleOCR:
         else:
             return "_"  # Unknown/unclear
     
-    def get_word_locations(self, image) -> List[Dict]:
+    def get_word_locations(self, image) -> list[dict]:
         """
         Get approximate locations of words in the image.
         
@@ -375,7 +375,7 @@ class AdvancedOCR:
             Extracted text
         """
         from PIL import Image
-        
+
         # Load image if path
         if isinstance(image, str):
             image = Image.open(image)
@@ -415,8 +415,8 @@ class AdvancedOCR:
     def _extract_paddleocr(self, image, language: str) -> str:
         """Extract text using PaddleOCR."""
         try:
-            from paddleocr import PaddleOCR
             import numpy as np
+            from paddleocr import PaddleOCR
             
             ocr = PaddleOCR(use_angle_cls=True, lang=language)
             arr = np.array(image)
@@ -456,7 +456,7 @@ class TextFinder:
         self._ocr = AdvancedOCR()
     
     def find(self, image, search_text: str, 
-             case_sensitive: bool = False) -> List[Dict]:
+             case_sensitive: bool = False) -> list[dict]:
         """
         Find all occurrences of text in image.
         
@@ -482,7 +482,7 @@ class TextFinder:
         return results
     
     def _find_easyocr(self, image, search_text: str, 
-                      case_sensitive: bool) -> List[Dict]:
+                      case_sensitive: bool) -> list[dict]:
         """Find text using EasyOCR."""
         try:
             import easyocr
@@ -518,11 +518,11 @@ class TextFinder:
             return [{'error': str(e)}]
     
     def _find_paddleocr(self, image, search_text: str,
-                        case_sensitive: bool) -> List[Dict]:
+                        case_sensitive: bool) -> list[dict]:
         """Find text using PaddleOCR."""
         try:
-            from paddleocr import PaddleOCR
             import numpy as np
+            from paddleocr import PaddleOCR
             
             ocr = PaddleOCR(use_angle_cls=True, lang='en')
             arr = np.array(image)
@@ -553,7 +553,7 @@ class TextFinder:
             return [{'error': str(e)}]
     
     def _find_tesseract(self, image, search_text: str,
-                        case_sensitive: bool) -> List[Dict]:
+                        case_sensitive: bool) -> list[dict]:
         """Find text using Tesseract."""
         try:
             import pytesseract
@@ -585,7 +585,7 @@ class TextFinder:
             return [{'error': str(e)}]
     
     def _find_simple(self, image, search_text: str,
-                     case_sensitive: bool) -> List[Dict]:
+                     case_sensitive: bool) -> list[dict]:
         """Find text using simple OCR."""
         simple = SimpleOCR()
         locations = simple.get_word_locations(image)
@@ -612,7 +612,7 @@ def ocr(image) -> str:
     return reader.extract_text(image)
 
 
-def find_text(image, text: str) -> List[Dict]:
+def find_text(image, text: str) -> list[dict]:
     """Quick text finding in image."""
     finder = TextFinder()
     return finder.find(image, text)

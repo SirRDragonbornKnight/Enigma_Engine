@@ -2,14 +2,14 @@
 SQLite-backed memory database for storing short messages and metadata.
 Provides both legacy API and new class-based interface with proper connection management.
 """
-import sqlite3
-from contextlib import contextmanager
-from typing import Optional, List, Dict, Any
-import threading
-from pathlib import Path
 import json
-import time
 import logging
+import sqlite3
+import threading
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 
@@ -103,7 +103,7 @@ class MemoryDatabase:
         self,
         text: str,
         source: str = "user",
-        meta: Optional[Dict] = None
+        meta: Optional[dict] = None
     ) -> int:
         """
         Add a memory and return its ID.
@@ -125,7 +125,7 @@ class MemoryDatabase:
             conn.commit()
             return cursor.lastrowid
     
-    def get_recent(self, n: int = 20) -> List[Dict[str, Any]]:
+    def get_recent(self, n: int = 20) -> list[dict[str, Any]]:
         """
         Get recent memories.
         
@@ -154,7 +154,7 @@ class MemoryDatabase:
                 for row in rows
             ]
     
-    def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """
         Search memories by text content.
         
@@ -190,7 +190,7 @@ class MemoryDatabase:
                 for row in rows
             ]
     
-    def get_by_id(self, id_: int) -> Optional[Dict[str, Any]]:
+    def get_by_id(self, id_: int) -> Optional[dict[str, Any]]:
         """
         Get a memory by ID.
         

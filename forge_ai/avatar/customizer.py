@@ -4,10 +4,10 @@ Avatar Customizer
 User tools for customizing avatar appearance.
 """
 
-from pathlib import Path
-from typing import List, Optional
 import json
 import shutil
+from pathlib import Path
+from typing import List, Optional
 
 from .avatar_identity import AvatarAppearance
 
@@ -365,7 +365,7 @@ class AvatarCustomizer:
             return False
         
         try:
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = json.load(f)
             
             appearance = AvatarAppearance.from_dict(data)
@@ -491,7 +491,7 @@ def send_ai_avatar_command(setting: str, value: str) -> bool:
         True if the command was written successfully
     """
     import time
-    
+
     # Path to the customization file
     info_dir = Path(__file__).parent.parent.parent / "information" / "avatar"
     info_dir.mkdir(parents=True, exist_ok=True)

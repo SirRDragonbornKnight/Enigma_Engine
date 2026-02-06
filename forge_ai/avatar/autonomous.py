@@ -63,10 +63,10 @@ import random
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from threading import Lock
-from typing import Dict, List, Optional, Callable, TYPE_CHECKING
-from datetime import datetime
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 if TYPE_CHECKING:
     from .controller import AvatarController
@@ -131,8 +131,8 @@ class AutonomousConfig:
     
     # Time-based behavior
     enable_time_awareness: bool = True
-    sleepy_hours: List[int] = field(default_factory=lambda: [22, 23, 0, 1, 2, 3, 4, 5])  # Night hours
-    energetic_hours: List[int] = field(default_factory=lambda: [9, 10, 11, 14, 15, 16])  # Day hours
+    sleepy_hours: list[int] = field(default_factory=lambda: [22, 23, 0, 1, 2, 3, 4, 5])  # Night hours
+    energetic_hours: list[int] = field(default_factory=lambda: [9, 10, 11, 14, 15, 16])  # Day hours
     
     # Personality influence
     personality_influence: float = 0.5  # How much personality affects behavior
@@ -165,17 +165,17 @@ class AutonomousAvatar:
         self._last_action_time = 0.0
         self._last_screen_scan = 0.0
         self._last_activity_time = time.time()
-        self._screen_regions: List[ScreenRegion] = []
+        self._screen_regions: list[ScreenRegion] = []
         self._current_focus: Optional[ScreenRegion] = None
         
         # Memory - what has avatar seen/done
-        self._seen_windows: List[str] = []
-        self._recent_actions: List[str] = []
+        self._seen_windows: list[str] = []
+        self._recent_actions: list[str] = []
         self._interaction_count: int = 0
         
         # Callbacks for external integration
-        self._on_mood_change: List[Callable] = []
-        self._on_action: List[Callable] = []
+        self._on_mood_change: list[Callable] = []
+        self._on_action: list[Callable] = []
         
         # Personality link
         self._personality = None
@@ -357,7 +357,7 @@ class AutonomousAvatar:
             action()
             self._action_cycle_index = (self._action_cycle_index + 1) % len(actions)
     
-    def _get_adjusted_weights(self) -> Dict[str, float]:
+    def _get_adjusted_weights(self) -> dict[str, float]:
         """Get behavior weights adjusted for current mood."""
         base = {
             'idle': self.config.idle_animation_weight,

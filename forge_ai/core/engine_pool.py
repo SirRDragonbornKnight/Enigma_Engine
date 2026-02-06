@@ -30,7 +30,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from .inference import ForgeEngine
@@ -129,7 +129,7 @@ class EnginePool:
             return
         
         self.config = config or EnginePoolConfig()
-        self._engines: Dict[str, List[PooledEngine]] = {}
+        self._engines: dict[str, list[PooledEngine]] = {}
         self._access_lock = threading.Lock()
         self._cleanup_thread: Optional[threading.Thread] = None
         self._shutdown = False
@@ -192,9 +192,9 @@ class EnginePool:
             ForgeEngine instance or None if unavailable
         """
         # Import here to avoid circular imports
-        from .inference import ForgeEngine
         from ..config import CONFIG
-        
+        from .inference import ForgeEngine
+
         # Determine model path
         if model_path is None:
             model_path = self.config.default_model_path or str(CONFIG.models_dir / "default")
@@ -289,7 +289,7 @@ class EnginePool:
             self._engines.clear()
             logger.info(f"Cleared {count} engines from pool")
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get pool statistics."""
         with self._access_lock:
             stats = {

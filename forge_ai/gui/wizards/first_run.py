@@ -1,8 +1,17 @@
 """First Run Wizard for ForgeAI."""
 
 try:
-    from PyQt5.QtWidgets import QWizard, QWizardPage, QVBoxLayout, QLabel, QLineEdit, QRadioButton, QButtonGroup, QFormLayout
     from PyQt5.QtCore import pyqtSignal
+    from PyQt5.QtWidgets import (
+        QButtonGroup,
+        QFormLayout,
+        QLabel,
+        QLineEdit,
+        QRadioButton,
+        QVBoxLayout,
+        QWizard,
+        QWizardPage,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False

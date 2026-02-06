@@ -3,12 +3,12 @@ Memory Visualization for ForgeAI
 Generates visualization data for memory analysis and insights.
 """
 import logging
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-from datetime import datetime, timedelta
 from collections import Counter
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from .categorization import Memory, MemoryType, MemoryCategorization
+from .categorization import Memory, MemoryCategorization, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class MemoryVisualizer:
         """
         self.memory_system = memory_system
     
-    def generate_timeline(self, memories: Optional[List[Memory]] = None) -> Dict[str, Any]:
+    def generate_timeline(self, memories: Optional[list[Memory]] = None) -> dict[str, Any]:
         """
         Generate timeline visualization data.
         
@@ -77,7 +77,7 @@ class MemoryVisualizer:
             'total_events': len(events)
         }
     
-    def generate_type_distribution(self) -> Dict[str, int]:
+    def generate_type_distribution(self) -> dict[str, int]:
         """
         Generate pie chart data for memory types.
         
@@ -92,7 +92,7 @@ class MemoryVisualizer:
         
         return distribution
     
-    def generate_access_heatmap(self, days: int = 30) -> Dict[str, Any]:
+    def generate_access_heatmap(self, days: int = 30) -> dict[str, Any]:
         """
         Generate heatmap of memory access patterns.
         
@@ -139,7 +139,7 @@ class MemoryVisualizer:
             }
         }
     
-    def generate_importance_histogram(self, bins: int = 10) -> Dict[str, Any]:
+    def generate_importance_histogram(self, bins: int = 10) -> dict[str, Any]:
         """
         Generate histogram of importance scores.
         
@@ -184,7 +184,7 @@ class MemoryVisualizer:
             'total_memories': len(memories)
         }
     
-    def generate_memory_growth(self, days: int = 30) -> Dict[str, Any]:
+    def generate_memory_growth(self, days: int = 30) -> dict[str, Any]:
         """
         Generate memory growth over time.
         
@@ -361,7 +361,7 @@ class MemoryVisualizer:
         
         logger.info(f"Exported visualization to {path}")
     
-    def _format_dict(self, d: Dict) -> str:
+    def _format_dict(self, d: dict) -> str:
         """Format dictionary for display."""
         import json
         return json.dumps(d, indent=2)

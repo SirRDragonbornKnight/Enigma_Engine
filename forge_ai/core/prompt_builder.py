@@ -30,7 +30,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 
@@ -55,14 +55,14 @@ class PromptTemplate:
     turn_separator: str = "\n"
     
     # Stop sequences (what marks end of AI turn)
-    stop_sequences: List[str] = field(default_factory=lambda: [
+    stop_sequences: list[str] = field(default_factory=lambda: [
         "\nUser:", "\n\n", "User:", "\nHuman:"
     ])
     
     # Whether to add assistant prefix at end (for generation)
     add_generation_prefix: bool = True
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "system_prefix": self.system_prefix,
@@ -75,7 +75,7 @@ class PromptTemplate:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PromptTemplate":
+    def from_dict(cls, data: dict[str, Any]) -> "PromptTemplate":
         """Create from dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
@@ -146,11 +146,11 @@ class PromptBuilder:
         user_templates_path = Path(CONFIG.get("data_dir", "data")) / "prompt_templates.json"
         if user_templates_path.exists():
             try:
-                with open(user_templates_path, 'r', encoding='utf-8') as f:
+                with open(user_templates_path, encoding='utf-8') as f:
                     user_templates = json.load(f)
                 if name in user_templates:
                     return PromptTemplate.from_dict(user_templates[name])
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Could not load user templates: {e}")
         
         # Use built-in template
@@ -177,7 +177,7 @@ class PromptBuilder:
     def build_chat_prompt(
         self,
         message: str,
-        history: Optional[List[Dict[str, str]]] = None,
+        history: Optional[list[dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
         personality_prompt: Optional[str] = None,
         include_generation_prefix: bool = True
@@ -253,7 +253,7 @@ class PromptBuilder:
             return f"{self._template.system_prefix}{instruction}\n\n{text}"
         return text
     
-    def get_stop_sequences(self) -> List[str]:
+    def get_stop_sequences(self) -> list[str]:
         """Get stop sequences for current template."""
         return self._template.stop_sequences.copy()
     
@@ -344,7 +344,7 @@ def get_prompt_builder(template_name: str = "default") -> PromptBuilder:
 
 def build_chat_prompt(
     message: str,
-    history: Optional[List[Dict[str, str]]] = None,
+    history: Optional[list[dict[str, str]]] = None,
     system_prompt: Optional[str] = None,
     **kwargs
 ) -> str:

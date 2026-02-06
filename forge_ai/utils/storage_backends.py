@@ -39,10 +39,11 @@ import mimetypes
 import os
 import shutil
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional, Union
+from typing import Any, BinaryIO, Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -53,10 +54,10 @@ class StorageObject:
     """Metadata about a stored object."""
     key: str
     size: int
-    modified_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    content_type: Optional[str] = None
-    metadata: Dict[str, str] = field(default_factory=dict)
+    modified_at: datetime | None = None
+    created_at: datetime | None = None
+    content_type: str | None = None
+    metadata: dict[str, str] = field(default_factory=dict)
     
     @property
     def name(self) -> str:
@@ -89,7 +90,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    def put(self, key: str, data: Union[bytes, BinaryIO], **kwargs) -> StorageObject:
+    def put(self, key: str, data: bytes | BinaryIO, **kwargs) -> StorageObject:
         """
         Store an object.
         
@@ -122,7 +123,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    def list(self, prefix: str = "", recursive: bool = True) -> List[StorageObject]:
+    def list(self, prefix: str = "", recursive: bool = True) -> list[StorageObject]:
         """
         List objects.
         
@@ -136,7 +137,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    def info(self, key: str) -> Optional[StorageObject]:
+    def info(self, key: str) -> StorageObject | None:
         """Get object metadata without downloading."""
         pass
     
@@ -175,7 +176,7 @@ class StorageBackend(ABC):
 class LocalStorage(StorageBackend):
     """Local filesystem storage backend."""
     
-    def __init__(self, base_path: Union[str, Path] = "data/storage"):
+    def __init__(self, base_path: str | Path = "data/storage"):
         """
         Initialize local storage.
         
@@ -202,7 +203,7 @@ class LocalStorage(StorageBackend):
             raise FileNotFoundError(f"Object not found: {key}")
         return path.read_bytes()
     
-    def put(self, key: str, data: Union[bytes, BinaryIO], **kwargs) -> StorageObject:
+    def put(self, key: str, data: bytes | BinaryIO, **kwargs) -> StorageObject:
         path = self._full_path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -237,7 +238,7 @@ class LocalStorage(StorageBackend):
     def exists(self, key: str) -> bool:
         return self._full_path(key).exists()
     
-    def list(self, prefix: str = "", recursive: bool = True) -> List[StorageObject]:
+    def list(self, prefix: str = "", recursive: bool = True) -> list[StorageObject]:
         base = self._full_path(prefix) if prefix else self._base_path
         
         if not base.exists():
@@ -261,7 +262,7 @@ class LocalStorage(StorageBackend):
         
         return results
     
-    def info(self, key: str) -> Optional[StorageObject]:
+    def info(self, key: str) -> StorageObject | None:
         path = self._full_path(key)
         if not path.exists():
             return None
@@ -280,15 +281,15 @@ class MemoryStorage(StorageBackend):
     """In-memory storage for testing."""
     
     def __init__(self):
-        self._data: Dict[str, bytes] = {}
-        self._metadata: Dict[str, Dict[str, Any]] = {}
+        self._data: dict[str, bytes] = {}
+        self._metadata: dict[str, dict[str, Any]] = {}
     
     def get(self, key: str) -> bytes:
         if key not in self._data:
             raise FileNotFoundError(f"Object not found: {key}")
         return self._data[key]
     
-    def put(self, key: str, data: Union[bytes, BinaryIO], **kwargs) -> StorageObject:
+    def put(self, key: str, data: bytes | BinaryIO, **kwargs) -> StorageObject:
         content = data if isinstance(data, bytes) else data.read()
         
         self._data[key] = content
@@ -316,7 +317,7 @@ class MemoryStorage(StorageBackend):
     def exists(self, key: str) -> bool:
         return key in self._data
     
-    def list(self, prefix: str = "", recursive: bool = True) -> List[StorageObject]:
+    def list(self, prefix: str = "", recursive: bool = True) -> list[StorageObject]:
         results = []
         for key in self._data:
             if key.startswith(prefix):
@@ -330,7 +331,7 @@ class MemoryStorage(StorageBackend):
                 ))
         return results
     
-    def info(self, key: str) -> Optional[StorageObject]:
+    def info(self, key: str) -> StorageObject | None:
         if key not in self._data:
             return None
         
@@ -356,10 +357,10 @@ class S3Storage(StorageBackend):
         self,
         bucket: str,
         prefix: str = "",
-        endpoint_url: Optional[str] = None,
+        endpoint_url: str | None = None,
         region_name: str = "us-east-1",
-        access_key: Optional[str] = None,
-        secret_key: Optional[str] = None
+        access_key: str | None = None,
+        secret_key: str | None = None
     ):
         self._bucket = bucket
         self._prefix = prefix.strip("/")
@@ -398,7 +399,7 @@ class S3Storage(StorageBackend):
                 raise FileNotFoundError(f"Object not found: {key}")
             raise
     
-    def put(self, key: str, data: Union[bytes, BinaryIO], **kwargs) -> StorageObject:
+    def put(self, key: str, data: bytes | BinaryIO, **kwargs) -> StorageObject:
         if not self._available:
             raise RuntimeError("S3 not available")
         
@@ -425,7 +426,8 @@ class S3Storage(StorageBackend):
         try:
             self._client.delete_object(Bucket=self._bucket, Key=self._full_key(key))
             return True
-        except:
+        except Exception as e:
+            logger.debug(f"S3 delete failed for {key}: {e}")
             return False
     
     def exists(self, key: str) -> bool:
@@ -434,10 +436,11 @@ class S3Storage(StorageBackend):
         try:
             self._client.head_object(Bucket=self._bucket, Key=self._full_key(key))
             return True
-        except:
+        except Exception as e:
+            logger.debug(f"S3 exists check failed for {key}: {e}")
             return False
     
-    def list(self, prefix: str = "", recursive: bool = True) -> List[StorageObject]:
+    def list(self, prefix: str = "", recursive: bool = True) -> list[StorageObject]:
         if not self._available:
             return []
         
@@ -454,7 +457,7 @@ class S3Storage(StorageBackend):
         
         return results
     
-    def info(self, key: str) -> Optional[StorageObject]:
+    def info(self, key: str) -> StorageObject | None:
         if not self._available:
             return None
         try:
@@ -463,14 +466,15 @@ class S3Storage(StorageBackend):
                 key=key, size=response["ContentLength"], modified_at=response["LastModified"],
                 content_type=response.get("ContentType"), metadata=response.get("Metadata", {})
             )
-        except:
+        except Exception as e:
+            logger.debug(f"S3 info failed for {key}: {e}")
             return None
 
 
 class AzureStorage(StorageBackend):
     """Azure Blob Storage backend."""
     
-    def __init__(self, container: str, connection_string: Optional[str] = None, account_url: Optional[str] = None):
+    def __init__(self, container: str, connection_string: str | None = None, account_url: str | None = None):
         self._container = container
         self._available = False
         
@@ -502,10 +506,10 @@ class AzureStorage(StorageBackend):
         blob_client = self._container_client.get_blob_client(key)
         try:
             return blob_client.download_blob().readall()
-        except:
-            raise FileNotFoundError(f"Object not found: {key}")
+        except Exception as e:
+            raise FileNotFoundError(f"Object not found: {key}") from e
     
-    def put(self, key: str, data: Union[bytes, BinaryIO], **kwargs) -> StorageObject:
+    def put(self, key: str, data: bytes | BinaryIO, **kwargs) -> StorageObject:
         if not self._available:
             raise RuntimeError("Azure storage not available")
         blob_client = self._container_client.get_blob_client(key)
@@ -519,7 +523,8 @@ class AzureStorage(StorageBackend):
         try:
             self._container_client.get_blob_client(key).delete_blob()
             return True
-        except:
+        except Exception as e:
+            logger.debug(f"Azure delete failed for {key}: {e}")
             return False
     
     def exists(self, key: str) -> bool:
@@ -527,7 +532,7 @@ class AzureStorage(StorageBackend):
             return False
         return self._container_client.get_blob_client(key).exists()
     
-    def list(self, prefix: str = "", recursive: bool = True) -> List[StorageObject]:
+    def list(self, prefix: str = "", recursive: bool = True) -> list[StorageObject]:
         if not self._available:
             return []
         results = []
@@ -535,18 +540,19 @@ class AzureStorage(StorageBackend):
             results.append(StorageObject(key=blob.name, size=blob.size, modified_at=blob.last_modified))
         return results
     
-    def info(self, key: str) -> Optional[StorageObject]:
+    def info(self, key: str) -> StorageObject | None:
         if not self._available:
             return None
         try:
             props = self._container_client.get_blob_client(key).get_blob_properties()
             return StorageObject(key=key, size=props.size, modified_at=props.last_modified)
-        except:
+        except Exception as e:
+            logger.debug(f"Azure info failed for {key}: {e}")
             return None
 
 
 # Storage factory
-_storage_instances: Dict[str, StorageBackend] = {}
+_storage_instances: dict[str, StorageBackend] = {}
 
 
 def get_storage(uri: str = "local://data/storage") -> StorageBackend:

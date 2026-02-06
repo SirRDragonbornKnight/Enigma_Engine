@@ -7,8 +7,10 @@ Execute multiple tools concurrently for improved performance.
 
 import logging
 import time
-from typing import Dict, Any, List, Optional, Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from concurrent.futures import as_completed
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +49,10 @@ class ParallelToolExecutor:
     
     def execute_parallel(
         self,
-        tool_calls: List[tuple],
+        tool_calls: list[tuple],
         timeout: Optional[float] = None,
         return_exceptions: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute multiple different tools in parallel.
         
@@ -105,10 +107,10 @@ class ParallelToolExecutor:
     def execute_batch(
         self,
         tool_name: str,
-        params_list: List[Dict[str, Any]],
+        params_list: list[dict[str, Any]],
         timeout: Optional[float] = None,
         return_exceptions: bool = True
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute the same tool with different parameters in parallel.
         
@@ -128,10 +130,10 @@ class ParallelToolExecutor:
     
     def execute_with_callback(
         self,
-        tool_calls: List[tuple],
-        callback: Callable[[int, Dict[str, Any]], None],
+        tool_calls: list[tuple],
+        callback: Callable[[int, dict[str, Any]], None],
         timeout: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute tools in parallel with a callback for each completion.
         
@@ -197,9 +199,9 @@ class ParallelToolExecutor:
         self,
         executor_instance,
         tool_name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         timeout: Optional[float]
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute a single tool with optional timeout."""
         start_time = time.time()
         
@@ -236,10 +238,10 @@ class ParallelToolExecutor:
     
     def execute_with_progress(
         self,
-        tool_calls: List[tuple],
+        tool_calls: list[tuple],
         progress_callback: Callable[[int, int], None],
         timeout: Optional[float] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute tools in parallel with progress tracking.
         

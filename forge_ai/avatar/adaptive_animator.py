@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from .controller import AvatarController
@@ -60,22 +60,22 @@ class ModelCapabilities:
     is_static: bool = True
     
     # Skeleton details
-    bones: List[str] = field(default_factory=list)
-    bone_hierarchy: Dict[str, List[str]] = field(default_factory=dict)
+    bones: list[str] = field(default_factory=list)
+    bone_hierarchy: dict[str, list[str]] = field(default_factory=dict)
     
     # Standard bone mapping (detected or user-configured)
     head_bone: Optional[str] = None
     neck_bone: Optional[str] = None
-    spine_bones: List[str] = field(default_factory=list)
+    spine_bones: list[str] = field(default_factory=list)
     jaw_bone: Optional[str] = None
-    eye_bones: List[str] = field(default_factory=list)
-    arm_bones: Dict[str, List[str]] = field(default_factory=dict)  # left/right
+    eye_bones: list[str] = field(default_factory=list)
+    arm_bones: dict[str, list[str]] = field(default_factory=dict)  # left/right
     
     # Blend shapes (for expressions/lip sync)
-    blend_shapes: List[str] = field(default_factory=list)
-    mouth_shapes: List[str] = field(default_factory=list)  # For lip sync
-    eye_shapes: List[str] = field(default_factory=list)    # For blink/expressions
-    expression_shapes: Dict[str, List[str]] = field(default_factory=dict)
+    blend_shapes: list[str] = field(default_factory=list)
+    mouth_shapes: list[str] = field(default_factory=list)  # For lip sync
+    eye_shapes: list[str] = field(default_factory=list)    # For blink/expressions
+    expression_shapes: dict[str, list[str]] = field(default_factory=dict)
     
     # What's possible with this model
     can_lip_sync: bool = False
@@ -114,18 +114,18 @@ class AnimationState:
     current_animation: Optional[AnimationType] = None
     emotion: str = "neutral"
     speaking: bool = False
-    looking_at: Optional[Tuple[float, float, float]] = None
+    looking_at: Optional[tuple[float, float, float]] = None
     
     # Transform state (for TRANSFORM strategy)
-    position_offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    rotation_offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    position_offset: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    rotation_offset: tuple[float, float, float] = (0.0, 0.0, 0.0)
     scale_factor: float = 1.0
     
     # Bone state (for SKELETAL strategy)
-    bone_rotations: Dict[str, Tuple[float, float, float]] = field(default_factory=dict)
+    bone_rotations: dict[str, tuple[float, float, float]] = field(default_factory=dict)
     
     # Blend shape state (for BLENDSHAPE strategy)
-    blend_shape_values: Dict[str, float] = field(default_factory=dict)
+    blend_shape_values: dict[str, float] = field(default_factory=dict)
 
 
 class AdaptiveAnimator:
@@ -192,12 +192,12 @@ class AdaptiveAnimator:
         self._anim_lock = threading.Lock()
         
         # Animation queue
-        self._animation_queue: List[Dict[str, Any]] = []
+        self._animation_queue: list[dict[str, Any]] = []
         
         # Callbacks for rendering
-        self._on_transform_update: List[Callable] = []
-        self._on_bone_update: List[Callable] = []
-        self._on_blend_shape_update: List[Callable] = []
+        self._on_transform_update: list[Callable] = []
+        self._on_bone_update: list[Callable] = []
+        self._on_blend_shape_update: list[Callable] = []
         
         # Timing
         self._last_update = time.time()
@@ -724,7 +724,7 @@ class AdaptiveAnimator:
             except Exception as e:
                 print(f"[AdaptiveAnimator] Transform callback error: {e}")
     
-    def _notify_bone_update(self, bone: str, rotation: Tuple[float, float, float]):
+    def _notify_bone_update(self, bone: str, rotation: tuple[float, float, float]):
         """Notify bone update callbacks."""
         for cb in self._on_bone_update:
             try:
@@ -748,7 +748,7 @@ class AdaptiveAnimator:
             return
         
         try:
-            with open(self._command_path, 'r') as f:
+            with open(self._command_path) as f:
                 cmd = json.load(f)
             
             timestamp = cmd.get('timestamp', 0)
@@ -781,7 +781,7 @@ class AdaptiveAnimator:
                 with open(caps_path, 'w') as f:
                     json.dump(self.capabilities.to_dict(), f, indent=2)
         
-        except (json.JSONDecodeError, IOError, ValueError) as e:
+        except (json.JSONDecodeError, OSError, ValueError) as e:
             pass
     
     def get_capabilities_for_ai(self) -> dict:

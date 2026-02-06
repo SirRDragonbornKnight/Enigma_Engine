@@ -43,8 +43,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
 from queue import Queue
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import CONFIG
 
@@ -88,10 +88,10 @@ class AgentPersonality:
     response_style: str = ""
     
     # Capabilities
-    tools: List[str] = field(default_factory=list)
-    specialties: List[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
+    specialties: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'name': self.name,
             'role': self.role.value,
@@ -109,7 +109,7 @@ class AgentPersonality:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'AgentPersonality':
+    def from_dict(cls, data: dict) -> 'AgentPersonality':
         return cls(
             name=data['name'],
             role=AgentRole(data.get('role', 'general')),
@@ -136,9 +136,9 @@ class AgentMessage:
     content: str
     timestamp: datetime = field(default_factory=datetime.now)
     message_type: str = "response"  # response, thought, action, question
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'agent_id': self.agent_id,
             'agent_name': self.agent_name,
@@ -188,8 +188,8 @@ class Agent:
         self._engine = engine
         
         # Conversation history
-        self.history: List[AgentMessage] = []
-        self.memory: Dict[str, Any] = {}  # Shared memory
+        self.history: list[AgentMessage] = []
+        self.memory: dict[str, Any] = {}  # Shared memory
         
         # State
         self.is_active = True
@@ -260,7 +260,7 @@ class Agent:
         
         return base_prompt
     
-    def respond(self, message: str, context: List[AgentMessage] = None) -> str:
+    def respond(self, message: str, context: list[AgentMessage] = None) -> str:
         """
         Generate a response to a message.
         
@@ -367,7 +367,7 @@ class Agent:
         """Clear conversation history."""
         self.history = []
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Serialize agent to dictionary."""
         return {
             'id': self.id,
@@ -383,7 +383,7 @@ class AgentConversation:
     A conversation between multiple agents.
     """
     
-    def __init__(self, agents: List[Agent], topic: str = ""):
+    def __init__(self, agents: list[Agent], topic: str = ""):
         """
         Initialize a conversation.
         
@@ -394,7 +394,7 @@ class AgentConversation:
         self.id = str(uuid.uuid4())[:8]
         self.agents = {a.id: a for a in agents}
         self.topic = topic
-        self.messages: List[AgentMessage] = []
+        self.messages: list[AgentMessage] = []
         self.started_at = datetime.now()
         self.is_active = True
     
@@ -409,7 +409,7 @@ class AgentConversation:
         self.messages.append(message)
         return message
     
-    def get_context(self, for_agent: Agent, limit: int = 10) -> List[AgentMessage]:
+    def get_context(self, for_agent: Agent, limit: int = 10) -> list[AgentMessage]:
         """Get recent conversation context for an agent."""
         return self.messages[-limit:]
     
@@ -444,9 +444,9 @@ class MultiAgentSystem:
             engine: Shared inference engine (optional)
         """
         self._engine = engine
-        self.agents: Dict[str, Agent] = {}
-        self.conversations: Dict[str, AgentConversation] = {}
-        self.shared_memory: Dict[str, Any] = {}
+        self.agents: dict[str, Agent] = {}
+        self.conversations: dict[str, AgentConversation] = {}
+        self.shared_memory: dict[str, Any] = {}
         
         # Presets directory
         self.presets_dir = Path(CONFIG.get("data_dir", "data")) / "agent_presets"
@@ -523,7 +523,7 @@ class MultiAgentSystem:
                 return agent
         return None
     
-    def list_agents(self) -> List[Agent]:
+    def list_agents(self) -> list[Agent]:
         """List all agents."""
         return list(self.agents.values())
     
@@ -534,7 +534,7 @@ class MultiAgentSystem:
     
     def collaborate(
         self,
-        agents: List[Agent],
+        agents: list[Agent],
         task: str,
         max_rounds: int = 5,
         callback: Callable[[AgentMessage], None] = None
@@ -592,7 +592,7 @@ class MultiAgentSystem:
     
     def debate(
         self,
-        agents: List[Agent],
+        agents: list[Agent],
         topic: str,
         max_rounds: int = 3,
         callback: Callable[[AgentMessage], None] = None
@@ -651,8 +651,8 @@ class MultiAgentSystem:
         self,
         task: str,
         planner: Agent = None,
-        executors: List[Agent] = None
-    ) -> Dict[str, Any]:
+        executors: list[Agent] = None
+    ) -> dict[str, Any]:
         """
         Delegate a complex task using planning and execution agents.
         
@@ -711,9 +711,9 @@ Provide a numbered list of steps."""
     def brainstorm(
         self,
         topic: str,
-        agents: List[Agent] = None,
+        agents: list[Agent] = None,
         num_ideas: int = 5
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Have agents brainstorm ideas.
         
@@ -755,7 +755,7 @@ Format each idea on a new line starting with "IDEA:"."""
         """Get a conversation by ID."""
         return self.conversations.get(conversation_id)
     
-    def list_conversations(self) -> List[AgentConversation]:
+    def list_conversations(self) -> list[AgentConversation]:
         """List all conversations."""
         return list(self.conversations.values())
     

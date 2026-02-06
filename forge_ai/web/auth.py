@@ -5,12 +5,12 @@ Simple but secure token-based authentication for local network access.
 Tokens are generated on first connection and can be shared via QR code.
 """
 
-import secrets
-from datetime import datetime, timedelta
-from typing import Dict, Optional
-from pathlib import Path
 import json
 import logging
+import secrets
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class WebAuth:
         """
         self.token_file = token_file
         self.token_lifetime = timedelta(hours=token_lifetime_hours)
-        self.tokens: Dict[str, dict] = {}
+        self.tokens: dict[str, dict] = {}
         self.master_token: Optional[str] = None
         
         # Load existing tokens from file
@@ -123,7 +123,7 @@ class WebAuth:
         """
         return self.master_token
     
-    def list_tokens(self) -> Dict[str, dict]:
+    def list_tokens(self) -> dict[str, dict]:
         """
         List all active tokens.
         
@@ -138,7 +138,7 @@ class WebAuth:
             return
         
         try:
-            with open(self.token_file, 'r') as f:
+            with open(self.token_file) as f:
                 data = json.load(f)
                 self.tokens = data.get("tokens", {})
                 self.master_token = data.get("master_token")

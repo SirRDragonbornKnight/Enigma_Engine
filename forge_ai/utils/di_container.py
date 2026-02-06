@@ -12,12 +12,11 @@ Part of the ForgeAI architecture patterns.
 """
 
 import inspect
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, Callable, Type, TypeVar, Generic, get_type_hints
 from enum import Enum
 from threading import Lock
-from contextlib import contextmanager
-
+from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, get_type_hints
 
 T = TypeVar('T')
 
@@ -52,7 +51,7 @@ class ScopeNotActiveError(DependencyError):
 @dataclass
 class ServiceDescriptor:
     """Describes a registered service."""
-    service_type: Type
+    service_type: type
     implementation: Any  # Type, factory, or instance
     lifetime: Lifetime
     is_factory: bool = False
@@ -78,7 +77,7 @@ class Scope:
     def __init__(self, container: 'Container'):
         """Initialize scope."""
         self._container = container
-        self._instances: Dict[Type, Any] = {}
+        self._instances: dict[type, Any] = {}
         self._lock = Lock()
     
     def get_or_create(
@@ -138,16 +137,16 @@ class Container:
     
     def __init__(self):
         """Initialize container."""
-        self._services: Dict[Type, ServiceDescriptor] = {}
-        self._singletons: Dict[Type, Any] = {}
+        self._services: dict[type, ServiceDescriptor] = {}
+        self._singletons: dict[type, Any] = {}
         self._lock = Lock()
         self._resolution_stack: list = []  # For circular dependency detection
         self._current_scope: Optional[Scope] = None
     
     def register(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None,
+        service_type: type[T],
+        implementation: Optional[type[T]] = None,
         lifetime: Lifetime = Lifetime.TRANSIENT
     ) -> 'Container':
         """
@@ -174,31 +173,31 @@ class Container:
     
     def register_singleton(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None
+        service_type: type[T],
+        implementation: Optional[type[T]] = None
     ) -> 'Container':
         """Register a singleton service."""
         return self.register(service_type, implementation, Lifetime.SINGLETON)
     
     def register_transient(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None
+        service_type: type[T],
+        implementation: Optional[type[T]] = None
     ) -> 'Container':
         """Register a transient service."""
         return self.register(service_type, implementation, Lifetime.TRANSIENT)
     
     def register_scoped(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None
+        service_type: type[T],
+        implementation: Optional[type[T]] = None
     ) -> 'Container':
         """Register a scoped service."""
         return self.register(service_type, implementation, Lifetime.SCOPED)
     
     def register_factory(
         self,
-        service_type: Type[T],
+        service_type: type[T],
         factory: Callable[['Container'], T],
         lifetime: Lifetime = Lifetime.TRANSIENT
     ) -> 'Container':
@@ -225,7 +224,7 @@ class Container:
     
     def register_instance(
         self,
-        service_type: Type[T],
+        service_type: type[T],
         instance: T
     ) -> 'Container':
         """
@@ -249,11 +248,11 @@ class Container:
         
         return self
     
-    def is_registered(self, service_type: Type) -> bool:
+    def is_registered(self, service_type: type) -> bool:
         """Check if a service type is registered."""
         return service_type in self._services
     
-    def resolve(self, service_type: Type[T]) -> T:
+    def resolve(self, service_type: type[T]) -> T:
         """
         Resolve a service instance.
         
@@ -324,7 +323,7 @@ class Container:
         finally:
             self._resolution_stack.pop()
     
-    def _construct(self, cls: Type) -> Any:
+    def _construct(self, cls: type) -> Any:
         """Construct an instance by injecting dependencies."""
         # Get constructor parameters
         try:
@@ -399,11 +398,11 @@ class Container:
             self._resolution_stack.clear()
             self._current_scope = None
     
-    def get_registered_types(self) -> list[Type]:
+    def get_registered_types(self) -> list[type]:
         """Get all registered service types."""
         return list(self._services.keys())
     
-    def get_service_info(self, service_type: Type) -> Optional[Dict[str, Any]]:
+    def get_service_info(self, service_type: type) -> Optional[dict[str, Any]]:
         """Get info about a registered service."""
         if service_type not in self._services:
             return None
@@ -424,7 +423,7 @@ class Container:
 # Decorators for automatic registration
 def injectable(
     lifetime: Lifetime = Lifetime.TRANSIENT,
-    interface: Optional[Type] = None
+    interface: Optional[type] = None
 ):
     """
     Decorator to mark a class as injectable.
@@ -438,7 +437,7 @@ def injectable(
         class PostgresDatabase:
             pass
     """
-    def decorator(cls: Type[T]) -> Type[T]:
+    def decorator(cls: type[T]) -> type[T]:
         setattr(cls, '_di_lifetime', lifetime)
         setattr(cls, '_di_interface', interface or cls)
         return cls
@@ -446,21 +445,21 @@ def injectable(
     return decorator
 
 
-def singleton(cls: Type[T]) -> Type[T]:
+def singleton(cls: type[T]) -> type[T]:
     """Decorator to mark a class as singleton."""
     setattr(cls, '_di_lifetime', Lifetime.SINGLETON)
     setattr(cls, '_di_interface', cls)
     return cls
 
 
-def scoped(cls: Type[T]) -> Type[T]:
+def scoped(cls: type[T]) -> type[T]:
     """Decorator to mark a class as scoped."""
     setattr(cls, '_di_lifetime', Lifetime.SCOPED)
     setattr(cls, '_di_interface', cls)
     return cls
 
 
-def transient(cls: Type[T]) -> Type[T]:
+def transient(cls: type[T]) -> type[T]:
     """Decorator to mark a class as transient."""
     setattr(cls, '_di_lifetime', Lifetime.TRANSIENT)
     setattr(cls, '_di_interface', cls)
@@ -487,8 +486,8 @@ class ContainerBuilder:
     
     def add_singleton(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None
+        service_type: type[T],
+        implementation: Optional[type[T]] = None
     ) -> 'ContainerBuilder':
         """Add singleton registration."""
         self._registrations.append(
@@ -498,8 +497,8 @@ class ContainerBuilder:
     
     def add_scoped(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None
+        service_type: type[T],
+        implementation: Optional[type[T]] = None
     ) -> 'ContainerBuilder':
         """Add scoped registration."""
         self._registrations.append(
@@ -509,8 +508,8 @@ class ContainerBuilder:
     
     def add_transient(
         self,
-        service_type: Type[T],
-        implementation: Optional[Type[T]] = None
+        service_type: type[T],
+        implementation: Optional[type[T]] = None
     ) -> 'ContainerBuilder':
         """Add transient registration."""
         self._registrations.append(
@@ -520,7 +519,7 @@ class ContainerBuilder:
     
     def add_factory(
         self,
-        service_type: Type[T],
+        service_type: type[T],
         factory: Callable[[Container], T],
         lifetime: Lifetime = Lifetime.TRANSIENT
     ) -> 'ContainerBuilder':
@@ -532,7 +531,7 @@ class ContainerBuilder:
     
     def add_instance(
         self,
-        service_type: Type[T],
+        service_type: type[T],
         instance: T
     ) -> 'ContainerBuilder':
         """Add instance registration."""
@@ -596,14 +595,14 @@ def set_container(container: Container) -> None:
     _global_container = container
 
 
-def resolve(service_type: Type[T]) -> T:
+def resolve(service_type: type[T]) -> T:
     """Resolve from global container."""
     return get_container().resolve(service_type)
 
 
 def register(
-    service_type: Type[T],
-    implementation: Optional[Type[T]] = None,
+    service_type: type[T],
+    implementation: Optional[type[T]] = None,
     lifetime: Lifetime = Lifetime.TRANSIENT
 ) -> None:
     """Register in global container."""

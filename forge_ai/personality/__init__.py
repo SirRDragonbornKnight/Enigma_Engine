@@ -12,10 +12,10 @@ from .curiosity import (
     CuriosityConfig,
     Question,
     QuestionCategory,
-    get_curiosity_system,
-    ask_user_question,
-    record_user_answer,
     add_conversation_topic,
+    ask_user_question,
+    get_curiosity_system,
+    record_user_answer,
 )
 
 __all__ = [

@@ -30,19 +30,19 @@ Usage:
     response = node.generate("Hello world")  # Processed on PC
 """
 
-import json
-import threading
-import queue
-import time
 import hashlib
 import hmac
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable, Union
-from dataclasses import dataclass, field, asdict
-from enum import Enum, auto
-import socket
+import json
 import logging
+import queue
+import socket
+import threading
+import time
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -97,17 +97,17 @@ class NodeInfo:
     address: str
     port: int
     device_class: str = "unknown"
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     last_seen: str = ""
     latency_ms: float = 0.0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d['role'] = self.role.name
         return d
     
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> 'NodeInfo':
+    def from_dict(cls, d: dict[str, Any]) -> 'NodeInfo':
         d['role'] = NodeRole[d['role']] if isinstance(d['role'], str) else d['role']
         return cls(**d)
 
@@ -116,7 +116,7 @@ class NodeInfo:
 class ProtocolMessage:
     """A message in the distributed protocol."""
     msg_type: MessageType
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     sender_id: str
     target_id: str = "*"  # "*" = broadcast
     timestamp: str = ""
@@ -194,13 +194,13 @@ class DistributedNode:
         self.secret = secret or "forge_default_secret"
         
         # Network state
-        self.peers: Dict[str, NodeInfo] = {}
+        self.peers: dict[str, NodeInfo] = {}
         self.address = self._get_local_ip()
         
         # Message handling
         self.incoming = queue.Queue()
         self.outgoing = queue.Queue()
-        self._handlers: Dict[MessageType, Callable] = {}
+        self._handlers: dict[MessageType, Callable] = {}
         
         # Server state
         self._server_thread: Optional[threading.Thread] = None
@@ -219,7 +219,7 @@ class DistributedNode:
     def _detect_role(self) -> NodeRole:
         """Auto-detect appropriate role based on hardware."""
         try:
-            from ..core.device_profiles import get_device_profiler, DeviceClass
+            from ..core.device_profiles import DeviceClass, get_device_profiler
             profiler = get_device_profiler()
             device_class = profiler.classify()
             
@@ -237,7 +237,7 @@ class DistributedNode:
         except ImportError:
             return NodeRole.INFERENCE_CLIENT
     
-    def _detect_capabilities(self) -> List[str]:
+    def _detect_capabilities(self) -> list[str]:
         """Detect what this node can do."""
         caps = ["ping", "message"]
         
@@ -371,7 +371,7 @@ class DistributedNode:
     def start(self, blocking: bool = False):
         """Start the node's network services."""
         try:
-            from flask import Flask, request, jsonify
+            from flask import Flask, jsonify, request
             from flask_cors import CORS
         except ImportError:
             logger.error("Flask not installed. Install with: pip install flask flask-cors")

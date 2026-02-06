@@ -32,11 +32,11 @@ Example training:
 import json
 import logging
 import random
-from dataclasses import dataclass, asdict
+from collections import defaultdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
-from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class LearnedDesign:
     """A design concept the AI has learned/created."""
     concept_name: str           # What this design represents
     description: str            # AI's description of the design
-    parameters: Dict[str, Any]  # Generated parameters
+    parameters: dict[str, Any]  # Generated parameters
     creation_method: str        # How it was created (learned, evolved, generated)
     confidence: float = 0.5     # How confident AI is in this design
     usage_count: int = 0        # How many times used
@@ -77,19 +77,19 @@ class AILearnedGenerator:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
         # Learned designs organized by type
-        self.learned_avatars: Dict[str, LearnedDesign] = {}
-        self.learned_voices: Dict[str, LearnedDesign] = {}
-        self.learned_behaviors: Dict[str, LearnedDesign] = {}
-        self.learned_aesthetics: Dict[str, LearnedDesign] = {}
+        self.learned_avatars: dict[str, LearnedDesign] = {}
+        self.learned_voices: dict[str, LearnedDesign] = {}
+        self.learned_behaviors: dict[str, LearnedDesign] = {}
+        self.learned_aesthetics: dict[str, LearnedDesign] = {}
         
         # Pattern library learned from training
-        self.color_associations: Dict[str, List[str]] = defaultdict(list)
-        self.shape_associations: Dict[str, List[str]] = defaultdict(list)
-        self.motion_patterns: Dict[str, Dict[str, Any]] = {}
-        self.voice_patterns: Dict[str, Dict[str, Any]] = {}
+        self.color_associations: dict[str, list[str]] = defaultdict(list)
+        self.shape_associations: dict[str, list[str]] = defaultdict(list)
+        self.motion_patterns: dict[str, dict[str, Any]] = {}
+        self.voice_patterns: dict[str, dict[str, Any]] = {}
         
         # Generation history
-        self.generation_history: List[Dict[str, Any]] = []
+        self.generation_history: list[dict[str, Any]] = []
         
         self.load()
     
@@ -132,7 +132,7 @@ class AILearnedGenerator:
         except Exception as e:
             logger.error(f"Error learning from training data: {e}")
     
-    def _integrate_learned_design(self, design_data: Dict[str, Any]):
+    def _integrate_learned_design(self, design_data: dict[str, Any]):
         """Integrate a learned design into the knowledge base."""
         concept = design_data.get("concept", "unknown")
         
@@ -170,8 +170,8 @@ class AILearnedGenerator:
         else:
             self.learned_aesthetics[concept] = design
     
-    def generate_avatar_from_personality(self, personality_traits: Dict[str, float],
-                                         wants: Optional[List[str]] = None) -> Dict[str, Any]:
+    def generate_avatar_from_personality(self, personality_traits: dict[str, float],
+                                         wants: Optional[list[str]] = None) -> dict[str, Any]:
         """
         Generate NEW avatar design based on personality, not presets.
         
@@ -275,7 +275,7 @@ class AILearnedGenerator:
         self._structured_form_index = (self._structured_form_index + 1) % len(geometric_concepts)
         return concept
     
-    def _generate_balanced_form(self, traits: Dict[str, float]) -> str:
+    def _generate_balanced_form(self, traits: dict[str, float]) -> str:
         """Generate form balancing multiple traits."""
         # Weight different concepts by traits
         concepts = []
@@ -292,8 +292,8 @@ class AILearnedGenerator:
         
         return "_".join(concepts[:2]) if len(concepts) > 1 else concepts[0]
     
-    def _generate_color_palette(self, traits: Dict[str, float], 
-                                wants: Optional[List[str]] = None) -> List[str]:
+    def _generate_color_palette(self, traits: dict[str, float], 
+                                wants: Optional[list[str]] = None) -> list[str]:
         """
         Generate color palette from personality and wants.
         AI invents colors, not picks from presets.
@@ -326,7 +326,7 @@ class AILearnedGenerator:
         
         return colors
     
-    def _generate_motion_pattern(self, traits: Dict[str, float]) -> Dict[str, Any]:
+    def _generate_motion_pattern(self, traits: dict[str, float]) -> dict[str, Any]:
         """Generate unique motion pattern."""
         energy = traits.get("playfulness", 0.5) + traits.get("confidence", 0.5)
         fluidity = traits.get("empathy", 0.5) + traits.get("creativity", 0.5)
@@ -339,7 +339,7 @@ class AILearnedGenerator:
             "complexity": int(traits.get("creativity", 0.5) * 10)
         }
     
-    def _generate_expression_method(self, traits: Dict[str, float]) -> Dict[str, Any]:
+    def _generate_expression_method(self, traits: dict[str, float]) -> dict[str, Any]:
         """Generate how avatar expresses emotions."""
         expressiveness = traits.get("empathy", 0.5) + traits.get("playfulness", 0.5)
         
@@ -357,7 +357,7 @@ class AILearnedGenerator:
             "response_time": 0.1 + (1.0 - expressiveness) * 0.4
         }
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Export to dictionary."""
         return {
             "learned_avatars": {k: asdict(v) for k, v in self.learned_avatars.items()},
@@ -371,7 +371,7 @@ class AILearnedGenerator:
             "generation_history": self.generation_history[-100:]  # Keep last 100
         }
     
-    def from_dict(self, data: Dict[str, Any]):
+    def from_dict(self, data: dict[str, Any]):
         """Import from dictionary."""
         self.learned_avatars = {
             k: LearnedDesign(**v) for k, v in data.get("learned_avatars", {}).items()

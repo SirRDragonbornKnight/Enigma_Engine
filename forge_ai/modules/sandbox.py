@@ -11,10 +11,10 @@ Features:
 - Restricted imports
 """
 
+import logging
 import os
 import sys
 import time
-import logging
 from pathlib import Path
 
 # resource module is Unix-only, handle Windows gracefully
@@ -24,8 +24,8 @@ try:
 except ImportError:
     HAS_RESOURCE = False
     resource = None  # type: ignore
-from typing import List, Callable, Any, Optional, Dict, Set
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,14 @@ _DEFAULT_RESTRICTED_IMPORTS = ['os.system', 'subprocess', 'eval', 'exec']
 @dataclass
 class SandboxConfig:
     """Configuration for module sandbox."""
-    allowed_paths: List[Path] = field(default_factory=list)
-    allowed_hosts: List[str] = field(default_factory=list)
-    blocked_hosts: List[str] = field(default_factory=list)
+    allowed_paths: list[Path] = field(default_factory=list)
+    allowed_hosts: list[str] = field(default_factory=list)
+    blocked_hosts: list[str] = field(default_factory=list)
     max_memory_mb: int = 1024
     max_cpu_seconds: int = 300
     allow_network: bool = True
     allow_subprocess: bool = False
-    restricted_imports: List[str] = field(default_factory=lambda: list(_DEFAULT_RESTRICTED_IMPORTS))
+    restricted_imports: list[str] = field(default_factory=lambda: list(_DEFAULT_RESTRICTED_IMPORTS))
 
 
 class ModuleSandbox:
@@ -72,7 +72,7 @@ class ModuleSandbox:
         """
         self.module_id = module_id
         self.config = config
-        self.permissions: Dict[str, bool] = {}
+        self.permissions: dict[str, bool] = {}
         self._setup_permissions()
         
     def _setup_permissions(self):

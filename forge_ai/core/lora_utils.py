@@ -16,12 +16,13 @@ Usage:
 """
 
 import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pathlib import Path
-from typing import List, Optional
-from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class LoRAConfig:
     rank: int = 8                           # LoRA rank (smaller = fewer params)
     alpha: float = 16.0                     # LoRA scaling factor
     dropout: float = 0.1                    # Dropout probability
-    target_modules: List[str] = None        # Modules to apply LoRA to
+    target_modules: list[str] = None        # Modules to apply LoRA to
     
     # Training
     learning_rate: float = 3e-4
@@ -310,7 +311,7 @@ class LoRATrainer:
             path: Path to save merged model
         """
         from forge_ai.core.nn.experts import LoRALayer
-        
+
         # Merge LoRA weights into base model
         for name, module in self.model.named_modules():
             if isinstance(module, nn.Linear) and name in self.lora_modules:
@@ -341,7 +342,7 @@ def prepare_lora_dataset(
         Prepared dataset
     """
     # Load data
-    with open(data_path, 'r', encoding='utf-8') as f:
+    with open(data_path, encoding='utf-8') as f:
         lines = f.readlines()
     
     # Parse Q&A pairs or conversation format
@@ -367,7 +368,7 @@ def prepare_lora_dataset(
 def create_lora_config(
     rank: int = 8,
     alpha: float = 16.0,
-    target_modules: List[str] = None
+    target_modules: list[str] = None
 ) -> LoRAConfig:
     """
     Create a LoRA configuration with sensible defaults.

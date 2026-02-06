@@ -11,16 +11,15 @@ Provides thread pool management for:
 Part of the ForgeAI concurrency utilities.
 """
 
+import atexit
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, Future, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, TypeVar
 from datetime import datetime
-from queue import PriorityQueue, Empty
 from enum import Enum
-import atexit
-
+from queue import Empty, PriorityQueue
+from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 T = TypeVar('T')
 
@@ -68,7 +67,7 @@ class Task:
     task_id: str = field(compare=False)
     func: Callable = field(compare=False)
     args: tuple = field(default_factory=tuple, compare=False)
-    kwargs: Dict[str, Any] = field(default_factory=dict, compare=False)
+    kwargs: dict[str, Any] = field(default_factory=dict, compare=False)
     callback: Optional[Callable[[TaskResult], None]] = field(default=None, compare=False)
     submitted_at: datetime = field(default_factory=datetime.now, compare=False)
 
@@ -123,8 +122,8 @@ class ThreadPoolManager:
         self._task_counter = 0
         
         # Task tracking
-        self._pending_tasks: Dict[str, Task] = {}
-        self._task_results: Dict[str, TaskResult] = {}
+        self._pending_tasks: dict[str, Task] = {}
+        self._task_results: dict[str, TaskResult] = {}
         self._results_limit = 1000
         
         # Statistics
@@ -237,7 +236,7 @@ class ThreadPoolManager:
         self,
         fn: Callable[..., T],
         args: tuple = (),
-        kwargs: Optional[Dict[str, Any]] = None,
+        kwargs: Optional[dict[str, Any]] = None,
         callback: Optional[Callable[[TaskResult], None]] = None
     ) -> str:
         """
@@ -291,9 +290,9 @@ class ThreadPoolManager:
     def map(
         self,
         fn: Callable[[T], Any],
-        iterable: List[T],
+        iterable: list[T],
         timeout: Optional[float] = None
-    ) -> List[Any]:
+    ) -> list[Any]:
         """
         Map a function over an iterable using the pool.
         
@@ -334,7 +333,7 @@ class ThreadPoolManager:
         """Get result for a task ID."""
         return self._task_results.get(task_id)
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get pool statistics."""
         with self._lock:
             return {
@@ -407,7 +406,7 @@ class WorkerPool:
         """
         self._num_workers = workers
         self._queue: PriorityQueue = PriorityQueue()
-        self._workers: List[threading.Thread] = []
+        self._workers: list[threading.Thread] = []
         self._running = False
         self._lock = threading.Lock()
         self._task_counter = 0
@@ -544,7 +543,7 @@ def submit_task(fn: Callable, *args, **kwargs) -> Future:
     return get_thread_pool().submit(fn, *args, **kwargs)
 
 
-def parallel_map(fn: Callable, iterable: List) -> List:
+def parallel_map(fn: Callable, iterable: list) -> list:
     """Parallel map using global pool."""
     return get_thread_pool().map(fn, iterable)
 

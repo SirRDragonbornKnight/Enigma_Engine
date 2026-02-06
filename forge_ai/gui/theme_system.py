@@ -4,9 +4,9 @@ Provides multiple theme presets and custom theme support.
 """
 import json
 import logging
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +39,12 @@ class ThemeColors:
     border_primary: str = "#45475a"
     border_secondary: str = "#313244"
     
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> dict[str, str]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> 'ThemeColors':
+    def from_dict(cls, data: dict[str, str]) -> 'ThemeColors':
         """Create from dictionary."""
         return cls(**data)
 
@@ -347,7 +347,7 @@ class Theme:
     @classmethod
     def load(cls, path: Path) -> 'Theme':
         """Load theme from JSON file."""
-        with open(path, 'r') as f:
+        with open(path) as f:
             data = json.load(f)
         
         colors = ThemeColors.from_dict(data['colors'])
@@ -529,7 +529,7 @@ class ThemeManager:
         self.themes_dir.mkdir(parents=True, exist_ok=True)
         
         self.current_theme: Optional[Theme] = None
-        self.custom_themes: Dict[str, Theme] = {}
+        self.custom_themes: dict[str, Theme] = {}
         
         # Load custom themes
         self._load_custom_themes()
@@ -581,7 +581,7 @@ class ThemeManager:
             return ""
         return self.current_theme.generate_stylesheet()
     
-    def list_themes(self) -> Dict[str, str]:
+    def list_themes(self) -> dict[str, str]:
         """List all available themes with descriptions."""
         themes = {}
         

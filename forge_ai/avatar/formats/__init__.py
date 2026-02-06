@@ -7,9 +7,9 @@ Support for various avatar formats:
 - Custom sprite sheets
 """
 
-from .vrm_loader import VRMLoader, VRMModel, VRM_AVAILABLE
-from .live2d_loader import Live2DLoader, Live2DModel, LIVE2D_AVAILABLE
-from .sprite_sheet import SpriteSheetLoader, SpriteSheet
+from .live2d_loader import LIVE2D_AVAILABLE, Live2DLoader, Live2DModel
+from .sprite_sheet import SpriteSheet, SpriteSheetLoader
+from .vrm_loader import VRM_AVAILABLE, VRMLoader, VRMModel
 
 __all__ = [
     'VRMLoader',

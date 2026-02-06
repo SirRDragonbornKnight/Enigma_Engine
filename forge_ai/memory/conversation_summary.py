@@ -83,21 +83,21 @@ class ConversationSummary:
     summary_text: str = ""
     
     # Extracted information
-    topics: List[str] = field(default_factory=list)
-    key_facts: List[str] = field(default_factory=list)
-    user_preferences: List[str] = field(default_factory=list)
-    action_items: List[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
+    key_facts: list[str] = field(default_factory=list)
+    user_preferences: list[str] = field(default_factory=list)
+    action_items: list[str] = field(default_factory=list)
     
     # Metadata
     message_count: int = 0
-    time_range: Tuple[float, float] = (0.0, 0.0)
+    time_range: tuple[float, float] = (0.0, 0.0)
     last_topic: str = ""
     sentiment: str = "neutral"  # positive, negative, neutral
     
     # For continuation
     continuation_context: str = ""
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "summary_text": self.summary_text,
@@ -113,7 +113,7 @@ class ConversationSummary:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ConversationSummary":
+    def from_dict(cls, data: dict[str, Any]) -> ConversationSummary:
         """Create from dictionary."""
         return cls(
             summary_text=data.get("summary_text", ""),
@@ -222,7 +222,7 @@ class ConversationSummarizer:
     
     def summarize_extractive(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         include_recent: int = 3
     ) -> ConversationSummary:
         """
@@ -329,8 +329,8 @@ class ConversationSummarizer:
     
     def _generate_extractive_summary(
         self,
-        messages: List[Dict[str, Any]],
-        topics: List[str],
+        messages: list[dict[str, Any]],
+        topics: list[str],
         recent_count: int
     ) -> str:
         """Generate a text summary from extracted information."""
@@ -361,7 +361,7 @@ class ConversationSummarizer:
     
     def _generate_continuation_context(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         summary: ConversationSummary,
         recent_count: int
     ) -> str:
@@ -389,9 +389,9 @@ class ConversationSummarizer:
     
     def summarize_with_ai(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         engine: Any = None,
-        model_name: Optional[str] = None
+        model_name: str | None = None
     ) -> ConversationSummary:
         """
         Create summary using AI generation (better quality).
@@ -458,7 +458,7 @@ Summary:"""
     
     def _format_conversation_for_prompt(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         max_messages: int = 30
     ) -> str:
         """Format messages for inclusion in prompt."""
@@ -498,7 +498,7 @@ Summary:"""
     
     def get_handoff_context(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         target_ai: str = "general"
     ) -> str:
         """
@@ -554,7 +554,7 @@ Summary:"""
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-_default_summarizer: Optional[ConversationSummarizer] = None
+_default_summarizer: ConversationSummarizer | None = None
 
 
 def get_summarizer() -> ConversationSummarizer:
@@ -566,7 +566,7 @@ def get_summarizer() -> ConversationSummarizer:
 
 
 def summarize_conversation(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     use_ai: bool = False,
     engine: Any = None
 ) -> ConversationSummary:
@@ -590,7 +590,7 @@ def summarize_conversation(
 
 
 def get_continuation_context(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     max_tokens: int = 500
 ) -> str:
     """
@@ -617,7 +617,7 @@ def get_continuation_context(
 
 
 def export_for_handoff(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     format: str = "text"
 ) -> str:
     """

@@ -11,19 +11,19 @@ Provides webhook functionality for event notifications:
 Part of the ForgeAI networking utilities.
 """
 
-import json
-import time
-import hmac
 import hashlib
+import hmac
+import json
 import threading
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
 from enum import Enum
-from queue import Queue, Empty
 from pathlib import Path
-import urllib.request
-import urllib.error
+from queue import Empty, Queue
+from typing import Any, Callable, Dict, List, Optional
 
 
 class WebhookEvent(Enum):
@@ -71,15 +71,15 @@ class WebhookConfig:
     """Configuration for a webhook endpoint."""
     id: str
     url: str
-    events: List[WebhookEvent]
+    events: list[WebhookEvent]
     secret: Optional[str] = None
     enabled: bool = True
-    headers: Dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     max_retries: int = 3
     retry_delay_seconds: int = 5
     timeout_seconds: int = 30
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -99,7 +99,7 @@ class WebhookDelivery:
     """Record of a webhook delivery attempt."""
     webhook_id: str
     event_type: WebhookEvent
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     status: DeliveryStatus = DeliveryStatus.PENDING
     attempts: int = 0
     last_attempt: Optional[datetime] = None
@@ -107,7 +107,7 @@ class WebhookDelivery:
     response_code: Optional[int] = None
     delivered_at: Optional[datetime] = None
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "webhook_id": self.webhook_id,
@@ -163,8 +163,8 @@ class WebhookManager:
             config_file: Optional file to persist webhook configs
             async_delivery: Whether to deliver webhooks asynchronously
         """
-        self._webhooks: Dict[str, WebhookConfig] = {}
-        self._delivery_history: List[WebhookDelivery] = []
+        self._webhooks: dict[str, WebhookConfig] = {}
+        self._delivery_history: list[WebhookDelivery] = []
         self._history_limit = 1000
         self._config_file = Path(config_file) if config_file else None
         self._async_delivery = async_delivery
@@ -187,10 +187,10 @@ class WebhookManager:
         self,
         id: str,
         url: str,
-        events: List[WebhookEvent],
+        events: list[WebhookEvent],
         secret: Optional[str] = None,
         enabled: bool = True,
-        headers: Optional[Dict[str, str]] = None,
+        headers: Optional[dict[str, str]] = None,
         max_retries: int = 3,
         retry_delay_seconds: int = 5,
         timeout_seconds: int = 30
@@ -251,7 +251,7 @@ class WebhookManager:
         """Get webhook by ID."""
         return self._webhooks.get(id)
     
-    def list_webhooks(self) -> List[WebhookConfig]:
+    def list_webhooks(self) -> list[WebhookConfig]:
         """List all webhooks."""
         return list(self._webhooks.values())
     
@@ -276,9 +276,9 @@ class WebhookManager:
     def emit(
         self,
         event: WebhookEvent,
-        payload: Dict[str, Any],
-        webhook_ids: Optional[List[str]] = None
-    ) -> List[str]:
+        payload: dict[str, Any],
+        webhook_ids: Optional[list[str]] = None
+    ) -> list[str]:
         """
         Emit an event to subscribed webhooks.
         
@@ -427,7 +427,7 @@ class WebhookManager:
         self,
         webhook_id: Optional[str] = None,
         limit: int = 100
-    ) -> List[WebhookDelivery]:
+    ) -> list[WebhookDelivery]:
         """Get delivery history."""
         history = self._delivery_history
         
@@ -562,14 +562,14 @@ def get_webhook_manager() -> WebhookManager:
 def register_webhook(
     id: str,
     url: str,
-    events: List[WebhookEvent],
+    events: list[WebhookEvent],
     **kwargs
 ) -> WebhookConfig:
     """Register webhook in global manager."""
     return get_webhook_manager().register(id, url, events, **kwargs)
 
 
-def emit_event(event: WebhookEvent, payload: Dict[str, Any]) -> List[str]:
+def emit_event(event: WebhookEvent, payload: dict[str, Any]) -> list[str]:
     """Emit event via global manager."""
     return get_webhook_manager().emit(event, payload)
 

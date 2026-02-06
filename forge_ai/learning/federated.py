@@ -8,14 +8,14 @@ Privacy-preserving distributed learning where:
 - Differential privacy protects individual contributions
 """
 
-import uuid
 import hashlib
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 try:
     import numpy as np
@@ -53,12 +53,12 @@ class WeightUpdate:
     update_id: str
     device_id: str                         # Anonymized if privacy enabled
     timestamp: datetime
-    weight_deltas: Dict[str, Any]          # Layer name -> weight changes (numpy arrays or lists)
+    weight_deltas: dict[str, Any]          # Layer name -> weight changes (numpy arrays or lists)
     training_samples: int                  # How many samples trained on
-    metadata: Dict[str, Any] = field(default_factory=dict)  # Loss, accuracy, etc.
+    metadata: dict[str, Any] = field(default_factory=dict)  # Loss, accuracy, etc.
     signature: Optional[str] = None        # Cryptographic signature
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "update_id": self.update_id,
@@ -81,7 +81,7 @@ class WeightUpdate:
         return arr
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WeightUpdate":
+    def from_dict(cls, data: dict[str, Any]) -> "WeightUpdate":
         """Create from dictionary."""
         return cls(
             update_id=data["update_id"],
@@ -180,11 +180,11 @@ class FederatedLearning:
         self.device_id = device_id or self._generate_device_id()
         
         # Initial model weights (for computing deltas)
-        self.initial_weights: Optional[Dict[str, Any]] = None
+        self.initial_weights: Optional[dict[str, Any]] = None
         
         # Training history
-        self.updates_sent: List[WeightUpdate] = []
-        self.updates_received: List[WeightUpdate] = []
+        self.updates_sent: list[WeightUpdate] = []
+        self.updates_received: list[WeightUpdate] = []
         
         logger.info(
             f"Federated learning initialized for {model_name} "
@@ -205,9 +205,9 @@ class FederatedLearning:
     
     def train_local_round(
         self,
-        final_weights: Dict[str, Any],
+        final_weights: dict[str, Any],
         training_samples: int,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> WeightUpdate:
         """
         Create weight update from local training.
@@ -351,12 +351,12 @@ class FederatedLearning:
         
         return True
     
-    def set_initial_weights(self, weights: Dict[str, Any]):
+    def set_initial_weights(self, weights: dict[str, Any]):
         """Set initial weights for computing deltas."""
         self.initial_weights = weights
         logger.debug(f"Set initial weights with {len(weights)} layers")
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get federated learning statistics."""
         return {
             "device_id": self.device_id,

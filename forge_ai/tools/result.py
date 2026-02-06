@@ -5,10 +5,11 @@ Provides consistent result types for all tool operations,
 enabling better error handling and type safety.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import TypeVar, Generic, Any
-from enum import Enum
+
 import json
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Generic, TypeVar
 
 
 class ErrorCode(Enum):
@@ -84,7 +85,7 @@ class ToolResult(Generic[T]):
         data: T = None,
         message: str = None,
         **metadata
-    ) -> 'ToolResult[T]':
+    ) -> ToolResult[T]:
         """
         Create a successful result.
         
@@ -128,7 +129,7 @@ class ToolResult(Generic[T]):
             metadata=meta
         )
     
-    def add_warning(self, warning: str) -> 'ToolResult[T]':
+    def add_warning(self, warning: str) -> ToolResult[T]:
         """Add a warning to the result (returns self for chaining)."""
         self.warnings.append(warning)
         return self
@@ -185,7 +186,7 @@ class ToolResult(Generic[T]):
         """Get the data or a default value if failed."""
         return self.data if self.success else default
     
-    def map(self, func) -> 'ToolResult':
+    def map(self, func) -> ToolResult:
         """
         Apply a function to the data if successful.
         

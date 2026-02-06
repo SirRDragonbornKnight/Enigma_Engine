@@ -7,7 +7,8 @@ Tools:
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 
@@ -34,7 +35,7 @@ class ReadDocumentTool(Tool):
     }
     
     def execute(self, path: str, max_chars: int = 10000, 
-                start_page: int = 1, end_page: int = None, **kwargs) -> Dict[str, Any]:
+                start_page: int = 1, end_page: int = None, **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             
@@ -74,7 +75,7 @@ class ReadDocumentTool(Tool):
     
     def _read_text(self, path: Path) -> str:
         """Read plain text file."""
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(path, encoding="utf-8", errors="ignore") as f:
             return f.read()
     
     def _read_pdf(self, path: Path, start_page: int, end_page: int) -> str:
@@ -124,8 +125,8 @@ class ReadDocumentTool(Tool):
         """Read EPUB ebook."""
         try:
             import ebooklib
-            from ebooklib import epub
             from bs4 import BeautifulSoup
+            from ebooklib import epub
             
             book = epub.read_epub(str(path))
             
@@ -160,7 +161,7 @@ class ReadDocumentTool(Tool):
         """Read HTML file and extract text."""
         import re
         
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(path, encoding="utf-8", errors="ignore") as f:
             html = f.read()
         
         # Remove script and style
@@ -187,7 +188,7 @@ class ExtractTextTool(Tool):
         "max_chars": "Maximum characters to return (default: 10000)",
     }
     
-    def execute(self, path: str, max_chars: int = 10000, **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, max_chars: int = 10000, **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             
@@ -196,9 +197,9 @@ class ExtractTextTool(Tool):
             
             # Try to read as text
             try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                with open(path, encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-            except (IOError, OSError, UnicodeDecodeError):
+            except (OSError, UnicodeDecodeError):
                 # Try binary read and decode
                 with open(path, "rb") as f:
                     raw = f.read()
@@ -206,6 +207,7 @@ class ExtractTextTool(Tool):
             
             # Clean up
             import re
+
             # Remove null bytes and control characters
             content = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', content)
             
@@ -226,7 +228,7 @@ class ExtractTextTool(Tool):
 
 if __name__ == "__main__":
     import json
-    
+
     # Test with a text file
     tool = ReadDocumentTool()
     result = tool.execute("README.md", max_chars=500)

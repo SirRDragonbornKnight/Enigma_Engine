@@ -119,7 +119,7 @@ class Router(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Compute routing weights.
         
@@ -163,7 +163,7 @@ class Router(nn.Module):
     def _top_k_routing(
         self,
         router_logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Standard Top-K routing with load balancing."""
         # Compute probabilities
         router_probs = F.softmax(router_logits, dim=-1)
@@ -184,7 +184,7 @@ class Router(nn.Module):
     def _expert_choice_routing(
         self,
         router_logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Expert choice routing - experts select tokens.
         
@@ -239,7 +239,7 @@ class Router(nn.Module):
     def _soft_routing(
         self,
         router_logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Soft routing - weighted combination of all experts."""
         # All experts with softmax weights
         router_probs = F.softmax(router_logits, dim=-1)
@@ -259,7 +259,7 @@ class Router(nn.Module):
         self,
         hidden_states: torch.Tensor,
         router_logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Hash-based routing for deterministic assignment."""
         batch_size, seq_len, _ = hidden_states.shape
         
@@ -292,7 +292,7 @@ class Router(nn.Module):
     def _switch_routing(
         self,
         router_logits: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Switch Transformer routing (top-1 with capacity)."""
         # Force top-1
         router_probs = F.softmax(router_logits, dim=-1)
@@ -413,7 +413,7 @@ class MoELayer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         return_aux_loss: bool = True
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Forward pass through MoE layer.
         
@@ -522,7 +522,7 @@ class MoEBlock(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass.
         
@@ -650,7 +650,7 @@ class MoEModel(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass.
         

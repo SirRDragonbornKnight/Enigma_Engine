@@ -274,7 +274,7 @@ class VoiceEffects:
     def _apply_authoritative(self, text: str) -> str:
         """Apply authoritative effect."""
         import re
-        
+
         # Make statements more definitive
         text = text.replace("...", ".")
         

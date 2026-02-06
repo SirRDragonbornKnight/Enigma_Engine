@@ -10,16 +10,29 @@ Features:
 """
 
 import os
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+from PyQt5.QtCore import QFileSystemWatcher, Qt, QTimer
+from PyQt5.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QLineEdit, QGroupBox, QCheckBox,
-    QFileDialog, QSplitter, QListWidget, QListWidgetItem,
-    QTabWidget, QMessageBox, QSizePolicy
+    QCheckBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, QTimer, QFileSystemWatcher
-from PyQt5.QtGui import QFont, QColor, QTextCharFormat, QTextCursor
 
 from .shared_components import NoScrollComboBox
 
@@ -112,7 +125,7 @@ class LogViewerWidget(QWidget):
             return
         
         try:
-            with open(self.log_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(self.log_path, encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             
             self._all_lines = content.split('\n')

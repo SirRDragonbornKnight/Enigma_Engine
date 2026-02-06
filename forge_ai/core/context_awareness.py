@@ -3,10 +3,10 @@ Context Awareness Enhancement for Multi-Turn Conversations
 Tracks conversation context and provides fallback clarifications.
 """
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+import re
 from dataclasses import dataclass
 from datetime import datetime
-import re
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ class ConversationTurn:
     role: str  # 'user' or 'assistant'
     content: str
     timestamp: float
-    entities: List[str] = None  # Extracted entities (names, places, etc.)
-    topics: List[str] = None  # Detected topics
+    entities: list[str] = None  # Extracted entities (names, places, etc.)
+    topics: list[str] = None  # Detected topics
     intent: str = None  # Detected intent
     
     def __post_init__(self):
@@ -39,17 +39,17 @@ class ContextTracker:
             max_context_turns: Maximum number of turns to keep in context
         """
         self.max_context_turns = max_context_turns
-        self.conversation_history: List[ConversationTurn] = []
+        self.conversation_history: list[ConversationTurn] = []
         self.current_topic: Optional[str] = None
-        self.entities_mentioned: Dict[str, int] = {}  # entity -> mention count
+        self.entities_mentioned: dict[str, int] = {}  # entity -> mention count
         self.unclear_count: int = 0  # Track unclear queries
         
     def add_turn(
         self,
         role: str,
         content: str,
-        entities: Optional[List[str]] = None,
-        topics: Optional[List[str]] = None
+        entities: Optional[list[str]] = None,
+        topics: Optional[list[str]] = None
     ) -> ConversationTurn:
         """
         Add a conversation turn and update context.
@@ -98,7 +98,7 @@ class ContextTracker:
         
         return turn
     
-    def _extract_simple_entities(self, text: str) -> List[str]:
+    def _extract_simple_entities(self, text: str) -> list[str]:
         """Extract simple entities like capitalized words."""
         # Very basic entity extraction - capitalized words that aren't at start of sentence
         words = text.split()
@@ -117,7 +117,7 @@ class ContextTracker:
         
         return entities
     
-    def detect_unclear_context(self, user_input: str) -> Tuple[bool, Optional[str]]:
+    def detect_unclear_context(self, user_input: str) -> tuple[bool, Optional[str]]:
         """
         Detect if the user input lacks clear context.
         
@@ -167,7 +167,7 @@ class ContextTracker:
         # Choose based on unclear count to vary responses
         return clarifications[self.unclear_count % len(clarifications)]
     
-    def get_relevant_context(self, current_input: str, max_turns: int = 5) -> List[ConversationTurn]:
+    def get_relevant_context(self, current_input: str, max_turns: int = 5) -> list[ConversationTurn]:
         """
         Get relevant conversation history for the current input.
         
@@ -290,7 +290,7 @@ class ContextAwareConversation:
         self.context_tracker = ContextTracker(max_context_turns)
         self.clarification_threshold = 3  # After 3 unclear queries, suggest restart
         
-    def process_user_input(self, user_input: str) -> Dict[str, Any]:
+    def process_user_input(self, user_input: str) -> dict[str, Any]:
         """
         Process user input with context awareness.
         

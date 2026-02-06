@@ -7,16 +7,24 @@ with individual progress indicators for each activated element.
 """
 
 import time
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-        QProgressBar, QTextEdit, QWidget, QApplication, QScrollArea,
-        QFrame
-    )
     from PyQt5.QtCore import Qt, QTimer
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QDialog,
+        QFrame,
+        QHBoxLayout,
+        QLabel,
+        QProgressBar,
+        QPushButton,
+        QScrollArea,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False

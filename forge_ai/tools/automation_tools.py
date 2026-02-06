@@ -11,15 +11,17 @@ Tools:
   - watch_folder: Monitor folder for changes
 """
 
-import os
 import json
-import time
 import logging
-import threading
+import os
+import shlex
 import subprocess
-from pathlib import Path
+import threading
+import time
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Callable
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -52,7 +54,7 @@ class ScheduleManager:
         if self._initialized:
             return
         self._initialized = True
-        self.schedules: List[Dict] = []
+        self.schedules: list[dict] = []
         self.running = False
         self._thread = None
         self._load_schedules()
@@ -61,9 +63,9 @@ class ScheduleManager:
         """Load schedules from file."""
         if SCHEDULE_FILE.exists():
             try:
-                with open(SCHEDULE_FILE, 'r') as f:
+                with open(SCHEDULE_FILE) as f:
                     self.schedules = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Could not load schedules: {e}")
                 self.schedules = []
     
@@ -73,7 +75,7 @@ class ScheduleManager:
             json.dump(self.schedules, f, indent=2, default=str)
     
     def add_schedule(self, name: str, command: str, schedule_type: str, 
-                     time_spec: str, enabled: bool = True) -> Dict:
+                     time_spec: str, enabled: bool = True) -> dict:
         """
         Add a scheduled task.
         
@@ -141,7 +143,7 @@ class ScheduleManager:
         self._save_schedules()
         return True
     
-    def list_schedules(self) -> List[Dict]:
+    def list_schedules(self) -> list[dict]:
         """List all schedules."""
         return self.schedules
     
@@ -169,7 +171,9 @@ class ScheduleManager:
                 if now >= next_run:
                     # Run the task
                     try:
-                        subprocess.run(schedule['command'], shell=True, timeout=300)
+                        # Use shlex.split to avoid shell injection
+                        cmd_parts = shlex.split(schedule['command'])
+                        subprocess.run(cmd_parts, shell=False, timeout=300)
                         schedule['last_run'] = now.isoformat()
                         
                         # Update next run
@@ -182,7 +186,7 @@ class ScheduleManager:
                         
                         self._save_schedules()
                     except Exception as e:
-                        print(f"Schedule error: {e}")
+                        logger.error(f"Schedule error: {e}")
             
             time.sleep(30)  # Check every 30 seconds
 
@@ -200,7 +204,7 @@ class ScheduleTaskTool(Tool):
     }
     
     def execute(self, name: str, command: str, schedule_type: str = "once", 
-                time_spec: str = None, **kwargs) -> Dict[str, Any]:
+                time_spec: str = None, **kwargs) -> dict[str, Any]:
         try:
             manager = ScheduleManager()
             schedule = manager.add_schedule(name, command, schedule_type, time_spec or "0")
@@ -222,7 +226,7 @@ class ListSchedulesTool(Tool):
     description = "List all scheduled tasks with their status and next run time."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             manager = ScheduleManager()
             schedules = manager.list_schedules()
@@ -244,7 +248,7 @@ class RemoveScheduleTool(Tool):
         "schedule_id": "The ID of the schedule to remove",
     }
     
-    def execute(self, schedule_id: int, **kwargs) -> Dict[str, Any]:
+    def execute(self, schedule_id: int, **kwargs) -> dict[str, Any]:
         try:
             manager = ScheduleManager()
             manager.remove_schedule(int(schedule_id))
@@ -273,15 +277,15 @@ class ClipboardHistory:
         if self._initialized:
             return
         self._initialized = True
-        self.history: List[Dict] = []
+        self.history: list[dict] = []
         self._load_history()
     
     def _load_history(self):
         if CLIPBOARD_HISTORY_FILE.exists():
             try:
-                with open(CLIPBOARD_HISTORY_FILE, 'r') as f:
+                with open(CLIPBOARD_HISTORY_FILE) as f:
                     self.history = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Could not load clipboard history: {e}")
                 self.history = []
     
@@ -298,7 +302,7 @@ class ClipboardHistory:
         self.history.append(entry)
         self._save_history()
     
-    def get_history(self, limit: int = 10) -> List[Dict]:
+    def get_history(self, limit: int = 10) -> list[dict]:
         return self.history[-limit:]
 
 
@@ -313,8 +317,8 @@ def _get_clipboard() -> str:
     
     # Try PyQt5 QClipboard (internal)
     try:
-        from PyQt5.QtWidgets import QApplication
         from PyQt5.QtCore import QMimeData
+        from PyQt5.QtWidgets import QApplication
         
         app = QApplication.instance()
         if app:
@@ -342,6 +346,7 @@ def _get_clipboard() -> str:
     if os.name == 'posix':
         try:
             import subprocess
+
             # Try xclip first
             result = subprocess.run(['xclip', '-selection', 'clipboard', '-o'], 
                                     capture_output=True, text=True, timeout=5)
@@ -396,6 +401,7 @@ def _set_clipboard(text: str) -> bool:
     if os.name == 'posix':
         try:
             import subprocess
+
             # Try xclip first
             process = subprocess.Popen(['xclip', '-selection', 'clipboard'],
                                        stdin=subprocess.PIPE, text=True)
@@ -434,7 +440,7 @@ class ClipboardReadTool(Tool):
     description = "Read the current content of the system clipboard."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             content = _get_clipboard()
             return {
@@ -455,7 +461,7 @@ class ClipboardWriteTool(Tool):
         "text": "The text to copy to clipboard",
     }
     
-    def execute(self, text: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, text: str, **kwargs) -> dict[str, Any]:
         try:
             success = _set_clipboard(text)
             if success:
@@ -480,7 +486,7 @@ class ClipboardHistoryTool(Tool):
         "limit": "Maximum number of items to return (default: 10)",
     }
     
-    def execute(self, limit: int = 10, **kwargs) -> Dict[str, Any]:
+    def execute(self, limit: int = 10, **kwargs) -> dict[str, Any]:
         try:
             history = ClipboardHistory().get_history(int(limit))
             return {
@@ -500,29 +506,29 @@ class MacroManager:
     """Manages keyboard/mouse macros."""
     
     def __init__(self):
-        self.macros: Dict[str, List[Dict]] = {}
+        self.macros: dict[str, list[dict]] = {}
         self._load_macros()
     
     def _load_macros(self):
         """Load all macros from disk."""
         for file in MACRO_DIR.glob("*.json"):
             try:
-                with open(file, 'r') as f:
+                with open(file) as f:
                     self.macros[file.stem] = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Could not load macro {file}: {e}")
     
-    def save_macro(self, name: str, actions: List[Dict]):
+    def save_macro(self, name: str, actions: list[dict]):
         """Save a macro."""
         self.macros[name] = actions
         with open(MACRO_DIR / f"{name}.json", 'w') as f:
             json.dump(actions, f, indent=2)
     
-    def get_macro(self, name: str) -> Optional[List[Dict]]:
+    def get_macro(self, name: str) -> Optional[list[dict]]:
         """Get a macro by name."""
         return self.macros.get(name)
     
-    def list_macros(self) -> List[str]:
+    def list_macros(self) -> list[str]:
         """List all macro names."""
         return list(self.macros.keys())
     
@@ -546,7 +552,7 @@ class RecordMacroTool(Tool):
         "delays": "Optional delays between commands in seconds (comma-separated)",
     }
     
-    def execute(self, name: str, commands: str, delays: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, name: str, commands: str, delays: str = None, **kwargs) -> dict[str, Any]:
         try:
             # Parse commands
             if isinstance(commands, str):
@@ -590,7 +596,7 @@ class PlayMacroTool(Tool):
         "repeat": "Number of times to repeat (default: 1)",
     }
     
-    def execute(self, name: str, repeat: int = 1, **kwargs) -> Dict[str, Any]:
+    def execute(self, name: str, repeat: int = 1, **kwargs) -> dict[str, Any]:
         try:
             manager = MacroManager()
             actions = manager.get_macro(name)
@@ -602,8 +608,13 @@ class PlayMacroTool(Tool):
             for _ in range(int(repeat)):
                 for action in actions:
                     if action['type'] == 'command':
+                        # Use shlex.split for safer command execution
+                        try:
+                            cmd_args = shlex.split(action['command'])
+                        except ValueError:
+                            cmd_args = [action['command']]
                         result = subprocess.run(
-                            action['command'], shell=True,
+                            cmd_args, shell=False,
                             capture_output=True, text=True, timeout=60
                         )
                         results.append({
@@ -631,7 +642,7 @@ class ListMacrosTool(Tool):
     description = "List all saved macros."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             manager = MacroManager()
             macros = manager.list_macros()
@@ -663,12 +674,12 @@ class FolderWatcher:
         if self._initialized:
             return
         self._initialized = True
-        self.watches: Dict[str, Dict] = {}
+        self.watches: dict[str, dict] = {}
         self.running = False
         self._thread = None
-        self._file_states: Dict[str, Dict[str, float]] = {}
+        self._file_states: dict[str, dict[str, float]] = {}
     
-    def add_watch(self, path: str, action: str, patterns: List[str] = None) -> Dict:
+    def add_watch(self, path: str, action: str, patterns: list[str] = None) -> dict:
         """Add a folder watch."""
         path = str(Path(path).expanduser().resolve())
         watch = {
@@ -681,7 +692,7 @@ class FolderWatcher:
         self._file_states[path] = self._scan_folder(path)
         return watch
     
-    def _scan_folder(self, path: str) -> Dict[str, float]:
+    def _scan_folder(self, path: str) -> dict[str, float]:
         """Scan folder and return file modification times."""
         states = {}
         folder = Path(path)
@@ -702,7 +713,7 @@ class FolderWatcher:
             if path in self._file_states:
                 del self._file_states[path]
     
-    def list_watches(self) -> List[Dict]:
+    def list_watches(self) -> list[dict]:
         """List all active watches."""
         return list(self.watches.values())
     
@@ -740,9 +751,11 @@ class FolderWatcher:
                             action = action.replace('{folder}', path)
                             
                             try:
-                                subprocess.run(action, shell=True, timeout=60)
+                                # Use shlex.split to avoid shell injection
+                                cmd_parts = shlex.split(action)
+                                subprocess.run(cmd_parts, shell=False, timeout=60)
                             except Exception as e:
-                                print(f"Watch action error: {e}")
+                                logger.error(f"Watch action error: {e}")
                 
                 self._file_states[path] = current_state
             
@@ -760,7 +773,7 @@ class WatchFolderTool(Tool):
         "patterns": "File patterns to match (default: all files). Comma-separated, e.g. '*.jpg,*.png'",
     }
     
-    def execute(self, path: str, action: str, patterns: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, action: str, patterns: str = None, **kwargs) -> dict[str, Any]:
         try:
             pattern_list = None
             if patterns:
@@ -788,7 +801,7 @@ class StopWatchTool(Tool):
         "path": "Path to the folder to stop watching",
     }
     
-    def execute(self, path: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, **kwargs) -> dict[str, Any]:
         try:
             watcher = FolderWatcher()
             watcher.remove_watch(path)
@@ -804,7 +817,7 @@ class ListWatchesTool(Tool):
     description = "List all active folder watches."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             watcher = FolderWatcher()
             watches = watcher.list_watches()

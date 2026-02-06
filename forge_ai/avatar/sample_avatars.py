@@ -12,18 +12,25 @@ Avatars Generated:
 - Cube (abstract geometric)
 """
 
-from pathlib import Path
-from typing import Optional, Tuple, List, Dict
 import math
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 # Check for PyQt5 (needed for drawing)
 try:
-    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtCore import QPoint, QPointF, QRect, Qt
     from PyQt5.QtGui import (
-        QPixmap, QPainter, QColor, QPen, QBrush, 
-        QRadialGradient, QLinearGradient, QPainterPath, QFont
+        QBrush,
+        QColor,
+        QFont,
+        QLinearGradient,
+        QPainter,
+        QPainterPath,
+        QPen,
+        QPixmap,
+        QRadialGradient,
     )
-    from PyQt5.QtCore import Qt, QRect, QPoint, QPointF
+    from PyQt5.QtWidgets import QApplication
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -56,7 +63,7 @@ class SampleAvatarGenerator:
             if self._app is None:
                 self._app = QApplication([])
     
-    def generate_all(self, output_dir: str) -> Dict[str, Path]:
+    def generate_all(self, output_dir: str) -> dict[str, Path]:
         """
         Generate all sample avatars.
         
@@ -897,7 +904,7 @@ class SampleAvatarGenerator:
         pixmap.save(output_path)
 
 
-def generate_sample_avatars(output_dir: Optional[str] = None) -> Dict[str, Path]:
+def generate_sample_avatars(output_dir: Optional[str] = None) -> dict[str, Path]:
     """
     Generate all sample avatars.
     

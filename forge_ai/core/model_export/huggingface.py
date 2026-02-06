@@ -7,11 +7,19 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import torch
 
-from .base import ExportProvider, ImportProvider, ExportResult, ImportResult, ExportStatus, ImportStatus, ProviderConfig
+from .base import (
+    ExportProvider,
+    ExportResult,
+    ExportStatus,
+    ImportProvider,
+    ImportResult,
+    ImportStatus,
+    ProviderConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +33,11 @@ list_models = None
 
 try:
     from huggingface_hub import (
-        HfApi, 
+        HfApi,
         create_repo,
         hf_hub_download,
-        snapshot_download,
         list_models,
+        snapshot_download,
     )
     HAVE_HF_HUB = True
 except ImportError:
@@ -37,7 +45,8 @@ except ImportError:
 
 HAVE_SAFETENSORS = False
 try:
-    from safetensors.torch import save_file as save_safetensors, load_file as load_safetensors
+    from safetensors.torch import load_file as load_safetensors
+    from safetensors.torch import save_file as save_safetensors
     HAVE_SAFETENSORS = True
 except ImportError:
     pass
@@ -69,9 +78,9 @@ class HuggingFaceProvider(ExportProvider):
     
     def _convert_config_to_hf(
         self, 
-        forge_config: Dict[str, Any], 
-        metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        forge_config: dict[str, Any], 
+        metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """Convert Forge config to HuggingFace format."""
         return {
             "model_type": "forge",
@@ -101,8 +110,8 @@ class HuggingFaceProvider(ExportProvider):
         self,
         output_path: Path,
         model_name: str,
-        config: Dict[str, Any],
-        metadata: Dict[str, Any]
+        config: dict[str, Any],
+        metadata: dict[str, Any]
     ):
         """Create README.md model card."""
         params = metadata.get("estimated_parameters", 0)
@@ -324,7 +333,7 @@ class HuggingFaceImporter(ImportProvider):
         limit: int = 10,
         filter_task: Optional[str] = "text-generation",
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search HuggingFace Hub for models.
         

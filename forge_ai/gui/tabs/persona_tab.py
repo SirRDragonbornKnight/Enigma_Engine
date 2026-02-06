@@ -16,17 +16,33 @@ Usage:
     tabs.addTab(persona_widget, "Personas")
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QListWidget,
-    QTextEdit, QLineEdit, QMessageBox, QFileDialog, QGroupBox, QFormLayout,
-    QComboBox, QListWidgetItem, QDialog, QDialogButtonBox, QCheckBox,
-    QSplitter, QFrame, QSizePolicy
-)
-from PyQt5.QtCore import Qt, pyqtSignal
 from pathlib import Path
 
-from ...core.persona import PersonaManager, AIPersona, get_persona_manager
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
+from ...core.persona import AIPersona, PersonaManager, get_persona_manager
 
 # =============================================================================
 # STYLE CONSTANTS
@@ -351,7 +367,7 @@ class PersonaTab(QWidget):
         """Load voice profiles from data directory (async for system voices)."""
         import os
         from pathlib import Path
-        
+
         # Voice profiles directory (fast - local file check)
         voice_dir = Path("data/voice_profiles")
         if voice_dir.exists():
@@ -390,7 +406,7 @@ class PersonaTab(QWidget):
         """Load avatar presets from data directory."""
         import os
         from pathlib import Path
-        
+
         # Avatar presets directory
         avatar_dir = Path("data/avatar")
         if avatar_dir.exists():

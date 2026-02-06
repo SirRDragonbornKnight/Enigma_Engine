@@ -33,21 +33,21 @@ USAGE:
     market.publish("my-plugin", "/path/to/plugin")
 """
 
+from .installer import (
+    DependencyResolver,
+    PluginInstaller,
+)
 from .marketplace import (
-    Marketplace,
-    PluginInfo,
-    PluginCategory,
-    PluginVersion,
     InstallResult,
+    Marketplace,
+    PluginCategory,
+    PluginInfo,
+    PluginVersion,
 )
 from .repository import (
-    PluginRepository,
     LocalRepository,
+    PluginRepository,
     RemoteRepository,
-)
-from .installer import (
-    PluginInstaller,
-    DependencyResolver,
 )
 
 __all__ = [

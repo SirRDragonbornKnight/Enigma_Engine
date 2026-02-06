@@ -6,25 +6,36 @@ Providers:
   - OPENAI: OpenAI embedding API (requires API key)
 """
 
-import os
-import time
 import json
 import logging
+import os
+import time
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QTextEdit, QProgressBar,
-        QMessageBox, QGroupBox, QListWidget, QListWidgetItem,
-        QSplitter, QLineEdit, QTableWidget, QTableWidgetItem,
-        QHeaderView
-    )
     from PyQt5.QtCore import Qt, QThread, pyqtSignal
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QGroupBox,
+        QHBoxLayout,
+        QHeaderView,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QListWidgetItem,
+        QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QSplitter,
+        QTableWidget,
+        QTableWidgetItem,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -89,7 +100,7 @@ class LocalEmbedding:
         self.is_loaded = False
         self._using_builtin = False
     
-    def embed(self, text: str) -> Dict[str, Any]:
+    def embed(self, text: str) -> dict[str, Any]:
         """Generate embedding for a single text."""
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
@@ -110,7 +121,7 @@ class LocalEmbedding:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def embed_batch(self, texts: List[str]) -> Dict[str, Any]:
+    def embed_batch(self, texts: list[str]) -> dict[str, Any]:
         """Generate embeddings for multiple texts."""
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
@@ -132,7 +143,7 @@ class LocalEmbedding:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def similarity(self, text1: str, text2: str) -> Dict[str, Any]:
+    def similarity(self, text1: str, text2: str) -> dict[str, Any]:
         """Calculate cosine similarity between two texts."""
         if not self.is_loaded:
             return {"success": False, "error": "Model not loaded"}
@@ -190,7 +201,7 @@ class OpenAIEmbedding:
         self.client = None
         self.is_loaded = False
     
-    def embed(self, text: str) -> Dict[str, Any]:
+    def embed(self, text: str) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -213,7 +224,7 @@ class OpenAIEmbedding:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def embed_batch(self, texts: List[str]) -> Dict[str, Any]:
+    def embed_batch(self, texts: list[str]) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         
@@ -237,7 +248,7 @@ class OpenAIEmbedding:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def similarity(self, text1: str, text2: str) -> Dict[str, Any]:
+    def similarity(self, text1: str, text2: str) -> dict[str, Any]:
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded or missing API key"}
         

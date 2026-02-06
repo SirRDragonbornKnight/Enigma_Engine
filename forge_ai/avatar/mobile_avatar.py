@@ -37,8 +37,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, Optional, List, Callable
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class MobileAvatar:
         self._speech_visible = False
         
         # Expression cache
-        self._expressions: Dict[str, AvatarExpression] = {}
+        self._expressions: dict[str, AvatarExpression] = {}
         
         # Network
         self._connected = False
@@ -113,7 +113,7 @@ class MobileAvatar:
         self._stop_event = threading.Event()
         
         # Touch handling
-        self._touch_callbacks: List[Callable[[int, int], None]] = []
+        self._touch_callbacks: list[Callable[[int, int], None]] = []
         
         # Battery saving
         self._is_background = False
@@ -227,7 +227,7 @@ class MobileAvatar:
     def _poll_based_sync(self):
         """Fallback: Poll-based state synchronization."""
         import urllib.request
-        
+
         # Convert ws:// to http://
         http_url = self.config.server_url.replace("ws://", "http://").replace("/avatar", "")
         
@@ -246,7 +246,7 @@ class MobileAvatar:
             
             self._stop_event.wait(self.config.sync_interval_ms / 1000.0)
     
-    def _handle_message(self, data: Dict[str, Any]):
+    def _handle_message(self, data: dict[str, Any]):
         """Handle message from server."""
         msg_type = data.get("type", "")
         
@@ -261,7 +261,7 @@ class MobileAvatar:
         
         self._last_activity = time.time()
     
-    def _update_state(self, data: Dict[str, Any]):
+    def _update_state(self, data: dict[str, Any]):
         """Update avatar state from server data."""
         state_str = data.get("state", "idle")
         try:
@@ -287,7 +287,7 @@ class MobileAvatar:
         if text:
             self._state = MobileAvatarState.SPEAKING
     
-    def _cache_expression_image(self, data: Dict[str, Any]):
+    def _cache_expression_image(self, data: dict[str, Any]):
         """Cache an expression image from server."""
         name = data.get("name", "")
         if not name:
@@ -335,7 +335,7 @@ class MobileAvatar:
                 "y": y,
             })
     
-    def _send_event(self, event: Dict[str, Any]):
+    def _send_event(self, event: dict[str, Any]):
         """Send event to server."""
         if not self._connected:
             return
@@ -378,7 +378,7 @@ class MobileAvatar:
             **kwargs,
         })
     
-    def get_render_data(self) -> Dict[str, Any]:
+    def get_render_data(self) -> dict[str, Any]:
         """
         Get data needed to render the avatar.
         
@@ -422,7 +422,7 @@ class MobileAvatar:
             self.config.update_rate_ms = self._original_update_rate
             logger.debug(f"Foreground mode: restored update rate to {self._original_update_rate}ms")
     
-    def get_battery_stats(self) -> Dict[str, Any]:
+    def get_battery_stats(self) -> dict[str, Any]:
         """Get battery usage statistics."""
         return {
             "update_rate_ms": self.config.update_rate_ms,
@@ -449,7 +449,7 @@ class MobileAvatarServer:
         """
         self._avatar = avatar_controller
         self._port = port
-        self._clients: List[Any] = []
+        self._clients: list[Any] = []
         self._running = False
         self._server_thread: Optional[threading.Thread] = None
     
@@ -514,7 +514,7 @@ class MobileAvatarServer:
         except ImportError:
             logger.error("Flask not installed, mobile avatar server unavailable")
     
-    def broadcast_state(self, state: Dict[str, Any]):
+    def broadcast_state(self, state: dict[str, Any]):
         """Broadcast state update to all connected clients via WebSocket."""
         if not hasattr(self, '_websocket_clients'):
             self._websocket_clients = set()

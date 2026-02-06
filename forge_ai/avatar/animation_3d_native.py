@@ -31,15 +31,15 @@ Usage:
     controller.start_talking()
 """
 
-import json
-import struct
 import base64
+import json
 import math
+import os
+import struct
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Any
-import os
+from typing import Any, Dict, List, Optional, Tuple
 
 # Numpy for matrix math (already in requirements)
 try:
@@ -51,20 +51,23 @@ except ImportError:
 
 # PyQt5 OpenGL (built into PyQt5, no extra install)
 try:
-    from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QObject
-    from PyQt5.QtGui import QMatrix4x4, QVector3D, QQuaternion, QColor
-    from PyQt5.QtWidgets import QWidget, QVBoxLayout, QOpenGLWidget
+    from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal
+    from PyQt5.QtGui import QColor, QMatrix4x4, QQuaternion, QVector3D
     from PyQt5.QtOpenGL import QGLFormat
+    from PyQt5.QtWidgets import QOpenGLWidget, QVBoxLayout, QWidget
     HAS_PYQT_GL = True
 except ImportError:
     HAS_PYQT_GL = False
     # Don't print - this is optional and the fallback works fine
 
 # OpenGL functions from PyQt5
+# NOTE: Star imports from OpenGL.GL and OpenGL.GLU are intentional here.
+# OpenGL bindings require many constants (GL_DEPTH_TEST, GL_BLEND, etc.)
+# and functions (glEnable, glClear, etc.) - explicit imports would be verbose.
 try:
     from OpenGL import GL
-    from OpenGL.GL import *
-    from OpenGL.GLU import *
+    from OpenGL.GL import *  # noqa: F401,F403 - OpenGL star import is standard practice
+    from OpenGL.GLU import *  # noqa: F401,F403
     HAS_OPENGL = True
 except ImportError:
     # Try PyOpenGL-accelerate or fall back
@@ -94,18 +97,18 @@ class Bone:
     name: str
     index: int
     parent_index: int = -1
-    local_position: Tuple[float, float, float] = (0, 0, 0)
-    local_rotation: Tuple[float, float, float, float] = (0, 0, 0, 1)  # Quaternion xyzw
-    local_scale: Tuple[float, float, float] = (1, 1, 1)
-    inverse_bind_matrix: Optional[List[float]] = None  # 4x4 matrix as flat list
-    children: List[int] = field(default_factory=list)
+    local_position: tuple[float, float, float] = (0, 0, 0)
+    local_rotation: tuple[float, float, float, float] = (0, 0, 0, 1)  # Quaternion xyzw
+    local_scale: tuple[float, float, float] = (1, 1, 1)
+    inverse_bind_matrix: Optional[list[float]] = None  # 4x4 matrix as flat list
+    children: list[int] = field(default_factory=list)
 
 
 @dataclass
 class AnimationKeyframe:
     """A single keyframe."""
     time: float
-    value: Tuple  # Position (xyz), Rotation (xyzw quaternion), or Scale (xyz)
+    value: tuple  # Position (xyz), Rotation (xyzw quaternion), or Scale (xyz)
 
 
 @dataclass  
@@ -113,7 +116,7 @@ class AnimationChannel:
     """Animation data for one bone property."""
     bone_index: int
     property_type: str  # "translation", "rotation", "scale"
-    keyframes: List[AnimationKeyframe] = field(default_factory=list)
+    keyframes: list[AnimationKeyframe] = field(default_factory=list)
 
 
 @dataclass
@@ -121,7 +124,7 @@ class AnimationClip:
     """A complete animation."""
     name: str
     duration: float
-    channels: List[AnimationChannel] = field(default_factory=list)
+    channels: list[AnimationChannel] = field(default_factory=list)
     loop: bool = True
 
 
@@ -129,12 +132,12 @@ class AnimationClip:
 class Mesh:
     """3D mesh data."""
     name: str
-    vertices: List[float] = field(default_factory=list)  # xyz xyz xyz...
-    normals: List[float] = field(default_factory=list)   # xyz xyz xyz...
-    uvs: List[float] = field(default_factory=list)       # uv uv uv...
-    indices: List[int] = field(default_factory=list)     # Triangle indices
-    bone_weights: List[float] = field(default_factory=list)  # 4 weights per vertex
-    bone_indices: List[int] = field(default_factory=list)    # 4 bone indices per vertex
+    vertices: list[float] = field(default_factory=list)  # xyz xyz xyz...
+    normals: list[float] = field(default_factory=list)   # xyz xyz xyz...
+    uvs: list[float] = field(default_factory=list)       # uv uv uv...
+    indices: list[int] = field(default_factory=list)     # Triangle indices
+    bone_weights: list[float] = field(default_factory=list)  # 4 weights per vertex
+    bone_indices: list[int] = field(default_factory=list)    # 4 bone indices per vertex
 
 
 class GLTFLoader:
@@ -144,7 +147,7 @@ class GLTFLoader:
     """
     
     @staticmethod
-    def load(path: str) -> Tuple[List[Mesh], List[Bone], List[AnimationClip]]:
+    def load(path: str) -> tuple[list[Mesh], list[Bone], list[AnimationClip]]:
         """Load a glTF/GLB file."""
         path = Path(path)
         
@@ -154,7 +157,7 @@ class GLTFLoader:
             return GLTFLoader._load_gltf(path)
     
     @staticmethod
-    def _load_glb(path: Path) -> Tuple[List[Mesh], List[Bone], List[AnimationClip]]:
+    def _load_glb(path: Path) -> tuple[list[Mesh], list[Bone], list[AnimationClip]]:
         """Load binary GLB format."""
         with open(path, 'rb') as f:
             # GLB header
@@ -182,9 +185,9 @@ class GLTFLoader:
             return GLTFLoader._parse_gltf(json_data, bin_data, path.parent)
     
     @staticmethod
-    def _load_gltf(path: Path) -> Tuple[List[Mesh], List[Bone], List[AnimationClip]]:
+    def _load_gltf(path: Path) -> tuple[list[Mesh], list[Bone], list[AnimationClip]]:
         """Load JSON glTF format."""
-        with open(path, 'r') as f:
+        with open(path) as f:
             json_data = json.load(f)
         
         # Load external binary buffer if referenced
@@ -204,14 +207,14 @@ class GLTFLoader:
         return GLTFLoader._parse_gltf(json_data, bin_data, path.parent)
     
     @staticmethod
-    def _parse_gltf(gltf: dict, bin_data: bytes, base_path: Path) -> Tuple[List[Mesh], List[Bone], List[AnimationClip]]:
+    def _parse_gltf(gltf: dict, bin_data: bytes, base_path: Path) -> tuple[list[Mesh], list[Bone], list[AnimationClip]]:
         """Parse glTF JSON structure."""
         meshes = []
         bones = []
         animations = []
         
         # Helper to get accessor data
-        def get_accessor_data(accessor_idx: int) -> List:
+        def get_accessor_data(accessor_idx: int) -> list:
             if accessor_idx is None or 'accessors' not in gltf:
                 return []
             
@@ -358,14 +361,14 @@ class Avatar3DWidget(QOpenGLWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        self.meshes: List[Mesh] = []
-        self.bones: List[Bone] = []
-        self.animations: Dict[str, AnimationClip] = {}
+        self.meshes: list[Mesh] = []
+        self.bones: list[Bone] = []
+        self.animations: dict[str, AnimationClip] = {}
         
         # Current state
         self._current_animation: Optional[str] = None
         self._animation_time: float = 0.0
-        self._bone_matrices: List[QMatrix4x4] = []
+        self._bone_matrices: list[QMatrix4x4] = []
         
         # Camera
         self._camera_pos = QVector3D(0, 0, 3)
@@ -456,7 +459,7 @@ class Avatar3DWidget(QOpenGLWidget):
         # Calculate final matrices
         self._calculate_bone_matrices()
     
-    def _interpolate_keyframes(self, keyframes: List[AnimationKeyframe], time: float) -> Tuple:
+    def _interpolate_keyframes(self, keyframes: list[AnimationKeyframe], time: float) -> tuple:
         """Linear interpolation between keyframes."""
         if not keyframes:
             return (0, 0, 0)
@@ -612,9 +615,9 @@ class NativeAvatar3D(QObject):
         super().__init__()
         
         self._widget: Optional[Avatar3DWidget] = None
-        self._state_animations: Dict[Animation3DState, str] = {}
+        self._state_animations: dict[Animation3DState, str] = {}
         self._current_state = Animation3DState.IDLE
-        self._gesture_queue: List[str] = []
+        self._gesture_queue: list[str] = []
         self._return_state = Animation3DState.IDLE
     
     def get_widget(self, width: int = 512, height: int = 512) -> QOpenGLWidget:
@@ -653,7 +656,7 @@ class NativeAvatar3D(QObject):
         if self._widget:
             self._widget.play_animation(name, loop=False)
     
-    def get_available_animations(self) -> List[str]:
+    def get_available_animations(self) -> list[str]:
         """Get list of loaded animations."""
         if self._widget:
             return list(self._widget.animations.keys())

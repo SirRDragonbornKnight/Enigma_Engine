@@ -44,7 +44,7 @@ class ScreenCapture:
         """Detect best available screenshot backend. Prioritize CLI tools on Linux."""
         import platform
         import shutil
-        
+
         # On Linux, prefer scrot first (works on Wayland, X11, Pi)
         if platform.system() == "Linux":
             if shutil.which("scrot"):
@@ -153,6 +153,7 @@ class ScreenCapture:
         """Capture using command line tools."""
         import subprocess
         import tempfile
+
         from PIL import Image
         
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
@@ -366,7 +367,7 @@ class ScreenVision:
         # Compare images
         try:
             import numpy as np
-            
+
             # Resize for faster comparison
             old_small = old_img.resize(COMPARISON_THUMBNAIL_SIZE)
             new_small = new_img.resize(COMPARISON_THUMBNAIL_SIZE)
@@ -517,6 +518,7 @@ def capture_screen(save_path: str = None) -> Dict[str, Any]:
         Dict with success status and path.
     """
     import time
+
     from ..config import CONFIG
     
     try:

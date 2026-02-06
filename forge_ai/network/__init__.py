@@ -7,21 +7,6 @@ Enables task distribution across multiple ForgeAI devices:
 - Automatic failover when servers go offline
 """
 
-from .remote_offloading import (
-    RemoteOffloader,
-    OffloadDecision,
-    get_remote_offloader,
-)
-from .load_balancer import (
-    LoadBalancer,
-    ServerInfo,
-    BalancingStrategy,
-)
-from .task_queue import (
-    NetworkTaskQueue,
-    NetworkTask,
-    TaskPriority,
-)
 from .failover import (
     FailoverManager,
     ServerHealth,
@@ -29,6 +14,21 @@ from .failover import (
 from .inference_gateway import (
     InferenceGateway,
     get_inference_gateway,
+)
+from .load_balancer import (
+    BalancingStrategy,
+    LoadBalancer,
+    ServerInfo,
+)
+from .remote_offloading import (
+    OffloadDecision,
+    RemoteOffloader,
+    get_remote_offloader,
+)
+from .task_queue import (
+    NetworkTask,
+    NetworkTaskQueue,
+    TaskPriority,
 )
 
 __all__ = [

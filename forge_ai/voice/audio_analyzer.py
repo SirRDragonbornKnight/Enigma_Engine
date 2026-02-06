@@ -46,8 +46,8 @@ class TimbreFeatures:
     """Voice timbre characteristics for cloning accuracy."""
     
     # Formants (resonant frequencies of vocal tract)
-    formants: List[float] = field(default_factory=lambda: [500, 1500, 2500])
-    formant_bandwidths: List[float] = field(default_factory=lambda: [90, 110, 170])
+    formants: list[float] = field(default_factory=lambda: [500, 1500, 2500])
+    formant_bandwidths: list[float] = field(default_factory=lambda: [90, 110, 170])
     
     # Spectral characteristics
     spectral_centroid: float = 1500.0  # "Center of mass" of spectrum (Hz)
@@ -65,7 +65,7 @@ class TimbreFeatures:
     breathiness: float = 0.3          # 0=clear, 1=breathy
     nasality: float = 0.2             # 0=oral, 1=nasal
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'formants': self.formants,
             'formant_bandwidths': self.formant_bandwidths,
@@ -94,12 +94,12 @@ class AudioFeatures:
     sample_rate: int = 0  # Audio sample rate
     
     # Advanced features (if available)
-    formants: Optional[List[float]] = None  # Formant frequencies
-    spectral_centroid: Optional[float] = None
-    zero_crossing_rate: Optional[float] = None
+    formants: list[float] | None = None  # Formant frequencies
+    spectral_centroid: float | None = None
+    zero_crossing_rate: float | None = None
     
     # Timbre features for voice cloning
-    timbre: Optional[TimbreFeatures] = None
+    timbre: TimbreFeatures | None = None
 
 
 class AudioAnalyzer:
@@ -138,7 +138,7 @@ class AudioAnalyzer:
         except ImportError:
             pass
     
-    def _estimate_speaking_rate(self, audio: 'np.ndarray', sr: int, duration: float) -> float:
+    def _estimate_speaking_rate(self, audio: np.ndarray, sr: int, duration: float) -> float:
         """
         Estimate speaking rate from audio using energy envelope peaks.
         
@@ -348,16 +348,16 @@ class AudioAnalyzer:
             )
             
         except Exception as e:
-            print(f"Warning: Advanced analysis failed: {e}")
+            logger.warning(f"Advanced analysis failed: {e}")
             return self._analyze_basic(audio_path)
     
     def _extract_timbre_features(
         self, 
-        y: 'np.ndarray', 
+        y: np.ndarray, 
         sr: int,
         f0: float,
-        pitch_values: List[float]
-    ) -> Optional[TimbreFeatures]:
+        pitch_values: list[float]
+    ) -> TimbreFeatures | None:
         """
         Extract comprehensive timbre features for voice cloning.
         
@@ -444,10 +444,10 @@ class AudioAnalyzer:
     
     def _extract_formants_lpc(
         self, 
-        y: 'np.ndarray', 
+        y: np.ndarray, 
         sr: int,
         order: int = 12
-    ) -> Tuple[List[float], List[float]]:
+    ) -> tuple[list[float], list[float]]:
         """
         Extract formant frequencies using LPC analysis.
         
@@ -518,7 +518,7 @@ class AudioAnalyzer:
             logger.debug(f"LPC formant extraction failed: {e}")
             return [500, 1500, 2500], [90, 110, 170]
     
-    def _levinson_durbin(self, r: 'np.ndarray', order: int) -> Optional['np.ndarray']:
+    def _levinson_durbin(self, r: np.ndarray, order: int) -> np.ndarray | None:
         """
         Levinson-Durbin algorithm for solving Toeplitz system.
         
@@ -557,7 +557,7 @@ class AudioAnalyzer:
         except Exception:
             return None
     
-    def _estimate_hnr(self, y: 'np.ndarray', sr: int, f0: float) -> float:
+    def _estimate_hnr(self, y: np.ndarray, sr: int, f0: float) -> float:
         """
         Estimate Harmonics-to-Noise Ratio (HNR).
         
@@ -614,7 +614,7 @@ class AudioAnalyzer:
         except Exception:
             return 15.0
     
-    def _estimate_nasality(self, formants: List[float], spectral_flatness: float) -> float:
+    def _estimate_nasality(self, formants: list[float], spectral_flatness: float) -> float:
         """
         Estimate nasality from formant patterns.
         
@@ -670,8 +670,8 @@ class AudioAnalyzer:
         try:
             # Try to analyze WAV files with standard library
             if str(audio_path).lower().endswith('.wav'):
-                import wave
                 import audioop
+                import wave
                 
                 with wave.open(str(audio_path), 'rb') as wf:
                     n_channels = wf.getnchannels()
@@ -760,7 +760,7 @@ class AudioAnalyzer:
     
     def estimate_voice_profile(
         self,
-        audio_files: List[str],
+        audio_files: list[str],
         name: str = "analyzed_voice"
     ) -> VoiceProfile:
         """
@@ -783,10 +783,10 @@ class AudioAnalyzer:
                 features = self.analyze_audio(audio_file)
                 all_features.append(features)
             except Exception as e:
-                print(f"Warning: Could not analyze {audio_file}: {e}")
+                logger.warning(f"Could not analyze {audio_file}: {e}")
         
         if not all_features:
-            print("Warning: No valid audio samples analyzed, using defaults")
+            logger.warning("No valid audio samples analyzed, using defaults")
             return VoiceProfile(name=name)
         
         # Average features
@@ -863,13 +863,13 @@ class AudioAnalyzer:
             return similarity
             
         except Exception as e:
-            print(f"Error comparing voices: {e}")
+            logger.error(f"Error comparing voices: {e}")
             return 0.0
     
     def extract_coqui_features(
         self,
-        audio_files: List[str]
-    ) -> Dict[str, Any]:
+        audio_files: list[str]
+    ) -> dict[str, Any]:
         """
         Extract features suitable for Coqui XTTS voice cloning.
         
@@ -898,14 +898,14 @@ class AudioAnalyzer:
                     "energy": audio_features.energy
                 })
             except Exception as e:
-                print(f"Warning: Could not analyze {audio_file}: {e}")
+                logger.warning(f"Could not analyze {audio_file}: {e}")
         
         return features
     
     def validate_audio_quality(
         self,
         audio_path: str
-    ) -> Tuple[bool, List[str]]:
+    ) -> tuple[bool, list[str]]:
         """
         Validate audio quality for voice cloning.
         
@@ -959,7 +959,7 @@ def analyze_audio(audio_path: str) -> AudioFeatures:
 
 
 def estimate_voice_profile(
-    audio_files: List[str],
+    audio_files: list[str],
     name: str = "analyzed_voice"
 ) -> VoiceProfile:
     """

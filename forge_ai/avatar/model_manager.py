@@ -33,16 +33,16 @@ USAGE:
     anime_avatars = manager.get_by_category("anime")
 """
 
+import hashlib
 import json
 import logging
 import shutil
-import hashlib
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-import subprocess
 
 from ..config import CONFIG
 
@@ -96,9 +96,9 @@ class AvatarRigging:
     has_face_rig: bool = False
     has_finger_bones: bool = False
     rig_type: str = "unknown"  # humanoid, quadruped, custom
-    blend_shapes: List[str] = field(default_factory=list)
+    blend_shapes: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'is_rigged': self.is_rigged,
             'bone_count': self.bone_count,
@@ -110,7 +110,7 @@ class AvatarRigging:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'AvatarRigging':
+    def from_dict(cls, data: dict) -> 'AvatarRigging':
         return cls(
             is_rigged=data.get('is_rigged', False),
             bone_count=data.get('bone_count', 0),
@@ -151,10 +151,10 @@ class AvatarModel:
     
     # Metadata
     created_at: datetime = field(default_factory=datetime.now)
-    tags: List[str] = field(default_factory=list)
-    custom_data: Dict = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    custom_data: dict = field(default_factory=dict)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'id': self.id,
             'name': self.name,
@@ -179,7 +179,7 @@ class AvatarModel:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'AvatarModel':
+    def from_dict(cls, data: dict) -> 'AvatarModel':
         return cls(
             id=data['id'],
             name=data['name'],
@@ -243,7 +243,7 @@ class AvatarModelManager:
         self.thumbnails_dir.mkdir(parents=True, exist_ok=True)
         
         # Load registry
-        self.avatars: Dict[str, AvatarModel] = {}
+        self.avatars: dict[str, AvatarModel] = {}
         self._load_registry()
         
         logger.info(f"Avatar model manager initialized with {len(self.avatars)} avatars")
@@ -345,7 +345,7 @@ class AvatarModelManager:
         
         return AvatarCategory.OTHER
     
-    def _analyze_model(self, file_path: Path) -> Tuple[AvatarRigging, Dict]:
+    def _analyze_model(self, file_path: Path) -> tuple[AvatarRigging, dict]:
         """Analyze model file for technical details."""
         rigging = AvatarRigging()
         stats = {
@@ -486,7 +486,7 @@ class AvatarModelManager:
         """
         try:
             import urllib.request
-            
+
             # Parse filename from URL
             from urllib.parse import urlparse
             parsed = urlparse(url)
@@ -523,23 +523,23 @@ class AvatarModelManager:
                 return avatar
         return None
     
-    def list_avatars(self) -> List[AvatarModel]:
+    def list_avatars(self) -> list[AvatarModel]:
         """List all avatars."""
         return list(self.avatars.values())
     
-    def get_by_category(self, category: AvatarCategory) -> List[AvatarModel]:
+    def get_by_category(self, category: AvatarCategory) -> list[AvatarModel]:
         """Get avatars by category."""
         if isinstance(category, str):
             category = AvatarCategory(category)
         return [a for a in self.avatars.values() if a.category == category]
     
-    def get_by_format(self, avatar_format: AvatarFormat) -> List[AvatarModel]:
+    def get_by_format(self, avatar_format: AvatarFormat) -> list[AvatarModel]:
         """Get avatars by format."""
         if isinstance(avatar_format, str):
             avatar_format = AvatarFormat(avatar_format)
         return [a for a in self.avatars.values() if a.format == avatar_format]
     
-    def search(self, query: str) -> List[AvatarModel]:
+    def search(self, query: str) -> list[AvatarModel]:
         """Search avatars by name, tags, or description."""
         query_lower = query.lower()
         results = []
@@ -584,7 +584,7 @@ class AvatarModelManager:
         
         logger.info(f"Deleted avatar: {avatar.name}")
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get library statistics."""
         by_category = {}
         by_format = {}

@@ -33,13 +33,15 @@ USAGE:
     llm = ChatOpenAI(base_url="http://localhost:8000/v1", api_key="not-needed")
 """
 
-import time
-import uuid
 import json
 import logging
+import time
+import uuid
+from collections.abc import Generator
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Generator, Union
-from flask import Flask, request, jsonify, Response, stream_with_context
+from typing import Any, Dict, List, Optional, Union
+
+from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 logger = logging.getLogger(__name__)
@@ -77,10 +79,10 @@ class ChatCompletionResponse:
     object: str = "chat.completion"
     created: int = field(default_factory=lambda: int(time.time()))
     model: str = "forge"
-    choices: List[Dict] = field(default_factory=list)
-    usage: Dict = field(default_factory=dict)
+    choices: list[dict] = field(default_factory=list)
+    usage: dict = field(default_factory=dict)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "object": self.object,
@@ -97,10 +99,10 @@ class CompletionResponse:
     object: str = "text_completion"
     created: int = field(default_factory=lambda: int(time.time()))
     model: str = "forge"
-    choices: List[Dict] = field(default_factory=list)
-    usage: Dict = field(default_factory=dict)
+    choices: list[dict] = field(default_factory=list)
+    usage: dict = field(default_factory=dict)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "object": self.object,
@@ -292,9 +294,10 @@ class OpenAICompatibleServer:
                 ]
             })
     
-    def _get_available_models(self) -> List[Dict]:
+    def _get_available_models(self) -> list[dict]:
         """Get list of available models."""
         from pathlib import Path
+
         from ..config import CONFIG
         
         models = []
@@ -352,7 +355,7 @@ class OpenAICompatibleServer:
         
         return models
     
-    def _messages_to_prompt(self, messages: List[Dict]) -> str:
+    def _messages_to_prompt(self, messages: list[dict]) -> str:
         """
         Convert OpenAI-style messages to a prompt string.
         
@@ -383,7 +386,7 @@ class OpenAICompatibleServer:
         temperature: float,
         max_tokens: int,
         top_p: float,
-        stop: Optional[List[str]]
+        stop: Optional[list[str]]
     ):
         """Generate a non-streaming chat response."""
         try:
@@ -439,7 +442,7 @@ class OpenAICompatibleServer:
         temperature: float,
         max_tokens: int,
         top_p: float,
-        stop: Optional[List[str]]
+        stop: Optional[list[str]]
     ):
         """Generate a streaming chat response (SSE)."""
         def generate():
@@ -596,7 +599,7 @@ class OpenAICompatibleServer:
             mimetype="text/event-stream"
         )
     
-    def _generate_embeddings(self, texts: List[str], model: str) -> List[Dict]:
+    def _generate_embeddings(self, texts: list[str], model: str) -> list[dict]:
         """Generate embeddings for texts."""
         embeddings = []
         

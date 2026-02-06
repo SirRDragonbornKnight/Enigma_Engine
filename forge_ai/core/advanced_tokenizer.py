@@ -22,17 +22,17 @@ Core Features:
 This is the ForgeAI's custom tokenizer - not a GPT clone.
 """
 import json
+import logging
 import random
 import re
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any, Set
 from collections import Counter, defaultdict
-import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-def bytes_to_unicode() -> Dict[int, str]:
+def bytes_to_unicode() -> dict[int, str]:
     """
     Create a mapping from bytes to unicode characters.
 
@@ -60,7 +60,7 @@ def bytes_to_unicode() -> Dict[int, str]:
     return {b: chr(c) for b, c in zip(bs, cs)}
 
 
-def get_pairs(word: Tuple[str, ...]) -> Set[Tuple[str, str]]:
+def get_pairs(word: tuple[str, ...]) -> set[tuple[str, str]]:
     """Get all adjacent pairs in a word."""
     pairs = set()
     prev_char = word[0]
@@ -182,14 +182,14 @@ class ForgeTokenizer:
         self.unk_token_id = 3
 
         # Vocabulary
-        self.encoder: Dict[str, int] = {}  # token -> id
-        self.decoder: Dict[int, str] = {}  # id -> token
+        self.encoder: dict[str, int] = {}  # token -> id
+        self.decoder: dict[int, str] = {}  # id -> token
 
         # BPE merge rules
-        self.bpe_ranks: Dict[Tuple[str, str], int] = {}
+        self.bpe_ranks: dict[tuple[str, str], int] = {}
 
         # Encoding cache
-        self.cache: Dict[str, str] = {}
+        self.cache: dict[str, str] = {}
         
         # Streaming buffer
         self._stream_buffer = ""
@@ -230,7 +230,7 @@ class ForgeTokenizer:
 
     def train(
         self,
-        texts: List[str],
+        texts: list[str],
         vocab_size: int = 8000,
         min_frequency: int = 2,
         verbose: bool = True
@@ -341,10 +341,10 @@ class ForgeTokenizer:
 
     def _apply_merge(
         self,
-        word: Tuple[str, ...],
-        pair: Tuple[str, str],
+        word: tuple[str, ...],
+        pair: tuple[str, str],
         new_token: str
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         """Apply a merge to a word."""
         new_word = []
         i = 0
@@ -359,7 +359,7 @@ class ForgeTokenizer:
                 i += 1
         return tuple(new_word)
 
-    def _pre_tokenize(self, text: str) -> List[str]:
+    def _pre_tokenize(self, text: str) -> list[str]:
         """
         Split text into words/tokens before BPE.
 
@@ -471,7 +471,7 @@ class ForgeTokenizer:
         
         return result
 
-    def encode(self, text: str, add_special_tokens: bool = True, dropout: float = 0.0) -> List[int]:
+    def encode(self, text: str, add_special_tokens: bool = True, dropout: float = 0.0) -> list[int]:
         """
         Encode text to token IDs.
 
@@ -512,7 +512,7 @@ class ForgeTokenizer:
 
         return ids
 
-    def decode(self, ids: List[int], skip_special_tokens: bool = True) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         """
         Decode token IDs back to text.
 
@@ -593,7 +593,7 @@ class ForgeTokenizer:
         """
         path = Path(path)
 
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
 
         self.encoder = data['encoder']
@@ -627,7 +627,7 @@ class ForgeTokenizer:
         truncation: bool = None,
         max_length: int = None,
         add_special_tokens: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Tokenize text (HuggingFace-compatible interface)."""
         ids = self.encode(text, add_special_tokens=add_special_tokens)
 
@@ -646,16 +646,16 @@ class ForgeTokenizer:
     def __len__(self) -> int:
         return self.vocab_size
 
-    def get_vocab(self) -> Dict[str, int]:
+    def get_vocab(self) -> dict[str, int]:
         return self.encoder.copy()
 
     @property
-    def token_to_id(self) -> Dict[str, int]:
+    def token_to_id(self) -> dict[str, int]:
         """Compatibility property."""
         return self.encoder
 
     @property
-    def id_to_token(self) -> Dict[int, str]:
+    def id_to_token(self) -> dict[int, str]:
         """Compatibility property."""
         return self.decoder
     
@@ -670,7 +670,7 @@ class ForgeTokenizer:
             raise ValueError(f"Dropout must be between 0.0 and 1.0, got {dropout}")
         self.bpe_dropout = dropout
     
-    def encode_stream(self, text_chunk: str, finalize: bool = False) -> List[int]:
+    def encode_stream(self, text_chunk: str, finalize: bool = False) -> list[int]:
         """
         Encode streaming text efficiently.
         
@@ -716,7 +716,7 @@ class ForgeTokenizer:
     
     def decode_improved(
         self, 
-        ids: List[int], 
+        ids: list[int], 
         skip_special_tokens: bool = True,
         clean_up_spaces: bool = True
     ) -> str:
@@ -739,7 +739,7 @@ class ForgeTokenizer:
         
         # Cleanup common spacing issues
         import re
-        
+
         # Remove spaces before punctuation
         text = re.sub(r' ([.,!?;:])', r'\1', text)
         
@@ -781,7 +781,7 @@ class ForgeTokenizer:
         
         return len(text) / len(ids)
     
-    def tokenize_stats(self, text: str) -> Dict[str, Any]:
+    def tokenize_stats(self, text: str) -> dict[str, Any]:
         """
         Get detailed tokenization statistics.
         
@@ -804,7 +804,7 @@ class ForgeTokenizer:
         }
     
     @staticmethod
-    def get_info() -> Dict[str, Any]:
+    def get_info() -> dict[str, Any]:
         """
         Get information about the ForgeAI Tokenizer.
         
@@ -870,7 +870,7 @@ class ForgeTokenizer:
 
 
 def train_tokenizer(
-    data_paths: List[str],
+    data_paths: list[str],
     vocab_size: int = 8000,
     output_path: Optional[str] = None
 ) -> 'ForgeTokenizer':
@@ -890,7 +890,7 @@ def train_tokenizer(
     for path in data_paths:
         p = Path(path)
         if p.exists():
-            with open(p, 'r', encoding='utf-8') as f:
+            with open(p, encoding='utf-8') as f:
                 texts.append(f.read())
 
     if not texts:

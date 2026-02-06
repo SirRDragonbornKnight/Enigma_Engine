@@ -11,19 +11,19 @@ Features:
 Part of the ForgeAI data management suite.
 """
 
-import json
 import csv
-import io
 import gzip
+import html
+import io
+import json
+import logging
+import re
 import zipfile
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Union, TypeVar, Generic
-from pathlib import Path
-from enum import Enum
 from datetime import datetime
-import logging
-import html
-import re
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +67,8 @@ class ExportOptions:
     indent: int = 2
     csv_delimiter: str = ","
     html_css: bool = True
-    fields: Optional[List[str]] = None  # Specific fields to export
-    exclude_fields: Optional[List[str]] = None
+    fields: Optional[list[str]] = None  # Specific fields to export
+    exclude_fields: Optional[list[str]] = None
     filename_template: str = "{name}_{date}.{ext}"
     
 
@@ -123,7 +123,7 @@ class CSVExporter:
     
     def export(
         self,
-        data: List[Dict],
+        data: list[dict],
         options: ExportOptions
     ) -> bytes:
         """Export data to CSV bytes."""
@@ -209,7 +209,7 @@ class MarkdownExporter:
         
         return "\n".join(lines).encode("utf-8")
     
-    def _format_item(self, item: Dict, options: ExportOptions) -> List[str]:
+    def _format_item(self, item: dict, options: ExportOptions) -> list[str]:
         """Format a single item."""
         lines = []
         
@@ -311,12 +311,12 @@ class HTMLExporter:
         
         return "\n".join(lines).encode("utf-8")
     
-    def _format_table(self, items: List[Dict], options: ExportOptions) -> List[str]:
+    def _format_table(self, items: list[dict], options: ExportOptions) -> list[str]:
         """Format list of dicts as table."""
         lines = ["<table>"]
         
         # Get fields
-        fields = options.fields or sorted(set(k for item in items for k in item.keys()))
+        fields = options.fields or sorted({k for item in items for k in item.keys()})
         if options.exclude_fields:
             fields = [f for f in fields if f not in options.exclude_fields]
         
@@ -339,7 +339,7 @@ class HTMLExporter:
         lines.append("</table>")
         return lines
     
-    def _format_item(self, item: Dict, options: ExportOptions) -> List[str]:
+    def _format_item(self, item: dict, options: ExportOptions) -> list[str]:
         """Format a single item."""
         lines = []
         
@@ -407,7 +407,7 @@ class TextExporter:
         
         return "\n".join(lines).encode("utf-8")
     
-    def _format_item(self, item: Any, options: ExportOptions) -> List[str]:
+    def _format_item(self, item: Any, options: ExportOptions) -> list[str]:
         """Format item to text lines."""
         lines = []
         
@@ -552,10 +552,10 @@ class DataExporter:
     
     def export_batch(
         self,
-        items: Dict[str, Any],
+        items: dict[str, Any],
         format: ExportFormat = ExportFormat.JSON,
         options: Optional[ExportOptions] = None
-    ) -> Dict[str, ExportResult]:
+    ) -> dict[str, ExportResult]:
         """
         Export multiple datasets.
         
@@ -646,7 +646,7 @@ def export_to_json(data: Any, filename: Optional[str] = None, pretty: bool = Tru
     return get_exporter().export(data, format=format, filename=filename)
 
 
-def export_to_csv(data: List[Dict], filename: Optional[str] = None) -> ExportResult:
+def export_to_csv(data: list[dict], filename: Optional[str] = None) -> ExportResult:
     """Quick export to CSV."""
     return get_exporter().export(data, format=ExportFormat.CSV, filename=filename)
 

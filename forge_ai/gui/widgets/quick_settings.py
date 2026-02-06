@@ -23,17 +23,27 @@ USAGE:
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable
+from typing import Any, Callable, Dict, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-        QPushButton, QSlider, QCheckBox, QComboBox,
-        QGroupBox, QFrame, QSizePolicy, QSpacerItem,
-        QToolButton, QScrollArea
-    )
-    from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
+    from PyQt5.QtCore import QEasingCurve, QPropertyAnimation, Qt, pyqtSignal
     from PyQt5.QtGui import QFont, QIcon
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QComboBox,
+        QFrame,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QScrollArea,
+        QSizePolicy,
+        QSlider,
+        QSpacerItem,
+        QToolButton,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -131,7 +141,7 @@ class QuickSettingsPanel(QWidget):
             raise ImportError("PyQt5 required")
         
         super().__init__(parent)
-        self._settings: Dict[str, Any] = {}
+        self._settings: dict[str, Any] = {}
         self._collapsed = False
         self._setup_ui()
         self._load_settings()
@@ -359,7 +369,7 @@ class QuickSettingsPanel(QWidget):
             self._save_settings()
             self.settings_changed.emit(self._settings)
     
-    def _apply_settings(self, settings: Dict[str, Any]):
+    def _apply_settings(self, settings: dict[str, Any]):
         """Apply settings to UI controls."""
         if "gaming_mode" in settings:
             self.gaming_toggle.setChecked(settings["gaming_mode"])
@@ -420,7 +430,7 @@ class QuickSettingsPanel(QWidget):
         except Exception as e:
             logger.warning(f"Could not save quick settings: {e}")
     
-    def get_settings(self) -> Dict[str, Any]:
+    def get_settings(self) -> dict[str, Any]:
         """Get current settings."""
         return self._settings.copy()
 
@@ -487,7 +497,7 @@ class ResourceMonitor(QWidget):
         """Update resource statistics."""
         try:
             import psutil
-            
+
             # CPU
             cpu = psutil.cpu_percent()
             cpu_color = "#a6e3a1" if cpu < 70 else "#f9e2af" if cpu < 90 else "#f38ba8"

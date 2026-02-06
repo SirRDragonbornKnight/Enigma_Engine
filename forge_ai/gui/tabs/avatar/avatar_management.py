@@ -9,16 +9,24 @@ Enhanced avatar management with:
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-        QLabel, QPushButton, QGroupBox, QScrollArea,
-        QFrame, QMessageBox, QSizePolicy
-    )
     from PyQt5.QtCore import Qt, pyqtSignal
     from PyQt5.QtGui import QPixmap
+    from PyQt5.QtWidgets import (
+        QFrame,
+        QGridLayout,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QMessageBox,
+        QPushButton,
+        QScrollArea,
+        QSizePolicy,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -31,7 +39,7 @@ class AvatarGalleryItem(QFrame):
     
     clicked = pyqtSignal(dict)
     
-    def __init__(self, avatar_info: Dict[str, Any], parent=None):
+    def __init__(self, avatar_info: dict[str, Any], parent=None):
         super().__init__(parent)
         self.avatar_info = avatar_info
         self._setup_ui()
@@ -202,7 +210,7 @@ class AvatarManagementPanel(QWidget):
             no_avatars.setStyleSheet("color: #bac2de; padding: 20px;")
             self.gallery_layout.addWidget(no_avatars, 0, 0, 1, cols)
     
-    def _on_avatar_clicked(self, avatar_info: Dict):
+    def _on_avatar_clicked(self, avatar_info: dict):
         """Handle avatar selection."""
         self.avatar_selected.emit(avatar_info)
     

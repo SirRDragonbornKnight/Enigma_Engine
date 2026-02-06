@@ -70,8 +70,8 @@ def speak(text: str):
                 process.communicate(input=safe_text)
             elif shutil.which("pico2wave"):
                 # Pico TTS (high quality, needs temp file)
-                import tempfile
                 import os
+                import tempfile
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
                     temp_path = f.name
                 subprocess.run(['pico2wave', '-w', temp_path, safe_text], check=False)

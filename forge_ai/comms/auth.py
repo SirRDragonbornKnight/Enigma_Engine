@@ -28,13 +28,13 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
-import threading
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +55,9 @@ class APIKey:
     expires_at: Optional[datetime] = None
     rate_limit: Optional[int] = None  # Requests per minute
     token_quota: Optional[int] = None  # Tokens per day
-    scopes: Set[str] = field(default_factory=lambda: {"generate", "embed"})
+    scopes: set[str] = field(default_factory=lambda: {"generate", "embed"})
     is_active: bool = True
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     
     def is_valid(self) -> bool:
         """Check if key is valid."""
@@ -76,7 +76,7 @@ class APIKeyManager:
     """Manage API keys."""
     
     def __init__(self, storage_path: Optional[str] = None):
-        self._keys: Dict[str, APIKey] = {}
+        self._keys: dict[str, APIKey] = {}
         self._storage_path = storage_path
         self._lock = threading.Lock()
         
@@ -89,7 +89,7 @@ class APIKeyManager:
         expires_in_days: Optional[int] = None,
         rate_limit: Optional[int] = None,
         token_quota: Optional[int] = None,
-        scopes: Optional[Set[str]] = None
+        scopes: Optional[set[str]] = None
     ) -> APIKey:
         """Create a new API key."""
         # Generate secure key
@@ -141,7 +141,7 @@ class APIKeyManager:
                 return True
         return False
     
-    def list_keys(self) -> List[Dict[str, Any]]:
+    def list_keys(self) -> list[dict[str, Any]]:
         """List all keys (without the actual key values)."""
         with self._lock:
             return [
@@ -183,7 +183,7 @@ class APIKeyManager:
     def _load_keys(self):
         """Load keys from storage."""
         try:
-            with open(self._storage_path, 'r') as f:
+            with open(self._storage_path) as f:
                 data = json.load(f)
             
             for key_hash, key_data in data.items():
@@ -216,11 +216,11 @@ class RateLimitState:
     """Track rate limit state for a key/IP."""
     
     def __init__(self):
-        self.minute_requests: List[float] = []
-        self.hour_requests: List[float] = []
-        self.day_requests: List[float] = []
-        self.minute_tokens: List[Tuple[float, int]] = []  # (timestamp, tokens)
-        self.day_tokens: List[Tuple[float, int]] = []
+        self.minute_requests: list[float] = []
+        self.hour_requests: list[float] = []
+        self.day_requests: list[float] = []
+        self.minute_tokens: list[tuple[float, int]] = []  # (timestamp, tokens)
+        self.day_tokens: list[tuple[float, int]] = []
     
     def cleanup(self, now: float):
         """Remove old entries."""
@@ -263,7 +263,7 @@ class RateLimiter:
     
     def __init__(self, config: Optional[RateLimitConfig] = None):
         self.config = config or RateLimitConfig()
-        self._states: Dict[str, RateLimitState] = defaultdict(RateLimitState)
+        self._states: dict[str, RateLimitState] = defaultdict(RateLimitState)
         self._lock = threading.Lock()
     
     def check_limit(
@@ -271,7 +271,7 @@ class RateLimiter:
         identifier: str,
         tokens: int = 0,
         custom_limit: Optional[int] = None
-    ) -> Tuple[bool, Dict[str, Any]]:
+    ) -> tuple[bool, dict[str, Any]]:
         """
         Check if request is within rate limits.
         
@@ -344,7 +344,7 @@ class RateLimiter:
                 'remaining_tokens': self.config.tokens_per_minute - state.get_minute_tokens()
             }
     
-    def get_usage(self, identifier: str) -> Dict[str, Any]:
+    def get_usage(self, identifier: str) -> dict[str, Any]:
         """Get usage statistics for an identifier."""
         with self._lock:
             state = self._states.get(identifier)
@@ -390,8 +390,8 @@ class AuthMiddleware:
             @wraps(f)
             def wrapped(*args, **kwargs):
                 # Import Flask here to avoid dependency issues
-                from flask import request, jsonify, g
-                
+                from flask import g, jsonify, request
+
                 # Get API key from header
                 auth_header = request.headers.get('Authorization', '')
                 
@@ -443,7 +443,7 @@ class AuthMiddleware:
         self,
         user_id: str,
         expires_in_hours: int = 24,
-        scopes: Optional[List[str]] = None
+        scopes: Optional[list[str]] = None
     ) -> str:
         """Create a JWT token."""
         if not JWT_AVAILABLE:
@@ -470,11 +470,11 @@ class IPThrottler:
         self.max_requests_per_second = max_requests_per_second
         self.ban_duration_seconds = ban_duration_seconds
         
-        self._request_counts: Dict[str, List[float]] = defaultdict(list)
-        self._banned_ips: Dict[str, float] = {}
+        self._request_counts: dict[str, list[float]] = defaultdict(list)
+        self._banned_ips: dict[str, float] = {}
         self._lock = threading.Lock()
     
-    def check_ip(self, ip: str) -> Tuple[bool, Optional[str]]:
+    def check_ip(self, ip: str) -> tuple[bool, Optional[str]]:
         """
         Check if IP is allowed.
         
@@ -509,7 +509,7 @@ class IPThrottler:
 def create_auth_system(
     storage_path: Optional[str] = None,
     requests_per_minute: int = 60
-) -> Tuple[APIKeyManager, RateLimiter, AuthMiddleware]:
+) -> tuple[APIKeyManager, RateLimiter, AuthMiddleware]:
     """
     Create a complete authentication system.
     

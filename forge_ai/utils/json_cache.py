@@ -7,13 +7,13 @@ Files are only re-read if they've been modified.
 """
 import json
 import os
+import threading
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional
-from functools import lru_cache
-import threading
 
 # Thread-safe cache for JSON files
-_json_cache: Dict[str, tuple] = {}  # path -> (mtime, data)
+_json_cache: dict[str, tuple] = {}  # path -> (mtime, data)
 _cache_lock = threading.Lock()
 
 
@@ -49,13 +49,13 @@ def read_json_cached(path: str | Path, default: Any = None) -> Any:
                     return cached_data
             
             # Read and cache
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 data = json.load(f)
             
             _json_cache[path_str] = (mtime, data)
             return data
             
-    except (json.JSONDecodeError, OSError, IOError):
+    except (json.JSONDecodeError, OSError):
         return default
 
 
@@ -88,7 +88,7 @@ def write_json_cached(path: str | Path, data: Any, indent: int = 2) -> bool:
         
         return True
         
-    except (OSError, IOError, TypeError):
+    except (OSError, TypeError):
         return False
 
 
@@ -107,7 +107,7 @@ def invalidate_cache(path: Optional[str | Path] = None) -> None:
             _json_cache.pop(path_str, None)
 
 
-def get_cache_stats() -> Dict[str, int]:
+def get_cache_stats() -> dict[str, int]:
     """Get cache statistics."""
     with _cache_lock:
         return {

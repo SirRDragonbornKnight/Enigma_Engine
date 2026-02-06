@@ -9,20 +9,35 @@ Features:
   - Network status monitoring
 """
 
-import os
 import json
+import os
 import socket
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QListWidget, QListWidgetItem, QGroupBox,
-    QSplitter, QTextEdit, QSpinBox, QMessageBox, QProgressBar,
-    QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox
+    QCheckBox,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QColor
 
 # Config
 NETWORK_CONFIG = Path.home() / ".forge_ai" / "network_config.json"
@@ -283,7 +298,7 @@ class NetworkTab(QWidget):
         """Load network configuration."""
         if NETWORK_CONFIG.exists():
             try:
-                with open(NETWORK_CONFIG, 'r') as f:
+                with open(NETWORK_CONFIG) as f:
                     config = json.load(f)
                     self.port_input.setValue(config.get("port", 8765))
                     
@@ -330,6 +345,7 @@ class NetworkTab(QWidget):
             
             # Start the actual Flask API server in a background thread
             import threading
+
             from forge_ai.comms.api_server import create_app
             
             self._flask_app = create_app()
@@ -519,7 +535,7 @@ class NetworkTab(QWidget):
         
         try:
             import urllib.request
-            
+
             # Test connection
             test_url = f"{url}/health" if not url.endswith("/health") else url
             req = urllib.request.Request(test_url, method='GET')
@@ -597,13 +613,14 @@ class NetworkTab(QWidget):
         try:
             import json
             from pathlib import Path
+
             from forge_ai.config import CONFIG
-            
+
             # Export current settings
             settings_path = Path(CONFIG.data_dir) / "gui_settings.json"
             
             if settings_path.exists():
-                with open(settings_path, 'r') as f:
+                with open(settings_path) as f:
                     settings = json.load(f)
                 
                 from PyQt5.QtWidgets import QInputDialog
@@ -666,8 +683,9 @@ class NetworkTab(QWidget):
         import threading
         def do_remote_chat():
             try:
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
+
                 from forge_ai.comms.remote_client import RemoteClient
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
                 
                 client = RemoteClient(url)
                 
@@ -686,7 +704,7 @@ class NetworkTab(QWidget):
                     Q_ARG(str, f"Response: {response}")
                 )
             except Exception as e:
-                from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+                from PyQt5.QtCore import Q_ARG, QMetaObject, Qt
                 QMetaObject.invokeMethod(
                     self.network_log, "append",
                     Qt.QueuedConnection,

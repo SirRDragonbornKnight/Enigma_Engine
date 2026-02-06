@@ -10,10 +10,11 @@ Provides different performance modes:
 Also includes "Speed vs Quality" toggle for generation.
 """
 
-from typing import Dict, Any, Optional
-from pathlib import Path
 import json
 import logging
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 import psutil
 
 logger = logging.getLogger(__name__)
@@ -95,13 +96,13 @@ class ResourceAllocator:
         """Load saved resource mode."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     data = json.load(f)
                 return data.get('mode', 'balanced')
             except json.JSONDecodeError as e:
                 logger.warning(f"Corrupted resource config, using balanced mode: {e}")
                 return 'balanced'
-            except IOError as e:
+            except OSError as e:
                 logger.warning(f"Could not read resource config: {e}")
                 return 'balanced'
         return 'balanced'
@@ -110,13 +111,13 @@ class ResourceAllocator:
         """Load speed vs quality preference."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     data = json.load(f)
                 return data.get('preference', 'balanced')
             except json.JSONDecodeError as e:
                 logger.debug(f"Corrupted preference file: {e}")
                 return 'balanced'
-            except IOError as e:
+            except OSError as e:
                 logger.debug(f"Could not read preference file: {e}")
                 return 'balanced'
         return 'balanced'
@@ -174,18 +175,18 @@ class ResourceAllocator:
         except (OSError, psutil.AccessDenied, AttributeError):
             pass
     
-    def get_current_mode(self) -> Dict[str, Any]:
+    def get_current_mode(self) -> dict[str, Any]:
         """Get current mode settings."""
         return {
             'mode': self.current_mode,
             'settings': self.MODES[self.current_mode]
         }
     
-    def get_all_modes(self) -> Dict[str, Dict]:
+    def get_all_modes(self) -> dict[str, dict]:
         """Get all available modes."""
         return self.MODES.copy()
     
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Get current system resource usage."""
         try:
             cpu_percent = psutil.cpu_percent(interval=1)
@@ -253,7 +254,7 @@ class ResourceAllocator:
         self._save()
         return True
     
-    def get_generation_params(self) -> Dict[str, Any]:
+    def get_generation_params(self) -> dict[str, Any]:
         """
         Get generation parameters based on speed/quality preference.
         
@@ -288,7 +289,7 @@ class ResourceAllocator:
                 'do_sample': True
             }
     
-    def get_training_params(self) -> Dict[str, Any]:
+    def get_training_params(self) -> dict[str, Any]:
         """
         Get training parameters based on current mode.
         
@@ -303,7 +304,7 @@ class ResourceAllocator:
             'pin_memory': True if self.get_system_info().get('gpu_available') else False,
         }
     
-    def get_resource_limits(self) -> Dict[str, Any]:
+    def get_resource_limits(self) -> dict[str, Any]:
         """
         Get resource limits for current mode.
         
@@ -378,7 +379,7 @@ class PerformanceMonitor:
             'memory_used_gb': memory.used / (1024**3)
         })
     
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get performance summary."""
         if not self.metrics:
             return {}

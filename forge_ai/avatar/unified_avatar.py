@@ -39,17 +39,26 @@ Usage:
     widget = avatar.get_widget()
 """
 
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Optional, Dict, List, Callable, Any, Tuple
-from pathlib import Path
 import math
 import random
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
-    from PyQt5.QtCore import QObject, QTimer, Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QPoint, QSize
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QTransform
-    from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QStackedWidget
+    from PyQt5.QtCore import (
+        QEasingCurve,
+        QObject,
+        QPoint,
+        QPropertyAnimation,
+        QSize,
+        Qt,
+        QTimer,
+        pyqtSignal,
+    )
+    from PyQt5.QtGui import QColor, QPainter, QPixmap, QTransform
+    from PyQt5.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -148,7 +157,7 @@ class EmotionMapping:
     }
     
     @classmethod
-    def get_mapping(cls, avatar_type: AvatarType) -> Dict:
+    def get_mapping(cls, avatar_type: AvatarType) -> dict:
         """Get emotion mapping for avatar type."""
         mappings = {
             AvatarType.HUMAN: cls.HUMAN,
@@ -356,7 +365,7 @@ class UnifiedAvatar(QObject):
         self._current_mode = self.config.mode
         self._is_talking = False
         self._current_emotion = "neutral"
-        self._animation_mappings: Dict[str, str] = {}
+        self._animation_mappings: dict[str, str] = {}
         
         # Emotion mapping for avatar type
         self._emotion_map = EmotionMapping.get_mapping(self.config.avatar_type)
@@ -453,7 +462,7 @@ class UnifiedAvatar(QObject):
         
         return False
     
-    def load_animations(self, animations: Dict[str, str]):
+    def load_animations(self, animations: dict[str, str]):
         """
         Load multiple animations (for ANIMATED_2D mode).
         
@@ -469,7 +478,7 @@ class UnifiedAvatar(QObject):
         
         self._auto_map_animations(list(animations.keys()))
     
-    def _auto_map_animations(self, animation_names: List[str]):
+    def _auto_map_animations(self, animation_names: list[str]):
         """Auto-map animation names to states."""
         name_lower = {n.lower(): n for n in animation_names}
         
@@ -668,7 +677,7 @@ def create_png_avatar(image_path: str, width: int = 256, height: int = 256) -> U
     return avatar
 
 
-def create_2d_avatar(animations: Dict[str, str], width: int = 256, height: int = 256) -> UnifiedAvatar:
+def create_2d_avatar(animations: dict[str, str], width: int = 256, height: int = 256) -> UnifiedAvatar:
     """Create a 2D animated avatar (Desktop Mate style)."""
     config = AvatarConfig(
         mode=AvatarMode.ANIMATED_2D,

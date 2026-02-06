@@ -8,11 +8,11 @@ Linux: Uses system speech tools
 """
 
 import os
-import sys
 import subprocess
+import sys
 import tempfile
 import time
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 
 class BuiltinSTT:
@@ -63,7 +63,7 @@ class BuiltinSTT:
                     continue
             return False
     
-    def get_microphones(self) -> List[str]:
+    def get_microphones(self) -> list[str]:
         """List available microphones."""
         mics = []
         
@@ -98,7 +98,7 @@ class BuiltinSTT:
         
         return mics if mics else ["Default"]
     
-    def listen(self, timeout: float = 5.0, phrase_limit: float = 10.0) -> Dict[str, Any]:
+    def listen(self, timeout: float = 5.0, phrase_limit: float = 10.0) -> dict[str, Any]:
         """
         Listen for speech and return transcription.
         
@@ -115,7 +115,7 @@ class BuiltinSTT:
         else:
             return self._listen_linux(timeout, phrase_limit)
     
-    def _listen_windows(self, timeout: float, phrase_limit: float) -> Dict[str, Any]:
+    def _listen_windows(self, timeout: float, phrase_limit: float) -> dict[str, Any]:
         """Windows speech recognition using System.Speech."""
         try:
             start = time.time()
@@ -172,7 +172,7 @@ class BuiltinSTT:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _listen_macos(self, timeout: float, phrase_limit: float) -> Dict[str, Any]:
+    def _listen_macos(self, timeout: float, phrase_limit: float) -> dict[str, Any]:
         """macOS speech recognition."""
         # macOS speech recognition requires more complex setup
         # Would need NSSpeechRecognizer or SFSpeechRecognizer
@@ -181,7 +181,7 @@ class BuiltinSTT:
             "error": "macOS STT requires speech_recognition library. Install with: pip install SpeechRecognition"
         }
     
-    def _listen_linux(self, timeout: float, phrase_limit: float) -> Dict[str, Any]:
+    def _listen_linux(self, timeout: float, phrase_limit: float) -> dict[str, Any]:
         """Linux speech recognition using external tools."""
         # Check for vosk or other tools
         try:
@@ -203,7 +203,7 @@ class BuiltinSTT:
             "error": "Linux STT requires speech_recognition library. Install with: pip install SpeechRecognition"
         }
     
-    def transcribe_file(self, audio_path: str) -> Dict[str, Any]:
+    def transcribe_file(self, audio_path: str) -> dict[str, Any]:
         """Transcribe an audio file."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}

@@ -13,8 +13,8 @@ Part of the ForgeAI utilities.
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Tuple
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class PatternCategory(Enum):
@@ -32,11 +32,11 @@ class MatchResult:
     """Result of a regex match."""
     matched: bool
     full_match: Optional[str] = None
-    groups: List[str] = field(default_factory=list)
-    named_groups: Dict[str, str] = field(default_factory=dict)
-    span: Optional[Tuple[int, int]] = None
+    groups: list[str] = field(default_factory=list)
+    named_groups: dict[str, str] = field(default_factory=dict)
+    span: Optional[tuple[int, int]] = None
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "matched": self.matched,
@@ -54,10 +54,10 @@ class PatternInfo:
     name: str
     description: str
     category: PatternCategory = PatternCategory.CUSTOM
-    example_matches: List[str] = field(default_factory=list)
-    example_non_matches: List[str] = field(default_factory=list)
+    example_matches: list[str] = field(default_factory=list)
+    example_non_matches: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "pattern": self.pattern,
@@ -109,7 +109,7 @@ REGEX_TOKENS = {
 
 
 # Common patterns library
-COMMON_PATTERNS: Dict[str, PatternInfo] = {
+COMMON_PATTERNS: dict[str, PatternInfo] = {
     "email": PatternInfo(
         pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
         name="Email Address",
@@ -313,7 +313,7 @@ class RegexHelper:
     def __init__(self):
         """Initialize the regex helper."""
         self.patterns = COMMON_PATTERNS.copy()
-        self._custom_patterns: Dict[str, PatternInfo] = {}
+        self._custom_patterns: dict[str, PatternInfo] = {}
     
     def test(
         self,
@@ -386,7 +386,7 @@ class RegexHelper:
         pattern: str,
         text: str,
         flags: int = 0
-    ) -> List[MatchResult]:
+    ) -> list[MatchResult]:
         """
         Find all matches in text.
         
@@ -447,7 +447,7 @@ class RegexHelper:
         text: str,
         flags: int = 0,
         maxsplit: int = 0
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Split text by pattern.
         
@@ -550,7 +550,7 @@ class RegexHelper:
         
         return '\n'.join(explanations)
     
-    def validate(self, pattern: str) -> Tuple[bool, Optional[str]]:
+    def validate(self, pattern: str) -> tuple[bool, Optional[str]]:
         """
         Validate if a pattern is valid regex.
         
@@ -581,7 +581,7 @@ class RegexHelper:
     def list_patterns(
         self,
         category: Optional[PatternCategory] = None
-    ) -> List[PatternInfo]:
+    ) -> list[PatternInfo]:
         """
         List available patterns.
         
@@ -603,8 +603,8 @@ class RegexHelper:
         pattern: str,
         description: str,
         category: PatternCategory = PatternCategory.CUSTOM,
-        example_matches: Optional[List[str]] = None,
-        example_non_matches: Optional[List[str]] = None
+        example_matches: Optional[list[str]] = None,
+        example_non_matches: Optional[list[str]] = None
     ) -> PatternInfo:
         """
         Add a custom pattern to the library.
@@ -704,7 +704,7 @@ class PatternBuilder:
     
     def __init__(self):
         """Initialize the builder."""
-        self._parts: List[str] = []
+        self._parts: list[str] = []
     
     def get(self) -> str:
         """Get the built pattern."""
@@ -922,7 +922,7 @@ def explain_pattern(pattern: str) -> str:
     return RegexHelper().explain(pattern)
 
 
-def validate_pattern(pattern: str) -> Tuple[bool, Optional[str]]:
+def validate_pattern(pattern: str) -> tuple[bool, Optional[str]]:
     """Quick pattern validation."""
     return RegexHelper().validate(pattern)
 

@@ -4,6 +4,7 @@ I/O Utility Functions for ForgeAI
 Provides safe, reusable functions for file operations with proper error handling.
 """
 from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
@@ -43,13 +44,13 @@ def safe_load_json(
         return default
     
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             return json.load(f)
     except json.JSONDecodeError as e:
         if log_errors:
             logger.warning(f"Invalid JSON in {path}: {e}")
         return default
-    except IOError as e:
+    except OSError as e:
         if log_errors:
             logger.warning(f"Failed to read {path}: {e}")
         return default
@@ -89,7 +90,7 @@ def safe_save_json(
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=indent, default=str)
         return True
-    except (IOError, TypeError) as e:
+    except (OSError, TypeError) as e:
         logger.error(f"Failed to save {path}: {e}")
         return False
     except Exception as e:
@@ -119,9 +120,9 @@ def safe_read_text(
         return default
     
     try:
-        with open(path, 'r', encoding=encoding) as f:
+        with open(path, encoding=encoding) as f:
             return f.read()
-    except (IOError, UnicodeDecodeError) as e:
+    except (OSError, UnicodeDecodeError) as e:
         logger.warning(f"Failed to read {path}: {e}")
         return default
 
@@ -153,7 +154,7 @@ def safe_write_text(
         with open(path, 'w', encoding=encoding) as f:
             f.write(content)
         return True
-    except IOError as e:
+    except OSError as e:
         logger.error(f"Failed to write {path}: {e}")
         return False
 
@@ -182,8 +183,8 @@ def atomic_save_json(
     Example:
         >>> success = atomic_save_json("config.json", {"key": "value"})
     """
-    import tempfile
     import os
+    import tempfile
     
     path = Path(path)
     
@@ -212,7 +213,7 @@ def atomic_save_json(
             except OSError:
                 pass
             raise
-    except (IOError, TypeError) as e:
+    except (OSError, TypeError) as e:
         logger.error(f"Failed to save {path}: {e}")
         return False
     except Exception as e:

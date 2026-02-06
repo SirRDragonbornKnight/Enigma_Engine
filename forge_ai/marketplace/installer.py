@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from ..config import CONFIG
-from .marketplace import PluginInfo, InstallResult
+from .marketplace import InstallResult, PluginInfo
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class DependencyNode:
     """Node in dependency graph."""
     plugin_id: str
     version: str
-    dependencies: List[str]
+    dependencies: list[str]
     resolved: bool = False
 
 
@@ -43,7 +43,7 @@ class DependencyResolver:
     - Installation order determination
     """
     
-    def __init__(self, available_plugins: Dict[str, PluginInfo]):
+    def __init__(self, available_plugins: dict[str, PluginInfo]):
         """
         Initialize resolver.
         
@@ -51,13 +51,13 @@ class DependencyResolver:
             available_plugins: Dictionary of available plugins
         """
         self.available = available_plugins
-        self.installed: Dict[str, str] = {}  # id -> version
+        self.installed: dict[str, str] = {}  # id -> version
     
-    def set_installed(self, installed: Dict[str, str]):
+    def set_installed(self, installed: dict[str, str]):
         """Set currently installed plugins."""
         self.installed = installed
     
-    def resolve(self, plugin_id: str, version: str = None) -> Tuple[List[str], List[str]]:
+    def resolve(self, plugin_id: str, version: str = None) -> tuple[list[str], list[str]]:
         """
         Resolve dependencies for a plugin.
         
@@ -78,7 +78,7 @@ class DependencyResolver:
         version = version or plugin.current_version
         
         # Build dependency graph
-        graph: Dict[str, DependencyNode] = {}
+        graph: dict[str, DependencyNode] = {}
         to_process = [(plugin_id, version)]
         
         while to_process:
@@ -132,12 +132,12 @@ class DependencyResolver:
         
         return install_order, errors
     
-    def _detect_circular(self, graph: Dict[str, DependencyNode]) -> Optional[List[str]]:
+    def _detect_circular(self, graph: dict[str, DependencyNode]) -> Optional[list[str]]:
         """Detect circular dependencies."""
-        visited: Set[str] = set()
-        path: List[str] = []
+        visited: set[str] = set()
+        path: list[str] = []
         
-        def dfs(node_id: str) -> Optional[List[str]]:
+        def dfs(node_id: str) -> Optional[list[str]]:
             if node_id in path:
                 idx = path.index(node_id)
                 return path[idx:] + [node_id]
@@ -166,10 +166,10 @@ class DependencyResolver:
         
         return None
     
-    def _topological_sort(self, graph: Dict[str, DependencyNode]) -> List[str]:
+    def _topological_sort(self, graph: dict[str, DependencyNode]) -> list[str]:
         """Topological sort of dependency graph."""
         result = []
-        visited: Set[str] = set()
+        visited: set[str] = set()
         
         def visit(node_id: str):
             if node_id in visited:
@@ -212,7 +212,7 @@ class PluginInstaller:
         self.backup_dir = self.plugins_dir / ".backups"
         self.backup_dir.mkdir(exist_ok=True)
         
-        self._installed: Dict[str, str] = {}
+        self._installed: dict[str, str] = {}
         self._load_installed()
     
     def _load_installed(self):
@@ -236,7 +236,7 @@ class PluginInstaller:
             }, f, indent=2)
     
     @property
-    def installed(self) -> Dict[str, str]:
+    def installed(self) -> dict[str, str]:
         """Get installed plugins."""
         return self._installed.copy()
     
@@ -387,7 +387,7 @@ class PluginInstaller:
         """Get installed version of a plugin."""
         return self._installed.get(plugin_id)
     
-    def list_backups(self) -> List[Tuple[str, str, Path]]:
+    def list_backups(self) -> list[tuple[str, str, Path]]:
         """List available backups."""
         backups = []
         for backup in self.backup_dir.glob("*.zip"):
@@ -407,7 +407,7 @@ class PluginInstaller:
             keep: Number of backups to keep per plugin
         """
         # Group by plugin
-        by_plugin: Dict[str, List[Path]] = {}
+        by_plugin: dict[str, list[Path]] = {}
         for backup in self.backup_dir.glob("*.zip"):
             name = backup.stem
             parts = name.rsplit('-', 1)

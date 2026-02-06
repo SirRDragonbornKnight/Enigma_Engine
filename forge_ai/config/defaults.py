@@ -51,11 +51,11 @@ ENVIRONMENT VARIABLES:
 WARNING: The blocked_paths and blocked_patterns settings are sacred
          protections that the AI cannot modify at runtime.
 """
-import os
 import json
+import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -466,7 +466,7 @@ def _load_user_config() -> None:
     for path in config_paths:
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     user_config = json.load(f)
                 if not isinstance(user_config, dict):
                     logger.warning(f"Config in {path} is not a dictionary, skipping")
@@ -553,7 +553,7 @@ def get_config(key: str, default: Any = None) -> Any:
     return CONFIG.get(key, default)
 
 
-def update_config(updates: Dict[str, Any]) -> None:
+def update_config(updates: dict[str, Any]) -> None:
     """
     Update configuration with new values (in memory only).
     
@@ -590,7 +590,7 @@ def save_config(path: Optional[str] = None) -> None:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(CONFIG, f, indent=2)
     except Exception as e:
-        raise IOError(f"Failed to save config to {path}: {e}") from e
+        raise OSError(f"Failed to save config to {path}: {e}") from e
 
 
 # =============================================================================

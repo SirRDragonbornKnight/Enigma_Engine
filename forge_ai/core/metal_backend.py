@@ -11,12 +11,13 @@ Supports:
 - Mixed precision (float16/bfloat16) on Apple GPUs
 """
 
-import torch
-from typing import Optional, Dict, Any, Union, List
-from dataclasses import dataclass
-import os
 import logging
+import os
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class MetalBackend:
         """Convert PyTorch model to MLX format."""
         import mlx.core as mx
         import mlx.nn as nn
-        
+
         # This is a simplified conversion - real implementation would be more complex
         logger.warning(
             "MLX conversion is experimental. "
@@ -282,7 +283,7 @@ class MetalBackend:
     ):
         """Generate using MLX backend."""
         import mlx.core as mx
-        
+
         # Convert input to MLX
         input_array = mx.array(input_ids.cpu().numpy())
         
@@ -293,10 +294,11 @@ class MetalBackend:
             "Use PyTorch MPS backend or native MLX models."
         )
     
-    def get_memory_info(self) -> Dict[str, Any]:
+    def get_memory_info(self) -> dict[str, Any]:
         """Get Metal memory usage information."""
         if self.config.use_mlx:
             import mlx.core as mx
+
             # MLX doesn't expose detailed memory info yet
             return {"backend": "mlx", "available": True}
         

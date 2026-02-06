@@ -24,13 +24,13 @@ Bundle Structure:
 """
 
 import json
-import zipfile
-import tempfile
 import shutil
-from pathlib import Path
-from typing import Optional, Dict, List, Any
-from dataclasses import dataclass, field, asdict
+import tempfile
+import zipfile
+from dataclasses import asdict, dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 class AvatarBundleVersion(Enum):
@@ -56,26 +56,26 @@ class AvatarManifest:
     
     # File references (relative paths within bundle)
     base_image: str = "base.png"
-    emotion_images: Dict[str, str] = field(default_factory=dict)
-    animation_files: Dict[str, str] = field(default_factory=dict)
+    emotion_images: dict[str, str] = field(default_factory=dict)
+    animation_files: dict[str, str] = field(default_factory=dict)
     model_file: Optional[str] = None
     
     # Emotion mappings (for non-human types)
-    emotion_mapping: Dict[str, str] = field(default_factory=dict)
+    emotion_mapping: dict[str, str] = field(default_factory=dict)
     
     # Display settings
-    default_size: List[int] = field(default_factory=lambda: [256, 256])
-    anchor_point: List[float] = field(default_factory=lambda: [0.5, 1.0])  # Center bottom
+    default_size: list[int] = field(default_factory=lambda: [256, 256])
+    anchor_point: list[float] = field(default_factory=lambda: [0.5, 1.0])  # Center bottom
     
     # Tags for discovery
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AvatarManifest':
+    def from_dict(cls, data: dict[str, Any]) -> 'AvatarManifest':
         """Create from dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
@@ -101,7 +101,7 @@ class AvatarBundle:
     
     def __init__(self, manifest: Optional[AvatarManifest] = None):
         self.manifest = manifest or AvatarManifest()
-        self._files: Dict[str, bytes] = {}  # path -> content
+        self._files: dict[str, bytes] = {}  # path -> content
         self._temp_dir: Optional[Path] = None
     
     def set_base_image(self, path: str):
@@ -216,11 +216,11 @@ class AvatarBundle:
             return self._files.get(self.manifest.model_file)
         return None
     
-    def list_emotions(self) -> List[str]:
+    def list_emotions(self) -> list[str]:
         """List available emotions."""
         return list(self.manifest.emotion_images.keys())
     
-    def list_animations(self) -> List[str]:
+    def list_animations(self) -> list[str]:
         """List available animations."""
         return list(self.manifest.animation_files.keys())
     
@@ -256,7 +256,10 @@ class AvatarBundle:
     
     def __del__(self):
         """Cleanup on deletion."""
-        self.cleanup_temp()
+        try:
+            self.cleanup_temp()
+        except Exception:
+            pass  # Ignore cleanup errors during shutdown
 
 
 class AvatarBundleCreator:
@@ -420,7 +423,7 @@ def install_avatar_bundle(bundle_path: str, avatars_dir: Optional[str] = None) -
     return avatar_dir
 
 
-def list_installed_avatars(avatars_dir: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_installed_avatars(avatars_dir: Optional[str] = None) -> list[dict[str, Any]]:
     """
     List all installed avatars.
     

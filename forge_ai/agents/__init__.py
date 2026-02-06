@@ -7,14 +7,14 @@ Multi-agent system for ForgeAI.
 """
 
 from .multi_agent import (
-    MultiAgentSystem,
-    Agent,
-    AgentRole,
-    AgentPersonality,
-    AgentMessage,
-    AgentConversation,
-    get_multi_agent_system,
     PRESET_AGENTS,
+    Agent,
+    AgentConversation,
+    AgentMessage,
+    AgentPersonality,
+    AgentRole,
+    MultiAgentSystem,
+    get_multi_agent_system,
 )
 
 __all__ = [

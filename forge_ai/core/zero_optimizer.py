@@ -10,13 +10,15 @@ References:
 - DeepSpeed ZeRO implementation
 """
 
+import math
+from collections import defaultdict
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
+
 import torch
 import torch.distributed as dist
 from torch.optim import Optimizer
-from typing import Dict, List, Optional, Any, Iterator, Tuple
-from dataclasses import dataclass
-import math
-from collections import defaultdict
 
 
 @dataclass
@@ -75,8 +77,8 @@ class ZeROOptimizer(Optimizer):
             self.rank = 0
         
         # Flatten parameters for partitioning
-        self._param_to_name: Dict[torch.nn.Parameter, str] = {}
-        self._name_to_param: Dict[str, torch.nn.Parameter] = {}
+        self._param_to_name: dict[torch.nn.Parameter, str] = {}
+        self._name_to_param: dict[str, torch.nn.Parameter] = {}
         for name, param in model.named_parameters():
             self._param_to_name[param] = name
             self._name_to_param[name] = param
@@ -85,14 +87,14 @@ class ZeROOptimizer(Optimizer):
         self._setup_flat_params()
         
         # Gradient buffers
-        self._grad_buffers: Dict[int, torch.Tensor] = {}
-        self._grad_partitions: Dict[int, torch.Tensor] = {}
+        self._grad_buffers: dict[int, torch.Tensor] = {}
+        self._grad_partitions: dict[int, torch.Tensor] = {}
         
         # Communication handles for overlap
-        self._comm_handles: List[Any] = []
+        self._comm_handles: list[Any] = []
         
         # Offload buffers (if enabled)
-        self._cpu_buffers: Dict[str, torch.Tensor] = {}
+        self._cpu_buffers: dict[str, torch.Tensor] = {}
         
         # Register hooks for gradient reduction
         self._register_hooks()
@@ -102,8 +104,8 @@ class ZeROOptimizer(Optimizer):
     
     def _setup_flat_params(self):
         """Flatten parameters into contiguous buffers for efficient partitioning."""
-        self._flat_params: List[torch.Tensor] = []
-        self._param_groups_flat: List[Dict] = []
+        self._flat_params: list[torch.Tensor] = []
+        self._param_groups_flat: list[dict] = []
         
         for group_idx, group in enumerate(self.optimizer.param_groups):
             # Collect parameters in this group
@@ -141,7 +143,7 @@ class ZeROOptimizer(Optimizer):
                 **{k: v for k, v in group.items() if k != 'params'}
             })
     
-    def _get_partition_range(self, total_elements: int) -> Tuple[int, int]:
+    def _get_partition_range(self, total_elements: int) -> tuple[int, int]:
         """Get the start and end indices for this rank's partition."""
         partition_size = math.ceil(total_elements / self.world_size)
         start = self.rank * partition_size
@@ -150,7 +152,7 @@ class ZeROOptimizer(Optimizer):
     
     def _partition_optimizer_state(self):
         """Partition optimizer states across ranks."""
-        self._partitioned_states: Dict[int, Dict[str, torch.Tensor]] = {}
+        self._partitioned_states: dict[int, dict[str, torch.Tensor]] = {}
         
         for group_idx, flat_group in enumerate(self._param_groups_flat):
             flat_buffer = flat_group['flat_buffer']
@@ -306,7 +308,7 @@ class ZeROOptimizer(Optimizer):
     
     def _gather_grad_partition(
         self,
-        flat_group: Dict,
+        flat_group: dict,
         start: int,
         end: int
     ) -> Optional[torch.Tensor]:
@@ -348,9 +350,9 @@ class ZeROOptimizer(Optimizer):
         self,
         params: torch.Tensor,
         grads: torch.Tensor,
-        state: Dict[str, torch.Tensor],
+        state: dict[str, torch.Tensor],
         lr: float,
-        betas: Tuple[float, float],
+        betas: tuple[float, float],
         eps: float,
         weight_decay: float
     ):
@@ -449,7 +451,7 @@ class ZeROOptimizer(Optimizer):
             elif param.grad is not None:
                 param.grad.zero_()
     
-    def state_dict(self) -> Dict[str, Any]:
+    def state_dict(self) -> dict[str, Any]:
         """Get optimizer state dict with partitioned states."""
         return {
             'partitioned_states': self._partitioned_states,
@@ -459,7 +461,7 @@ class ZeROOptimizer(Optimizer):
             'base_optimizer_state': self.optimizer.state_dict()
         }
     
-    def load_state_dict(self, state_dict: Dict[str, Any]):
+    def load_state_dict(self, state_dict: dict[str, Any]):
         """Load optimizer state dict."""
         if state_dict['rank'] != self.rank:
             raise ValueError(
@@ -475,7 +477,7 @@ def create_zero_optimizer(
     model: torch.nn.Module,
     lr: float = 1e-4,
     weight_decay: float = 0.01,
-    betas: Tuple[float, float] = (0.9, 0.999),
+    betas: tuple[float, float] = (0.9, 0.999),
     stage: int = 2,
     offload_optimizer: bool = False
 ) -> ZeROOptimizer:

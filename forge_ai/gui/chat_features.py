@@ -11,13 +11,13 @@ Part of the ForgeAI GUI features.
 """
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Set, Callable
-from pathlib import Path
 from enum import Enum, auto
-import logging
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class Message:
     timestamp: float = field(default_factory=time.time)
     
     # Edit support
-    edit_history: List[MessageEdit] = field(default_factory=list)
+    edit_history: list[MessageEdit] = field(default_factory=list)
     is_edited: bool = False
     
     # Pin support
@@ -97,11 +97,11 @@ class Message:
     pin_note: Optional[str] = None
     
     # Tags
-    tags: Set[str] = field(default_factory=set)
+    tags: set[str] = field(default_factory=set)
     
     # Regeneration
     regeneration_parent: Optional[str] = None  # ID of message this regenerated from
-    regeneration_children: List[str] = field(default_factory=list)
+    regeneration_children: list[str] = field(default_factory=list)
     
     # Response config used when generating this message
     response_config: Optional[ResponseConfig] = None
@@ -141,7 +141,7 @@ class Message:
         """Remove a tag from this message."""
         self.tags.discard(tag.lower().strip())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
             "id": self.id,
@@ -166,7 +166,7 @@ class Message:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Message':
+    def from_dict(cls, data: dict[str, Any]) -> 'Message':
         """Create Message from dictionary."""
         msg = cls(
             id=data.get("id", str(uuid.uuid4())),
@@ -196,7 +196,7 @@ class Message:
         return msg
     
     @classmethod
-    def from_legacy(cls, legacy: Dict[str, Any]) -> 'Message':
+    def from_legacy(cls, legacy: dict[str, Any]) -> 'Message':
         """
         Convert legacy message format to enhanced Message.
         
@@ -218,7 +218,7 @@ class ConversationTag:
     description: Optional[str] = None
     created_at: float = field(default_factory=time.time)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "color": self.color,
@@ -227,7 +227,7 @@ class ConversationTag:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ConversationTag':
+    def from_dict(cls, data: dict[str, Any]) -> 'ConversationTag':
         return cls(
             name=data.get("name", ""),
             color=data.get("color", "#808080"),
@@ -264,8 +264,8 @@ class ConversationTagManager:
             storage_path: Path to store tags. If None, uses memory only.
         """
         self.storage_path = storage_path
-        self.tags: Dict[str, ConversationTag] = {}
-        self._conversation_tags: Dict[str, Set[str]] = {}  # conv_name -> set of tag names
+        self.tags: dict[str, ConversationTag] = {}
+        self._conversation_tags: dict[str, set[str]] = {}  # conv_name -> set of tag names
         
         # Load or initialize
         if storage_path and storage_path.exists():
@@ -333,7 +333,7 @@ class ConversationTagManager:
         """Get a tag by name."""
         return self.tags.get(name.lower().strip())
     
-    def get_all_tags(self) -> List[ConversationTag]:
+    def get_all_tags(self) -> list[ConversationTag]:
         """Get all tags."""
         return list(self.tags.values())
     
@@ -355,12 +355,12 @@ class ConversationTagManager:
             self._conversation_tags[conversation_name].discard(tag_name)
             self._save()
     
-    def get_conversation_tags(self, conversation_name: str) -> List[ConversationTag]:
+    def get_conversation_tags(self, conversation_name: str) -> list[ConversationTag]:
         """Get all tags for a conversation."""
         tag_names = self._conversation_tags.get(conversation_name, set())
         return [self.tags[name] for name in tag_names if name in self.tags]
     
-    def get_conversations_by_tag(self, tag_name: str) -> List[str]:
+    def get_conversations_by_tag(self, tag_name: str) -> list[str]:
         """Get all conversations with a specific tag."""
         tag_name = tag_name.lower().strip()
         return [
@@ -370,10 +370,10 @@ class ConversationTagManager:
     
     def filter_conversations(
         self,
-        all_conversations: List[str],
-        include_tags: Optional[List[str]] = None,
-        exclude_tags: Optional[List[str]] = None
-    ) -> List[str]:
+        all_conversations: list[str],
+        include_tags: Optional[list[str]] = None,
+        exclude_tags: Optional[list[str]] = None
+    ) -> list[str]:
         """
         Filter conversations by tags.
         
@@ -387,8 +387,8 @@ class ConversationTagManager:
         """
         result = []
         
-        include_set = set(t.lower().strip() for t in (include_tags or []))
-        exclude_set = set(t.lower().strip() for t in (exclude_tags or []))
+        include_set = {t.lower().strip() for t in (include_tags or [])}
+        exclude_set = {t.lower().strip() for t in (exclude_tags or [])}
         
         for conv in all_conversations:
             conv_tags = self._conversation_tags.get(conv, set())
@@ -416,7 +416,7 @@ class MessageEditor:
     2. Optionally, the AI response can be regenerated from that point
     """
     
-    def __init__(self, on_regenerate: Optional[Callable[[str, List[Message]], None]] = None):
+    def __init__(self, on_regenerate: Optional[Callable[[str, list[Message]], None]] = None):
         """
         Initialize message editor.
         
@@ -428,11 +428,11 @@ class MessageEditor:
     
     def edit_message(
         self,
-        messages: List[Message],
+        messages: list[Message],
         message_id: str,
         new_text: str,
         regenerate: bool = False
-    ) -> List[Message]:
+    ) -> list[Message]:
         """
         Edit a message in the conversation.
         
@@ -468,7 +468,7 @@ class MessageEditor:
         
         return messages
     
-    def get_edit_history(self, message: Message) -> List[Dict[str, Any]]:
+    def get_edit_history(self, message: Message) -> list[dict[str, Any]]:
         """Get formatted edit history for a message."""
         return [
             {
@@ -499,7 +499,7 @@ class PinManager:
             storage_path: Path to store pins. If None, uses memory only.
         """
         self.storage_path = storage_path
-        self.pins: Dict[str, Dict[str, Message]] = {}  # conv_name -> {msg_id: Message}
+        self.pins: dict[str, dict[str, Message]] = {}  # conv_name -> {msg_id: Message}
         
         if storage_path and storage_path.exists():
             self._load()
@@ -551,7 +551,7 @@ class PinManager:
                 del self.pins[conversation_name][message_id]
                 self._save()
     
-    def get_pinned_messages(self, conversation_name: Optional[str] = None) -> List[Message]:
+    def get_pinned_messages(self, conversation_name: Optional[str] = None) -> list[Message]:
         """
         Get pinned messages.
         
@@ -666,11 +666,11 @@ class ChatFeaturesManager:
         self.response_controller = ResponseLengthController()
         self.message_editor = MessageEditor()
     
-    def convert_messages(self, legacy_messages: List[Dict[str, Any]]) -> List[Message]:
+    def convert_messages(self, legacy_messages: list[dict[str, Any]]) -> list[Message]:
         """Convert legacy message format to enhanced Messages."""
         return [Message.from_legacy(m) for m in legacy_messages]
     
-    def export_messages(self, messages: List[Message]) -> List[Dict[str, Any]]:
+    def export_messages(self, messages: list[Message]) -> list[dict[str, Any]]:
         """Export Messages to storage format."""
         return [m.to_dict() for m in messages]
 

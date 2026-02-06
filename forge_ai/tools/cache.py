@@ -6,13 +6,13 @@ Provides memory and disk-based caching for expensive tool operations.
 Reduces repeated expensive operations like web searches and API calls.
 """
 
-import json
 import hashlib
+import json
 import logging
 import time
-from pathlib import Path
-from typing import Dict, Any, Optional, Set
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class ToolCache:
         self.enable_disk_cache = enable_disk_cache
         
         # Memory cache: {cache_key: (result, expiry_time)}
-        self.memory_cache: Dict[str, tuple] = {}
+        self.memory_cache: dict[str, tuple] = {}
         
         # Disk cache directory
         if cache_dir is None:
@@ -82,7 +82,7 @@ class ToolCache:
         
         logger.info(f"ToolCache initialized with TTL={default_ttl}s, disk={enable_disk_cache}")
     
-    def _make_cache_key(self, tool_name: str, params: Dict[str, Any]) -> str:
+    def _make_cache_key(self, tool_name: str, params: dict[str, Any]) -> str:
         """
         Generate a cache key from tool name and parameters.
         
@@ -112,8 +112,8 @@ class ToolCache:
     def get(
         self,
         tool_name: str,
-        params: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+        params: dict[str, Any]
+    ) -> Optional[dict[str, Any]]:
         """
         Get cached result for a tool call.
         
@@ -161,8 +161,8 @@ class ToolCache:
     def set(
         self,
         tool_name: str,
-        params: Dict[str, Any],
-        result: Dict[str, Any],
+        params: dict[str, Any],
+        result: dict[str, Any],
         ttl: Optional[int] = None
     ):
         """
@@ -201,7 +201,7 @@ class ToolCache:
     def _add_to_memory(
         self,
         cache_key: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         expiry_time: float
     ):
         """Add entry to memory cache, evicting old entries if needed."""
@@ -222,7 +222,7 @@ class ToolCache:
             return None
         
         try:
-            with open(cache_file, 'r') as f:
+            with open(cache_file) as f:
                 data = json.load(f)
             
             result = data.get("result")
@@ -239,7 +239,7 @@ class ToolCache:
     def _save_to_disk(
         self,
         cache_key: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         expiry_time: float
     ):
         """Save cache entry to disk."""
@@ -305,7 +305,7 @@ class ToolCache:
         if self.enable_disk_cache:
             for cache_file in self.cache_dir.glob("*.json"):
                 try:
-                    with open(cache_file, 'r') as f:
+                    with open(cache_file) as f:
                         data = json.load(f)
                     
                     if data.get("expiry_time", 0) < current_time:
@@ -316,7 +316,7 @@ class ToolCache:
         if expired_keys:
             logger.info(f"Cleaned up {len(expired_keys)} expired cache entries")
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get cache statistics."""
         total_requests = self.stats["hits"] + self.stats["misses"]
         hit_rate = (self.stats["hits"] / total_requests * 100) if total_requests > 0 else 0

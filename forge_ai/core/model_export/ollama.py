@@ -12,11 +12,19 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import torch
 
-from .base import ExportProvider, ImportProvider, ExportResult, ImportResult, ExportStatus, ImportStatus, ProviderConfig
+from .base import (
+    ExportProvider,
+    ExportResult,
+    ExportStatus,
+    ImportProvider,
+    ImportResult,
+    ImportStatus,
+    ProviderConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +99,8 @@ class OllamaProvider(ExportProvider):
         self,
         output_path: Path,
         model_name: str,
-        config: Dict[str, Any],
-        metadata: Dict[str, Any],
+        config: dict[str, Any],
+        metadata: dict[str, Any],
         gguf_filename: str
     ):
         """Create Ollama Modelfile."""
@@ -132,7 +140,7 @@ LICENSE \"\"\"MIT License - Model trained with ForgeAI\"\"\"
         self,
         model_path: Path,
         output_path: Path,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         quantization: str = "q4_k_m"
     ) -> Optional[str]:
         """
@@ -369,7 +377,7 @@ class OllamaImporter(ImportProvider):
         query: str,
         limit: int = 10,
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search for Ollama models."""
         query_lower = query.lower()
         
@@ -382,7 +390,7 @@ class OllamaImporter(ImportProvider):
         
         return results[:limit] if results else self.POPULAR_MODELS[:limit]
     
-    def list_models(self, **kwargs) -> List[Dict[str, Any]]:
+    def list_models(self, **kwargs) -> list[dict[str, Any]]:
         """List locally installed Ollama models."""
         if not HAVE_OLLAMA:
             return []

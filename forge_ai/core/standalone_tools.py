@@ -34,7 +34,7 @@ USAGE:
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -498,7 +498,7 @@ def _use_speech_to_text(
 # =============================================================================
 
 def _use_embeddings(
-    text: Union[str, List[str]],
+    text: Union[str, list[str]],
     provider: str = "auto",
     **kwargs,
 ) -> Union[list, list]:
@@ -622,10 +622,11 @@ def _use_gif_generation(
         Path to generated GIF
     """
     try:
-        from PIL import Image
-        import time
         import os
-        
+        import time
+
+        from PIL import Image
+
         # Get dimensions and other params
         width = kwargs.get("width", 256)
         height = kwargs.get("height", 256)
@@ -747,7 +748,7 @@ def _use_gif_generation(
 def _use_avatar(
     action: str,
     **kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Control avatar without LLM.
     
@@ -802,7 +803,7 @@ def _use_web_tools(
         Web tool result
     """
     try:
-        from ..tools.web import search_web, browse_url, download_file
+        from ..tools.web import browse_url, download_file, search_web
         
         if action == "search":
             if not query:
@@ -848,7 +849,10 @@ def _use_file_tools(
     """
     try:
         from ..tools.file_tools import (
-            read_file, write_file, list_directory, delete_file
+            delete_file,
+            list_directory,
+            read_file,
+            write_file,
         )
         
         if action == "read":
@@ -907,7 +911,7 @@ def list_available_tools() -> list:
     ]
 
 
-def get_tool_info(tool_name: str) -> Dict[str, Any]:
+def get_tool_info(tool_name: str) -> dict[str, Any]:
     """
     Get information about a tool.
     

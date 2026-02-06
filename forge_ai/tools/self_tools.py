@@ -14,7 +14,8 @@ This makes the AI feel alive - it can evolve and personalize itself.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -23,12 +24,12 @@ logger = logging.getLogger(__name__)
 SELF_CONFIG_PATH = Path(__file__).parent.parent.parent / "data" / "ai_self_config.json"
 
 
-def _load_self_config() -> Dict[str, Any]:
+def _load_self_config() -> dict[str, Any]:
     """Load AI's self-configuration."""
     if SELF_CONFIG_PATH.exists():
         try:
             return json.loads(SELF_CONFIG_PATH.read_text())
-        except (json.JSONDecodeError, IOError) as e:
+        except (json.JSONDecodeError, OSError) as e:
             logger.warning(f"Failed to load self-config from {SELF_CONFIG_PATH}: {e}")
     return {
         "personality": {
@@ -60,7 +61,7 @@ def _load_self_config() -> Dict[str, Any]:
     }
 
 
-def _save_self_config(config: Dict[str, Any]):
+def _save_self_config(config: dict[str, Any]):
     """Save AI's self-configuration."""
     SELF_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     SELF_CONFIG_PATH.write_text(json.dumps(config, indent=2))
@@ -78,7 +79,7 @@ class SetPersonalityTool(Tool):
         "value": "New value (for traits, comma-separated list like 'friendly,curious,witty')",
     }
     
-    def execute(self, trait: str, value: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, trait: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
         trait = trait.lower().strip()
         
@@ -112,7 +113,7 @@ class SetAvatarPreferenceTool(Tool):
         "value": "New value (colors as hex comma-separated, style as 'neural/letter/anvil')",
     }
     
-    def execute(self, setting: str, value: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
         setting = setting.lower().strip()
         
@@ -178,7 +179,7 @@ class SetVoicePreferenceTool(Tool):
         "value": "Number value (0.5 to 2.0 for speed/pitch, 0.0 to 1.0 for volume)",
     }
     
-    def execute(self, setting: str, value: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
         setting = setting.lower().strip()
         
@@ -212,7 +213,7 @@ class SetCompanionBehaviorTool(Tool):
         "value": "Value (0-1 for frequency, comma-list for interests, comma-list of hours for quiet)",
     }
     
-    def execute(self, setting: str, value: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, setting: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
         setting = setting.lower().strip()
         
@@ -270,7 +271,7 @@ class SetPreferenceTool(Tool):
         "value": "Value (comma-list for topics, string for nickname)",
     }
     
-    def execute(self, preference: str, value: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, preference: str, value: str, **kwargs) -> dict[str, Any]:
         config = _load_self_config()
         preference = preference.lower().strip()
         
@@ -298,7 +299,7 @@ class GetSelfConfigTool(Tool):
         "section": "Optional: personality, avatar, voice, companion, preferences, or 'all'",
     }
     
-    def execute(self, section: str = "all", **kwargs) -> Dict[str, Any]:
+    def execute(self, section: str = "all", **kwargs) -> dict[str, Any]:
         config = _load_self_config()
         section = section.lower().strip()
         
@@ -324,7 +325,7 @@ class RememberFactTool(Tool):
     
     MEMORY_PATH = Path(__file__).parent.parent.parent / "data" / "ai_memory.json"
     
-    def execute(self, category: str, fact: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, category: str, fact: str, **kwargs) -> dict[str, Any]:
         # Load existing memories
         memories = {}
         if self.MEMORY_PATH.exists():
@@ -361,7 +362,7 @@ class RecallFactsTool(Tool):
     
     MEMORY_PATH = Path(__file__).parent.parent.parent / "data" / "ai_memory.json"
     
-    def execute(self, category: str = "all", **kwargs) -> Dict[str, Any]:
+    def execute(self, category: str = "all", **kwargs) -> dict[str, Any]:
         if not self.MEMORY_PATH.exists():
             return {"success": True, "facts": [], "message": "No facts remembered yet"}
         
@@ -394,7 +395,7 @@ class GenerateAvatarTool(Tool):
     
     AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar" / "generated"
     
-    def execute(self, description: str, style: str = "robot", **kwargs) -> Dict[str, Any]:
+    def execute(self, description: str, style: str = "robot", **kwargs) -> dict[str, Any]:
         self.AVATAR_DIR.mkdir(parents=True, exist_ok=True)
         
         # Enhance prompt based on style
@@ -409,9 +410,10 @@ class GenerateAvatarTool(Tool):
         
         # Try to use the 3D generation system
         try:
-            from ..gui.tabs.threed_tab import Local3DGen, Cloud3DGen, OUTPUT_DIR
             import time
-            
+
+            from ..gui.tabs.threed_tab import OUTPUT_DIR, Cloud3DGen, Local3DGen
+
             # Try local first
             gen = Local3DGen()
             if gen.load():
@@ -468,10 +470,10 @@ class OpenAvatarInBlenderTool(Tool):
         "file_path": "Optional: specific 3D file to open. If not provided, opens current avatar.",
     }
     
-    def execute(self, file_path: str = "", **kwargs) -> Dict[str, Any]:
-        import subprocess
+    def execute(self, file_path: str = "", **kwargs) -> dict[str, Any]:
         import shutil
-        
+        import subprocess
+
         # Find Blender
         blender_paths = [
             "blender",  # If in PATH
@@ -566,7 +568,7 @@ class ListAvatarsTool(Tool):
     
     AVATAR_DIR = Path(__file__).parent.parent.parent / "data" / "avatar"
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         avatars = {"2d": [], "3d": [], "generated": []}
         
         # Check main avatar directory
@@ -608,7 +610,7 @@ class SetAvatarTool(Tool):
         "file_path": "Path to the avatar file to use",
     }
     
-    def execute(self, file_path: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, file_path: str, **kwargs) -> dict[str, Any]:
         if not Path(file_path).exists():
             return {"success": False, "error": f"Avatar file not found: {file_path}"}
         
@@ -649,13 +651,13 @@ class ControlAvatarTool(Tool):
         "value": "Corner name (for go_corner), emotion name, gesture type, text to say, item to hold, or note content",
     }
     
-    def execute(self, action: str, x: int = None, y: int = None, value: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, action: str, x: int = None, y: int = None, value: str = None, **kwargs) -> dict[str, Any]:
         action = action.lower().strip()
         
         try:
             # Try to get the desktop pet
             from forge_ai.avatar.desktop_pet import DesktopPet
-            
+
             # Get the running pet instance
             pet = self._get_pet_instance()
             if not pet:
@@ -813,7 +815,7 @@ class SpawnObjectTool(Tool):
         duration: float = 5.0,
         physics: bool = False,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         try:
             from forge_ai.avatar.spawnable_objects import get_spawner
             spawner = get_spawner()
@@ -894,7 +896,7 @@ class RemoveObjectTool(Tool):
         "object_id": "ID of the object to remove (from spawn_object result), or 'all' to remove everything",
     }
     
-    def execute(self, object_id: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, object_id: str, **kwargs) -> dict[str, Any]:
         try:
             from forge_ai.avatar.spawnable_objects import get_spawner
             spawner = get_spawner()
@@ -919,7 +921,7 @@ class ListSpawnedObjectsTool(Tool):
     description = "List all objects I've spawned on the screen"
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             from forge_ai.avatar.spawnable_objects import get_spawner
             spawner = get_spawner()

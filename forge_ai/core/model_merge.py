@@ -24,14 +24,15 @@ Usage:
     )
 """
 
-import torch
-import torch.nn as nn
-from typing import Dict, List, Optional, Union, Tuple, Any
+import copy
+import logging
 from dataclasses import dataclass
 from enum import Enum
-import logging
 from pathlib import Path
-import copy
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import torch
+import torch.nn as nn
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,11 @@ class MergeMethod(Enum):
 class MergeConfig:
     """Configuration for model merging."""
     method: MergeMethod = MergeMethod.LINEAR
-    weights: Optional[List[float]] = None  # Weights for each model
+    weights: Optional[list[float]] = None  # Weights for each model
     base_model_index: int = 0  # Index of base model (for task arithmetic/TIES)
     density: float = 0.5  # For DARE: fraction of parameters to keep
     normalize: bool = True  # Normalize weights to sum to 1
-    exclude_layers: List[str] = None  # Layer names to exclude from merging
+    exclude_layers: list[str] = None  # Layer names to exclude from merging
 
 
 class ModelMerger:
@@ -91,8 +92,8 @@ class ModelMerger:
     
     def merge(
         self,
-        models: List[nn.Module],
-        weights: Optional[List[float]] = None,
+        models: list[nn.Module],
+        weights: Optional[list[float]] = None,
         method: Optional[MergeMethod] = None,
         **kwargs
     ) -> nn.Module:
@@ -136,8 +137,8 @@ class ModelMerger:
     
     def _merge_linear(
         self,
-        models: List[nn.Module],
-        weights: Optional[List[float]] = None
+        models: list[nn.Module],
+        weights: Optional[list[float]] = None
     ) -> nn.Module:
         """
         Linear interpolation (weighted average) of model parameters.
@@ -171,7 +172,7 @@ class ModelMerger:
     
     def _merge_slerp(
         self,
-        models: List[nn.Module],
+        models: list[nn.Module],
         t: float = 0.5
     ) -> nn.Module:
         """
@@ -222,8 +223,8 @@ class ModelMerger:
     
     def _merge_ties(
         self,
-        models: List[nn.Module],
-        weights: Optional[List[float]] = None,
+        models: list[nn.Module],
+        weights: Optional[list[float]] = None,
         density: float = 0.5
     ) -> nn.Module:
         """
@@ -286,8 +287,8 @@ class ModelMerger:
     
     def _merge_dare(
         self,
-        models: List[nn.Module],
-        weights: Optional[List[float]] = None,
+        models: list[nn.Module],
+        weights: Optional[list[float]] = None,
         density: float = 0.5
     ) -> nn.Module:
         """
@@ -328,8 +329,8 @@ class ModelMerger:
     
     def _merge_task_arithmetic(
         self,
-        models: List[nn.Module],
-        weights: Optional[List[float]] = None
+        models: list[nn.Module],
+        weights: Optional[list[float]] = None
     ) -> nn.Module:
         """
         Task Arithmetic merging.
@@ -375,12 +376,12 @@ class ModelMerger:
     
     @staticmethod
     def merge_from_files(
-        paths: List[str],
-        weights: Optional[List[float]] = None,
+        paths: list[str],
+        weights: Optional[list[float]] = None,
         method: MergeMethod = MergeMethod.LINEAR,
         output_path: Optional[str] = None,
         **kwargs
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Merge models from checkpoint files without loading full models.
         
@@ -430,8 +431,8 @@ class ModelMerger:
 
 
 def merge_models(
-    models: List[nn.Module],
-    weights: Optional[List[float]] = None,
+    models: list[nn.Module],
+    weights: Optional[list[float]] = None,
     method: str = "linear"
 ) -> nn.Module:
     """

@@ -11,11 +11,11 @@ Supports:
 """
 
 import logging
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from .manager import ModuleManager, ModuleInfo, ModuleCategory
+from .manager import ModuleCategory, ModuleInfo, ModuleManager
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +234,7 @@ class ModuleDocGenerator:
         lines.append("## Table of Contents")
         lines.append("")
         
-        by_category: Dict[ModuleCategory, List[ModuleInfo]] = {}
+        by_category: dict[ModuleCategory, list[ModuleInfo]] = {}
         for module_class in self.manager.module_classes.values():
             info = module_class.get_info()
             if info.category not in by_category:

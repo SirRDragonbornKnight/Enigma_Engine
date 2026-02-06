@@ -12,7 +12,7 @@ This is EXPERIMENTAL but allows your AI to "grow up" over time.
 import torch
 import torch.nn.functional as F
 
-from .model import Forge, ForgeConfig, MODEL_PRESETS
+from .model import MODEL_PRESETS, Forge, ForgeConfig
 from .model_registry import ModelRegistry
 
 

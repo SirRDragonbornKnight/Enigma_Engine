@@ -9,11 +9,19 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import torch
 
-from .base import ExportProvider, ImportProvider, ExportResult, ImportResult, ExportStatus, ImportStatus, ProviderConfig
+from .base import (
+    ExportProvider,
+    ExportResult,
+    ExportStatus,
+    ImportProvider,
+    ImportResult,
+    ImportStatus,
+    ProviderConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +72,7 @@ class WandBProvider(ExportProvider):
         entity: Optional[str] = None,
         token: Optional[str] = None,
         output_dir: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        tags: Optional[list[str]] = None,
         description: Optional[str] = None,
         **kwargs
     ) -> ExportResult:
@@ -183,7 +191,7 @@ class WandBProvider(ExportProvider):
         project: str,
         entity: Optional[str] = None,
         token: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """List models in a W&B project."""
         if not HAVE_WANDB:
             return []
@@ -246,7 +254,7 @@ class WandBImporter(ImportProvider):
         limit: int = 10,
         entity: Optional[str] = None,
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search for models in W&B.
         
@@ -267,7 +275,7 @@ class WandBImporter(ImportProvider):
         entity: Optional[str] = None,
         token: Optional[str] = None,
         **kwargs
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """List model artifacts in a W&B project."""
         if not HAVE_WANDB:
             return []

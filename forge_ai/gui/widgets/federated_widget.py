@@ -6,16 +6,28 @@ Shows participation status, privacy settings, contribution stats, and network in
 """
 
 import logging
-from typing import Optional, Any
+from typing import Any, Optional
 
 try:
-    from PyQt5.QtWidgets import (
-        QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
-        QPushButton, QCheckBox, QComboBox, QSpinBox, QTextEdit,
-        QFormLayout, QScrollArea, QFrame, QLineEdit, QListWidget,
-    )
     from PyQt5.QtCore import Qt, pyqtSignal
     from PyQt5.QtGui import QFont
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QComboBox,
+        QFormLayout,
+        QFrame,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QPushButton,
+        QScrollArea,
+        QSpinBox,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -45,10 +57,10 @@ if HAS_PYQT:
             
             # Import here to avoid circular dependencies
             from ...learning import (
+                FederatedDataFilter,
                 FederatedLearning,
                 FederatedMode,
                 PrivacyLevel,
-                FederatedDataFilter,
             )
             
             self.federated_learning: Optional[FederatedLearning] = None

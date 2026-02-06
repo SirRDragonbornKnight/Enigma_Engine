@@ -4,15 +4,29 @@ Resource Monitor Widget
 
 Real-time resource usage dashboard for the GUI.
 Shows CPU, GPU, memory usage and performance metrics.
+Now includes per-module memory breakdown for loaded modules.
 """
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QProgressBar, QGroupBox, QGridLayout
-)
-from PyQt5.QtCore import QTimer, Qt
-from PyQt5.QtGui import QFont
+import logging
+import sys
 import time
+
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+logger = logging.getLogger(__name__)
 
 # Optional imports for resource monitoring
 try:
@@ -33,16 +47,22 @@ except ImportError:
 class ResourceMonitor(QWidget):
     """
     Widget that displays real-time resource usage.
+    Now includes per-module memory breakdown.
     """
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
         
-        # Setup update timer
+        # Setup update timer for hardware metrics
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_metrics)
         self.timer.start(1000)  # Update every second
+        
+        # Setup slower timer for module memory (less frequent)
+        self.module_timer = QTimer()
+        self.module_timer.timeout.connect(self.update_module_memory)
+        self.module_timer.start(5000)  # Update every 5 seconds
         
         # Track metrics
         self.last_update = time.time()
@@ -131,10 +151,206 @@ class ResourceMonitor(QWidget):
         mode_group.setLayout(mode_layout)
         layout.addWidget(mode_group)
         
+        # === MODULE MEMORY BREAKDOWN ===
+        self.module_group = QGroupBox("Module Memory Usage")
+        self.module_layout = QVBoxLayout()
+        
+        # Header
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(QLabel("Module"))
+        header_layout.addStretch()
+        header_layout.addWidget(QLabel("RAM"))
+        header_layout.addWidget(QLabel("VRAM"))
+        self.module_layout.addLayout(header_layout)
+        
+        # Scrollable area for modules
+        self.module_scroll = QScrollArea()
+        self.module_scroll.setWidgetResizable(True)
+        self.module_scroll.setMaximumHeight(150)
+        self.module_scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+        """)
+        
+        self.module_container = QWidget()
+        self.module_container_layout = QVBoxLayout(self.module_container)
+        self.module_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.module_container_layout.setSpacing(2)
+        
+        # Placeholder label
+        self.no_modules_label = QLabel("No modules loaded")
+        self.no_modules_label.setStyleSheet("color: #6c7086; font-style: italic;")
+        self.module_container_layout.addWidget(self.no_modules_label)
+        self.module_container_layout.addStretch()
+        
+        self.module_scroll.setWidget(self.module_container)
+        self.module_layout.addWidget(self.module_scroll)
+        
+        # Refresh button
+        refresh_btn = QPushButton("Refresh Modules")
+        refresh_btn.setMaximumWidth(120)
+        refresh_btn.clicked.connect(self.update_module_memory)
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: #45475a;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                color: #cdd6f4;
+                font-size: 10px;
+            }
+            QPushButton:hover { background: #585b70; }
+        """)
+        self.module_layout.addWidget(refresh_btn)
+        
+        self.module_group.setLayout(self.module_layout)
+        layout.addWidget(self.module_group)
+        
+        # Track module widgets for updates
+        self._module_widgets = {}
+        
         layout.addStretch()
         
         # Initial update
         self.update_metrics()
+        self.update_module_memory()
+    
+    def update_module_memory(self):
+        """Update the per-module memory breakdown."""
+        try:
+            from ..modules import get_manager
+            manager = get_manager()
+            
+            # Clear existing widgets
+            for widget in self._module_widgets.values():
+                widget.setParent(None)
+                widget.deleteLater()
+            self._module_widgets.clear()
+            
+            # Get loaded modules
+            loaded_modules = manager.list_loaded() if hasattr(manager, 'list_loaded') else []
+            
+            if not loaded_modules:
+                self.no_modules_label.show()
+                return
+            
+            self.no_modules_label.hide()
+            
+            # Calculate memory per module
+            for mod_id in loaded_modules:
+                try:
+                    mod = manager.get_module(mod_id)
+                    if mod is None:
+                        continue
+                    
+                    # Create row widget
+                    row = QFrame()
+                    row.setStyleSheet("""
+                        QFrame {
+                            background: rgba(69, 71, 90, 0.3);
+                            border-radius: 3px;
+                            padding: 2px;
+                        }
+                    """)
+                    row_layout = QHBoxLayout(row)
+                    row_layout.setContentsMargins(4, 2, 4, 2)
+                    row_layout.setSpacing(8)
+                    
+                    # Module name
+                    name_label = QLabel(mod_id[:15] + "..." if len(mod_id) > 15 else mod_id)
+                    name_label.setToolTip(mod_id)
+                    name_label.setMinimumWidth(100)
+                    name_label.setStyleSheet("color: #cdd6f4; font-size: 10px;")
+                    row_layout.addWidget(name_label)
+                    
+                    row_layout.addStretch()
+                    
+                    # RAM usage estimate
+                    ram_mb = self._estimate_module_ram(mod)
+                    ram_label = QLabel(f"{ram_mb:.0f} MB")
+                    ram_label.setStyleSheet(self._get_memory_color(ram_mb, 500))
+                    ram_label.setMinimumWidth(50)
+                    row_layout.addWidget(ram_label)
+                    
+                    # VRAM usage estimate
+                    vram_mb = self._estimate_module_vram(mod)
+                    vram_label = QLabel(f"{vram_mb:.0f} MB" if vram_mb > 0 else "--")
+                    vram_label.setStyleSheet(self._get_memory_color(vram_mb, 1000))
+                    vram_label.setMinimumWidth(50)
+                    row_layout.addWidget(vram_label)
+                    
+                    self.module_container_layout.insertWidget(
+                        self.module_container_layout.count() - 1, row
+                    )
+                    self._module_widgets[mod_id] = row
+                    
+                except Exception as e:
+                    logger.debug(f"Error getting memory for module {mod_id}: {e}")
+                    
+        except ImportError:
+            # Module manager not available
+            self.no_modules_label.setText("Module manager not available")
+            self.no_modules_label.show()
+        except Exception as e:
+            logger.debug(f"Error updating module memory: {e}")
+    
+    def _estimate_module_ram(self, module) -> float:
+        """Estimate RAM usage of a module in MB."""
+        try:
+            instance = module.get_interface() if hasattr(module, 'get_interface') else None
+            if instance is None:
+                return 0.0
+            
+            # Try to get size from torch models
+            if HAS_TORCH:
+                import torch
+                if hasattr(instance, 'parameters'):
+                    # It's a torch model
+                    param_size = sum(p.numel() * p.element_size() for p in instance.parameters())
+                    return param_size / (1024 * 1024)
+            
+            # Rough estimate based on sys.getsizeof
+            return sys.getsizeof(instance) / (1024 * 1024)
+        except Exception:
+            return 0.0
+    
+    def _estimate_module_vram(self, module) -> float:
+        """Estimate VRAM usage of a module in MB."""
+        try:
+            if not HAS_TORCH or not torch.cuda.is_available():
+                return 0.0
+                
+            instance = module.get_interface() if hasattr(module, 'get_interface') else None
+            if instance is None:
+                return 0.0
+            
+            # Check if model is on GPU
+            if hasattr(instance, 'parameters'):
+                for p in instance.parameters():
+                    if p.is_cuda:
+                        param_size = sum(
+                            p.numel() * p.element_size() 
+                            for p in instance.parameters() 
+                            if p.is_cuda
+                        )
+                        return param_size / (1024 * 1024)
+                    break  # Only check first param
+            return 0.0
+        except Exception:
+            return 0.0
+    
+    def _get_memory_color(self, mb: float, threshold: float) -> str:
+        """Get color style based on memory usage."""
+        if mb == 0:
+            return "color: #6c7086; font-size: 10px;"
+        elif mb < threshold * 0.5:
+            return "color: #a6e3a1; font-size: 10px;"  # Green
+        elif mb < threshold:
+            return "color: #f9e2af; font-size: 10px;"  # Yellow
+        else:
+            return "color: #f38ba8; font-size: 10px;"  # Red
     
     def update_metrics(self):
         """Update all resource metrics."""
@@ -265,8 +481,9 @@ def create_resource_monitor_widget(parent=None):
 
 
 if __name__ == "__main__":
-    from PyQt5.QtWidgets import QApplication
     import sys
+
+    from PyQt5.QtWidgets import QApplication
     
     app = QApplication(sys.argv)
     

@@ -25,12 +25,12 @@ Usage:
 import asyncio
 import json
 import logging
-import uuid
-from typing import Dict, Any, Optional, Set, Callable, List
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
-import threading
 import queue
+import threading
+import uuid
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class WebSocketConfig:
     ping_timeout: float = 10.0
     max_message_size: int = 1024 * 1024  # 1MB
     require_auth: bool = False
-    auth_tokens: Set[str] = field(default_factory=set)
+    auth_tokens: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -63,7 +63,7 @@ class Message:
     """WebSocket message structure."""
     type: str  # 'generate', 'stop', 'status', 'config'
     id: str = ""  # Request ID for tracking
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     timestamp: str = ""
     
     def __post_init__(self):
@@ -106,8 +106,8 @@ class ConnectionManager:
     
     def __init__(self, max_connections: int = 100):
         self.max_connections = max_connections
-        self._connections: Dict[str, Any] = {}  # connection_id -> websocket
-        self._active_requests: Dict[str, str] = {}  # request_id -> connection_id
+        self._connections: dict[str, Any] = {}  # connection_id -> websocket
+        self._active_requests: dict[str, str] = {}  # request_id -> connection_id
         self._lock = threading.Lock()
     
     def add_connection(self, connection_id: str, websocket: Any) -> bool:
@@ -198,7 +198,7 @@ class WebSocketServer:
         self.config = config or WebSocketConfig()
         
         self.connection_manager = ConnectionManager(self.config.max_connections)
-        self._stop_requests: Set[str] = set()
+        self._stop_requests: set[str] = set()
         self._server = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
     
@@ -510,7 +510,7 @@ class WebSocketClient:
                         return
                     yield data.get('token', '')
                 elif data.get('type') == 'error':
-                    raise Exception(data.get('error'))
+                    raise RuntimeError(data.get('error', 'Unknown WebSocket error'))
         else:
             response = await self._websocket.recv()
             data = json.loads(response)

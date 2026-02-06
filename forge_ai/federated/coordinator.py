@@ -25,12 +25,13 @@ USAGE:
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
+
 import numpy as np
 
-from .federation import ModelUpdate, FederationInfo
 from .aggregation import FederatedAggregator
+from .federation import FederationInfo, ModelUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -56,17 +57,17 @@ class FederatedCoordinator:
             round_timeout: Timeout for waiting for updates (seconds)
             wait_between_rounds: Wait time between rounds (seconds)
         """
-        self.participants: List[str] = []
+        self.participants: list[str] = []
         self.current_round = 0
         self.min_participants = min_participants
         self.round_timeout = round_timeout
         self.wait_between_rounds = wait_between_rounds
         
         self.aggregator = FederatedAggregator()
-        self.round_history: List[Dict] = []
+        self.round_history: list[dict] = []
         
         # Current model weights (coordinator maintains base model)
-        self.base_weights: Optional[Dict[str, np.ndarray]] = None
+        self.base_weights: Optional[dict[str, np.ndarray]] = None
         
         logger.info(
             f"Initialized coordinator: min_participants={min_participants}, "
@@ -95,7 +96,7 @@ class FederatedCoordinator:
             self.participants.remove(device_id)
             logger.info(f"Unregistered participant {device_id} ({len(self.participants)} remaining)")
     
-    async def run_round(self) -> Dict:
+    async def run_round(self) -> dict:
         """
         Execute one federated learning round.
         
@@ -215,7 +216,7 @@ class FederatedCoordinator:
         # Small delay to ensure messages are received
         await asyncio.sleep(0.05)
     
-    async def _send_to_participant(self, participant_id: str, message: Dict):
+    async def _send_to_participant(self, participant_id: str, message: dict):
         """
         Send a message to a specific participant.
         
@@ -227,8 +228,8 @@ class FederatedCoordinator:
         if hasattr(self, '_participant_connections') and participant_id in self._participant_connections:
             conn_info = self._participant_connections[participant_id]
             try:
-                import urllib.request
                 import json as json_lib
+                import urllib.request
                 
                 address = conn_info.get('address', 'localhost')
                 port = conn_info.get('port', 5000)
@@ -260,7 +261,7 @@ class FederatedCoordinator:
         self,
         timeout: int,
         min_updates: int
-    ) -> List[ModelUpdate]:
+    ) -> list[ModelUpdate]:
         """
         Wait for updates from participants.
         
@@ -274,12 +275,12 @@ class FederatedCoordinator:
         logger.info(f"Collecting updates (timeout={timeout}s, min={min_updates})")
         
         updates = []
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         
         # In real implementation, this would listen for incoming updates
         # For now, just wait for timeout
         while True:
-            elapsed = asyncio.get_event_loop().time() - start_time
+            elapsed = asyncio.get_running_loop().time() - start_time
             
             if elapsed >= timeout:
                 logger.info(f"Timeout reached, collected {len(updates)} updates")
@@ -295,7 +296,7 @@ class FederatedCoordinator:
         
         return updates
     
-    async def _broadcast_model(self, model_weights: Dict[str, np.ndarray]):
+    async def _broadcast_model(self, model_weights: dict[str, np.ndarray]):
         """
         Broadcast improved model to all participants.
         
@@ -356,7 +357,7 @@ class FederatedCoordinator:
         
         logger.info(f"Registered connection for {participant_id} at {address}:{port}")
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """
         Get coordinator statistics.
         
@@ -371,7 +372,7 @@ class FederatedCoordinator:
             'aggregator_stats': self.aggregator.get_stats(),
         }
     
-    def get_round_history(self, last_n: Optional[int] = None) -> List[Dict]:
+    def get_round_history(self, last_n: Optional[int] = None) -> list[dict]:
         """
         Get round history.
         

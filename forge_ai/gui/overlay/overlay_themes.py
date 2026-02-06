@@ -64,7 +64,7 @@ class OverlayTheme:
 
 
 # Preset themes
-OVERLAY_THEMES: Dict[str, OverlayTheme] = {
+OVERLAY_THEMES: dict[str, OverlayTheme] = {
     "dark": OverlayTheme(
         name="dark",
         background_color="rgba(0, 0, 0, 0.7)",

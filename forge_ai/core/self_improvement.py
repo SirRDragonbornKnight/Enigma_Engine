@@ -15,15 +15,15 @@ improves over time through measurable metrics.
 """
 
 import json
-import time
 import logging
 import threading
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Set
-from dataclasses import dataclass, asdict, field
+import time
+from collections import defaultdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from collections import defaultdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 from ..config import CONFIG
 
@@ -86,17 +86,17 @@ class LearningExample:
     priority: Priority                   # How important to learn
     quality_score: float                 # 0.0-1.0 quality rating
     timestamp: float = field(default_factory=time.time)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     
     # Topics extracted from this example
-    topics: List[str] = field(default_factory=list)
+    topics: list[str] = field(default_factory=list)
     
     # Validation metrics
     relevance: float = 0.0    # How relevant output is to input
     coherence: float = 0.0    # How coherent the output is
     repetition: float = 0.0   # Repetition score (lower is better)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
         data['source'] = self.source.value
@@ -104,7 +104,7 @@ class LearningExample:
         return data
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'LearningExample':
+    def from_dict(cls, data: dict[str, Any]) -> 'LearningExample':
         """Create from dictionary."""
         data = data.copy()
         data['source'] = LearningSource(data['source'])
@@ -137,7 +137,7 @@ class PerformanceMetrics:
     topics_explored: int = 0
     
     # Topic engagement (which topics get positive feedback)
-    topic_scores: Dict[str, float] = field(default_factory=dict)
+    topic_scores: dict[str, float] = field(default_factory=dict)
     
     # Time tracking
     last_updated: float = field(default_factory=time.time)
@@ -171,12 +171,12 @@ class PerformanceMetrics:
         
         return feedback_component + quality_component + learning_component
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'PerformanceMetrics':
+    def from_dict(cls, data: dict[str, Any]) -> 'PerformanceMetrics':
         """Create from dictionary."""
         return cls(**data)
 
@@ -213,12 +213,12 @@ class AutonomousConfig:
     low_power_interval: int = 1800  # 30 minutes when low power
     low_power_max_actions: int = 2  # Only 2 actions per hour in low power
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AutonomousConfig':
+    def from_dict(cls, data: dict[str, Any]) -> 'AutonomousConfig':
         """Create from dictionary."""
         return cls(**data)
     
@@ -273,9 +273,9 @@ class LearningEngine:
         self.feedback_file = self.learning_dir / "feedback_log.jsonl"
         
         # In-memory state
-        self.learning_queue: List[LearningExample] = []
+        self.learning_queue: list[LearningExample] = []
         self.metrics = PerformanceMetrics()
-        self.knowledge_graph: Dict[str, Set[str]] = defaultdict(set)
+        self.knowledge_graph: dict[str, set[str]] = defaultdict(set)
         
         # Thread safety
         self._lock = threading.Lock()
@@ -296,7 +296,7 @@ class LearningEngine:
         # Load learning queue
         if self.queue_file.exists():
             try:
-                with open(self.queue_file, 'r') as f:
+                with open(self.queue_file) as f:
                     for line in f:
                         if line.strip():
                             data = json.loads(line)
@@ -309,7 +309,7 @@ class LearningEngine:
         # Load metrics
         if self.metrics_file.exists():
             try:
-                with open(self.metrics_file, 'r') as f:
+                with open(self.metrics_file) as f:
                     data = json.load(f)
                     self.metrics = PerformanceMetrics.from_dict(data)
                 logger.info(f"Loaded metrics: {self.metrics.total_conversations} conversations")
@@ -319,7 +319,7 @@ class LearningEngine:
         # Load knowledge graph
         if self.knowledge_graph_file.exists():
             try:
-                with open(self.knowledge_graph_file, 'r') as f:
+                with open(self.knowledge_graph_file) as f:
                     data = json.load(f)
                     self.knowledge_graph = defaultdict(set, {
                         k: set(v) for k, v in data.items()
@@ -357,7 +357,7 @@ class LearningEngine:
         self, 
         input_text: str, 
         output_text: str
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Evaluate the quality of a response using multiple metrics.
         
@@ -502,7 +502,7 @@ class LearningEngine:
     # TOPIC EXTRACTION
     # =========================================================================
     
-    def extract_topics(self, text: str, max_topics: int = 5) -> List[str]:
+    def extract_topics(self, text: str, max_topics: int = 5) -> list[str]:
         """
         Extract main topics from text.
         
@@ -580,7 +580,7 @@ class LearningEngine:
             logger.debug(f"Added learning example: {example.priority.name} priority, "
                         f"quality={example.quality_score:.2f}, topics={example.topics[:3]}")
     
-    def get_queue_stats(self) -> Dict[str, Any]:
+    def get_queue_stats(self) -> dict[str, Any]:
         """Get statistics about the learning queue."""
         with self._lock:
             stats = {
@@ -610,7 +610,7 @@ class LearningEngine:
         input_text: str, 
         output_text: str, 
         feedback: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ):
         """
         Record user feedback on a response.
@@ -684,7 +684,7 @@ class LearningEngine:
     # KNOWLEDGE GRAPH
     # =========================================================================
     
-    def get_related_topics(self, topic: str, max_results: int = 5) -> List[str]:
+    def get_related_topics(self, topic: str, max_results: int = 5) -> list[str]:
         """
         Get topics related to a given topic from the knowledge graph.
         
@@ -702,7 +702,7 @@ class LearningEngine:
             related = list(self.knowledge_graph[topic])
             return related[:max_results]
     
-    def get_all_topics(self) -> List[str]:
+    def get_all_topics(self) -> list[str]:
         """Get all topics in the knowledge graph."""
         with self._lock:
             return list(self.knowledge_graph.keys())
@@ -794,7 +794,7 @@ class LearningEngine:
 # GLOBAL ACCESS
 # =============================================================================
 
-_engines: Dict[str, LearningEngine] = {}
+_engines: dict[str, LearningEngine] = {}
 _lock = threading.Lock()
 
 

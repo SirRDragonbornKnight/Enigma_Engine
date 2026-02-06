@@ -14,7 +14,7 @@ Usage:
 
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ except ImportError:
     logger.warning("torch not available - ONNX loading disabled")
 
 
-def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> Dict[str, torch.Tensor]:
+def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> dict[str, torch.Tensor]:
     """
     Extract weights from ONNX model file.
     
@@ -89,7 +89,7 @@ def extract_onnx_weights(onnx_model_path: Union[str, Path]) -> Dict[str, torch.T
     return weights
 
 
-def infer_config_from_onnx(onnx_weights: Dict[str, torch.Tensor]) -> Dict[str, Any]:
+def infer_config_from_onnx(onnx_weights: dict[str, torch.Tensor]) -> dict[str, Any]:
     """
     Infer model configuration from ONNX weights.
     
@@ -308,7 +308,7 @@ def validate_loaded_model(model: 'Forge') -> None:
         raise RuntimeError(f"Model validation failed: {e}")
 
 
-def validate_onnx_model(onnx_model_path: Union[str, Path]) -> Dict[str, Any]:
+def validate_onnx_model(onnx_model_path: Union[str, Path]) -> dict[str, Any]:
     """
     Validate an ONNX model and return information about it.
     

@@ -34,16 +34,16 @@ GAMING PRIORITY LEVELS:
     FULL (5): No restrictions (no game detected)
 """
 
+import json
 import logging
+import platform
+import subprocess
 import threading
 import time
-import subprocess
-import platform
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Set, Callable
-import json
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class GamingPriority(Enum):
 class GamingProfile:
     """Profile for a specific game or app."""
     name: str
-    process_names: List[str] = field(default_factory=list)
+    process_names: list[str] = field(default_factory=list)
     priority: GamingPriority = GamingPriority.MEDIUM
     cpu_inference: bool = True      # Force CPU inference
     max_vram_mb: int = 512          # Max VRAM AI can use
@@ -74,7 +74,7 @@ class GamingProfile:
 
 
 # Default gaming profiles for popular games
-DEFAULT_GAMING_PROFILES: Dict[str, GamingProfile] = {
+DEFAULT_GAMING_PROFILES: dict[str, GamingProfile] = {
     "competitive_fps": GamingProfile(
         name="Competitive FPS",
         process_names=[
@@ -176,7 +176,7 @@ class GamingMode:
         target_fps_headroom: int = 5,
         max_vram_percent: float = 0.1,
         cpu_inference: bool = False,
-        custom_profiles: Dict[str, GamingProfile] = None,
+        custom_profiles: dict[str, GamingProfile] = None,
         check_interval: float = 5.0,
     ):
         """
@@ -200,7 +200,7 @@ class GamingMode:
             self.profiles.update(custom_profiles)
         
         # Build process name to profile lookup
-        self._process_to_profile: Dict[str, GamingProfile] = {}
+        self._process_to_profile: dict[str, GamingProfile] = {}
         for profile in self.profiles.values():
             for proc in profile.process_names:
                 self._process_to_profile[proc.lower()] = profile
@@ -216,12 +216,12 @@ class GamingMode:
         self._stop_event = threading.Event()
         
         # Deferred task queue
-        self._deferred_tasks: List[Dict[str, Any]] = []
+        self._deferred_tasks: list[dict[str, Any]] = []
         
         # Callbacks
-        self._on_game_start: List[Callable[[str, GamingProfile], None]] = []
-        self._on_game_end: List[Callable[[str], None]] = []
-        self._on_limits_change: List[Callable[[ResourceLimits], None]] = []
+        self._on_game_start: list[Callable[[str, GamingProfile], None]] = []
+        self._on_game_end: list[Callable[[str], None]] = []
+        self._on_limits_change: list[Callable[[ResourceLimits], None]] = []
     
     @property
     def enabled(self) -> bool:
@@ -331,7 +331,7 @@ class GamingMode:
                 self._notify_game_end(old_game)
                 self._process_deferred_tasks()
     
-    def _get_running_processes(self) -> Set[str]:
+    def _get_running_processes(self) -> set[str]:
         """Get set of running process names."""
         processes = set()
         
@@ -444,7 +444,7 @@ class GamingMode:
             except Exception as e:
                 logger.error(f"Game end callback error: {e}")
     
-    def defer_task(self, task_type: str, task_data: Dict[str, Any]):
+    def defer_task(self, task_type: str, task_data: dict[str, Any]):
         """Queue a task to run after gaming ends."""
         self._deferred_tasks.append({
             "type": task_type,
@@ -622,7 +622,7 @@ class GamingMode:
         except Exception as e:
             logger.error(f"Failed to load gaming profiles: {e}")
     
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current gaming mode status."""
         return {
             "enabled": self._enabled,

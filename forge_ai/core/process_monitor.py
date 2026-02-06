@@ -5,11 +5,11 @@ Monitors system processes to detect when games are running.
 Works cross-platform (Windows, Linux, macOS).
 """
 
+import logging
 import platform
 import subprocess
-import logging
-from typing import Optional, Dict, List, Set
 from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class ProcessMonitor:
         "nw.exe",  # Common game launcher wrapper
     ]
     
-    def __init__(self, custom_games: Optional[List[str]] = None):
+    def __init__(self, custom_games: Optional[list[str]] = None):
         """
         Initialize process monitor.
         
@@ -79,8 +79,8 @@ class ProcessMonitor:
             custom_games: Additional game process names to detect
         """
         self.custom_games = custom_games or []
-        self.all_games = set(g.lower() for g in self.KNOWN_GAMES + self.custom_games)
-        self.launcher_exclusions = set(g.lower() for g in self.LAUNCHER_EXCLUSIONS)
+        self.all_games = {g.lower() for g in self.KNOWN_GAMES + self.custom_games}
+        self.launcher_exclusions = {g.lower() for g in self.LAUNCHER_EXCLUSIONS}
         self._system = platform.system()
     
     def get_fullscreen_app(self) -> Optional[str]:
@@ -203,7 +203,7 @@ class ProcessMonitor:
         
         return None
     
-    def get_gpu_usage_by_process(self) -> Dict[str, float]:
+    def get_gpu_usage_by_process(self) -> dict[str, float]:
         """
         Get GPU usage per process.
         
@@ -271,7 +271,7 @@ class ProcessMonitor:
         running = self.get_running_games()
         return len(running) > 0
     
-    def get_running_games(self) -> Set[str]:
+    def get_running_games(self) -> set[str]:
         """
         Get all currently running known games.
         
@@ -288,7 +288,7 @@ class ProcessMonitor:
         
         return games
     
-    def _get_running_processes(self) -> Set[str]:
+    def _get_running_processes(self) -> set[str]:
         """Get set of all running process names."""
         processes = set()
         
@@ -360,7 +360,7 @@ class ProcessMonitor:
         
         return None
     
-    def get_known_game_processes(self) -> List[str]:
+    def get_known_game_processes(self) -> list[str]:
         """
         Get list of all known game executables.
         

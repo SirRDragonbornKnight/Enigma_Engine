@@ -65,30 +65,59 @@ SEE ALSO:
     • forge_ai/gui/theme_system.py - Theme management
     • data/gui_settings.json       - Saved GUI preferences
 """
-import sys
 import json
 import logging
 import shutil
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
-    QLabel, QListWidget, QTabWidget, QFileDialog, QMessageBox, QDialog, QComboBox,
-    QRadioButton, QButtonGroup, QDialogButtonBox, QWizard, QWizardPage, QFormLayout,
-    QInputDialog, QActionGroup, QGroupBox, QGridLayout, QSplitter, QWidget,
-    QStackedWidget, QScrollArea, QListWidgetItem, QFrame, QSizePolicy, QProgressBar,
-    QTextEdit, QMenu, QAction
-)
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QPixmap, QFont, QIcon, QKeySequence
 import time
+
+from PyQt5.QtCore import QSize, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QFont, QIcon, QKeySequence, QPixmap
+from PyQt5.QtWidgets import (
+    QAction,
+    QActionGroup,
+    QApplication,
+    QButtonGroup,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStackedWidget,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+    QWizard,
+    QWizardPage,
+)
 
 # Import GUI mode system
 from .gui_modes import GUIMode, GUIModeManager
-from .widgets.quick_actions import QuickActionsBar, FeedbackButtons
+from .widgets.quick_actions import FeedbackButtons, QuickActionsBar
 
 
 # === AI Generation Worker Thread ===
@@ -1129,10 +1158,10 @@ THEMES = {
 
 # Import forge_ai modules
 try:
-    from ..core.model_registry import ModelRegistry
-    from ..core.model_config import MODEL_PRESETS
-    from ..core.model_scaling import shrink_model
     from ..config import CONFIG
+    from ..core.model_config import MODEL_PRESETS
+    from ..core.model_registry import ModelRegistry
+    from ..core.model_scaling import shrink_model
 except ImportError:
     # Running standalone
     pass
@@ -1520,7 +1549,6 @@ from .dialogs.loading import ModelLoadingDialog
 # Import model manager dialog from dialogs module (extracted for smaller file size)
 from .dialogs.model_manager import ModelManagerDialog
 
-
 # =============================================================================
 # 🏰 ENHANCED MAIN WINDOW - THE GRAND CASTLE
 # =============================================================================
@@ -1717,7 +1745,7 @@ class EnhancedMainWindow(QMainWindow):
         # ─────────────────────────────────────────────────────────────────
         self._avatar_bridge = None
         try:
-            from ..avatar import get_avatar, AIAvatarBridge, create_avatar_bridge
+            from ..avatar import AIAvatarBridge, create_avatar_bridge, get_avatar
             avatar = get_avatar()
             if avatar:
                 self._avatar_bridge = create_avatar_bridge(avatar, enable_explicit=True)
@@ -1757,6 +1785,7 @@ class EnhancedMainWindow(QMainWindow):
         self._learning_integration = None
         try:
             from ..learning import LearningChatIntegration
+
             # Will be properly initialized once a model is loaded
             self._learning_integration_enabled = self._gui_settings.get("learning_integration", True)
             print(f"Learning integration: {'enabled' if self._learning_integration_enabled else 'disabled'}")
@@ -1923,9 +1952,9 @@ class EnhancedMainWindow(QMainWindow):
     
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts including emergency close."""
-        from PyQt5.QtWidgets import QShortcut
         from PyQt5.QtGui import QKeySequence
-        
+        from PyQt5.QtWidgets import QShortcut
+
         # Alt+F4 - Force quit (works on most systems by default, but ensure it)
         quit_shortcut = QShortcut(QKeySequence("Alt+F4"), self)
         quit_shortcut.activated.connect(self._force_quit)
@@ -2072,15 +2101,15 @@ class EnhancedMainWindow(QMainWindow):
         """
         try:
             from ..config import CONFIG
-            
+
             # Check if hotkeys are enabled
             if not CONFIG.get("enable_hotkeys", True):
                 print("Global hotkeys disabled in config")
                 return
             
-            from ..core.hotkey_manager import get_hotkey_manager, DEFAULT_HOTKEYS
             from ..core.hotkey_actions import get_hotkey_actions
-            
+            from ..core.hotkey_manager import DEFAULT_HOTKEYS, get_hotkey_manager
+
             # Get manager and actions
             self.hotkey_manager = get_hotkey_manager()
             self.hotkey_actions = get_hotkey_actions(self)
@@ -2169,7 +2198,7 @@ class EnhancedMainWindow(QMainWindow):
         settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
         try:
             if settings_path.exists():
-                with open(settings_path, "r") as f:
+                with open(settings_path) as f:
                     return json.load(f)
         except Exception as e:
             print(f"Could not load GUI settings: {e}")
@@ -2177,8 +2206,9 @@ class EnhancedMainWindow(QMainWindow):
     
     def _save_gui_settings(self):
         """Save GUI settings to file."""
-        from ..config import CONFIG
         from PyQt5.QtGui import QGuiApplication
+
+        from ..config import CONFIG
         
         settings_path = Path(CONFIG["data_dir"]) / "gui_settings.json"
         try:
@@ -2250,7 +2280,13 @@ class EnhancedMainWindow(QMainWindow):
     
     def _show_close_dialog(self):
         """Show close options dialog - same as Quick Chat close."""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QVBoxLayout,
+        )
         
         dialog = QDialog(self)
         dialog.setWindowTitle("Close Options")
@@ -2356,8 +2392,8 @@ class EnhancedMainWindow(QMainWindow):
     
     def _cleanup_and_quit(self):
         """Clean up all resources and quit the application."""
-        import sys
         import os
+        import sys
         
         print("[ForgeAI] Shutting down all components...")
         
@@ -2451,7 +2487,7 @@ class EnhancedMainWindow(QMainWindow):
     
     def contextMenuEvent(self, event):
         """Show right-click context menu with common options."""
-        from PyQt5.QtWidgets import QMenu, QAction
+        from PyQt5.QtWidgets import QAction, QMenu
         
         menu = QMenu(self)
         menu.setStyleSheet("""
@@ -2533,9 +2569,9 @@ class EnhancedMainWindow(QMainWindow):
     
     def _show_options_menu(self):
         """Show options menu from the sidebar menu button."""
-        from PyQt5.QtWidgets import QMenu
         from PyQt5.QtGui import QCursor
-        
+        from PyQt5.QtWidgets import QMenu
+
         # Reuse the context menu logic
         event_pos = QCursor.pos()
         
@@ -2597,7 +2633,7 @@ class EnhancedMainWindow(QMainWindow):
     def keyPressEvent(self, event):
         """Handle key press events - Escape stops all generations."""
         from PyQt5.QtCore import Qt
-        
+
         # Mode switching shortcuts
         if event.modifiers() == Qt.ControlModifier:
             # Tab shortcuts (Ctrl+1/2/3)
@@ -2703,7 +2739,7 @@ class EnhancedMainWindow(QMainWindow):
     def _show_model_selector_deferred(self):
         """Defer model loading until after GUI is shown."""
         from PyQt5.QtCore import QTimer
-        
+
         # Select the model name now
         models = list(self.registry.registry.get("models", {}).keys())
         if models:
@@ -3113,6 +3149,7 @@ class EnhancedMainWindow(QMainWindow):
         # Menu bar - Create View menu for mode switching
         # ─────────────────────────────────────────────────────────────────
         self._create_view_menu()
+        self._create_help_menu()
         
         # Initialize toggle state variables (previously in menu, now in Settings)
         self.learn_while_chatting = True
@@ -3185,27 +3222,41 @@ class EnhancedMainWindow(QMainWindow):
         
         # Import tabs from separate modules
         from .tabs import (
-            create_chat_tab, create_training_tab, 
-            create_avatar_subtab, create_game_subtab, create_robot_subtab,
-            create_vision_tab, create_camera_tab, create_sessions_tab, create_instructions_tab,
-            create_terminal_tab, create_examples_tab,
-            create_image_tab, create_code_tab, create_video_tab,
-            create_audio_tab, create_embeddings_tab, create_threed_tab,
-            create_logs_tab, create_notes_tab, create_network_tab,
+            create_analytics_tab,
+            create_audio_tab,
+            create_avatar_subtab,
+            create_camera_tab,
+            create_chat_tab,
+            create_code_tab,
+            create_embeddings_tab,
+            create_examples_tab,
             create_federation_tab,
-            create_analytics_tab
+            create_game_subtab,
+            create_image_tab,
+            create_instructions_tab,
+            create_logs_tab,
+            create_network_tab,
+            create_notes_tab,
+            create_robot_subtab,
+            create_sessions_tab,
+            create_terminal_tab,
+            create_threed_tab,
+            create_training_tab,
+            create_video_tab,
+            create_vision_tab,
         )
         from .tabs.gif_tab import create_gif_tab
-        from .tabs.settings_tab import create_settings_tab
-        from .tabs.modules_tab import ModulesTab
-        from .tabs.scaling_tab import ScalingTab
+        from .tabs.learning_tab import LearningTab
+        from .tabs.model_comparison_tab import create_model_comparison_tab
         from .tabs.model_router_tab import ModelRouterTab
+        from .tabs.modules_tab import ModulesTab
+        from .tabs.persona_tab import create_persona_tab
+        from .tabs.scaling_tab import ScalingTab
+        from .tabs.settings_tab import create_settings_tab
         from .tabs.tool_manager_tab import ToolManagerTab
         from .tabs.voice_clone_tab import VoiceCloneTab
         from .tabs.workspace_tab import create_workspace_tab
-        from .tabs.persona_tab import create_persona_tab
-        from .tabs.learning_tab import LearningTab
-        
+
         # Create main container with sidebar navigation
         main_widget = QWidget()
         main_layout = QHBoxLayout(main_widget)
@@ -3263,6 +3314,7 @@ class EnhancedMainWindow(QMainWindow):
             ("", "Modules", "modules", "Enable/disable AI features"),
             ("", "Tools", "tools", "Manage AI tools and capabilities"),
             ("", "Router", "router", "Assign specialized models to tasks"),
+            ("", "Compare", "compare", "Compare responses from different models"),
             # Generate
             ("section", "GENERATE"),
             ("", "Image", "image", "Generate images from text descriptions"),
@@ -3325,7 +3377,7 @@ class EnhancedMainWindow(QMainWindow):
         
         # Tabs that should always be visible (core tabs)
         self._always_visible_tabs = [
-            'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router',
+            'chat', 'workspace', 'history', 'persona', 'scale', 'modules', 'tools', 'router', 'compare',
             'learning', 'terminal', 'files', 'logs', 'network', 'federation',
             'analytics', 'examples', 'settings',
             # Default-enabled generation/perception tabs (image, avatar, vision on by default)
@@ -3343,7 +3395,7 @@ class EnhancedMainWindow(QMainWindow):
                 section_item.setFont(font)
                 section_item.setSizeHint(QSize(170, 28))
                 # Use custom styling via foreground
-                from PyQt5.QtGui import QColor, QBrush
+                from PyQt5.QtGui import QBrush, QColor
                 section_item.setForeground(QBrush(QColor("#6c7086")))
                 self.sidebar.addItem(section_item)
             else:
@@ -3386,6 +3438,7 @@ class EnhancedMainWindow(QMainWindow):
         self.content_stack.addWidget(wrap_in_scroll(ToolManagerTab(self)))  # Tools
         self.router_tab = ModelRouterTab(self)  # Store reference for syncing
         self.content_stack.addWidget(wrap_in_scroll(self.router_tab))  # Router
+        self.content_stack.addWidget(wrap_in_scroll(create_model_comparison_tab(self)))  # Compare
         self.content_stack.addWidget(wrap_in_scroll(create_image_tab(self)))  # Image
         self.content_stack.addWidget(wrap_in_scroll(create_code_tab(self)))  # Code
         self.content_stack.addWidget(wrap_in_scroll(create_video_tab(self)))  # Video
@@ -3448,7 +3501,7 @@ class EnhancedMainWindow(QMainWindow):
         Users often accidentally change dropdown selections when scrolling.
         This makes combos only respond to clicks, not scroll wheel.
         """
-        from PyQt5.QtCore import Qt, QEvent
+        from PyQt5.QtCore import QEvent, Qt
         from PyQt5.QtWidgets import QComboBox
         
         class ComboScrollFilter(QWidget):
@@ -3471,7 +3524,7 @@ class EnhancedMainWindow(QMainWindow):
         """Enable text selection on all QLabel and text widgets in the GUI."""
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QTextBrowser, QTextEdit
-        
+
         # Enable selection on all QLabel widgets
         for label in self.findChildren(QLabel):
             current_flags = label.textInteractionFlags()
@@ -3623,7 +3676,7 @@ class EnhancedMainWindow(QMainWindow):
             # Core tabs
             'chat': 'chat', 'train': 'train', 'history': 'history',
             'scale': 'scale', 'modules': 'modules', 'tools': 'tools',
-            'router': 'router',
+            'router': 'router', 'compare': 'compare',
             # Generation tabs
             'image': 'image', 'code': 'code', 'video': 'video',
             'audio': 'audio', '3d': '3d', 'gif': 'gif',
@@ -3721,16 +3774,128 @@ class EnhancedMainWindow(QMainWindow):
         """Show dialog with keyboard shortcuts."""
         from .gui_modes import KEYBOARD_SHORTCUTS
         
-        shortcuts_text = "<h3>Keyboard Shortcuts</h3><table>"
+        shortcuts_text = """
+        <style>
+            table { border-collapse: collapse; width: 100%; }
+            th { text-align: left; padding: 8px; background: #313244; color: #cdd6f4; }
+            td { padding: 6px 8px; border-bottom: 1px solid #45475a; }
+            .key { background: #45475a; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+        </style>
+        <h3 style="color: #89b4fa;">Keyboard Shortcuts</h3>
+        <table>
+        <tr><th>Shortcut</th><th>Action</th></tr>
+        """
+        
         for shortcut, description in KEYBOARD_SHORTCUTS.items():
-            shortcuts_text += f"<tr><td><b>{shortcut}</b></td><td>{description}</td></tr>"
+            shortcuts_text += f'<tr><td><span class="key">{shortcut}</span></td><td>{description}</td></tr>'
         shortcuts_text += "</table>"
         
         msg = QMessageBox(self)
         msg.setWindowTitle("Keyboard Shortcuts")
         msg.setTextFormat(Qt.RichText)
         msg.setText(shortcuts_text)
+        msg.setMinimumWidth(400)
         msg.exec_()
+    
+    def _create_help_menu(self):
+        """Create the Help menu."""
+        help_menu = self.menuBar().addMenu("&Help")
+        
+        # Keyboard shortcuts
+        shortcuts_action = QAction("Keyboard Shortcuts", self)
+        shortcuts_action.setShortcut("F1")
+        shortcuts_action.triggered.connect(self._show_shortcuts_dialog)
+        help_menu.addAction(shortcuts_action)
+        
+        # Getting started guide
+        getting_started = QAction("Getting Started", self)
+        getting_started.triggered.connect(self._show_getting_started)
+        help_menu.addAction(getting_started)
+        
+        help_menu.addSeparator()
+        
+        # Documentation links
+        docs_action = QAction("Open Documentation", self)
+        docs_action.triggered.connect(lambda: self._open_url("https://github.com/SirKnightforge/ForgeAI"))
+        help_menu.addAction(docs_action)
+        
+        help_menu.addSeparator()
+        
+        # About
+        about_action = QAction("About ForgeAI", self)
+        about_action.triggered.connect(self._show_about_dialog)
+        help_menu.addAction(about_action)
+    
+    def _show_getting_started(self):
+        """Show getting started guide."""
+        guide = """
+        <h2 style="color: #89b4fa;">Getting Started with ForgeAI</h2>
+        
+        <h3>1. Chat with AI</h3>
+        <p>The <b>Chat</b> tab is your main interface. Just type a message and press Enter or click Send.</p>
+        
+        <h3>2. Enable Features</h3>
+        <p>Go to the <b>Modules</b> tab to enable additional features like:</p>
+        <ul>
+            <li>Image Generation - Create images from text</li>
+            <li>Voice Input/Output - Talk to your AI</li>
+            <li>Avatar - Visual AI companion</li>
+        </ul>
+        
+        <h3>3. Customize Your AI</h3>
+        <p>Use the <b>Persona</b> tab to give your AI a unique personality.</p>
+        
+        <h3>4. Train Your Model</h3>
+        <p>Use the <b>Files</b> tab to add training data, then train in the <b>Chat</b> tab.</p>
+        
+        <h3>Quick Tips</h3>
+        <ul>
+            <li>Press <b>F1</b> anytime to see keyboard shortcuts</li>
+            <li>Right-click for context menus</li>
+            <li>Check the <b>Settings</b> tab for more options</li>
+        </ul>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Getting Started")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(guide)
+        msg.setMinimumWidth(500)
+        msg.exec_()
+    
+    def _show_about_dialog(self):
+        """Show about dialog."""
+        about_text = """
+        <h2 style="color: #89b4fa;">ForgeAI</h2>
+        <p><b>Version:</b> 1.0.0</p>
+        <p>A fully modular local AI assistant framework.</p>
+        
+        <p><b>Features:</b></p>
+        <ul>
+            <li>Local AI chat and generation</li>
+            <li>Image, code, video, audio generation</li>
+            <li>Voice input and output</li>
+            <li>Avatar display</li>
+            <li>Game integration</li>
+            <li>Modular architecture</li>
+        </ul>
+        
+        <p style="color: #6c7086; font-size: 10px;">
+        Built with PyTorch, PyQt5, and love.
+        </p>
+        """
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("About ForgeAI")
+        msg.setTextFormat(Qt.RichText)
+        msg.setText(about_text)
+        msg.exec_()
+    
+    def _open_url(self, url: str):
+        """Open a URL in the default browser."""
+        from PyQt5.QtCore import QUrl
+        from PyQt5.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl(url))
     
     def _set_theme(self, theme_name):
         """Set the application theme."""
@@ -4038,8 +4203,17 @@ class EnhancedMainWindow(QMainWindow):
     
     def _show_zoom_dialog(self):
         """Show a dialog with live preview zoom slider."""
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QSlider, QLabel, QSpinBox, QPushButton, QDialogButtonBox
         from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QDialogButtonBox,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QSlider,
+            QSpinBox,
+            QVBoxLayout,
+        )
         
         current = getattr(self, '_current_zoom', 100)
         original_zoom = current
@@ -4251,7 +4425,7 @@ class EnhancedMainWindow(QMainWindow):
         """Capture image from webcam/camera."""
         try:
             import cv2
-            
+
             # Try to open camera
             cap = cv2.VideoCapture(0)
             if not cap.isOpened():
@@ -4386,9 +4560,10 @@ class EnhancedMainWindow(QMainWindow):
             
             if platform.system() == "Linux" and shutil.which("scrot"):
                 try:
+                    import os
                     import subprocess
                     import tempfile
-                    import os
+
                     from PIL import Image
                     
                     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
@@ -4414,9 +4589,10 @@ class EnhancedMainWindow(QMainWindow):
             # macOS - use screencapture
             elif platform.system() == "Darwin" and shutil.which("screencapture"):
                 try:
+                    import os
                     import subprocess
                     import tempfile
-                    import os
+
                     from PIL import Image
                     
                     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
@@ -5376,8 +5552,8 @@ class EnhancedMainWindow(QMainWindow):
     
     def _execute_tool_from_response(self, response: str):
         """Parse and execute any tool calls in the AI response, return modified response."""
-        import re
         import json
+        import re
         
         tool_pattern = r'<tool_call>\s*(\{.*?\})\s*</tool_call>'
         matches = re.findall(tool_pattern, response, re.DOTALL)
@@ -5452,7 +5628,7 @@ class EnhancedMainWindow(QMainWindow):
     def _request_tool_permission(self, tool_name: str, params: dict) -> bool:
         """Show a permission dialog asking user to approve tool execution."""
         from PyQt5.QtWidgets import QMessageBox
-        
+
         # Format parameter summary
         param_summary = "\n".join([f"  • {k}: {str(v)[:50]}{'...' if len(str(v)) > 50 else ''}" 
                                    for k, v in params.items()])
@@ -5539,9 +5715,9 @@ class EnhancedMainWindow(QMainWindow):
     def _execute_full_tool(self, tool_name: str, params: dict) -> dict:
         """Execute any tool using the full ToolExecutor."""
         try:
-            from ..tools.tool_executor import ToolExecutor
             from ..modules import ModuleManager
-            
+            from ..tools.tool_executor import ToolExecutor
+
             # Get or create module manager
             module_manager = getattr(self, 'module_manager', None)
             if not module_manager:
@@ -5682,7 +5858,10 @@ class EnhancedMainWindow(QMainWindow):
             
             # Record response time analytics
             try:
-                from .tabs.analytics_tab import record_response_time, record_session_message
+                from .tabs.analytics_tab import (
+                    record_response_time,
+                    record_session_message,
+                )
                 model_name = getattr(self, 'current_model_name', 'unknown')
                 record_response_time(elapsed_ms, model_name, len(response))
                 record_session_message(is_user=False)  # AI message
@@ -6368,6 +6547,7 @@ Click the "Learning: ON/OFF" indicator to toggle.<br>
         """Speak text using TTS with voice profile support."""
         try:
             import re
+
             # Clean text for TTS
             clean_text = re.sub(r'<[^>]+>', '', text)  # Remove HTML
             clean_text = re.sub(r'<tool_call>.*?</tool_call>', '', clean_text, flags=re.DOTALL)

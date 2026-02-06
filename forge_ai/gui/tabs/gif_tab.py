@@ -13,16 +13,27 @@ import time
 
 logger = logging.getLogger(__name__)
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QTextEdit, QProgressBar,
-    QMessageBox, QFileDialog, QSpinBox, QGroupBox,
-    QDoubleSpinBox, QListWidget, QListWidgetItem, QLineEdit
-)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtWidgets import (
+    QDoubleSpinBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
 
@@ -41,7 +52,7 @@ class GIFGenerationWorker(QThread):
     progress = pyqtSignal(int, str)
     status = pyqtSignal(str)
     
-    def __init__(self, prompts: List[str], frames_per_prompt: int,
+    def __init__(self, prompts: list[str], frames_per_prompt: int,
                  width: int, height: int, fps: int, loop: bool, parent=None):
         super().__init__(parent)
         self.prompts = prompts
@@ -59,8 +70,9 @@ class GIFGenerationWorker(QThread):
     
     def run(self):
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
             
             self._start_time = time.time()
             self.progress.emit(5, "Starting GIF generation...")
@@ -449,7 +461,7 @@ class GIFTab(QWidget):
         """Display the generated GIF."""
         try:
             from PyQt5.QtGui import QMovie
-            
+
             # Store movie as instance variable to prevent garbage collection
             self._current_movie = QMovie(str(filepath))
             self.result_label.setMovie(self._current_movie)

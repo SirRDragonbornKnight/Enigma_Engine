@@ -10,17 +10,17 @@ Provides ready-made personalities for different use cases:
 - Creative: Imaginative, artistic, idea-generating
 """
 
-from typing import Dict, Any, List
-from pathlib import Path
 import json
+from pathlib import Path
+from typing import Any, Dict, List
 
 
 class Persona:
     """Represents an AI personality template."""
     
     def __init__(self, name: str, description: str, system_prompt: str, 
-                 example_responses: List[Dict[str, str]] = None,
-                 tone: str = "professional", traits: List[str] = None):
+                 example_responses: list[dict[str, str]] = None,
+                 tone: str = "professional", traits: list[str] = None):
         self.name = name
         self.description = description
         self.system_prompt = system_prompt
@@ -28,7 +28,7 @@ class Persona:
         self.tone = tone
         self.traits = traits or []
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert persona to dictionary."""
         return {
             "name": self.name,
@@ -40,7 +40,7 @@ class Persona:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Persona':
+    def from_dict(cls, data: dict[str, Any]) -> 'Persona':
         """Create persona from dictionary."""
         return cls(
             name=data["name"],
@@ -202,17 +202,17 @@ class PersonaManager:
         # Load custom personas
         self.custom_personas = self._load_custom()
     
-    def _load_custom(self) -> Dict[str, Persona]:
+    def _load_custom(self) -> dict[str, Persona]:
         """Load custom personas from storage."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     data = json.load(f)
                 return {
                     name: Persona.from_dict(persona_data)
                     for name, persona_data in data.items()
                 }
-            except (json.JSONDecodeError, IOError, KeyError):
+            except (json.JSONDecodeError, OSError, KeyError):
                 return {}
         return {}
     
@@ -237,7 +237,7 @@ class PersonaManager:
         
         return None
     
-    def list_personas(self) -> Dict[str, Persona]:
+    def list_personas(self) -> dict[str, Persona]:
         """List all available personas."""
         all_personas = PREDEFINED_PERSONAS.copy()
         all_personas.update(self.custom_personas)
@@ -266,7 +266,7 @@ class PersonaManager:
             return persona.system_prompt
         return ""
     
-    def apply_persona_to_config(self, persona_name: str, config: Dict) -> Dict:
+    def apply_persona_to_config(self, persona_name: str, config: dict) -> dict:
         """Apply a persona's settings to a configuration."""
         persona = self.get_persona(persona_name)
         if persona:

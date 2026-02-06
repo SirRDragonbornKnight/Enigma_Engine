@@ -64,27 +64,33 @@ SEE ALSO:
     • docs/HOW_TO_TRAIN.md      - Training guide
     • docs/TRAINING_DATA_FORMAT.md - Data format guide
 """
+import logging  # For log messages
+import math  # For cosine learning rate schedule
+import time  # For timing training
+from dataclasses import dataclass  # For clean config classes
+from pathlib import Path  # For file paths (cross-platform)
+from typing import Any, Callable, Dict, List, Optional, Union  # Type hints
+
 # =============================================================================
 # IMPORTS - What libraries we need
 # =============================================================================
 # PyTorch is the deep learning framework that powers everything
-import torch                          # Main PyTorch library
-import torch.nn as nn                 # Neural network building blocks
-import torch.nn.functional as F       # Functions like cross_entropy loss
-from torch.utils.data import Dataset, DataLoader  # For loading training data
-from torch.amp import autocast, GradScaler        # Mixed precision (faster on GPU)
-import math                           # For cosine learning rate schedule
-import time                           # For timing training
-import logging                        # For log messages
-from pathlib import Path              # For file paths (cross-platform)
-from typing import List, Dict, Any, Optional, Union, Callable  # Type hints
-from dataclasses import dataclass     # For clean config classes
+import torch  # Main PyTorch library
+import torch.nn as nn  # Neural network building blocks
+import torch.nn.functional as F  # Functions like cross_entropy loss
+from torch.amp import GradScaler, autocast  # Mixed precision (faster on GPU)
+from torch.utils.data import DataLoader, Dataset  # For loading training data
+
+from ..config import CONFIG  # → Global settings
+from ..utils.system_messages import (  # → Pretty printing
+    info_msg,
+    system_msg,
+    warning_msg,
+)
 
 # Our own modules
-from .model import create_model, MODEL_PRESETS    # → Creates the neural network
+from .model import MODEL_PRESETS, create_model  # → Creates the neural network
 from .tokenizer import get_tokenizer, train_tokenizer  # → Converts text↔numbers
-from ..config import CONFIG                        # → Global settings
-from ..utils.system_messages import system_msg, info_msg, warning_msg  # → Pretty printing
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +202,7 @@ class TrainingConfig:
             TrainingConfig optimized for current hardware
         """
         try:
-            from .device_profiles import get_device_profiler, DeviceClass
+            from .device_profiles import DeviceClass, get_device_profiler
             
             profiler = get_device_profiler()
             device_class = profiler.classify()
@@ -324,7 +330,7 @@ class TextDataset(Dataset):
 
     def __init__(
         self,
-        texts: List[str],
+        texts: list[str],
         tokenizer: Any,
         max_length: int = 512,
         stride: int = 256
@@ -417,7 +423,7 @@ class TextDataset(Dataset):
         """Return number of training sequences (used by DataLoader)."""
         return len(self.sequences)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         """
         Get a single training example.
         
@@ -503,7 +509,7 @@ class QADataset(Dataset):
 
     def __init__(
         self,
-        texts: List[str],
+        texts: list[str],
         tokenizer: Any,
         max_length: int = 512
     ):
@@ -574,7 +580,7 @@ class QADataset(Dataset):
         """Return number of Q&A examples."""
         return len(self.examples)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         """
         Get a single Q&A training example.
         
@@ -678,7 +684,7 @@ class CosineWarmupScheduler:
         self.min_lr = min_lr
         self.current_step = 0  # Tracks where we are in training
 
-    def step(self):
+    def step(self) -> None:
         """
         Update learning rate for the current step.
         Called once per training step (after optimizer.step()).
@@ -849,11 +855,11 @@ class Trainer:
 
     def train(
         self,
-        texts: List[str],
+        texts: list[str],
         epochs: Optional[int] = None,
         dataset_type: str = "auto",
-        callback: Optional[Callable[[Dict], None]] = None
-    ) -> Dict[str, Any]:
+        callback: Optional[Callable[[dict], None]] = None
+    ) -> dict[str, Any]:
         """
         Train the model on texts.
         
@@ -1242,7 +1248,7 @@ class Trainer:
 
         logger.info(f"Saved checkpoint to {path}")
 
-    def save_model(self, path: Union[str, Path]):
+    def save_model(self, path: Union[str, Path]) -> None:
         """
         Save the trained model weights.
         
@@ -1274,7 +1280,7 @@ def train_model(
     train_tokenizer_first: bool = True,
     force: bool = False,
     **kwargs
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     High-level training function - THE EASY WAY TO TRAIN!
     
@@ -1392,7 +1398,7 @@ def train_model(
     try:
         texts = [data_path.read_text(encoding='utf-8')]
         logger.info(f"Loaded {len(texts[0]):,} characters from {data_path}")
-    except (UnicodeDecodeError, IOError) as e:
+    except (UnicodeDecodeError, OSError) as e:
         raise RuntimeError(f"Failed to read training data: {e}") from e
 
     # ─────────────────────────────────────────────────────────────────
@@ -1450,7 +1456,7 @@ def train_model(
     try:
         trainer.save_model(output_path)
         logger.info(f"Model saved to {output_path}")
-    except (IOError, OSError) as e:
+    except OSError as e:
         raise RuntimeError(f"Failed to save model: {e}") from e
 
     # Save tokenizer alongside model (so they stay together)

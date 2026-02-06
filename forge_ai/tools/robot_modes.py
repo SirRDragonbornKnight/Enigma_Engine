@@ -30,7 +30,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List, Optional, Any, Callable, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ class MovementConstraints:
     max_speed: float = 1.0          # Max speed multiplier (0-1)
     max_acceleration: float = 1.0   # Max acceleration multiplier
     max_range: float = 1.0          # Max movement range multiplier
-    allowed_joints: List[str] = field(default_factory=lambda: ["all"])
-    forbidden_regions: List[Tuple[float, float, float, float, float, float]] = field(default_factory=list)
+    allowed_joints: list[str] = field(default_factory=lambda: ["all"])
+    forbidden_regions: list[tuple[float, float, float, float, float, float]] = field(default_factory=list)
     require_confirmation: bool = False
     
     @staticmethod
@@ -107,7 +107,7 @@ class CameraConfig:
     """Camera configuration for robot."""
     enabled: bool = False
     device_id: int = 0              # Camera device ID
-    resolution: Tuple[int, int] = (640, 480)
+    resolution: tuple[int, int] = (640, 480)
     fps: int = 30
     flip_horizontal: bool = False
     flip_vertical: bool = False
@@ -152,15 +152,15 @@ class RobotModeController:
         self._camera_thread: Optional[threading.Thread] = None
         
         # Sensors
-        self._sensors: Dict[str, SensorConfig] = {}
-        self._sensor_values: Dict[str, float] = {}
+        self._sensors: dict[str, SensorConfig] = {}
+        self._sensor_values: dict[str, float] = {}
         self._sensor_thread: Optional[threading.Thread] = None
         
         # Callbacks
-        self._on_mode_change: List[Callable] = []
-        self._on_estop: List[Callable] = []
-        self._on_camera_frame: List[Callable] = []
-        self._on_sensor_warning: List[Callable] = []
+        self._on_mode_change: list[Callable] = []
+        self._on_estop: list[Callable] = []
+        self._on_camera_frame: list[Callable] = []
+        self._on_sensor_warning: list[Callable] = []
         
         # Locks
         self._mode_lock = threading.Lock()
@@ -168,7 +168,7 @@ class RobotModeController:
         
         # Auto mode state
         self._auto_enabled = False
-        self._auto_context: Dict[str, Any] = {}
+        self._auto_context: dict[str, Any] = {}
     
     @property
     def mode(self) -> RobotMode:
@@ -419,7 +419,7 @@ class RobotModeController:
     
     # ===== Movement Validation =====
     
-    def validate_movement(self, joint: str, position: float, speed: float = 1.0) -> Tuple[bool, str]:
+    def validate_movement(self, joint: str, position: float, speed: float = 1.0) -> tuple[bool, str]:
         """
         Validate if a movement is allowed.
         
@@ -478,7 +478,7 @@ class RobotModeController:
     
     # ===== AI Auto Control =====
     
-    def ai_request(self, action: str, params: Optional[Dict[str, Any]] = None) -> bool:
+    def ai_request(self, action: str, params: Optional[dict[str, Any]] = None) -> bool:
         """
         Handle AI control request.
         

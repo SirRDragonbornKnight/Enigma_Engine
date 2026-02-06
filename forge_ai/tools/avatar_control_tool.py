@@ -4,8 +4,7 @@ Avatar Control Tool Definition
 Allows AI to control avatar through bone animations as a tool call.
 """
 
-from typing import Dict, Any
-
+from typing import Any, Dict
 
 AVATAR_CONTROL_TOOL = {
     "name": "control_avatar_bones",
@@ -55,7 +54,7 @@ AVATAR_CONTROL_TOOL = {
 
 
 def execute_avatar_control(action: str, bone_name: str = None, pitch: float = None,
-                          yaw: float = None, roll: float = None, gesture_name: str = None) -> Dict[str, Any]:
+                          yaw: float = None, roll: float = None, gesture_name: str = None) -> dict[str, Any]:
     """Execute avatar control command.
     
     Args:

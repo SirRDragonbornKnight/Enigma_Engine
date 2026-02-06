@@ -45,10 +45,10 @@ USAGE:
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ class Capability:
     name: str                      # Capability identifier
     display_name: str              # Human-readable name
     description: str               # What this capability does
-    requires_input: List[str]      # Required input types (e.g., "text", "image")
-    produces_output: List[str]     # Output types (e.g., "text", "image")
+    requires_input: list[str]      # Required input types (e.g., "text", "image")
+    produces_output: list[str]     # Output types (e.g., "text", "image")
     category: str = "general"      # Category grouping
 
 
@@ -195,13 +195,13 @@ class ModelCapabilityEntry:
     """Record of a model's capabilities and metadata."""
     
     model_id: str                              # Unique model identifier
-    capabilities: Set[str]                     # Set of capability names
-    metadata: Dict[str, Any] = field(default_factory=dict)  # Model info
-    performance_ratings: Dict[str, float] = field(default_factory=dict)  # Capability performance (0-1)
+    capabilities: set[str]                     # Set of capability names
+    metadata: dict[str, Any] = field(default_factory=dict)  # Model info
+    performance_ratings: dict[str, float] = field(default_factory=dict)  # Capability performance (0-1)
     registered_at: str = field(default_factory=lambda: datetime.now().isoformat())
     last_updated: str = field(default_factory=lambda: datetime.now().isoformat())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "model_id": self.model_id,
@@ -213,7 +213,7 @@ class ModelCapabilityEntry:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ModelCapabilityEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "ModelCapabilityEntry":
         """Create from dictionary."""
         data = data.copy()
         data["capabilities"] = set(data.get("capabilities", []))
@@ -242,8 +242,8 @@ class CapabilityRegistry:
         Args:
             config_path: Path to save/load registry data
         """
-        self._models: Dict[str, ModelCapabilityEntry] = {}
-        self._capabilities: Dict[str, Capability] = BUILT_IN_CAPABILITIES.copy()
+        self._models: dict[str, ModelCapabilityEntry] = {}
+        self._capabilities: dict[str, Capability] = BUILT_IN_CAPABILITIES.copy()
         self._config_path = Path(config_path) if config_path else None
         
         # Load existing registry if available
@@ -257,9 +257,9 @@ class CapabilityRegistry:
     def register_model(
         self,
         model_id: str,
-        capabilities: List[str],
-        metadata: Optional[Dict[str, Any]] = None,
-        performance_ratings: Optional[Dict[str, float]] = None,
+        capabilities: list[str],
+        metadata: Optional[dict[str, Any]] = None,
+        performance_ratings: Optional[dict[str, float]] = None,
         auto_detect: bool = False,
     ) -> None:
         """
@@ -338,7 +338,7 @@ class CapabilityRegistry:
             return False
         return capability in self._models[model_id].capabilities
     
-    def get_capabilities(self, model_id: str) -> List[str]:
+    def get_capabilities(self, model_id: str) -> list[str]:
         """
         Get all capabilities of a model.
         
@@ -356,7 +356,7 @@ class CapabilityRegistry:
         self,
         capability: str,
         min_performance: Optional[float] = None,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Find all models with a specific capability.
         
@@ -385,7 +385,7 @@ class CapabilityRegistry:
     def find_best_model(
         self,
         capability: str,
-        requirements: Optional[Dict[str, Any]] = None,
+        requirements: Optional[dict[str, Any]] = None,
     ) -> Optional[str]:
         """
         Find the best model for a capability based on performance ratings.
@@ -458,7 +458,7 @@ class CapabilityRegistry:
         """
         return self._capabilities.get(name)
     
-    def list_capabilities(self) -> List[str]:
+    def list_capabilities(self) -> list[str]:
         """Get list of all known capabilities."""
         return list(self._capabilities.keys())
     
@@ -466,7 +466,7 @@ class CapabilityRegistry:
     # MODEL INFORMATION
     # -------------------------------------------------------------------------
     
-    def get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
+    def get_model_info(self, model_id: str) -> Optional[dict[str, Any]]:
         """
         Get complete information about a model.
         
@@ -480,7 +480,7 @@ class CapabilityRegistry:
             return None
         return self._models[model_id].to_dict()
     
-    def list_models(self) -> List[str]:
+    def list_models(self) -> list[str]:
         """Get list of all registered models."""
         return list(self._models.keys())
     
@@ -516,8 +516,8 @@ class CapabilityRegistry:
     def _auto_detect_capabilities(
         self,
         model_id: str,
-        metadata: Dict[str, Any],
-    ) -> List[str]:
+        metadata: dict[str, Any],
+    ) -> list[str]:
         """
         Auto-detect capabilities from model metadata.
         
@@ -602,7 +602,7 @@ class CapabilityRegistry:
             return
         
         try:
-            with open(load_path, "r", encoding="utf-8") as f:
+            with open(load_path, encoding="utf-8") as f:
                 data = json.load(f)
             
             # Load models

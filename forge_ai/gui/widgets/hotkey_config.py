@@ -10,14 +10,24 @@ Features:
 """
 
 import logging
-from typing import Dict, Optional, Callable
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
-    QPushButton, QListWidget, QListWidgetItem, QMessageBox,
-    QDialog, QDialogButtonBox, QCheckBox
-)
+from typing import Callable, Dict, Optional
+
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +156,7 @@ class HotkeyConfigWidget(QWidget):
         super().__init__(parent)
         
         self.hotkey_manager = hotkey_manager
-        self.hotkeys: Dict[str, dict] = {}
+        self.hotkeys: dict[str, dict] = {}
         
         self._init_ui()
         self._load_hotkeys()

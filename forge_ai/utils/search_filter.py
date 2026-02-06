@@ -11,15 +11,23 @@ Features:
 Part of the ForgeAI data processing suite.
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
-from typing import (
-    Optional, Dict, Any, List, Callable, TypeVar, Generic,
-    Union, Set, Tuple
-)
-from enum import Enum
 from datetime import datetime
-import logging
+from enum import Enum
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +170,8 @@ class Filter(Generic[T]):
     
     def __init__(self):
         """Initialize filter."""
-        self._conditions: List[FilterCondition] = []
-        self._or_groups: List[List[FilterCondition]] = []
+        self._conditions: list[FilterCondition] = []
+        self._or_groups: list[list[FilterCondition]] = []
         self._current_field: Optional[str] = None
         self._case_sensitive: bool = False
     
@@ -224,11 +232,11 @@ class Filter(Generic[T]):
         """Less than or equal."""
         return self._add_condition(FilterOp.LTE, value)
     
-    def is_in(self, values: List[Any]) -> "Filter[T]":
+    def is_in(self, values: list[Any]) -> "Filter[T]":
         """Value in list."""
         return self._add_condition(FilterOp.IN, values)
     
-    def not_in(self, values: List[Any]) -> "Filter[T]":
+    def not_in(self, values: list[Any]) -> "Filter[T]":
         """Value not in list."""
         return self._add_condition(FilterOp.NIN, values)
     
@@ -256,7 +264,7 @@ class Filter(Generic[T]):
         """Value between range."""
         return self._add_condition(FilterOp.RANGE, [min_val, max_val])
     
-    def apply(self, items: List[T]) -> List[T]:
+    def apply(self, items: list[T]) -> list[T]:
         """Apply filter to items."""
         # Collect all OR groups
         all_groups = self._or_groups.copy()
@@ -306,7 +314,7 @@ class Sorter(Generic[T]):
     
     def __init__(self):
         """Initialize sorter."""
-        self._specs: List[SortSpec] = []
+        self._specs: list[SortSpec] = []
     
     def by(self, field: str, desc: bool = False) -> "Sorter[T]":
         """Sort by field."""
@@ -328,7 +336,7 @@ class Sorter(Generic[T]):
         """Sort descending."""
         return self.by(field, desc=True)
     
-    def apply(self, items: List[T]) -> List[T]:
+    def apply(self, items: list[T]) -> list[T]:
         """Apply sort to items."""
         if not self._specs:
             return items
@@ -392,7 +400,7 @@ class SearchResult(Generic[T]):
     """A search result with score."""
     item: T
     score: float
-    matches: Dict[str, List[str]] = field(default_factory=dict)
+    matches: dict[str, list[str]] = field(default_factory=dict)
 
 
 class TextSearch(Generic[T]):
@@ -406,8 +414,8 @@ class TextSearch(Generic[T]):
     
     def __init__(
         self,
-        fields: List[str],
-        field_weights: Optional[Dict[str, float]] = None,
+        fields: list[str],
+        field_weights: Optional[dict[str, float]] = None,
         min_score: float = 0.0
     ):
         """
@@ -425,10 +433,10 @@ class TextSearch(Generic[T]):
     def search(
         self,
         query: str,
-        items: List[T],
+        items: list[T],
         limit: Optional[int] = None,
         fuzzy: bool = False
-    ) -> List[SearchResult[T]]:
+    ) -> list[SearchResult[T]]:
         """
         Search items for query.
         
@@ -466,7 +474,7 @@ class TextSearch(Generic[T]):
         
         return results
     
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """Tokenize text into search terms."""
         # Lowercase and split on non-alphanumeric
         text = text.lower()
@@ -476,12 +484,12 @@ class TextSearch(Generic[T]):
     def _score_item(
         self,
         item: T,
-        query_terms: List[str],
+        query_terms: list[str],
         fuzzy: bool
-    ) -> Tuple[float, Dict[str, List[str]]]:
+    ) -> tuple[float, dict[str, list[str]]]:
         """Score an item against query terms."""
         total_score = 0.0
-        all_matches: Dict[str, List[str]] = {}
+        all_matches: dict[str, list[str]] = {}
         
         for field_name in self.fields:
             field_value = self._get_field(item, field_name)
@@ -575,7 +583,7 @@ class QueryParser:
     QUOTED = re.compile(r'"([^"]*)"')
     OPERATOR = re.compile(r'(\w+)(>=|<=|!=|>|<)(\S+)')
     
-    def parse(self, query: str) -> Dict[str, Any]:
+    def parse(self, query: str) -> dict[str, Any]:
         """
         Parse query string.
         
@@ -625,7 +633,7 @@ class QueryParser:
         
         return result
     
-    def to_filter(self, parsed: Dict[str, Any]) -> Filter:
+    def to_filter(self, parsed: dict[str, Any]) -> Filter:
         """Convert parsed query to Filter."""
         f = Filter()
         
@@ -664,7 +672,7 @@ class QueryParser:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-def filter_items(items: List[T], **conditions) -> List[T]:
+def filter_items(items: list[T], **conditions) -> list[T]:
     """
     Quick filter function.
     
@@ -681,7 +689,7 @@ def filter_items(items: List[T], **conditions) -> List[T]:
     return f.apply(items)
 
 
-def sort_items(items: List[T], *fields: str, desc: bool = False) -> List[T]:
+def sort_items(items: list[T], *fields: str, desc: bool = False) -> list[T]:
     """
     Quick sort function.
     
@@ -700,11 +708,11 @@ def sort_items(items: List[T], *fields: str, desc: bool = False) -> List[T]:
 
 
 def search_items(
-    items: List[T],
+    items: list[T],
     query: str,
-    fields: List[str],
+    fields: list[str],
     limit: int = 20
-) -> List[T]:
+) -> list[T]:
     """
     Quick search function.
     

@@ -19,11 +19,12 @@ Features:
 This is the architecture used by LLaMA, Mistral, and other top models.
 """
 import math
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple
-from dataclasses import dataclass
 
 
 @dataclass
@@ -364,7 +365,7 @@ class ForgeModel(nn.Module):
         targets: Optional[torch.Tensor] = None,
         use_cache: bool = False,
         start_pos: int = 0,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    ) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Forward pass.
 

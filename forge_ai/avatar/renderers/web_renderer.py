@@ -4,12 +4,12 @@ Web Avatar Renderer
 Renders avatar in web browser via WebSocket for web dashboard integration.
 """
 
-from typing import Optional, Dict
 import json
+from typing import Dict, Optional
 
+from ..avatar_identity import AvatarAppearance
 from .base import BaseRenderer
 from .default_sprites import get_sprite_data_url
-from ..avatar_identity import AvatarAppearance
 
 
 class WebAvatarRenderer(BaseRenderer):
@@ -63,7 +63,7 @@ class WebAvatarRenderer(BaseRenderer):
                 "position": {"x": x, "y": y}
             })
     
-    def render_frame(self, animation_data: Optional[Dict] = None) -> None:
+    def render_frame(self, animation_data: Optional[dict] = None) -> None:
         """
         Render a single frame.
         

@@ -15,13 +15,14 @@ Tools:
   - dnd_encounter: Generate D&D encounter
 """
 
-import os
 import json
-import random
 import logging
-from pathlib import Path
+import os
+import random
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from .tool_registry import Tool
 
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ class TriviaGameTool(Tool):
         ],
     }
     
-    def execute(self, category: str = None, difficulty: str = "medium", **kwargs) -> Dict[str, Any]:
+    def execute(self, category: str = None, difficulty: str = "medium", **kwargs) -> dict[str, Any]:
         try:
             # Select category
             if not category or category == "random":
@@ -146,7 +147,7 @@ class WordGameTool(Tool):
         "hard": ["algorithm", "telescope", "philosophy", "electricity", "mysterious", "adventure"],
     }
     
-    def execute(self, game_type: str = "scramble", difficulty: str = "medium", **kwargs) -> Dict[str, Any]:
+    def execute(self, game_type: str = "scramble", difficulty: str = "medium", **kwargs) -> dict[str, Any]:
         try:
             words = self.WORDS.get(difficulty, self.WORDS["medium"])
             word = random.choice(words)
@@ -211,7 +212,7 @@ class NumberGuessTool(Tool):
     # Store active games
     _active_games = {}
     
-    def execute(self, min_num: int = 1, max_num: int = 100, guess: int = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, min_num: int = 1, max_num: int = 100, guess: int = None, **kwargs) -> dict[str, Any]:
         try:
             game_id = "current"
             
@@ -277,28 +278,28 @@ class CharacterManager:
     """Manages AI characters/personas."""
     
     def __init__(self):
-        self.characters: Dict[str, Dict] = {}
+        self.characters: dict[str, dict] = {}
         self._load_characters()
     
     def _load_characters(self):
         for file in CHARACTERS_DIR.glob("*.json"):
             try:
-                with open(file, 'r') as f:
+                with open(file) as f:
                     char = json.load(f)
                     self.characters[char['name'].lower()] = char
-            except (json.JSONDecodeError, IOError, KeyError) as e:
+            except (json.JSONDecodeError, OSError, KeyError) as e:
                 logger.warning(f"Could not load character {file}: {e}")
     
-    def save_character(self, character: Dict):
+    def save_character(self, character: dict):
         name = character['name'].lower()
         self.characters[name] = character
         with open(CHARACTERS_DIR / f"{name}.json", 'w') as f:
             json.dump(character, f, indent=2)
     
-    def get_character(self, name: str) -> Optional[Dict]:
+    def get_character(self, name: str) -> Optional[dict]:
         return self.characters.get(name.lower())
     
-    def list_characters(self) -> List[str]:
+    def list_characters(self) -> list[str]:
         return list(self.characters.keys())
     
     def delete_character(self, name: str):
@@ -324,7 +325,7 @@ class CharacterCreateTool(Tool):
     }
     
     def execute(self, name: str, personality: str, backstory: str = "",
-                speaking_style: str = "normal", traits: str = "", **kwargs) -> Dict[str, Any]:
+                speaking_style: str = "normal", traits: str = "", **kwargs) -> dict[str, Any]:
         try:
             trait_list = [t.strip() for t in traits.split(',')] if traits else []
             
@@ -358,7 +359,7 @@ class CharacterListTool(Tool):
     description = "List all created AI characters."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             manager = CharacterManager()
             characters = []
@@ -392,7 +393,7 @@ class CharacterChatTool(Tool):
         "message": "Message to respond to as the character",
     }
     
-    def execute(self, character_name: str, message: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, character_name: str, message: str, **kwargs) -> dict[str, Any]:
         try:
             manager = CharacterManager()
             character = manager.get_character(character_name)
@@ -431,27 +432,27 @@ class StoryManager:
     """Manages interactive stories."""
     
     def __init__(self):
-        self.stories: Dict[str, Dict] = {}
+        self.stories: dict[str, dict] = {}
         self._load_stories()
     
     def _load_stories(self):
         for file in STORIES_DIR.glob("*.json"):
             try:
-                with open(file, 'r') as f:
+                with open(file) as f:
                     story = json.load(f)
                     self.stories[story['id']] = story
-            except (json.JSONDecodeError, IOError, KeyError) as e:
+            except (json.JSONDecodeError, OSError, KeyError) as e:
                 logger.warning(f"Could not load story {file}: {e}")
     
-    def save_story(self, story: Dict):
+    def save_story(self, story: dict):
         self.stories[story['id']] = story
         with open(STORIES_DIR / f"{story['id']}.json", 'w') as f:
             json.dump(story, f, indent=2)
     
-    def get_story(self, story_id: str) -> Optional[Dict]:
+    def get_story(self, story_id: str) -> Optional[dict]:
         return self.stories.get(story_id)
     
-    def list_stories(self) -> List[Dict]:
+    def list_stories(self) -> list[dict]:
         return [{"id": s['id'], "title": s['title'], "genre": s.get('genre')} 
                 for s in self.stories.values()]
 
@@ -479,7 +480,7 @@ class StoryGenerateTool(Tool):
     }
     
     def execute(self, title: str, genre: str = "fantasy", setting: str = "",
-                protagonist: str = "our hero", **kwargs) -> Dict[str, Any]:
+                protagonist: str = "our hero", **kwargs) -> dict[str, Any]:
         try:
             story_id = f"story_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
@@ -523,7 +524,7 @@ class StoryGenerateTool(Tool):
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _generate_choices(self, genre: str) -> List[Dict]:
+    def _generate_choices(self, genre: str) -> list[dict]:
         choices_by_genre = {
             "fantasy": [
                 {"id": "A", "text": "Follow the mysterious light into the forest"},
@@ -569,7 +570,7 @@ class StoryContinueTool(Tool):
         "choice": "The choice to make (A, B, C, etc.)",
     }
     
-    def execute(self, story_id: str, choice: str, **kwargs) -> Dict[str, Any]:
+    def execute(self, story_id: str, choice: str, **kwargs) -> dict[str, Any]:
         try:
             manager = StoryManager()
             story = manager.get_story(story_id)
@@ -603,7 +604,7 @@ class StoryContinueTool(Tool):
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def _generate_continuation(self, story: Dict, choice: str) -> Dict:
+    def _generate_continuation(self, story: dict, choice: str) -> dict:
         """Generate story continuation based on choice using AI."""
         protagonist = story.get('protagonist', 'the hero')
         setting = story.get('setting', 'a mysterious land')
@@ -680,7 +681,7 @@ class DnDRollTool(Tool):
         "animate": "Generate animated dice roll GIF (default: True)",
     }
     
-    def execute(self, dice: str, reason: str = "", animate: bool = True, **kwargs) -> Dict[str, Any]:
+    def execute(self, dice: str, reason: str = "", animate: bool = True, **kwargs) -> dict[str, Any]:
         try:
             import re
             
@@ -764,10 +765,11 @@ class DnDRollTool(Tool):
     def _generate_dice_animation(self, die_size: int, final_rolls: list, total: int, crit: str = None) -> str:
         """Generate an animated GIF of dice rolling."""
         try:
-            from PIL import Image, ImageDraw, ImageFont
-            from pathlib import Path
             import time
-            
+            from pathlib import Path
+
+            from PIL import Image, ImageDraw, ImageFont
+
             # Output directory
             output_dir = Path("outputs")
             output_dir.mkdir(exist_ok=True)
@@ -797,7 +799,7 @@ class DnDRollTool(Tool):
                 font = ImageFont.truetype("arial.ttf", 24)
                 font_large = ImageFont.truetype("arial.ttf", 48)
                 font_small = ImageFont.truetype("arial.ttf", 14)
-            except (IOError, OSError):
+            except OSError:
                 # Font file not found, use default
                 font = ImageFont.load_default()
                 font_large = font
@@ -933,7 +935,7 @@ class DnDCharacterTool(Tool):
         "default": ["Zephyr", "Shadow", "Storm", "Raven", "Phoenix", "Wolf"],
     }
     
-    def execute(self, level: int = 1, race: str = None, char_class: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, level: int = 1, race: str = None, char_class: str = None, **kwargs) -> dict[str, Any]:
         try:
             # Select race and class
             if not race:
@@ -1028,7 +1030,7 @@ class DnDEncounterTool(Tool):
     }
     
     def execute(self, difficulty: str = "medium", environment: str = None, 
-                party_size: int = 4, **kwargs) -> Dict[str, Any]:
+                party_size: int = 4, **kwargs) -> dict[str, Any]:
         try:
             if not environment:
                 environment = random.choice(list(self.ENCOUNTERS.keys()))

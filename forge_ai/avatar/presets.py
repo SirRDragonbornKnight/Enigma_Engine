@@ -5,11 +5,11 @@ Save, load, and share complete avatar configurations.
 Presets include colors, expressions, style, and accessories.
 """
 
-from dataclasses import dataclass, asdict, field
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 import json
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from .avatar_identity import AvatarAppearance
 
@@ -28,7 +28,7 @@ class AvatarPreset:
     # Metadata
     created_at: str = ""
     version: str = "1.0"
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     
     # Preview image (base64 or path)
     preview_image: str = ""
@@ -41,7 +41,7 @@ class AvatarPreset:
         if self.appearance is None:
             self.appearance = AvatarAppearance()
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "name": self.name,
@@ -55,7 +55,7 @@ class AvatarPreset:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AvatarPreset':
+    def from_dict(cls, data: dict[str, Any]) -> 'AvatarPreset':
         """Create from dictionary."""
         appearance_data = data.get("appearance", {})
         appearance = AvatarAppearance.from_dict(appearance_data) if appearance_data else AvatarAppearance()
@@ -248,9 +248,9 @@ class PresetManager:
             self.presets_dir = Path(CONFIG.get("data_dir", "data")) / "avatar" / "presets"
         
         self.presets_dir.mkdir(parents=True, exist_ok=True)
-        self._cache: Dict[str, AvatarPreset] = {}
+        self._cache: dict[str, AvatarPreset] = {}
     
-    def list_presets(self, include_builtin: bool = True) -> List[str]:
+    def list_presets(self, include_builtin: bool = True) -> list[str]:
         """
         List available preset names.
         
@@ -298,7 +298,7 @@ class PresetManager:
         preset_path = self.presets_dir / f"{name}.json"
         if preset_path.exists():
             try:
-                with open(preset_path, 'r', encoding='utf-8') as f:
+                with open(preset_path, encoding='utf-8') as f:
                     data = json.load(f)
                 preset = AvatarPreset.from_dict(data)
                 self._cache[name] = preset
@@ -313,7 +313,7 @@ class PresetManager:
         name: str, 
         appearance: AvatarAppearance,
         description: str = "",
-        tags: Optional[List[str]] = None
+        tags: Optional[list[str]] = None
     ) -> bool:
         """
         Save an appearance as a preset.
@@ -412,7 +412,7 @@ class PresetManager:
             True if imported
         """
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, encoding='utf-8') as f:
                 data = json.load(f)
             
             preset = AvatarPreset.from_dict(data)
@@ -433,7 +433,7 @@ class PresetManager:
             print(f"[PresetManager] Import error: {e}")
             return False
     
-    def get_presets_by_tag(self, tag: str) -> List[AvatarPreset]:
+    def get_presets_by_tag(self, tag: str) -> list[AvatarPreset]:
         """
         Get presets with a specific tag.
         

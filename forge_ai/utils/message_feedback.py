@@ -82,7 +82,7 @@ class MessageReaction:
     reaction_type: ReactionType
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "message_id": self.message_id,
             "reaction_type": self.reaction_type.value,
@@ -90,7 +90,7 @@ class MessageReaction:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MessageReaction':
+    def from_dict(cls, data: dict[str, Any]) -> MessageReaction:
         return cls(
             message_id=data["message_id"],
             reaction_type=ReactionType(data["reaction_type"]),
@@ -108,10 +108,10 @@ class MessageFeedback:
     rating: int = 0
     
     # Reaction
-    reaction: Optional[ReactionType] = None
+    reaction: ReactionType | None = None
     
     # Categories that apply
-    categories: List[str] = field(default_factory=list)
+    categories: list[str] = field(default_factory=list)
     
     # Freeform comment
     comment: str = ""
@@ -125,14 +125,14 @@ class MessageFeedback:
     # Metadata
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         if self.reaction:
             data["reaction"] = self.reaction.value
         return data
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'MessageFeedback':
+    def from_dict(cls, data: dict[str, Any]) -> MessageFeedback:
         if "reaction" in data and data["reaction"]:
             data["reaction"] = ReactionType(data["reaction"])
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
@@ -170,16 +170,16 @@ class FeedbackStats:
     stars: int = 0
     
     # Rating distribution
-    rating_counts: Dict[int, int] = field(default_factory=dict)
+    rating_counts: dict[int, int] = field(default_factory=dict)
     average_rating: float = 0.0
     
     # Category counts
-    category_counts: Dict[str, int] = field(default_factory=dict)
+    category_counts: dict[str, int] = field(default_factory=dict)
     
     # Ratio
     positive_ratio: float = 0.0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -188,7 +188,7 @@ class FeedbackManager:
     Manage message feedback and reactions.
     """
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Initialize feedback manager.
         
@@ -201,8 +201,8 @@ class FeedbackManager:
         self._feedback_file = self._data_path / "feedback.json"
         self._reactions_file = self._data_path / "reactions.json"
         
-        self._feedback: Dict[str, MessageFeedback] = {}
-        self._reactions: Dict[str, List[MessageReaction]] = {}  # message_id -> reactions
+        self._feedback: dict[str, MessageFeedback] = {}
+        self._reactions: dict[str, list[MessageReaction]] = {}  # message_id -> reactions
         
         self._load_data()
     
@@ -211,7 +211,7 @@ class FeedbackManager:
         # Load feedback
         if self._feedback_file.exists():
             try:
-                with open(self._feedback_file, 'r', encoding='utf-8') as f:
+                with open(self._feedback_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for fb_data in data.get("feedback", []):
                         fb = MessageFeedback.from_dict(fb_data)
@@ -222,7 +222,7 @@ class FeedbackManager:
         # Load reactions
         if self._reactions_file.exists():
             try:
-                with open(self._reactions_file, 'r', encoding='utf-8') as f:
+                with open(self._reactions_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for msg_id, reactions_data in data.get("reactions", {}).items():
                         self._reactions[msg_id] = [
@@ -299,7 +299,7 @@ class FeedbackManager:
         
         return True  # Already exists, not toggled
     
-    def get_reactions(self, message_id: str) -> List[MessageReaction]:
+    def get_reactions(self, message_id: str) -> list[MessageReaction]:
         """Get all reactions for a message."""
         return self._reactions.get(message_id, [])
     
@@ -307,8 +307,8 @@ class FeedbackManager:
         self,
         message_id: str,
         rating: int = 0,
-        reaction: Optional[ReactionType] = None,
-        categories: Optional[List[str]] = None,
+        reaction: ReactionType | None = None,
+        categories: list[str] | None = None,
         comment: str = "",
         conversation_id: str = "",
         prompt: str = "",
@@ -356,11 +356,11 @@ class FeedbackManager:
         self._save_data()
         return feedback
     
-    def get_feedback(self, feedback_id: str) -> Optional[MessageFeedback]:
+    def get_feedback(self, feedback_id: str) -> MessageFeedback | None:
         """Get feedback by ID."""
         return self._feedback.get(feedback_id)
     
-    def get_message_feedback(self, message_id: str) -> List[MessageFeedback]:
+    def get_message_feedback(self, message_id: str) -> list[MessageFeedback]:
         """Get all feedback for a message."""
         return [fb for fb in self._feedback.values() if fb.message_id == message_id]
     
@@ -426,22 +426,22 @@ class FeedbackManager:
         
         return stats
     
-    def get_positive_feedback(self, limit: int = 100) -> List[MessageFeedback]:
+    def get_positive_feedback(self, limit: int = 100) -> list[MessageFeedback]:
         """Get positive feedback entries."""
         positive = [fb for fb in self._feedback.values() if fb.is_positive]
         return sorted(positive, key=lambda f: f.created_at, reverse=True)[:limit]
     
-    def get_negative_feedback(self, limit: int = 100) -> List[MessageFeedback]:
+    def get_negative_feedback(self, limit: int = 100) -> list[MessageFeedback]:
         """Get negative feedback entries."""
         negative = [fb for fb in self._feedback.values() if fb.is_negative]
         return sorted(negative, key=lambda f: f.created_at, reverse=True)[:limit]
     
     def export_training_data(
         self,
-        output_path: Optional[Path] = None,
+        output_path: Path | None = None,
         min_rating: int = 4,
         include_negative: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Export feedback data for training.
         
@@ -506,9 +506,9 @@ class FeedbackManager:
         
         return training_data
     
-    def get_model_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_model_stats(self) -> dict[str, dict[str, Any]]:
         """Get feedback stats grouped by model."""
-        model_stats: Dict[str, Dict[str, Any]] = {}
+        model_stats: dict[str, dict[str, Any]] = {}
         
         for fb in self._feedback.values():
             if not fb.model_name:
@@ -573,10 +573,10 @@ class FeedbackManager:
 
 
 # Singleton instance
-_feedback_instance: Optional[FeedbackManager] = None
+_feedback_instance: FeedbackManager | None = None
 
 
-def get_feedback_manager(data_path: Optional[Path] = None) -> FeedbackManager:
+def get_feedback_manager(data_path: Path | None = None) -> FeedbackManager:
     """Get or create the singleton feedback manager."""
     global _feedback_instance
     if _feedback_instance is None:

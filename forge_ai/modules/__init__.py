@@ -52,19 +52,33 @@ Conflict Prevention:
     - embedding_local / embedding_api
 """
 
-from .manager import ModuleManager, Module, ModuleState, ModuleCategory, ModuleInfo, ModuleHealth, get_manager, set_manager
+from .docs import ModuleDocGenerator
+from .manager import (
+    Module,
+    ModuleCategory,
+    ModuleHealth,
+    ModuleInfo,
+    ModuleManager,
+    ModuleState,
+    get_manager,
+    set_manager,
+)
 from .registry import (
     MODULE_REGISTRY,
     get_module,
-    list_modules,
     list_by_category,
-    list_local_modules,
     list_cloud_modules,
-    register_all
+    list_local_modules,
+    list_modules,
+    register_all,
 )
-from .sandbox import ModuleSandbox, SandboxConfig, SandboxViolationError, create_default_sandbox_config
-from .docs import ModuleDocGenerator
-from .updater import ModuleUpdater, ModuleUpdate
+from .sandbox import (
+    ModuleSandbox,
+    SandboxConfig,
+    SandboxViolationError,
+    create_default_sandbox_config,
+)
+from .updater import ModuleUpdate, ModuleUpdater
 
 __all__ = [
     # Core classes

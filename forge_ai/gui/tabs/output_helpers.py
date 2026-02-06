@@ -10,12 +10,12 @@ Provides common utilities for:
 import os
 import sys
 from pathlib import Path
-from typing import Union, Optional, Tuple, Any
+from typing import Any, Optional, Tuple, Union
 
 try:
-    from PyQt5.QtWidgets import QCheckBox, QHBoxLayout  # type: ignore[import]
     from PyQt5.QtCore import QUrl  # type: ignore[import]
     from PyQt5.QtGui import QDesktopServices  # type: ignore[import]
+    from PyQt5.QtWidgets import QCheckBox, QHBoxLayout  # type: ignore[import]
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -68,7 +68,7 @@ def open_folder(folder_path: Union[str, Path]) -> None:
             subprocess.run(['xdg-open', str(folder)])
 
 
-def create_auto_open_options(parent: Any) -> Tuple[Any, Any, Any]:
+def create_auto_open_options(parent: Any) -> tuple[Any, Any, Any]:
     """
     Create auto-open checkboxes for generation tabs.
     

@@ -9,11 +9,11 @@ This subpackage contains modular neural network components:
 - experts.py: MoE, LoRA, and advanced components
 """
 
-from .attention import MultiHeadAttention, GroupedQueryAttention, SlidingWindowAttention
-from .activations import SwiGLU, GeGLU, ReGLU, FeedForward
-from .normalization import RMSNorm, AdaptiveRMSNorm
-from .embeddings import RotaryEmbedding, SinusoidalEmbedding, LearnedEmbedding
-from .experts import LoRALayer, MixtureOfExperts, AdaptiveLayerNorm, MultiQueryAttention
+from .activations import FeedForward, GeGLU, ReGLU, SwiGLU
+from .attention import GroupedQueryAttention, MultiHeadAttention, SlidingWindowAttention
+from .embeddings import LearnedEmbedding, RotaryEmbedding, SinusoidalEmbedding
+from .experts import AdaptiveLayerNorm, LoRALayer, MixtureOfExperts, MultiQueryAttention
+from .normalization import AdaptiveRMSNorm, RMSNorm
 
 __all__ = [
     # Attention

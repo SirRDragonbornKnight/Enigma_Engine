@@ -46,27 +46,41 @@ Exporting from Unreal Engine:
 """
 
 import os
+import queue
 import sys
+import threading
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, Dict, List, Callable, Any, Tuple
-import threading
-import queue
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Check for Panda3D
 try:
-    from direct.showbase.ShowBase import ShowBase
     from direct.actor.Actor import Actor
+    from direct.interval.IntervalGlobal import Func, Sequence, Wait
+    from direct.showbase.ShowBase import ShowBase
     from direct.task import Task
-    from direct.interval.IntervalGlobal import Sequence, Func, Wait
     from panda3d.core import (
-        WindowProperties, FrameBufferProperties, GraphicsPipe,
-        GraphicsOutput, Texture, PNMImage, NodePath,
-        AmbientLight, DirectionalLight, PointLight,
-        TransparencyAttrib, LColor, LVector3, LPoint3,
-        loadPrcFileData, Camera, OrthographicLens, PerspectiveLens,
-        CardMaker, BitMask32
+        AmbientLight,
+        BitMask32,
+        Camera,
+        CardMaker,
+        DirectionalLight,
+        FrameBufferProperties,
+        GraphicsOutput,
+        GraphicsPipe,
+        LColor,
+        LPoint3,
+        LVector3,
+        NodePath,
+        OrthographicLens,
+        PerspectiveLens,
+        PNMImage,
+        PointLight,
+        Texture,
+        TransparencyAttrib,
+        WindowProperties,
+        loadPrcFileData,
     )
     HAS_PANDA3D = True
 except ImportError:
@@ -75,9 +89,9 @@ except ImportError:
 
 # PyQt integration
 try:
-    from PyQt5.QtCore import QObject, QTimer, pyqtSignal, Qt, QThread
+    from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal
     from PyQt5.QtGui import QImage, QPixmap
-    from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout
+    from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
     HAS_PYQT = True
 except ImportError:
     HAS_PYQT = False
@@ -123,13 +137,13 @@ class Avatar3DAnimator:
         self.height = height
         
         # Animation storage
-        self._animations: Dict[str, Animation3DClip] = {}
-        self._state_animations: Dict[Animation3DState, str] = {}
+        self._animations: dict[str, Animation3DClip] = {}
+        self._state_animations: dict[Animation3DState, str] = {}
         
         # State
         self._current_state = Animation3DState.IDLE
         self._current_animation: Optional[str] = None
-        self._gesture_queue: List[str] = []
+        self._gesture_queue: list[str] = []
         self._return_state = Animation3DState.IDLE
         
         # Panda3D components (initialized in separate thread)
@@ -357,7 +371,7 @@ class Avatar3DAnimator:
         except Exception as e:
             print(f"[3D Animator] Failed to load model: {e}")
     
-    def _do_play_animation(self, args: Tuple[str, bool, float]):
+    def _do_play_animation(self, args: tuple[str, bool, float]):
         """Play animation in Panda3D thread."""
         anim_name, loop, blend = args
         
@@ -495,8 +509,8 @@ class Avatar3DAnimator:
         if gesture_name in self._animations:
             self._gesture_queue.append(gesture_name)
     
-    def set_camera(self, position: Tuple[float, float, float], 
-                   look_at: Tuple[float, float, float] = (0, 0, 1)):
+    def set_camera(self, position: tuple[float, float, float], 
+                   look_at: tuple[float, float, float] = (0, 0, 1)):
         """Set camera position and target."""
         self._command_queue.put(("set_camera", (position, look_at)))
     
@@ -532,7 +546,7 @@ class Avatar3DAnimator:
         """Get current animation state."""
         return self._current_state
     
-    def get_available_animations(self) -> List[str]:
+    def get_available_animations(self) -> list[str]:
         """Get list of loaded animations."""
         return list(self._animations.keys())
 
@@ -600,7 +614,7 @@ class AI3DAvatarController:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-def create_3d_avatar(model_path: str, width: int = 512, height: int = 512) -> Tuple[Avatar3DAnimator, AI3DAvatarController]:
+def create_3d_avatar(model_path: str, width: int = 512, height: int = 512) -> tuple[Avatar3DAnimator, AI3DAvatarController]:
     """
     Convenience function to create a 3D avatar system.
     

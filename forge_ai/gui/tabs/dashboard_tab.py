@@ -12,23 +12,35 @@ Features:
   - Pi-friendly - no AI dependencies
 """
 
-import os
 import json
+import os
 import platform
-import psutil
-from pathlib import Path
-from datetime import datetime
 from collections import deque
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QGroupBox, QProgressBar, QScrollArea,
-    QSizePolicy, QSpacerItem, QMessageBox, QInputDialog, QLineEdit
-)
+from datetime import datetime
+from pathlib import Path
+
+import psutil
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPainterPath
+from PyQt5.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt5.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpacerItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ...config import CONFIG
-
 
 # === Storage for dashboard settings ===
 DASHBOARD_DIR = Path.home() / ".forge_ai" / "dashboard"
@@ -719,7 +731,7 @@ class DashboardTab(QWidget):
         try:
             temp_path = Path("/sys/class/thermal/thermal_zone0/temp")
             if temp_path.exists():
-                with open(temp_path, 'r') as f:
+                with open(temp_path) as f:
                     return float(f.read().strip()) / 1000
             
             temps = psutil.sensors_temperatures()

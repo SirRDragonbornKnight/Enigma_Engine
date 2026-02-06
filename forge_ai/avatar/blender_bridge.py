@@ -39,11 +39,10 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Tuple
 from queue import Queue
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import CONFIG
-
 
 # Default connection settings
 DEFAULT_HOST = "127.0.0.1"
@@ -92,9 +91,9 @@ class BlenderModelInfo:
     """Information about the loaded Blender model."""
     name: str = ""
     filepath: str = ""
-    bones: List[str] = field(default_factory=list)
-    shape_keys: List[str] = field(default_factory=list)
-    animations: List[str] = field(default_factory=list)
+    bones: list[str] = field(default_factory=list)
+    shape_keys: list[str] = field(default_factory=list)
+    animations: list[str] = field(default_factory=list)
     has_armature: bool = False
     vertex_count: int = 0
 
@@ -109,13 +108,13 @@ class BlenderBridgeConfig:
     command_timeout: float = 5.0
     
     # Expression mappings (ForgeAI expression -> Blender shape keys)
-    expression_mappings: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    expression_mappings: dict[str, dict[str, float]] = field(default_factory=dict)
     
     # Viseme mappings (phoneme -> shape key weights)
-    viseme_mappings: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    viseme_mappings: dict[str, dict[str, float]] = field(default_factory=dict)
     
     # Bone mappings (standard name -> model-specific name)
-    bone_mappings: Dict[str, str] = field(default_factory=dict)
+    bone_mappings: dict[str, str] = field(default_factory=dict)
 
 
 class BlenderBridge:
@@ -141,17 +140,17 @@ class BlenderBridge:
         
         self._command_queue: Queue = Queue()
         self._response_queue: Queue = Queue()
-        self._pending_responses: Dict[str, Any] = {}
+        self._pending_responses: dict[str, Any] = {}
         
         self._model_info: Optional[BlenderModelInfo] = None
         self._current_expression = "neutral"
-        self._current_pose: Dict[str, Dict[str, float]] = {}
+        self._current_pose: dict[str, dict[str, float]] = {}
         
         # Callbacks
-        self._on_connected: List[Callable] = []
-        self._on_disconnected: List[Callable] = []
-        self._on_model_loaded: List[Callable] = []
-        self._on_error: List[Callable] = []
+        self._on_connected: list[Callable] = []
+        self._on_disconnected: list[Callable] = []
+        self._on_model_loaded: list[Callable] = []
+        self._on_error: list[Callable] = []
         
         # Load default mappings
         self._load_default_mappings()
@@ -440,7 +439,7 @@ class BlenderBridge:
             return True
         return False
     
-    def get_bones(self) -> List[str]:
+    def get_bones(self) -> list[str]:
         """Get list of bones in current armature."""
         if self._model_info:
             return self._model_info.bones
@@ -450,7 +449,7 @@ class BlenderBridge:
             return response.get("data", {}).get("bones", [])
         return []
     
-    def get_shape_keys(self) -> List[str]:
+    def get_shape_keys(self) -> list[str]:
         """Get list of shape keys (blend shapes)."""
         if self._model_info:
             return self._model_info.shape_keys

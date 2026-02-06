@@ -33,11 +33,11 @@ Usage:
 """
 
 import gc
-import time
 import logging
+import time
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -168,8 +168,12 @@ class GenerationProvider(ABC):
         
         try:
             from ...builtin import (
-                BuiltinImageGen, BuiltinCodeGen, BuiltinVideoGen,
-                BuiltinTTS, BuiltinEmbeddings, Builtin3DGen
+                Builtin3DGen,
+                BuiltinCodeGen,
+                BuiltinEmbeddings,
+                BuiltinImageGen,
+                BuiltinTTS,
+                BuiltinVideoGen,
             )
             
             builtin_map = {
@@ -237,7 +241,7 @@ class GenerationProvider(ABC):
             logger.error(f"Error unloading {self.DISPLAY_NAME}: {e}")
             return False
     
-    def generate(self, **kwargs) -> Dict[str, Any]:
+    def generate(self, **kwargs) -> dict[str, Any]:
         """
         Generate content.
         
@@ -281,7 +285,7 @@ class GenerationProvider(ABC):
     def _get_api_key(self) -> Optional[str]:
         """Get API key from config or environment."""
         import os
-        
+
         # Check config first
         if "api_key" in self.config:
             return self.config["api_key"]
@@ -292,7 +296,7 @@ class GenerationProvider(ABC):
         
         return None
     
-    def _validate_inputs(self, **kwargs) -> Dict[str, Any]:
+    def _validate_inputs(self, **kwargs) -> dict[str, Any]:
         """
         Validate generation inputs.
         
@@ -328,7 +332,7 @@ class GenerationProvider(ABC):
         pass
     
     @abstractmethod
-    def _do_generate(self, **kwargs) -> Dict[str, Any]:
+    def _do_generate(self, **kwargs) -> dict[str, Any]:
         """
         Actual generation implementation.
         
@@ -352,7 +356,7 @@ class GenerationProvider(ABC):
         return output_dir / filename
     
     @classmethod
-    def get_info(cls) -> Dict[str, Any]:
+    def get_info(cls) -> dict[str, Any]:
         """Get provider information for UI."""
         return {
             "name": cls.NAME,
@@ -396,7 +400,7 @@ class ProviderRegistry:
         name = getattr(provider_class, 'NAME', provider_class.__name__)
         self._providers[provider_type][name] = provider_class
     
-    def get_providers(self, provider_type: str) -> Dict[str, type]:
+    def get_providers(self, provider_type: str) -> dict[str, type]:
         """Get all registered providers for a type."""
         return self._providers.get(provider_type, {})
     

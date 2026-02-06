@@ -6,10 +6,10 @@ Checks if required dependencies (Python modules and CLI commands) are available
 for tool execution. Provides installation instructions when dependencies are missing.
 """
 
+import importlib
 import logging
 import subprocess
 import sys
-import importlib
 from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -90,8 +90,8 @@ class ToolDependencyChecker:
     def __init__(self):
         """Initialize dependency checker."""
         # Cache for checked modules/commands
-        self._module_cache: Dict[str, bool] = {}
-        self._command_cache: Dict[str, bool] = {}
+        self._module_cache: dict[str, bool] = {}
+        self._command_cache: dict[str, bool] = {}
         
         logger.info("ToolDependencyChecker initialized")
     
@@ -152,7 +152,7 @@ class ToolDependencyChecker:
             self._command_cache[command_name] = False
             return False
     
-    def check_tool(self, tool_name: str) -> Tuple[bool, List[str]]:
+    def check_tool(self, tool_name: str) -> tuple[bool, list[str]]:
         """
         Check if all dependencies for a tool are available.
         
@@ -179,7 +179,7 @@ class ToolDependencyChecker:
         all_available = len(missing) == 0
         return all_available, missing
     
-    def check_all_tools(self) -> Dict[str, Tuple[bool, List[str]]]:
+    def check_all_tools(self) -> dict[str, tuple[bool, list[str]]]:
         """
         Check dependencies for all tools.
         
@@ -270,7 +270,7 @@ class ToolDependencyChecker:
         self._command_cache.clear()
         logger.info("Cleared dependency check cache")
     
-    def get_statistics(self) -> Dict:
+    def get_statistics(self) -> dict:
         """Get dependency checker statistics."""
         all_results = self.check_all_tools()
         

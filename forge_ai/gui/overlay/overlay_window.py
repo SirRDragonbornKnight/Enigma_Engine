@@ -8,21 +8,32 @@ providing quick AI interaction without leaving games or other apps.
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QTextEdit, QFrame, QGraphicsOpacityEffect
-)
-from PyQt5.QtCore import Qt, QPoint, QTimer, pyqtSignal
+from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
+from .overlay_chat import OverlayChatBridge
 from .overlay_modes import (
-    OverlayMode, OverlayPosition, OverlaySettings,
-    MinimalOverlay, CompactOverlay, FullOverlay
+    CompactOverlay,
+    FullOverlay,
+    MinimalOverlay,
+    OverlayMode,
+    OverlayPosition,
+    OverlaySettings,
 )
 from .overlay_themes import OverlayTheme, get_theme
-from .overlay_chat import OverlayChatBridge
 
 logger = logging.getLogger(__name__)
 
@@ -562,7 +573,7 @@ class AIOverlay(QWidget):
             if not config_path.exists():
                 return
                 
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 settings_dict = json.load(f)
                 
             # Update settings

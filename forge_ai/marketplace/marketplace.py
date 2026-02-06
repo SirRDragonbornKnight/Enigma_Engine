@@ -20,13 +20,13 @@ import json
 import logging
 import shutil
 import tempfile
+import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urljoin
-import zipfile
 
 from ..config import CONFIG
 
@@ -57,9 +57,9 @@ class PluginVersion:
     download_url: str = ""
     checksum: str = ""  # SHA256
     min_forge_version: str = "0.1.0"
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'version': self.version,
             'release_date': self.release_date.isoformat(),
@@ -71,7 +71,7 @@ class PluginVersion:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'PluginVersion':
+    def from_dict(cls, data: dict) -> 'PluginVersion':
         return cls(
             version=data['version'],
             release_date=datetime.fromisoformat(data['release_date']),
@@ -93,11 +93,11 @@ class PluginInfo:
     author: str
     category: PluginCategory
     current_version: str
-    versions: List[PluginVersion] = field(default_factory=list)
+    versions: list[PluginVersion] = field(default_factory=list)
     
     # Metadata
     icon_url: str = ""
-    screenshots: List[str] = field(default_factory=list)
+    screenshots: list[str] = field(default_factory=list)
     homepage: str = ""
     repository: str = ""
     license: str = "MIT"
@@ -115,7 +115,7 @@ class PluginInfo:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             'id': self.id,
             'name': self.name,
@@ -137,7 +137,7 @@ class PluginInfo:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'PluginInfo':
+    def from_dict(cls, data: dict) -> 'PluginInfo':
         return cls(
             id=data['id'],
             name=data['name'],
@@ -168,8 +168,8 @@ class InstallResult:
     version: str
     message: str
     installed_path: Optional[Path] = None
-    dependencies_installed: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    dependencies_installed: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 class Marketplace:
@@ -203,8 +203,8 @@ class Marketplace:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         # Plugin registry
-        self._plugins: Dict[str, PluginInfo] = {}
-        self._installed: Dict[str, str] = {}  # id -> version
+        self._plugins: dict[str, PluginInfo] = {}
+        self._installed: dict[str, str] = {}  # id -> version
         
         # Repository URLs
         self._repositories = list(self.DEFAULT_REPOSITORIES)
@@ -290,7 +290,7 @@ class Marketplace:
         
         return len(self._plugins)
     
-    def _fetch_repository(self, url: str) -> List[PluginInfo]:
+    def _fetch_repository(self, url: str) -> list[PluginInfo]:
         """Fetch plugins from a repository URL."""
         try:
             import urllib.request
@@ -325,7 +325,7 @@ class Marketplace:
         category: PluginCategory = None,
         installed_only: bool = False,
         sort_by: str = "downloads"
-    ) -> List[PluginInfo]:
+    ) -> list[PluginInfo]:
         """
         Search for plugins.
         
@@ -548,11 +548,11 @@ class Marketplace:
         logger.info(f"Uninstalled {plugin_id}")
         return True
     
-    def get_updates(self) -> List[PluginInfo]:
+    def get_updates(self) -> list[PluginInfo]:
         """Get list of plugins with available updates."""
         return [p for p in self._plugins.values() if p.update_available]
     
-    def update_all(self) -> List[InstallResult]:
+    def update_all(self) -> list[InstallResult]:
         """Update all plugins with available updates."""
         results = []
         for plugin in self.get_updates():
@@ -563,8 +563,8 @@ class Marketplace:
     def publish(
         self,
         plugin_path: Path,
-        metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Prepare a plugin for publishing.
         
@@ -625,7 +625,7 @@ class Marketplace:
             self._repositories.remove(url)
             logger.info(f"Removed repository: {url}")
     
-    def get_installed_plugins(self) -> List[PluginInfo]:
+    def get_installed_plugins(self) -> list[PluginInfo]:
         """Get all installed plugins."""
         return [p for p in self._plugins.values() if p.installed]
     
@@ -650,7 +650,7 @@ class Marketplace:
         
         try:
             import importlib.util
-            
+
             # Look for __init__.py or main.py
             init_file = plugin_path / "__init__.py"
             if not init_file.exists():

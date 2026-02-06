@@ -14,7 +14,7 @@ import math
 import re
 import time
 from collections import Counter
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class BuiltinEmbeddings:
@@ -36,7 +36,7 @@ class BuiltinEmbeddings:
         """
         self.dimensions = dimensions
         self.is_loaded = False
-        self._word_idf: Dict[str, float] = {}
+        self._word_idf: dict[str, float] = {}
         self._vocab_size = 0
         
     def load(self) -> bool:
@@ -73,14 +73,14 @@ class BuiltinEmbeddings:
         """Unload (no-op for built-in)."""
         self.is_loaded = False
     
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """Simple tokenization."""
         # Lowercase and split on non-alphanumeric
         text = text.lower()
         tokens = re.findall(r'\b[a-z0-9]+\b', text)
         return tokens
     
-    def _get_ngrams(self, text: str, n: int = 3) -> List[str]:
+    def _get_ngrams(self, text: str, n: int = 3) -> list[str]:
         """Get character n-grams."""
         text = text.lower()
         ngrams = []
@@ -97,7 +97,7 @@ class BuiltinEmbeddings:
         """Get IDF weight for a word (higher = rarer = more important)."""
         return self._word_idf.get(word, 1.0)  # Default 1.0 for unknown words
     
-    def embed(self, text: str) -> Dict[str, Any]:
+    def embed(self, text: str) -> dict[str, Any]:
         """Generate embedding for a single text."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}
@@ -151,7 +151,7 @@ class BuiltinEmbeddings:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def embed_batch(self, texts: List[str]) -> Dict[str, Any]:
+    def embed_batch(self, texts: list[str]) -> dict[str, Any]:
         """Generate embeddings for multiple texts."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}
@@ -179,7 +179,7 @@ class BuiltinEmbeddings:
         except Exception as e:
             return {"success": False, "error": str(e)}
     
-    def similarity(self, text1: str, text2: str) -> Dict[str, Any]:
+    def similarity(self, text1: str, text2: str) -> dict[str, Any]:
         """Calculate cosine similarity between two texts."""
         if not self.is_loaded:
             return {"success": False, "error": "Not loaded"}

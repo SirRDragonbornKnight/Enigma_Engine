@@ -82,52 +82,134 @@ class ToolRegistry:
     
     def _register_builtin_tools(self):
         """Register all built-in tools (respects tool_manager settings)."""
-        from .web_tools import WebSearchTool, FetchWebpageTool
-        from .file_tools import ReadFileTool, WriteFileTool, ListDirectoryTool, MoveFileTool, DeleteFileTool
-        from .document_tools import ReadDocumentTool, ExtractTextTool
-        from .system_tools import RunCommandTool, ScreenshotTool, GetSystemInfoTool
-        from .vision import ScreenVisionTool, FindOnScreenTool
-        from .robot_tools import RobotMoveTool, RobotGripperTool, RobotStatusTool, RobotHomeTool
-        from .interactive_tools import (CreateChecklistTool, ListChecklistsTool, AddTaskTool, 
-                                       ListTasksTool, CompleteTaskTool, SetReminderTool, 
-                                       ListRemindersTool, CheckRemindersTool)
-        
         # New tool imports
-        from .automation_tools import (ScheduleTaskTool, ListSchedulesTool, RemoveScheduleTool,
-                                       ClipboardReadTool, ClipboardWriteTool, ClipboardHistoryTool,
-                                       RecordMacroTool, PlayMacroTool)
-        from .knowledge_tools import WikipediaSearchTool, ArxivSearchTool, PDFExtractTool
-        from .communication_tools import TranslateTextTool, OCRImageTool
-        from .media_tools import (MusicGenerateTool, RemoveBackgroundTool, UpscaleImageTool,
-                                  StyleTransferTool, ConvertAudioTool, ExtractAudioTool,
-                                  AudioVisualizeTool)
-        from .productivity_tools import (SystemMonitorTool, ProcessListTool, ProcessKillTool,
-                                         SSHExecuteTool, DockerListTool, DockerControlTool,
-                                         GitStatusTool, GitCommitTool, GitPushTool, GitPullTool)
-        from .iot_tools import (HomeAssistantSetupTool, HomeAssistantControlTool,
-                                HomeAssistantStatusTool, GPIOReadTool, GPIOWriteTool,
-                                GPIOPWMTool, MQTTPublishTool, MQTTSubscribeTool,
-                                CameraCaptureTool, CameraListTool, CameraStreamTool)
-        from .browser_tools import (BrowserMediaPauseTool, BrowserMediaMuteTool,
-                                    BrowserMediaSkipTool, BrowserMediaStopTool,
-                                    BrowserMediaVolumeTool, BrowserMediaInfoTool,
-                                    BrowserTabListTool, BrowserFocusTool)
-        from .data_tools import (CSVAnalyzeTool, CSVQueryTool, PlotChartTool, JSONQueryTool,
-                                 SQLQueryTool, SQLExecuteTool, DataConvertTool)
+        from .automation_tools import (
+            ClipboardHistoryTool,
+            ClipboardReadTool,
+            ClipboardWriteTool,
+            ListSchedulesTool,
+            PlayMacroTool,
+            RecordMacroTool,
+            RemoveScheduleTool,
+            ScheduleTaskTool,
+        )
+
         # Avatar tools - AI can control and customize the desktop avatar
-        from .avatar_tools import (AvatarControlTool, AvatarCustomizeTool, 
-                                   AvatarGestureTool, AvatarEmotionTool)
-        # Self-modification tools - AI can customize itself
-        from .self_tools import (SetPersonalityTool, SetAvatarPreferenceTool,
-                                 SetVoicePreferenceTool, SetCompanionBehaviorTool,
-                                 SetPreferenceTool, GetSelfConfigTool,
-                                 RememberFactTool, RecallFactsTool,
-                                 GenerateAvatarTool, OpenAvatarInBlenderTool,
-                                 ListAvatarsTool, SetAvatarTool,
-                                 SpawnObjectTool, RemoveObjectTool, ListSpawnedObjectsTool)
+        from .avatar_tools import (
+            AvatarControlTool,
+            AvatarCustomizeTool,
+            AvatarEmotionTool,
+            AvatarGestureTool,
+        )
+        from .browser_tools import (
+            BrowserFocusTool,
+            BrowserMediaInfoTool,
+            BrowserMediaMuteTool,
+            BrowserMediaPauseTool,
+            BrowserMediaSkipTool,
+            BrowserMediaStopTool,
+            BrowserMediaVolumeTool,
+            BrowserTabListTool,
+        )
+        from .communication_tools import OCRImageTool, TranslateTextTool
+        from .data_tools import (
+            CSVAnalyzeTool,
+            CSVQueryTool,
+            DataConvertTool,
+            JSONQueryTool,
+            PlotChartTool,
+            SQLExecuteTool,
+            SQLQueryTool,
+        )
+        from .document_tools import ExtractTextTool, ReadDocumentTool
+        from .file_tools import (
+            DeleteFileTool,
+            ListDirectoryTool,
+            MoveFileTool,
+            ReadFileTool,
+            WriteFileTool,
+        )
+
         # Gaming tools removed - AI can roleplay, tell stories, and play games natively
         # Keep only DnD dice roller since it needs true randomness
         from .gaming_tools import DnDRollTool
+        from .interactive_tools import (
+            AddTaskTool,
+            CheckRemindersTool,
+            CompleteTaskTool,
+            CreateChecklistTool,
+            ListChecklistsTool,
+            ListRemindersTool,
+            ListTasksTool,
+            SetReminderTool,
+        )
+        from .iot_tools import (
+            CameraCaptureTool,
+            CameraListTool,
+            CameraStreamTool,
+            GPIOPWMTool,
+            GPIOReadTool,
+            GPIOWriteTool,
+            HomeAssistantControlTool,
+            HomeAssistantSetupTool,
+            HomeAssistantStatusTool,
+            MQTTPublishTool,
+            MQTTSubscribeTool,
+        )
+        from .knowledge_tools import (
+            ArxivSearchTool,
+            PDFExtractTool,
+            WikipediaSearchTool,
+        )
+        from .media_tools import (
+            AudioVisualizeTool,
+            ConvertAudioTool,
+            ExtractAudioTool,
+            MusicGenerateTool,
+            RemoveBackgroundTool,
+            StyleTransferTool,
+            UpscaleImageTool,
+        )
+        from .productivity_tools import (
+            DockerControlTool,
+            DockerListTool,
+            GitCommitTool,
+            GitPullTool,
+            GitPushTool,
+            GitStatusTool,
+            ProcessKillTool,
+            ProcessListTool,
+            SSHExecuteTool,
+            SystemMonitorTool,
+        )
+        from .robot_tools import (
+            RobotGripperTool,
+            RobotHomeTool,
+            RobotMoveTool,
+            RobotStatusTool,
+        )
+
+        # Self-modification tools - AI can customize itself
+        from .self_tools import (
+            GenerateAvatarTool,
+            GetSelfConfigTool,
+            ListAvatarsTool,
+            ListSpawnedObjectsTool,
+            OpenAvatarInBlenderTool,
+            RecallFactsTool,
+            RememberFactTool,
+            RemoveObjectTool,
+            SetAvatarPreferenceTool,
+            SetAvatarTool,
+            SetCompanionBehaviorTool,
+            SetPersonalityTool,
+            SetPreferenceTool,
+            SetVoicePreferenceTool,
+            SpawnObjectTool,
+        )
+        from .system_tools import GetSystemInfoTool, RunCommandTool, ScreenshotTool
+        from .vision import FindOnScreenTool, ScreenVisionTool
+        from .web_tools import FetchWebpageTool, WebSearchTool
         
         builtin = [
             # Web

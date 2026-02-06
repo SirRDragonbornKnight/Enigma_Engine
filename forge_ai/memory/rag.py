@@ -64,6 +64,7 @@ class RAGSystem:
         else:
             # Fallback: simple hash-based embedding
             import hashlib
+
             import numpy as np
             hash_obj = hashlib.sha256(text.encode())
             hash_bytes = hash_obj.digest()

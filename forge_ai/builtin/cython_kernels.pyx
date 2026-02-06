@@ -18,9 +18,11 @@ Auto-detected by neural_network.py when compiled.
 """
 
 import numpy as np
-cimport numpy as np
+
 cimport cython
+cimport numpy as np
 from libc.math cimport exp, sqrt, tanh
+
 from cython.parallel import prange
 
 # Type definitions

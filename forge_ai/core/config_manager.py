@@ -18,7 +18,7 @@ Usage:
 import json
 import logging
 import os
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_type_hints
 
@@ -130,7 +130,7 @@ class ServerConfig:
     api_key_file: Optional[str] = None
     
     # CORS
-    cors_origins: List[str] = field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = field(default_factory=lambda: ["*"])
     
     # Logging
     log_requests: bool = True
@@ -210,17 +210,17 @@ class ConfigManager:
         if ext in ('.yaml', '.yml'):
             if not YAML_AVAILABLE:
                 raise ImportError("PyYAML not installed. Install with: pip install pyyaml")
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = yaml.safe_load(f)
         
         elif ext == '.toml':
             if not TOML_AVAILABLE:
                 raise ImportError("toml not installed. Install with: pip install toml")
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = toml.load(f)
         
         elif ext == '.json':
-            with open(path, 'r') as f:
+            with open(path) as f:
                 data = json.load(f)
         
         else:
@@ -236,7 +236,7 @@ class ConfigManager:
         return manager
     
     @classmethod
-    def _parse_config(cls, data: Dict[str, Any]) -> ForgeConfig:
+    def _parse_config(cls, data: dict[str, Any]) -> ForgeConfig:
         """Parse dictionary into ForgeConfig."""
         config = ForgeConfig()
         
@@ -263,7 +263,7 @@ class ConfigManager:
         return config
     
     @classmethod
-    def _dict_to_dataclass(cls, data: Dict[str, Any], cls_type: Type[T]) -> T:
+    def _dict_to_dataclass(cls, data: dict[str, Any], cls_type: type[T]) -> T:
         """Convert dictionary to dataclass, handling nested structures."""
         # Get field names
         field_names = {f.name for f in fields(cls_type)}
@@ -344,7 +344,7 @@ class ConfigManager:
         else:
             raise ValueError(f"Unsupported config format: {ext}")
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary."""
         return {
             'project_name': self.config.project_name,

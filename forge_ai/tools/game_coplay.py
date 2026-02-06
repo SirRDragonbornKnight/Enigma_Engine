@@ -30,14 +30,14 @@ Usage:
     player.press_key("a")  # Move left
 """
 
+import json
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable, Tuple
-import json
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +66,12 @@ class InputMethod(Enum):
 class GameAction:
     """An action the AI wants to perform."""
     action_type: str            # "move", "attack", "use", "say", etc.
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     reason: str = ""            # Why the AI chose this action
     confidence: float = 1.0     # How confident (0-1)
     delay: float = 0.0          # Delay before executing
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "type": self.action_type,
             "params": self.parameters,
@@ -110,7 +110,7 @@ class InputSimulator:
         self._keyboard = None
         self._mouse = None
         self._controller = None
-        self._available_methods: List[InputMethod] = []
+        self._available_methods: list[InputMethod] = []
         self._init_inputs()
     
     def _init_inputs(self):
@@ -127,8 +127,8 @@ class InputSimulator:
             logger.warning("pynput not installed - keyboard input unavailable")
         
         try:
-            from pynput.mouse import Controller as MouseController
             from pynput.mouse import Button
+            from pynput.mouse import Controller as MouseController
             self._mouse = MouseController()
             self._Button = Button
             self._available_methods.append(InputMethod.MOUSE)
@@ -157,7 +157,7 @@ class InputSimulator:
             logger.debug("Virtual gamepad not available")
     
     @property
-    def available_methods(self) -> List[InputMethod]:
+    def available_methods(self) -> list[InputMethod]:
         return self._available_methods
     
     def press_key(self, key: str, duration: float = 0.05):
@@ -275,19 +275,19 @@ class GameCoPlayer:
         self._active = False
         self._paused = False
         self._game_id: Optional[str] = None
-        self._game_state: Dict[str, Any] = {}
+        self._game_state: dict[str, Any] = {}
         
         # Action queue and timing
-        self._action_queue: List[GameAction] = []
+        self._action_queue: list[GameAction] = []
         self._last_action_time = 0.0
         self._actions_this_second = 0
         
         # Communication
-        self._on_action: List[Callable] = []  # Callbacks when AI acts
-        self._on_speak: List[Callable] = []   # Callbacks when AI speaks
+        self._on_action: list[Callable] = []  # Callbacks when AI acts
+        self._on_speak: list[Callable] = []   # Callbacks when AI speaks
         
         # Key bindings per game (loaded from config)
-        self._key_bindings: Dict[str, Dict[str, str]] = {}
+        self._key_bindings: dict[str, dict[str, str]] = {}
         self._load_default_bindings()
         
         # Thread for action execution
@@ -561,7 +561,7 @@ class GameCoPlayer:
             except Exception:
                 pass
     
-    def combo(self, keys: List[str], delay: float = 0.05, reason: str = ""):
+    def combo(self, keys: list[str], delay: float = 0.05, reason: str = ""):
         """Queue a combo of key presses."""
         action = GameAction(
             action_type="combo",
@@ -581,7 +581,7 @@ class GameCoPlayer:
     
     # === Observation and decision making ===
     
-    def observe(self) -> Dict[str, Any]:
+    def observe(self) -> dict[str, Any]:
         """
         Observe the current game state by capturing the screen.
         

@@ -15,29 +15,30 @@ import json
 import sqlite3
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Tuple, Union, Iterator
 from datetime import datetime
 from pathlib import Path
-from contextlib import contextmanager
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 @dataclass
 class QueryResult:
     """Result from a database query."""
-    rows: List[Dict[str, Any]] = field(default_factory=list)
+    rows: list[dict[str, Any]] = field(default_factory=list)
     affected_rows: int = 0
     last_insert_id: Optional[Union[int, str]] = None  # str for MongoDB ObjectId
     success: bool = True
     error: Optional[str] = None
     
-    def __iter__(self) -> Iterator[Dict[str, Any]]:
+    def __iter__(self) -> Iterator[dict[str, Any]]:
         return iter(self.rows)
     
     def __len__(self) -> int:
         return len(self.rows)
     
-    def first(self) -> Optional[Dict[str, Any]]:
+    def first(self) -> Optional[dict[str, Any]]:
         """Get first row."""
         return self.rows[0] if self.rows else None
     
@@ -68,7 +69,7 @@ class DatabaseBackend(ABC):
     def execute(
         self,
         query: str,
-        params: Optional[Tuple] = None
+        params: Optional[tuple] = None
     ) -> QueryResult:
         """Execute a query."""
         pass
@@ -77,7 +78,7 @@ class DatabaseBackend(ABC):
     def execute_many(
         self,
         query: str,
-        params_list: List[Tuple]
+        params_list: list[tuple]
     ) -> QueryResult:
         """Execute query with multiple parameter sets."""
         pass
@@ -103,7 +104,7 @@ class DatabaseBackend(ABC):
         pass
     
     @abstractmethod
-    def get_tables(self) -> List[str]:
+    def get_tables(self) -> list[str]:
         """List all tables."""
         pass
     
@@ -172,7 +173,7 @@ class SQLiteBackend(DatabaseBackend):
     def execute(
         self,
         query: str,
-        params: Optional[Tuple] = None
+        params: Optional[tuple] = None
     ) -> QueryResult:
         """Execute a query."""
         if not self._connection:
@@ -204,7 +205,7 @@ class SQLiteBackend(DatabaseBackend):
     def execute_many(
         self,
         query: str,
-        params_list: List[Tuple]
+        params_list: list[tuple]
     ) -> QueryResult:
         """Execute query with multiple parameter sets."""
         if not self._connection:
@@ -259,7 +260,7 @@ class SQLiteBackend(DatabaseBackend):
         )
         return len(result.rows) > 0
     
-    def get_tables(self) -> List[str]:
+    def get_tables(self) -> list[str]:
         """List all tables."""
         result = self.execute(
             "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
@@ -337,7 +338,7 @@ class PostgreSQLBackend(DatabaseBackend):
     def execute(
         self,
         query: str,
-        params: Optional[Tuple] = None
+        params: Optional[tuple] = None
     ) -> QueryResult:
         """Execute a query."""
         if not self._connection:
@@ -366,7 +367,7 @@ class PostgreSQLBackend(DatabaseBackend):
     def execute_many(
         self,
         query: str,
-        params_list: List[Tuple]
+        params_list: list[tuple]
     ) -> QueryResult:
         """Execute query with multiple parameter sets."""
         if not self._connection:
@@ -413,7 +414,7 @@ class PostgreSQLBackend(DatabaseBackend):
         )
         return result.scalar() if result.success else False
     
-    def get_tables(self) -> List[str]:
+    def get_tables(self) -> list[str]:
         """List all tables."""
         result = self.execute(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
@@ -482,7 +483,7 @@ class MySQLBackend(DatabaseBackend):
     def execute(
         self,
         query: str,
-        params: Optional[Tuple] = None
+        params: Optional[tuple] = None
     ) -> QueryResult:
         """Execute a query."""
         if not self._connection:
@@ -508,7 +509,7 @@ class MySQLBackend(DatabaseBackend):
     def execute_many(
         self,
         query: str,
-        params_list: List[Tuple]
+        params_list: list[tuple]
     ) -> QueryResult:
         """Execute query with multiple parameter sets."""
         if not self._connection:
@@ -563,7 +564,7 @@ class MySQLBackend(DatabaseBackend):
         )
         return result.scalar('cnt') > 0 if result.success else False
     
-    def get_tables(self) -> List[str]:
+    def get_tables(self) -> list[str]:
         """List all tables."""
         result = self.execute(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
@@ -635,7 +636,7 @@ class MongoDBBackend(DatabaseBackend):
     def execute(
         self,
         query: str,
-        params: Optional[Tuple] = None
+        params: Optional[tuple] = None
     ) -> QueryResult:
         """
         Execute a MongoDB operation.
@@ -716,7 +717,7 @@ class MongoDBBackend(DatabaseBackend):
     def execute_many(
         self,
         query: str,
-        params_list: List[Tuple]
+        params_list: list[tuple]
     ) -> QueryResult:
         """Execute multiple MongoDB operations."""
         total_affected = 0
@@ -744,7 +745,7 @@ class MongoDBBackend(DatabaseBackend):
             return table_name in self._db.list_collection_names()
         return False
     
-    def get_tables(self) -> List[str]:
+    def get_tables(self) -> list[str]:
         """List all collections."""
         if self._db:
             return self._db.list_collection_names()
@@ -775,7 +776,7 @@ class DatabaseManager:
     
     def __init__(self):
         """Initialize database manager."""
-        self._databases: Dict[str, DatabaseBackend] = {}
+        self._databases: dict[str, DatabaseBackend] = {}
         self._default: Optional[str] = None
     
     def register(
@@ -826,7 +827,7 @@ class DatabaseManager:
         db = self._databases.get(name)
         return db.connect() if db else False
     
-    def connect_all(self) -> Dict[str, bool]:
+    def connect_all(self) -> dict[str, bool]:
         """Connect all databases."""
         results = {}
         for name, db in self._databases.items():
@@ -838,7 +839,7 @@ class DatabaseManager:
         for db in self._databases.values():
             db.disconnect()
     
-    def list_databases(self) -> List[str]:
+    def list_databases(self) -> list[str]:
         """List registered database names."""
         return list(self._databases.keys())
 

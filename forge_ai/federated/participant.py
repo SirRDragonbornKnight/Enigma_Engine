@@ -24,13 +24,14 @@ USAGE:
 
 import asyncio
 import logging
-from typing import Optional, Dict
+from typing import Dict, Optional
+
 import numpy as np
 
+from ..config import CONFIG
+from .compression import UpdateCompressor
 from .federation import ModelUpdate
 from .privacy import DifferentialPrivacy
-from .compression import UpdateCompressor
-from ..config import CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class FederatedParticipant:
         round_number: int,
         model = None,
         dataset = None
-    ) -> Dict:
+    ) -> dict:
         """
         Participate in a training round.
         
@@ -234,7 +235,7 @@ class FederatedParticipant:
             
             # Run training in executor to not block async loop
             import concurrent.futures
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = loop.run_in_executor(
                     executor,
@@ -333,7 +334,7 @@ class FederatedParticipant:
         # In real implementation, send over network
         await asyncio.sleep(0.1)  # Simulate network delay
     
-    async def _receive_model(self) -> Optional[Dict[str, np.ndarray]]:
+    async def _receive_model(self) -> Optional[dict[str, np.ndarray]]:
         """
         Wait for improved model from coordinator.
         
@@ -348,7 +349,7 @@ class FederatedParticipant:
         # Placeholder - return None
         return None
     
-    def _apply_model_update(self, model_weights: Dict[str, np.ndarray]):
+    def _apply_model_update(self, model_weights: dict[str, np.ndarray]):
         """
         Apply improved model to local model.
         
@@ -390,7 +391,7 @@ class FederatedParticipant:
         # Unknown size
         return 0
     
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """
         Get participant statistics.
         

@@ -38,11 +38,12 @@ class WhisperSTT:
     
     def listen(self, duration: int = 5) -> str:
         """Listen from microphone and transcribe."""
-        import tempfile
         import os
-        import sounddevice as sd
+        import tempfile
+
         import scipy.io.wavfile as wav
-        
+        import sounddevice as sd
+
         # Record audio
         sample_rate = 16000
         audio = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1)

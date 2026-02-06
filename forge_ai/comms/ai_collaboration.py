@@ -72,14 +72,14 @@ on complex operations across multiple devices.
 """
 
 import json
-import time
 import logging
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Callable, Tuple
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class AICapability:
     model_params: int = 0  # Approximate parameter count
     
     # Tools
-    available_tools: List[str] = field(default_factory=list)
+    available_tools: list[str] = field(default_factory=list)
     
     # Performance
     current_load: float = 0.0  # 0.0 to 1.0
@@ -146,7 +146,7 @@ class AICapability:
     # Timestamp
     last_updated: str = field(default_factory=lambda: datetime.now().isoformat())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for network transmission."""
         return {
             "node_name": self.node_name,
@@ -164,7 +164,7 @@ class AICapability:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AICapability':
+    def from_dict(cls, data: dict[str, Any]) -> 'AICapability':
         """Create from dictionary."""
         return cls(
             node_name=data.get("node_name", "unknown"),
@@ -233,16 +233,16 @@ class TaskRequest:
     """
     task_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     tool_name: str = ""
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
     requester: str = ""  # Node name of requester
     assigned_to: Optional[str] = None
     status: TaskStatus = TaskStatus.PENDING
-    result: Optional[Dict[str, Any]] = None
+    result: Optional[dict[str, Any]] = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     completed_at: Optional[str] = None
     timeout_seconds: int = 300  # 5 minutes default
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "tool_name": self.tool_name,
@@ -257,7 +257,7 @@ class TaskRequest:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TaskRequest':
+    def from_dict(cls, data: dict[str, Any]) -> 'TaskRequest':
         return cls(
             task_id=data.get("task_id", str(uuid.uuid4())[:8]),
             tool_name=data.get("tool_name", ""),
@@ -332,21 +332,21 @@ class AICollaborationProtocol:
         self._network_node = None
         
         # Peer capabilities (peer_name -> AICapability)
-        self._peer_capabilities: Dict[str, AICapability] = {}
+        self._peer_capabilities: dict[str, AICapability] = {}
         self._capabilities_lock = threading.RLock()
         
         # Local capabilities
         self._local_capability: Optional[AICapability] = None
         
         # Active tasks
-        self._active_tasks: Dict[str, TaskRequest] = {}
+        self._active_tasks: dict[str, TaskRequest] = {}
         self._tasks_lock = threading.RLock()
         
         # Routing preference
         self._routing_preference = RoutingPreference.LOCAL_FIRST
         
         # Callbacks
-        self._on_task_received: Optional[Callable[[TaskRequest], Dict]] = None
+        self._on_task_received: Optional[Callable[[TaskRequest], dict]] = None
         self._on_capability_update: Optional[Callable[[str, AICapability], None]] = None
         
         logger.info(f"AICollaborationProtocol initialized for node: {node_name}")
@@ -416,7 +416,7 @@ class AICollaborationProtocol:
                 hardware_type="cpu",
             )
     
-    def _get_available_tools(self) -> List[str]:
+    def _get_available_tools(self) -> list[str]:
         """Get list of locally available tools."""
         try:
             from ..core.tool_router import get_router
@@ -505,7 +505,7 @@ class AICollaborationProtocol:
             
             return cap
     
-    def list_all_capabilities(self) -> Dict[str, AICapability]:
+    def list_all_capabilities(self) -> dict[str, AICapability]:
         """Get all known peer capabilities."""
         with self._capabilities_lock:
             return self._peer_capabilities.copy()
@@ -514,7 +514,7 @@ class AICollaborationProtocol:
     # 🤝 TASK NEGOTIATION
     # =========================================================================
     
-    def request_task_handling(self, tool_name: str, params: Dict[str, Any]) -> Optional[str]:
+    def request_task_handling(self, tool_name: str, params: dict[str, Any]) -> Optional[str]:
         """
         Ask peers who can best handle a task.
         
@@ -534,7 +534,7 @@ class AICollaborationProtocol:
             return None
         
         # Score all peers
-        scores: List[Tuple[str, float]] = []
+        scores: list[tuple[str, float]] = []
         
         with self._capabilities_lock:
             for peer_name, capability in self._peer_capabilities.items():
@@ -554,7 +554,7 @@ class AICollaborationProtocol:
         
         return best_peer
     
-    def negotiate_task(self, tool_name: str, params: Dict[str, Any]) -> str:
+    def negotiate_task(self, tool_name: str, params: dict[str, Any]) -> str:
         """
         Negotiate with all peers to find the best handler for a task.
         
@@ -640,8 +640,8 @@ class AICollaborationProtocol:
             logger.info(f"Accepted task: {task_id}")
             return True
     
-    def delegate_task(self, peer_name: str, tool_name: str, params: Dict[str, Any],
-                      timeout: int = None) -> Dict[str, Any]:
+    def delegate_task(self, peer_name: str, tool_name: str, params: dict[str, Any],
+                      timeout: int = None) -> dict[str, Any]:
         """
         Delegate a task to a peer for execution.
         
@@ -705,7 +705,7 @@ class AICollaborationProtocol:
                 task.result = {"success": False, "error": str(e)}
             return {"success": False, "error": str(e)}
     
-    def report_task_complete(self, task_id: str, result: Dict[str, Any]):
+    def report_task_complete(self, task_id: str, result: dict[str, Any]):
         """
         Report task completion back to the requester.
         
@@ -758,7 +758,7 @@ class AICollaborationProtocol:
     # 🔀 TASK SPLITTING
     # =========================================================================
     
-    def split_task(self, complex_task: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def split_task(self, complex_task: dict[str, Any]) -> list[dict[str, Any]]:
         """
         Split a complex task into subtasks for distributed execution.
         
@@ -822,7 +822,7 @@ class AICollaborationProtocol:
         logger.info(f"Split task into {len(subtasks)} subtasks")
         return subtasks
     
-    def request_collaboration(self, task: str, sub_tasks: List[Dict]) -> Dict[str, Any]:
+    def request_collaboration(self, task: str, sub_tasks: list[dict]) -> dict[str, Any]:
         """
         Request collaboration from peers for parallel subtask execution.
         
@@ -834,7 +834,7 @@ class AICollaborationProtocol:
             Combined results from all peers
         """
         results = []
-        peer_assignments: Dict[str, List[Dict]] = {}
+        peer_assignments: dict[str, list[dict]] = {}
         
         # Assign subtasks to peers
         available_peers = list(self._peer_capabilities.keys())
@@ -872,7 +872,7 @@ class AICollaborationProtocol:
             "results": results,
         }
     
-    def _execute_locally(self, task: Dict) -> Dict[str, Any]:
+    def _execute_locally(self, task: dict) -> dict[str, Any]:
         """Execute a task locally."""
         try:
             from ..core.tool_router import get_router
@@ -905,7 +905,7 @@ class AICollaborationProtocol:
         """Get current routing preference."""
         return self._routing_preference.value
     
-    def set_task_callback(self, callback: Callable[[TaskRequest], Dict]):
+    def set_task_callback(self, callback: Callable[[TaskRequest], dict]):
         """Set callback for when a task is received from another AI."""
         self._on_task_received = callback
     

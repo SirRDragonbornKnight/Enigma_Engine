@@ -5,8 +5,8 @@ Uses mDNS/Bonjour to advertise ForgeAI service on the local network,
 making it easy to discover from phones, tablets, and other computers.
 """
 
-import socket
 import logging
+import socket
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,10 @@ class LocalDiscovery:
             True if service was advertised successfully
         """
         try:
-            from zeroconf import ServiceInfo, Zeroconf
             import socket
-            
+
+            from zeroconf import ServiceInfo, Zeroconf
+
             # Get local IP
             local_ip = self._get_local_ip()
             if not local_ip:

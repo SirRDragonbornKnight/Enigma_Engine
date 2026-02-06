@@ -8,8 +8,8 @@ duplicate load/save implementations across the codebase.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
 from threading import Lock
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class JsonStorageMixin:
     _storage_path: Optional[Path] = None
     _storage_lock: Lock = Lock()
     
-    def _load_json(self, default: Optional[Dict] = None) -> Dict[str, Any]:
+    def _load_json(self, default: Optional[dict] = None) -> dict[str, Any]:
         """
         Load data from JSON file.
         
@@ -58,7 +58,7 @@ class JsonStorageMixin:
         
         try:
             with self._storage_lock:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(path, encoding='utf-8') as f:
                     data = json.load(f)
                     if not isinstance(data, dict):
                         logger.warning(f"Invalid data type in {path}, expected dict")
@@ -67,14 +67,14 @@ class JsonStorageMixin:
         except json.JSONDecodeError as e:
             logger.warning(f"Invalid JSON in {path}: {e}")
             return default
-        except IOError as e:
+        except OSError as e:
             logger.warning(f"Could not read {path}: {e}")
             return default
         except Exception as e:
             logger.error(f"Unexpected error loading {path}: {e}")
             return default
     
-    def _save_json(self, data: Dict[str, Any], indent: int = 2) -> bool:
+    def _save_json(self, data: dict[str, Any], indent: int = 2) -> bool:
         """
         Save data to JSON file.
         
@@ -99,7 +99,7 @@ class JsonStorageMixin:
                 with open(path, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=indent, ensure_ascii=False)
             return True
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Could not write {path}: {e}")
             return False
         except Exception as e:
@@ -107,7 +107,7 @@ class JsonStorageMixin:
             return False
 
 
-def load_json_file(path: Path, default: Optional[Dict] = None) -> Dict[str, Any]:
+def load_json_file(path: Path, default: Optional[dict] = None) -> dict[str, Any]:
     """
     Standalone function to load a JSON file.
     
@@ -127,15 +127,15 @@ def load_json_file(path: Path, default: Optional[Dict] = None) -> Dict[str, Any]
         return default
     
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
             return data if isinstance(data, dict) else default
-    except (json.JSONDecodeError, IOError) as e:
+    except (json.JSONDecodeError, OSError) as e:
         logger.warning(f"Could not load {path}: {e}")
         return default
 
 
-def save_json_file(path: Path, data: Dict[str, Any], indent: int = 2) -> bool:
+def save_json_file(path: Path, data: dict[str, Any], indent: int = 2) -> bool:
     """
     Standalone function to save data to a JSON file.
     
@@ -154,6 +154,6 @@ def save_json_file(path: Path, data: Dict[str, Any], indent: int = 2) -> bool:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
         return True
-    except (IOError, TypeError) as e:
+    except (OSError, TypeError) as e:
         logger.error(f"Could not save {path}: {e}")
         return False

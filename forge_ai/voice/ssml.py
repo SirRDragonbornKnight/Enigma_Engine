@@ -71,7 +71,7 @@ class SSMLSegment:
     """A segment of parsed SSML content."""
     
     text: str = ""
-    tag: Optional[SSMLTag] = None
+    tag: SSMLTag | None = None
     
     # Prosody modifiers (relative to current)
     rate: float = 1.0        # Speech rate multiplier (0.5 = half speed)
@@ -85,32 +85,32 @@ class SSMLSegment:
     emphasis_level: str = "none"  # none, reduced, moderate, strong
     
     # Say-as interpretation
-    interpret_as: Optional[str] = None  # date, time, telephone, characters, etc.
-    format_hint: Optional[str] = None   # Format for interpretation
+    interpret_as: str | None = None  # date, time, telephone, characters, etc.
+    format_hint: str | None = None   # Format for interpretation
     
     # Phoneme
-    phoneme: Optional[str] = None
+    phoneme: str | None = None
     phoneme_alphabet: str = "ipa"  # ipa or x-sampa
     
     # Substitution
-    alias: Optional[str] = None
+    alias: str | None = None
     
     # Audio
-    audio_src: Optional[str] = None
+    audio_src: str | None = None
     
     # Voice/language
-    voice_name: Optional[str] = None
-    language: Optional[str] = None
+    voice_name: str | None = None
+    language: str | None = None
     
     # Mark for synchronization
-    mark_name: Optional[str] = None
+    mark_name: str | None = None
 
 
 @dataclass
 class SSMLDocument:
     """Parsed SSML document."""
     
-    segments: List[SSMLSegment] = field(default_factory=list)
+    segments: list[SSMLSegment] = field(default_factory=list)
     xml_lang: str = "en-US"
     
     def get_plain_text(self) -> str:
@@ -168,7 +168,7 @@ class SSMLParser:
     }
     
     def __init__(self):
-        self._current_prosody: Dict[str, float] = {
+        self._current_prosody: dict[str, float] = {
             "rate": 1.0,
             "pitch": 1.0,
             "volume": 1.0,
@@ -213,8 +213,8 @@ class SSMLParser:
     def _process_element(
         self,
         element: ET.Element,
-        segments: List[SSMLSegment],
-        inherited: Dict[str, Any]
+        segments: list[SSMLSegment],
+        inherited: dict[str, Any]
     ):
         """Process an SSML element recursively."""
         tag_name = element.tag.lower()
@@ -510,8 +510,8 @@ class SSMLProcessor:
         self.parser = SSMLParser()
         
         # Callbacks for marks and audio
-        self._mark_callbacks: List[Callable[[str], None]] = []
-        self._audio_callback: Optional[Callable[[str], None]] = None
+        self._mark_callbacks: list[Callable[[str], None]] = []
+        self._audio_callback: Callable[[str], None] | None = None
     
     def on_mark(self, callback: Callable[[str], None]):
         """Register callback for SSML mark elements."""
@@ -669,7 +669,7 @@ class SSMLProcessor:
             logger.error(f"Generic TTS error: {e}")
 
 
-def ssml_to_text(ssml: str) -> Tuple[str, List[Dict]]:
+def ssml_to_text(ssml: str) -> tuple[str, list[dict]]:
     """
     Convert SSML to plain text with timing hints.
     

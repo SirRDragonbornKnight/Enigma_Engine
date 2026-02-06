@@ -6,8 +6,8 @@ offers help proactively, and behaves like a lifelike assistant.
 """
 
 from .companion_mode import (
-    CompanionMode,
     CompanionConfig,
+    CompanionMode,
     CompanionState,
     get_companion,
     start_companion,

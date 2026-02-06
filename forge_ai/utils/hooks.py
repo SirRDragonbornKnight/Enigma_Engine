@@ -87,7 +87,7 @@ class HookContext:
     """
     
     hook_point: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     skip_remaining: bool = False  # If True, skip remaining hooks
     skip_function: bool = False   # If True, skip the main function (before hooks only)
     override_result: Any = None   # If set, use this instead of function result
@@ -112,7 +112,7 @@ class HookManager:
     functions without modifying the original code.
     """
     
-    _instance: Optional['HookManager'] = None
+    _instance: HookManager | None = None
     _initialized: bool = False
     
     def __new__(cls):
@@ -128,15 +128,15 @@ class HookManager:
         HookManager._initialized = True
         
         # Hooks by hook point
-        self._before_hooks: Dict[str, List[Hook]] = {}
-        self._after_hooks: Dict[str, List[Hook]] = {}
+        self._before_hooks: dict[str, list[Hook]] = {}
+        self._after_hooks: dict[str, list[Hook]] = {}
         
         # Thread safety
         self._lock = threading.RLock()
         
         # Statistics
-        self._call_counts: Dict[str, int] = {}
-        self._total_time: Dict[str, float] = {}
+        self._call_counts: dict[str, int] = {}
+        self._total_time: dict[str, float] = {}
         
         logger.debug("HookManager initialized")
     
@@ -147,7 +147,7 @@ class HookManager:
         after: Callable = None,
         priority: int = 50,
         name: str = None
-    ) -> List[Callable[[], None]]:
+    ) -> list[Callable[[], None]]:
         """
         Register hooks for a hook point.
         
@@ -188,7 +188,7 @@ class HookManager:
     def _add_hook(
         self,
         hook: Hook,
-        registry: Dict[str, List[Hook]]
+        registry: dict[str, list[Hook]]
     ) -> Callable[[], None]:
         """Add a hook to a registry and return unregister function."""
         with self._lock:
@@ -383,7 +383,7 @@ class HookManager:
         
         return result
     
-    def list_hooks(self, hook_point: str = None) -> Dict[str, Dict[str, List[str]]]:
+    def list_hooks(self, hook_point: str = None) -> dict[str, dict[str, list[str]]]:
         """
         List registered hooks.
         
@@ -409,7 +409,7 @@ class HookManager:
             
             return result
     
-    def get_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_stats(self) -> dict[str, dict[str, Any]]:
         """Get hook execution statistics."""
         with self._lock:
             stats = {}
@@ -456,7 +456,7 @@ class HookManager:
 # Global access
 # =============================================================================
 
-_manager: Optional[HookManager] = None
+_manager: HookManager | None = None
 
 
 def get_hook_manager() -> HookManager:

@@ -7,11 +7,11 @@ Records tool execution history for debugging, analytics, and auditing.
 
 import json
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
 from collections import defaultdict
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class ToolExecution:
     """Record of a single tool execution."""
     
     tool_name: str
-    params: Dict[str, Any]
+    params: dict[str, Any]
     success: bool
     result: Any
     error: Optional[str] = None
@@ -31,7 +31,7 @@ class ToolExecution:
     rate_limited: bool = False
     timeout: bool = False
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
 
@@ -65,7 +65,7 @@ class ToolExecutionHistory:
         self.enable_file_logging = enable_file_logging
         
         # In-memory history (circular buffer)
-        self.history: List[ToolExecution] = []
+        self.history: list[ToolExecution] = []
         
         # Log file
         if log_file is None and enable_file_logging:
@@ -80,8 +80,8 @@ class ToolExecutionHistory:
     def record(
         self,
         tool_name: str,
-        params: Dict[str, Any],
-        result: Dict[str, Any],
+        params: dict[str, Any],
+        result: dict[str, Any],
         duration_ms: Optional[float] = None
     ):
         """
@@ -125,7 +125,7 @@ class ToolExecutionHistory:
         except Exception as e:
             logger.warning(f"Failed to write to execution log: {e}")
     
-    def get_recent(self, count: int = 10) -> List[ToolExecution]:
+    def get_recent(self, count: int = 10) -> list[ToolExecution]:
         """
         Get most recent executions.
         
@@ -137,7 +137,7 @@ class ToolExecutionHistory:
         """
         return self.history[-count:]
     
-    def get_failures(self, count: Optional[int] = None) -> List[ToolExecution]:
+    def get_failures(self, count: Optional[int] = None) -> list[ToolExecution]:
         """
         Get failed executions.
         
@@ -153,7 +153,7 @@ class ToolExecutionHistory:
             return failures[-count:]
         return failures
     
-    def get_by_tool(self, tool_name: str, count: Optional[int] = None) -> List[ToolExecution]:
+    def get_by_tool(self, tool_name: str, count: Optional[int] = None) -> list[ToolExecution]:
         """
         Get executions for a specific tool.
         
@@ -174,7 +174,7 @@ class ToolExecutionHistory:
         self,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None
-    ) -> List[ToolExecution]:
+    ) -> list[ToolExecution]:
         """
         Get executions within a time range.
         
@@ -203,7 +203,7 @@ class ToolExecutionHistory:
         self,
         tool_name: Optional[str] = None,
         time_period: Optional[timedelta] = None
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get execution statistics.
         
@@ -360,13 +360,13 @@ class ToolOutputMemory:
         self.max_per_type = max_per_type
         
         # Last output per category
-        self._last_output: Dict[str, Dict[str, Any]] = {}
+        self._last_output: dict[str, dict[str, Any]] = {}
         
         # Output history per category (newest first)
-        self._history: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self._history: dict[str, list[dict[str, Any]]] = defaultdict(list)
         
         # All outputs in order (for "the 3rd thing you made")
-        self._all_outputs: List[Dict[str, Any]] = []
+        self._all_outputs: list[dict[str, Any]] = []
         
         logger.info(f"ToolOutputMemory initialized (max_per_type={max_per_type})")
     
@@ -383,8 +383,8 @@ class ToolOutputMemory:
         tool_name: str,
         output_path: Optional[str] = None,
         output_data: Any = None,
-        params: Optional[Dict[str, Any]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        params: Optional[dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None
     ):
         """
         Record a tool output for later reference.
@@ -422,7 +422,7 @@ class ToolOutputMemory:
         
         logger.debug(f"Recorded {category} output: {output_path or 'in-memory'}")
     
-    def get_last(self, category: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_last(self, category: Optional[str] = None) -> Optional[dict[str, Any]]:
         """
         Get the last output, optionally filtered by category.
         
@@ -438,7 +438,7 @@ class ToolOutputMemory:
             return self._all_outputs[-1]
         return None
     
-    def get_by_reference(self, reference: str) -> Optional[Dict[str, Any]]:
+    def get_by_reference(self, reference: str) -> Optional[dict[str, Any]]:
         """
         Get output by natural language reference.
         
@@ -488,7 +488,7 @@ class ToolOutputMemory:
         
         return None
     
-    def get_history(self, category: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
+    def get_history(self, category: Optional[str] = None, limit: int = 5) -> list[dict[str, Any]]:
         """
         Get output history.
         
@@ -578,19 +578,19 @@ def record_tool_output(
     tool_name: str,
     output_path: Optional[str] = None,
     output_data: Any = None,
-    params: Optional[Dict[str, Any]] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    params: Optional[dict[str, Any]] = None,
+    metadata: Optional[dict[str, Any]] = None
 ):
     """Convenience function to record a tool output."""
     get_output_memory().record_output(tool_name, output_path, output_data, params, metadata)
 
 
-def get_last_output(category: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def get_last_output(category: Optional[str] = None) -> Optional[dict[str, Any]]:
     """Convenience function to get last output."""
     return get_output_memory().get_last(category)
 
 
-def get_output_by_reference(reference: str) -> Optional[Dict[str, Any]]:
+def get_output_by_reference(reference: str) -> Optional[dict[str, Any]]:
     """Convenience function to get output by reference."""
     return get_output_memory().get_by_reference(reference)
 

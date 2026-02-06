@@ -146,8 +146,8 @@ class FallbackResult:
     result: Any = None
     device_used: str = "unknown"
     fallback_triggered: bool = False
-    strategy_used: Optional[FallbackStrategy] = None
-    error: Optional[str] = None
+    strategy_used: FallbackStrategy | None = None
+    error: str | None = None
     execution_time: float = 0.0
     retries: int = 0
 
@@ -163,13 +163,13 @@ class MemoryFallbackManager:
     - Memory estimation before operations
     """
     
-    def __init__(self, config: Optional[FallbackConfig] = None):
+    def __init__(self, config: FallbackConfig | None = None):
         """Initialize the manager."""
         self.config = config or FallbackConfig()
         self._lock = threading.Lock()
         self._monitoring = False
-        self._monitor_thread: Optional[threading.Thread] = None
-        self._memory_callbacks: List[Callable[[MemoryInfo, MemoryState], None]] = []
+        self._monitor_thread: threading.Thread | None = None
+        self._memory_callbacks: list[Callable[[MemoryInfo, MemoryState], None]] = []
         self._last_oom_time: float = 0
         self._oom_count: int = 0
         
@@ -205,7 +205,7 @@ class MemoryFallbackManager:
         
         return info
     
-    def get_memory_state(self, info: Optional[MemoryInfo] = None) -> MemoryState:
+    def get_memory_state(self, info: MemoryInfo | None = None) -> MemoryState:
         """Get current memory state based on utilization."""
         if info is None:
             info = self.get_memory_info()
@@ -228,8 +228,8 @@ class MemoryFallbackManager:
     
     def estimate_memory_needed(
         self,
-        model: Optional[Any] = None,
-        input_size: Optional[int] = None,
+        model: Any | None = None,
+        input_size: int | None = None,
         batch_size: int = 1,
         dtype: str = "float16"
     ) -> int:
@@ -277,8 +277,8 @@ class MemoryFallbackManager:
     
     def will_fit_in_gpu(
         self,
-        model: Optional[Any] = None,
-        input_size: Optional[int] = None,
+        model: Any | None = None,
+        input_size: int | None = None,
         batch_size: int = 1
     ) -> bool:
         """Check if an operation will fit in GPU memory."""
@@ -292,8 +292,8 @@ class MemoryFallbackManager:
     
     def suggest_device(
         self,
-        model: Optional[Any] = None,
-        input_size: Optional[int] = None,
+        model: Any | None = None,
+        input_size: int | None = None,
         prefer_gpu: bool = True
     ) -> str:
         """
@@ -385,7 +385,7 @@ class MemoryFallbackManager:
         self,
         func: Callable[..., T],
         *args,
-        strategy: Optional[FallbackStrategy] = None,
+        strategy: FallbackStrategy | None = None,
         **kwargs
     ) -> FallbackResult:
         """
@@ -463,7 +463,7 @@ class MemoryFallbackManager:
         args: tuple,
         kwargs: dict,
         retry: int
-    ) -> Tuple[tuple, dict]:
+    ) -> tuple[tuple, dict]:
         """Apply fallback strategy to arguments."""
         if not HAVE_TORCH:
             return args, kwargs
@@ -545,10 +545,10 @@ class MemoryFallbackManager:
 
 
 # Singleton instance
-_fallback_manager: Optional[MemoryFallbackManager] = None
+_fallback_manager: MemoryFallbackManager | None = None
 
 
-def get_fallback_manager(config: Optional[FallbackConfig] = None) -> MemoryFallbackManager:
+def get_fallback_manager(config: FallbackConfig | None = None) -> MemoryFallbackManager:
     """Get or create the singleton fallback manager."""
     global _fallback_manager
     if _fallback_manager is None:

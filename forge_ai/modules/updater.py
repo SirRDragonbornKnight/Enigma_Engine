@@ -14,10 +14,10 @@ Features:
 import json
 import logging
 import re
-from pathlib import Path
-from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from .manager import ModuleManager
 
@@ -28,7 +28,7 @@ DEFAULT_REGISTRY_URL = "https://forge-modules.example.com/registry"
 DEFAULT_UPDATE_CHECK_INTERVAL_HOURS = 24
 
 
-def parse_version(version_str: str) -> Tuple[int, ...]:
+def parse_version(version_str: str) -> tuple[int, ...]:
     """
     Parse a version string into a tuple for comparison.
     
@@ -125,7 +125,7 @@ class ModuleUpdater:
     def check_updates(
         self, 
         module_id: Optional[str] = None
-    ) -> List[ModuleUpdate]:
+    ) -> list[ModuleUpdate]:
         """
         Check for available updates.
         
@@ -184,7 +184,7 @@ class ModuleUpdater:
         
         return updates
     
-    def _fetch_update_info(self, module_id: str) -> Optional[Dict[str, Any]]:
+    def _fetch_update_info(self, module_id: str) -> Optional[dict[str, Any]]:
         """
         Fetch update information from registry.
         
@@ -250,8 +250,8 @@ class ModuleUpdater:
             # Try fetching from registry if available
             if self.registry_url and self.registry_url != DEFAULT_REGISTRY_URL:
                 try:
-                    import urllib.request
                     import ssl
+                    import urllib.request
                     
                     url = f"{self.registry_url}/modules/{module_id}/changelog"
                     params = f"?from={from_version}&to={to_version}"
@@ -484,7 +484,7 @@ class ModuleUpdater:
         self, 
         module_id: str, 
         version: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Download module from registry.
         
@@ -498,12 +498,12 @@ class ModuleUpdater:
         logger.info(f"Downloading '{module_id}' version {version}")
         
         try:
-            import urllib.request
-            import urllib.error
-            import tempfile
-            import zipfile
             import hashlib
-            
+            import tempfile
+            import urllib.error
+            import urllib.request
+            import zipfile
+
             # Try to get download URL from registry
             update_info = self.check_for_update(module_id)
             if not update_info or not update_info.download_url:
@@ -560,7 +560,7 @@ class ModuleUpdater:
             logger.error(f"Download failed for '{module_id}': {e}")
             return None
     
-    def _verify_module(self, module_data: Dict[str, Any]) -> bool:
+    def _verify_module(self, module_data: dict[str, Any]) -> bool:
         """
         Verify downloaded module integrity.
         
@@ -631,7 +631,7 @@ class ModuleUpdater:
     def _install_module(
         self, 
         module_id: str, 
-        module_data: Dict[str, Any]
+        module_data: dict[str, Any]
     ) -> bool:
         """
         Install downloaded module.
@@ -648,7 +648,7 @@ class ModuleUpdater:
         try:
             import shutil
             import zipfile
-            
+
             # Determine installation directory
             from ..config import CONFIG
             modules_dir = Path(CONFIG.BASE_DIR) / "forge_ai" / "modules" / "installed"
@@ -751,13 +751,13 @@ class ModuleUpdater:
             registry_file = modules_dir / "registry.json"
             if registry_file.exists():
                 import json
-                with open(registry_file, 'r') as f:
+                with open(registry_file) as f:
                     registry = json.load(f)
                 
                 # Update version info from backup metadata if available
                 backup_meta = backup_path / "module.json"
                 if backup_meta.exists():
-                    with open(backup_meta, 'r') as f:
+                    with open(backup_meta) as f:
                         meta = json.load(f)
                     registry[module_id] = {
                         "version": meta.get("version", "unknown"),
@@ -838,7 +838,7 @@ class ModuleUpdater:
             # In production, would stop background thread
             # self._stop_auto_update_thread()
     
-    def get_update_status(self) -> Dict[str, Any]:
+    def get_update_status(self) -> dict[str, Any]:
         """
         Get current update status and settings.
         

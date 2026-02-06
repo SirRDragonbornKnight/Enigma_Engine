@@ -22,15 +22,19 @@ Usage:
 """
 
 import json
+import logging
 import threading
 import time
-from pathlib import Path
-from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 # Try to import voice module
 try:
-    from ..voice import speak as voice_speak, VoiceEngine, get_engine
+    from ..voice import VoiceEngine, get_engine
+    from ..voice import speak as voice_speak
     VOICE_AVAILABLE = True
 except ImportError:
     VOICE_AVAILABLE = False
@@ -91,7 +95,7 @@ class SpeechSync:
         self._animator: Optional['AdaptiveAnimator'] = None
         
         # Speech queue
-        self._speech_queue: List[SpeechEvent] = []
+        self._speech_queue: list[SpeechEvent] = []
         self._is_speaking = False
         self._speech_lock = threading.Lock()
         
@@ -112,9 +116,9 @@ class SpeechSync:
             self._command_file = Path(CONFIG.get("data_dir", "data")) / "avatar" / "ai_command.json"
         
         # Callbacks
-        self._on_speech_start: List[Callable[[str], None]] = []
-        self._on_speech_end: List[Callable[[str], None]] = []
-        self._on_word: List[Callable[[str, int], None]] = []  # word, position
+        self._on_speech_start: list[Callable[[str], None]] = []
+        self._on_speech_end: list[Callable[[str], None]] = []
+        self._on_word: list[Callable[[str, int], None]] = []  # word, position
         
         # Worker thread
         self._worker_thread: Optional[threading.Thread] = None
@@ -208,8 +212,8 @@ class SpeechSync:
         for cb in self._on_speech_start:
             try:
                 cb(text)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Speech start callback error: {e}")
         
         # Set emotion if enabled
         if self.config.enable_emotions and emotion != "neutral":
@@ -235,8 +239,8 @@ class SpeechSync:
         for cb in self._on_speech_end:
             try:
                 cb(text)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Speech end callback error: {e}")
     
     def speak_async(
         self, 
@@ -292,8 +296,8 @@ class SpeechSync:
                 if event.callback:
                     try:
                         event.callback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Speech callback error: {e}")
             else:
                 time.sleep(0.1)  # Small sleep when queue is empty
         
@@ -314,16 +318,16 @@ class SpeechSync:
             try:
                 self._animator.set_emotion(emotion)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Animator emotion error: {e}")
         
         # Try avatar method
         if self._avatar and hasattr(self._avatar, 'set_emotion'):
             try:
                 self._avatar.set_emotion(emotion)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Avatar emotion error: {e}")
         
         # Try AI command file
         self._send_command("emotion", {"emotion": emotion})
@@ -335,21 +339,21 @@ class SpeechSync:
             try:
                 self._animator.speak(text, duration)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Animator speak error: {e}")
         
         # Try avatar speak method
         if self._avatar and hasattr(self._avatar, 'animate_speak'):
             try:
                 self._avatar.animate_speak(text, duration)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Avatar animate_speak error: {e}")
         
         # Try AI command file
         self._send_command("speak", {"text": text, "duration": duration})
     
-    def _send_command(self, action: str, params: Dict[str, Any]):
+    def _send_command(self, action: str, params: dict[str, Any]):
         """Send command via AI command file."""
         try:
             self._command_file.parent.mkdir(parents=True, exist_ok=True)
@@ -430,7 +434,7 @@ def patch_speak_function():
     
     try:
         import forge_ai.voice.voice_profile as vp
-        
+
         # Store original
         original_speak = vp.speak
         

@@ -45,9 +45,9 @@ import socket
 import time
 import urllib.error
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class RobotState(Enum):
@@ -73,8 +73,8 @@ class RobotInfo:
     """Information about a robot."""
     name: str
     type: str  # "arm", "mobile", "humanoid", etc.
-    joints: Dict[str, JointInfo]
-    capabilities: List[str]  # ["move", "grip", "speak", "see"]
+    joints: dict[str, JointInfo]
+    capabilities: list[str]  # ["move", "grip", "speak", "see"]
     state: RobotState = RobotState.DISCONNECTED
 
 
@@ -126,7 +126,7 @@ class RobotInterface(ABC):
         """Rotate the robot (for mobile bases)."""
         return False
     
-    def get_sensors(self) -> Dict[str, Any]:
+    def get_sensors(self) -> dict[str, Any]:
         """Read sensor values."""
         return {}
 
@@ -204,7 +204,7 @@ class GPIORobotInterface(RobotInterface):
     def __init__(self, name: str = "gpio_robot"):
         super().__init__(name)
         self._gpio_available = False
-        self._servos: Dict[str, int] = {}  # joint_name -> pin
+        self._servos: dict[str, int] = {}  # joint_name -> pin
     
     def connect(self) -> bool:
         try:
@@ -317,10 +317,10 @@ class SimulatedRobotInterface(RobotInterface):
     Logs all commands and maintains virtual state.
     """
     
-    def __init__(self, name: str = "sim_robot", joints: List[str] = None):
+    def __init__(self, name: str = "sim_robot", joints: list[str] = None):
         super().__init__(name)
         self.joints = joints or ["base", "shoulder", "elbow", "wrist", "gripper"]
-        self._positions: Dict[str, float] = {j: 0.0 for j in self.joints}
+        self._positions: dict[str, float] = {j: 0.0 for j in self.joints}
         self._gripper_state = "open"
     
     def connect(self) -> bool:
@@ -359,7 +359,7 @@ class SimulatedRobotInterface(RobotInterface):
             self._positions[joint] = 0.0
         return True
     
-    def get_sensors(self) -> Dict[str, Any]:
+    def get_sensors(self) -> dict[str, Any]:
         return {
             "positions": self._positions.copy(),
             "gripper": self._gripper_state,
@@ -375,7 +375,7 @@ class RobotController:
     """
     
     def __init__(self):
-        self._robots: Dict[str, RobotInterface] = {}
+        self._robots: dict[str, RobotInterface] = {}
         self._default_robot: Optional[str] = None
     
     def register(self, name: str, interface: RobotInterface) -> bool:
@@ -432,11 +432,11 @@ class RobotController:
             return r.stop()
         return False
     
-    def list_robots(self) -> Dict[str, str]:
+    def list_robots(self) -> dict[str, str]:
         """List registered robots and their states."""
         return {name: robot.state.value for name, robot in self._robots.items()}
     
-    def get_sensors(self, robot: str = None) -> Dict[str, Any]:
+    def get_sensors(self, robot: str = None) -> dict[str, Any]:
         """Get sensor data from robot."""
         r = self._get_robot(robot)
         if r:
@@ -473,7 +473,7 @@ class RobotMoveTool(Tool):
         "speed": "Speed 0-1 (default 1.0)",
     }
     
-    def execute(self, joint: str = "", angle: float = 0, robot: str = None, speed: float = 1.0, **kwargs) -> Dict[str, Any]:
+    def execute(self, joint: str = "", angle: float = 0, robot: str = None, speed: float = 1.0, **kwargs) -> dict[str, Any]:
         controller = get_robot()
         success = controller.move_joint(joint, angle, robot, speed)
         return {
@@ -494,7 +494,7 @@ class RobotGripperTool(Tool):
         "robot": "Robot name (optional)",
     }
     
-    def execute(self, action: str = "open", robot: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, action: str = "open", robot: str = None, **kwargs) -> dict[str, Any]:
         controller = get_robot()
         success = controller.gripper(action, robot)
         return {"success": success, "action": action}
@@ -509,7 +509,7 @@ class RobotStatusTool(Tool):
         "robot": "Robot name (optional)",
     }
     
-    def execute(self, robot: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, robot: str = None, **kwargs) -> dict[str, Any]:
         controller = get_robot()
         robots = controller.list_robots()
         sensors = controller.get_sensors(robot)
@@ -529,7 +529,7 @@ class RobotHomeTool(Tool):
         "robot": "Robot name (optional)",
     }
     
-    def execute(self, robot: str = None, **kwargs) -> Dict[str, Any]:
+    def execute(self, robot: str = None, **kwargs) -> dict[str, Any]:
         controller = get_robot()
         success = controller.home(robot)
         return {"success": success, "action": "home"}

@@ -38,8 +38,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-from torch.optim import AdamW
 from torch.cuda.amp import GradScaler, autocast
+from torch.optim import AdamW
 
 from ..config import CONFIG
 
@@ -99,7 +99,7 @@ class MemoryEstimate:
     activations_gb: float = 0.0
     total_gb: float = 0.0
     fits_in_vram: bool = False
-    recommendations: List[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
 
 class CPUOffloader:
@@ -119,8 +119,8 @@ class CPUOffloader:
         """
         self.device = device
         self.pin_memory = pin_memory
-        self.offloaded: Dict[str, torch.Tensor] = {}
-        self._original_locations: Dict[str, torch.device] = {}
+        self.offloaded: dict[str, torch.Tensor] = {}
+        self._original_locations: dict[str, torch.device] = {}
     
     def offload(self, name: str, tensor: torch.Tensor) -> torch.Tensor:
         """
@@ -345,7 +345,7 @@ class LargeModelTrainer:
         inputs: torch.Tensor,
         targets: torch.Tensor,
         loss_fn: Callable = None
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Perform a single training step with accumulation.
         
@@ -424,7 +424,7 @@ class LargeModelTrainer:
         train_loader,
         epochs: int = 1,
         val_loader = None,
-        callbacks: List[Callable] = None
+        callbacks: list[Callable] = None
     ):
         """
         Train the model.

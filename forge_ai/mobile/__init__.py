@@ -24,11 +24,11 @@ Features:
 
 # Re-export from comms.mobile_api (the main implementation)
 from ..comms.mobile_api import (
+    HAS_FLASK,
+    MOBILE_CLIENT_TEMPLATES,
     MobileAPI,
     create_mobile_api,
     print_mobile_client_template,
-    MOBILE_CLIENT_TEMPLATES,
-    HAS_FLASK,
 )
 
 # Backwards-compatible alias

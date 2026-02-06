@@ -12,11 +12,12 @@ Tools:
 Supports: Chrome, Firefox, Opera GX, Brave, Edge
 """
 
+import json
 import os
 import subprocess
-import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from .tool_registry import Tool
 
 # Storage for browser control settings
@@ -24,7 +25,7 @@ BROWSER_CONFIG = Path.home() / ".forge_ai" / "browser_config.json"
 BROWSER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _run_browser_command(browser: str, action: str) -> Dict[str, Any]:
+def _run_browser_command(browser: str, action: str) -> dict[str, Any]:
     """
     Run a browser control command using various methods.
     
@@ -70,7 +71,7 @@ def _run_browser_command(browser: str, action: str) -> Dict[str, Any]:
         
         # Try pynput for media keys (internal Python library)
         try:
-            from pynput.keyboard import Key, Controller
+            from pynput.keyboard import Controller, Key
             keyboard = Controller()
             
             key_map = {
@@ -134,7 +135,7 @@ class BrowserMediaPauseTool(Tool):
         "action": "Action: 'toggle' (default), 'pause', or 'play'",
     }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         action = kwargs.get("action", "toggle")
         
         try:
@@ -159,7 +160,7 @@ class BrowserMediaMuteTool(Tool):
         "action": "Action: 'toggle' (default), 'mute', or 'unmute'",
     }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         action = kwargs.get("action", "toggle")
         
         try:
@@ -177,7 +178,7 @@ class BrowserMediaSkipTool(Tool):
         "direction": "Direction: 'next' (default) or 'previous'",
     }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         direction = kwargs.get("direction", "next")
         
         try:
@@ -198,7 +199,7 @@ class BrowserMediaStopTool(Tool):
     description = "Stop media playback completely in browser."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             return _run_browser_command("any", "stop")
         except Exception as e:
@@ -215,7 +216,7 @@ class BrowserMediaVolumeTool(Tool):
         "level": "Volume level 0-100 (only for 'set' action)",
     }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         action = kwargs.get("action", "up")
         level = kwargs.get("level")
         
@@ -273,7 +274,7 @@ class BrowserMediaInfoTool(Tool):
     description = "Get information about currently playing media (title, artist, etc.)."
     parameters = {}
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             # Try playerctl on Linux
             if os.name == "posix":
@@ -310,7 +311,7 @@ class BrowserTabListTool(Tool):
         "browser": "Browser: 'chrome', 'firefox', 'opera', 'brave', 'edge' (default: auto-detect)",
     }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         browser = kwargs.get("browser", "auto")
         
         try:
@@ -373,7 +374,7 @@ class BrowserFocusTool(Tool):
         "browser": "Browser: 'chrome', 'firefox', 'opera', 'brave', 'edge'",
     }
     
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         browser = kwargs.get("browser", "chrome")
         
         try:

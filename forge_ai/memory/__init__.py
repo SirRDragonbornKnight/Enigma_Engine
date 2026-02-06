@@ -1,75 +1,43 @@
 # memory package - Conversation Storage, Vector Search, Categorization, Export/Import, RAG, and more
 
-from .manager import ConversationManager
-from .memory_db import add_memory, recent, MemoryDatabase
-from .vector_db import (
-    VectorDBInterface,
-    FAISSVectorDB,
-    PineconeVectorDB,
-    SimpleVectorDB,
-    create_vector_db
-)
-from .categorization import (
-    Memory,
-    MemoryType,
-    MemoryCategory,
-    MemoryCategorization
-)
-from .export_import import (
-    MemoryExporter,
-    MemoryImporter
-)
-from .rag import (
-    RAGSystem,
-    RAGResult
-)
-from .embeddings import (
-    EmbeddingGenerator,
-    AutoEmbeddingVectorDB
-)
-from .consolidation import (
-    MemoryConsolidator
-)
-from .async_memory import (
-    AsyncMemoryDatabase,
-    AsyncVectorDB
-)
-from .search import (
-    MemorySearch
-)
-from .deduplication import (
-    MemoryDeduplicator
-)
-from .visualization import (
-    MemoryVisualizer
-)
-from .analytics import (
-    MemoryAnalytics
-)
-from .encryption import (
-    MemoryEncryption,
-    EncryptedMemoryCategory
-)
-from .backup import (
-    MemoryBackupScheduler
-)
+from .analytics import MemoryAnalytics
+from .async_memory import AsyncMemoryDatabase, AsyncVectorDB
 from .augmented_engine import (
     MemoryAugmentedEngine,
     MemoryConfig,
-    get_memory_engine,
-    generate_with_memory,
     chat_with_memory,
+    generate_with_memory,
+    get_memory_engine,
+    search_memories,
     store_memory,
-    search_memories
 )
+from .backup import MemoryBackupScheduler
+from .categorization import Memory, MemoryCategorization, MemoryCategory, MemoryType
+from .consolidation import MemoryConsolidator
 from .conversation_summary import (
     ConversationSummarizer,
     ConversationSummary,
+    export_for_handoff,
+    get_continuation_context,
     get_summarizer,
     summarize_conversation,
-    get_continuation_context,
-    export_for_handoff
 )
+from .deduplication import MemoryDeduplicator
+from .embeddings import AutoEmbeddingVectorDB, EmbeddingGenerator
+from .encryption import EncryptedMemoryCategory, MemoryEncryption
+from .export_import import MemoryExporter, MemoryImporter
+from .manager import ConversationManager
+from .memory_db import MemoryDatabase, add_memory, recent
+from .rag import RAGResult, RAGSystem
+from .search import MemorySearch
+from .vector_db import (
+    FAISSVectorDB,
+    PineconeVectorDB,
+    SimpleVectorDB,
+    VectorDBInterface,
+    create_vector_db,
+)
+from .visualization import MemoryVisualizer
 
 __all__ = [
     # Legacy API

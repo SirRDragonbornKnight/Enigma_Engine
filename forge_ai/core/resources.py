@@ -19,6 +19,7 @@ Usage:
 
 import os
 import platform
+
 from ..config import CONFIG
 
 # Check for torch
@@ -176,6 +177,7 @@ def set_low_priority(enabled: bool = True):
 
         if system == "Windows":
             import ctypes
+
             # BELOW_NORMAL_PRIORITY_CLASS = 0x4000
             # NORMAL_PRIORITY_CLASS = 0x20
             # IDLE_PRIORITY_CLASS = 0x40
@@ -188,6 +190,7 @@ def set_low_priority(enabled: bool = True):
 
         elif system in ("Linux", "Darwin"):
             import os
+
             # Nice values: -20 (high) to 19 (low), 0 is default
             # os.nice(increment) adds to current niceness and returns new value
             try:

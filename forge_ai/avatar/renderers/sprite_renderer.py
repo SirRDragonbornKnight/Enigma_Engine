@@ -6,12 +6,12 @@ Uses built-in SVG sprites with customizable colors.
 """
 
 import time
-from typing import Optional, Dict
 from pathlib import Path
+from typing import Dict, Optional
 
-from .base import BaseRenderer
-from .default_sprites import generate_sprite, SPRITE_TEMPLATES, save_sprite
 from ..avatar_identity import AvatarAppearance
+from .base import BaseRenderer
+from .default_sprites import SPRITE_TEMPLATES, generate_sprite, save_sprite
 
 
 class SpriteRenderer(BaseRenderer):
@@ -30,7 +30,7 @@ class SpriteRenderer(BaseRenderer):
             controller: AvatarController instance
         """
         super().__init__(controller)
-        self._sprite_cache: Dict[str, str] = {}
+        self._sprite_cache: dict[str, str] = {}
         self._current_sprite_name = "idle"
         self._animation_frame = 0
         self._last_render_time = 0
@@ -62,7 +62,7 @@ class SpriteRenderer(BaseRenderer):
         if self._visible:
             print(f"[SpriteRenderer] Moved to ({x}, {y})")
     
-    def render_frame(self, animation_data: Optional[Dict] = None) -> None:
+    def render_frame(self, animation_data: Optional[dict] = None) -> None:
         """
         Render a single frame.
         

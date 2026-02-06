@@ -391,7 +391,7 @@ class SmartWakeWords:
     def suggest_wake_phrases(
         self,
         ai_name: str,
-        personality: Optional['AIPersonality'] = None,
+        personality: Optional[AIPersonality] = None,
         num_suggestions: int = 5
     ) -> List[str]:
         """
@@ -592,7 +592,7 @@ class SmartWakeWords:
 # Convenience functions for smart wake words
 def suggest_wake_phrases(
     ai_name: str,
-    personality: Optional['AIPersonality'] = None
+    personality: Optional[AIPersonality] = None
 ) -> List[str]:
     """
     Get AI-suggested wake phrases.

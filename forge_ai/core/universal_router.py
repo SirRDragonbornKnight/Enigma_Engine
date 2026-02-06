@@ -160,7 +160,7 @@ class UniversalToolRouter:
         matches.sort(key=lambda x: x[1], reverse=True)
         return matches[0][0]
     
-    def extract_params(self, user_input: str, tool_name: str) -> Dict[str, Any]:
+    def extract_params(self, user_input: str, tool_name: str) -> dict[str, Any]:
         """
         Extract parameters for a tool from user input.
         
@@ -239,7 +239,7 @@ class UniversalToolRouter:
                     
         return params
     
-    def route_and_execute(self, user_input: str) -> Dict[str, Any]:
+    def route_and_execute(self, user_input: str) -> dict[str, Any]:
         """
         Detect intent, extract params, and execute the appropriate tool.
         
@@ -408,9 +408,9 @@ class UniversalToolRouter:
             else:
                 return f"I tried to use the {tool_name} tool but encountered an error: {error}"
     
-    def get_available_tools(self) -> List[str]:
+    def get_available_tools(self) -> list[str]:
         """Get list of tools this router can handle."""
-        return list(set(t[0] for t in self.TOOL_PATTERNS if t[0] != "chat"))
+        return list({t[0] for t in self.TOOL_PATTERNS if t[0] != "chat"})
 
 
 # Singleton instance

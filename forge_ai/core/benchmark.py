@@ -17,17 +17,18 @@ Usage:
     bench.save_report(results, "benchmark_results.json")
 """
 
-import torch
-import time
 import gc
 import json
-import statistics
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
 import logging
+import statistics
 import threading
+import time
 from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,9 @@ logger = logging.getLogger(__name__)
 class BenchmarkConfig:
     """Configuration for benchmarks."""
     # Input settings
-    prompt_lengths: List[int] = field(default_factory=lambda: [32, 128, 512, 1024])
-    output_lengths: List[int] = field(default_factory=lambda: [32, 128, 256, 512])
-    batch_sizes: List[int] = field(default_factory=lambda: [1, 2, 4, 8, 16, 32])
+    prompt_lengths: list[int] = field(default_factory=lambda: [32, 128, 512, 1024])
+    output_lengths: list[int] = field(default_factory=lambda: [32, 128, 256, 512])
+    batch_sizes: list[int] = field(default_factory=lambda: [1, 2, 4, 8, 16, 32])
     
     # Run settings
     warmup_runs: int = 3
@@ -100,7 +101,7 @@ class MemoryResult:
     kv_cache_memory_mb: float
     
     # Per-batch memory
-    memory_per_batch: Dict[int, float] = field(default_factory=dict)
+    memory_per_batch: dict[int, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -113,12 +114,12 @@ class BenchmarkReport:
     timestamp: str
     
     # Results
-    latency_results: List[LatencyResult] = field(default_factory=list)
-    throughput_results: List[ThroughputResult] = field(default_factory=list)
+    latency_results: list[LatencyResult] = field(default_factory=list)
+    throughput_results: list[ThroughputResult] = field(default_factory=list)
     memory_results: Optional[MemoryResult] = None
     
     # Summary
-    summary: Dict[str, Any] = field(default_factory=dict)
+    summary: dict[str, Any] = field(default_factory=dict)
 
 
 class Benchmark:
@@ -162,7 +163,7 @@ class Benchmark:
         self.num_params = sum(p.numel() for p in model.parameters())
         
         # Sample prompts for benchmarking
-        self._prompts: Dict[int, str] = {}
+        self._prompts: dict[int, str] = {}
     
     def _get_device(self) -> torch.device:
         """Get the device the model is on."""
@@ -212,7 +213,7 @@ class Benchmark:
         prompt: str,
         max_tokens: int,
         batch_size: int = 1
-    ) -> Tuple[float, float, int]:
+    ) -> tuple[float, float, int]:
         """
         Run a single inference and return timing.
         
@@ -250,7 +251,7 @@ class Benchmark:
         
         return ttft, total_time, tokens_generated
     
-    def benchmark_latency(self) -> List[LatencyResult]:
+    def benchmark_latency(self) -> list[LatencyResult]:
         """
         Benchmark inference latency for various configurations.
         """
@@ -304,7 +305,7 @@ class Benchmark:
         
         return results
     
-    def benchmark_throughput(self) -> List[ThroughputResult]:
+    def benchmark_throughput(self) -> list[ThroughputResult]:
         """
         Benchmark throughput at various batch sizes.
         """
@@ -454,7 +455,7 @@ class Benchmark:
         
         return report
     
-    def _generate_summary(self, report: BenchmarkReport) -> Dict[str, Any]:
+    def _generate_summary(self, report: BenchmarkReport) -> dict[str, Any]:
         """Generate summary statistics from benchmark results."""
         summary = {}
         
@@ -543,7 +544,7 @@ class Benchmark:
         logger.info(f"Saved benchmark report to {path}")
 
 
-def run_quick_benchmark(model, tokenizer, model_name: str = "model") -> Dict[str, float]:
+def run_quick_benchmark(model, tokenizer, model_name: str = "model") -> dict[str, float]:
     """
     Run a quick benchmark and return key metrics.
     

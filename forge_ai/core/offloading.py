@@ -22,10 +22,11 @@ Usage:
     model = OffloadedModel(model, device_map="auto")
 """
 
-import torch
-from typing import Dict, Optional, Union, Any
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ except ImportError:
     logger.info("accelerate not installed. Install with: pip install accelerate")
 
 
-def get_memory_info() -> Dict[str, Any]:
+def get_memory_info() -> dict[str, Any]:
     """Get current memory info for CPU and GPU."""
     import psutil
     
@@ -74,7 +75,7 @@ def get_memory_info() -> Dict[str, Any]:
     return info
 
 
-def estimate_model_memory(model: torch.nn.Module) -> Dict[str, float]:
+def estimate_model_memory(model: torch.nn.Module) -> dict[str, float]:
     """Estimate memory requirements for a model."""
     param_count = sum(p.numel() for p in model.parameters())
     
@@ -98,10 +99,10 @@ def estimate_model_memory(model: torch.nn.Module) -> Dict[str, float]:
 
 def get_device_map(
     model: torch.nn.Module,
-    max_gpu_memory: Optional[Union[str, Dict[int, str]]] = None,
+    max_gpu_memory: Optional[Union[str, dict[int, str]]] = None,
     max_cpu_memory: Optional[str] = None,
     offload_folder: Optional[str] = None
-) -> Dict[str, Union[int, str]]:
+) -> dict[str, Union[int, str]]:
     """
     Create a device map for splitting model across devices.
     
@@ -150,7 +151,7 @@ def get_device_map(
 
 def apply_offloading(
     model: torch.nn.Module,
-    device_map: Optional[Dict[str, Union[int, str]]] = None,
+    device_map: Optional[dict[str, Union[int, str]]] = None,
     offload_folder: Optional[str] = None,
     offload_to_disk: bool = False,
     max_gpu_memory: Optional[str] = None

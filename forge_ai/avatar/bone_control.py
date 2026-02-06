@@ -26,11 +26,11 @@ Usage:
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple, List, Any
 from threading import Lock
-import time
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class BoneLimits:
     # Speed limit (max degrees per second)
     speed_limit: float = 90.0
     
-    def clamp(self, pitch: float, yaw: float, roll: float) -> Tuple[float, float, float]:
+    def clamp(self, pitch: float, yaw: float, roll: float) -> tuple[float, float, float]:
         """Clamp rotation values to limits."""
         pitch = max(self.pitch_min, min(self.pitch_max, pitch))
         yaw = max(self.yaw_min, min(self.yaw_max, yaw))
@@ -63,7 +63,7 @@ class BoneLimits:
 
 # Standard bone limits based on human anatomy
 # These prevent unnatural movements like elbows bending backwards
-STANDARD_BONE_LIMITS: Dict[str, BoneLimits] = {
+STANDARD_BONE_LIMITS: dict[str, BoneLimits] = {
     # Head and neck
     "head": BoneLimits(pitch_min=-40, pitch_max=40, yaw_min=-80, yaw_max=80, roll_min=-30, roll_max=30),
     "neck": BoneLimits(pitch_min=-30, pitch_max=30, yaw_min=-60, yaw_max=60, roll_min=-20, roll_max=20),
@@ -151,10 +151,10 @@ class BoneController:
     
     def __init__(self):
         self._lock = Lock()
-        self._bone_states: Dict[str, BoneState] = {}
-        self._custom_limits: Dict[str, BoneLimits] = {}
-        self._avatar_bones: List[str] = []
-        self._callbacks: List[Callable] = []
+        self._bone_states: dict[str, BoneState] = {}
+        self._custom_limits: dict[str, BoneLimits] = {}
+        self._avatar_bones: list[str] = []
+        self._callbacks: list[Callable] = []
         
         # Link to main avatar controller for priority system
         self._avatar_controller = None
@@ -172,7 +172,7 @@ class BoneController:
         self._avatar_controller = controller
         logger.info("Bone controller linked to main avatar controller")
     
-    def set_avatar_bones(self, bone_names: List[str]) -> None:
+    def set_avatar_bones(self, bone_names: list[str]) -> None:
         """Set the available bones for the current avatar."""
         with self._lock:
             self._avatar_bones = list(bone_names)
@@ -206,7 +206,7 @@ class BoneController:
         return DEFAULT_BONE_LIMITS
     
     def move_bone(self, bone_name: str, pitch: float = None, yaw: float = None, 
-                  roll: float = None, smooth: bool = True) -> Tuple[float, float, float]:
+                  roll: float = None, smooth: bool = True) -> tuple[float, float, float]:
         """
         Move a bone to the specified rotation.
         
@@ -304,7 +304,7 @@ class BoneController:
         with self._lock:
             return self._bone_states.get(bone_name)
     
-    def get_all_states(self) -> Dict[str, Dict[str, float]]:
+    def get_all_states(self) -> dict[str, dict[str, float]]:
         """Get all bone states as a dictionary."""
         with self._lock:
             return {
@@ -336,7 +336,7 @@ class BoneController:
             return
         
         try:
-            with open(self._command_file, 'r') as f:
+            with open(self._command_file) as f:
                 cmd = json.load(f)
             
             timestamp = cmd.get("timestamp", 0)
@@ -376,7 +376,7 @@ class BoneController:
         except Exception as e:
             logger.error(f"Error reading bone commands: {e}")
     
-    def get_bone_info_for_ai(self) -> Dict[str, Any]:
+    def get_bone_info_for_ai(self) -> dict[str, Any]:
         """
         Get bone information formatted for AI.
         

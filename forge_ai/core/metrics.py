@@ -22,12 +22,13 @@ Usage:
     metrics_text = metrics.export()
 """
 
-import time
-import threading
-from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field
-from collections import defaultdict
 import logging
+import threading
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
+
 import torch
 
 logger = logging.getLogger(__name__)
@@ -47,11 +48,11 @@ class HistogramBuckets:
 class Counter:
     """Thread-safe counter metric."""
     
-    def __init__(self, name: str, description: str, labels: Optional[List[str]] = None):
+    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None):
         self.name = name
         self.description = description
         self.labels = labels or []
-        self._values: Dict[tuple, float] = defaultdict(float)
+        self._values: dict[tuple, float] = defaultdict(float)
         self._lock = threading.Lock()
     
     def inc(self, value: float = 1.0, **labels):
@@ -84,11 +85,11 @@ class Counter:
 class Gauge:
     """Thread-safe gauge metric."""
     
-    def __init__(self, name: str, description: str, labels: Optional[List[str]] = None):
+    def __init__(self, name: str, description: str, labels: Optional[list[str]] = None):
         self.name = name
         self.description = description
         self.labels = labels or []
-        self._values: Dict[tuple, float] = defaultdict(float)
+        self._values: dict[tuple, float] = defaultdict(float)
         self._lock = threading.Lock()
     
     def set(self, value: float, **labels):
@@ -135,18 +136,18 @@ class Histogram:
         self,
         name: str,
         description: str,
-        buckets: List[float],
-        labels: Optional[List[str]] = None
+        buckets: list[float],
+        labels: Optional[list[str]] = None
     ):
         self.name = name
         self.description = description
         self.buckets = sorted(buckets)
         self.labels = labels or []
-        self._bucket_counts: Dict[tuple, Dict[float, int]] = defaultdict(
+        self._bucket_counts: dict[tuple, dict[float, int]] = defaultdict(
             lambda: {b: 0 for b in self.buckets}
         )
-        self._sums: Dict[tuple, float] = defaultdict(float)
-        self._counts: Dict[tuple, int] = defaultdict(int)
+        self._sums: dict[tuple, float] = defaultdict(float)
+        self._counts: dict[tuple, int] = defaultdict(int)
         self._lock = threading.Lock()
     
     def observe(self, value: float, **labels):

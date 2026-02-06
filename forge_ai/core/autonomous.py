@@ -30,20 +30,24 @@ CONNECTED FILES:
 ================================================================================
 """
 
-import time
+import logging
 import random
 import threading
-import logging
-from typing import Optional, Callable, List, Dict, Any, Tuple
-from pathlib import Path
+import time
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .self_improvement import (
-    LearningEngine, LearningExample, LearningSource, Priority,
-    PerformanceMetrics, AutonomousConfig, get_learning_engine
+    AutonomousConfig,
+    LearningEngine,
+    LearningExample,
+    LearningSource,
+    PerformanceMetrics,
+    Priority,
+    get_learning_engine,
 )
-
 
 # =============================================================================
 # ENUMS & DATA CLASSES
@@ -381,7 +385,7 @@ Reply with ONLY the topic name."""
         if config_file.exists():
             try:
                 import json
-                with open(config_file, 'r') as f:
+                with open(config_file) as f:
                     data = json.load(f)
                     self.config = AutonomousConfig.from_dict(data)
                 logger.info(f"Loaded autonomous config for {self.model_name}")
@@ -495,7 +499,7 @@ Reply with ONLY the topic name."""
         
         try:
             from ..memory.manager import ConversationManager
-            
+
             # Get conversation manager
             conv_manager = ConversationManager(model_name=self.model_name)
             
@@ -896,7 +900,7 @@ Reply with ONLY the topic name."""
     # HELPER METHODS FOR ENHANCED LEARNING
     # =========================================================================
     
-    def _analyze_conversation_structure(self, messages: List[Dict[str, Any]]) -> Dict[str, float]:
+    def _analyze_conversation_structure(self, messages: list[dict[str, Any]]) -> dict[str, float]:
         """
         Analyze overall conversation structure and quality.
         
@@ -925,7 +929,7 @@ Reply with ONLY the topic name."""
             "length": len(messages)
         }
     
-    def _extract_topics_from_text(self, text: str) -> List[str]:
+    def _extract_topics_from_text(self, text: str) -> list[str]:
         """
         Extract topics/keywords from text.
         
@@ -951,7 +955,7 @@ Reply with ONLY the topic name."""
         
         return topics[:5]  # Return top 5 topics
     
-    def _extract_personality_traits(self, conversations: List[List[Dict[str, Any]]]) -> Dict[str, float]:
+    def _extract_personality_traits(self, conversations: list[list[dict[str, Any]]]) -> dict[str, float]:
         """
         Extract personality trait values from conversations.
         
@@ -1399,7 +1403,7 @@ Reply with ONLY the topic name."""
     # STATUS & STATISTICS
     # =========================================================================
     
-    def get_learning_stats(self) -> Dict[str, Any]:
+    def get_learning_stats(self) -> dict[str, Any]:
         """
         Get current learning statistics.
         

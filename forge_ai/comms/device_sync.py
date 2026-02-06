@@ -25,18 +25,18 @@ USAGE:
     sync.register(DeviceType.AVATAR_DISPLAY, "phone-1")
 """
 
+import hashlib
+import http.server
 import json
 import logging
+import socketserver
 import threading
 import time
-import hashlib
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Callable, Set
-from enum import Enum, auto
 from collections import deque
-import http.server
-import socketserver
-from urllib import request, error
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Any, Callable, Dict, List, Optional, Set
+from urllib import error, request
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ class SyncState:
     voice_enabled: bool = True
     connection_quality: str = "good"
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "avatar_expression": self.avatar_expression,
@@ -116,7 +116,7 @@ class SyncState:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SyncState':
+    def from_dict(cls, data: dict[str, Any]) -> 'SyncState':
         """Create from dictionary."""
         state = cls()
         for key, value in data.items():
@@ -129,7 +129,7 @@ class SyncState:
         content = json.dumps(self.to_dict(), sort_keys=True)
         return hashlib.md5(content.encode()).hexdigest()
     
-    def get_delta(self, other: 'SyncState') -> Dict[str, Any]:
+    def get_delta(self, other: 'SyncState') -> dict[str, Any]:
         """Get only changed fields compared to another state."""
         delta = {}
         self_dict = self.to_dict()
@@ -150,8 +150,8 @@ class ConnectedDevice:
     address: str
     last_seen: float = field(default_factory=time.time)
     last_state_hash: str = ""
-    subscriptions: Set[str] = field(default_factory=set)  # State fields to receive
-    capabilities: Set[str] = field(default_factory=set)   # What it can do
+    subscriptions: set[str] = field(default_factory=set)  # State fields to receive
+    capabilities: set[str] = field(default_factory=set)   # What it can do
     
     def is_alive(self, timeout: float = 30.0) -> bool:
         """Check if device is still responding."""
@@ -184,7 +184,7 @@ class DeviceSync:
         self._last_state_hash = ""
         
         # Connected devices (master only)
-        self._devices: Dict[str, ConnectedDevice] = {}
+        self._devices: dict[str, ConnectedDevice] = {}
         self._devices_lock = threading.Lock()
         
         # My device info (client only)
@@ -192,7 +192,7 @@ class DeviceSync:
         self._my_device_type: Optional[DeviceType] = None
         
         # Update callbacks
-        self._callbacks: Dict[str, List[Callable[[str, Any], None]]] = {}
+        self._callbacks: dict[str, list[Callable[[str, Any], None]]] = {}
         
         # Update queue for outgoing changes
         self._update_queue: deque = deque(maxlen=100)
@@ -228,7 +228,7 @@ class DeviceSync:
         if self._sync_thread:
             self._sync_thread.join(timeout=2.0)
     
-    def register(self, device_type: DeviceType, device_id: str, capabilities: Set[str] = None):
+    def register(self, device_type: DeviceType, device_id: str, capabilities: set[str] = None):
         """Register this device with the master (client mode)."""
         if self.role != "client":
             return
@@ -292,7 +292,7 @@ class DeviceSync:
         """Subscribe to all state changes."""
         self.subscribe("*", callback)
     
-    def get_connected_devices(self) -> List[Dict[str, Any]]:
+    def get_connected_devices(self) -> list[dict[str, Any]]:
         """Get list of connected devices (master only)."""
         with self._devices_lock:
             return [
@@ -306,7 +306,7 @@ class DeviceSync:
                 for d in self._devices.values()
             ]
     
-    def send_command(self, device_id: str, command: str, params: Dict[str, Any] = None):
+    def send_command(self, device_id: str, command: str, params: dict[str, Any] = None):
         """Send a command to a specific device."""
         if self.role == "master":
             self._queue_command(device_id, command, params or {})
@@ -365,7 +365,7 @@ class DeviceSync:
         
         return SyncHandler
     
-    def _handle_request(self, data: Dict[str, Any], address: str) -> Dict[str, Any]:
+    def _handle_request(self, data: dict[str, Any], address: str) -> dict[str, Any]:
         """Handle incoming sync request (master only)."""
         action = data.get("action", "sync")
         
@@ -380,7 +380,7 @@ class DeviceSync:
         else:
             return {"error": f"Unknown action: {action}"}
     
-    def _handle_register(self, data: Dict[str, Any], address: str) -> Dict[str, Any]:
+    def _handle_register(self, data: dict[str, Any], address: str) -> dict[str, Any]:
         """Handle device registration."""
         device_id = data.get("device_id", "")
         device_type_str = data.get("device_type", "COMPUTE_NODE")
@@ -407,7 +407,7 @@ class DeviceSync:
             "state": self._state.to_dict(),
         }
     
-    def _handle_sync(self, data: Dict[str, Any], address: str) -> Dict[str, Any]:
+    def _handle_sync(self, data: dict[str, Any], address: str) -> dict[str, Any]:
         """Handle sync request."""
         device_id = data.get("device_id", "")
         updates = data.get("updates", {})
@@ -439,7 +439,7 @@ class DeviceSync:
                 "hash": current_hash,
             }
     
-    def _handle_heartbeat(self, data: Dict[str, Any], address: str) -> Dict[str, Any]:
+    def _handle_heartbeat(self, data: dict[str, Any], address: str) -> dict[str, Any]:
         """Handle heartbeat from device."""
         device_id = data.get("device_id", "")
         
@@ -449,7 +449,7 @@ class DeviceSync:
         
         return {"status": "ok"}
     
-    def _handle_command(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_command(self, data: dict[str, Any]) -> dict[str, Any]:
         """Handle command forwarding."""
         # Store command for target device
         target = data.get("target", "")
@@ -532,7 +532,7 @@ class DeviceSync:
         """Queue a state update for sync."""
         self._update_queue.append((key, value))
     
-    def _queue_command(self, device_id: str, command: str, params: Dict[str, Any]):
+    def _queue_command(self, device_id: str, command: str, params: dict[str, Any]):
         """Queue a command for a device."""
         # Commands are delivered on next sync
         pass
@@ -553,7 +553,7 @@ class DeviceSync:
             except Exception as e:
                 logger.error(f"Callback error: {e}")
     
-    def _send_to_master(self, data: Dict[str, Any]):
+    def _send_to_master(self, data: dict[str, Any]):
         """Send data to master."""
         try:
             json_data = json.dumps(data).encode('utf-8')

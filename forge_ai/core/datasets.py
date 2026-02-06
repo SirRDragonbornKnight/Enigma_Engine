@@ -52,10 +52,10 @@ class TextDataset(Dataset):
     
     def __init__(
         self,
-        texts: List[str],
+        texts: list[str],
         tokenizer: Any,
         config: Optional[DataConfig] = None,
-        labels: Optional[List[Any]] = None
+        labels: Optional[list[Any]] = None
     ):
         self.texts = texts
         self.tokenizer = tokenizer
@@ -75,7 +75,7 @@ class TextDataset(Dataset):
             encoding = self._tokenize(text)
             self._cached_encodings.append(encoding)
     
-    def _tokenize(self, text: str) -> Dict[str, torch.Tensor]:
+    def _tokenize(self, text: str) -> dict[str, torch.Tensor]:
         """Tokenize a single text."""
         # Handle different tokenizer interfaces
         if hasattr(self.tokenizer, 'encode'):
@@ -116,7 +116,7 @@ class TextDataset(Dataset):
     def __len__(self) -> int:
         return len(self.texts)
     
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         if self._cached_encodings:
             item = self._cached_encodings[idx].copy()
         else:
@@ -140,7 +140,7 @@ class TextDataset(Dataset):
         texts = []
         labels = []
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             for i, line in enumerate(f):
                 if max_samples and i >= max_samples:
                     break
@@ -169,7 +169,7 @@ class TextDataset(Dataset):
         """Load from JSON file."""
         config = config or DataConfig()
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
         
         if max_samples:
@@ -197,7 +197,7 @@ class TextDataset(Dataset):
         texts = []
         labels = []
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             reader = csv.DictReader(f, delimiter=delimiter)
             
             for i, row in enumerate(reader):
@@ -222,7 +222,7 @@ class TextDataset(Dataset):
         """Load from plain text file."""
         config = config or DataConfig()
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             text = f.read()
         
         if chunk_size:
@@ -247,7 +247,7 @@ class StreamingDataset(IterableDataset):
     
     def __init__(
         self,
-        paths: List[str],
+        paths: list[str],
         tokenizer: Any,
         config: Optional[DataConfig] = None,
         shuffle_files: bool = True
@@ -257,7 +257,7 @@ class StreamingDataset(IterableDataset):
         self.config = config or DataConfig()
         self.shuffle_files = shuffle_files
     
-    def __iter__(self) -> Iterator[Dict[str, torch.Tensor]]:
+    def __iter__(self) -> Iterator[dict[str, torch.Tensor]]:
         worker_info = torch.utils.data.get_worker_info()
         
         if worker_info is None:
@@ -279,31 +279,31 @@ class StreamingDataset(IterableDataset):
         for path in paths:
             yield from self._iterate_file(path)
     
-    def _iterate_file(self, path: str) -> Iterator[Dict[str, torch.Tensor]]:
+    def _iterate_file(self, path: str) -> Iterator[dict[str, torch.Tensor]]:
         """Iterate over a single file."""
         ext = os.path.splitext(path)[1].lower()
         
         if ext == '.jsonl':
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 for line in f:
                     item = json.loads(line)
                     text = item[self.config.text_column]
                     yield self._tokenize(text)
         
         elif ext == '.csv':
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     text = row[self.config.text_column]
                     yield self._tokenize(text)
         
         else:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 for line in f:
                     if line.strip():
                         yield self._tokenize(line.strip())
     
-    def _tokenize(self, text: str) -> Dict[str, torch.Tensor]:
+    def _tokenize(self, text: str) -> dict[str, torch.Tensor]:
         """Tokenize a single text."""
         if hasattr(self.tokenizer, 'encode'):
             token_ids = self.tokenizer.encode(text)
@@ -336,7 +336,7 @@ class InstructionDataset(TextDataset):
     
     def __init__(
         self,
-        instructions: List[Dict[str, str]],
+        instructions: list[dict[str, str]],
         tokenizer: Any,
         config: Optional[DataConfig] = None,
         prompt_template: str = "### Instruction:\n{instruction}\n\n### Response:\n{response}"
@@ -366,7 +366,7 @@ class InstructionDataset(TextDataset):
         config: Optional[DataConfig] = None
     ) -> 'InstructionDataset':
         """Load from Alpaca format (instruction, input, output)."""
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
         
         instructions = []
@@ -390,7 +390,7 @@ class InstructionDataset(TextDataset):
         config: Optional[DataConfig] = None
     ) -> 'InstructionDataset':
         """Load from ShareGPT format (conversations)."""
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             data = json.load(f)
         
         instructions = []
@@ -420,7 +420,7 @@ class PreferenceDataset(TextDataset):
     
     def __init__(
         self,
-        preferences: List[Dict[str, str]],
+        preferences: list[dict[str, str]],
         tokenizer: Any,
         config: Optional[DataConfig] = None
     ):
@@ -433,7 +433,7 @@ class PreferenceDataset(TextDataset):
     def __len__(self) -> int:
         return len(self.preferences)
     
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         item = self.preferences[idx]
         
         prompt_encoding = self._tokenize(item['prompt'])
@@ -449,7 +449,7 @@ class PreferenceDataset(TextDataset):
             'rejected_attention_mask': rejected_encoding.get('attention_mask'),
         }
     
-    def _tokenize(self, text: str) -> Dict[str, torch.Tensor]:
+    def _tokenize(self, text: str) -> dict[str, torch.Tensor]:
         """Tokenize a single text."""
         if hasattr(self.tokenizer, 'encode'):
             token_ids = self.tokenizer.encode(text)
@@ -484,7 +484,7 @@ class PreferenceDataset(TextDataset):
         """Load from JSONL file with prompt, chosen, rejected columns."""
         preferences = []
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             for line in f:
                 item = json.loads(line)
                 preferences.append({
@@ -497,9 +497,9 @@ class PreferenceDataset(TextDataset):
 
 
 def collate_fn(
-    batch: List[Dict[str, torch.Tensor]],
+    batch: list[dict[str, torch.Tensor]],
     pad_token_id: int = 0
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     """
     Collate function for DataLoader.
     

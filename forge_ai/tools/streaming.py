@@ -8,8 +8,9 @@ Provides streaming results for long-running tools.
 import logging
 import queue
 import threading
-from typing import Any, Optional, Iterator, Dict
+from collections.abc import Iterator
 from enum import Enum
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class StreamingToolResult:
         # State tracking
         self._state = StreamState.PENDING
         self._error: Optional[str] = None
-        self._metadata: Dict[str, Any] = {}
+        self._metadata: dict[str, Any] = {}
         
         # Thread safety
         self._lock = threading.Lock()
@@ -74,7 +75,7 @@ class StreamingToolResult:
             logger.warning(f"Stream queue full for {self.tool_name}")
             raise
     
-    def done(self, metadata: Optional[Dict[str, Any]] = None):
+    def done(self, metadata: Optional[dict[str, Any]] = None):
         """
         Mark stream as complete.
         
@@ -136,7 +137,7 @@ class StreamingToolResult:
         with self._lock:
             return self._error
     
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Get stream metadata."""
         with self._lock:
             return self._metadata.copy()
@@ -174,7 +175,7 @@ class StreamingToolExecutor:
     def execute_streaming(
         self,
         tool_name: str,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         chunk_size: Optional[int] = None
     ) -> StreamingToolResult:
         """
@@ -228,7 +229,7 @@ class StreamingToolExecutor:
         self,
         tool_calls: list,
         chunk_size: Optional[int] = None
-    ) -> Dict[int, StreamingToolResult]:
+    ) -> dict[int, StreamingToolResult]:
         """
         Execute multiple tools with streaming results.
         

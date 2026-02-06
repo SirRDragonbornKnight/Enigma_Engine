@@ -11,12 +11,13 @@ Removed (AI should learn file operations instead):
   - note_* tools → Use file_tools or AI learns file handling
 """
 
-import re
 import json
-import urllib.request
+import re
 import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
 from .tool_registry import Tool
 
 
@@ -31,7 +32,7 @@ class WikipediaSearchTool(Tool):
         "language": "Language code: en, es, de, fr, ja, zh (default: en)",
     }
     
-    def execute(self, query: str, sentences: int = 5, language: str = "en", **kwargs) -> Dict[str, Any]:
+    def execute(self, query: str, sentences: int = 5, language: str = "en", **kwargs) -> dict[str, Any]:
         try:
             # Search for page
             search_url = f"https://{language}.wikipedia.org/w/api.php"
@@ -79,7 +80,7 @@ class ArxivSearchTool(Tool):
         "sort_by": "Sort: relevance, lastUpdatedDate, submittedDate",
     }
     
-    def execute(self, query: str, max_results: int = 5, sort_by: str = "relevance", **kwargs) -> Dict[str, Any]:
+    def execute(self, query: str, max_results: int = 5, sort_by: str = "relevance", **kwargs) -> dict[str, Any]:
         try:
             import xml.etree.ElementTree as ET
             
@@ -139,7 +140,7 @@ class PDFExtractTool(Tool):
         "max_pages": "Max pages (default: 10)",
     }
     
-    def execute(self, path: str, pages: str = "all", max_pages: int = 10, **kwargs) -> Dict[str, Any]:
+    def execute(self, path: str, pages: str = "all", max_pages: int = 10, **kwargs) -> dict[str, Any]:
         try:
             path = Path(path).expanduser().resolve()
             if not path.exists():

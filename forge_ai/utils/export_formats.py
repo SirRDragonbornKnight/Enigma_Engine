@@ -33,11 +33,12 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,7 @@ class JSONLHandler(FormatHandler):
             json.dump(item, stream, ensure_ascii=False, default=str)
             stream.write('\n')
     
-    def import_data(self, stream: io.IOBase, **options) -> List[Any]:
+    def import_data(self, stream: io.IOBase, **options) -> list[Any]:
         result = []
         for line in stream:
             line = line.strip()
@@ -183,7 +184,7 @@ class CSVHandler(FormatHandler):
         stream: io.IOBase,
         delimiter: str = ',',
         **options
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         reader = csv.DictReader(stream, delimiter=delimiter)
         result = []
         for row in reader:
@@ -193,7 +194,7 @@ class CSVHandler(FormatHandler):
                 if v and v.startswith(('[', '{')):
                     try:
                         clean_row[k] = json.loads(v)
-                    except:
+                    except (json.JSONDecodeError, ValueError):
                         clean_row[k] = v
                 else:
                     clean_row[k] = v
@@ -207,7 +208,7 @@ class TSVHandler(CSVHandler):
     def export(self, data: Any, stream: io.IOBase, **options) -> None:
         super().export(data, stream, delimiter='\t', **options)
     
-    def import_data(self, stream: io.IOBase, **options) -> List[Dict[str, Any]]:
+    def import_data(self, stream: io.IOBase, **options) -> list[dict[str, Any]]:
         return super().import_data(stream, delimiter='\t', **options)
 
 
@@ -266,7 +267,7 @@ class MarkdownHandler(FormatHandler):
                     stream.write(f"{item}\n")
                 stream.write("\n")
     
-    def import_data(self, stream: io.IOBase, **options) -> List[Dict[str, Any]]:
+    def import_data(self, stream: io.IOBase, **options) -> list[dict[str, Any]]:
         content = stream.read()
         
         # Try to parse markdown table
@@ -370,7 +371,7 @@ class HTMLHandler(FormatHandler):
             .replace("'", "&#39;")
         )
     
-    def import_data(self, stream: io.IOBase, **options) -> List[Dict[str, Any]]:
+    def import_data(self, stream: io.IOBase, **options) -> list[dict[str, Any]]:
         content = stream.read()
         
         # Try to parse HTML table
@@ -467,7 +468,7 @@ class YAMLHandler(FormatHandler):
             content = stream.read()
             try:
                 return json.loads(content)
-            except:
+            except (json.JSONDecodeError, ValueError):
                 return {"content": content}
 
 
@@ -613,7 +614,7 @@ class Exporter:
     
     def __init__(self):
         """Initialize exporter with format handlers."""
-        self._handlers: Dict[ExportFormat, FormatHandler] = {
+        self._handlers: dict[ExportFormat, FormatHandler] = {
             ExportFormat.JSON: JSONHandler(),
             ExportFormat.JSONL: JSONLHandler(),
             ExportFormat.CSV: CSVHandler(),
@@ -625,7 +626,7 @@ class Exporter:
             ExportFormat.TEXT: TextHandler(),
         }
     
-    def get_supported_formats(self) -> List[ExportFormat]:
+    def get_supported_formats(self) -> list[ExportFormat]:
         """Get list of supported formats."""
         return list(self._handlers.keys())
     
@@ -640,8 +641,8 @@ class Exporter:
     def export(
         self,
         data: Any,
-        output: Union[str, Path, io.IOBase],
-        format: Optional[Union[str, ExportFormat]] = None,
+        output: str | Path | io.IOBase,
+        format: str | ExportFormat | None = None,
         **options
     ) -> None:
         """
@@ -679,7 +680,7 @@ class Exporter:
     def export_string(
         self,
         data: Any,
-        format: Union[str, ExportFormat],
+        format: str | ExportFormat,
         **options
     ) -> str:
         """
@@ -699,8 +700,8 @@ class Exporter:
     
     def import_file(
         self,
-        input_path: Union[str, Path],
-        format: Optional[Union[str, ExportFormat]] = None,
+        input_path: str | Path,
+        format: str | ExportFormat | None = None,
         **options
     ) -> Any:
         """
@@ -726,13 +727,13 @@ class Exporter:
         if not handler:
             raise ValueError(f"Unsupported format: {format}")
         
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             return handler.import_data(f, **options)
     
     def import_string(
         self,
         content: str,
-        format: Union[str, ExportFormat],
+        format: str | ExportFormat,
         **options
     ) -> Any:
         """
@@ -758,10 +759,10 @@ class Exporter:
     
     def convert(
         self,
-        input_path: Union[str, Path],
-        output_path: Union[str, Path],
-        input_format: Optional[Union[str, ExportFormat]] = None,
-        output_format: Optional[Union[str, ExportFormat]] = None,
+        input_path: str | Path,
+        output_path: str | Path,
+        input_format: str | ExportFormat | None = None,
+        output_format: str | ExportFormat | None = None,
         **options
     ) -> None:
         """
@@ -801,7 +802,7 @@ class Exporter:
 
 
 # Singleton instance
-_exporter_instance: Optional[Exporter] = None
+_exporter_instance: Exporter | None = None
 
 
 def get_exporter() -> Exporter:
@@ -815,8 +816,8 @@ def get_exporter() -> Exporter:
 # Convenience functions
 def export_data(
     data: Any,
-    output: Union[str, Path],
-    format: Optional[str] = None,
+    output: str | Path,
+    format: str | None = None,
     **options
 ) -> None:
     """Export data to file."""
@@ -824,16 +825,16 @@ def export_data(
 
 
 def import_data(
-    input_path: Union[str, Path],
-    format: Optional[str] = None
+    input_path: str | Path,
+    format: str | None = None
 ) -> Any:
     """Import data from file."""
     return get_exporter().import_file(input_path, format)
 
 
 def convert_format(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path]
+    input_path: str | Path,
+    output_path: str | Path
 ) -> None:
     """Convert between formats."""
     get_exporter().convert(input_path, output_path)

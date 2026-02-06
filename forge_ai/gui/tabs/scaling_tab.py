@@ -8,15 +8,25 @@ Simple, clean interface for selecting model sizes.
 """
 
 from __future__ import annotations
+
 from typing import Optional
 
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QScrollArea,
-    QLabel, QPushButton, QFrame, QMessageBox, QProgressBar, QSizePolicy
-)
-from PyQt5.QtCore import Qt, pyqtSignal, QEvent
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import (
+    QApplication,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .shared_components import NoScrollComboBox
 
@@ -513,8 +523,10 @@ class ScalingTab(QWidget):
             return
             
         try:
-            import torch
             import time
+
+            import torch
+
             from forge_ai.core.model import create_model
             
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

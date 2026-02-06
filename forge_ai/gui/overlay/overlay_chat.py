@@ -6,7 +6,8 @@ and the main ForgeAI chat interface.
 """
 
 import logging
-from typing import Optional, Callable, List, Dict, Any
+from typing import Any, Callable, Dict, List, Optional
+
 from PyQt5.QtCore import QObject, pyqtSignal
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class OverlayChatBridge(QObject):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._chat_history: List[Dict[str, Any]] = []
+        self._chat_history: list[dict[str, Any]] = []
         self._engine = None
         self._on_response_callback: Optional[Callable[[str], None]] = None
         
@@ -95,7 +96,7 @@ class OverlayChatBridge(QObject):
         if self._on_response_callback:
             self._on_response_callback(response)
             
-    def sync_history(self, history: Optional[List[Dict[str, Any]]] = None):
+    def sync_history(self, history: Optional[list[dict[str, Any]]] = None):
         """
         Sync chat history between overlay and main window.
         
@@ -106,7 +107,7 @@ class OverlayChatBridge(QObject):
             self._chat_history = history.copy()
         self.history_updated.emit(self._chat_history.copy())
         
-    def get_history(self) -> List[Dict[str, Any]]:
+    def get_history(self) -> list[dict[str, Any]]:
         """Get current chat history."""
         return self._chat_history.copy()
         

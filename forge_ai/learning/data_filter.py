@@ -6,10 +6,10 @@ control over their privacy by filtering out sensitive conversations, keywords,
 and personal information.
 """
 
-import re
 import logging
-from typing import Set, List, Optional, Any, Dict
+import re
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class TrainingExample:
     text: str
     category: Optional[str] = None
     is_private: bool = False
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 class FederatedDataFilter:
@@ -37,10 +37,10 @@ class FederatedDataFilter:
     def __init__(self):
         """Initialize the data filter."""
         # Categories to include (empty = all)
-        self.allowed_categories: Set[str] = set()
+        self.allowed_categories: set[str] = set()
         
         # Keywords to exclude
-        self.excluded_keywords: Set[str] = {
+        self.excluded_keywords: set[str] = {
             # Security-sensitive
             "password", "passwd", "pwd",
             "credit card", "creditcard", "card number",
@@ -65,7 +65,7 @@ class FederatedDataFilter:
         
         logger.info("Federated data filter initialized")
     
-    def _compile_pii_patterns(self) -> List[re.Pattern]:
+    def _compile_pii_patterns(self) -> list[re.Pattern]:
         """Compile regex patterns for PII detection."""
         patterns = [
             # Email addresses
@@ -204,9 +204,9 @@ class FederatedDataFilter:
     
     def filter_batch(
         self,
-        examples: List[TrainingExample],
+        examples: list[TrainingExample],
         sanitize: bool = True,
-    ) -> List[TrainingExample]:
+    ) -> list[TrainingExample]:
         """
         Filter a batch of training examples.
         
@@ -233,7 +233,7 @@ class FederatedDataFilter:
         
         return result
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get filter statistics."""
         return {
             "allowed_categories": list(self.allowed_categories) if self.allowed_categories else "all",

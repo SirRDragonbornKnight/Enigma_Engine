@@ -5,11 +5,11 @@ Allows AI to design and evolve its own visual appearance based on personality tr
 AI can create its own look OR user can fully customize.
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Optional, Any
-from datetime import datetime
 import json
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ..core.personality import AIPersonality
 
@@ -31,7 +31,7 @@ class AvatarAppearance:
     size: str = "medium"    # small, medium, large
     
     # Accessories/elements
-    accessories: List[str] = field(default_factory=list)
+    accessories: list[str] = field(default_factory=list)
     
     # Expression defaults
     default_expression: str = "neutral"
@@ -46,12 +46,12 @@ class AvatarAppearance:
     description: str = ""
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AvatarAppearance':
+    def from_dict(cls, data: dict[str, Any]) -> 'AvatarAppearance':
         """Create from dictionary."""
         # Handle list fields properly
         if 'accessories' in data:
@@ -84,7 +84,7 @@ class AIAvatarIdentity:
         """
         self.personality = personality
         self.appearance = AvatarAppearance()
-        self.evolution_history: List[Dict[str, Any]] = []
+        self.evolution_history: list[dict[str, Any]] = []
         self.reasoning: str = ""
         
     def design_from_personality(self) -> AvatarAppearance:
@@ -449,7 +449,7 @@ class AIAvatarIdentity:
             return False
         
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath) as f:
                 data = json.load(f)
             
             self.appearance = AvatarAppearance.from_dict(data.get("appearance", {}))

@@ -5,7 +5,8 @@ Abstract base class for all avatar renderers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from ..avatar_identity import AvatarAppearance
 
 
@@ -51,7 +52,7 @@ class BaseRenderer(ABC):
         pass
     
     @abstractmethod
-    def render_frame(self, animation_data: Optional[Dict] = None) -> None:
+    def render_frame(self, animation_data: Optional[dict] = None) -> None:
         """
         Render a single frame.
         

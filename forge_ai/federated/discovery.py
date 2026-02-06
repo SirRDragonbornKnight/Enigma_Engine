@@ -20,13 +20,13 @@ USAGE:
     federations = discovery.discover_federations()
 """
 
+import json
 import logging
 import socket
-import json
 import threading
 import time
-from typing import List, Dict, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
 
 from .federation import FederationInfo, FederationMode
 
@@ -48,8 +48,8 @@ class FederationDiscovery:
             discovery_port: UDP port for discovery broadcast
         """
         self.discovery_port = discovery_port
-        self.discovered_federations: Dict[str, FederationInfo] = {}
-        self.advertised_federations: Dict[str, FederationInfo] = {}
+        self.discovered_federations: dict[str, FederationInfo] = {}
+        self.advertised_federations: dict[str, FederationInfo] = {}
         
         self._listener_thread: Optional[threading.Thread] = None
         self._broadcaster_thread: Optional[threading.Thread] = None
@@ -93,7 +93,7 @@ class FederationDiscovery:
         
         logger.info("Federation discovery stopped")
     
-    def discover_federations(self, timeout: float = 5.0) -> List[FederationInfo]:
+    def discover_federations(self, timeout: float = 5.0) -> list[FederationInfo]:
         """
         Find available federations on network.
         
@@ -226,7 +226,7 @@ class FederationDiscovery:
         except Exception as e:
             logger.error(f"Error in broadcaster thread: {e}")
     
-    def _handle_announcement(self, message: Dict, addr: tuple):
+    def _handle_announcement(self, message: dict, addr: tuple):
         """
         Handle federation announcement.
         
@@ -248,7 +248,7 @@ class FederationDiscovery:
         except Exception as e:
             logger.debug(f"Error handling announcement: {e}")
     
-    def get_discovered_federations(self) -> List[FederationInfo]:
+    def get_discovered_federations(self) -> list[FederationInfo]:
         """
         Get list of currently discovered federations.
         
@@ -257,7 +257,7 @@ class FederationDiscovery:
         """
         return list(self.discovered_federations.values())
     
-    def get_advertised_federations(self) -> List[FederationInfo]:
+    def get_advertised_federations(self) -> list[FederationInfo]:
         """
         Get list of federations being advertised.
         
@@ -282,7 +282,7 @@ class FederationDirectory:
             server_url: URL of central directory server (optional)
         """
         self.server_url = server_url
-        self.federations: Dict[str, FederationInfo] = {}
+        self.federations: dict[str, FederationInfo] = {}
         
     def register_federation(self, federation: FederationInfo):
         """
@@ -311,7 +311,7 @@ class FederationDirectory:
         self,
         mode: Optional[FederationMode] = None,
         name_filter: Optional[str] = None
-    ) -> List[FederationInfo]:
+    ) -> list[FederationInfo]:
         """
         Search for federations in directory.
         

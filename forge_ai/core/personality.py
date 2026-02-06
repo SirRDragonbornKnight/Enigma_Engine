@@ -34,10 +34,10 @@ Usage:
 """
 
 import json
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 
@@ -55,12 +55,12 @@ class PersonalityTraits:
     confidence: float = 0.5        # 0=hedging, 1=assertive
     playfulness: float = 0.5       # 0=professional, 1=playful
     
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         """Convert to dictionary."""
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, float]) -> 'PersonalityTraits':
+    def from_dict(cls, data: dict[str, float]) -> 'PersonalityTraits':
         """Create from dictionary."""
         return cls(**data)
     
@@ -91,20 +91,20 @@ class AIPersonality:
         """
         self.model_name = model_name
         self.traits = PersonalityTraits()
-        self.user_overrides: Dict[str, float] = {}  # User-set trait overrides
+        self.user_overrides: dict[str, float] = {}  # User-set trait overrides
         self.allow_evolution: bool = True           # Allow auto-evolution
-        self.interests: List[str] = []          # Topics AI likes discussing
-        self.dislikes: List[str] = []           # Topics AI avoids
-        self.catchphrases: List[str] = []       # Phrases AI develops
-        self.opinions: Dict[str, str] = {}      # Opinions on various topics
-        self.memories: List[Dict[str, Any]] = []  # Important memories
+        self.interests: list[str] = []          # Topics AI likes discussing
+        self.dislikes: list[str] = []           # Topics AI avoids
+        self.catchphrases: list[str] = []       # Phrases AI develops
+        self.opinions: dict[str, str] = {}      # Opinions on various topics
+        self.memories: list[dict[str, Any]] = []  # Important memories
         self.mood: str = "neutral"              # Current mood
         self.conversation_count: int = 0        # Total conversations
         self.last_updated: str = datetime.now().isoformat()
         
         # Voice preferences and evolution
-        self.voice_preferences: Dict[str, Any] = {}  # AI's voice choices
-        self.voice_evolution_history: List[Dict[str, Any]] = []  # Voice changes over time
+        self.voice_preferences: dict[str, Any] = {}  # AI's voice choices
+        self.voice_evolution_history: list[dict[str, Any]] = []  # Voice changes over time
         
         # Evolution settings
         self.evolution_rate: float = 0.05       # How fast personality changes
@@ -153,7 +153,7 @@ class AIPersonality:
             return self.user_overrides[trait_name]
         return getattr(self.traits, trait_name)
     
-    def get_all_effective_traits(self) -> Dict[str, float]:
+    def get_all_effective_traits(self) -> dict[str, float]:
         """Get all traits with overrides applied."""
         traits = self.traits.to_dict()
         traits.update(self.user_overrides)
@@ -240,7 +240,7 @@ class AIPersonality:
         user_input: str, 
         ai_response: str, 
         feedback: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[dict[str, Any]] = None
     ):
         """
         Update personality based on interaction.
@@ -544,7 +544,7 @@ class AIPersonality:
             return False
         
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath) as f:
                 data = json.load(f)
             
             self.model_name = data.get("model_name", self.model_name)

@@ -21,14 +21,13 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    from flask import Flask, request, jsonify
+    from flask import Flask, jsonify, request
     from flask_cors import CORS
     FLASK_AVAILABLE = True
 except ImportError:
     FLASK_AVAILABLE = False
 
 from ..config import CONFIG
-
 
 # Create Flask app or blueprint
 if FLASK_AVAILABLE:
@@ -167,8 +166,8 @@ if FLASK_AVAILABLE:
         voice_name = data.get('voice', 'default')
         
         try:
-            from ..voice import speak, set_voice, VoiceProfile
-            
+            from ..voice import VoiceProfile, set_voice, speak
+
             # Set the voice profile
             try:
                 set_voice(voice_name)

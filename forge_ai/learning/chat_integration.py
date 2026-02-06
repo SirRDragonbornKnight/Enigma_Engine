@@ -88,10 +88,10 @@ class LearningChatIntegration:
     
     def __init__(
         self,
-        model: 'Forge',  # Forward reference to avoid circular import
+        model: Forge,  # Forward reference to avoid circular import
         model_name: Optional[str] = None,
         learning_engine: Optional[LearningEngine] = None,
-        autonomous_learner: Optional['AutonomousMode'] = None,
+        autonomous_learner: Optional[AutonomousMode] = None,
         auto_learn: bool = True,
         on_learning_detected: Optional[Callable[[DetectedLearning], None]] = None,
     ):
@@ -467,7 +467,7 @@ class LearningChatIntegration:
 # =============================================================================
 
 def create_chat_integration(
-    model: 'Forge',
+    model: Forge,
     model_name: Optional[str] = None,
     auto_learn: bool = True,
     on_learning: Optional[Callable[[DetectedLearning], None]] = None,
@@ -519,7 +519,7 @@ class LearningChatWrapper:
     
     def __init__(
         self,
-        model: 'Forge',
+        model: Forge,
         model_name: Optional[str] = None,
         auto_learn: bool = True,
     ):

@@ -8,8 +8,8 @@ This module provides:
 3. Automatic model suggestions based on user needs
 """
 
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -18,7 +18,7 @@ class ModelRecommendation:
     model_id: str  # HuggingFace model ID
     name: str  # Display name
     size_str: str  # "1.5B", "7B", etc.
-    capabilities: List[str]  # What it can do
+    capabilities: list[str]  # What it can do
     requirements: str  # "CPU", "GPU 8GB+", etc.
     description: str
     priority: int = 0  # Higher = better recommendation
@@ -212,7 +212,7 @@ CAPABILITIES = {
 # Helper Functions
 # =============================================================================
 
-def get_recommended_models(capability: str, max_vram_gb: float = None) -> List[ModelRecommendation]:
+def get_recommended_models(capability: str, max_vram_gb: float = None) -> list[ModelRecommendation]:
     """Get recommended models for a capability, filtered by VRAM if specified."""
     cap_info = CAPABILITIES.get(capability)
     if not cap_info:
@@ -259,7 +259,7 @@ def get_best_model_for_system(capability: str) -> Optional[ModelRecommendation]:
     return models[0] if models else None
 
 
-def check_model_capabilities(model_id: str) -> Dict[str, bool]:
+def check_model_capabilities(model_id: str) -> dict[str, bool]:
     """Check what capabilities a model has based on its type."""
     model_lower = model_id.lower()
     
@@ -335,7 +335,7 @@ To add this model:
 """
 
 
-def get_training_requirements() -> Dict[str, Any]:
+def get_training_requirements() -> dict[str, Any]:
     """Get information about what ForgeAI training needs."""
     return {
         "data_format": {
@@ -383,7 +383,7 @@ def get_training_requirements() -> Dict[str, Any]:
 # Quick Setup Functions
 # =============================================================================
 
-def setup_chat_ai(model_id: str = None) -> Dict[str, Any]:
+def setup_chat_ai(model_id: str = None) -> dict[str, Any]:
     """Set up a model as the main chat AI."""
     if model_id is None:
         best = get_best_model_for_system("chat")
@@ -401,7 +401,7 @@ def setup_chat_ai(model_id: str = None) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
-def setup_vision_ai(model_id: str = None) -> Dict[str, Any]:
+def setup_vision_ai(model_id: str = None) -> dict[str, Any]:
     """Set up a vision model."""
     if model_id is None:
         best = get_best_model_for_system("vision")

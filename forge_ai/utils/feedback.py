@@ -53,9 +53,9 @@ class FeedbackCollector:
         """Load feedback from storage."""
         if self.storage_path.exists():
             try:
-                with open(self.storage_path, 'r') as f:
+                with open(self.storage_path) as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, OSError):
                 return []
         return []
     

@@ -24,15 +24,15 @@ Usage:
     # - Offer help proactively
 """
 
+import json
+import random
 import threading
 import time
-import random
-import json
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 
 class CompanionState(Enum):
@@ -61,16 +61,16 @@ class CompanionConfig:
     comment_chance: float = 0.3
     
     # Be more quiet during these hours
-    quiet_hours: List[int] = field(default_factory=lambda: [23, 0, 1, 2, 3, 4, 5, 6])
+    quiet_hours: list[int] = field(default_factory=lambda: [23, 0, 1, 2, 3, 4, 5, 6])
     
     # Things that trigger immediate attention
-    attention_triggers: List[str] = field(default_factory=lambda: [
+    attention_triggers: list[str] = field(default_factory=lambda: [
         "error", "warning", "failed", "crash", "exception",
         "update available", "download complete", "install"
     ])
     
     # Topics the companion is interested in (will comment more)
-    interests: List[str] = field(default_factory=lambda: [
+    interests: list[str] = field(default_factory=lambda: [
         "programming", "code", "python", "AI", "game",
         "music", "video", "news", "weather"
     ])
@@ -114,8 +114,8 @@ class CompanionMode:
         
         # Context
         self._current_screen_context = ""
-        self._recent_observations: List[Dict] = []
-        self._conversation_history: List[Dict] = []
+        self._recent_observations: list[dict] = []
+        self._conversation_history: list[dict] = []
         
         # Connections to other systems
         self._chat_callback: Optional[Callable] = None
@@ -349,7 +349,7 @@ class CompanionMode:
         
         self._set_state(CompanionState.IDLE)
     
-    def _on_new_window(self, window_info: Dict):
+    def _on_new_window(self, window_info: dict):
         """React to a new window appearing."""
         if self.config.avatar_reactions and self._avatar_callback:
             self._avatar_callback("emotion", "curious")
@@ -453,7 +453,7 @@ Emotion:"""
         if state != self._state:
             self._state = state
     
-    def _get_active_window(self) -> Optional[Dict]:
+    def _get_active_window(self) -> Optional[dict]:
         """Get info about the currently active window."""
         import sys
         
@@ -498,7 +498,7 @@ Emotion:"""
         
         return None
     
-    def _get_monitor_info(self, monitor_handle) -> Optional[Dict]:
+    def _get_monitor_info(self, monitor_handle) -> Optional[dict]:
         """Get info about a specific monitor."""
         try:
             import ctypes
@@ -536,7 +536,7 @@ Emotion:"""
             pass
         return None
     
-    def _get_all_monitors(self) -> List[Dict]:
+    def _get_all_monitors(self) -> list[dict]:
         """Get info about all connected monitors."""
         monitors = []
         
@@ -573,7 +573,7 @@ Emotion:"""
         state_file = self._storage_path / "companion_state.json"
         if state_file.exists():
             try:
-                with open(state_file, 'r') as f:
+                with open(state_file) as f:
                     data = json.load(f)
                     self._seen_windows = set(data.get("seen_windows", []))
                     self._commented_on = set(data.get("commented_on", []))

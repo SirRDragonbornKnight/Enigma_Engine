@@ -40,14 +40,15 @@ USAGE:
     cache.free(seq_id=0)
 """
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import Optional, Dict, List, Tuple, Any
-from dataclasses import dataclass, field
 import logging
 import math
 from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 
@@ -121,10 +122,10 @@ class BlockManager:
         
         # Sequence to block mapping
         # seq_id -> list of physical block indices
-        self.seq_blocks: Dict[int, List[int]] = {}
+        self.seq_blocks: dict[int, list[int]] = {}
         
         # Track tokens written per sequence
-        self.seq_lengths: Dict[int, int] = {}
+        self.seq_lengths: dict[int, int] = {}
         
         logger.info(f"[PagedAttn] Initialized {num_blocks} blocks x {block_size} tokens")
         logger.info(f"[PagedAttn] Total cache: {self._get_cache_size_mb():.1f} MB")
@@ -273,7 +274,7 @@ class BlockManager:
         seq_id: int,
         layer: int,
         max_len: Optional[int] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Read keys and values from cache.
         
@@ -332,7 +333,7 @@ class BlockManager:
         
         return keys, values
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get memory statistics."""
         used_blocks = self.num_blocks - len(self.free_blocks)
         return {
@@ -406,7 +407,7 @@ class PagedKVCache:
         """Write to cache."""
         self.block_manager.write(seq_id, layer, keys, values)
     
-    def read(self, seq_id: int, layer: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def read(self, seq_id: int, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Read from cache."""
         return self.block_manager.read(seq_id, layer)
     
@@ -414,7 +415,7 @@ class PagedKVCache:
         """Get current length of a sequence."""
         return self.block_manager.seq_lengths.get(seq_id, 0)
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         return self.block_manager.get_stats()
 
@@ -510,10 +511,10 @@ class QuantizedKVCache:
             self.value_scale = None
         
         # Track sequence lengths
-        self.seq_lengths: Dict[int, int] = {}
+        self.seq_lengths: dict[int, int] = {}
         
         # Offset for each sequence in the cache
-        self.seq_offsets: Dict[int, int] = {}
+        self.seq_offsets: dict[int, int] = {}
         self._next_offset = 0
         
         logger.info(f"[QuantizedKV] Initialized {num_layers}L x {max_seq_len}T "
@@ -543,7 +544,7 @@ class QuantizedKVCache:
         
         return (key_bytes + value_bytes + scale_bytes) / (1024 * 1024)
     
-    def _quantize(self, tensor: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _quantize(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Quantize tensor to INT8 with per-row scale."""
         # Compute scale for each position (row)
         # Shape: [seq_len, num_heads, head_dim] -> scale: [seq_len]
@@ -620,7 +621,7 @@ class QuantizedKVCache:
         
         self.seq_lengths[seq_id] = length + new_len
     
-    def read(self, seq_id: int, layer: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def read(self, seq_id: int, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Read and dequantize keys and values from cache.
         
@@ -675,7 +676,7 @@ class QuantizedKVCache:
         """Get current length of a sequence."""
         return self.seq_lengths.get(seq_id, 0)
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         used_tokens = sum(self.seq_lengths.values())
         return {
@@ -845,7 +846,7 @@ class PagedAttention(nn.Module):
 # =============================================================================
 
 def create_paged_cache(
-    model_config: Dict[str, Any],
+    model_config: dict[str, Any],
     page_size: int = 16,
     max_pages: int = 1000,
     device: Optional[torch.device] = None
@@ -882,7 +883,7 @@ def estimate_memory_savings(
     max_seq_len: int,
     avg_seq_len: int,
     page_size: int = 16
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Estimate memory savings from paged attention.
     

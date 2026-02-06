@@ -3,11 +3,11 @@ Memory Analytics for ForgeAI
 Provides usage statistics and access pattern analysis.
 """
 import logging
-from typing import Dict, Any, List
-from datetime import datetime, timedelta
 from collections import Counter
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
 
-from .categorization import Memory, MemoryType, MemoryCategorization
+from .categorization import Memory, MemoryCategorization, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class MemoryAnalytics:
         """
         self.memory_system = memory_system
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """
         Get comprehensive memory statistics.
         
@@ -79,7 +79,7 @@ class MemoryAnalytics:
         
         return stats
     
-    def get_access_patterns(self) -> Dict[str, Any]:
+    def get_access_patterns(self) -> dict[str, Any]:
         """
         Analyze how memories are accessed.
         
@@ -162,7 +162,7 @@ class MemoryAnalytics:
         self,
         days_threshold: int = 30,
         min_importance: float = 0.0
-    ) -> List[Memory]:
+    ) -> list[Memory]:
         """
         Find memories that haven't been accessed recently.
         
@@ -187,7 +187,7 @@ class MemoryAnalytics:
         
         return unused
     
-    def get_importance_analysis(self) -> Dict[str, Any]:
+    def get_importance_analysis(self) -> dict[str, Any]:
         """
         Analyze importance distribution and patterns.
         
@@ -253,7 +253,7 @@ class MemoryAnalytics:
         
         return analysis
     
-    def get_type_analysis(self) -> Dict[str, Any]:
+    def get_type_analysis(self) -> dict[str, Any]:
         """
         Analyze memory type usage patterns.
         

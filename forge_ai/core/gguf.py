@@ -159,7 +159,7 @@ class GGUFTensor:
     data: Any  # np.ndarray
     type: GGMLType = GGMLType.F32
     n_dims: int = 0
-    shape: Tuple[int, ...] = field(default_factory=tuple)
+    shape: tuple[int, ...] = field(default_factory=tuple)
     
     def __post_init__(self):
         if self.n_dims == 0 and self.shape:
@@ -194,7 +194,7 @@ class GGUFMetadata:
     eos_token_id: int = 2
     pad_token_id: int = 0
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         arch = self.general_architecture
         return {
             "general.architecture": arch,
@@ -268,7 +268,7 @@ if HAS_NUMPY:
         BLOCK_SIZE = 32
         
         @classmethod
-        def quantize_q4_0(cls, data: np.ndarray) -> Tuple[np.ndarray, GGMLType]:
+        def quantize_q4_0(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q4_0 format (4-bit with block-wise scaling)."""
             data = data.flatten().astype(np.float32)
             block_size = cls.BLOCK_SIZE
@@ -309,7 +309,7 @@ if HAS_NUMPY:
             return output, GGMLType.Q4_0
         
         @classmethod
-        def quantize_q8_0(cls, data: np.ndarray) -> Tuple[np.ndarray, GGMLType]:
+        def quantize_q8_0(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q8_0 format (8-bit with block-wise scaling)."""
             data = data.flatten().astype(np.float32)
             block_size = cls.BLOCK_SIZE
@@ -343,7 +343,7 @@ if HAS_NUMPY:
             return output, GGMLType.Q8_0
         
         @classmethod
-        def quantize_q4_k(cls, data: np.ndarray) -> Tuple[np.ndarray, GGMLType]:
+        def quantize_q4_k(cls, data: np.ndarray) -> tuple[np.ndarray, GGMLType]:
             """Quantize to Q4_K format (super blocks with multiple scales)."""
             data = data.flatten().astype(np.float32)
             block_size = 256
@@ -408,8 +408,8 @@ if HAS_NUMPY:
         
         def __init__(self, filepath: Union[str, Path]):
             self.filepath = Path(filepath)
-            self.metadata: Dict[str, Any] = {}
-            self.tensors: List[GGUFTensor] = []
+            self.metadata: dict[str, Any] = {}
+            self.tensors: list[GGUFTensor] = []
             self._file: Optional[BinaryIO] = None
         
         def add_metadata(self, key: str, value: Any):

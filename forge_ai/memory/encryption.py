@@ -2,12 +2,12 @@
 Memory Encryption for ForgeAI
 Provides encryption/decryption for sensitive memories using Fernet (AES-128).
 """
-import logging
 import base64
-from typing import Optional, Dict, Any
+import logging
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-from .categorization import Memory, MemoryType, MemoryCategory
+from .categorization import Memory, MemoryCategory, MemoryType
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +184,7 @@ class EncryptedMemoryCategory(MemoryCategory):
         content: str,
         ttl: Optional[float] = None,
         importance: float = 0.5,
-        metadata: Optional[Dict] = None
+        metadata: Optional[dict] = None
     ) -> Memory:
         """
         Add encrypted memory.

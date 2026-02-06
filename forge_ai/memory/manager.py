@@ -64,9 +64,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .vector_db import SimpleVectorDB
 from ..config import CONFIG
 from ..memory.memory_db import add_memory
+from .vector_db import SimpleVectorDB
 
 logger = logging.getLogger(__name__)
 
@@ -209,12 +209,12 @@ class ConversationManager:
         try:
             from ..utils.io_utils import atomic_save_json
             if not atomic_save_json(fname, data, indent=2):
-                raise IOError(f"Atomic save failed for {fname}")
+                raise OSError(f"Atomic save failed for {fname}")
         except ImportError:
             # Fallback to direct write if io_utils not available
             fname.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        except (IOError, OSError) as e:
-            raise IOError(f"Failed to save conversation to {fname}: {e}") from e
+        except OSError as e:
+            raise OSError(f"Failed to save conversation to {fname}: {e}") from e
         
         # ─────────────────────────────────────────────────────────────────────
         # PUSH TO MEMORY DB: For long-term semantic search

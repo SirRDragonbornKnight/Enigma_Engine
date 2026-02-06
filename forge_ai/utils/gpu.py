@@ -5,7 +5,7 @@ Provides common GPU operations to avoid code duplication across the codebase.
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def clear_cuda_cache() -> bool:
     return False
 
 
-def get_gpu_memory_info() -> Optional[Dict[str, Any]]:
+def get_gpu_memory_info() -> Optional[dict[str, Any]]:
     """
     Get GPU memory information.
     

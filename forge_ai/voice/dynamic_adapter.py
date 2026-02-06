@@ -24,11 +24,11 @@ Usage:
     profile = adapter.adapt_for_mood("cheerful", base_profile)
 """
 
-from typing import Optional, Dict, Any
 from dataclasses import replace
+from typing import Any, Dict, Optional
 
-from .voice_profile import VoiceProfile
 from .voice_effects import VoiceEffects
+from .voice_profile import VoiceProfile
 
 try:
     from ..core.personality import AIPersonality

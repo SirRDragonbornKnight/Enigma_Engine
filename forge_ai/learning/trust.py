@@ -7,9 +7,9 @@ Prevents malicious actors from corrupting the shared model.
 
 import hashlib
 import logging
-from typing import List, Dict, Any, Set
-from datetime import datetime, timedelta
 from collections import defaultdict
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Set
 
 try:
     import numpy as np
@@ -50,13 +50,13 @@ class TrustManager:
         self.reputation_decay = reputation_decay
         
         # Device reputation scores (0.0 to 1.0)
-        self.reputations: Dict[str, float] = defaultdict(lambda: 0.5)
+        self.reputations: dict[str, float] = defaultdict(lambda: 0.5)
         
         # Update history for anomaly detection
-        self.update_history: List[Dict[str, Any]] = []
+        self.update_history: list[dict[str, Any]] = []
         
         # Blocked devices
-        self.blocked_devices: Set[str] = set()
+        self.blocked_devices: set[str] = set()
         
         logger.info("Trust manager initialized")
     
@@ -148,7 +148,7 @@ class TrustManager:
         
         return float(np.sqrt(total_magnitude))
     
-    def detect_poisoning(self, updates: List[Any]) -> List[str]:
+    def detect_poisoning(self, updates: list[Any]) -> list[str]:
         """
         Detect potential poisoning attacks in a batch of updates.
         
@@ -273,7 +273,7 @@ class TrustManager:
         
         logger.info(f"Applied reputation decay to {len(self.reputations)} devices")
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get trust manager statistics."""
         return {
             "total_devices": len(self.reputations),
@@ -283,7 +283,7 @@ class TrustManager:
             "reputation_distribution": self._get_reputation_distribution(),
         }
     
-    def _get_reputation_distribution(self) -> Dict[str, int]:
+    def _get_reputation_distribution(self) -> dict[str, int]:
         """Get distribution of reputation scores."""
         distribution = {
             "excellent (0.8-1.0)": 0,
@@ -314,8 +314,9 @@ def test_trust_manager():
         print("NumPy not available, skipping test")
         return
     
-    from .federated import WeightUpdate
     import uuid
+
+    from .federated import WeightUpdate
     
     trust_manager = TrustManager(max_update_magnitude=5.0)
     

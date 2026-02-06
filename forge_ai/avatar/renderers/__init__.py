@@ -8,10 +8,10 @@ Provides different rendering backends for the avatar system:
 """
 
 from .base import BaseRenderer
-from .sprite_renderer import SpriteRenderer
+from .default_sprites import SPRITE_TEMPLATES, generate_sprite
 from .qt_renderer import QtAvatarRenderer
+from .sprite_renderer import SpriteRenderer
 from .web_renderer import WebAvatarRenderer
-from .default_sprites import generate_sprite, SPRITE_TEMPLATES
 
 __all__ = [
     "BaseRenderer",

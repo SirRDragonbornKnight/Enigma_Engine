@@ -65,9 +65,9 @@ class Entity:
     """An entity with associated knowledge."""
     name: str
     entity_type: str
-    aliases: List[str] = field(default_factory=list)
-    facts: List[str] = field(default_factory=list)
-    attributes: Dict[str, Any] = field(default_factory=dict)
+    aliases: list[str] = field(default_factory=list)
+    facts: list[str] = field(default_factory=list)
+    attributes: dict[str, Any] = field(default_factory=dict)
     
     # Metadata
     created_at: str = ""
@@ -112,11 +112,11 @@ class Entity:
             return True
         return any(a.lower() == query_lower for a in self.aliases)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Entity':
+    def from_dict(cls, data: dict[str, Any]) -> Entity:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -128,18 +128,18 @@ class Relationship:
     relation_type: str  # "knows", "works_at", "located_in", etc.
     bidirectional: bool = False
     strength: float = 1.0  # 0.0 to 1.0
-    facts: List[str] = field(default_factory=list)
+    facts: list[str] = field(default_factory=list)
     created_at: str = ""
     
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Relationship':
+    def from_dict(cls, data: dict[str, Any]) -> Relationship:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -148,7 +148,7 @@ class EntityMemory:
     Long-term memory for entities and their relationships.
     """
     
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         """
         Initialize entity memory.
         
@@ -161,12 +161,12 @@ class EntityMemory:
         self._entities_file = self._data_path / "entities.json"
         self._relationships_file = self._data_path / "relationships.json"
         
-        self._entities: Dict[str, Entity] = {}  # name_lower -> Entity
-        self._relationships: List[Relationship] = []
+        self._entities: dict[str, Entity] = {}  # name_lower -> Entity
+        self._relationships: list[Relationship] = []
         
         # Index for fast lookup
-        self._alias_index: Dict[str, str] = {}  # alias_lower -> canonical_name_lower
-        self._type_index: Dict[str, Set[str]] = defaultdict(set)  # type -> {names}
+        self._alias_index: dict[str, str] = {}  # alias_lower -> canonical_name_lower
+        self._type_index: dict[str, set[str]] = defaultdict(set)  # type -> {names}
         
         self._load_data()
     
@@ -175,7 +175,7 @@ class EntityMemory:
         # Load entities
         if self._entities_file.exists():
             try:
-                with open(self._entities_file, 'r', encoding='utf-8') as f:
+                with open(self._entities_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for item in data.get("entities", []):
                         entity = Entity.from_dict(item)
@@ -187,7 +187,7 @@ class EntityMemory:
         # Load relationships
         if self._relationships_file.exists():
             try:
-                with open(self._relationships_file, 'r', encoding='utf-8') as f:
+                with open(self._relationships_file, encoding='utf-8') as f:
                     data = json.load(f)
                     for item in data.get("relationships", []):
                         rel = Relationship.from_dict(item)
@@ -228,7 +228,7 @@ class EntityMemory:
         for alias in entity.aliases:
             self._alias_index[alias.lower()] = name_lower
     
-    def _resolve_name(self, name: str) -> Optional[str]:
+    def _resolve_name(self, name: str) -> str | None:
         """Resolve a name to canonical form."""
         name_lower = name.lower()
         
@@ -246,9 +246,9 @@ class EntityMemory:
         self,
         name: str,
         entity_type: str = EntityType.THING,
-        facts: Optional[List[str]] = None,
-        aliases: Optional[List[str]] = None,
-        attributes: Optional[Dict[str, Any]] = None,
+        facts: list[str] | None = None,
+        aliases: list[str] | None = None,
+        attributes: dict[str, Any] | None = None,
         source: str = ""
     ) -> Entity:
         """
@@ -301,7 +301,7 @@ class EntityMemory:
         self._save_data()
         return entity
     
-    def get_entity(self, name: str) -> Optional[Entity]:
+    def get_entity(self, name: str) -> Entity | None:
         """
         Get an entity by name or alias.
         
@@ -366,8 +366,8 @@ class EntityMemory:
         relation_type: str,
         bidirectional: bool = False,
         strength: float = 1.0,
-        facts: Optional[List[str]] = None
-    ) -> Optional[Relationship]:
+        facts: list[str] | None = None
+    ) -> Relationship | None:
         """
         Add a relationship between entities.
         
@@ -424,8 +424,8 @@ class EntityMemory:
     def get_relationships(
         self,
         entity_name: str,
-        relation_type: Optional[str] = None
-    ) -> List[Relationship]:
+        relation_type: str | None = None
+    ) -> list[Relationship]:
         """
         Get relationships for an entity.
         
@@ -454,8 +454,8 @@ class EntityMemory:
     def get_related(
         self,
         entity_name: str,
-        relation_type: Optional[str] = None
-    ) -> List[Entity]:
+        relation_type: str | None = None
+    ) -> list[Entity]:
         """
         Get entities related to an entity.
         
@@ -486,9 +486,9 @@ class EntityMemory:
     def search_entities(
         self,
         query: str,
-        entity_type: Optional[str] = None,
+        entity_type: str | None = None,
         limit: int = 10
-    ) -> List[Entity]:
+    ) -> list[Entity]:
         """
         Search entities by name or fact content.
         
@@ -501,7 +501,7 @@ class EntityMemory:
             List of matching entities
         """
         query_lower = query.lower()
-        results: List[Tuple[float, Entity]] = []
+        results: list[tuple[float, Entity]] = []
         
         for entity in self._entities.values():
             if entity_type and entity.entity_type != entity_type:
@@ -536,16 +536,16 @@ class EntityMemory:
         results.sort(reverse=True, key=lambda x: x[0])
         return [e for _, e in results[:limit]]
     
-    def list_by_type(self, entity_type: str) -> List[Entity]:
+    def list_by_type(self, entity_type: str) -> list[Entity]:
         """Get all entities of a type."""
         names = self._type_index.get(entity_type, set())
         return [self._entities[n] for n in names if n in self._entities]
     
-    def list_types(self) -> List[str]:
+    def list_types(self) -> list[str]:
         """Get all entity types in use."""
         return list(self._type_index.keys())
     
-    def extract_entities(self, text: str) -> List[Tuple[str, str]]:
+    def extract_entities(self, text: str) -> list[tuple[str, str]]:
         """
         Extract potential entities from text (simple heuristic).
         
@@ -589,7 +589,7 @@ class EntityMemory:
         
         return entities
     
-    def process_message(self, content: str, source: str = "conversation") -> List[Entity]:
+    def process_message(self, content: str, source: str = "conversation") -> list[Entity]:
         """
         Process a message to extract and store entities.
         
@@ -618,7 +618,7 @@ class EntityMemory:
         
         return entities
     
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a summary of entity memory."""
         return {
             "total_entities": len(self._entities),
@@ -634,7 +634,7 @@ class EntityMemory:
             ]
         }
     
-    def export_graph(self) -> Dict[str, Any]:
+    def export_graph(self) -> dict[str, Any]:
         """
         Export entity graph for visualization.
         
@@ -672,10 +672,10 @@ class EntityMemory:
 
 
 # Singleton instance
-_entity_memory_instance: Optional[EntityMemory] = None
+_entity_memory_instance: EntityMemory | None = None
 
 
-def get_entity_memory(data_path: Optional[Path] = None) -> EntityMemory:
+def get_entity_memory(data_path: Path | None = None) -> EntityMemory:
     """Get or create the singleton entity memory."""
     global _entity_memory_instance
     if _entity_memory_instance is None:
@@ -684,16 +684,16 @@ def get_entity_memory(data_path: Optional[Path] = None) -> EntityMemory:
 
 
 # Convenience functions
-def remember_entity(name: str, entity_type: str = EntityType.THING, facts: List[str] = None) -> Entity:
+def remember_entity(name: str, entity_type: str = EntityType.THING, facts: list[str] = None) -> Entity:
     """Quick entity creation."""
     return get_entity_memory().add_entity(name, entity_type, facts)
 
 
-def recall_entity(name: str) -> Optional[Entity]:
+def recall_entity(name: str) -> Entity | None:
     """Quick entity lookup."""
     return get_entity_memory().get_entity(name)
 
 
-def remember_relationship(source: str, target: str, relation: str) -> Optional[Relationship]:
+def remember_relationship(source: str, target: str, relation: str) -> Relationship | None:
     """Quick relationship creation."""
     return get_entity_memory().add_relationship(source, target, relation)

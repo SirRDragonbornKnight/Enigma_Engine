@@ -178,7 +178,7 @@ class RewardModel(nn.Module):
         rejected_ids: torch.Tensor,
         chosen_mask: Optional[torch.Tensor] = None,
         rejected_mask: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+    ) -> tuple[torch.Tensor, dict[str, float]]:
         """
         Compute Bradley-Terry loss for preference learning.
         
@@ -222,10 +222,10 @@ class RewardModelTrainer:
     
     def train(
         self,
-        comparisons: List[Dict[str, str]],
+        comparisons: list[dict[str, str]],
         epochs: int = 3,
         batch_size: int = 8
-    ) -> Dict[str, List[float]]:
+    ) -> dict[str, list[float]]:
         """
         Train reward model on comparison data.
         
@@ -286,7 +286,7 @@ class RewardModelTrainer:
         
         return history
     
-    def _tokenize(self, texts: List[str], device: torch.device) -> Dict[str, torch.Tensor]:
+    def _tokenize(self, texts: list[str], device: torch.device) -> dict[str, torch.Tensor]:
         """Tokenize texts."""
         if hasattr(self.tokenizer, 'batch_encode_plus'):
             encoded = self.tokenizer.batch_encode_plus(
@@ -334,7 +334,7 @@ class PolicyWithValueHead(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass returning both logits and values.
         
@@ -413,9 +413,9 @@ class RLHFTrainer:
     @torch.no_grad()
     def generate_rollouts(
         self,
-        prompts: List[str],
+        prompts: list[str],
         device: torch.device
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """
         Generate responses and compute rewards.
         
@@ -470,7 +470,7 @@ class RLHFTrainer:
         self,
         input_ids: torch.Tensor,
         max_new_tokens: int
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Generate tokens and return logprobs and values."""
         generated = []
         logprobs = []
@@ -538,7 +538,7 @@ class RLHFTrainer:
         self,
         rewards: torch.Tensor,
         values: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Compute GAE advantages and returns.
         """
@@ -569,8 +569,8 @@ class RLHFTrainer:
     
     def ppo_step(
         self,
-        rollouts: Dict[str, torch.Tensor]
-    ) -> Dict[str, float]:
+        rollouts: dict[str, torch.Tensor]
+    ) -> dict[str, float]:
         """
         Perform PPO update.
         """
@@ -690,9 +690,9 @@ class RLHFTrainer:
     
     def train(
         self,
-        prompts: List[str],
+        prompts: list[str],
         num_iterations: int = 100
-    ) -> Dict[str, List[float]]:
+    ) -> dict[str, list[float]]:
         """
         Train policy using PPO.
         

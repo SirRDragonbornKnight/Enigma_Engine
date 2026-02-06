@@ -19,10 +19,9 @@ Supported formats:
   lowercase whisper - Quiet/shy
 """
 
-import re
-import html
 import hashlib
-
+import html
+import re
 
 # Code block counter for unique IDs
 _code_block_counter = 0

@@ -15,8 +15,8 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Callable, Tuple
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 class ScoringStrategy(Enum):
@@ -33,11 +33,11 @@ class ScoredContext:
     """Context with relevance score."""
     content: str
     score: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     strategy: Optional[str] = None
-    breakdown: Dict[str, float] = field(default_factory=dict)
+    breakdown: dict[str, float] = field(default_factory=dict)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "content": self.content,
@@ -63,7 +63,7 @@ class TextProcessor:
     }
     
     @staticmethod
-    def tokenize(text: str, lowercase: bool = True, remove_stopwords: bool = True) -> List[str]:
+    def tokenize(text: str, lowercase: bool = True, remove_stopwords: bool = True) -> list[str]:
         """
         Tokenize text into words.
         
@@ -87,7 +87,7 @@ class TextProcessor:
         return tokens
     
     @staticmethod
-    def ngrams(tokens: List[str], n: int) -> List[Tuple[str, ...]]:
+    def ngrams(tokens: list[str], n: int) -> list[tuple[str, ...]]:
         """Generate n-grams from tokens."""
         return [tuple(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
 
@@ -97,8 +97,8 @@ class TFIDFScorer:
     
     def __init__(self):
         """Initialize TF-IDF scorer."""
-        self._documents: List[List[str]] = []
-        self._idf_cache: Dict[str, float] = {}
+        self._documents: list[list[str]] = []
+        self._idf_cache: dict[str, float] = {}
         self._doc_count = 0
     
     def add_document(self, text: str):
@@ -108,12 +108,12 @@ class TFIDFScorer:
         self._doc_count += 1
         self._idf_cache.clear()  # Invalidate cache
     
-    def add_documents(self, texts: List[str]):
+    def add_documents(self, texts: list[str]):
         """Add multiple documents."""
         for text in texts:
             self.add_document(text)
     
-    def _tf(self, term: str, document: List[str]) -> float:
+    def _tf(self, term: str, document: list[str]) -> float:
         """Calculate term frequency."""
         if not document:
             return 0.0
@@ -177,10 +177,10 @@ class BM25Scorer:
         """
         self.k1 = k1
         self.b = b
-        self._documents: List[List[str]] = []
-        self._doc_lengths: List[int] = []
+        self._documents: list[list[str]] = []
+        self._doc_lengths: list[int] = []
         self._avg_doc_length: float = 0.0
-        self._doc_freqs: Dict[str, int] = {}
+        self._doc_freqs: dict[str, int] = {}
         self._doc_count = 0
     
     def add_document(self, text: str):
@@ -200,7 +200,7 @@ class BM25Scorer:
         # Update average length
         self._avg_doc_length = sum(self._doc_lengths) / self._doc_count
     
-    def add_documents(self, texts: List[str]):
+    def add_documents(self, texts: list[str]):
         """Add multiple documents."""
         for text in texts:
             self.add_document(text)
@@ -344,7 +344,7 @@ class RelevanceScorer:
     def __init__(
         self,
         strategy: ScoringStrategy = ScoringStrategy.COMBINED,
-        weights: Optional[Dict[str, float]] = None
+        weights: Optional[dict[str, float]] = None
     ):
         """
         Initialize relevance scorer.
@@ -369,7 +369,7 @@ class RelevanceScorer:
         self._tfidf.add_document(text)
         self._bm25.add_document(text)
     
-    def add_documents(self, texts: List[str]):
+    def add_documents(self, texts: list[str]):
         """Add multiple documents to corpus."""
         for text in texts:
             self.add_document(text)
@@ -430,9 +430,9 @@ class RelevanceScorer:
     def score_contexts(
         self,
         query: str,
-        contexts: List[str],
-        metadata: Optional[List[Dict[str, Any]]] = None
-    ) -> List[ScoredContext]:
+        contexts: list[str],
+        metadata: Optional[list[dict[str, Any]]] = None
+    ) -> list[ScoredContext]:
         """
         Score multiple contexts.
         
@@ -472,10 +472,10 @@ class RelevanceScorer:
     def rank_contexts(
         self,
         query: str,
-        contexts: List[str],
+        contexts: list[str],
         top_k: Optional[int] = None,
         threshold: float = 0.0
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Rank and filter contexts by relevance.
         
@@ -502,10 +502,10 @@ class RelevanceScorer:
     def select_context_window(
         self,
         query: str,
-        contexts: List[str],
+        contexts: list[str],
         max_tokens: int = 2000,
         avg_chars_per_token: int = 4
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Select contexts that fit within token budget.
         
@@ -554,8 +554,8 @@ def score_relevance(query: str, document: str) -> float:
 
 def rank_by_relevance(
     query: str,
-    contexts: List[str],
+    contexts: list[str],
     top_k: Optional[int] = None
-) -> List[str]:
+) -> list[str]:
     """Rank contexts by relevance to query."""
     return get_relevance_scorer().rank_contexts(query, contexts, top_k)
