@@ -30,7 +30,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import random
 from dataclasses import asdict, dataclass
@@ -41,6 +40,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 from ..config import CONFIG
+from ..utils.io_utils import safe_load_json, safe_save_json
 from .voice_profile import PROFILES_DIR, VoiceProfile
 
 try:
@@ -415,8 +415,7 @@ class AIVoiceIdentity:
             "feedback_history": self.feedback_history
         }
         
-        with open(identity_file, 'w') as f:
-            json.dump(data, f, indent=2)
+        safe_save_json(identity_file, data)
         
         return identity_file
     
@@ -442,8 +441,9 @@ class AIVoiceIdentity:
             return False
         
         try:
-            with open(identity_file) as f:
-                data = json.load(f)
+            data = safe_load_json(identity_file, default=None)
+            if not data:
+                return False
             
             if data.get("current_identity"):
                 self.current_identity = VoiceProfile(**data["current_identity"])

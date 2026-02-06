@@ -9,30 +9,43 @@ Contains the core components of the ForgeAI AI framework:
 - Inference engine (KV-cache, streaming, chat)
 - Tokenization (BPE, character-level)
 - Self-Improvement & Autonomous Learning
+
+NOTE: Heavy imports (torch, numpy) are lazy-loaded for faster startup.
+Use `from forge_ai.core import create_model` - it only imports torch when called.
 """
 
-# Inference
-from .inference import ForgeEngine, generate, load_engine
+# Lazy loading system for fast startup
+from ..utils.lazy_import import LazyLoader
 
-# Model
-from .model import Enigma  # Legacy name for backwards compatibility
-from .model import TinyForge  # Backwards compatibility alias
-from .model import (
-    MODEL_PRESETS,
-    Forge,
-    ForgeConfig,
-    create_model,
-)
+_loader = LazyLoader(__name__)
 
-# Training
-from .training import (
-    QADataset,
-    TextDataset,
-    Trainer,
-    TrainingConfig,
-    load_trained_model,
-    train_model,
-)
+# Register lazy imports for heavy torch-dependent modules
+_loader.register_many({
+    # Inference
+    'ForgeEngine': ('.inference', 'ForgeEngine'),
+    'generate': ('.inference', 'generate'),
+    'load_engine': ('.inference', 'load_engine'),
+    # Model
+    'Enigma': ('.model', 'Enigma'),
+    'TinyForge': ('.model', 'TinyForge'),
+    'MODEL_PRESETS': ('.model', 'MODEL_PRESETS'),
+    'Forge': ('.model', 'Forge'),
+    'ForgeConfig': ('.model', 'ForgeConfig'),
+    'create_model': ('.model', 'create_model'),
+    # Training
+    'QADataset': ('.training', 'QADataset'),
+    'TextDataset': ('.training', 'TextDataset'),
+    'Trainer': ('.training', 'Trainer'),
+    'TrainingConfig': ('.training', 'TrainingConfig'),
+    'load_trained_model': ('.training', 'load_trained_model'),
+    'train_model': ('.training', 'train_model'),
+})
+
+def __getattr__(name):
+    """Lazy load heavy modules only when accessed."""
+    if _loader.is_registered(name):
+        return _loader.load(name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Self-Improvement System (NEW)
 try:

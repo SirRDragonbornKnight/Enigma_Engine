@@ -382,6 +382,9 @@ class VoiceChat:
         self._vad = VAD(self.config)
         self._turn_manager = TurnManager(self.config)
         
+        # Thread safety lock for shared state
+        self._lock = threading.Lock()
+        
         self._state = ChatState.IDLE
         self._running = False
         self._listen_thread: Optional[threading.Thread] = None
@@ -398,32 +401,38 @@ class VoiceChat:
     
     @property
     def state(self) -> ChatState:
-        return self._state
+        with self._lock:
+            return self._state
     
     def _set_state(self, new_state: ChatState):
         """Set state and notify callback."""
-        if new_state != self._state:
-            old_state = self._state
-            self._state = new_state
-            logger.debug(f"State change: {old_state.value} -> {new_state.value}")
-            
-            if self._on_state_change:
-                self._on_state_change(new_state)
+        with self._lock:
+            if new_state != self._state:
+                old_state = self._state
+                self._state = new_state
+                logger.debug(f"State change: {old_state.value} -> {new_state.value}")
+                
+                if self._on_state_change:
+                    self._on_state_change(new_state)
     
     def start(self) -> bool:
         """Start voice chat session."""
-        if self._running:
-            return True
+        with self._lock:
+            if self._running:
+                return True
+            self._running = True
         
         # Start audio
         if not self._audio_stream.start_recording():
+            with self._lock:
+                self._running = False
             return False
         
         if not self._audio_stream.start_playback():
             self._audio_stream.stop_recording()
+            with self._lock:
+                self._running = False
             return False
-        
-        self._running = True
         
         # Start listening thread
         self._listen_thread = threading.Thread(target=self._listen_loop, daemon=True)
@@ -439,8 +448,12 @@ class VoiceChat:
     
     def stop(self):
         """Stop voice chat session."""
-        self._running = False
+        with self._lock:
+            self._running = False
         self._set_state(ChatState.IDLE)
+        
+        # Signal playback thread to exit
+        self._playback_queue.put(None)
         
         # Clear playback queue
         while not self._playback_queue.empty():

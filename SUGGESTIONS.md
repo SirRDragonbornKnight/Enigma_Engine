@@ -2,13 +2,13 @@
 
 Remaining improvements for the ForgeAI codebase.
 
-**Last Updated:** February 5, 2026
+**Last Updated:** February 6, 2026
 
 ---
 
 ## Performance
 
-- [ ] **Lazy imports** for `torch` and `numpy` in core/voice modules (startup speed)
+- [x] **Lazy imports** for `torch` and `numpy` in core/voice modules (startup speed) *(Added LazyLoader utility and lazy imports in core/__init__.py)*
 - [x] **Tokenizer caching** in `core/tokenizer.py` - cache instances by type *(Added `_tokenizer_cache` with thread-safe locking)*
 - [x] **TTS engine pooling** in `voice/voice_pipeline.py` - reuse engines *(Added `TTSEnginePool` singleton class)*
 - [x] **Thread cleanup** - daemon threads in voice modules lack proper `__del__` *(Added `__del__` methods to voice_pipeline.py and voice_chat.py)*
@@ -20,9 +20,9 @@ Remaining improvements for the ForgeAI codebase.
 ## Architecture
 
 - [x] **Consolidate progress tracking** - duplicated in `utils/progress.py`, `core/download_progress.py`, GUI dialogs *(Added `to_progress_state()` method to bridge systems)*
-- [ ] **Standardize JSON I/O** - use `utils/io_utils.py` consistently across voice/memory modules
-- [ ] **Standardize configs** - use `@dataclass` for all configuration objects
-- [ ] **Thread safety audit** - review all `threading.Thread` usage for proper locks
+- [x] **Standardize JSON I/O** - use `utils/io_utils.py` consistently across voice/memory modules *(Updated voice_profile.py, voice_identity.py, entity_memory.py to use safe_load_json/safe_save_json)*
+- [x] **Standardize configs** - use `@dataclass` for all configuration objects *(Verified - all Config classes already use @dataclass)*
+- [x] **Thread safety audit** - review all `threading.Thread` usage for proper locks *(Added threading.Lock to VoiceChat for shared state protection)*
 
 ---
 

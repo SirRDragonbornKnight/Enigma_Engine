@@ -35,7 +35,6 @@ USAGE:
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from collections import defaultdict
@@ -43,6 +42,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+from ..utils.io_utils import safe_load_json, safe_save_json
 
 logger = logging.getLogger(__name__)
 
@@ -175,11 +176,10 @@ class EntityMemory:
         # Load entities
         if self._entities_file.exists():
             try:
-                with open(self._entities_file, encoding='utf-8') as f:
-                    data = json.load(f)
-                    for item in data.get("entities", []):
-                        entity = Entity.from_dict(item)
-                        self._index_entity(entity)
+                data = safe_load_json(self._entities_file, default={})
+                for item in data.get("entities", []):
+                    entity = Entity.from_dict(item)
+                    self._index_entity(entity)
                 logger.info(f"Loaded {len(self._entities)} entities")
             except Exception as e:
                 logger.error(f"Failed to load entities: {e}")
@@ -187,11 +187,10 @@ class EntityMemory:
         # Load relationships
         if self._relationships_file.exists():
             try:
-                with open(self._relationships_file, encoding='utf-8') as f:
-                    data = json.load(f)
-                    for item in data.get("relationships", []):
-                        rel = Relationship.from_dict(item)
-                        self._relationships.append(rel)
+                data = safe_load_json(self._relationships_file, default={})
+                for item in data.get("relationships", []):
+                    rel = Relationship.from_dict(item)
+                    self._relationships.append(rel)
                 logger.info(f"Loaded {len(self._relationships)} relationships")
             except Exception as e:
                 logger.error(f"Failed to load relationships: {e}")
@@ -204,16 +203,14 @@ class EntityMemory:
                 "entities": [e.to_dict() for e in self._entities.values()],
                 "last_updated": datetime.now().isoformat()
             }
-            with open(self._entities_file, 'w', encoding='utf-8') as f:
-                json.dump(entity_data, f, indent=2)
+            safe_save_json(self._entities_file, entity_data)
             
             # Save relationships
             rel_data = {
                 "relationships": [r.to_dict() for r in self._relationships],
                 "last_updated": datetime.now().isoformat()
             }
-            with open(self._relationships_file, 'w', encoding='utf-8') as f:
-                json.dump(rel_data, f, indent=2)
+            safe_save_json(self._relationships_file, rel_data)
                 
         except Exception as e:
             logger.error(f"Failed to save entity data: {e}")

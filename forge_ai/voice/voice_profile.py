@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import platform
 import shlex
@@ -35,6 +34,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from ..utils.io_utils import safe_load_json, safe_save_json
 from ..utils.system_messages import error_msg, warning_msg
 
 logger = logging.getLogger(__name__)
@@ -89,8 +89,7 @@ class VoiceProfile:
     def save(self, directory: Path = PROFILES_DIR) -> Path:
         """Save profile to JSON file."""
         filepath = directory / f"{self.name.lower().replace(' ', '_')}.json"
-        with open(filepath, 'w') as f:
-            json.dump(asdict(self), f, indent=2)
+        safe_save_json(filepath, asdict(self))
         return filepath
     
     @classmethod
@@ -98,8 +97,8 @@ class VoiceProfile:
         """Load profile from JSON file."""
         filepath = directory / f"{name.lower().replace(' ', '_')}.json"
         if filepath.exists():
-            with open(filepath) as f:
-                data = json.load(f)
+            data = safe_load_json(filepath, default=None)
+            if data:
                 return cls(**data)
         raise FileNotFoundError(f"Voice profile '{name}' not found")
     
