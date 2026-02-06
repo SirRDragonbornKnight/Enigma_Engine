@@ -198,6 +198,28 @@ class PluginInstaller:
         with open(self._config_path, 'w') as f:
             json.dump(data, f, indent=2)
     
+    def install(self, source: Path) -> tuple[bool, str]:
+        """
+        Install a plugin from a path (zip file or directory).
+        
+        Args:
+            source: Path to plugin zip file or directory
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        source = Path(source)
+        
+        if not source.exists():
+            return False, f"Path not found: {source}"
+        
+        if source.is_file() and source.suffix == '.zip':
+            return self.install_from_zip(source)
+        elif source.is_dir():
+            return self.install_from_directory(source)
+        else:
+            return False, f"Invalid source: must be a .zip file or directory"
+    
     def install_from_zip(self, zip_path: Path) -> tuple[bool, str]:
         """
         Install a plugin from a zip file.

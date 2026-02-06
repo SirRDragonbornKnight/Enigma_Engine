@@ -321,7 +321,8 @@ class TestFederatedCoordinator:
         import numpy as np
         from forge_ai.learning import FederatedCoordinator, WeightUpdate
         
-        coordinator = FederatedCoordinator(min_participants=1)
+        # Use min_participants=2 so round doesn't immediately finalize
+        coordinator = FederatedCoordinator(min_participants=2)
         coordinator.register_device("device1")
         coordinator.start_round()
         

@@ -36,12 +36,21 @@ except ImportError:
     psutil = None
     HAS_PSUTIL = False
 
-try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    torch = None
-    HAS_TORCH = False
+# Delay torch import to avoid DLL conflicts on Windows
+torch = None
+HAS_TORCH = False
+
+def _lazy_import_torch():
+    """Lazily import torch to avoid DLL conflicts."""
+    global torch, HAS_TORCH
+    if torch is None:
+        try:
+            import torch as _torch
+            torch = _torch
+            HAS_TORCH = True
+        except (ImportError, OSError):
+            HAS_TORCH = False
+    return torch
 
 
 class ResourceMonitor(QWidget):
@@ -319,7 +328,8 @@ class ResourceMonitor(QWidget):
     def _estimate_module_vram(self, module) -> float:
         """Estimate VRAM usage of a module in MB."""
         try:
-            if not HAS_TORCH or not torch.cuda.is_available():
+            _torch = _lazy_import_torch()
+            if not HAS_TORCH or _torch is None or not _torch.cuda.is_available():
                 return 0.0
                 
             instance = module.get_interface() if hasattr(module, 'get_interface') else None
@@ -389,7 +399,8 @@ class ResourceMonitor(QWidget):
             self.mem_bar.setFormat("N/A")
         
         # GPU usage
-        if HAS_TORCH and torch.cuda.is_available():
+        _torch = _lazy_import_torch()
+        if HAS_TORCH and _torch is not None and _torch.cuda.is_available():
             # GPU utilization
             # Note: This is a simplified version - real GPU monitoring
             # would require nvidia-ml-py3 or similar
@@ -398,8 +409,8 @@ class ResourceMonitor(QWidget):
             self.gpu_bar.setStyleSheet("QProgressBar::chunk { background-color: #22c55e; }")
             
             # VRAM usage
-            vram_used = torch.cuda.memory_allocated(0) / (1024**3)
-            vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            vram_used = _torch.cuda.memory_allocated(0) / (1024**3)
+            vram_total = _torch.cuda.get_device_properties(0).total_memory / (1024**3)
             vram_percent = (vram_used / vram_total * 100) if vram_total > 0 else 0
             
             self.vram_bar.setValue(int(vram_percent))

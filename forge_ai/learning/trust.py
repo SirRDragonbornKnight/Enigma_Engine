@@ -175,19 +175,24 @@ class TrustManager:
         if not magnitudes:
             return []
         
-        # Statistical outlier detection
+        # Statistical outlier detection using median and IQR (robust to outliers)
         mags = np.array([m[2] for m in magnitudes])
-        mean = np.mean(mags)
-        std = np.std(mags)
+        median = np.median(mags)
+        q1, q3 = np.percentile(mags, [25, 75])
+        iqr = q3 - q1
         
-        # Flag updates more than 3 standard deviations from mean
-        threshold = mean + 3 * std
+        # Use median-based threshold: values > median + 3*IQR are outliers
+        # For small samples where IQR might be 0, fall back to using median * 10
+        if iqr > 0:
+            threshold = median + 3 * iqr
+        else:
+            threshold = median * 10  # 10x median is suspicious
         
         for update_id, device_id, mag in magnitudes:
             if mag > threshold:
                 logger.warning(
                     f"Suspicious update {update_id[:8]} from {device_id}: "
-                    f"magnitude {mag:.2f} >> mean {mean:.2f}"
+                    f"magnitude {mag:.2f} >> median {median:.2f}"
                 )
                 suspicious.append(update_id)
                 self._penalize_device(device_id, 0.4)

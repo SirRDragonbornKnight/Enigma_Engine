@@ -1235,9 +1235,10 @@ def _tts_finished(parent):
 
 def _init_branching(parent):
     """Initialize the message branching system."""
-    if not hasattr(parent, '_message_branches'):
+    if not hasattr(parent, '_message_branches') or not isinstance(parent._message_branches, dict):
         # Maps message index -> list of alternate responses
         parent._message_branches = {}
+    if not hasattr(parent, '_current_branch') or not isinstance(parent._current_branch, dict):
         # Maps message index -> current branch index (0 = original)
         parent._current_branch = {}
 

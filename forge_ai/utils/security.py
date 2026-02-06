@@ -40,7 +40,7 @@ WARNING: The AI cannot modify these protections at runtime.
 import fnmatch
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Set
 
 logger = logging.getLogger(__name__)
 
@@ -412,3 +412,279 @@ def ai_cannot_call(func):
     """
     func._ai_blocked = True
     return func
+
+
+# =============================================================================
+# THE VAULT OF SAFE LOADING - Secure Deserialization
+# =============================================================================
+
+class SecureLoader:
+    """
+    The Vault of Safe Loading - Protection against malicious serialized data.
+    
+    Pickle files and torch checkpoints can execute arbitrary code when loaded.
+    This guardian validates and safely loads serialized data, protecting
+    against poisoned models and data files.
+    
+    THREATS GUARDED AGAINST:
+    - Pickle deserialization attacks (arbitrary code execution)
+    - Malicious torch checkpoints
+    - Tampered model files
+    - Path traversal in archives
+    """
+    
+    # File extensions that are known to be dangerous
+    DANGEROUS_EXTENSIONS = {'.pkl', '.pickle', '.pt', '.pth', '.ckpt', '.bin'}
+    
+    # Hash algorithms for integrity verification
+    HASH_ALGORITHMS = {'sha256', 'sha512', 'blake2b'}
+    
+    @staticmethod
+    def compute_hash(path: Path, algorithm: str = 'sha256') -> str:
+        """
+        Compute cryptographic hash of a file.
+        
+        Args:
+            path: Path to file
+            algorithm: Hash algorithm (sha256, sha512, blake2b)
+            
+        Returns:
+            Hex digest of file hash
+        """
+        import hashlib
+        
+        if algorithm not in SecureLoader.HASH_ALGORITHMS:
+            raise ValueError(f"Unsupported algorithm: {algorithm}")
+        
+        h = hashlib.new(algorithm)
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                h.update(chunk)
+        return h.hexdigest()
+    
+    @staticmethod
+    def verify_hash(path: Path, expected_hash: str, algorithm: str = 'sha256') -> bool:
+        """
+        Verify file integrity against expected hash.
+        
+        Args:
+            path: Path to file
+            expected_hash: Expected hash value
+            algorithm: Hash algorithm used
+            
+        Returns:
+            True if hash matches, False otherwise
+        """
+        actual_hash = SecureLoader.compute_hash(path, algorithm)
+        return actual_hash.lower() == expected_hash.lower()
+    
+    @staticmethod
+    def safe_torch_load(
+        path: Path,
+        map_location: str = 'cpu',
+        weights_only: bool = True,
+        expected_hash: Optional[str] = None
+    ) -> Any:
+        """
+        Safely load a torch checkpoint.
+        
+        Args:
+            path: Path to checkpoint
+            map_location: Device to map tensors to
+            weights_only: If True, only load weights (safer). If False, allows
+                         full checkpoint loading (required for some legacy models)
+            expected_hash: Optional hash to verify before loading
+            
+        Returns:
+            Loaded checkpoint data
+            
+        Raises:
+            SecurityError: If hash verification fails
+            RuntimeError: If loading fails
+        """
+        import torch
+        
+        path = Path(path)
+        
+        # Verify hash if provided
+        if expected_hash:
+            if not SecureLoader.verify_hash(path, expected_hash):
+                logger.error(f"Security: Hash mismatch for {path}")
+                raise SecurityError(f"File integrity check failed: {path}")
+        
+        # Log warning for unsafe loading
+        if not weights_only:
+            logger.warning(
+                f"Security: Loading {path} with weights_only=False. "
+                "This allows arbitrary code execution. Only do this for trusted files."
+            )
+        
+        try:
+            return torch.load(path, map_location=map_location, weights_only=weights_only)
+        except Exception as e:
+            # If weights_only fails, it might be a legacy checkpoint
+            if weights_only and "weights_only" in str(e):
+                logger.warning(
+                    f"weights_only=True failed for {path}. "
+                    "This is a legacy checkpoint that requires unsafe loading."
+                )
+                raise RuntimeError(
+                    f"Cannot safely load {path}. It requires weights_only=False. "
+                    "If you trust this file, load it explicitly with weights_only=False."
+                ) from e
+            raise
+    
+    @staticmethod
+    def safe_pickle_load(
+        path: Path,
+        expected_hash: Optional[str] = None,
+        allowed_modules: Optional[set] = None
+    ) -> Any:
+        """
+        Load pickle file with restricted unpickler for safety.
+        
+        Args:
+            path: Path to pickle file
+            expected_hash: Optional hash to verify before loading
+            allowed_modules: Set of allowed module names (default: safe set)
+            
+        Returns:
+            Unpickled data
+            
+        Raises:
+            SecurityError: If hash verification fails or dangerous class found
+        """
+        import io
+        import pickle
+        
+        path = Path(path)
+        
+        # Verify hash if provided
+        if expected_hash:
+            if not SecureLoader.verify_hash(path, expected_hash):
+                logger.error(f"Security: Hash mismatch for pickle file {path}")
+                raise SecurityError(f"File integrity check failed: {path}")
+        
+        # Default allowed modules (safe data types only)
+        if allowed_modules is None:
+            allowed_modules = {
+                'builtins', 'collections', 'datetime', 'numpy', 'numpy.core',
+                'numpy.core.multiarray', 'torch', 'torch._utils'
+            }
+        
+        class RestrictedUnpickler(pickle.Unpickler):
+            """Unpickler that restricts which classes can be loaded."""
+            
+            def find_class(self, module, name):
+                # Allow only safe modules
+                module_base = module.split('.')[0]
+                if module_base not in allowed_modules and module not in allowed_modules:
+                    logger.warning(f"Security: Blocked unpickle of {module}.{name}")
+                    raise SecurityError(
+                        f"Pickle contains untrusted class: {module}.{name}"
+                    )
+                return super().find_class(module, name)
+        
+        with open(path, 'rb') as f:
+            return RestrictedUnpickler(f).load()
+    
+    @staticmethod
+    def is_safe_to_load(path: Path) -> tuple[bool, str]:
+        """
+        Check if a file is safe to load.
+        
+        Returns:
+            (is_safe, reason) - True if likely safe, or False with reason
+        """
+        path = Path(path)
+        
+        # Check if file exists
+        if not path.exists():
+            return False, "File does not exist"
+        
+        # Check for dangerous extensions
+        if path.suffix.lower() in SecureLoader.DANGEROUS_EXTENSIONS:
+            return False, f"File type {path.suffix} can execute code when loaded"
+        
+        # Check file size (suspiciously small might be malicious)
+        if path.stat().st_size < 100:
+            return False, "File suspiciously small"
+        
+        return True, "File appears safe"
+
+
+class SecurityError(Exception):
+    """Raised when a security check fails."""
+    pass
+
+
+# =============================================================================
+# THE LOG SENTINEL - Sensitive Data Sanitization
+# =============================================================================
+
+class LogSanitizer:
+    """
+    The Log Sentinel - Prevents sensitive information from being logged.
+    
+    Scans log messages for sensitive patterns (API keys, passwords, paths)
+    and redacts them before they reach log files.
+    """
+    
+    # Patterns to redact
+    SENSITIVE_PATTERNS = [
+        (r'(api[_-]?key|apikey)["\s:=]+["\']?([a-zA-Z0-9_-]{20,})["\']?', r'\1=***REDACTED***'),
+        (r'(password|passwd|pwd)["\s:=]+["\']?([^\s"\']+)["\']?', r'\1=***REDACTED***'),
+        (r'(secret|token)["\s:=]+["\']?([a-zA-Z0-9_-]{10,})["\']?', r'\1=***REDACTED***'),
+        (r'(sk-[a-zA-Z0-9]{20,})', '***API_KEY***'),  # OpenAI key pattern
+        (r'(hf_[a-zA-Z0-9]{20,})', '***HF_TOKEN***'),  # HuggingFace token
+        (r'(bearer\s+[a-zA-Z0-9_-]{20,})', 'Bearer ***REDACTED***'),  # Bearer tokens
+    ]
+    
+    @classmethod
+    def sanitize(cls, message: str) -> str:
+        """
+        Sanitize a log message by redacting sensitive information.
+        
+        Args:
+            message: Log message to sanitize
+            
+        Returns:
+            Sanitized message
+        """
+        import re
+        
+        result = message
+        for pattern, replacement in cls.SENSITIVE_PATTERNS:
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+        
+        return result
+    
+    @classmethod
+    def sanitize_exception(cls, exc: Exception) -> str:
+        """
+        Sanitize exception message for safe logging/display.
+        
+        Args:
+            exc: Exception to sanitize
+            
+        Returns:
+            Sanitized error message
+        """
+        return cls.sanitize(str(exc))
+
+
+# =============================================================================
+# CONVENIENCE EXPORTS
+# =============================================================================
+
+def safe_load_model(path: Path, **kwargs) -> Any:
+    """Convenience wrapper for SecureLoader.safe_torch_load()"""
+    return SecureLoader.safe_torch_load(path, **kwargs)
+
+def safe_load_pickle(path: Path, **kwargs) -> Any:
+    """Convenience wrapper for SecureLoader.safe_pickle_load()"""
+    return SecureLoader.safe_pickle_load(path, **kwargs)
+
+def sanitize_log(message: str) -> str:
+    """Convenience wrapper for LogSanitizer.sanitize()"""
+    return LogSanitizer.sanitize(message)

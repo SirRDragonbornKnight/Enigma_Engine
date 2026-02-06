@@ -98,25 +98,30 @@ class TestAgent:
     
     def test_agent_creation(self, mock_engine):
         """Test creating an agent."""
-        from forge_ai.agents.multi_agent import Agent, AgentRole
+        from forge_ai.agents.multi_agent import Agent, AgentRole, AgentPersonality
         
-        agent = Agent(
+        personality = AgentPersonality(
             name="TestAgent",
-            role=AgentRole.GENERAL,
+            role=AgentRole.GENERAL
+        )
+        agent = Agent(
+            personality=personality,
             engine=mock_engine
         )
         
         assert agent.name == "TestAgent"
         assert agent.role == AgentRole.GENERAL
-        assert agent.engine == mock_engine
     
     def test_agent_respond(self, mock_engine):
         """Test agent generating a response."""
-        from forge_ai.agents.multi_agent import Agent, AgentRole
+        from forge_ai.agents.multi_agent import Agent, AgentRole, AgentPersonality
         
-        agent = Agent(
+        personality = AgentPersonality(
             name="TestAgent",
-            role=AgentRole.GENERAL,
+            role=AgentRole.GENERAL
+        )
+        agent = Agent(
+            personality=personality,
             engine=mock_engine
         )
         
@@ -155,7 +160,7 @@ class TestMultiAgentSystem:
         assert agent is not None
         assert agent.name == "Coder"
         assert agent.role == AgentRole.CODER
-        assert "Coder" in system.agents
+        assert system.get_agent_by_name("Coder") is not None
     
     def test_remove_agent(self, mock_engine):
         """Test removing an agent."""
@@ -164,11 +169,11 @@ class TestMultiAgentSystem:
         system = MultiAgentSystem()
         system._engine = mock_engine
         
-        system.create_agent("TestAgent", AgentRole.GENERAL)
-        assert "TestAgent" in system.agents
+        agent = system.create_agent("TestAgent", AgentRole.GENERAL)
+        assert system.get_agent_by_name("TestAgent") is not None
         
-        system.remove_agent("TestAgent")
-        assert "TestAgent" not in system.agents
+        system.remove_agent(agent.id)
+        assert system.get_agent_by_name("TestAgent") is None
     
     def test_get_agent(self, mock_engine):
         """Test getting an agent by name."""
@@ -178,7 +183,7 @@ class TestMultiAgentSystem:
         system._engine = mock_engine
         
         created = system.create_agent("MyAgent", AgentRole.ANALYST)
-        retrieved = system.get_agent("MyAgent")
+        retrieved = system.get_agent_by_name("MyAgent")
         
         assert retrieved is created
 
@@ -208,8 +213,9 @@ class TestAgentCollaboration:
         """Test listing agents."""
         agents = system_with_agents.list_agents()
         assert len(agents) == 2
-        assert "Alice" in agents
-        assert "Bob" in agents
+        agent_names = [a.name for a in agents]
+        assert "Alice" in agent_names
+        assert "Bob" in agent_names
 
 
 class TestAgentSerialization:

@@ -276,6 +276,9 @@ class MoELayer(nn.Module):
         """Get auxiliary loss for this forward pass."""
         loss = self._aux_loss
         self._aux_loss = 0.0
+        # Convert tensor to float if needed
+        if hasattr(loss, 'item'):
+            return loss.item()
         return loss
 
 

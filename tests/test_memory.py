@@ -67,14 +67,14 @@ class TestSimpleVectorDB:
     
     def test_db_init(self):
         """Test vector DB initialization."""
-        from forge_ai.memory.vector_utils import SimpleVectorDB
+        from forge_ai.memory.vector_db import SimpleVectorDB
         db = SimpleVectorDB(dim=64)
         assert db is not None
         assert db.dim == 64
     
     def test_add_and_search(self):
         """Test adding and searching vectors."""
-        from forge_ai.memory.vector_utils import SimpleVectorDB
+        from forge_ai.memory.vector_db import SimpleVectorDB
         db = SimpleVectorDB(dim=3)
         
         # Add some vectors

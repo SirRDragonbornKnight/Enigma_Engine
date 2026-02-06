@@ -22,14 +22,20 @@ class TestModelToInference:
         from forge_ai.core.inference import ForgeEngine
         from forge_ai.core.model import Enigma
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available")
         assert isinstance(engine.model, Enigma)
     
     def test_tokenizer_vocab_matches_model(self):
         """Test tokenizer vocab matches model embedding."""
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available")
         tok_vocab = getattr(engine.tokenizer, 'vocab_size', None) or getattr(engine.tokenizer, 'n_vocab', 32000)
         model_vocab = engine.model.vocab_size
         
@@ -40,7 +46,10 @@ class TestModelToInference:
         """Test full pipeline from prompt to text."""
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available")
         
         # Encode
         prompt = "Hello world"
@@ -129,7 +138,10 @@ class TestConfigIntegration:
         from forge_ai.config import CONFIG
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available")
         
         # Model should have a valid max_len
         assert hasattr(engine.model, 'max_len')
@@ -144,7 +156,10 @@ class TestEndToEnd:
         """Test a full conversation flow."""
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available")
         
         # Start conversation with history
         history = []
@@ -164,7 +179,10 @@ class TestEndToEnd:
         """Test streaming generation collects all tokens."""
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available")
         
         tokens = []
         for token in engine.stream_generate("Test", max_gen=5):

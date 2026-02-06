@@ -77,6 +77,8 @@ def test_local_only_default_true():
     """ModuleManager should default to local_only=True."""
     print("Testing local_only mode defaults to True...")
     try:
+        # Reset singleton to get fresh instance
+        ModuleManager.reset_singleton()
         manager = ModuleManager()
         assert manager.local_only is True, \
             "ModuleManager should default to local_only=True"
@@ -89,6 +91,8 @@ def test_local_only_prevents_cloud_loading():
     """local_only=True should prevent loading cloud modules."""
     print("Testing local_only=True prevents cloud module loading...")
     try:
+        # Reset singleton to get fresh instance
+        ModuleManager.reset_singleton()
         manager = ModuleManager(local_only=True)
         
         # Register modules
@@ -114,6 +118,8 @@ def test_local_only_false_allows_cloud():
     """local_only=False should allow loading cloud modules."""
     print("Testing local_only=False allows cloud modules...")
     try:
+        # Reset singleton to get fresh instance with new settings
+        ModuleManager.reset_singleton()
         manager = ModuleManager(local_only=False)
         
         # Register modules

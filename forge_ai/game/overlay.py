@@ -553,24 +553,24 @@ if HAS_QT:
                         setattr(self.config, key, data[key])
 
 
-def create_game_overlay(
-    config: OverlayConfig = None,
-    message_handler: Callable[[str], None] = None
-) -> OverlayManager:
-    """
-    Create a game overlay manager.
-    
-    Args:
-        config: Overlay configuration
-        message_handler: Callback for user messages
-    
-    Returns:
-        OverlayManager instance
-    """
-    manager = OverlayManager(config)
-    if message_handler:
-        manager.set_message_handler(message_handler)
-    return manager
+    def create_game_overlay(
+        config: OverlayConfig = None,
+        message_handler: Callable[[str], None] = None
+    ) -> OverlayManager:
+        """
+        Create a game overlay manager.
+        
+        Args:
+            config: Overlay configuration
+            message_handler: Callback for user messages
+        
+        Returns:
+            OverlayManager instance
+        """
+        manager = OverlayManager(config)
+        if message_handler:
+            manager.set_message_handler(message_handler)
+        return manager
 
 else:
     class OverlayWidget:

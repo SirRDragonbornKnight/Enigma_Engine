@@ -19,7 +19,10 @@ class TestForgeEngine:
     def engine(self):
         """Create a test engine."""
         from forge_ai.core.inference import ForgeEngine
-        return ForgeEngine()
+        try:
+            return ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available - train a model first")
     
     def test_creation(self, engine):
         """Test engine can be created."""
@@ -32,8 +35,11 @@ class TestForgeEngine:
         from forge_ai.core.inference import ForgeEngine
         
         # Force CPU
-        engine = ForgeEngine(device="cpu")
-        assert engine.device.type == "cpu"
+        try:
+            engine = ForgeEngine(device="cpu")
+            assert engine.device.type == "cpu"
+        except FileNotFoundError:
+            pytest.skip("No trained model available - train a model first")
     
     def test_generate_basic(self, engine):
         """Test basic generation."""
@@ -143,7 +149,10 @@ class TestInferenceHelpers:
         """Test token sampling."""
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available - train a model first")
         logits = torch.randn(1, 1000)
         generated = torch.tensor([[1, 2, 3]])
         
@@ -161,7 +170,10 @@ class TestInferenceHelpers:
         """Test repetition penalty reduces repeat probability."""
         from forge_ai.core.inference import ForgeEngine
         
-        engine = ForgeEngine()
+        try:
+            engine = ForgeEngine()
+        except FileNotFoundError:
+            pytest.skip("No trained model available - train a model first")
         
         # Create logits where token 5 has highest probability
         logits = torch.zeros(1, 1000)

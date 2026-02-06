@@ -273,8 +273,8 @@ class CapabilityRegistry:
             auto_detect: If True, try to auto-detect capabilities from metadata
         """
         # Auto-detect capabilities if requested
-        if auto_detect and metadata:
-            detected = self._auto_detect_capabilities(model_id, metadata)
+        if auto_detect:
+            detected = self._auto_detect_capabilities(model_id, metadata or {})
             capabilities = list(set(capabilities + detected))
         
         # Validate capabilities

@@ -240,6 +240,36 @@ class PluginInstaller:
         """Get installed plugins."""
         return self._installed.copy()
     
+    def install(self, source: Path, plugin_id: str = None, version: str = None) -> InstallResult:
+        """
+        Install a plugin from a path (package file or directory).
+        
+        Args:
+            source: Path to plugin package or directory
+            plugin_id: Optional plugin ID (extracted from source if not provided)
+            version: Optional version (extracted from source if not provided)
+            
+        Returns:
+            InstallResult with success status and details
+        """
+        source = Path(source)
+        
+        if not source.exists():
+            return InstallResult(
+                success=False,
+                message=f"Source not found: {source}",
+                plugin_id=plugin_id or "",
+                version=version or "",
+            )
+        
+        # Extract plugin_id and version from path if not provided
+        if not plugin_id:
+            plugin_id = source.stem
+        if not version:
+            version = "1.0.0"
+        
+        return self.install_package(source, plugin_id, version)
+    
     def install_package(
         self,
         package_path: Path,

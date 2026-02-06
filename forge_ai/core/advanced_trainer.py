@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import torch
-from torch.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
+from torch.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 
 from .advanced_model import ForgeModel

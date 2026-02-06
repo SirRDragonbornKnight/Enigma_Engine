@@ -409,7 +409,3 @@ def get_registry() -> ToolRegistry:
 def execute_tool(name: str, **kwargs) -> Dict[str, Any]:
     """Convenience function to execute a tool."""
     return get_registry().execute(name, **kwargs)
-
-
-# Convenience alias for direct import
-tool_registry = get_registry()

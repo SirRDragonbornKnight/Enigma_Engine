@@ -210,9 +210,10 @@ class TestVoiceMessages:
         assert hasattr(chat_tab, '_do_voice_input')
         assert hasattr(chat_tab, '_voice_message_saved')
     
-    def test_voice_message_saved_attaches_file(self):
+    @patch('forge_ai.gui.tabs.chat_tab._update_attachment_preview')
+    def test_voice_message_saved_attaches_file(self, mock_update_preview):
         """Test that saved voice message is attached."""
-        from forge_ai.gui.tabs.chat_tab import _voice_message_saved, _update_attachment_preview
+        from forge_ai.gui.tabs.chat_tab import _voice_message_saved
         
         parent = Mock()
         parent._attachments = []

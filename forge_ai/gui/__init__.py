@@ -84,6 +84,14 @@ def __getattr__(name: str):
         'create_scaling_tab': ('.tabs', 'create_scaling_tab'),
         'ExamplesTab': ('.tabs', 'ExamplesTab'),
         'create_examples_tab': ('.tabs', 'create_examples_tab'),
+        # Safety guards
+        'SafetyGuards': ('.safety_guards', 'SafetyGuards'),
+        'confirm_action': ('.safety_guards', 'confirm_action'),
+        'confirm_destructive': ('.safety_guards', 'confirm_destructive'),
+        'validate_input': ('.safety_guards', 'validate_input'),
+        'rate_limit': ('.safety_guards', 'rate_limit'),
+        'ActionHistory': ('.safety_guards', 'ActionHistory'),
+        'InputValidator': ('.safety_guards', 'InputValidator'),
     }
     
     if name not in _imports:
@@ -159,4 +167,12 @@ __all__ = [
     'ScalingTab',
     'create_scaling_tab',
     'ExamplesTab',
+    # Safety guards
+    'SafetyGuards',
+    'confirm_action',
+    'confirm_destructive',
+    'validate_input',
+    'rate_limit',
+    'ActionHistory',
+    'InputValidator',
 ]

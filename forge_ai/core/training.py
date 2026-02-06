@@ -78,7 +78,8 @@ from typing import Any, Callable, Dict, List, Optional, Union  # Type hints
 import torch  # Main PyTorch library
 import torch.nn as nn  # Neural network building blocks
 import torch.nn.functional as F  # Functions like cross_entropy loss
-from torch.amp import GradScaler, autocast  # Mixed precision (faster on GPU)
+from torch.cuda.amp import GradScaler  # Mixed precision scaler (faster on GPU)
+from torch.amp import autocast  # Mixed precision autocast
 from torch.utils.data import DataLoader, Dataset  # For loading training data
 
 from ..config import CONFIG  # → Global settings
