@@ -180,6 +180,13 @@ class CommandPaletteDialog(QDialog):
         self._setup_ui()
         self._setup_shortcuts()
         self._populate_commands()
+        
+        # Apply transparency
+        try:
+            from ..ui_settings import apply_dialog_transparency
+            apply_dialog_transparency(self)
+        except ImportError:
+            pass
     
     def _setup_ui(self):
         """Set up the dialog UI."""

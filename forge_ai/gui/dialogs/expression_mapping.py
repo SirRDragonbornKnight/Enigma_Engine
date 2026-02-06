@@ -266,6 +266,13 @@ if HAS_PYQT:
             self._current_emotion: Optional[str] = None
             self._setup_ui()
             self._load_first_emotion()
+            
+            # Apply transparency
+            try:
+                from ..ui_settings import apply_dialog_transparency
+                apply_dialog_transparency(self)
+            except ImportError:
+                pass
         
         def _setup_ui(self):
             self.setWindowTitle("Expression Mapping")

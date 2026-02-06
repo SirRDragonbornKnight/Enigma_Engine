@@ -83,6 +83,13 @@ class ModelLoadingDialog(QDialog):
         self._setup_ui()
         self._setup_timers()
         
+        # Apply transparency
+        try:
+            from ..ui_settings import apply_dialog_transparency
+            apply_dialog_transparency(self)
+        except ImportError:
+            pass
+        
         # Calculate size based on number of items
         num_items = len(self._loading_items)
         base_height = 100

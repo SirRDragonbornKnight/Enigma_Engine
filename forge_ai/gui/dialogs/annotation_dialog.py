@@ -374,6 +374,13 @@ if HAS_PYQT:
             
             self._setup_ui()
             self._load_current_sample()
+            
+            # Apply transparency
+            try:
+                from ..ui_settings import apply_dialog_transparency
+                apply_dialog_transparency(self)
+            except ImportError:
+                pass
         
         def _setup_ui(self):
             """Setup the dialog UI."""

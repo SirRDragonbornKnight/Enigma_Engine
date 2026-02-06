@@ -506,31 +506,44 @@ class QADataset(Dataset):
       - Chatbot personality training
       - FAQ-style knowledge
       - Customer support responses
+      
+    📋 SUPPORTED FORMATS:
+      - Q&A: Q: question\\nA: answer
+      - JSONL: {"input": "...", "output": "..."}
+      - Conversation: User: ... Assistant: ...
+      - Instruction: ### Instruction\\n...\\n### Response\\n...
+      - ChatML: <|im_start|>user\\n...<|im_end|>
     """
 
     def __init__(
         self,
         texts: list[str],
         tokenizer: Any,
-        max_length: int = 512
+        max_length: int = 512,
+        format: str = 'auto'
     ):
         """
         Initialize Q&A dataset.
         
         Args:
-            texts: List of texts containing Q:/A: pairs
+            texts: List of texts containing training data
             tokenizer: Tokenizer to convert text→numbers
             max_length: Maximum tokens per example
+            format: Data format ('qa', 'jsonl', 'conversation', 'instruction', 
+                    'chatml', 'plain', 'auto' for auto-detect)
         """
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.format = format
         self.examples = []  # Will hold parsed Q&A pairs
 
-        # Parse Q&A pairs from each text
+        # Parse training data from each text using multi-format parser
         for text in texts:
-            self._parse_qa(text)
+            # Use multi-format parser for flexibility
+            parsed = parse_training_data(text, self.format)
+            self.examples.extend(parsed)
 
-        logger.info(f"Created {len(self.examples)} Q&A training examples")
+        logger.info(f"Created {len(self.examples)} training examples (format: {format})")
 
     def _parse_qa(self, text: str):
         """
@@ -624,7 +637,280 @@ class QADataset(Dataset):
 
 
 # =============================================================================
-# 📈 LEARNING RATE SCHEDULER - Controls how fast the model learns
+# � MULTI-FORMAT TRAINING DATA SUPPORT
+# =============================================================================
+# Supports multiple common formats for training data. Auto-detects format
+# or can be explicitly specified.
+#
+# SUPPORTED FORMATS:
+#   1. Q&A Format:      Q: Hello\nA: Hi there!
+#   2. JSONL:           {"input": "Hello", "output": "Hi!", "system": "optional"}
+#   3. Conversation:    User: Hello\nAssistant: Hi there!
+#   4. Instruction:     ### Instruction\nHello\n### Response\nHi there!
+#   5. ChatML:          <|im_start|>user\nHello<|im_end|>...
+#   6. Plain Text:      Just raw text for language modeling
+
+TRAINING_FORMATS = {
+    'qa': 'Q&A Format (Q: question\\nA: answer)',
+    'jsonl': 'JSON Lines ({\"input\": ..., \"output\": ...})',
+    'conversation': 'Conversation (User: ... Assistant: ...)',
+    'instruction': 'Instruction (### Instruction\\n...\\n### Response\\n...)',
+    'chatml': 'ChatML (<|im_start|>user\\n...<|im_end|>)',
+    'plain': 'Plain Text (raw text, no special formatting)',
+    'auto': 'Auto-detect format'
+}
+
+
+def detect_training_format(text: str) -> str:
+    """
+    Auto-detect the format of training data.
+    
+    Args:
+        text: Training data content
+        
+    Returns:
+        Format identifier: 'qa', 'jsonl', 'conversation', 'instruction', 'chatml', 'plain'
+    """
+    # Check first 2000 chars for format markers
+    sample = text[:2000]
+    
+    # JSONL - starts with { and contains "input"/"output" or "prompt"/"completion"
+    if sample.strip().startswith('{'):
+        try:
+            import json
+            first_line = sample.split('\n')[0].strip()
+            obj = json.loads(first_line)
+            if 'input' in obj or 'prompt' in obj or 'instruction' in obj:
+                return 'jsonl'
+        except (json.JSONDecodeError, IndexError):
+            pass
+    
+    # ChatML
+    if '<|im_start|>' in sample or '<|im_end|>' in sample:
+        return 'chatml'
+    
+    # Instruction format
+    if '### Instruction' in sample or '### Response' in sample:
+        return 'instruction'
+    
+    # Q&A format (case insensitive)
+    import re
+    if re.search(r'^\s*Q:\s*', sample, re.MULTILINE | re.IGNORECASE):
+        return 'qa'
+    
+    # Conversation format
+    if re.search(r'^\s*(User|Human):\s*', sample, re.MULTILINE | re.IGNORECASE):
+        return 'conversation'
+    
+    # Default to plain text
+    return 'plain'
+
+
+def parse_training_data(text: str, format: str = 'auto') -> list[str]:
+    """
+    Parse training data in various formats into usable training examples.
+    
+    Args:
+        text: Raw training data content
+        format: Format type ('qa', 'jsonl', 'conversation', 'instruction', 
+                'chatml', 'plain', 'auto')
+                
+    Returns:
+        List of training example strings in consistent Q: A: format
+    """
+    if format == 'auto':
+        format = detect_training_format(text)
+    
+    parsers = {
+        'qa': _parse_qa_format,
+        'jsonl': _parse_jsonl_format,
+        'conversation': _parse_conversation_format,
+        'instruction': _parse_instruction_format,
+        'chatml': _parse_chatml_format,
+        'plain': _parse_plain_format,
+    }
+    
+    parser = parsers.get(format, _parse_qa_format)
+    examples = parser(text)
+    
+    logger.info(f"Parsed {len(examples)} examples from {format} format")
+    return examples
+
+
+def _parse_qa_format(text: str) -> list[str]:
+    """Parse Q:/A: format."""
+    import re
+    examples = []
+    
+    # Split on Q: markers
+    parts = re.split(r'\n?Q:\s*', text, flags=re.IGNORECASE)
+    
+    for part in parts:
+        if not part.strip():
+            continue
+        
+        # Split on A: to separate question and answer
+        qa_split = re.split(r'\n?A:\s*', part, maxsplit=1, flags=re.IGNORECASE)
+        
+        if len(qa_split) == 2:
+            question = qa_split[0].strip()
+            answer = qa_split[1].strip()
+            if question and answer:
+                examples.append(f"Q: {question}\nA: {answer}")
+    
+    return examples
+
+
+def _parse_jsonl_format(text: str) -> list[str]:
+    """Parse JSONL format."""
+    import json
+    examples = []
+    
+    for line in text.strip().split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        
+        try:
+            obj = json.loads(line)
+            
+            # Support various key names
+            input_text = obj.get('input') or obj.get('prompt') or obj.get('instruction') or obj.get('question', '')
+            output_text = obj.get('output') or obj.get('completion') or obj.get('response') or obj.get('answer', '')
+            system_text = obj.get('system') or obj.get('context', '')
+            
+            if input_text and output_text:
+                if system_text:
+                    examples.append(f"Q: {system_text} {input_text}\nA: {output_text}")
+                else:
+                    examples.append(f"Q: {input_text}\nA: {output_text}")
+                    
+        except json.JSONDecodeError:
+            continue
+    
+    return examples
+
+
+def _parse_conversation_format(text: str) -> list[str]:
+    """Parse User:/Assistant: conversation format."""
+    import re
+    examples = []
+    
+    # Pattern to match User/Human and Assistant/AI markers
+    pattern = r'(?:User|Human):\s*(.*?)\s*(?:Assistant|AI):\s*(.*?)(?=(?:User|Human):|$)'
+    matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+    
+    for user_msg, assistant_msg in matches:
+        user_msg = user_msg.strip()
+        assistant_msg = assistant_msg.strip()
+        if user_msg and assistant_msg:
+            examples.append(f"Q: {user_msg}\nA: {assistant_msg}")
+    
+    return examples
+
+
+def _parse_instruction_format(text: str) -> list[str]:
+    """Parse ### Instruction/### Response format."""
+    import re
+    examples = []
+    
+    # Pattern for instruction format
+    pattern = r'###\s*Instruction[:\s]*(.*?)###\s*Response[:\s]*(.*?)(?=###\s*Instruction|$)'
+    matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+    
+    for instruction, response in matches:
+        instruction = instruction.strip()
+        response = response.strip()
+        if instruction and response:
+            examples.append(f"Q: {instruction}\nA: {response}")
+    
+    return examples
+
+
+def _parse_chatml_format(text: str) -> list[str]:
+    """Parse ChatML format."""
+    import re
+    examples = []
+    
+    # Pattern for ChatML
+    pattern = r'<\|im_start\|>user\s*(.*?)<\|im_end\|>\s*<\|im_start\|>assistant\s*(.*?)<\|im_end\|>'
+    matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+    
+    for user_msg, assistant_msg in matches:
+        user_msg = user_msg.strip()
+        assistant_msg = assistant_msg.strip()
+        if user_msg and assistant_msg:
+            examples.append(f"Q: {user_msg}\nA: {assistant_msg}")
+    
+    return examples
+
+
+def _parse_plain_format(text: str) -> list[str]:
+    """Parse plain text - create chunks for language modeling."""
+    examples = []
+    
+    # Split into paragraphs/chunks
+    paragraphs = text.split('\n\n')
+    
+    for para in paragraphs:
+        para = para.strip()
+        if len(para) > 50:  # Skip very short paragraphs
+            # For plain text, we don't use Q/A format
+            # Just return raw text for language modeling
+            examples.append(para)
+    
+    return examples
+
+
+def convert_to_format(examples: list[str], target_format: str) -> str:
+    """
+    Convert training examples to a specific output format.
+    
+    Args:
+        examples: List of Q: A: formatted examples
+        target_format: Target format ('qa', 'jsonl', 'conversation', 'instruction', 'chatml')
+        
+    Returns:
+        Formatted training data string
+    """
+    import re
+    import json
+    
+    output_lines = []
+    
+    for example in examples:
+        # Parse the Q: A: format
+        match = re.match(r'Q:\s*(.*?)\nA:\s*(.*)', example, re.DOTALL)
+        if not match:
+            continue
+        
+        question = match.group(1).strip()
+        answer = match.group(2).strip()
+        
+        if target_format == 'qa':
+            output_lines.append(f"Q: {question}\nA: {answer}\n")
+        
+        elif target_format == 'jsonl':
+            obj = {"input": question, "output": answer}
+            output_lines.append(json.dumps(obj))
+        
+        elif target_format == 'conversation':
+            output_lines.append(f"User: {question}\nAssistant: {answer}\n")
+        
+        elif target_format == 'instruction':
+            output_lines.append(f"### Instruction\n{question}\n### Response\n{answer}\n")
+        
+        elif target_format == 'chatml':
+            output_lines.append(
+                f"<|im_start|>user\n{question}<|im_end|>\n"
+                f"<|im_start|>assistant\n{answer}<|im_end|>\n"
+            )
+    
+    return '\n'.join(output_lines)
+
+
+# =============================================================================
+# �📈 LEARNING RATE SCHEDULER - Controls how fast the model learns
 # =============================================================================
 # Learning rate is THE most important hyperparameter in deep learning.
 # Too high = model learns garbage (loss explodes)

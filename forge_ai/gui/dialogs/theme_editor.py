@@ -113,6 +113,13 @@ class ThemeEditorDialog(QDialog):
         
         self._setup_ui()
         
+        # Apply transparency
+        try:
+            from ..ui_settings import apply_dialog_transparency
+            apply_dialog_transparency(self)
+        except ImportError:
+            pass
+        
         if edit_theme:
             self._load_theme(edit_theme)
     

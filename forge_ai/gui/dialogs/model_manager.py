@@ -53,6 +53,13 @@ class ModelManagerDialog(QDialog):
         self._build_ui()
         self._refresh_list()
         
+        # Apply transparency
+        try:
+            from ..ui_settings import apply_dialog_transparency
+            apply_dialog_transparency(self)
+        except ImportError:
+            pass
+        
         # Apply dark style to dialog
         self.setStyleSheet("""
             QDialog {

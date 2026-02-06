@@ -326,6 +326,32 @@ def create_training_tab(parent):
     lr_layout.addWidget(parent.lr_input)
     params_layout.addLayout(lr_layout)
     
+    # Data format selector
+    format_layout = QVBoxLayout()
+    format_label = QLabel("Data Format")
+    format_label.setStyleSheet("font-size: 12px; color: #bac2de;")
+    format_layout.addWidget(format_label)
+    parent.format_combo = NoScrollComboBox()
+    parent.format_combo.addItem("Auto-detect", "auto")
+    parent.format_combo.addItem("Q&A (Q: A:)", "qa")
+    parent.format_combo.addItem("JSONL", "jsonl")
+    parent.format_combo.addItem("Conversation", "conversation")
+    parent.format_combo.addItem("Instruction", "instruction")
+    parent.format_combo.addItem("ChatML", "chatml")
+    parent.format_combo.addItem("Plain Text", "plain")
+    parent.format_combo.setToolTip(
+        "Training data format:\n"
+        "- Auto-detect: Automatically detect format\n"
+        "- Q&A: Q: question\\nA: answer\n"
+        "- JSONL: {\"input\": ..., \"output\": ...}\n"
+        "- Conversation: User: ... Assistant: ...\n"
+        "- Instruction: ### Instruction\\n...\\n### Response\n"
+        "- ChatML: <|im_start|>user\\n..."
+    )
+    parent.format_combo.setMinimumWidth(100)
+    format_layout.addWidget(parent.format_combo)
+    params_layout.addLayout(format_layout)
+    
     params_layout.addStretch()
     layout.addWidget(params_group)
     
