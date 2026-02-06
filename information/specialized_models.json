@@ -19,6 +19,13 @@
       "size": "small",
       "description": "Generates and explains code",
       "max_seq_len": 1024
+    },
+    "trainer": {
+      "path": "models/specialized/trainer_small.pth",
+      "size": "small",
+      "description": "Generates training data and evaluates AI responses - trains other AIs",
+      "max_seq_len": 2048,
+      "capabilities": ["generate_qa", "evaluate_response", "improve_answer", "create_curriculum"]
     }
   }
 }

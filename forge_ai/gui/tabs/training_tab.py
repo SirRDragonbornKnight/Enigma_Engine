@@ -9,6 +9,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
+    QApplication,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
@@ -63,6 +64,87 @@ def create_training_tab(parent):
     header_layout.addWidget(parent.training_model_label)
     
     layout.addLayout(header_layout)
+    
+    # === QUICK START SECTION ===
+    quickstart_group = QGroupBox("Quick Start - Train Your AI in 3 Steps")
+    quickstart_group.setStyleSheet("""
+        QGroupBox {
+            border: 2px solid #a6e3a1;
+            border-radius: 8px;
+            margin-top: 8px;
+            padding: 8px;
+            font-weight: bold;
+        }
+        QGroupBox::title {
+            color: #a6e3a1;
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 5px;
+        }
+    """)
+    quickstart_layout = QVBoxLayout(quickstart_group)
+    
+    # Step 1: Load base knowledge
+    step1_row = QHBoxLayout()
+    step1_label = QLabel("1. Give AI basic knowledge:")
+    step1_label.setStyleSheet("font-weight: bold; min-width: 180px;")
+    step1_row.addWidget(step1_label)
+    
+    btn_load_base = QPushButton("Load Base Knowledge")
+    btn_load_base.setToolTip("Load essential Q&A pairs that teach the AI fundamentals (greetings, basic facts, empathy, etc.)")
+    btn_load_base.setStyleSheet("background: #a6e3a1; color: #1e1e2e; font-weight: bold; padding: 6px 12px;")
+    btn_load_base.clicked.connect(lambda: _load_base_knowledge(parent))
+    step1_row.addWidget(btn_load_base)
+    
+    btn_view_base = QPushButton("View")
+    btn_view_base.setToolTip("Preview the base knowledge file")
+    btn_view_base.clicked.connect(lambda: _view_base_knowledge(parent))
+    step1_row.addWidget(btn_view_base)
+    
+    step1_row.addStretch()
+    quickstart_layout.addLayout(step1_row)
+    
+    # Step 2: Add your own knowledge
+    step2_row = QHBoxLayout()
+    step2_label = QLabel("2. Add your knowledge:")
+    step2_label.setStyleSheet("font-weight: bold; min-width: 180px;")
+    step2_row.addWidget(step2_label)
+    
+    btn_paste_convert = QPushButton("Paste Text -> Q&A")
+    btn_paste_convert.setToolTip("Paste any text and auto-convert it to training Q&A pairs using the Trainer AI")
+    btn_paste_convert.setStyleSheet("background: #89b4fa; color: #1e1e2e; font-weight: bold; padding: 6px 12px;")
+    btn_paste_convert.clicked.connect(lambda: _paste_and_convert(parent))
+    step2_row.addWidget(btn_paste_convert)
+    
+    btn_import_url = QPushButton("Import URL")
+    btn_import_url.setToolTip("Fetch a webpage and convert to training data")
+    btn_import_url.clicked.connect(lambda: _import_from_url(parent))
+    step2_row.addWidget(btn_import_url)
+    
+    step2_row.addStretch()
+    quickstart_layout.addLayout(step2_row)
+    
+    # Step 3: Train
+    step3_row = QHBoxLayout()
+    step3_label = QLabel("3. Train the AI:")
+    step3_label.setStyleSheet("font-weight: bold; min-width: 180px;")
+    step3_row.addWidget(step3_label)
+    
+    btn_quick_train = QPushButton("Quick Train (Recommended Settings)")
+    btn_quick_train.setToolTip("Start training with safe default settings (10 epochs, batch 4, lr 0.0001)")
+    btn_quick_train.setStyleSheet("background: #f5c2e7; color: #1e1e2e; font-weight: bold; padding: 6px 12px;")
+    btn_quick_train.clicked.connect(lambda: _quick_train(parent))
+    step3_row.addWidget(btn_quick_train)
+    
+    step3_row.addStretch()
+    quickstart_layout.addLayout(step3_row)
+    
+    # Status line
+    parent.quickstart_status = QLabel("Load base knowledge first, then add your own, then train!")
+    parent.quickstart_status.setStyleSheet("color: #6c7086; font-style: italic; padding: 4px;")
+    quickstart_layout.addWidget(parent.quickstart_status)
+    
+    layout.addWidget(quickstart_group)
     
     # File management group
     file_group = QGroupBox("Training Data")
@@ -857,3 +939,298 @@ def _wrap_selection_qa(parent):
         wrapped = f"Q: {selected.strip()}\nA: [Your answer here]\n"
     
     cursor.insertText(wrapped)
+
+
+# ============================================================================
+# Quick Start Helper Functions
+# ============================================================================
+
+def _load_base_knowledge(parent):
+    """Load the base_knowledge.txt into the training editor."""
+    from pathlib import Path
+    
+    base_path = Path(__file__).parent.parent.parent.parent / "data" / "base_knowledge.txt"
+    
+    if not base_path.exists():
+        QMessageBox.warning(parent, "Not Found", 
+            f"Base knowledge file not found at:\n{base_path}\n\n"
+            "This file should contain foundational Q&A pairs.")
+        return
+    
+    try:
+        content = base_path.read_text(encoding='utf-8')
+        
+        # Confirm if editor has content
+        current = parent.training_editor.toPlainText().strip()
+        if current:
+            reply = QMessageBox.question(
+                parent, "Replace Content?",
+                "The editor already has content. Do you want to:\n\n"
+                "Yes - Replace all content\n"
+                "No - Append to existing content",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            if reply == QMessageBox.Cancel:
+                return
+            elif reply == QMessageBox.No:
+                content = current + "\n\n" + content
+        
+        parent.training_editor.setPlainText(content)
+        
+        # Count Q&A pairs
+        qa_count = content.count("\nQ:") + (1 if content.startswith("Q:") else 0)
+        QMessageBox.information(parent, "Loaded",
+            f"Loaded {qa_count} Q&A pairs from base knowledge.\n\n"
+            "This covers basic self-awareness, conversation, and reasoning.\n"
+            "Click 'Save' then 'Train' to train with this data!")
+            
+    except Exception as e:
+        QMessageBox.critical(parent, "Error", f"Failed to load: {e}")
+
+
+def _view_base_knowledge(parent):
+    """Preview the base knowledge file in a dialog."""
+    from pathlib import Path
+    
+    base_path = Path(__file__).parent.parent.parent.parent / "data" / "base_knowledge.txt"
+    
+    if not base_path.exists():
+        QMessageBox.warning(parent, "Not Found", "Base knowledge file not found.")
+        return
+    
+    try:
+        content = base_path.read_text(encoding='utf-8')
+        
+        # Create preview dialog
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("Base Knowledge Preview")
+        dialog.resize(600, 500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Info label
+        qa_count = content.count("\nQ:") + (1 if content.startswith("Q:") else 0)
+        info = QLabel(f"Contains {qa_count} Q&A pairs covering foundational knowledge")
+        layout.addWidget(info)
+        
+        # Text display
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setPlainText(content)
+        layout.addWidget(text)
+        
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.exec_()
+        
+    except Exception as e:
+        QMessageBox.critical(parent, "Error", f"Failed to read: {e}")
+
+
+def _paste_and_convert(parent):
+    """Open dialog to paste text and convert to Q&A format using Trainer AI."""
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Convert Text to Q&A Training Data")
+    dialog.resize(700, 600)
+    
+    layout = QVBoxLayout(dialog)
+    
+    # Instructions
+    instructions = QLabel(
+        "Paste any text (articles, documentation, notes) below.\n"
+        "The Trainer AI will automatically generate Q&A pairs from it."
+    )
+    layout.addWidget(instructions)
+    
+    # Input text area
+    input_label = QLabel("Input Text:")
+    layout.addWidget(input_label)
+    
+    input_text = QTextEdit()
+    input_text.setPlaceholderText(
+        "Paste your text here...\n\n"
+        "Examples of good content:\n"
+        "- Wikipedia articles\n"
+        "- Documentation\n"
+        "- Study notes\n"
+        "- How-to guides\n"
+        "- Any factual content"
+    )
+    layout.addWidget(input_text)
+    
+    # Topic hint
+    topic_layout = QHBoxLayout()
+    topic_layout.addWidget(QLabel("Topic Hint (optional):"))
+    topic_input = QLineEdit()
+    topic_input.setPlaceholderText("e.g., Python programming, History, Science")
+    topic_layout.addWidget(topic_input)
+    layout.addLayout(topic_layout)
+    
+    # Output area
+    output_label = QLabel("Generated Q&A Pairs:")
+    layout.addWidget(output_label)
+    
+    output_text = QTextEdit()
+    output_text.setReadOnly(True)
+    output_text.setPlaceholderText("Q&A pairs will appear here after conversion...")
+    layout.addWidget(output_text)
+    
+    # Buttons
+    btn_layout = QHBoxLayout()
+    
+    convert_btn = QPushButton("Convert to Q&A")
+    add_btn = QPushButton("Add to Training Data")
+    add_btn.setEnabled(False)
+    close_btn = QPushButton("Close")
+    
+    btn_layout.addWidget(convert_btn)
+    btn_layout.addWidget(add_btn)
+    btn_layout.addStretch()
+    btn_layout.addWidget(close_btn)
+    layout.addLayout(btn_layout)
+    
+    def do_convert():
+        text = input_text.toPlainText().strip()
+        if not text:
+            QMessageBox.warning(dialog, "No Text", "Please paste some text to convert.")
+            return
+        
+        topic = topic_input.text().strip() or None
+        
+        convert_btn.setEnabled(False)
+        convert_btn.setText("Converting...")
+        QApplication.processEvents()
+        
+        try:
+            # Try to use Trainer AI
+            from forge_ai.core.tool_router import get_router
+            router = get_router()
+            qa_pairs = router.generate_training_data(text, topic=topic, num_pairs=10)
+            
+            if qa_pairs:
+                # Format output
+                output = ""
+                for q, a in qa_pairs:
+                    output += f"Q: {q}\nA: {a}\n\n"
+                output_text.setPlainText(output.strip())
+                add_btn.setEnabled(True)
+            else:
+                output_text.setPlainText("No Q&A pairs could be generated. Try different text.")
+                
+        except Exception as e:
+            # Fallback: simple rule-based extraction
+            output_text.setPlainText(f"Trainer AI unavailable, using basic extraction...\n\n")
+            _do_basic_extraction(text, output_text)
+            add_btn.setEnabled(True)
+            
+        finally:
+            convert_btn.setEnabled(True)
+            convert_btn.setText("Convert to Q&A")
+    
+    def _do_basic_extraction(text, output_widget):
+        """Basic Q&A extraction without AI."""
+        lines = text.split('.')
+        qa_output = ""
+        
+        for i, sentence in enumerate(lines[:15]):  # Limit to 15 sentences
+            sentence = sentence.strip()
+            if len(sentence) > 20:  # Skip very short sentences
+                # Create a question from the sentence
+                words = sentence.split()
+                if len(words) > 3:
+                    # Simple pattern: "What is X?" where X is the subject
+                    if words[0].lower() in ['the', 'a', 'an']:
+                        subject = ' '.join(words[1:4])
+                    else:
+                        subject = ' '.join(words[:3])
+                    
+                    qa_output += f"Q: What do you know about {subject.lower()}?\n"
+                    qa_output += f"A: {sentence}.\n\n"
+        
+        current = output_widget.toPlainText()
+        output_widget.setPlainText(current + qa_output)
+    
+    def do_add():
+        qa_content = output_text.toPlainText().strip()
+        if not qa_content:
+            return
+        
+        # Add to training editor
+        current = parent.training_editor.toPlainText()
+        if current.strip():
+            parent.training_editor.setPlainText(current + "\n\n" + qa_content)
+        else:
+            parent.training_editor.setPlainText(qa_content)
+        
+        QMessageBox.information(dialog, "Added", 
+            "Q&A pairs added to training data.\n"
+            "Click 'Save' then 'Train' to train the model!")
+        dialog.accept()
+    
+    convert_btn.clicked.connect(do_convert)
+    add_btn.clicked.connect(do_add)
+    close_btn.clicked.connect(dialog.reject)
+    
+    dialog.exec_()
+
+
+def _quick_train(parent):
+    """Start training with recommended beginner settings."""
+    # Verify there's training data
+    content = parent.training_editor.toPlainText().strip()
+    
+    if not content:
+        QMessageBox.warning(parent, "No Training Data",
+            "Please add some training data first!\n\n"
+            "Options:\n"
+            "1. Click 'Load Base Knowledge' to load starter data\n"
+            "2. Click 'Paste Text -> Q&A' to convert any text\n"
+            "3. Manually type Q&A pairs")
+        return
+    
+    # Count Q&A pairs
+    qa_count = content.count("\nQ:") + (1 if content.startswith("Q:") else 0)
+    
+    if qa_count < 10:
+        reply = QMessageBox.question(parent, "Limited Data",
+            f"Only {qa_count} Q&A pairs found.\n\n"
+            "For best results, we recommend at least 50+ pairs.\n"
+            "Training with limited data may not produce good results.\n\n"
+            "Continue anyway?",
+            QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.No:
+            return
+    
+    # Check if data is saved
+    reply = QMessageBox.information(parent, "Quick Train",
+        f"Ready to train with {qa_count} Q&A pairs!\n\n"
+        "Recommended settings for beginners:\n"
+        "- Epochs: 3 (more = better but slower)\n"
+        "- Learning Rate: 0.0001 (safe default)\n"
+        "- Batch Size: 4 (works on most hardware)\n\n"
+        "The training will:\n"
+        "1. Save your training data\n"
+        "2. Train the model (may take a few minutes)\n"
+        "3. Show progress in the log\n\n"
+        "Start training?",
+        QMessageBox.Ok | QMessageBox.Cancel)
+    
+    if reply == QMessageBox.Cancel:
+        return
+    
+    # Save first
+    _save_training_data(parent)
+    
+    # Set recommended values
+    if hasattr(parent, 'epochs_input'):
+        parent.epochs_input.setValue(3)
+    if hasattr(parent, 'batch_input'):
+        parent.batch_input.setValue(4)
+    if hasattr(parent, 'lr_input'):
+        parent.lr_input.setValue(0.0001)
+    
+    # Start training
+    _start_training(parent)

@@ -895,6 +895,244 @@ class ToolRouter:
         
         # Fallback - return prompt
         return f"# {prompt}\n# (No specialized code model available)"
+    
+    # ─────────────────────────────────────────────────────────────────────
+    # TRAINER AI: Generates training data for other AIs
+    # ─────────────────────────────────────────────────────────────────────
+    
+    def generate_training_data(self, text: str, style: str = "qa") -> str:
+        """
+        Generate training data from input text using the Trainer AI.
+        
+        This is the "AI that trains AIs" - it converts raw text into
+        properly formatted Q&A pairs for training.
+        
+        Args:
+            text: Raw text to convert (article, document, notes)
+            style: Output format - "qa" for Q&A pairs, "conversation" for dialog
+        
+        Returns:
+            Formatted training data
+        """
+        # Try specialized trainer model first
+        if self.use_specialized:
+            trainer_model = self._specialized_models.get('trainer')
+            if trainer_model is None and 'trainer' not in self._specialized_models:
+                trainer_model = self._load_specialized_model('trainer')
+                self._specialized_models['trainer'] = trainer_model
+            
+            if trainer_model:
+                try:
+                    return self._trainer_generate(trainer_model, text, style)
+                except Exception as e:
+                    logger.warning(f"Specialized trainer model failed: {e}")
+        
+        # Fallback: rule-based Q&A generation
+        return self._generate_qa_fallback(text)
+    
+    def _trainer_generate(self, trainer_model, text: str, style: str) -> str:
+        """Generate training data using specialized trainer model."""
+        import torch
+        
+        model = trainer_model['model']
+        tokenizer = trainer_model['tokenizer']
+        
+        prompt = f"Convert this text to {style} training data:\n{text}\n\nTraining data:"
+        input_ids = tokenizer.encode(prompt)
+        input_tensor = torch.tensor([input_ids])
+        
+        with torch.no_grad():
+            output = model.generate(
+                input_tensor,
+                max_new_tokens=512,
+                temperature=0.7,
+            )
+        
+        result = tokenizer.decode(output[0].tolist())
+        if "Training data:" in result:
+            return result.split("Training data:", 1)[1].strip()
+        return result
+    
+    def _generate_qa_fallback(self, text: str) -> str:
+        """
+        Rule-based Q&A generation when no trainer model is available.
+        
+        Splits text into paragraphs and creates questions from them.
+        """
+        import re
+        
+        lines = []
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        
+        for i, para in enumerate(paragraphs[:20]):  # Limit to 20 pairs
+            # Skip very short paragraphs
+            if len(para) < 30:
+                continue
+            
+            # Generate a question based on the paragraph
+            # Look for key phrases to make relevant questions
+            question = self._extract_question(para)
+            
+            lines.append(f"Q: {question}")
+            lines.append(f"A: {para}")
+            lines.append("")
+        
+        return '\n'.join(lines)
+    
+    def _extract_question(self, paragraph: str) -> str:
+        """Extract a relevant question from a paragraph."""
+        import re
+        
+        # Try to find the main topic/subject
+        sentences = paragraph.split('.')
+        first_sentence = sentences[0].strip() if sentences else paragraph[:100]
+        
+        # Common patterns to convert to questions
+        patterns = [
+            (r'^(\w+) is ', r'What is \1?'),
+            (r'^(\w+) are ', r'What are \1?'),
+            (r'^The (\w+)', r'What is the \1?'),
+            (r'^A (\w+)', r'What is a \1?'),
+            (r'how to ', r'How do you '),
+        ]
+        
+        for pattern, replacement in patterns:
+            if re.search(pattern, first_sentence, re.IGNORECASE):
+                # Found a pattern, create question
+                match = re.search(r'^\w+', first_sentence)
+                if match:
+                    topic = match.group()
+                    return f"What is {topic}?"
+        
+        # Default: ask about the topic
+        words = first_sentence.split()[:5]
+        topic = ' '.join(words)
+        return f"Tell me about {topic}?"
+    
+    def evaluate_response(self, question: str, response: str) -> dict:
+        """
+        Evaluate an AI response quality (Trainer AI as critic).
+        
+        Args:
+            question: The original question
+            response: The AI's response to evaluate
+        
+        Returns:
+            Dict with scores and feedback
+        """
+        # Try specialized trainer model
+        if self.use_specialized:
+            trainer_model = self._specialized_models.get('trainer')
+            if trainer_model:
+                try:
+                    return self._trainer_evaluate(trainer_model, question, response)
+                except Exception as e:
+                    logger.warning(f"Trainer evaluation failed: {e}")
+        
+        # Fallback: simple heuristic evaluation
+        return self._evaluate_response_fallback(question, response)
+    
+    def _trainer_evaluate(self, trainer_model, question: str, response: str) -> dict:
+        """Evaluate using trainer model."""
+        import torch
+        
+        model = trainer_model['model']
+        tokenizer = trainer_model['tokenizer']
+        
+        prompt = f"Rate this response (1-10 for quality, relevance, helpfulness):\nQ: {question}\nA: {response}\n\nRating:"
+        input_ids = tokenizer.encode(prompt)
+        input_tensor = torch.tensor([input_ids])
+        
+        with torch.no_grad():
+            output = model.generate(input_tensor, max_new_tokens=50, temperature=0.3)
+        
+        result = tokenizer.decode(output[0].tolist())
+        
+        # Parse rating
+        try:
+            if "Rating:" in result:
+                rating_text = result.split("Rating:", 1)[1].strip()
+                score = float(rating_text.split()[0])
+                return {"score": score / 10.0, "feedback": rating_text}
+        except Exception:
+            pass
+        
+        return {"score": 0.5, "feedback": "Could not parse evaluation"}
+    
+    def _evaluate_response_fallback(self, question: str, response: str) -> dict:
+        """Simple heuristic response evaluation."""
+        score = 0.5
+        feedback = []
+        
+        # Check length
+        if len(response) < 10:
+            score -= 0.2
+            feedback.append("Response too short")
+        elif len(response) > 50:
+            score += 0.1
+            feedback.append("Good length")
+        
+        # Check if response relates to question
+        q_words = set(question.lower().split())
+        r_words = set(response.lower().split())
+        overlap = len(q_words & r_words)
+        if overlap > 2:
+            score += 0.1
+            feedback.append("Good relevance")
+        
+        # Check for repetition
+        words = response.split()
+        if len(words) != len(set(words)):
+            repetition = 1 - (len(set(words)) / len(words))
+            if repetition > 0.3:
+                score -= 0.15
+                feedback.append("Too repetitive")
+        
+        # Bounds
+        score = max(0.0, min(1.0, score))
+        
+        return {
+            "score": score,
+            "feedback": "; ".join(feedback) if feedback else "Average response"
+        }
+    
+    def improve_response(self, question: str, response: str, feedback: str = "") -> str:
+        """
+        Use Trainer AI to improve an AI response.
+        
+        Args:
+            question: Original question
+            response: Current response to improve
+            feedback: Optional feedback about what's wrong
+        
+        Returns:
+            Improved response
+        """
+        if self.use_specialized:
+            trainer_model = self._specialized_models.get('trainer')
+            if trainer_model:
+                try:
+                    import torch
+                    
+                    model = trainer_model['model']
+                    tokenizer = trainer_model['tokenizer']
+                    
+                    prompt = f"Improve this response:\nQ: {question}\nOriginal A: {response}\nFeedback: {feedback}\n\nImproved A:"
+                    input_ids = tokenizer.encode(prompt)
+                    input_tensor = torch.tensor([input_ids])
+                    
+                    with torch.no_grad():
+                        output = model.generate(input_tensor, max_new_tokens=256, temperature=0.7)
+                    
+                    result = tokenizer.decode(output[0].tolist())
+                    if "Improved A:" in result:
+                        return result.split("Improved A:", 1)[1].strip()
+                    return result
+                except Exception as e:
+                    logger.warning(f"Trainer improve failed: {e}")
+        
+        # Fallback: return original
+        return response
             
     def _save_config(self):
         """Save routing configuration."""
